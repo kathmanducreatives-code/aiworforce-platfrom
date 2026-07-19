@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import type { DBTask, DBToolCall, DBApproval } from '@/lib/orchestration';
 import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
-import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Circle, Loader2, XCircle } from 'lucide-react';
 import { resolveAgent, inferAgentFromContent } from '@/lib/agentResolver';
 
 /** Tiny per-agent outcome chip rendered next to the agent badge. */
@@ -32,7 +33,7 @@ function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBT
   const dim = task.status === 'skipped';
   return (
     <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] font-medium border"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border shrink-0"
       style={{
         color: dim ? '#7D8590' : accent,
         borderColor: dim ? 'rgba(125,133,144,0.25)' : `${accent}55`,
@@ -57,25 +58,17 @@ interface Props {
 }
 
 function StatusIcon({ status }: { status: DBTask['status'] }) {
-  if (status === 'complete') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
-  if (status === 'running')  return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />;
-  if (status === 'failed')   return <XCircle className="h-3.5 w-3.5 text-rose-400" />;
-  if (status === 'skipped')  return <Circle className="h-3.5 w-3.5 text-[#484F58]" />;
-  return <Circle className="h-3.5 w-3.5 text-[#484F58]" />;
-}
-
-function outputPreview(output: unknown): string | null {
-  if (!output) return null;
-  if (typeof output === 'string') return output.slice(0, 220);
-  try {
-    const s = JSON.stringify(output);
-    return s.length > 220 ? s.slice(0, 220) + '…' : s;
-  } catch { return null; }
+  if (status === 'complete') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
+  if (status === 'running')  return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400 shrink-0" />;
+  if (status === 'failed')   return <XCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />;
+  if (status === 'skipped')  return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
+  return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
 }
 
 export default function ExecutionTaskRow({
   index, task, agentSlug, latestToolCall, approval, connectorMissingFor, onReviewApproval, onOpenOutput,
 }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const payload = (task.payload ?? {}) as Record<string, any>;
   const toolNeeded: string | null = payload.tool_needed ?? null;
   const expected: string | null = payload.expected_output ?? null;
@@ -88,9 +81,6 @@ export default function ExecutionTaskRow({
   const actorKey = metaToolInput?.selected_actor_key ?? null;
   const actorReason = metaToolInput?.reason ?? null;
 
-  // Final fallback: infer agent from the task title/description so a planning
-  // or untagged step never misleadingly claims Pilot's identity for sourcing,
-  // ranking, research, drafting, or content work.
   const effectiveSlug = agentSlug
     ?? (task as any).agent_slug
     ?? payload.agent_slug
@@ -100,97 +90,81 @@ export default function ExecutionTaskRow({
   const canOpenOutput =
     !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
 
+  const connectorMissing = connectorMissingFor(toolNeeded);
+  const showToolBadge = (task.status === 'failed' || connectorMissing) && (toolNeeded || latestToolCall);
+  const errorText = task.status === 'failed'
+    ? ((latestToolCall?.error ?? (task.output as any)?.error ?? '') as string)
+    : '';
+
+  const hasExpandable = !!(expected || success || actorKey || actorReason);
+
   return (
     <li
-      className={`rounded-xl border border-white/[0.06] bg-white/[0.025] p-3.5 ${canOpenOutput ? 'hover:bg-white/[0.045] hover:border-white/[0.10] cursor-pointer transition-colors' : ''}`}
+      className={`group rounded-md border border-white/[0.05] bg-white/[0.02] ${canOpenOutput ? 'hover:bg-white/[0.05] hover:border-white/[0.09] cursor-pointer' : ''} transition-colors`}
       onClick={canOpenOutput ? () => onOpenOutput!(task.id, latestToolCall?.id ?? null) : undefined}
     >
-
-      <div className="flex items-start gap-3 flex-wrap">
-        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-[#9aa4af] shrink-0">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 min-w-0">
+        <span className="text-[10.5px] font-mono text-[#6b7480] shrink-0 w-6 text-right">
           {String(index + 1).padStart(2, '0')}
         </span>
         <StatusIcon status={task.status} />
         <AgentBadge slug={effectiveSlug} />
+
+        <div className="flex-1 min-w-0 text-[13px] text-[#F0F6FC] truncate" title={title}>
+          {title}
+        </div>
+
         <ReactionChip slug={effectiveSlug} task={task} toolCall={latestToolCall} />
 
-        <div className="flex-1 min-w-[200px]">
-          <div className="text-[15px] text-[#F0F6FC] leading-snug font-medium">{title}</div>
-          {task.description && task.description !== title && (
-            <div className="text-[13px] text-[#9aa4af] mt-1 leading-relaxed">{task.description}</div>
-          )}
-        </div>
-      </div>
-
-      {(expected || success) && (
-        <div className="mt-2 pl-1 space-y-1 text-[11px] text-[#A6ADB8]">
-          {expected && <div><span className="text-[#7D8590]">Output:</span> {expected}</div>}
-          {success && <div><span className="text-[#7D8590]">Done when:</span> {success}</div>}
-        </div>
-      )}
-
-      {(actorKey || actorReason) && (
-        <div className="mt-2 pl-1 text-[11px] text-emerald-300/90 flex items-center gap-2 flex-wrap">
-          {actorKey && <span className="font-mono">{actorKey}</span>}
-          {(() => {
-            const err = (latestToolCall?.error ?? '') as string;
-            const disabled = err === 'actor_missing' || err === 'actor_key_unknown' || err === 'apify_actor_disabled_by_default';
-            return disabled ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">
-                disabled
-              </span>
-            ) : null;
-          })()}
-          {actorReason && <span className="text-[#C9D1D9]">— {actorReason}</span>}
-        </div>
-      )}
-
-
-
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {(toolNeeded || latestToolCall) && (
-          <span
-            onClick={(e) => {
-              if (!onOpenOutput) return;
-              e.stopPropagation();
-              onOpenOutput(task.id, latestToolCall?.id ?? null);
-            }}
-            className={onOpenOutput ? 'cursor-pointer' : ''}
-          >
+        {showToolBadge && (
+          <span onClick={(e) => e.stopPropagation()} className="shrink-0">
             <ToolStatusBadge
               toolNeeded={toolNeeded}
               latestCall={latestToolCall ?? null}
-              connectorMissing={connectorMissingFor(toolNeeded)}
+              connectorMissing={connectorMissing}
             />
           </span>
         )}
+
         {(requiresApproval || approval) && (
-          <ApprovalBadge approval={approval ?? null} onReview={onReviewApproval} />
+          <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+            <ApprovalBadge approval={approval ?? null} onReview={onReviewApproval} />
+          </span>
         )}
-        {canOpenOutput && (
+
+        {hasExpandable && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenOutput!(task.id, latestToolCall?.id ?? null); }}
-            className="ml-auto text-[11px] text-emerald-300 hover:text-emerald-200"
+            aria-label={expanded ? 'Hide details' : 'Show details'}
+            onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+            className="shrink-0 p-0.5 rounded hover:bg-white/[0.06] text-[#7D8590]"
           >
-            View output →
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
           </button>
+        )}
+
+        {canOpenOutput && (
+          <ChevronRight className="h-3.5 w-3.5 text-[#484F58] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
       </div>
 
-      {task.status === 'failed' && (latestToolCall?.error || (task.output as any)?.error) && (
-        <div className="mt-2 text-[11px] text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-2 py-1">
-          {(latestToolCall?.error ?? (task.output as any)?.error ?? '').toString().slice(0, 240)}
+      {expanded && hasExpandable && (
+        <div className="px-2.5 pb-2 pl-[52px] space-y-0.5 text-[11px] text-[#A6ADB8]">
+          {expected && <div><span className="text-[#7D8590]">Output:</span> {expected}</div>}
+          {success && <div><span className="text-[#7D8590]">Done when:</span> {success}</div>}
+          {(actorKey || actorReason) && (
+            <div className="flex items-center gap-2 flex-wrap text-emerald-300/90">
+              {actorKey && <span className="font-mono">{actorKey}</span>}
+              {actorReason && <span className="text-[#C9D1D9]">— {actorReason}</span>}
+            </div>
+          )}
         </div>
       )}
 
-      {task.status === 'complete' && outputPreview(task.output) && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[11px] text-[#7D8590] hover:text-[#C9D1D9]">Output preview</summary>
-          <pre className="mt-1 text-[11px] text-[#C9D1D9] whitespace-pre-wrap break-words bg-white/[0.02] border border-white/[0.06] rounded p-2 max-h-40 overflow-auto">
-{outputPreview(task.output)}
-          </pre>
-        </details>
+      {errorText && (
+        <div className="mx-2.5 mb-1.5 text-[11px] text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-2 py-0.5 truncate" title={errorText}>
+          {errorText}
+        </div>
       )}
     </li>
   );
