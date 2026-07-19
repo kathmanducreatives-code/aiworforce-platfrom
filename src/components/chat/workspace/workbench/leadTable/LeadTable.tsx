@@ -3,6 +3,10 @@ import type { LeadTableRow } from '@/hooks/useLeadResults';
 import type { LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadActionKind } from '@/lib/leadActionRequest';
 import { companyDisplayLinks, rowActionCopy, type RowAction } from '@/lib/leadRowAction';
+import {
+  personaLabel, titleCompanyLine, verificationLine, emailStatusCopy,
+  ROW_STATUS_HEADLINE, ROW_STATUS_DETAIL,
+} from '@/lib/decisionMakerDisplay';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -43,12 +47,41 @@ function RowActionCell({ a, kind }: { a: RowAction; kind: LeadActionKind }) {
   }
 
   const tone = STATUS_TONE[a.status] ?? 'text-slate-300/80';
+
+  // Structured rendering for a verified decision-maker: the person's name is the
+  // strongest element, with title/company and verification as supporting lines.
+  // Never a prose sentence with an interpolated value.
+  const dm = a.decisionMakers?.primary_decision_maker;
+  if (kind === 'find_decision_makers' && a.status === 'succeeded' && dm) {
+    const extra = a.decisionMakers?.additional_decision_makers.length ?? 0;
+    return (
+      <div className="px-2 py-1.5 space-y-0.5 min-w-0">
+        <div className="text-[12px] font-medium text-[#E6EDF3] truncate" title={dm.full_name}>
+          {dm.full_name}
+        </div>
+        {titleCompanyLine(dm) && (
+          <div className="text-[10.5px] text-[#8B949E] line-clamp-2">{titleCompanyLine(dm)}</div>
+        )}
+        <div className="text-[10px] text-emerald-300/90 inline-flex items-center gap-1">
+          <span aria-hidden="true">✓</span>
+          <span>{verificationLine(dm)}</span>
+        </div>
+        {extra > 0 && (
+          <div className="text-[10px] text-sky-300/80">+{extra} more verified</div>
+        )}
+      </div>
+    );
+  }
+
   const copy = rowActionCopy(a);
-  const suffix = a.status === 'succeeded' && a.detail ? `: ${a.detail}` : '';
+  const detail = a.decisionMakers ? ROW_STATUS_DETAIL[a.decisionMakers.status] : '';
 
   return (
-    <div className={`px-2 py-1.5 text-[10.5px] ${tone} line-clamp-2`} title={a.reason_code ?? undefined}>
-      {copy}{suffix}
+    <div className={`px-2 py-1.5 text-[10.5px] ${tone} space-y-0.5`} title={a.reason_code ?? undefined}>
+      <div className="line-clamp-2">{copy}</div>
+      {kind === 'find_decision_makers' && detail && (
+        <div className="text-[10px] text-[#7D8590] line-clamp-2">{detail}</div>
+      )}
     </div>
   );
 }
@@ -208,18 +241,40 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                   {contactLocked ? (
                     <LockedCell label="Enrich contact" credits={1} onUnlock={() => onUnlock('find_contacts', r.id)} />
                   ) : (
-                    <div className="px-2 py-1.5 space-y-0.5">
-                      {r.contact_email ? (
-                        <div className="text-[11.5px] text-emerald-200 truncate">{r.contact_email}</div>
-                      ) : (
-                        <div className="text-[10.5px] text-[#7D8590] italic">no email</div>
-                      )}
-                      {r.contact_linkedin_url && (
-                        <a href={r.contact_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-[10.5px] inline-flex items-center gap-1 text-sky-300 hover:text-sky-200">
-                          <Linkedin className="h-2.5 w-2.5" /> LinkedIn <ExternalLink className="h-2.5 w-2.5" />
-                        </a>
-                      )}
-                    </div>
+                    (() => {
+                      const dmView = rowActions?.[r.id]?.kind === 'find_decision_makers'
+                        ? rowActions[r.id].decisionMakers?.primary_decision_maker
+                        : undefined;
+                      // Prefer the freshly-verified profile over the stored one.
+                      const liUrl = dmView?.linkedin_url ?? r.contact_linkedin_url ?? null;
+                      const personName = dmView?.full_name ?? null;
+                      return (
+                        <div className="px-2 py-1.5 space-y-1">
+                          {dmView && (
+                            <div className="text-[10px] text-sky-300/90">{personaLabel(dmView.role_family)}</div>
+                          )}
+                          {liUrl && (
+                            <a
+                              href={liUrl}
+                              target="_blank"
+                              rel="noopener noreferrer nofollow"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={personName ? `Open LinkedIn profile for ${personName} in a new tab` : 'Open LinkedIn profile in a new tab'}
+                              className="text-[10.5px] inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 focus:outline-none focus:ring-1 focus:ring-sky-400/60 rounded"
+                            >
+                              <Linkedin className="h-2.5 w-2.5" aria-hidden="true" /> Open LinkedIn
+                              <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+                            </a>
+                          )}
+                          {r.contact_email ? (
+                            <div className="text-[11.5px] text-emerald-200 truncate">{r.contact_email}</div>
+                          ) : (
+                            // Never "no email" — that claims a provider proved none exists.
+                            <div className="text-[10.5px] text-[#7D8590]">{emailStatusCopy('not_enriched')}</div>
+                          )}
+                        </div>
+                      );
+                    })()
                   )}
                 </td>
                 <td className={`${COL_W.enrichment} border-b border-white/[0.05] align-top p-0`}>
