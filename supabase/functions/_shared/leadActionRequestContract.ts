@@ -63,11 +63,27 @@ export function isDirectLeadActionAttempt(toolInput: unknown): boolean {
   return "lead_action" in (toolInput as Record<string, unknown>);
 }
 
+/**
+ * Outreach output mode. EXPLICIT only — never inferred from component name,
+ * request origin, UI text, missing fields or desired message length. An absent
+ * mode resolves to the safest backward-compatible value (full_draft), so every
+ * existing non-Workbench caller is unaffected.
+ */
+export type OutreachOutputMode = "personalized_opener" | "full_draft";
+
+export const DEFAULT_OUTPUT_MODE: OutreachOutputMode = "full_draft";
+
+export function resolveOutputMode(value: unknown): OutreachOutputMode {
+  return value === "personalized_opener" ? "personalized_opener" : DEFAULT_OUTPUT_MODE;
+}
+
 export interface DirectLeadActionRequest {
   action: LeadActionKind;
   lead_candidate_ids: string[];
   agent_slug: string;
   instruction: string;
+  /** Only meaningful for generate_outreach; ignored by the other actions. */
+  output_mode: OutreachOutputMode;
 }
 
 export type DirectLeadActionValidation =
@@ -131,6 +147,7 @@ export function validateDirectLeadActionRequest(body: {
       action,
       lead_candidate_ids: ids as string[],
       agent_slug: DIRECT_ACTION_AGENT[action],
+      output_mode: resolveOutputMode(toolInput.output_mode),
       instruction: DIRECT_ACTION_INSTRUCTION[action],
     },
   };
