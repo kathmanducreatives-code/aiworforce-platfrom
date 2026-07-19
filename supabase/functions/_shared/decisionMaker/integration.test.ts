@@ -16,6 +16,7 @@ import {
   type ToolResultLike,
 } from "./providerAdapter.ts";
 import { planPeopleSearch } from "./searchPlanner.ts";
+import { normalizeProviderProfile } from "./personProfile.ts";
 import { resolveCompanyIdentity } from "./companyIdentity.ts";
 import * as F from "./fixtures.ts";
 
@@ -456,4 +457,97 @@ Deno.test("HOTFIX: a failing first stage still surfaces failed when nothing is f
   const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
   assertEquals(r.status, "failed");
   assertEquals(r.retryable, true);
+});
+
+// ===========================================================================
+// LIVE-RESULT HOTFIX REGRESSIONS
+//
+// Derived from the sanitized STRUCTURE of the 2026-07-18 production run
+// (5 tasks, 125 rows). No real names, URLs or companies are reproduced.
+//
+// Observed: apify_linkedin_company_employees returned 0 rows on all 5 calls
+// while reporting success, and apify_people_search returned snake_case rows
+// carrying `company_linkedin_url` on 108/125 rows.
+// ===========================================================================
+
+Deno.test("HOTFIX: the company-employees plan carries a target the actor can read", () => {
+  // buildHarvestApiCompanyEmployeesInput sources its target from companies[] /
+  // user_input.companyUrl / a query containing a company URL. Sending only
+  // `company_linkedin_url` left it with nothing to scrape, so the actor
+  // succeeded with an empty dataset on every call.
+  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  assert(plan.ok);
+  if (!plan.ok) return;
+  const input = planToToolInput(plan.plan) as Record<string, unknown>;
+
+  const companies = input.companies as string[] | undefined;
+  assert(Array.isArray(companies) && companies.length === 1, "companies[] must carry the company URL");
+  assert(String(companies[0]).includes("/company/"));
+  assert(String(input.query ?? "").includes("/company/"), "query fallback must also carry it");
+  const ui = input.user_input as Record<string, unknown> | undefined;
+  assert(ui && String(ui.companyUrl ?? "").includes("/company/"), "user_input.companyUrl must carry it");
+  // Safety rails preserved.
+  assertEquals(input.defer_persistence, true);
+  assertEquals(input.attach_to_accounts, false);
+});
+
+Deno.test("HOTFIX: no company URL → no fabricated company targeting", () => {
+  const domainOnly = resolveCompanyIdentity({ company_name: "Nimbus Forge", website: "https://nimbusforge.example" });
+  const plan = planPeopleSearch(domainOnly, "domain_people_search");
+  assert(plan.ok);
+  if (!plan.ok) return;
+  const input = planToToolInput(plan.plan) as Record<string, unknown>;
+  assertEquals(input.companies, undefined);
+  assertEquals(input.user_input, undefined);
+});
+
+Deno.test("HOTFIX: live snake_case rows keep their company identifier", () => {
+  // Structural shape observed in production: name/full_name/headline/title/
+  // company/profile_url/company_linkedin_url/location — all snake_case.
+  const liveShape = {
+    name: "Synthetic Person",
+    full_name: "Synthetic Person",
+    headline: "Chief Revenue Officer at Nimbus Forge",
+    title: "Chief Revenue Officer",
+    company: "Nimbus Forge",
+    profile_url: "https://www.linkedin.com/in/synthetic-person-x",
+    company_linkedin_url: "https://www.linkedin.com/company/nimbus-forge",
+    location: "Synthetic City",
+  };
+  const p = normalizeProviderProfile(liveShape);
+  assertEquals(p.linkedin_url, "https://www.linkedin.com/in/synthetic-person-x");
+  assertEquals(p.current_company_linkedin_url, "https://www.linkedin.com/company/nimbus-forge");
+  assertEquals(p.current_company_name, "Nimbus Forge");
+  assertEquals(p.current_title, "Chief Revenue Officer");
+});
+
+Deno.test("HOTFIX: a live-shaped row at the target company now VERIFIES", async () => {
+  const onTarget = {
+    name: "Synthetic Founder", full_name: "Synthetic Founder",
+    title: "Founder & CEO", company: "Nimbus Forge",
+    profile_url: "https://www.linkedin.com/in/synthetic-founder-x",
+    company_linkedin_url: "https://www.linkedin.com/company/nimbus-forge",
+  };
+  const { p } = ports({ provider: provOk([onTarget]) });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(r.status, "succeeded");
+  assertEquals(r.decision_makers[0].verification_status, "verified");
+});
+
+Deno.test("HOTFIX: off-company live rows are rejected as another employer, not 'no evidence'", async () => {
+  // Previously the missing alias erased the company identifier, so a person
+  // plainly at another company was filed as "no_current_employment_evidence".
+  const offTarget = {
+    name: "Synthetic Other", full_name: "Synthetic Other",
+    title: "Chief Revenue Officer", company: "Quillstone",
+    profile_url: "https://www.linkedin.com/in/synthetic-other-x",
+    company_linkedin_url: "https://www.linkedin.com/company/quillstone-synthetic",
+  };
+  const { p } = ports({ provider: provOk([offTarget]) });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(r.status, "no_match");
+  const reasons = (r.rejected_profiles as Array<Record<string, unknown>>).map((x) => x.reason_code);
+  assertEquals(reasons, ["current_employer_is_another_company"]);
+  // And it must still be a rejection — never persisted.
+  assertEquals(r.persisted_count, 0);
 });

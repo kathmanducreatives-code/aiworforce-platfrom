@@ -126,7 +126,12 @@ export function normalizeProviderProfile(
     : (raw.currentPosition ?? {})) as Record<string, unknown>;
 
   const flatCompanyUrl =
-    str(raw.current_company_linkedin_url) ?? str(raw.currentCompanyLinkedInUrl) ?? str(raw.company_url) ??
+    str(raw.current_company_linkedin_url) ?? str(raw.currentCompanyLinkedInUrl) ??
+    // Observed in live apify_people_search output: snake_case company_linkedin_url
+    // on 108/125 rows. Missing it meant every such profile lost its company
+    // identifier and was reported as "no current employment evidence" instead of
+    // the confident "currently at another company".
+    str(raw.company_linkedin_url) ?? str(raw.company_url) ??
     str(raw.companyLinkedinUrl) ?? str(raw.companyLinkedInUrl) ?? str(raw.companyUrl) ?? str(raw.companyPageUrl) ??
     str(cp.companyLinkedinUrl) ?? str(cp.companyLinkedInUrl) ?? str(cp.companyUrl) ?? str(cp.companyPageUrl);
 
@@ -149,7 +154,8 @@ export function normalizeProviderProfile(
     current_company_name: flatCompanyName ?? currentFromExperience?.company_name ?? null,
     current_company_linkedin_url: flatCompanyUrl ?? currentFromExperience?.company_linkedin_url ?? null,
     current_company_domain:
-      str(raw.current_company_domain) ?? str(raw.currentCompanyDomain) ?? currentFromExperience?.company_domain ?? null,
+      str(raw.current_company_domain) ?? str(raw.currentCompanyDomain) ?? str(raw.company_domain) ??
+      currentFromExperience?.company_domain ?? null,
     current_employment_start: currentFromExperience?.start_date ?? str(raw.current_employment_start) ?? null,
     location: str(raw.location) ?? str(raw.locationName),
     experience,
