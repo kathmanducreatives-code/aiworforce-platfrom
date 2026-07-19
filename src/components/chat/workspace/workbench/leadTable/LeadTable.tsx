@@ -10,6 +10,7 @@ import {
 import { evidenceLine, missingLine, RESEARCH_STATUS_COPY } from '@/lib/companyResearchDisplay';
 import { icpFitLine, topFitReasons, topMissing, NO_TRIGGER_COPY } from '@/lib/icpSnapshot';
 import type { WorkbenchAccountView } from '@/lib/workbenchAccountView';
+import { DEPTH_LABEL, OPENER_APPROVAL_NOTICE, type OutreachRowHint } from '@/lib/outreachOpener';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -23,6 +24,8 @@ interface Props {
   rowActions?: Record<string, RowAction>;
   /** Persistent per-stage account state. Completed stages render from HERE. */
   accountViews?: Record<string, WorkbenchAccountView>;
+  /** Per-row personalized-opener hint (opener or a SPECIFIC blocker). */
+  outreachHints?: Record<string, OutreachRowHint>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onOpen: (row: LeadTableRow) => void;
@@ -108,7 +111,7 @@ const COL_W = {
   status: 'w-[90px]',
 };
 
-export default function LeadTable({ rows, selected, rowActions, accountViews, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
+export default function LeadTable({ rows, selected, rowActions, accountViews, outreachHints, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   return (
@@ -342,18 +345,45 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, on
                   ))}
                 </td>
                 <td className={`${COL_W.message} border-b border-white/[0.05] align-top p-0`}>
-                  {rowActions?.[r.id]?.kind === 'generate_outreach' ? (
-                    <RowActionCell a={rowActions[r.id]} kind="generate_outreach" />
-                  ) : draftLocked ? (
-                    <LockedCell
-                      label={r.contact_status === 'needs_contact' ? 'Needs contact' : 'Generate outreach'}
-                      credits={r.contact_status === 'needs_contact' ? 0 : 2}
-                      onUnlock={() => onUnlock('draft_outreach', r.id)}
-                      disabled={r.contact_status === 'needs_contact'}
-                    />
-                  ) : (
-                    <div className="px-2 py-1.5 text-[11px] text-[#C9D1D9] line-clamp-2">{r.personalized_message ?? '—'}</div>
-                  )}
+                  {(() => {
+                    if (rowActions?.[r.id]?.kind === 'generate_outreach') {
+                      return <RowActionCell a={rowActions[r.id]} kind="generate_outreach" />;
+                    }
+                    const hint = outreachHints?.[r.id];
+                    // A persisted personalized OPENER (not a full email) renders directly.
+                    if (hint?.opener) {
+                      return (
+                        <div className="px-2 py-1.5 space-y-1 min-w-0">
+                          <div className="text-[10px] uppercase tracking-wide text-[#7D8590]">Personalized opener</div>
+                          <div className="text-[11px] text-[#C9D1D9] line-clamp-3">{hint.opener}</div>
+                          <div className="text-[10px] text-[#7D8590]">
+                            {DEPTH_LABEL[hint.personalization_depth]}
+                            {hint.source_count > 0 && ` · ${hint.source_count} verified source${hint.source_count === 1 ? '' : 's'}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(r); }} className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none rounded" aria-label={`Review opener for ${r.company ?? 'this company'}`}>Review</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(hint.opener ?? ''); }} className="text-[10.5px] text-[#9aa4af] hover:text-[#C9D1D9] focus:outline-none rounded" aria-label="Copy opener">Copy</button>
+                          </div>
+                          <div className="text-[9.5px] text-[#7D8590]">{OPENER_APPROVAL_NOTICE}</div>
+                        </div>
+                      );
+                    }
+                    // A SPECIFIC blocker — never "Complete the required previous step first".
+                    if (hint?.blocker_copy) {
+                      return <div className="px-2 py-1.5 text-[11px] text-amber-300/90 line-clamp-2">{hint.blocker_copy}</div>;
+                    }
+                    if (draftLocked) {
+                      return (
+                        <LockedCell
+                          label={r.contact_status === 'needs_contact' ? 'Needs contact' : 'Generate outreach'}
+                          credits={r.contact_status === 'needs_contact' ? 0 : 2}
+                          onUnlock={() => onUnlock('draft_outreach', r.id)}
+                          disabled={r.contact_status === 'needs_contact'}
+                        />
+                      );
+                    }
+                    return <div className="px-2 py-1.5 text-[11px] text-[#C9D1D9] line-clamp-2">{r.personalized_message ?? '—'}</div>;
+                  })()}
                 </td>
                 <td className={`${COL_W.fit} border-b border-white/[0.05] px-2 py-1.5 align-top font-mono text-[11px] text-emerald-200`}>
                   {typeof r.fit_score === 'number' ? (
