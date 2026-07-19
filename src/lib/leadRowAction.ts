@@ -12,6 +12,7 @@ import {
   titleCompanyLine,
   type DecisionMakerRowView,
 } from './decisionMakerDisplay';
+import { sanitizeSummary, outreachBlockCopy } from './companyResearchDisplay';
 
 export interface RowAction {
   kind: LeadActionKind;
@@ -93,9 +94,11 @@ function rowDetail(kind: LeadActionKind, status: LeadOutcomeStatus, p: Record<st
     return line ? `${dm.full_name} · ${line}` : dm.full_name;
   }
   if (kind === 'research_company') {
+    // The old path took the raw "Summary: …" line straight from scraped page
+    // text, which is how newsletter copy and Markdown images reached the cell.
     const lines = Array.isArray(p.summary_lines) ? (p.summary_lines as string[]) : [];
-    const summary = lines.find((l) => /^Summary/.test(l));
-    return summary ? summary.replace(/^Summary:\s*/, '') : undefined;
+    const raw = lines.find((l) => /^Summary/.test(l))?.replace(/^Summary:\s*/, '');
+    return sanitizeSummary(raw) ?? undefined;
   }
   return 'Draft ready for approval';
 }
@@ -106,9 +109,15 @@ function rowDetail(kind: LeadActionKind, status: LeadOutcomeStatus, p: Record<st
  * cases where "decision-maker" would be nonsense.
  */
 export function rowActionCopy(a: RowAction): string {
+  // A blocked draft must say WHICH prerequisite is missing.
+  if (a.kind === 'generate_outreach' && a.status === 'blocked') {
+    return outreachBlockCopy(a.reason_code);
+  }
   if (a.kind !== 'find_decision_makers') {
     if (a.status === 'succeeded') {
-      return a.kind === 'research_company' ? 'Company enriched' : 'Draft ready for approval';
+      // "Company researched" — matches RESEARCH_STATUS_COPY and drops the old
+      // "Company enriched:" prefix that preceded raw scraped text.
+      return a.kind === 'research_company' ? 'Company researched' : 'Draft ready for approval';
     }
     if (a.status === 'no_match') return 'No useful evidence found';
     if (a.status === 'unavailable') return 'This provider is disabled in this environment';
