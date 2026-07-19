@@ -329,7 +329,7 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onOpen(r); }}
                             className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none focus:ring-1 focus:ring-sky-400/60 rounded"
-                            aria-label={`View research for ${r.company ?? 'this company'}`}
+                            aria-label={`View research for ${r.company_name ?? 'this company'}`}
                           >
                             View research →
                           </button>
