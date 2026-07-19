@@ -17,6 +17,12 @@ import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
 import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/integration.ts";
 import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
 import {
+  buildPersonalizationContext, assessOpenerEligibility, generateOpener,
+  buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile,
+  type ModelBoundary, type OutreachOutputMode,
+} from "./workbench/openerBackend.ts";
+import { makeOpenerModel } from "./workbench/openerModel.ts";
+import {
   readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
   nextBestAction, WORKBENCH_STATE_KEY,
   type CompanyResearchState, type DecisionMakerState,
@@ -60,6 +66,13 @@ export interface ExecCtx {
   user_id?: string | null;
   /** Requested execution mode; source_and_qualify_only forbids draft writes. */
   execution_mode?: string | null;
+  /**
+   * EXPLICIT outreach output mode. Absent → full_draft, which is exactly the
+   * pre-existing behaviour for every non-Workbench caller.
+   */
+  output_mode?: OutreachOutputMode | null;
+  /** Injected in tests so no model is ever reached. */
+  openerModel?: ModelBoundary;
   runTool: RunToolFn;
   toolCtx: unknown;           // ToolContext passed straight through to runTool
 }
@@ -71,6 +84,15 @@ function str(v: unknown): string | null {
 /** Injectable-friendly clock. Stage timestamps must be deterministic in tests. */
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** A posting older than 60 days may not ground a "they're hiring" claim. */
+const POSTING_FRESH_DAYS = 60;
+export function isFreshPosting(postedAt: string | null | undefined, now: Date = new Date()): boolean {
+  if (!postedAt) return false;
+  const t = Date.parse(postedAt);
+  if (Number.isNaN(t)) return false;
+  return (now.getTime() - t) <= POSTING_FRESH_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /** Map a lead_candidates DB row (with joined account) into a runner LeadRecord. */
@@ -327,7 +349,87 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         observability: res.observability,
       });
 
+    } else if (action === "generate_outreach" && ctx.output_mode === "personalized_opener") {
+      // ---- PERSONALIZED OPENER -------------------------------------------
+      // Explicitly requested mode. Gates on WORKBENCH-established evidence
+      // rather than the sourcing-era draft-gate fields, and produces ONE short
+      // opening line — never an email. The legacy full_draft path below is
+      // untouched, so every non-Workbench caller behaves exactly as before.
+      const acctOpener = readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id);
+
+      // Saved Company Brain for THIS workspace only.
+      const { data: brainRow } = await ctx.admin
+        .from("company_brain").select("profile").eq("workspace_id", ctx.workspace_id).maybeSingle();
+
+      const rawRow = (row.raw ?? {}) as Record<string, unknown>;
+      const openerCtx = buildPersonalizationContext({
+        lead_candidate_id: lead.lead_candidate_id,
+        company_name: lead.company_name ?? null,
+        industry: Array.isArray(lead.industries) ? (lead.industries[0] ?? null) : null,
+        account: acctOpener,
+        brain_profile: brainRow?.profile ?? null,
+        icp_matched_criteria: typeof rawRow.icp_fit_summary === "string" ? [rawRow.icp_fit_summary] : [],
+        why_now: typeof rawRow.why_now === "string" ? rawRow.why_now : null,
+        job_posting: lead.job_title
+          ? { role: lead.job_title ?? null, fresh: isFreshPosting(lead.posted_at), source_domain: undefined }
+          : null,
+      });
+
+      // A hard saved-ICP disqualifier overrides everything.
+      const icpExcluded = rawRow.canonical_final_decision === "skip" ||
+        (typeof rawRow.gate_decision === "string" && rawRow.gate_decision === "reject");
+
+      const eligibility = assessOpenerEligibility(openerCtx, icpExcluded);
+      const model = ctx.openerModel ?? makeOpenerModel({ workspaceId: ctx.workspace_id, agentSlug: ctx.agent_slug ?? "penn" });
+      const openerResult = await generateOpener(openerCtx, eligibility, model);
+
+      const stagePayload = buildOpenerStagePayload(openerResult, nowIso());
+      const persisted = openerResult.status === "succeeded";
+
+      // Merge into the OUTREACH stage only — research, ICP and decision-maker
+      // state are carried through untouched, and a failed retry keeps the last
+      // valid opener.
+      const openerMerged = applyStageUpdate(
+        acctOpener,
+        "outreach",
+        {
+          status: persisted ? "succeeded" : (openerResult.status === "blocked" ? "failed" : openerResult.status as never),
+          reason_code: openerResult.reason_code,
+          payload: persisted ? stagePayload : null,
+        },
+        nowIso(),
+      );
+      await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, { [WORKBENCH_STATE_KEY]: openerMerged });
+
+      if (persisted) needsApproval = true;
+
+      per_lead.push({
+        lead_candidate_id: lead.lead_candidate_id,
+        company: lead.company_name,
+        output_mode: "personalized_opener",
+        status: openerResult.status,
+        reason_code: openerResult.reason_code,
+        opener: openerResult.opener ?? null,
+        alternative_opener: openerResult.alternative_opener ?? null,
+        personalization_depth: openerResult.personalization_depth,
+        used_evidence_ids: openerResult.used_evidence_ids,
+        validation: openerResult.validation ?? null,
+        approval_required: true,
+        approval_status: "draft",
+        sent: false,
+        retryable: openerResult.status === "timed_out" || openerResult.status === "failed",
+        observability: buildOpenerObservability({
+          lead_candidate_id: lead.lead_candidate_id,
+          workspace_id: ctx.workspace_id,
+          ctx: openerCtx,
+          eligibility,
+          result: openerResult,
+          persisted,
+        }),
+      });
+
     } else if (action === "generate_outreach") {
+      // ---- LEGACY FULL DRAFT (unchanged) ---------------------------------
       // Centralized draft gate — no outreach_drafts insert may bypass it. A draft
       // is allowed ONLY for a persisted, provider-verified, contact-ready lead whose
       // canonical decision is `contact`, and never when the mode forbids drafting.
