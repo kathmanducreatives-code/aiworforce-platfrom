@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
@@ -22,6 +22,8 @@ import {
   type WorkbenchAccountView,
 } from '@/lib/workbenchAccountView';
 import { buildCompanyResearchView } from '@/lib/companyResearchDisplay';
+import { hydrateAccountView, applyHydrationFloor, savedIcpFromBrain } from '@/lib/accountResearchHydration';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -48,6 +50,31 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerRow, setDrawerRow] = useState<LeadTableRow | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ action: LeadResultPanelAction; ids: string[]; credits: number } | null>(null);
+
+  // Active workspace Company Brain → saved ICP (never generic defaults).
+  const { data: brain } = useCompanyBrain();
+  const savedIcp = useMemo(
+    () => savedIcpFromBrain((brain as { profile?: unknown } | null)?.profile ?? null),
+    [brain],
+  );
+
+  // Zero-credit hydration. Seed each loaded account's research + saved-ICP stage
+  // from data Agentory ALREADY collected (verified website, company LinkedIn, live
+  // job posting, source proof, enrichment summary). Hydration is a FLOOR — an
+  // action-updated stage always wins (applyHydrationFloor), so completed
+  // intelligence survives every later action and no user is charged to rediscover
+  // sources. No provider call, no network, no writes.
+  useEffect(() => {
+    if (items.length === 0) return;
+    setAccountViews((prev) => {
+      const next: Record<string, WorkbenchAccountView> = { ...prev };
+      for (const r of items) {
+        const { view } = hydrateAccountView(r, savedIcp);
+        next[r.id] = applyHydrationFloor(view, prev[r.id]);
+      }
+      return next;
+    });
+  }, [items, savedIcp]);
 
   const filtered = useMemo(() => items.filter((r) => {
     if (onlyWithWebsite && !r.website) return false;
