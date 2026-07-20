@@ -47,6 +47,8 @@ import ICPResultsPage from "./pages/ICPResultsPage";
 import ICPCandidateDetail from "./pages/ICPCandidateDetail";
 import ScreeningJobs from "./pages/ScreeningJobs";
 import Leads from "./pages/Leads";
+import LeadScraper from "./pages/LeadScraper";
+import DeepSearch from "./pages/DeepSearch";
 import Competitors from "./pages/Competitors";
 import Content from "./pages/Content";
 import OAuthConsent from "./pages/OAuthConsent";
@@ -150,6 +152,15 @@ const App = () => (
                     {/* Agentory restructure — new top-level pages */}
                     <Route path="/leads" element={
                       <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/leads/find" element={
+                      <ProtectedRoute><MainLayout><LeadScraper /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/leads/icp" element={
+                      <ProtectedRoute><MainLayout><ICPManager /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/leads/research" element={
+                      <ProtectedRoute><MainLayout><DeepSearch /></MainLayout></ProtectedRoute>
                     } />
                     <Route path="/competitors" element={
                       <ProtectedRoute><MainLayout><Competitors /></MainLayout></ProtectedRoute>
