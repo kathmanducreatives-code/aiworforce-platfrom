@@ -50,12 +50,48 @@ export interface AccountStage<T> {
   last_success: T | null;
 }
 
+/**
+ * The outreach stage as the Workbench actually stores it.
+ *
+ * This used to be `{ status; personalization_depth?; draft_id? }`, so a
+ * successful personalized opener was reduced to its status during
+ * reconciliation and the generated message was silently discarded — the row
+ * read "Draft ready for approval" with nothing to show and the CSV exported
+ * "Not generated".
+ *
+ * `opener` and friends mirror the persisted
+ * `raw.agentory_workbench.outreach.last_success` payload. `draft_id` stays for
+ * the legacy full_draft path, which is unaffected.
+ */
+export interface OutreachStageView {
+  status: string;
+  reason_code?: string;
+  /** The generated opening line. Null for the legacy full_draft path. */
+  opener?: string | null;
+  alternative_opener?: string | null;
+  personalization_depth?: string;
+  used_evidence_ids?: string[];
+  approval_required?: boolean;
+  approval_status?: string;
+  generated_at?: string;
+  persisted?: boolean;
+  retryable?: boolean;
+  output_mode?: string;
+  /** Always false on this path — nothing here can send. */
+  sent?: boolean;
+  selected_contact_id?: string | null;
+  selected_recipient_name?: string | null;
+  selected_recipient_title?: string | null;
+  /** Legacy full_draft only. */
+  draft_id?: string;
+}
+
 export interface WorkbenchAccountView {
   lead_candidate_id: string;
   company_research: AccountStage<CompanyResearchView>;
   decision_makers: AccountStage<DecisionMakerRowView>;
   contact_enrichment: AccountStage<{ email_status: string; linkedin_available: boolean }>;
-  outreach: AccountStage<{ status: string; personalization_depth?: string; draft_id?: string }>;
+  outreach: AccountStage<OutreachStageView>;
   icp_snapshot: IcpSnapshot | null;
   updated_at: string | null;
 }
