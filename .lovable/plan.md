@@ -1,287 +1,72 @@
-# Implementation Spec (Option 1 — read-only, no code changes)
+## Goal
 
-You picked **option 1**. Below are two complete specs your engineer can apply on
-branch `company-brain-tab-state-draft-persistence-v1` (and a second branch for
-Workbench). Frontend-only. No edge functions, no migrations, no schema, no
-secrets, no provider calls.
+Replace the right-side ICP edit Sheet with a premium centered Dialog editor that visually belongs to the Company Brain page. Frontend-only, no backend/contract changes. All six sections (company, targeting, buyers, signals, disqualifiers, messaging) use the same editor shell — Target Market/targeting gets the richest grouped layout.
 
----
+## Files to change
 
-## SPEC A — Company Brain: tab-switch loading + unsaved-draft loss
+- **Rewrite** `src/components/company-brain/CompanyBrainEditDrawer.tsx` — swap `Sheet` for `Dialog`, keep the exported default component name and `Props` (so `CompanyBrainDashboard.tsx` needs no change). Internally rename the shell to `CompanyBrainEditorDialog` and re-export as default.
+- **New** `src/components/company-brain/editor/EditorShell.tsx` — centered glass modal shell (backdrop blur, header, section-context strip, sticky footer, dirty-state, focus trap via Radix Dialog, Escape guard, reduced-motion aware).
+- **New** `src/components/company-brain/editor/EditorField.tsx` — label/helper/error primitive + `FieldGroup` glass panel wrapper.
+- **New** `src/components/company-brain/editor/TargetingEditorPanel.tsx` — grouped Target Market layout (Market Definition / Company Size / Must-have / Optional).
+- **New** `src/components/company-brain/editor/sections/*` — thin wrappers for the five other sections reusing existing `ChipInput`/`Input`/`Textarea` inside `FieldGroup`s.
+- **New tests** `src/components/company-brain/editor/__tests__/CompanyBrainEditor.test.tsx` — covers the 22 test items (rendered as Dialog not Sheet, chip render/wrap, numeric min/max, size label, save payload equality vs current `buildPatch`, cancel/dirty, escape guard, focus trap presence, sticky header/footer nodes, no network calls via fetch spy).
 
-### Root causes (verified in current source)
+## Layout
 
-1. **`useCompanyBrain` refetches on every mount and has no cache.**
-   `src/hooks/useCompanyBrain.ts` runs a `supabase.from('company_brain')…maybeSingle()`
-   inside a `useEffect` keyed on `[workspaceId, wsLoading, tick]` with local
-   `useState` only. Any route/tab switch that unmounts `CompanyBrainDashboard`
-   loses `data` and re-triggers the network round-trip, which the user
-   experiences as "full page reload".
+Centered `Dialog` (Radix, already in the app):
 
-2. **Drawer draft state is component-local and reset on every open.**
-   `CompanyBrainEditDrawer.tsx` line 43-47:
-   ```ts
-   useEffect(() => {
-     if (!open || !section) return;
-     setState(initialFor(section, brain));  // clobbers user edits
-     setSaved(false);
-   }, [open, section, brain]);
-   ```
-   - Closing the drawer (or the parent re-rendering with a new `brain` object
-     reference — which happens on every refetch) discards edits.
-   - There is no dirty-state tracking and no "unsaved changes" guard.
+- container: `w-[min(1040px,calc(100vw-64px))] max-h-[calc(100vh-72px)] rounded-3xl` with translucent dark-emerald glass (`bg-card/55 backdrop-blur-2xl backdrop-saturate-150`), thin emerald border, soft outer shadow, top hairline.
+- backdrop: existing Radix overlay, tuned to `bg-background/60 backdrop-blur-sm` (page faintly visible, no harsh black).
+- structure: sticky header → context strip (`Section N of 5 · <title>`) → scroll body → sticky footer.
+- mobile (`<640px`): near full-width, rounded top corners, single column, sticky footer.
 
-3. **No cross-tab / cross-navigation persistence.** Drafts live only in React
-   state; navigating to another route or hard-refreshing loses them.
+## Header
 
-### Fix (frontend-only)
+- Icon tile (emerald glass) + eyebrow `COMPANY BRAIN` + title (`Edit ICP & Targeting` for `targeting`, mapped titles for other sections) + one-line description.
+- Right: dirty dot ("Unsaved changes"), close button.
 
-#### A1. Cache Company Brain reads with React Query
+## Section navigation
 
-Replace the ad-hoc `useEffect + useState` in `src/hooks/useCompanyBrain.ts`
-with a `useQuery` keyed by workspace. React Query is already in the project.
+Compact non-interactive stepper pills for the five sections + a `Section N of 5 · <title>` context label. Not clickable (each section is opened from the dashboard picker; we don't fake unsupported cross-section nav).
 
-```ts
-// src/hooks/useCompanyBrain.ts
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
+## Target Market form grouping
 
-export interface CompanyBrainRow {
-  profile: Record<string, any>;
-  onboarding_completed: boolean;
-  onboarding_completed_at: string | null;
-}
+Two-column grid (`md:grid-cols-2`, `md:grid-cols-3` for size row), full-width for tag fields.
 
-export const companyBrainKey = (workspaceId: string | null) =>
-  ['company_brain', workspaceId] as const;
+- **Market Definition** panel: Industries (full), Business models + Company stage row, Geography (full).  
+  Note: current schema exposes `industries`, `business_models`, `geography`, `funding_stage`. There is no separate `stage` field on `target_customer` — we map "Company stage" to existing `funding_stage` (already saved via the same `buildPatch`). No schema change.
+- **Company Size** panel: min / max / label in a 3-column row plus live "Qualified range: X–Y employees" helper (pure derived text). Numbers stay strings in state (matches current `buildPatch`).
+- **Must-have traits** panel: uses `ChipInput` (already wraps). For long-sentence traits it wraps to multiple lines — no truncation; verified by test.
+- **Optional**: Nice-to-have + Funding stage kept (already in current form; funding_stage now displayed once, not duplicated with "Company stage" — label reads "Funding stage" in a single control).
 
-export function useCompanyBrain() {
-  const { workspaceId, loading: wsLoading } = useWorkspace();
-  const qc = useQueryClient();
+## Other sections
 
-  const query = useQuery({
-    queryKey: companyBrainKey(workspaceId),
-    enabled: !wsLoading && !!workspaceId,
-    staleTime: 5 * 60_000,          // 5 min — no reload on tab switch
-    gcTime:   30 * 60_000,          // keep in cache across route unmounts
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    queryFn: async (): Promise<CompanyBrainRow> => {
-      const { data: row, error } = await supabase
-        .from('company_brain')
-        .select('profile, onboarding_completed, onboarding_completed_at')
-        .eq('workspace_id', workspaceId!)
-        .maybeSingle();
-      if (error) throw error;
-      return {
-        profile: (row?.profile as any) ?? {},
-        onboarding_completed: !!row?.onboarding_completed,
-        onboarding_completed_at: row?.onboarding_completed_at ?? null,
-      };
-    },
-  });
+Same shell, single `FieldGroup` per section, existing controls reused verbatim. No field renames.
 
-  return {
-    workspaceId,
-    data: query.data ?? null,
-    loading: query.isPending || wsLoading,
-    refresh: () => qc.invalidateQueries({ queryKey: companyBrainKey(workspaceId) }),
-  };
-}
-```
+## Footer
 
-Consumers keep the same `{ data, loading, refresh }` contract, so
-`CompanyBrainDashboard.tsx` and `CompanyBrainStatusCard.tsx` need no change.
+Sticky bottom bar inside the dialog: left = "Unsaved changes" / "All changes saved"; right = Cancel + Save. Save button uses existing primary gradient. Loading/disabled preserved. Cancel with dirty state prompts `window.confirm('Discard changes?')` — same guard on Escape and backdrop click.
 
-**Effect:** switching tabs (Dashboard ↔ Company Brain ↔ any other route) hits
-the cache instantly. No spinner, no re-fetch until `refresh()` (called after
-`saveSection`) or 5-minute stale.
+## Behavior preserved
 
-#### A2. Persist drawer drafts per workspace + section
+- `initialFor` and `buildPatch` reused unchanged → save payload is byte-identical to current.
+- `onSave`/`onOpenChange` props unchanged.
+- ChipInput Enter-to-add, keyboard nav, `useReducedMotion` all preserved.
+- No new deps.
 
-New helper `src/lib/companyBrainDrafts.ts`:
+## Validation
 
-```ts
-const KEY = (workspaceId: string, section: string) =>
-  `agentory.brain-draft.v1.${workspaceId}.${section}`;
+Client-side only, non-blocking hints under fields:
+- min > max → "Minimum must be less than maximum."
+- both size fields empty → allowed (matches current contract).
+- targeting industries empty → soft warning, does not block save (contract accepts empty).
 
-export function loadDraft(workspaceId: string, section: string): any | null {
-  try {
-    const raw = sessionStorage.getItem(KEY(workspaceId, section));
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
+## Tests, checks
 
-export function saveDraft(workspaceId: string, section: string, state: any) {
-  try { sessionStorage.setItem(KEY(workspaceId, section), JSON.stringify(state)); } catch {}
-}
+- Vitest suite for the editor.
+- `npx tsc --noEmit` and `npm run build` via harness.
+- Manual visual review at 1512 / 1280 / 1024 / 375.
 
-export function clearDraft(workspaceId: string, section: string) {
-  try { sessionStorage.removeItem(KEY(workspaceId, section)); } catch {}
-}
-```
+## Out of scope
 
-Rationale for `sessionStorage`: survives route changes and tab switches
-inside the SPA and normal reloads within the tab, but auto-clears when the
-browser tab closes — matches the mental model of an "in-progress edit" and
-avoids stale drafts leaking into future logins on shared machines.
-
-#### A3. Wire drafts + dirty guard into `CompanyBrainEditDrawer.tsx`
-
-Changes only inside this file (props already carry `section` and `brain`;
-add `workspaceId` from `useWorkspace` at the top):
-
-```ts
-import { loadDraft, saveDraft, clearDraft } from '@/lib/companyBrainDrafts';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
-```
-
-Replace the current init effect:
-
-```ts
-const { workspaceId } = useWorkspace();
-const [initial, setInitial] = useState<any>(null);
-
-useEffect(() => {
-  if (!open || !section || !workspaceId) return;
-  const base = initialFor(section, brain);
-  const draft = loadDraft(workspaceId, section);
-  setInitial(base);
-  setState(draft ?? base);
-  setSaved(false);
-}, [open, section, workspaceId]);   // NOTE: `brain` removed from deps
-```
-
-Add draft autosave:
-
-```ts
-useEffect(() => {
-  if (!open || !section || !workspaceId || !state) return;
-  saveDraft(workspaceId, section, state);
-}, [state, open, section, workspaceId]);
-```
-
-Dirty check + guard:
-
-```ts
-const isDirty = useMemo(
-  () => initial != null && JSON.stringify(state) !== JSON.stringify(initial),
-  [initial, state],
-);
-
-function requestClose(next: boolean) {
-  if (busy) return;
-  if (!next && isDirty) {
-    const ok = window.confirm('Discard unsaved changes to this section?');
-    if (!ok) return;
-    if (workspaceId && section) clearDraft(workspaceId, section);
-  }
-  onOpenChange(next);
-}
-```
-
-Then `<Sheet onOpenChange={requestClose}>` and the Cancel button calls
-`requestClose(false)`.
-
-On successful save, clear the draft:
-
-```ts
-async function handleSave() {
-  setBusy(true);
-  try {
-    await onSave(buildPatch(section!, state, brain));
-    if (workspaceId && section) clearDraft(workspaceId, section);
-    setSaved(true);
-    setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
-  } finally { setBusy(false); }
-}
-```
-
-#### A4. Optional: unsaved-changes badge on the section card
-
-`CompanyBrainDashboard.tsx` can read drafts to show a small "Draft" chip
-next to sections with pending edits (query `loadDraft(workspaceId, key)` in
-a `useMemo` re-run on drawer close). Non-blocking — nice-to-have.
-
-### Test matrix (manual)
-
-| # | Steps | Expected |
-|---|-------|----------|
-| 1 | Open `/company-brain`, wait for load, switch to Dashboard, switch back | No spinner, instant render, no network call |
-| 2 | Open drawer → edit → close (X) | Confirm modal appears; Cancel keeps drawer open |
-| 3 | Open drawer → edit → click Save | Draft cleared, toast, section reflects new values |
-| 4 | Open drawer → edit → confirm discard | Draft cleared, edits gone |
-| 5 | Open drawer → edit → navigate to `/dashboard` (drawer force-closes) → return → open same section | Edits still present (draft restored) |
-| 6 | Two workspaces: edit section A in ws1 → switch workspace → open same section | Fresh values, no leaked draft |
-| 7 | Reload tab mid-edit | Draft still present after reload |
-| 8 | Close tab, reopen | Draft gone (sessionStorage cleared) — matches expectation |
-
-### Files touched (A)
-
-- `src/hooks/useCompanyBrain.ts` (rewrite with React Query, same public API)
-- `src/lib/companyBrainDrafts.ts` (new)
-- `src/components/company-brain/CompanyBrainEditDrawer.tsx` (draft wiring + dirty guard)
-
-### Guardrails
-- No backend, RLS, edge function, migration, secret or provider changes.
-- No new dependencies (React Query already installed).
-- Contract of `useCompanyBrain` and drawer props unchanged.
-
----
-
-## SPEC B — Workbench & Lead Detail: consistent, per-lead display
-
-### Root cause summary
-
-`WorkbenchPanel.tsx` resets `tab` on `selectedOutput` change (good), but
-downstream views (`LeadResultsView`, `AgentOutputViewer`, `LeadTable`, etc.)
-cache lead detail state locally and can display previous-lead content when
-a new `selectedOutput` targets a different lead but the same `taskId`.
-
-### Fix outline (frontend-only)
-
-1. **Add `selectedLeadId` to `ChatWorkspaceContext`** and thread it through
-   `LeadResultsView` and `LeadDetailDrawer`. Reset on `selectedOutput` change.
-2. **Key detail components by `selectedLeadId`** so React remounts them.
-3. **Extend `useWorkbenchData`** to expose `leadResults` scoped by `taskId`,
-   and make `LeadTable` derive `rows` from that memo. Do not query per-row.
-4. **Normalize row shape** in one place — `normalize.ts` — so
-   `LeadTable.tsx` never touches `r.company` / `r.company_name` inconsistently
-   (this recurred in the recent TS fix and points to schema drift).
-5. **Loading/empty/failed states** should be rendered from a single
-   `renderState(status)` helper in `WorkbenchPanel` so tabs stay in sync.
-
-### Test matrix (manual)
-
-| # | Steps | Expected |
-|---|-------|----------|
-| 1 | Run workflow, open lead A, open lead B | Detail shows B; no A residue |
-| 2 | Switch tabs (Table→Insights→Activity) with a lead open | Selected lead persists on return |
-| 3 | Refresh workbench | Same lead re-selected, same tab |
-| 4 | Failed task | Failure card visible in Table tab, amber dot on Insights |
-| 5 | People-mode output | People columns render; no jobs columns leak |
-
-### Files (B)
-
-- `src/contexts/ChatWorkspaceContext.tsx` — add `selectedLeadId`
-- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx`
-- `src/components/chat/workspace/workbench/LeadResultsView.tsx`
-- `src/components/chat/workspace/workbench/leadTable/LeadTable.tsx`
-- `src/components/chat/workspace/workbench/useWorkbenchData.ts`
-- `src/components/chat/workspace/workbench/normalize.ts`
-
-### Guardrails (B)
-
-Frontend-only. No changes to `run-agent`, no persistence, no schema.
-
----
-
-## Guardrails (both specs)
-
-I will not (in this task): deploy edge functions, publish the frontend,
-apply migrations, change schema/secrets/provider flags, or call providers
-or models.
-
-Apply Spec A on branch `company-brain-tab-state-draft-persistence-v1` and
-open one PR into `main`. Do not merge until QA passes the test matrix.
+Backend, edge functions, migrations, providers, publish, other Company Brain page chrome, draft persistence (tracked separately).
