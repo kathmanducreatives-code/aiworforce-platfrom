@@ -233,14 +233,15 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
             {state && (
               <>
-                {section === 'company' && <CompanyEditor state={state} setState={setState} />}
-                {section === 'targeting' && <TargetingEditor state={state} setState={setState} />}
-                {section === 'buyers' && <BuyersEditor state={state} setState={setState} />}
-                {section === 'signals' && <SignalsEditor state={state} setState={setState} />}
-                {section === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
-                {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
+                {activeSection === 'company' && <CompanyEditor state={state} setState={setState} />}
+                {activeSection === 'targeting' && <TargetingEditor state={state} setState={setState} />}
+                {activeSection === 'buyers' && <BuyersEditor state={state} setState={setState} />}
+                {activeSection === 'signals' && <SignalsEditor state={state} setState={setState} />}
+                {activeSection === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
+                {activeSection === 'messaging' && <MessagingEditor state={state} setState={setState} />}
 
-                <ImpactPanel section={section} influences={meta.influences} />
+                <ImpactPanel section={activeSection} influences={meta.influences} />
+
               </>
             )}
           </div>
