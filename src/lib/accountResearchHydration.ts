@@ -38,6 +38,7 @@ import {
 import {
   emptyAccountView,
   type AccountStage,
+  type StageAttempt,
   type WorkbenchAccountView,
 } from '@/lib/workbenchAccountView';
 
