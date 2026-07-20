@@ -197,22 +197,26 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
             <span className="text-muted-foreground/40">·</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {SECTION_ORDER.map((s) => {
-                const active = s === section;
+                const active = s === activeSection;
                 return (
-                  <span
+                  <button
                     key={s}
+                    type="button"
+                    onClick={() => switchSection(s)}
+                    aria-current={active ? 'true' : undefined}
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
                       active
                         ? 'border-emerald-400/40 bg-emerald-400/[0.10] text-emerald-200'
-                        : 'border-border/30 bg-background/20 text-muted-foreground/60',
+                        : 'border-border/30 bg-background/20 text-muted-foreground/70 hover:border-emerald-400/30 hover:text-foreground',
                     )}
                   >
                     {TITLES[s].short}
-                  </span>
+                  </button>
                 );
               })}
             </div>
+
           </div>
 
           {/* Scroll body */}
