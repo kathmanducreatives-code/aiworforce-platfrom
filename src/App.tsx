@@ -153,6 +153,15 @@ const App = () => (
                     <Route path="/leads" element={
                       <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
                     } />
+                    <Route path="/leads/find" element={
+                      <ProtectedRoute><MainLayout><LeadScraper /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/leads/icp" element={
+                      <ProtectedRoute><MainLayout><ICPManager /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/leads/research" element={
+                      <ProtectedRoute><MainLayout><DeepSearch /></MainLayout></ProtectedRoute>
+                    } />
                     <Route path="/competitors" element={
                       <ProtectedRoute><MainLayout><Competitors /></MainLayout></ProtectedRoute>
                     } />
