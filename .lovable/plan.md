@@ -1,45 +1,30 @@
-## Goal
+## Blocker: branch/PR creation not supported in Lovable
 
-Shrink the per-step "step box" inside the Execution Plan card. Right now each step renders as a padded card (`p-3.5` + Output/Done-when block + tool badge row + View output button) — with 50 steps this becomes an enormous scroll. Make each step a compact single-line row across the system, while keeping all functionality (click to open output, agent badge, status, approvals, errors).
+Your release rule requires:
 
-## Scope
+> Create a focused frontend branch `workbench-lead-detail-sync-ux-v1`. Do not write directly to main. If branch/PR creation is not supported, stop before modifying files and report that limitation.
 
-Change only `src/components/chat/workspace/plan/ExecutionTaskRow.tsx` (used everywhere execution plans render — Chat, PlanDetailView, TaskPlanPage). No logic, routing, or data changes. Container in `ExecutionPlanCard.tsx` gets slightly tighter row spacing.
+Lovable's build environment commits directly to the canonical `main` branch that this project is synced to. I cannot:
 
-## New compact row design
+- create a new branch (`workbench-lead-detail-sync-ux-v1`)
+- push to a non-`main` branch
+- open a pull request into `main`
+- prevent changes from flowing into `main` once files are written
 
-Single row, ~32px tall:
+Any file edit I make here becomes a commit on `main`. That is incompatible with the "do not write directly to main / open one PR / do not merge" rule.
 
-```
-02  ●  [Hawk]  Scrape company site           firecrawl · researched   →
-```
+Per your own instruction, I am stopping before modifying any files.
 
-- Left: 2-digit index (mono, muted) + `StatusIcon` + `AgentBadge` (small)
-- Middle: title truncated to one line (`truncate`), with title tooltip for overflow
-- Right: compact reaction chip (e.g. "25 researched" / "Draft ready") + optional tool badge (only when failed or connector missing) + chevron
-- Whole row is clickable → opens Workbench (unchanged behavior)
-- Approval badge, when required, replaces the reaction chip on the right
-- Failed rows show a thin one-line rose error underneath (kept, but single-line truncated)
+## What I need from you to proceed
 
-Removed from the default row (moved into expand-on-click details, opened via a small caret):
-- "Output:" / "Done when:" block
-- Actor key + reason line
-- Output preview `<details>` (Workbench already shows this)
+Pick one:
 
-Expandable details:
-- Small caret button on the far right (or click on the title area with a modifier — simplest: caret toggles a local `expanded` state). When expanded, show the previously-hidden expected/success/actor/reason lines beneath the row in muted text.
-- Default state = collapsed for every step.
+1. **Do the work in your own git checkout.** I stay read-only here. I can instead deliver a detailed implementation spec (file list, canonical account-view shape, resolver contracts, guard rules, test list) that your engineer or Claude Code applies on branch `workbench-lead-detail-sync-ux-v1` and opens the PR from.
+2. **Waive the branch/PR rule for this task only.** I implement the frontend-only changes directly on `main` in Lovable (still no deploy, no publish, no edge functions, no migrations, no schema/secret/provider changes). You review the resulting commits on `main` before publishing.
+3. **Scope down to a read-only audit + spec.** No code changes at all; I produce the canonical view model, resolver, scoping rules, and test matrix as a written spec you can hand off.
 
-## Visual specs
+## Confirmed guardrails either way
 
-- Row: `flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04]`
-- Title: `text-[13px] text-[#F0F6FC] truncate`
-- Index/status/badge: `shrink-0`
-- Reaction chip: keep existing `ReactionChip` but always small
-- ExecutionPlanCard list spacing: `space-y-2` → `space-y-1`
+Regardless of option, I will not: deploy edge functions, publish the frontend, apply migrations, change schema, change secrets, change provider flags, call providers/models, or write to the production DB.
 
-## Out of scope
-
-- Workbench, agent rail, activity feed, plan card header — untouched
-- No changes to `ExecutionPlanCard.tsx` beyond `space-y-2` → `space-y-1`
-- No changes to data model, hooks, or edge functions
+Reply with 1, 2, or 3 and I'll proceed accordingly.
