@@ -32,7 +32,7 @@ import { deriveHealth, FLOW_SECTIONS, type SectionKey } from '@/lib/companyBrain
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
-  const { data, loading, refresh } = useCompanyBrain();
+  const { data, loading, isRefreshing, refresh } = useCompanyBrain();
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
@@ -59,6 +59,9 @@ export default function CompanyBrainDashboard() {
     refresh();
   }
 
+  // `loading` is now "nothing cached AND a first read pending", so a background
+  // refetch (or an auth-driven workspace re-resolve) no longer blanks the page
+  // and no longer resets scroll position.
   if (loading) {
     return (
       <div className="relative min-h-screen text-foreground">
@@ -86,6 +89,11 @@ export default function CompanyBrainDashboard() {
 
       {/* scroll container; pb-36 reserves clearance for the floating command dock */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 py-6 pb-36 sm:px-6 sm:py-8 lg:py-10">
+        {/* Background read in flight while the page stays fully usable. */}
+        {isRefreshing && (
+          <div className="px-1 pb-1 text-[11px] text-muted-foreground">Refreshing…</div>
+        )}
+
         {/* compact ICP hero */}
         <IcpHero
           companyName={brain.company.name}
@@ -202,6 +210,7 @@ export default function CompanyBrainDashboard() {
         brain={brain}
         onOpenChange={(v) => { if (!v) setOpenSection(null); }}
         onSave={(patch) => saveSection(openSection as SectionKey, patch)}
+        serverUpdatedAt={data?.onboarding_completed_at ?? null}
       />
 
       <RestartOnboardingModal
