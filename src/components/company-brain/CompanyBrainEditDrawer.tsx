@@ -51,20 +51,37 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey | null>(section);
   const initialRef = useRef<string>('');
 
+  // Sync active section when opening or when parent changes it.
   useEffect(() => {
-    if (!open || !section) return;
-    const init = initialFor(section, brain);
+    if (open) setActiveSection(section);
+  }, [open, section]);
+
+  useEffect(() => {
+    if (!open || !activeSection) return;
+    const init = initialFor(activeSection, brain);
     setState(init);
     initialRef.current = JSON.stringify(init);
     setSaved(false);
-  }, [open, section, brain]);
+  }, [open, activeSection, brain]);
 
   const dirty = useMemo(() => {
     if (!state) return false;
     return JSON.stringify(state) !== initialRef.current;
   }, [state]);
+
+  function switchSection(next: SectionKey) {
+    if (busy || next === activeSection) return;
+    if (dirty && !saved) {
+      const ok = typeof window !== 'undefined'
+        ? window.confirm('Discard unsaved changes in this section?')
+        : true;
+      if (!ok) return;
+    }
+    setActiveSection(next);
+  }
 
   function requestClose(next: boolean) {
     if (busy) return;
@@ -76,22 +93,23 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   async function handleSave() {
-    if (!section || !state) return;
+    if (!activeSection || !state) return;
     setBusy(true);
     try {
-      await onSave(buildPatch(section, state, brain));
+      await onSave(buildPatch(activeSection, state, brain));
       initialRef.current = JSON.stringify(state);
       setSaved(true);
-      setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
+      setTimeout(() => setSaved(false), reduce ? 0 : 1400);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!section) return null;
-  const meta = TITLES[section];
+  if (!activeSection) return null;
+  const meta = TITLES[activeSection];
   const Icon = meta.icon;
-  const sectionIndex = SECTION_ORDER.indexOf(section) + 1;
+  const sectionIndex = SECTION_ORDER.indexOf(activeSection) + 1;
+
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={requestClose}>
