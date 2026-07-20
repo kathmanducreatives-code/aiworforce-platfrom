@@ -22,6 +22,7 @@ import {
   type WorkbenchAccountView,
 } from '@/lib/workbenchAccountView';
 import { buildCompanyResearchView } from '@/lib/companyResearchDisplay';
+import { toOutreachStageView } from '@/lib/outreachStageView';
 import { hydrateAccountView, applyHydrationFloor, savedIcpFromBrain, hydrateAccountResearchSnapshot } from '@/lib/accountResearchHydration';
 import { buildWhyRelevant } from '@/lib/icpSnapshot';
 import {
@@ -204,7 +205,11 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
               ? buildCompanyResearchView(p as never, ra.status === 'succeeded' ? 'succeeded' : 'partial')
               : stage === 'decision_makers'
                 ? ra.decisionMakers ?? null
-                : { status: ra.status },
+                // The FULL canonical outreach result. This used to be
+                // `{ status: ra.status }`, which discarded the generated opener
+                // along with its depth, evidence ids and approval state — the
+                // row then had a success status and nothing to render.
+                : toOutreachStageView({ ...p, status: ra.status, reason_code: ra.reason_code }),
             now: new Date().toISOString(),
           }),
         }));

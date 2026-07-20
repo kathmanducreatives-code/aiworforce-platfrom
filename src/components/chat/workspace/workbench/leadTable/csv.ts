@@ -1,5 +1,6 @@
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { unwrapLeadRaw } from '@/lib/leadRowAction';
+import { hydrateOutreachStage, OUTREACH_DRAFT_READY_COPY } from '@/lib/outreachStageView';
 
 // "Locked" only means the user has not run the unlock action yet. After running,
 // the persisted status tells the real story (Part F).
@@ -44,6 +45,11 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     // Provider/debug identifiers.
     'provider_job_id', 'provider_ref_id', 'tracking_id', 'input_url',
     'outreach_status',
+    // Canonical personalized-opener metadata. Never prompts, provider payloads
+    // or model traces — only what a human needs to judge the draft.
+    'approval_status', 'personalization_depth',
+    'selected_recipient_name', 'selected_recipient_title',
+    'generated_at', 'evidence_count',
     // Query trace + explainability (Parts 1/3/7) — trace every row back to the
     // exact run + query that produced it, and why it was accepted/downgraded/flagged.
     'run_id', 'original_user_query', 'parsed_intent_summary',
@@ -70,9 +76,41 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       ? (raw.company_enrichment ? String((raw.company_enrichment as Record<string, unknown>).status ?? 'needs_verification')
         : (r.domain_status === 'missing' ? 'Blocked: no website' : NOT_GENERATED))
       : 'Enriched';
-    const outreachState = draftLocked
-      ? (r.contact_status === 'needs_contact' ? 'Insufficient context: no verified contact' : NOT_GENERATED)
-      : 'Draft ready for approval';
+    // CANONICAL outreach state. The personalized-opener path persists to
+    // `raw.agentory_workbench.outreach.last_success` and writes NO legacy
+    // `personalized_message` / full_draft row — so reading the legacy field
+    // alone exported "Not generated" for openers that had actually been
+    // generated, validated and persisted.
+    const persistedOpener = hydrateOutreachStage(raw).last_success;
+
+    // Recipient the opener was written for. The opener payload carries it when
+    // the backend recorded one; otherwise fall back to the highest-ranked
+    // verified person already exported in the contact_* columns.
+    const primaryRecipient = (() => {
+      const people = Array.isArray(raw.decision_makers) ? raw.decision_makers : [];
+      const verified = people
+        .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+        .filter((p) => p.verification_status === 'verified')
+        .sort((a, b) => (typeof a.rank === 'number' ? a.rank : Number.MAX_SAFE_INTEGER)
+          - (typeof b.rank === 'number' ? b.rank : Number.MAX_SAFE_INTEGER));
+      const top = verified[0];
+      if (!top) return null;
+      return {
+        full_name: typeof top.full_name === 'string' ? top.full_name : (typeof top.name === 'string' ? top.name : undefined),
+        current_title: typeof top.current_title === 'string' ? top.current_title : (typeof top.title === 'string' ? top.title : undefined),
+      };
+    })();
+
+    const outreachState = persistedOpener?.opener
+      ? OUTREACH_DRAFT_READY_COPY
+      : (draftLocked
+        ? (r.contact_status === 'needs_contact' ? 'Insufficient context: no verified contact' : NOT_GENERATED)
+        : OUTREACH_DRAFT_READY_COPY);
+
+    // Legacy full_draft body is FALLBACK ONLY, for records that predate the
+    // namespaced outreach stage.
+    const personalizedMessage = persistedOpener?.opener
+      ?? (draftLocked ? outreachState : (r.personalized_message ?? outreachState));
     const arr = (v: unknown) => Array.isArray(v) ? (v as unknown[]).join(' · ') : (v ?? '');
     const addr = (raw.company_address && typeof raw.company_address === 'object' ? raw.company_address : {}) as Record<string, unknown>;
     // Prefer real source proof (job_url / company website); never emit a fake
@@ -172,7 +210,7 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(contactState ?? r.contact_email),
       esc(contactState ?? r.contact_linkedin_url),
       esc(enrichLocked ? enrichState : (r.enrichment_summary ?? enrichState)),
-      esc(draftLocked ? outreachState : (r.personalized_message ?? outreachState)),
+      esc(personalizedMessage),
       esc(r.status),
       // Provider/debug identifiers.
       esc(raw.provider_job_id),
@@ -180,6 +218,12 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(raw.provider_tracking_id),
       esc(raw.input_url),
       esc(outreachState),
+      esc(persistedOpener?.approval_status),
+      esc(persistedOpener?.personalization_depth),
+      esc(persistedOpener?.selected_recipient_name ?? primaryRecipient?.full_name),
+      esc(persistedOpener?.selected_recipient_title ?? primaryRecipient?.current_title),
+      esc(persistedOpener?.generated_at),
+      esc(persistedOpener ? (persistedOpener.used_evidence_ids?.length ?? 0) : ''),
       // Query trace + explainability (Parts 1/3/7).
       esc(raw.run_id),
       esc(raw.original_user_query),

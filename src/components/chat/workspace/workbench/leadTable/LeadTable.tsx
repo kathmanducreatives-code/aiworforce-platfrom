@@ -11,6 +11,7 @@ import { evidenceLine, missingLine, RESEARCH_STATUS_COPY } from '@/lib/companyRe
 import { icpFitLine, topFitReasons, topMissing, NO_TRIGGER_COPY } from '@/lib/icpSnapshot';
 import type { WorkbenchAccountView } from '@/lib/workbenchAccountView';
 import { DEPTH_LABEL, OPENER_APPROVAL_NOTICE, type OutreachRowHint } from '@/lib/outreachOpener';
+import { OUTREACH_MISSING_CONTENT_COPY } from '@/lib/outreachStageView';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -350,10 +351,27 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                 </td>
                 <td className={`${COL_W.message} border-b border-white/[0.05] align-top p-0`}>
                   {(() => {
-                    if (rowActions?.[r.id]?.kind === 'generate_outreach') {
-                      return <RowActionCell a={rowActions[r.id]} kind="generate_outreach" />;
-                    }
                     const hint = outreachHints?.[r.id];
+                    const ra = rowActions?.[r.id];
+                    const isOutreachAction = ra?.kind === 'generate_outreach';
+
+                    // A generated opener OUTRANKS the transient action cell.
+                    // Previously the action cell won, so a successful run showed
+                    // only "Draft ready for approval" and the message the user
+                    // had just paid to generate was never displayed.
+                    // `running` still wins — the row should show progress.
+                    if (isOutreachAction && (ra.status === 'running' || !hint?.opener)) {
+                      // Succeeded, but no message to show: say exactly that
+                      // rather than claiming a draft is ready to approve.
+                      if (ra.status === 'succeeded' && !hint?.opener) {
+                        return (
+                          <div className="px-2 py-1.5 text-[10.5px] text-amber-200/80 min-w-0">
+                            <div className="line-clamp-2">{OUTREACH_MISSING_CONTENT_COPY}</div>
+                          </div>
+                        );
+                      }
+                      return <RowActionCell a={ra} kind="generate_outreach" />;
+                    }
                     // A persisted personalized OPENER (not a full email) renders directly.
                     if (hint?.opener) {
                       return (
