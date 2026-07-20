@@ -47,6 +47,8 @@ import ICPResultsPage from "./pages/ICPResultsPage";
 import ICPCandidateDetail from "./pages/ICPCandidateDetail";
 import ScreeningJobs from "./pages/ScreeningJobs";
 import Leads from "./pages/Leads";
+import LeadScraper from "./pages/LeadScraper";
+import DeepSearch from "./pages/DeepSearch";
 import Competitors from "./pages/Competitors";
 import Content from "./pages/Content";
 import OAuthConsent from "./pages/OAuthConsent";
