@@ -22,6 +22,7 @@
 //   verified website + LinkedIn + live job posting counted as zero sources.
 
 import type { LeadTableRow } from '@/hooks/useLeadResults';
+import { hydrateOutreachStage } from './outreachStageView';
 import {
   buildCompanyResearchView,
   sanitizeSummary,
@@ -422,6 +423,16 @@ export function hydrateAccountView(
   const icp_snapshot = buildIcpSnapshot(facts, icp ?? null);
 
   const now = new Date((opts.now ?? Date.now)()).toISOString();
+
+  // A generated opener lives in the namespaced outreach stage. Without this the
+  // message vanished on refresh: it was persisted correctly but nothing read it
+  // back, so the Personalized Message column reverted to a blocker/empty state.
+  //
+  // `last_success` is the durable valid opener; the stage's own status reflects
+  // the LATEST attempt, so a failed retry shows its status without erasing the
+  // opener that already succeeded.
+  const outreachStage = hydrateOutreachStage(readLeadJsonb(row));
+
   const view: WorkbenchAccountView = {
     ...emptyAccountView(snapshot.lead_candidate_id),
     company_research: {
@@ -429,6 +440,17 @@ export function hydrateAccountView(
         ? { status: 'succeeded', attempted_at: now, succeeded_at: snapshot.refreshed_at ?? now }
         : null,
       last_success: research.usable ? research : null,
+    },
+    outreach: {
+      attempt: outreachStage.latest_status
+        ? {
+          status: outreachStage.latest_status,
+          reason_code: outreachStage.latest_reason_code ?? undefined,
+          attempted_at: now,
+          succeeded_at: outreachStage.last_success?.generated_at,
+        }
+        : null,
+      last_success: outreachStage.last_success,
     },
     icp_snapshot,
     updated_at: snapshot.refreshed_at,
@@ -454,6 +476,9 @@ export function applyHydrationFloor(
   return {
     ...existing,
     company_research: keepStage(existing.company_research, hydrated.company_research),
+    // Same floor rule for outreach: an opener produced by an action in THIS
+    // session wins; otherwise the persisted one fills in on load.
+    outreach: keepStage(existing.outreach, hydrated.outreach),
     // ICP: keep a freshly recomputed one from an action if present, else hydrated.
     icp_snapshot: existing.icp_snapshot ?? hydrated.icp_snapshot,
     updated_at: existing.updated_at ?? hydrated.updated_at,
