@@ -26,7 +26,7 @@ export default function PilotBriefing({ totals }: Props) {
 
   const runningRun = useMemo(() => recentRuns.find((r) => r.status === 'running'), [recentRuns]);
 
-  const profile = brain?.profile || {};
+  const profile = (brain?.profile || {}) as any;
   const founderName = profile.founder?.name || '';
   const companyName = profile.company?.name || '';
   const firstHelp = profile.founder?.first_help_goal || '';
