@@ -200,11 +200,15 @@ Deno.test("a valid opener succeeds, approval-required and never sent", async () 
   assertEquals(r.used_evidence_ids, ["research_1"]);
 });
 
-Deno.test("evidence ids the model invents are dropped", async () => {
+Deno.test("an evidence id the model invents FAILS the message", async () => {
+  // Previously the unknown id was dropped and the opener shipped. A message may
+  // be grounded in something that does not exist, so this is now a contract
+  // violation rather than a detail to quietly discard.
   const ctx = ctxFor({ fresh: true });
   const e = assessOpenerEligibility(ctx, false);
   const r = await generateOpener(ctx, e, stubModel({ opener: GOOD_OPENER, used_evidence_ids: ["research_1", "made_up_9"] }).fn);
-  assertEquals(r.used_evidence_ids, ["research_1"], "only allowed ids survive");
+  assertEquals(r.status, "failed_validation");
+  assert(r.validation?.violations.includes("unknown_evidence_id"));
 });
 
 Deno.test("length, sentence and question limits are enforced", () => {
@@ -302,6 +306,7 @@ Deno.test("an invalid ALTERNATIVE is dropped while the primary survives", async 
   const r = await generateOpener(ctx, e, stubModel({
     opener: GOOD_OPENER,
     alternative_opener: "Hope you're doing well!",
+    used_evidence_ids: ["research_1"],
   }).fn);
   assertEquals(r.status, "succeeded");
   assertEquals(r.alternative_opener, undefined);
@@ -376,7 +381,7 @@ Deno.test("stage payload is approval-only and never sent", async () => {
 Deno.test("a failed retry preserves the previous valid opener", async () => {
   const ctx = ctxFor({ fresh: true });
   const e = assessOpenerEligibility(ctx, false);
-  const ok = await generateOpener(ctx, e, stubModel({ opener: GOOD_OPENER }).fn);
+  const ok = await generateOpener(ctx, e, stubModel({ opener: GOOD_OPENER, used_evidence_ids: ["research_1"] }).fn);
 
   let acct = applyStageUpdate(readyAccount(), "outreach", {
     status: "succeeded", payload: buildOpenerStagePayload(ok, T),
@@ -399,7 +404,7 @@ Deno.test("a failed retry preserves the previous valid opener", async () => {
 Deno.test("telemetry is sanitized — no prompts, responses or contact data", async () => {
   const ctx = ctxFor({ fresh: true });
   const e = assessOpenerEligibility(ctx, false);
-  const r = await generateOpener(ctx, e, stubModel({ opener: GOOD_OPENER }).fn);
+  const r = await generateOpener(ctx, e, stubModel({ opener: GOOD_OPENER, used_evidence_ids: ["research_1"] }).fn);
   const obs = buildOpenerObservability({
     lead_candidate_id: LEAD, workspace_id: WS, ctx, eligibility: e, result: r, persisted: true,
   });
