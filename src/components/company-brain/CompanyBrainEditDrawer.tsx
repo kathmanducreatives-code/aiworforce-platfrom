@@ -67,7 +67,13 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey | null>(section);
   const initialRef = useRef<string>('');
+
+  // Sync active section when opening or when parent changes it.
+  useEffect(() => {
+    if (open) setActiveSection(section);
+  }, [open, section]);
 
   const { workspaceId } = useWorkspace();
   const { user } = useAuth();
@@ -75,21 +81,23 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [restored, setRestored] = useState(false);
   const [backgroundUpdate, setBackgroundUpdate] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const scope = { userId, workspaceId, sectionId: section };
+  // Drafts are keyed on the section actually being edited, which the in-drawer
+  // navigator can change independently of the `section` prop.
+  const scope = { userId, workspaceId, sectionId: activeSection };
 
   // Newest `brain` reachable WITHOUT making it an effect dependency.
   const brainRef = useRef(brain);
   useEffect(() => { brainRef.current = brain; }, [brain]);
 
-  // `brain` is deliberately NOT a dependency here. It gets a new object identity
-  // on every refetch — and a refetch is exactly what a tab switch used to
-  // trigger via TOKEN_REFRESHED → new user object → workspace re-resolve. Having
-  // `brain` in these deps is what destroyed unsaved edits. Initialisation is
-  // keyed on IDENTITY: which section, which workspace, which user.
+  // `brain` is deliberately NOT a dependency. It gets a new object identity on
+  // every refetch — and a refetch is exactly what a tab switch used to trigger
+  // via TOKEN_REFRESHED → new user object → workspace re-resolve. Having `brain`
+  // in these deps is what destroyed unsaved edits. Initialisation is keyed on
+  // IDENTITY: which section, which workspace, which user.
   useEffect(() => {
-    if (!open || !section) return;
-    const serverValues = initialFor(section, brainRef.current);
-    const draft = loadDraft({ userId, workspaceId, sectionId: section });
+    if (!open || !activeSection) return;
+    const serverValues = initialFor(activeSection, brainRef.current);
+    const draft = loadDraft({ userId, workspaceId, sectionId: activeSection });
 
     if (draft && draft.dirty) {
       // The user's own unsaved work outranks the server copy.
@@ -105,7 +113,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     setBackgroundUpdate(false);
     setSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, section, workspaceId, userId]);
+  }, [open, activeSection, workspaceId, userId]);
 
   const dirty = useMemo(() => {
     if (!state) return false;
@@ -113,10 +121,10 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }, [state]);
 
   // A CLEAN editor may accept fresh server values. A dirty one must not be
-  // touched — it says the Brain changed instead, and keeps the user's work.
+  // touched — it reports that the Brain changed and keeps the user's work.
   useEffect(() => {
-    if (!open || !section) return;
-    const serverValues = initialFor(section, brain);
+    if (!open || !activeSection) return;
+    const serverValues = initialFor(activeSection, brain);
     const serialised = JSON.stringify(serverValues);
     if (serialised === initialRef.current) return;   // nothing actually changed
     if (dirty) { setBackgroundUpdate(true); return; }
@@ -128,17 +136,17 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   // Persist only AFTER the form is dirty, debounced. A clean form clears its
   // draft rather than leaving a phantom "unsaved changes" behind.
   useEffect(() => {
-    if (!open || !section || !userId || !workspaceId || !state) return;
+    if (!open || !activeSection || !userId || !workspaceId || !state) return;
     const t = setTimeout(() => {
       if (dirty) {
         saveDraft({
           schemaVersion: DRAFT_SCHEMA_VERSION,
-          userId, workspaceId, sectionId: section,
+          userId, workspaceId, sectionId: activeSection,
           brainVersion: serverUpdatedAt ?? null,
           values: state as SectionDraftValues,
           dirty: true,
           drawerOpen: true,
-          activeSection: section,
+          activeSection,
           expandedGroups: [],
           scrollPosition: typeof window !== 'undefined' ? window.scrollY : 0,
           draftUpdatedAt: new Date().toISOString(),
@@ -150,7 +158,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     }, DRAFT_DEBOUNCE_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, dirty, open, section, userId, workspaceId, serverUpdatedAt]);
+  }, [state, dirty, open, activeSection, userId, workspaceId, serverUpdatedAt]);
 
   // Native reload/close warning ONLY while there is unsaved work.
   useEffect(() => {
@@ -162,8 +170,8 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
   function discard() {
     clearDraft(scope);
-    if (section) {
-      const serverValues = initialFor(section, brainRef.current);
+    if (activeSection) {
+      const serverValues = initialFor(activeSection, brainRef.current);
       setState(serverValues);
       initialRef.current = JSON.stringify(serverValues);
     }
@@ -171,6 +179,15 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     setBackgroundUpdate(false);
     setConfirmClose(false);
     onOpenChange(false);
+  }
+
+  /**
+   * Switching sections no longer needs a confirm: the draft for the section
+   * being left is already persisted, so it is waiting when the user returns.
+   */
+  function switchSection(next: SectionKey) {
+    if (busy || next === activeSection) return;
+    setActiveSection(next);
   }
 
   function requestClose(next: boolean) {
@@ -182,26 +199,27 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   async function handleSave() {
-    if (!section || !state) return;
+    if (!activeSection || !state) return;
     setBusy(true);
     try {
-      await onSave(buildPatch(section, state, brain));
+      await onSave(buildPatch(activeSection, state, brain));
       // The work is on the server now; a kept draft would only be a stale copy.
-      clearDraft({ userId, workspaceId, sectionId: section });
+      clearDraft({ userId, workspaceId, sectionId: activeSection });
       initialRef.current = JSON.stringify(state);
       setRestored(false);
       setBackgroundUpdate(false);
       setSaved(true);
-      setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
+      setTimeout(() => setSaved(false), reduce ? 0 : 1400);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!section) return null;
-  const meta = TITLES[section];
+  if (!activeSection) return null;
+  const meta = TITLES[activeSection];
   const Icon = meta.icon;
-  const sectionIndex = SECTION_ORDER.indexOf(section) + 1;
+  const sectionIndex = SECTION_ORDER.indexOf(activeSection) + 1;
+
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={requestClose}>
@@ -289,22 +307,26 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
             <span className="text-muted-foreground/40">·</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {SECTION_ORDER.map((s) => {
-                const active = s === section;
+                const active = s === activeSection;
                 return (
-                  <span
+                  <button
                     key={s}
+                    type="button"
+                    onClick={() => switchSection(s)}
+                    aria-current={active ? 'true' : undefined}
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
                       active
                         ? 'border-emerald-400/40 bg-emerald-400/[0.10] text-emerald-200'
-                        : 'border-border/30 bg-background/20 text-muted-foreground/60',
+                        : 'border-border/30 bg-background/20 text-muted-foreground/70 hover:border-emerald-400/30 hover:text-foreground',
                     )}
                   >
                     {TITLES[s].short}
-                  </span>
+                  </button>
                 );
               })}
             </div>
+
           </div>
 
           {/* Scroll body */}
@@ -321,14 +343,15 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
             {state && (
               <>
-                {section === 'company' && <CompanyEditor state={state} setState={setState} />}
-                {section === 'targeting' && <TargetingEditor state={state} setState={setState} />}
-                {section === 'buyers' && <BuyersEditor state={state} setState={setState} />}
-                {section === 'signals' && <SignalsEditor state={state} setState={setState} />}
-                {section === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
-                {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
+                {activeSection === 'company' && <CompanyEditor state={state} setState={setState} />}
+                {activeSection === 'targeting' && <TargetingEditor state={state} setState={setState} />}
+                {activeSection === 'buyers' && <BuyersEditor state={state} setState={setState} />}
+                {activeSection === 'signals' && <SignalsEditor state={state} setState={setState} />}
+                {activeSection === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
+                {activeSection === 'messaging' && <MessagingEditor state={state} setState={setState} />}
 
-                <ImpactPanel section={section} influences={meta.influences} />
+                <ImpactPanel section={activeSection} influences={meta.influences} />
+
               </>
             )}
           </div>
