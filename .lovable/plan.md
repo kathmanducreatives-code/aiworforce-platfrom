@@ -2,16 +2,16 @@
 
 Your release rule requires:
 
-> Create a focused frontend branch `workbench-lead-detail-sync-ux-v1`. Do not write directly to main. If branch/PR creation is not supported, stop before modifying files and report that limitation.
+> Create a focused frontend branch `company-brain-tab-state-draft-persistence-v1`. Do not write directly to main. … Push the branch and open one PR into main. Do not merge.
 
-Lovable's build environment commits directly to the canonical `main` branch that this project is synced to. I cannot:
+Lovable's build environment commits directly to the canonical `main` branch this project is synced to. I cannot:
 
-- create a new branch (`workbench-lead-detail-sync-ux-v1`)
+- create a new branch (`company-brain-tab-state-draft-persistence-v1`)
 - push to a non-`main` branch
 - open a pull request into `main`
 - prevent changes from flowing into `main` once files are written
 
-Any file edit I make here becomes a commit on `main`. That is incompatible with the "do not write directly to main / open one PR / do not merge" rule.
+Any file edit I make becomes a commit on `main`. That is incompatible with the "do not write directly to main / open one PR / do not merge" rule.
 
 Per your own instruction, I am stopping before modifying any files.
 
@@ -19,9 +19,9 @@ Per your own instruction, I am stopping before modifying any files.
 
 Pick one:
 
-1. **Do the work in your own git checkout.** I stay read-only here. I can instead deliver a detailed implementation spec (file list, canonical account-view shape, resolver contracts, guard rules, test list) that your engineer or Claude Code applies on branch `workbench-lead-detail-sync-ux-v1` and opens the PR from.
-2. **Waive the branch/PR rule for this task only.** I implement the frontend-only changes directly on `main` in Lovable (still no deploy, no publish, no edge functions, no migrations, no schema/secret/provider changes). You review the resulting commits on `main` before publishing.
-3. **Scope down to a read-only audit + spec.** No code changes at all; I produce the canonical view model, resolver, scoping rules, and test matrix as a written spec you can hand off.
+1. **Do the work in your own git checkout.** I stay read-only here and deliver a detailed implementation spec (root causes for the full-page reload and draft loss, exact files to change, cache/stale-time settings, draft key scheme, dirty-guard contract, test matrix). Your engineer or Claude Code applies it on branch `company-brain-tab-state-draft-persistence-v1` and opens the PR.
+2. **Waive the branch/PR rule for this task only.** I implement the frontend-only changes directly on `main` in Lovable (still no deploy, no publish, no edge functions, no migrations, no schema/secret/provider changes, no provider/model calls). You review the resulting commits on `main` before publishing.
+3. **Scope down to a read-only audit + spec.** No code changes at all; I produce the proven root causes, the caching strategy, the draft-persistence contract, the workspace/user scoping rules, and the full test matrix as a written spec you can hand off.
 
 ## Confirmed guardrails either way
 
