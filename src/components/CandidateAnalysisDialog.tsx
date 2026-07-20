@@ -14,6 +14,7 @@ import { Calendar, Folder, FileText, Target, ShieldAlert, Trophy, CheckCircle, A
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import type { ResumeAnalysis, CandidateStatus, TimelineEvent, CandidateNote } from "@/types/ResumeAnalysis";
 import type { ScreeningBehavioralAnalysis } from "@/types/AdaptiveScreening";
 import BehavioralAnalysisCard from "@/components/screening/BehavioralAnalysisCard";
@@ -32,6 +33,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
   const [strengthsOpen, setStrengthsOpen] = useState(true);
   const [weaknessesOpen, setWeaknessesOpen] = useState(true);
   const { toast } = useToast();
+  const { workspaceId } = useWorkspace();
   
   // Status tracking
   const [currentStatus, setCurrentStatus] = useState<CandidateStatus>('new');
@@ -262,18 +264,20 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !candidate?.id) return;
-    
+
     try {
-      // Try to get user if authenticated, but don't require it
       const { data: { user } } = await supabase.auth.getUser();
-      
+      if (!user?.id) throw new Error('You must be signed in to add a note.');
+      if (!workspaceId) throw new Error('No active workspace.');
+
       const { data, error } = await supabase
         .from('candidate_notes')
         .insert({
           candidate_id: candidate.id,
           content: newNote.trim(),
-          created_by: user?.id || null,
-          created_by_name: user?.email?.split('@')[0] || 'Team Member'
+          created_by: user.id,
+          created_by_name: user.email?.split('@')[0] || 'Team Member',
+          workspace_id: workspaceId,
         })
         .select()
         .single();

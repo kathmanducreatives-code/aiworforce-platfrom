@@ -38,6 +38,7 @@ import {
 import {
   emptyAccountView,
   type AccountStage,
+  type StageAttempt,
   type WorkbenchAccountView,
 } from '@/lib/workbenchAccountView';
 
@@ -444,7 +445,7 @@ export function hydrateAccountView(
     outreach: {
       attempt: outreachStage.latest_status
         ? {
-          status: outreachStage.latest_status,
+          status: outreachStage.latest_status as StageAttempt['status'],
           reason_code: outreachStage.latest_reason_code ?? undefined,
           attempted_at: now,
           succeeded_at: outreachStage.last_success?.generated_at,

@@ -373,6 +373,7 @@ export type Database = {
           created_by_name: string | null
           id: string
           updated_at: string | null
+          workspace_id: string
         }
         Insert: {
           candidate_id?: string | null
@@ -382,6 +383,7 @@ export type Database = {
           created_by_name?: string | null
           id?: string
           updated_at?: string | null
+          workspace_id: string
         }
         Update: {
           candidate_id?: string | null
@@ -391,6 +393,7 @@ export type Database = {
           created_by_name?: string | null
           id?: string
           updated_at?: string | null
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -398,6 +401,13 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: false
             referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_notes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
