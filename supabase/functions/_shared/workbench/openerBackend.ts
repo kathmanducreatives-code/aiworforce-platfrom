@@ -407,6 +407,24 @@ export interface OpenerConstraints {
   max_questions: number;
 }
 
+/**
+ * Violations that are ADVISORY: reported so the operator can see them, but not
+ * grounds for rejection.
+ *
+ * `preferred_min_words` / `preferred_max_words` are named "preferred" and sit
+ * alongside `hard_max_chars`, which is named "hard" — the distinction was
+ * intended from the start but `ok` was computed as `violations.length === 0`,
+ * making every preference fatal. A 36-word opener that respects the character,
+ * sentence, question, structure and evidence rules is a good opener, and
+ * rejecting it burns a model call for nothing.
+ *
+ * Nothing safety-related belongs in this set.
+ */
+const ADVISORY_VIOLATIONS: ReadonlySet<string> = new Set([
+  "below_preferred_word_count",
+  "above_preferred_word_count",
+]);
+
 export const DEFAULT_OPENER_CONSTRAINTS: OpenerConstraints = {
   preferred_min_words: 18,
   preferred_max_words: 35,
@@ -504,9 +522,17 @@ export function validateOpener(
   const sentence_count = countSentences(text);
   const question_count = countQuestions(text);
 
+  // An empty opener is a hard failure in its own right. It used to be caught
+  // only as a side effect of `below_preferred_word_count` being fatal; now that
+  // word count is advisory, emptiness must be stated explicitly or whitespace
+  // would validate.
+  if (text.trim().length === 0) violations.push("empty_opener");
+
   if (char_count > constraints.hard_max_chars) violations.push("too_long_chars");
   if (sentence_count > constraints.max_sentences) violations.push("too_many_sentences");
   if (question_count > constraints.max_questions) violations.push("too_many_questions");
+  // PREFERRED, not hard. Reported for observability, never fatal — see
+  // ADVISORY_VIOLATIONS below.
   if (word_count < constraints.preferred_min_words) violations.push("below_preferred_word_count");
   if (word_count > constraints.preferred_max_words) violations.push("above_preferred_word_count");
 
@@ -540,7 +566,11 @@ export function validateOpener(
   }
 
   return {
-    ok: violations.length === 0,
+    // Advisory violations describe STYLE preference, not a safety, factual or
+    // format limit, so they must not reject an otherwise valid opener. Every
+    // hard constraint — character cap, sentence/question caps, email structure,
+    // prohibited phrases, unsupported/stale event claims — still fails hard.
+    ok: violations.every((v) => ADVISORY_VIOLATIONS.has(v)),
     violations,
     word_count,
     char_count,
