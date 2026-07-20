@@ -29,9 +29,9 @@ export default function WorkflowConfigPanel({ workflow, open, onClose, onRun }: 
   useEffect(() => {
     if (!workflow) return;
     const initial: Record<string, string | number | string[]> = {};
-    const company = brain?.profile?.company || {};
-    const icp = brain?.profile?.icp || {};
-    const competitors = brain?.profile?.competitors || {};
+    const company = (brain?.profile?.company || {}) as any;
+    const icp = (brain?.profile?.icp || {}) as any;
+    const competitors = (brain?.profile?.competitors || {}) as any;
 
     workflow.fields.forEach((f) => {
       // Best-effort pre-fill from Company Brain
