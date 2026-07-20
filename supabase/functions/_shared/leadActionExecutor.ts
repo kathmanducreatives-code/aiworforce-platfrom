@@ -371,6 +371,9 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         // the namespaced stage — the resolver decides whether it is usable.
         legacy_decision_makers: rawRow.decision_makers,
         brain_profile: brainRow?.profile ?? null,
+        // Saved ICP selects WHICH seller outcome is most relevant. It never
+        // contributes a prospect fact and never reaches the message verbatim.
+        saved_icp: brainRow?.profile ?? null,
         icp_matched_criteria: typeof rawRow.icp_fit_summary === "string" ? [rawRow.icp_fit_summary] : [],
         why_now: typeof rawRow.why_now === "string" ? rawRow.why_now : null,
         job_posting: lead.job_title

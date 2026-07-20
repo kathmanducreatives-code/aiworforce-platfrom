@@ -26,6 +26,15 @@ import {
   resolveVerifiedDecisionMakerForOutreach,
   type DecisionMakerResolution,
 } from "./decisionMakerResolver.ts";
+import {
+  buildSellerContext,
+  buildSellerClaims,
+  buildIcpContext,
+  selectSellerOutcome,
+  type SellerContext,
+  type SellerClaim,
+} from "./sellerContext.ts";
+import { selectBestCandidate } from "./openerCandidates.ts";
 
 // ---------------------------------------------------------------- output mode --
 
@@ -95,6 +104,16 @@ export interface PersonalizationContext {
   evidence: ContextEvidence[];
   icp_matched_criteria: string[];
   why_now: string | null;
+  /**
+   * The SELLER half — this workspace's own company, kept strictly apart from
+   * `company` (the prospect). The prompt labels them as different companies so
+   * the model cannot describe the seller using the prospect's business.
+   */
+  seller: SellerContext;
+  /** The closed set of statements the model may make about the seller. */
+  seller_claims: SellerClaim[];
+  /** Chosen deterministically from the saved ICP — never echoed verbatim. */
+  selected_seller_outcome: string | null;
   /**
    * How the person above was resolved, so eligibility can distinguish "nobody
    * exists" from "stored person data is malformed", and so observability can
@@ -205,6 +224,8 @@ export interface BuildContextInput {
    */
   legacy_decision_makers?: unknown;
   brain_profile: unknown;
+  /** The workspace's saved ICP, used only to select the most relevant outcome. */
+  saved_icp?: unknown;
   icp_matched_criteria?: string[];
   /** Fresh timing statement, only when genuinely supported. */
   why_now?: string | null;
@@ -219,6 +240,10 @@ export interface BuildContextInput {
  */
 export function buildPersonalizationContext(input: BuildContextInput): PersonalizationContext {
   const research = input.account.company_research.last_success;
+
+  // SELLER context, built from this workspace's own Company Brain and kept
+  // strictly separate from the prospect facts below.
+  const seller = buildSellerContext(input.brain_profile);
 
   // ONE resolver decides who (if anyone) we may write to. It reads the
   // namespaced stage first and falls back to the legacy projection only for
@@ -285,6 +310,12 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
     evidence,
     icp_matched_criteria: input.icp_matched_criteria ?? [],
     why_now: input.why_now ?? null,
+    seller,
+    seller_claims: buildSellerClaims(seller),
+    // Chosen deterministically. The ICP decides WHICH seller outcome is most
+    // relevant; it never contributes a fact about the prospect, and its
+    // vocabulary never reaches the message.
+    selected_seller_outcome: selectSellerOutcome(seller, buildIcpContext(input.saved_icp)),
     person_resolution,
   };
 }
@@ -592,6 +623,8 @@ export interface ModelOpenerResponse {
   opener: string;
   alternative_opener?: string;
   used_evidence_ids?: string[];
+  /** Which approved seller claims the model drew on. Backend-only. */
+  used_seller_claim_ids?: string[];
 }
 
 /** Injected so tests never reach a model. */
@@ -683,34 +716,104 @@ export async function generateOpener(
     };
   }
 
-  const validation = validateOpener(opener, ctx, eligibility, constraints);
-  if (!validation.ok) {
+  // Only ids that actually exist may be credited. An id the model invented is a
+  // contract violation, not a detail to quietly drop — it means the message may
+  // be grounded in something that does not exist.
+  const allowedEvidence = new Set(eligibility.allowed_evidence_ids);
+  const allowedClaims = new Set(ctx.seller_claims.map((c) => c.id));
+
+  const claimedEvidence = resp.used_evidence_ids ?? [];
+  const claimedSellerClaims = resp.used_seller_claim_ids ?? [];
+
+  const unknownEvidence = claimedEvidence.filter((id) => !allowedEvidence.has(id));
+  const unknownClaims = claimedSellerClaims.filter((id) => !allowedClaims.has(id));
+
+  if (unknownEvidence.length > 0 || unknownClaims.length > 0) {
     return {
       ...base,
       status: "failed_validation",
       reason_code: "failed_validation",
-      validation,
-      omitted_claims: validation.unsupported_claims,
+      validation: {
+        ...validateOpener(opener, ctx, eligibility, constraints),
+        ok: false,
+        violations: [
+          ...(unknownEvidence.length > 0 ? ["unknown_evidence_id"] : []),
+          ...(unknownClaims.length > 0 ? ["unknown_seller_claim_id"] : []),
+        ],
+      },
       provider_attempted: true,
       model_calls: 1,
     };
   }
 
-  // Only evidence that actually exists AND is allowed may be credited.
-  const allowed = new Set(eligibility.allowed_evidence_ids);
-  const used = (resp.used_evidence_ids ?? []).filter((id) => allowed.has(id));
+  const usedEvidence = claimedEvidence.filter((id) => allowedEvidence.has(id));
+  const usedClaims = claimedSellerClaims.filter((id) => allowedClaims.has(id));
 
+  // A "specific" message that cites nothing is not specific. Depth is a promise
+  // to the user about how the message was grounded.
+  if (eligibility.personalization_depth === "specific" && usedEvidence.length === 0) {
+    return {
+      ...base,
+      status: "failed_validation",
+      reason_code: "failed_validation",
+      validation: {
+        ...validateOpener(opener, ctx, eligibility, constraints),
+        ok: false,
+        violations: ["specific_depth_without_evidence"],
+      },
+      provider_attempted: true,
+      model_calls: 1,
+    };
+  }
+
+  // Validate BOTH candidates from the single model call, then let the stronger
+  // one win. Previously the primary was used whenever it validated, so a vague
+  // primary beat a specific alternative — and a failing primary failed the whole
+  // request even when the alternative was good.
   const alt = str(resp.alternative_opener);
-  const altValid = alt ? validateOpener(alt, ctx, eligibility, constraints).ok : false;
+  const primaryValidation = validateOpener(opener, ctx, eligibility, constraints);
+  const altValidation = alt ? validateOpener(alt, ctx, eligibility, constraints) : null;
+
+  const valid: Array<{ text: string; validation: OpenerValidation }> = [];
+  if (primaryValidation.ok) valid.push({ text: opener, validation: primaryValidation });
+  if (alt && altValidation?.ok) valid.push({ text: alt, validation: altValidation });
+
+  if (valid.length === 0) {
+    return {
+      ...base,
+      status: "failed_validation",
+      reason_code: "failed_validation",
+      validation: primaryValidation,
+      omitted_claims: primaryValidation.unsupported_claims,
+      provider_attempted: true,
+      model_calls: 1,
+    };
+  }
+
+  const best = selectBestCandidate(
+    valid.map((v) => ({
+      text: v.text,
+      used_evidence_ids: usedEvidence,
+      used_seller_claim_ids: usedClaims,
+    })),
+    {
+      personalization_depth: eligibility.personalization_depth,
+      company_name: ctx.company.name,
+      recipient_first_name: ctx.decision_maker?.first_name ?? null,
+    },
+  );
+
+  const chosen = valid.find((v) => v.text === best?.text) ?? valid[0];
+  const runnerUp = valid.find((v) => v.text !== chosen.text);
 
   return {
     ...base,
     status: "succeeded",
     reason_code: eligibility.reason_code,
-    opener,
-    ...(altValid && alt ? { alternative_opener: alt } : {}),
-    used_evidence_ids: used,
-    validation,
+    opener: chosen.text,
+    ...(runnerUp ? { alternative_opener: runnerUp.text } : {}),
+    used_evidence_ids: usedEvidence,
+    validation: chosen.validation,
     provider_attempted: true,
     model_calls: 1,
   };
