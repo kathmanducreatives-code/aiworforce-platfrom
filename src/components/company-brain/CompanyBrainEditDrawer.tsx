@@ -51,20 +51,37 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey | null>(section);
   const initialRef = useRef<string>('');
 
+  // Sync active section when opening or when parent changes it.
   useEffect(() => {
-    if (!open || !section) return;
-    const init = initialFor(section, brain);
+    if (open) setActiveSection(section);
+  }, [open, section]);
+
+  useEffect(() => {
+    if (!open || !activeSection) return;
+    const init = initialFor(activeSection, brain);
     setState(init);
     initialRef.current = JSON.stringify(init);
     setSaved(false);
-  }, [open, section, brain]);
+  }, [open, activeSection, brain]);
 
   const dirty = useMemo(() => {
     if (!state) return false;
     return JSON.stringify(state) !== initialRef.current;
   }, [state]);
+
+  function switchSection(next: SectionKey) {
+    if (busy || next === activeSection) return;
+    if (dirty && !saved) {
+      const ok = typeof window !== 'undefined'
+        ? window.confirm('Discard unsaved changes in this section?')
+        : true;
+      if (!ok) return;
+    }
+    setActiveSection(next);
+  }
 
   function requestClose(next: boolean) {
     if (busy) return;
@@ -76,22 +93,23 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   async function handleSave() {
-    if (!section || !state) return;
+    if (!activeSection || !state) return;
     setBusy(true);
     try {
-      await onSave(buildPatch(section, state, brain));
+      await onSave(buildPatch(activeSection, state, brain));
       initialRef.current = JSON.stringify(state);
       setSaved(true);
-      setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
+      setTimeout(() => setSaved(false), reduce ? 0 : 1400);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!section) return null;
-  const meta = TITLES[section];
+  if (!activeSection) return null;
+  const meta = TITLES[activeSection];
   const Icon = meta.icon;
-  const sectionIndex = SECTION_ORDER.indexOf(section) + 1;
+  const sectionIndex = SECTION_ORDER.indexOf(activeSection) + 1;
+
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={requestClose}>
@@ -179,22 +197,26 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
             <span className="text-muted-foreground/40">·</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {SECTION_ORDER.map((s) => {
-                const active = s === section;
+                const active = s === activeSection;
                 return (
-                  <span
+                  <button
                     key={s}
+                    type="button"
+                    onClick={() => switchSection(s)}
+                    aria-current={active ? 'true' : undefined}
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
                       active
                         ? 'border-emerald-400/40 bg-emerald-400/[0.10] text-emerald-200'
-                        : 'border-border/30 bg-background/20 text-muted-foreground/60',
+                        : 'border-border/30 bg-background/20 text-muted-foreground/70 hover:border-emerald-400/30 hover:text-foreground',
                     )}
                   >
                     {TITLES[s].short}
-                  </span>
+                  </button>
                 );
               })}
             </div>
+
           </div>
 
           {/* Scroll body */}
@@ -211,14 +233,15 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
             {state && (
               <>
-                {section === 'company' && <CompanyEditor state={state} setState={setState} />}
-                {section === 'targeting' && <TargetingEditor state={state} setState={setState} />}
-                {section === 'buyers' && <BuyersEditor state={state} setState={setState} />}
-                {section === 'signals' && <SignalsEditor state={state} setState={setState} />}
-                {section === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
-                {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
+                {activeSection === 'company' && <CompanyEditor state={state} setState={setState} />}
+                {activeSection === 'targeting' && <TargetingEditor state={state} setState={setState} />}
+                {activeSection === 'buyers' && <BuyersEditor state={state} setState={setState} />}
+                {activeSection === 'signals' && <SignalsEditor state={state} setState={setState} />}
+                {activeSection === 'disqualifiers' && <DisqualifiersEditor state={state} setState={setState} />}
+                {activeSection === 'messaging' && <MessagingEditor state={state} setState={setState} />}
 
-                <ImpactPanel section={section} influences={meta.influences} />
+                <ImpactPanel section={activeSection} influences={meta.influences} />
+
               </>
             )}
           </div>
