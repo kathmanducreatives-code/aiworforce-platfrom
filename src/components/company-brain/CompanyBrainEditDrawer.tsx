@@ -17,6 +17,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { ChipInput } from '@/components/onboarding/ChipInput';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
 import type { BrainProfile } from '@/lib/companyBrainView';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  loadDraft, saveDraft, clearDraft,
+  DRAFT_SCHEMA_VERSION, UNSAVED_RESTORED_NOTICE, BACKGROUND_UPDATE_NOTICE,
+  type SectionDraftValues,
+} from '@/lib/companyBrainDrafts';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+/** Long enough that typing is not a write per keystroke, short enough to be safe. */
+const DRAFT_DEBOUNCE_MS = 500;
 
 export type SectionKey = 'company' | 'targeting' | 'buyers' | 'signals' | 'disqualifiers' | 'messaging';
 
@@ -26,6 +40,8 @@ interface Props {
   brain: CompanyBrainV2;
   onOpenChange: (v: boolean) => void;
   onSave: (patch: BrainProfile) => Promise<void> | void;
+  /** Server version this edit started from, for background-update detection. */
+  serverUpdatedAt?: string | null;
 }
 
 const SECTION_ORDER: SectionKey[] = ['company', 'targeting', 'buyers', 'signals', 'disqualifiers', 'messaging'];
@@ -46,7 +62,7 @@ const TITLES: Record<SectionKey, {
   messaging:     { eyebrow: 'COMPANY BRAIN', title: 'Edit Messaging & Positioning', short: 'Messaging Fit', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
-export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave }: Props) {
+export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt }: Props) {
   const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -59,36 +75,126 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     if (open) setActiveSection(section);
   }, [open, section]);
 
+  const { workspaceId } = useWorkspace();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [restored, setRestored] = useState(false);
+  const [backgroundUpdate, setBackgroundUpdate] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  // Drafts are keyed on the section actually being edited, which the in-drawer
+  // navigator can change independently of the `section` prop.
+  const scope = { userId, workspaceId, sectionId: activeSection };
+
+  // Newest `brain` reachable WITHOUT making it an effect dependency.
+  const brainRef = useRef(brain);
+  useEffect(() => { brainRef.current = brain; }, [brain]);
+
+  // `brain` is deliberately NOT a dependency. It gets a new object identity on
+  // every refetch — and a refetch is exactly what a tab switch used to trigger
+  // via TOKEN_REFRESHED → new user object → workspace re-resolve. Having `brain`
+  // in these deps is what destroyed unsaved edits. Initialisation is keyed on
+  // IDENTITY: which section, which workspace, which user.
   useEffect(() => {
     if (!open || !activeSection) return;
-    const init = initialFor(activeSection, brain);
-    setState(init);
-    initialRef.current = JSON.stringify(init);
+    const serverValues = initialFor(activeSection, brainRef.current);
+    const draft = loadDraft({ userId, workspaceId, sectionId: activeSection });
+
+    if (draft && draft.dirty) {
+      // The user's own unsaved work outranks the server copy.
+      setState(draft.values);
+      setRestored(true);
+    } else {
+      setState(serverValues);
+      setRestored(false);
+    }
+    // The BASE stays the server values either way, so `dirty` keeps meaning
+    // "differs from what is saved".
+    initialRef.current = JSON.stringify(serverValues);
+    setBackgroundUpdate(false);
     setSaved(false);
-  }, [open, activeSection, brain]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeSection, workspaceId, userId]);
 
   const dirty = useMemo(() => {
     if (!state) return false;
     return JSON.stringify(state) !== initialRef.current;
   }, [state]);
 
+  // A CLEAN editor may accept fresh server values. A dirty one must not be
+  // touched — it reports that the Brain changed and keeps the user's work.
+  useEffect(() => {
+    if (!open || !activeSection) return;
+    const serverValues = initialFor(activeSection, brain);
+    const serialised = JSON.stringify(serverValues);
+    if (serialised === initialRef.current) return;   // nothing actually changed
+    if (dirty) { setBackgroundUpdate(true); return; }
+    setState(serverValues);
+    initialRef.current = serialised;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brain]);
+
+  // Persist only AFTER the form is dirty, debounced. A clean form clears its
+  // draft rather than leaving a phantom "unsaved changes" behind.
+  useEffect(() => {
+    if (!open || !activeSection || !userId || !workspaceId || !state) return;
+    const t = setTimeout(() => {
+      if (dirty) {
+        saveDraft({
+          schemaVersion: DRAFT_SCHEMA_VERSION,
+          userId, workspaceId, sectionId: activeSection,
+          brainVersion: serverUpdatedAt ?? null,
+          values: state as SectionDraftValues,
+          dirty: true,
+          drawerOpen: true,
+          activeSection,
+          expandedGroups: [],
+          scrollPosition: typeof window !== 'undefined' ? window.scrollY : 0,
+          draftUpdatedAt: new Date().toISOString(),
+          baseServerUpdatedAt: serverUpdatedAt ?? null,
+        });
+      } else {
+        clearDraft(scope);
+      }
+    }, DRAFT_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, dirty, open, activeSection, userId, workspaceId, serverUpdatedAt]);
+
+  // Native reload/close warning ONLY while there is unsaved work.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  function discard() {
+    clearDraft(scope);
+    if (activeSection) {
+      const serverValues = initialFor(activeSection, brainRef.current);
+      setState(serverValues);
+      initialRef.current = JSON.stringify(serverValues);
+    }
+    setRestored(false);
+    setBackgroundUpdate(false);
+    setConfirmClose(false);
+    onOpenChange(false);
+  }
+
+  /**
+   * Switching sections no longer needs a confirm: the draft for the section
+   * being left is already persisted, so it is waiting when the user returns.
+   */
   function switchSection(next: SectionKey) {
     if (busy || next === activeSection) return;
-    if (dirty && !saved) {
-      const ok = typeof window !== 'undefined'
-        ? window.confirm('Discard unsaved changes in this section?')
-        : true;
-      if (!ok) return;
-    }
     setActiveSection(next);
   }
 
   function requestClose(next: boolean) {
     if (busy) return;
-    if (!next && dirty && !saved) {
-      const ok = typeof window !== 'undefined' ? window.confirm('Discard unsaved changes?') : true;
-      if (!ok) return;
-    }
+    // An accessible dialog, not window.confirm — and closing no longer means
+    // losing the work, so the choice is three-way.
+    if (!next && dirty && !saved) { setConfirmClose(true); return; }
     onOpenChange(next);
   }
 
@@ -97,7 +203,11 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     setBusy(true);
     try {
       await onSave(buildPatch(activeSection, state, brain));
+      // The work is on the server now; a kept draft would only be a stale copy.
+      clearDraft({ userId, workspaceId, sectionId: activeSection });
       initialRef.current = JSON.stringify(state);
+      setRestored(false);
+      setBackgroundUpdate(false);
       setSaved(true);
       setTimeout(() => setSaved(false), reduce ? 0 : 1400);
     } finally {
@@ -252,7 +362,17 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
             className="sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t border-border/25 bg-card/50 px-7 py-4 backdrop-blur-xl"
           >
             <div className="min-w-0 text-[12px] text-muted-foreground/80">
-              {dirty && !saved ? (
+              {backgroundUpdate ? (
+                <span className="inline-flex items-center gap-1.5 text-amber-200/90">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                  {BACKGROUND_UPDATE_NOTICE}
+                </span>
+              ) : restored ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-300/90">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                  {UNSAVED_RESTORED_NOTICE}
+                </span>
+              ) : dirty && !saved ? (
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
                   Unsaved changes
@@ -285,6 +405,28 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
           </footer>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
+      <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>You have unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your edits are kept for this browser session. They are not saved to Company Brain yet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmClose(false)}>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmClose(false); onOpenChange(false); }}>
+              Leave and keep draft
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={discard}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DialogPrimitive.Root>
   );
 }
