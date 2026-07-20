@@ -35,6 +35,7 @@ import {
   type SellerClaim,
 } from "./sellerContext.ts";
 import { selectBestCandidate } from "./openerCandidates.ts";
+import { canonicalRecipient, type CanonicalRecipient } from "./outreachRecipient.ts";
 
 // ---------------------------------------------------------------- output mode --
 
@@ -653,6 +654,8 @@ export interface OpenerResult {
   provider_attempted: boolean;
   sanitized_error_code?: string;
   model_calls: number;
+  /** The single recipient this opener was generated for. See outreachRecipient.ts. */
+  recipient?: CanonicalRecipient;
 }
 
 /** Sanitized classification — a raw model/provider error never propagates. */
@@ -816,6 +819,9 @@ export async function generateOpener(
     validation: chosen.validation,
     provider_attempted: true,
     model_calls: 1,
+    // Record exactly who this opener was written for — the same person that
+    // entered the prompt — so nothing downstream re-derives a different one.
+    recipient: canonicalRecipient(ctx.decision_maker, ctx.person_resolution.person),
   };
 }
 
@@ -835,6 +841,16 @@ export interface OpenerStagePayload {
   approval_status: "draft";
   sent: false;
   generated_at: string;
+  /**
+   * The single recipient this opener was generated for. Persisted so the row,
+   * Lead Detail, Review and CSV all read ONE recipient instead of each
+   * re-deriving its own — the fix for "generated for Kenneth, displayed Amy".
+   */
+  selected_contact_id: string | null;
+  selected_recipient_name: string | null;
+  selected_recipient_first_name: string | null;
+  selected_recipient_title: string | null;
+  selected_recipient_role_family: string | null;
 }
 
 export function buildOpenerStagePayload(result: OpenerResult, now: string): OpenerStagePayload {
@@ -852,6 +868,11 @@ export function buildOpenerStagePayload(result: OpenerResult, now: string): Open
     approval_status: "draft",
     sent: false,
     generated_at: now,
+    selected_contact_id: result.recipient?.selected_contact_id ?? null,
+    selected_recipient_name: result.recipient?.selected_recipient_name ?? null,
+    selected_recipient_first_name: result.recipient?.selected_recipient_first_name ?? null,
+    selected_recipient_title: result.recipient?.selected_recipient_title ?? null,
+    selected_recipient_role_family: result.recipient?.selected_recipient_role_family ?? null,
   };
 }
 
@@ -870,6 +891,9 @@ export interface OpenerObservability {
   persisted: boolean;
   approval_status: "draft";
   sent: false;
+  /** Sanitized recipient provenance: id and role only, never a name or email. */
+  selected_contact_id: string | null;
+  selected_recipient_role_family: string | null;
 }
 
 export function buildOpenerObservability(input: {
@@ -894,5 +918,9 @@ export function buildOpenerObservability(input: {
     persisted: input.persisted,
     approval_status: "draft",
     sent: false,
+    // Role + id only — enough to answer "who did we generate for" in diagnostics
+    // without putting a name or contact detail into telemetry.
+    selected_contact_id: input.result.recipient?.selected_contact_id ?? null,
+    selected_recipient_role_family: input.result.recipient?.selected_recipient_role_family ?? null,
   };
 }
