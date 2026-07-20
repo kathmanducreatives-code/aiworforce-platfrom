@@ -187,6 +187,9 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
    */
   function switchSection(next: SectionKey) {
     if (busy || next === activeSection) return;
+    // Clear state first so the new editor doesn't render against the previous
+    // section's shape (would crash on undefined array fields).
+    setState(null);
     setActiveSection(next);
   }
 
