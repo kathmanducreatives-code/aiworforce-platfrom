@@ -2,8 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Plus, Upload, Download, FolderPlus, Search, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Plus, Upload, Download, FolderPlus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { useLeadLibrary, loadLocalAug, saveLocalAug } from "@/hooks/leadLibrary/useLeadLibrary";
@@ -17,6 +16,10 @@ import { ListsTab } from "@/components/leads/library/ListsTab";
 import { SearchRunsTab } from "@/components/leads/library/SearchRunsTab";
 import { ActivityTab } from "@/components/leads/library/ActivityTab";
 import { downloadCsv, leadsToCsv } from "@/lib/leadLibrary/types";
+import { CommandBackdrop } from "@/components/leads/library/premium/CommandBackdrop";
+import { AtlasPanel } from "@/components/leads/library/premium/AtlasPanel";
+import { AtlasEmptyState } from "@/components/leads/library/premium/AtlasEmptyState";
+import { PremiumSkeleton } from "@/components/leads/library/premium/PremiumSkeleton";
 
 type TabId = "all" | "lists" | "runs" | "activity";
 
@@ -61,7 +64,6 @@ export default function LeadLibrary() {
     if (!workspaceId) return;
     const name = window.prompt("Name your new list");
     if (!name) return;
-    // seed empty list into aug so it shows up in ListsTab metadata later
     const aug = loadLocalAug(workspaceId);
     aug.savedViews.push({ id: crypto.randomUUID(), name, filters: null });
     saveLocalAug(workspaceId, aug);
@@ -79,72 +81,127 @@ export default function LeadLibrary() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-8 py-6 space-y-5">
-        {/* Header */}
-        <header className="flex flex-wrap items-start gap-4">
-          <div className="min-w-0">
-            <h1 className="text-[22px] font-semibold text-foreground tracking-tight">Lead Library</h1>
-            <p className="text-[13px] text-muted-foreground mt-1 max-w-xl">
-              Every account Agentory has found, researched, qualified, and prepared for outreach.
-            </p>
-          </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={filters.q}
-                onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-                placeholder="Global search…"
-                className="h-8 pl-8 w-56 bg-background/60"
-              />
+    <div className="relative min-h-screen">
+      <CommandBackdrop />
+
+      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8 space-y-5">
+        {/* Header row */}
+        <header className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          <div className="lg:col-span-8 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10.5px] uppercase tracking-[0.18em] text-primary/80 font-semibold">
+                Lead Operations
+              </span>
+              <span className="h-1 w-1 rounded-full bg-primary/60" />
+              <span className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
+                Command Desk
+              </span>
             </div>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => toast.info("Open the Add lead dialog from your CRM import flow.")}>
-              <Plus className="h-3 w-3 mr-1" /> Add lead
-            </Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => toast.info("CSV import — coming from the Import workflow.")}>
-              <Upload className="h-3 w-3 mr-1" /> Import
-            </Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleExportAll}>
-              <Download className="h-3 w-3 mr-1" /> Export
-            </Button>
-            <Button size="sm" variant="default" className="h-8 text-xs" onClick={handleCreateList}>
-              <FolderPlus className="h-3 w-3 mr-1" /> Create list
-            </Button>
+            <h1 className="mt-1.5 text-[28px] font-semibold text-foreground tracking-tight leading-tight">
+              Lead Library
+            </h1>
+            <p className="mt-1.5 text-[13px] text-muted-foreground max-w-xl leading-relaxed">
+              Every account Atlas has found, researched, qualified, and prepared for outreach — one intelligent desk for your entire pipeline.
+            </p>
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/[0.06] px-2.5 py-1 text-[11px] text-primary/90">
+              <Sparkles className="h-3 w-3" />
+              Organized by Atlas — AI Account Analyst
+            </div>
+
+            {/* Actions */}
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20"
+                onClick={() => toast.info("Open the Add lead dialog from your CRM import flow.")}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1 text-primary/80" /> Add lead
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20"
+                onClick={() => toast.info("CSV import — coming from the Import workflow.")}
+              >
+                <Upload className="h-3.5 w-3.5 mr-1 text-primary/80" /> Import
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20"
+                onClick={handleExportAll}
+              >
+                <Download className="h-3.5 w-3.5 mr-1 text-primary/80" /> Export
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs bg-[linear-gradient(180deg,#10B981_0%,#059669_100%)] hover:brightness-110 text-white border-0 shadow-[0_10px_30px_-10px_rgba(16,185,129,0.75),inset_0_1px_0_rgba(255,255,255,0.15)]"
+                onClick={handleCreateList}
+              >
+                <FolderPlus className="h-3.5 w-3.5 mr-1" /> Create list
+              </Button>
+            </div>
+          </div>
+
+          <div className="lg:col-span-4">
+            <AtlasPanel rows={rows} />
           </div>
         </header>
 
-        {/* Metrics */}
+        {/* Metric strip */}
         <MetricStrip rows={rows} active={metric} onSelect={setMetric} />
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
-          <TabsList className="bg-card/40 border border-border/60">
-            <TabsTrigger value="all" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs">All leads</TabsTrigger>
-            <TabsTrigger value="lists" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs">Lists</TabsTrigger>
-            <TabsTrigger value="runs" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs">Search runs</TabsTrigger>
-            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs">Activity</TabsTrigger>
+          <TabsList className="bg-[rgba(10,14,12,0.6)] backdrop-blur-xl border border-white/[0.07] p-1 h-auto rounded-xl">
+            <TabsTrigger
+              value="all"
+              className="data-[state=active]:bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.04))] data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)] text-xs rounded-lg px-3 py-1.5"
+            >All leads</TabsTrigger>
+            <TabsTrigger
+              value="lists"
+              className="data-[state=active]:bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.04))] data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)] text-xs rounded-lg px-3 py-1.5"
+            >Lists</TabsTrigger>
+            <TabsTrigger
+              value="runs"
+              className="data-[state=active]:bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.04))] data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)] text-xs rounded-lg px-3 py-1.5"
+            >Search runs</TabsTrigger>
+            <TabsTrigger
+              value="activity"
+              className="data-[state=active]:bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.04))] data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)] text-xs rounded-lg px-3 py-1.5"
+            >Activity</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="mt-4 space-y-3">
             <FilterBar rows={rows} filters={filters} onChange={setFilters} onSaveView={handleSaveView} />
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading leads…
-              </div>
+              <PremiumSkeleton />
             ) : error ? (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-6 text-sm text-rose-200">
-                Lead data could not be synchronized. <button className="underline" onClick={() => refetch()}>Refresh</button>.
+              <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-6 text-sm text-rose-200 backdrop-blur-xl">
+                Lead data could not be synchronized.{" "}
+                <button className="underline" onClick={() => refetch()}>Refresh</button>.
               </div>
             ) : rows.length === 0 ? (
-              <EmptyBlock title="No leads yet" body="Ask Scout to find accounts or import a CSV to begin building your Lead Library." />
+              <AtlasEmptyState
+                title="Your Lead Library is ready to fill"
+                body="Ask Atlas to find accounts that match your ICP, or import a CSV to begin building the desk."
+              />
             ) : filtered.length === 0 ? (
-              <EmptyBlock title="No leads match these filters" body="Clear filters or adjust the selected view." />
+              <AtlasEmptyState
+                title="No leads match this view"
+                body="Adjust the filters above or clear them to see the full library."
+              />
             ) : (
               <>
-                <div className="text-[11px] text-muted-foreground">
-                  Showing {filtered.length} of {rows.length} · {computeMetric(rows, metric)} in {metric.replace("_", " ")}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
+                  <span>
+                    Showing <span className="text-foreground font-medium">{filtered.length}</span> of {rows.length}
+                    <span className="mx-1.5 text-white/20">·</span>
+                    <span className="text-primary/90">{computeMetric(rows, metric)}</span> in {metric.replace("_", " ")}
+                  </span>
+                  <span className="uppercase tracking-[0.14em] text-[10px]">Live · Atlas monitoring</span>
                 </div>
                 <LeadTable
                   rows={filtered}
@@ -196,15 +253,6 @@ export default function LeadLibrary() {
         onClose={() => { setOpenLead(null); params.delete("lead"); setParams(params, { replace: true }); }}
         onRefresh={() => refetch()}
       />
-    </div>
-  );
-}
-
-function EmptyBlock({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-card/30 p-10 text-center">
-      <div className="text-sm text-foreground">{title}</div>
-      <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">{body}</p>
     </div>
   );
 }

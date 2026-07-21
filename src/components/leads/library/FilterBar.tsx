@@ -75,13 +75,31 @@ export function FilterBar({
   const hasActive = chips.length > 0 || !!filters.q;
 
   return (
-    <div className="sticky top-0 z-10 -mx-1 rounded-xl border border-border/60 bg-card/60 backdrop-blur-md px-3 py-2.5 space-y-2">
+    <div className="sticky top-0 z-10 rounded-2xl border border-white/[0.07] bg-[rgba(10,14,12,0.72)] backdrop-blur-2xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] px-4 py-3 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
+            Refine lead view
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasActive && (
+            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => onChange(EMPTY_FILTERS)}>
+              Clear all
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={onSaveView}>
+            Save view
+          </Button>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={filters.q}
           onChange={(e) => set("q", e.target.value)}
           placeholder="Search company, buyer, signal…"
-          className="h-8 max-w-xs bg-background/60"
+          className="h-8 max-w-xs bg-black/30 border-white/10 focus-visible:ring-primary/40 text-xs"
         />
         <SmallSelect value={filters.account} onChange={(v) => set("account", v)} placeholder="Status" options={Object.entries(ACCOUNT_STATUS_LABEL)} />
         <SmallSelect value={filters.readiness} onChange={(v) => set("readiness", v)} placeholder="Readiness" options={Object.entries(CONTACT_READINESS_LABEL)} />
@@ -89,25 +107,14 @@ export function FilterBar({
         <SmallSelect value={filters.engagement} onChange={(v) => set("engagement", v)} placeholder="Engagement" options={Object.entries(ENGAGEMENT_STATUS_LABEL)} />
         <SmallSelect value={filters.industry} onChange={(v) => set("industry", v)} placeholder="Industry" options={industries.map((i) => [i, i])} />
         <SmallSelect value={filters.discoveryMethod} onChange={(v) => set("discoveryMethod", v)} placeholder="Discovery" options={methods.map((m) => [m, m])} />
-
-        <div className="ml-auto flex items-center gap-2">
-          {hasActive && (
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => onChange(EMPTY_FILTERS)}>
-              Clear all
-            </Button>
-          )}
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onSaveView}>
-            Save view
-          </Button>
-        </div>
       </div>
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 pt-1">
           {chips.map((c) => (
             <button
               key={c.key}
               onClick={() => set(c.key, "any" as never)}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/20"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/20 transition-colors"
             >
               {c.label}
               <X className="h-3 w-3" />
@@ -126,7 +133,7 @@ function SmallSelect({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[130px] bg-background/60 text-xs">
+      <SelectTrigger className="h-8 w-[130px] bg-black/30 border-white/10 text-xs hover:bg-white/[0.04]">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
