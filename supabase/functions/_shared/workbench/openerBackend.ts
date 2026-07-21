@@ -31,8 +31,10 @@ import {
   buildSellerClaims,
   buildIcpContext,
   selectSellerOutcome,
+  detectBrainContradictions,
   type SellerContext,
   type SellerClaim,
+  type BrainContradiction,
 } from "./sellerContext.ts";
 import { selectBestCandidate } from "./openerCandidates.ts";
 import { canonicalRecipient, type CanonicalRecipient } from "./outreachRecipient.ts";
@@ -115,6 +117,9 @@ export interface PersonalizationContext {
   seller_claims: SellerClaim[];
   /** Chosen deterministically from the saved ICP — never echoed verbatim. */
   selected_seller_outcome: string | null;
+  /** Which Company Brain produced the seller context above, for provenance. */
+  company_brain_id: string | null;
+  company_brain_updated_at: string | null;
   /**
    * How the person above was resolved, so eligibility can distinguish "nobody
    * exists" from "stored person data is malformed", and so observability can
@@ -227,6 +232,9 @@ export interface BuildContextInput {
   brain_profile: unknown;
   /** The workspace's saved ICP, used only to select the most relevant outcome. */
   saved_icp?: unknown;
+  /** Identity of the Brain the seller context came from (workspace-scoped). */
+  company_brain_id?: string | null;
+  company_brain_updated_at?: string | null;
   icp_matched_criteria?: string[];
   /** Fresh timing statement, only when genuinely supported. */
   why_now?: string | null;
@@ -317,6 +325,8 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
     // relevant; it never contributes a fact about the prospect, and its
     // vocabulary never reaches the message.
     selected_seller_outcome: selectSellerOutcome(seller, buildIcpContext(input.saved_icp)),
+    company_brain_id: input.company_brain_id ?? null,
+    company_brain_updated_at: input.company_brain_updated_at ?? null,
     person_resolution,
   };
 }
@@ -329,12 +339,28 @@ export type OpenerReasonCode =
   | "blocked_missing_verified_person"
   | "blocked_person_contract_invalid"
   | "blocked_missing_company_brain"
+  | "blocked_company_brain_conflict"
   | "blocked_missing_company_research"
   | "blocked_icp_disqualified";
+
+/**
+ * Sanitized diagnostics for a Company Brain that contradicts itself. Carries
+ * IDENTIFIERS and normalized concepts only — never prompt text, never the full
+ * claim bodies beyond the overlapping terms the user needs to find the clash.
+ */
+export interface BrainConflictDiagnostics {
+  conflicting_claim_ids: string[];
+  conflicting_prohibited: string[];
+  overlapping_concepts: string[];
+  company_brain_id: string | null;
+  company_brain_updated_at: string | null;
+}
 
 export interface OpenerEligibility {
   status: "ready" | "downgraded" | "blocked";
   reason_code: OpenerReasonCode;
+  /** Present only when reason_code is blocked_company_brain_conflict. */
+  brain_conflict?: BrainConflictDiagnostics;
   personalization_depth: PersonalizationDepth;
   allowed_evidence_ids: string[];
   missing_requirements: string[];
@@ -357,6 +383,28 @@ export function assessOpenerEligibility(
       personalization_depth: "generic_value_only",
       allowed_evidence_ids: [],
       missing_requirements: ["icp_disqualified"],
+    };
+  }
+
+  // A Company Brain that approves and forbids the same positioning cannot be
+  // acted on: choosing a side would be guessing at what the tenant meant, and
+  // the wrong guess ships messaging they explicitly banned. Block BEFORE the
+  // model so a misconfigured Brain costs nothing.
+  const brainConflicts: BrainContradiction[] = detectBrainContradictions(ctx.seller, ctx.seller_claims);
+  if (brainConflicts.length > 0) {
+    return {
+      status: "blocked",
+      reason_code: "blocked_company_brain_conflict",
+      brain_conflict: {
+        conflicting_claim_ids: [...new Set(brainConflicts.map((c) => c.claim_id))],
+        conflicting_prohibited: [...new Set(brainConflicts.map((c) => c.prohibited))],
+        overlapping_concepts: [...new Set(brainConflicts.flatMap((c) => c.overlap))],
+        company_brain_id: ctx.company_brain_id,
+        company_brain_updated_at: ctx.company_brain_updated_at,
+      },
+      personalization_depth: "none" as PersonalizationDepth,
+      allowed_evidence_ids: allowed,
+      missing_requirements: ["coherent_company_brain"],
     };
   }
 

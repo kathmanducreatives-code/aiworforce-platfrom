@@ -359,7 +359,7 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
 
       // Saved Company Brain for THIS workspace only.
       const { data: brainRow } = await ctx.admin
-        .from("company_brain").select("profile").eq("workspace_id", ctx.workspace_id).maybeSingle();
+        .from("company_brain").select("profile, updated_at").eq("workspace_id", ctx.workspace_id).maybeSingle();
 
       const rawRow = (row.raw ?? {}) as Record<string, unknown>;
       const openerCtx = buildPersonalizationContext({
@@ -374,6 +374,10 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         // Saved ICP selects WHICH seller outcome is most relevant. It never
         // contributes a prospect fact and never reaches the message verbatim.
         saved_icp: brainRow?.profile ?? null,
+        // Brain provenance: the row is workspace-keyed, so workspace_id IS its
+        // identity. updated_at distinguishes versions.
+        company_brain_id: ctx.workspace_id,
+        company_brain_updated_at: brainRow?.updated_at ?? null,
         icp_matched_criteria: typeof rawRow.icp_fit_summary === "string" ? [rawRow.icp_fit_summary] : [],
         why_now: typeof rawRow.why_now === "string" ? rawRow.why_now : null,
         job_posting: lead.job_title
