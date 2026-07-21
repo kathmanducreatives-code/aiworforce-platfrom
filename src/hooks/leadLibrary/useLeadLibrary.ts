@@ -97,6 +97,21 @@ export function useLeadLibrary() {
       if (cErr) throw cErr;
       if (dErr) throw dErr;
 
+      // Truncation diagnostic: the Library must not SILENTLY present an
+      // incomplete account set at scale. These caps are generous for current
+      // volumes (prod: ~63 accounts / ~80 lead_candidates per workspace) but are
+      // surfaced here so a workspace that outgrows them is visible rather than
+      // quietly cut off. A later phase replaces this with pagination.
+      const ACCOUNTS_CAP = 500, LEADS_CAP = 2000, CONTACTS_CAP = 2000, DRAFTS_CAP = 2000;
+      const capped: string[] = [];
+      if ((accounts?.length ?? 0) >= ACCOUNTS_CAP) capped.push(`accounts>=${ACCOUNTS_CAP}`);
+      if ((leadCandidates?.length ?? 0) >= LEADS_CAP) capped.push(`lead_candidates>=${LEADS_CAP}`);
+      if ((contacts?.length ?? 0) >= CONTACTS_CAP) capped.push(`contacts>=${CONTACTS_CAP}`);
+      if ((drafts?.length ?? 0) >= DRAFTS_CAP) capped.push(`outreach_drafts>=${DRAFTS_CAP}`);
+      if (capped.length > 0) {
+        console.warn(`[lead-library] result cap reached (${capped.join(", ")}) for workspace ${workspaceId} — the account set may be incomplete. Pagination is a tracked follow-up.`);
+      }
+
       // Group inputs by account_id once.
       const leadsByAccount = new Map<string, CanonicalLeadCandidate[]>();
       for (const l of leadCandidates ?? []) {

@@ -369,10 +369,12 @@ function collectSource(lc: CanonicalLeadCandidate): CanonicalDiscoverySource | n
 
   if (!sourceUrl && !providerRef && !discoveryMethod && !sourceType) return null;
 
+  // A source that reached here has at least one identifying field, so it is
+  // never "missing" — that verdict is reserved for an account with NO source at
+  // all (computed at the provenance level below).
   const fields = [sourceUrl, providerRef, discoveryMethod, sourceType, observedAt];
   const present = fields.filter(Boolean).length;
-  const completeness: ProvenanceCompleteness =
-    present >= 4 ? "complete" : present >= 2 ? "partial" : "missing";
+  const completeness: ProvenanceCompleteness = present >= 4 ? "complete" : "partial";
 
   return {
     sourceType,
