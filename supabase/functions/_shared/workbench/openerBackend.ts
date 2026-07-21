@@ -936,9 +936,79 @@ export interface OpenerStagePayload {
   selected_recipient_first_name: string | null;
   selected_recipient_title: string | null;
   selected_recipient_role_family: string | null;
+  /**
+   * Which seller identity + Brain produced this message, so a persisted opener
+   * can later PROVE it was generated from the current, coherent Brain — not from
+   * a stale flat field or a competitor-contaminated one. Optional so older
+   * callers/tests are unaffected; always attached by the Workbench opener path.
+   */
+  generation_provenance?: GenerationProvenance;
 }
 
-export function buildOpenerStagePayload(result: OpenerResult, now: string): OpenerStagePayload {
+// --------------------------------------------------------- generation provenance
+
+/** Bump when the generation contract (prompt/gating/claim shape) changes. */
+export const GENERATOR_CONTRACT_VERSION = "opener-v1";
+
+/**
+ * Enough to answer "which seller identity and Brain produced this message?"
+ * Sanitized: identifiers, normalized identity and claim IDs — never prompt text,
+ * never contact PII beyond the already-persisted recipient id.
+ */
+export interface GenerationProvenance {
+  company_brain_id: string | null;
+  company_brain_updated_at: string | null;
+  company_brain_hash: string;
+  seller_company_name_used: string | null;
+  seller_website_used: string | null;
+  seller_domain_used: string | null;
+  seller_identity_source: CanonicalSellerIdentity["identitySource"];
+  seller_identity_status: CanonicalSellerIdentity["identityStatus"];
+  seller_identity_hash: string;
+  /** The closed set of approved claims the generation context was built from. */
+  approved_seller_claim_ids: string[];
+  claim_field_paths: string[];
+  selected_contact_id: string | null;
+  evidence_ids: string[];
+  cta_source: "approved" | "derived" | "none";
+  generator_contract_version: string;
+  generated_at: string;
+  model_calls: number;
+}
+
+export function buildGenerationProvenance(input: {
+  ctx: PersonalizationContext;
+  result: OpenerResult;
+  now: string;
+}): GenerationProvenance {
+  const { ctx, result, now } = input;
+  const identity = ctx.seller_identity;
+  return {
+    company_brain_id: ctx.company_brain_id,
+    company_brain_updated_at: ctx.company_brain_updated_at,
+    company_brain_hash: identity.identityHash,
+    seller_company_name_used: identity.companyName,
+    seller_website_used: identity.websiteUrl,
+    seller_domain_used: identity.domain,
+    seller_identity_source: identity.identitySource,
+    seller_identity_status: identity.identityStatus,
+    seller_identity_hash: identity.identityHash,
+    approved_seller_claim_ids: ctx.seller_claims.map((c) => c.id),
+    claim_field_paths: [...new Set(ctx.seller_claims.map((c) => c.field_path).filter((p): p is string => !!p))],
+    selected_contact_id: result.recipient?.selected_contact_id ?? null,
+    evidence_ids: result.used_evidence_ids,
+    cta_source: ctx.seller.approved_ctas.length > 0 ? "approved" : (ctx.seller.offer.primary_offer ? "derived" : "none"),
+    generator_contract_version: GENERATOR_CONTRACT_VERSION,
+    generated_at: now,
+    model_calls: result.model_calls,
+  };
+}
+
+export function buildOpenerStagePayload(
+  result: OpenerResult,
+  now: string,
+  provenance?: GenerationProvenance,
+): OpenerStagePayload {
   return {
     output_mode: "personalized_opener",
     status: result.status,
@@ -958,6 +1028,7 @@ export function buildOpenerStagePayload(result: OpenerResult, now: string): Open
     selected_recipient_first_name: result.recipient?.selected_recipient_first_name ?? null,
     selected_recipient_title: result.recipient?.selected_recipient_title ?? null,
     selected_recipient_role_family: result.recipient?.selected_recipient_role_family ?? null,
+    ...(provenance ? { generation_provenance: provenance } : {}),
   };
 }
 

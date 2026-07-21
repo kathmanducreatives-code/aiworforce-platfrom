@@ -18,7 +18,7 @@ import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/int
 import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
 import {
   buildPersonalizationContext, assessOpenerEligibility, generateOpener,
-  buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile,
+  buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile, buildGenerationProvenance,
   type ModelBoundary, type OutreachOutputMode,
 } from "./workbench/openerBackend.ts";
 import { makeOpenerModel } from "./workbench/openerModel.ts";
@@ -393,8 +393,22 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       const model = ctx.openerModel ?? makeOpenerModel({ workspaceId: ctx.workspace_id, agentSlug: ctx.agent_slug ?? "penn" });
       const openerResult = await generateOpener(openerCtx, eligibility, model);
 
-      const stagePayload = buildOpenerStagePayload(openerResult, nowIso());
+      // Provenance: which seller identity + Brain version produced this attempt.
+      // Stamped on the persisted opener so a message can PROVE it came from the
+      // current, coherent Brain — never a stale flat or competitor-contaminated
+      // field. Historical messages without provenance stay historical.
+      const provenance = buildGenerationProvenance({ ctx: openerCtx, result: openerResult, now: nowIso() });
+      const stagePayload = buildOpenerStagePayload(openerResult, nowIso(), provenance);
       const persisted = openerResult.status === "succeeded";
+
+      // A blocked seller-identity conflict records SANITIZED diagnostics (no raw
+      // Brain/prompt) on the failed attempt, so the UI can explain what to fix
+      // without exposing seller internals. The previous valid opener survives.
+      const blockedDiagnostics = eligibility.reason_code === "blocked_seller_identity_conflict"
+        ? { seller_identity_conflict: eligibility.seller_identity_conflict ?? null, provenance }
+        : eligibility.reason_code === "blocked_company_brain_conflict"
+        ? { brain_conflict: eligibility.brain_conflict ?? null, provenance }
+        : null;
 
       // Merge into the OUTREACH stage only — research, ICP and decision-maker
       // state are carried through untouched, and a failed retry keeps the last
@@ -405,7 +419,7 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         {
           status: persisted ? "succeeded" : (openerResult.status === "blocked" ? "failed" : openerResult.status as never),
           reason_code: openerResult.reason_code,
-          payload: persisted ? stagePayload : null,
+          payload: persisted ? stagePayload : (blockedDiagnostics as Record<string, unknown> | null),
         },
         nowIso(),
       );
@@ -427,6 +441,11 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         approval_required: true,
         approval_status: "draft",
         sent: false,
+        // Sanitized conflict diagnostics so the UI can explain a blocked identity
+        // without exposing the Brain. Absent unless the attempt was blocked on it.
+        seller_identity_conflict: eligibility.seller_identity_conflict ?? null,
+        // Provenance the message was (or would have been) generated from.
+        generation_provenance: provenance,
         retryable: openerResult.status === "timed_out" || openerResult.status === "failed",
         observability: buildOpenerObservability({
           lead_candidate_id: lead.lead_candidate_id,
