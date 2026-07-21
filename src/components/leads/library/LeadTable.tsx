@@ -27,12 +27,24 @@ export function LeadTable({
 }) {
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   return (
-    <div className="rounded-xl border border-border/60 bg-card/30 backdrop-blur-sm overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.07] bg-[rgba(10,14,12,0.55)] backdrop-blur-xl overflow-hidden shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.05] bg-black/20">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
+            Accounts
+          </span>
+          <span className="text-[11px] text-muted-foreground/70">· {rows.length}</span>
+        </div>
+        <span className="text-[10.5px] text-muted-foreground/70">
+          Ranked by Atlas
+        </span>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-card/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <thead className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground bg-white/[0.02]">
             <tr>
-              <th className="w-8 px-3 py-2">
+              <th className="w-8 px-3 py-2.5">
                 <Checkbox checked={allSelected} onCheckedChange={(v) => onToggleAll(!!v)} />
               </th>
               <Th>Company</Th>
@@ -59,8 +71,9 @@ export function LeadTable({
 }
 
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-3 py-2 text-left font-medium whitespace-nowrap">{children}</th>;
+  return <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{children}</th>;
 }
+
 
 function LeadRowView({ r, selected, onToggle, onOpen }: {
   r: LeadRow; selected: boolean; onToggle: () => void; onOpen: () => void;
@@ -69,11 +82,13 @@ function LeadRowView({ r, selected, onToggle, onOpen }: {
   return (
     <tr
       className={cn(
-        "border-t border-border/40 transition-colors cursor-pointer hover:bg-primary/5",
-        selected && "bg-primary/10",
+        "border-t border-white/[0.04] transition-all cursor-pointer",
+        "hover:bg-[linear-gradient(90deg,rgba(16,185,129,0.05),transparent_60%)]",
+        selected && "bg-[linear-gradient(90deg,rgba(16,185,129,0.10),transparent_70%)] shadow-[inset_3px_0_0_rgba(16,185,129,0.9)]",
       )}
       onClick={onOpen}
     >
+
       <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
         <Checkbox checked={selected} onCheckedChange={onToggle} />
       </td>

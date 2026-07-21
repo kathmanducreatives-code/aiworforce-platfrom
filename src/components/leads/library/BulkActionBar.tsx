@@ -84,19 +84,23 @@ export function BulkActionBar({
   };
 
   return (
-    <div className="sticky bottom-3 z-20 mt-3 rounded-xl border border-primary/40 bg-card/95 backdrop-blur-xl px-3 py-2 shadow-[0_10px_40px_-10px_rgba(16,185,129,0.4)]">
+    <div className="sticky bottom-3 z-20 mt-3 rounded-2xl border border-primary/30 bg-[rgba(6,20,15,0.85)] backdrop-blur-2xl px-4 py-2.5 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.5)]">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-medium text-foreground">{selectedRows.length} selected</span>
+        <div className="flex items-center gap-2 pr-2 border-r border-white/[0.06]">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-pulse" />
+          <span className="text-[11px] uppercase tracking-[0.14em] text-primary/90 font-medium">Atlas</span>
+        </div>
+        <span className="font-semibold text-foreground">{selectedRows.length} selected</span>
         {ineligible > 0 && (
-          <span className="text-muted-foreground">· {ineligible} not ready (missing source or verified buyer)</span>
+          <span className="text-muted-foreground">· {ineligible} not ready</span>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addToList}><ListPlus className="h-3 w-3 mr-1" />Add to list</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addTag}><Tag className="h-3 w-3 mr-1" />Add tag</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={markContacted}><CheckCircle2 className="h-3 w-3 mr-1" />Mark contacted</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={archive}><Archive className="h-3 w-3 mr-1" />Archive</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={exportCsv}><Download className="h-3 w-3 mr-1" />Export CSV</Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onClear}><X className="h-3 w-3" /></Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={addToList}><ListPlus className="h-3 w-3 mr-1" />Add to list</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={addTag}><Tag className="h-3 w-3 mr-1" />Add tag</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={markContacted}><CheckCircle2 className="h-3 w-3 mr-1" />Mark contacted</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={archive}><Archive className="h-3 w-3 mr-1" />Archive</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px] border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" onClick={exportCsv}><Download className="h-3 w-3 mr-1" />Export CSV</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={onClear}><X className="h-3 w-3" /></Button>
         </div>
       </div>
     </div>
