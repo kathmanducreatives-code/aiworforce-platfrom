@@ -50,6 +50,12 @@ export interface SellerContext {
   target_customer: SellerTargetCustomer;
   brand_voice: SellerBrandVoice;
   prohibited_claims: string[];
+  /**
+   * CTAs this workspace has explicitly approved. Empty for most Brains, which
+   * is why the CTA plan can also derive a conservative ask from an approved
+   * offer rather than inventing one.
+   */
+  approved_ctas: string[];
   /** Which Brain fields actually produced content — for observability only. */
   source_fields: string[];
   /** False when the Brain cannot support any seller positioning at all. */
@@ -206,6 +212,7 @@ export function buildSellerContext(profile: unknown): SellerContext {
     target_customer,
     brand_voice,
     prohibited_claims,
+    approved_ctas: firstArr(p.approved_ctas, p.ctas, p.preferred_cta),
     source_fields: dedupe(source_fields),
     usable,
   };
@@ -240,6 +247,66 @@ export function buildSellerClaims(seller: SellerContext): SellerClaim[] {
   for (const pr of seller.offer.proof_points.slice(0, MAX_CLAIMS_PER_TYPE)) push("proof", pr);
 
   return claims;
+}
+
+// ------------------------------------------------- Brain self-contradiction ---
+
+export interface BrainContradiction {
+  claim_id: string;
+  /** The prohibition the approved claim collides with. */
+  prohibited: string;
+  /** The overlapping terms, for a sanitized diagnostic. */
+  overlap: string[];
+}
+
+/** Words too common to signal a real collision. */
+const STOPWORDS = new Set([
+  "about", "after", "again", "their", "there", "these", "those", "which", "while",
+  "would", "could", "should", "using", "with", "from", "that", "this", "into",
+  "your", "teams", "team", "help", "helps", "make", "more", "than", "then",
+]);
+
+function significantTerms(s: string): string[] {
+  return s.toLowerCase()
+    .split(/\W+/)
+    .filter((w) => w.length > 4 && !STOPWORDS.has(w));
+}
+
+/**
+ * Approved seller claims that collide with this same Brain's own prohibitions.
+ *
+ * PROVEN IN PRODUCTION (2026-07-21): a workspace Brain listed talent-discovery
+ * vocabulary in BOTH `positioning.use_cases` (approved, and therefore fed to the
+ * model as a usable claim) and `positioning.avoid_positioning` (forbidden). The
+ * generator silently used the approved side and produced positioning the same
+ * Brain forbids.
+ *
+ * Picking a side would be guessing at what the tenant meant. The caller should
+ * block and ask the user to resolve it — the Brain is the authority, and right
+ * now it says two opposite things.
+ */
+export function detectBrainContradictions(
+  seller: SellerContext,
+  claims: SellerClaim[],
+): BrainContradiction[] {
+  const out: BrainContradiction[] = [];
+  if (seller.prohibited_claims.length === 0) return out;
+
+  for (const claim of claims) {
+    const claimTerms = new Set(significantTerms(claim.text));
+    if (claimTerms.size === 0) continue;
+
+    for (const prohibited of seller.prohibited_claims) {
+      const overlap = significantTerms(prohibited).filter((t) => claimTerms.has(t));
+      // Two or more shared significant terms is a real collision, not a
+      // coincidental word.
+      if (overlap.length >= 2) {
+        out.push({ claim_id: claim.id, prohibited, overlap: [...new Set(overlap)] });
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 // ------------------------------------------------------------- saved ICP ------

@@ -187,7 +187,7 @@ describe('claim safety + style (validation rejects)', () => {
   const rej = (t: string, ctxOver?: PersonalizationContext) => validateOpener(t, ctxOver ?? ctx, elig);
 
   it('rejects over-length / full-draft / multi-question', () => {
-    expect(rej('a'.repeat(241)).length_valid).toBe(false);
+    expect(rej('a'.repeat(DEFAULT_OPENER_CONSTRAINTS.hard_max_chars + 1)).length_valid).toBe(false);
     expect(rej('Subject: Hi\n\nDear Sarah, best regards').violations).toContain('looks_like_full_draft');
     expect(rej('Sarah — one? and two? really?').length_valid).toBe(false);
   });
@@ -230,7 +230,7 @@ describe('persistence (namespaced outreach stage)', () => {
   });
   it('a failed retry preserves the previous valid opener', async () => {
     const good = buildOutreachStagePayload(await generateOpener(ctx, elig, stubModel(GOOD_OPENER)), '2026-07-19T00:00:00.000Z');
-    const failed = await generateOpener(ctx, elig, stubModel('a'.repeat(300))); // over cap → failed_validation
+    const failed = await generateOpener(ctx, elig, stubModel('a'.repeat(DEFAULT_OPENER_CONSTRAINTS.hard_max_chars + 50))); // over cap → failed_validation
     const merged = buildOutreachStagePayload(failed, '2026-07-19T01:00:00.000Z', good);
     expect(merged.opener).toBe(GOOD_OPENER);       // previous opener kept
     expect(merged.status).toBe('failed_validation'); // new attempt status recorded

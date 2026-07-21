@@ -215,11 +215,13 @@ Deno.test("length, sentence and question limits are enforced", () => {
   const ctx = ctxFor({ fresh: true });
   const e = assessOpenerEligibility(ctx, false);
 
-  const tooLong = "word ".repeat(80).trim();
+  // Limits were raised so a message can carry observation + bridge + CTA; the
+  // ENFORCEMENT is what this test covers, not the specific numbers.
+  const tooLong = "word ".repeat(120).trim();
   assert(validateOpener(tooLong, ctx, e).violations.includes("too_long_chars"));
 
-  const threeSentences = "One thing here now. Two things here now. Three things here now.";
-  assert(validateOpener(threeSentences, ctx, e).violations.includes("too_many_sentences"));
+  const fourSentences = "One thing here now. Two things here now. Three things here now. Four things here now.";
+  assert(validateOpener(fourSentences, ctx, e).violations.includes("too_many_sentences"));
 
   const twoQuestions = "Are you hiring now? Or maybe later this year?";
   assert(validateOpener(twoQuestions, ctx, e).violations.includes("too_many_questions"));

@@ -14,6 +14,8 @@
 // No model call. No network. Pure and deterministic — the same candidates always
 // produce the same winner.
 
+import { hasCta } from "./ctaPlan.ts";
+
 export interface CandidateInput {
   text: string;
   /** Evidence ids the model claimed, already filtered to the allowed set. */
@@ -99,6 +101,12 @@ const COMFORTABLE_MAX_CHARS = 220;
 
 export interface ScoreOptions {
   personalization_depth: string;
+  /**
+   * Whether the message is expected to ask for a next step. Cold outreach
+   * normally is; an informational message a workspace configured without an ask
+   * is not. A missing CTA is scored, never silently ignored.
+   */
+  requireCta?: boolean;
   /** The prospect company name, so we can credit explicit relevance. */
   company_name?: string | null;
   /** The recipient's first name, likewise. */
@@ -184,6 +192,19 @@ export function scoreOpenerCandidate(c: CandidateInput, opts: ScoreOptions): Sco
   if (templateOpening && genericSeller) {
     score -= 6;
     reasons.push("penalty_signal_restatement_plus_generic_pitch");
+  }
+
+  // A next step. A message that ends as a product statement gives the reader
+  // nothing to do — the 2026-07-21 production message did exactly that and was
+  // still accepted as a complete success.
+  if (opts.requireCta !== false) {
+    if (hasCta(text)) {
+      score += 3;
+      reasons.push("has_cta");
+    } else {
+      score -= 5;
+      reasons.push("penalty_missing_cta");
+    }
   }
 
   // Brevity, but only as a tiebreak — never enough to beat grounding.

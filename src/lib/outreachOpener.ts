@@ -269,10 +269,10 @@ export interface OpenerConstraints {
 }
 
 export const DEFAULT_OPENER_CONSTRAINTS: OpenerConstraints = {
-  preferred_min_words: 18,
-  preferred_max_words: 35,
-  hard_max_chars: 240,
-  max_sentences: 2,
+  preferred_min_words: 30,
+  preferred_max_words: 85,
+  hard_max_chars: 420,
+  max_sentences: 3,
   max_questions: 1,
 };
 

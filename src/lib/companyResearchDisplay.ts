@@ -152,6 +152,8 @@ export const OUTREACH_BLOCK_COPY: Record<string, string> = {
   blocked_missing_company_evidence: 'Complete company research first',
   blocked_missing_person: 'Find a verified decision-maker first',
   blocked_missing_company_brain: 'Complete Company Brain before drafting',
+  blocked_company_brain_conflict:
+    'Company Brain contains conflicting messaging guidance. Resolve the highlighted approved and prohibited claims before generating outreach.',
   ready: 'Ready to draft',
 
   // Canonical personalized-opener reason codes. The backend emits
