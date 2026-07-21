@@ -58,7 +58,10 @@ function ctx(depth: "specific" | "company_level" = "specific"): PersonalizationC
     why_now: null,
     person_resolution: { status: "verified", source: "legacy_decision_makers", reason_code: "verified_person_resolved" },
     ...(depth ? {} : {}),
-  } as PersonalizationContext;
+    // Deliberately partial: this advisory suite exercises validation, not the
+    // seller fields. Cast through `unknown` (the seller_* / seller_identity
+    // fields are intentionally omitted).
+  } as unknown as PersonalizationContext;
 }
 
 function eligibility(depth: "specific" | "company_level"): OpenerEligibility {

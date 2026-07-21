@@ -18,6 +18,8 @@
 //   default product category, and no fallback positioning — if the Brain cannot
 //   support a claim, the claim is not made and the opener is blocked instead.
 
+import { resolveCanonicalSellerIdentity } from "./sellerIdentity.ts";
+
 // ------------------------------------------------------------------- types ----
 
 export interface SellerOffer {
@@ -71,7 +73,22 @@ export interface SellerClaim {
   id: string;
   type: "offer" | "promise" | "outcome" | "use_case" | "differentiator" | "proof";
   text: string;
+  /**
+   * Provenance — which Brain field this approved claim came from, and whether it
+   * is seller-owned vs competitor/reference research. Lets a generation record
+   * prove no competitor-sourced text entered the approved claim catalog.
+   */
+  field_path?: string;
+  source?: "company_brain";
+  source_role?: SellerSourceRole;
+  confirmation_state?: SellerConfirmationState;
 }
+
+/** Whether a piece of Brain content describes the SELLER or is external research. */
+export type SellerSourceRole = "seller" | "competitor" | "reference" | "example" | "unknown";
+
+/** Confirmation state of a Brain field (no per-field metadata stored yet → unconfirmed). */
+export type SellerConfirmationState = "confirmed" | "manual" | "extracted" | "unconfirmed";
 
 // -------------------------------------------------------------- primitives ----
 
@@ -146,7 +163,12 @@ export function buildSellerContext(profile: unknown): SellerContext {
     return value;
   };
 
-  const seller_company_name = firstStr(p.company_name, namedOnly(p.company).name);
+  // Canonical precedence: the nested `company.name` the editor writes and the UI
+  // displays OUTRANKS the flat legacy `company_name`. In production the flat field
+  // was contaminated with a competitor's name ("goji") by a website research run,
+  // so flat-first resolution named the seller after the competitor. All seller
+  // name precedence lives in ONE place now — sellerIdentity.ts.
+  const seller_company_name = resolveCanonicalSellerIdentity({ profile }).companyName;
 
   const seller_summary = firstStr(p.company_summary, p.short_description, p.offer_summary);
 
@@ -228,6 +250,16 @@ const MAX_CLAIMS_PER_TYPE = 2;
  * Bounded deliberately: a long list invites the model to blend several claims
  * into a sentence that no single Brain field supports.
  */
+/** Representative canonical Brain path for each claim type — for provenance. */
+const CLAIM_FIELD_PATH: Record<SellerClaim["type"], string> = {
+  offer: "positioning.offer",
+  promise: "positioning.promise",
+  outcome: "target_outcomes",
+  use_case: "positioning.use_cases",
+  differentiator: "differentiators",
+  proof: "proof_points",
+};
+
 export function buildSellerClaims(seller: SellerContext): SellerClaim[] {
   const claims: SellerClaim[] = [];
   let n = 0;
@@ -236,7 +268,20 @@ export function buildSellerClaims(seller: SellerContext): SellerClaim[] {
     if (!t) return;
     if (claims.some((c) => c.text.toLowerCase() === t.toLowerCase())) return;
     n += 1;
-    claims.push({ id: `seller_claim_${n}`, type, text: t });
+    // Approved claims come from THIS workspace's own Brain positioning, so the
+    // role is `seller`. A competitor/reference URL cannot reach here — its
+    // content is kept out of the seller positioning fields (see
+    // companyBrainSourceRole.ts). Confirmation metadata is not stored per-field
+    // yet, so claims are `unconfirmed` until a confirm action records it.
+    claims.push({
+      id: `seller_claim_${n}`,
+      type,
+      text: t,
+      field_path: CLAIM_FIELD_PATH[type],
+      source: "company_brain",
+      source_role: "seller",
+      confirmation_state: "unconfirmed",
+    });
   };
 
   push("offer", seller.offer.primary_offer);
