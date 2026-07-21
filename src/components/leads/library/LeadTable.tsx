@@ -162,10 +162,26 @@ function LeadRowView({ r, selected, onToggle, onOpen }: {
         {r.opener ? (
           <div className="text-xs">
             <div className="line-clamp-2 text-foreground">{r.opener.bodyPreview}</div>
-            <div className="flex gap-1 mt-0.5">
-              <StatusPill label={r.opener.status === "approved" ? "Approved" : "Draft ready"} tone={r.opener.status === "approved" ? "success" : "info"} />
+            <div className="flex gap-1 mt-0.5 flex-wrap">
+              {(() => {
+                // The legacy LeadRow.OutreachStatus enum cannot express
+                // "retry failed, previous draft preserved" or "sent", so read the
+                // distinction from the canonical view. `sent` is shown ONLY when
+                // explicitly persisted. Falls back to the legacy enum if canonical
+                // is somehow absent.
+                const cs = r.canonical?.outreach.status;
+                if (cs === "sent" && r.canonical?.outreach.sent) return <StatusPill label="Sent" tone="success" />;
+                if (cs === "approved") return <StatusPill label="Approved" tone="success" />;
+                if (cs === "retry_failed_previous_draft_preserved") {
+                  return <>
+                    <StatusPill label="Draft ready" tone="info" />
+                    <StatusPill label="Latest retry failed" tone="warning" />
+                  </>;
+                }
+                return <StatusPill label={r.opener.status === "approved" ? "Approved" : "Draft ready"} tone={r.opener.status === "approved" ? "success" : "info"} />;
+              })()}
               <StatusPill label={`${r.opener.evidenceCount} evidence`} tone="muted" />
-              <StatusPill label="Approval required · Nothing sent" tone="warning" />
+              {!r.canonical?.outreach.sent && <StatusPill label="Approval required · Nothing sent" tone="warning" />}
             </div>
           </div>
         ) : (

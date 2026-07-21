@@ -149,6 +149,14 @@ export interface LeadRow {
   owner: string | null;
 
   possibleDuplicateOf: string | null;
+
+  /**
+   * The canonical account-level read model this row was derived from. Present
+   * once the row is built through the canonical adapter — Lead Detail and CSV
+   * read truth from here (research/outreach/recipient/provenance) instead of
+   * re-deriving. Optional so any legacy construction path still type-checks.
+   */
+  canonical?: import("./canonicalLeadView").CanonicalLeadView;
 }
 
 // ---------- labels ----------

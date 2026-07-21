@@ -3,13 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   type LeadRow,
-  type LeadSource,
-  type OpenerPreview,
-  type SelectedRecipient,
-  type OutreachStatus,
-  fitTierFromScore,
   findDuplicates,
 } from "@/lib/leadLibrary/types";
+import { deriveCanonicalLeadView, type CanonicalLeadCandidate } from "@/lib/leadLibrary/canonicalLeadView";
+import { canonicalToLeadRow, type RowAug } from "@/lib/leadLibrary/canonicalLeadRow";
 
 // Local-only augmentation store (lists/tags/manual statuses/follow-up).
 // Documented gap: no dedicated tables today.
@@ -69,75 +66,60 @@ function emptyAug(): LocalAug {
   };
 }
 
-function readJsonField<T = unknown>(raw: unknown, key: string): T | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  return (raw as Record<string, T>)[key];
-}
-
-function mapDraftToOpener(draft: {
-  id: string;
-  body: string;
-  status: string;
-  updated_at: string;
-  personalization_notes: string | null;
-  raw: unknown;
-  contact_id: string | null;
-}, contactName: string | null): OpenerPreview {
-  const status = (
-    ["not_generated","generating","draft_ready","edited","approved","skipped","failed"].includes(draft.status)
-      ? draft.status
-      : "draft_ready"
-  ) as OutreachStatus;
-  const evidence = readJsonField<unknown[]>(draft.raw, "evidence") ?? [];
-  const depth = (readJsonField<string>(draft.raw, "personalization_depth") ?? null) as
-    | "generic" | "specific" | "deep" | null;
-  return {
-    id: draft.id,
-    fullBody: draft.body,
-    bodyPreview: draft.body.slice(0, 180),
-    recipientName: contactName,
-    status,
-    generatedAt: draft.updated_at,
-    evidenceCount: Array.isArray(evidence) ? evidence.length : 0,
-    personalizationDepth: depth,
-  };
-}
-
 export function useLeadLibrary() {
   const { workspaceId } = useWorkspace();
 
   return useQuery({
-    queryKey: ["lead-library", workspaceId],
+    // Bumped to canonical-v1: rows now derive from the same JSONB stages the
+    // Workbench reads, so a cache from the old (accounts+drafts only) shape must
+    // not be reused.
+    queryKey: ["lead-library", workspaceId, "canonical-v1"],
     enabled: !!workspaceId,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     queryFn: async (): Promise<LeadRow[]> => {
       if (!workspaceId) return [];
 
-      const [{ data: accounts, error: aErr }, { data: contacts, error: cErr }, { data: drafts, error: dErr }] =
-        await Promise.all([
-          supabase
-            .from("accounts")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .order("created_at", { ascending: false })
-            .limit(500),
-          supabase
-            .from("contacts")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .limit(2000),
-          supabase
-            .from("outreach_drafts")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .order("updated_at", { ascending: false })
-            .limit(2000),
-        ]);
+      // One batched, workspace-scoped read per table — no N+1 per account.
+      const [
+        { data: accounts, error: aErr },
+        { data: leadCandidates, error: lErr },
+        { data: contacts, error: cErr },
+        { data: drafts, error: dErr },
+      ] = await Promise.all([
+        supabase.from("accounts").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(500),
+        supabase.from("lead_candidates").select("id, workspace_id, account_id, plan_id, status, fit_score, priority, next_action, updated_at, created_at, raw").eq("workspace_id", workspaceId).limit(2000),
+        supabase.from("contacts").select("*").eq("workspace_id", workspaceId).limit(2000),
+        supabase.from("outreach_drafts").select("*").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(2000),
+      ]);
       if (aErr) throw aErr;
+      if (lErr) throw lErr;
       if (cErr) throw cErr;
       if (dErr) throw dErr;
 
+      // Truncation diagnostic: the Library must not SILENTLY present an
+      // incomplete account set at scale. These caps are generous for current
+      // volumes (prod: ~63 accounts / ~80 lead_candidates per workspace) but are
+      // surfaced here so a workspace that outgrows them is visible rather than
+      // quietly cut off. A later phase replaces this with pagination.
+      const ACCOUNTS_CAP = 500, LEADS_CAP = 2000, CONTACTS_CAP = 2000, DRAFTS_CAP = 2000;
+      const capped: string[] = [];
+      if ((accounts?.length ?? 0) >= ACCOUNTS_CAP) capped.push(`accounts>=${ACCOUNTS_CAP}`);
+      if ((leadCandidates?.length ?? 0) >= LEADS_CAP) capped.push(`lead_candidates>=${LEADS_CAP}`);
+      if ((contacts?.length ?? 0) >= CONTACTS_CAP) capped.push(`contacts>=${CONTACTS_CAP}`);
+      if ((drafts?.length ?? 0) >= DRAFTS_CAP) capped.push(`outreach_drafts>=${DRAFTS_CAP}`);
+      if (capped.length > 0) {
+        console.warn(`[lead-library] result cap reached (${capped.join(", ")}) for workspace ${workspaceId} — the account set may be incomplete. Pagination is a tracked follow-up.`);
+      }
+
+      // Group inputs by account_id once.
+      const leadsByAccount = new Map<string, CanonicalLeadCandidate[]>();
+      for (const l of leadCandidates ?? []) {
+        if (!l.account_id) continue;
+        const arr = leadsByAccount.get(l.account_id) ?? [];
+        arr.push(l as unknown as CanonicalLeadCandidate);
+        leadsByAccount.set(l.account_id, arr);
+      }
       const contactsByAccount = new Map<string, typeof contacts>();
       for (const c of contacts ?? []) {
         if (!c.account_id) continue;
@@ -147,148 +129,54 @@ export function useLeadLibrary() {
       }
       const draftsByAccount = new Map<string, typeof drafts>();
       for (const d of drafts ?? []) {
-        if (!d.account_id) continue;
-        const arr = draftsByAccount.get(d.account_id) ?? [];
+        const key = d.account_id ?? "";
+        if (!key) continue;
+        const arr = draftsByAccount.get(key) ?? [];
         arr.push(d);
-        draftsByAccount.set(d.account_id, arr);
+        draftsByAccount.set(key, arr);
+      }
+      // Drafts linked by lead_candidate_id (covers account-less-but-lead-linked rows).
+      const draftsByLead = new Map<string, typeof drafts>();
+      for (const d of drafts ?? []) {
+        if (!d.lead_candidate_id) continue;
+        const arr = draftsByLead.get(d.lead_candidate_id) ?? [];
+        arr.push(d);
+        draftsByLead.set(d.lead_candidate_id, arr);
       }
 
       const aug = loadLocalAug(workspaceId);
 
       const rows: LeadRow[] = (accounts ?? []).map((a) => {
-        const acctContacts = contactsByAccount.get(a.id) ?? [];
-        const selected = acctContacts.find((c) => !!c.email || !!c.linkedin_url) ?? acctContacts[0] ?? null;
-        const alternates = acctContacts.filter((c) => c.id !== selected?.id);
-        const draft = (draftsByAccount.get(a.id) ?? [])[0];
+        const acctLeads = leadsByAccount.get(a.id) ?? [];
+        const acctLeadIds = new Set(acctLeads.map((l) => l.id));
+        const acctDrafts = [
+          ...(draftsByAccount.get(a.id) ?? []),
+          ...(drafts ?? []).filter((d) => d.lead_candidate_id && acctLeadIds.has(d.lead_candidate_id) && d.account_id !== a.id),
+        ];
 
-        const selRecipient: SelectedRecipient | null = selected
-          ? {
-              id: selected.id,
-              fullName: selected.full_name,
-              title: selected.title,
-              linkedinUrl: selected.linkedin_url,
-              email: selected.email,
-              phone: selected.phone,
-              verified: !!selected.email,
-            }
-          : null;
+        const view = deriveCanonicalLeadView({
+          workspaceId,
+          account: a as never,
+          leadCandidates: acctLeads,
+          contacts: (contactsByAccount.get(a.id) ?? []) as never,
+          outreachDrafts: acctDrafts as never,
+          activity: aug.activity
+            .filter((x) => x.leadId === a.id)
+            .map((x) => ({ id: x.id, at: x.at, type: x.type, detail: x.detail, owner: x.owner, channel: null })),
+        });
 
-        // Source signal reconstruction from `accounts.raw` (best-effort, truthful).
-        const raw = a.raw as Record<string, unknown> | null;
-        const signalTitle = (raw?.signal_title as string) ?? (raw?.headline as string) ?? null;
-        const signalUrl = (raw?.source_url as string) ?? null;
-        const searchQuery = (raw?.search_query as string) ?? null;
-        const searchRunId = (raw?.search_run_id as string) ?? null;
-
-        const sources: LeadSource[] = [];
-        if (a.source || signalTitle || signalUrl) {
-          sources.push({
-            discoveryMethod: a.source,
-            sourceType: (raw?.source_type as string) ?? null,
-            headline: signalTitle,
-            url: signalUrl,
-            author: (raw?.source_author as string) ?? null,
-            publishedAt: (raw?.published_at as string) ?? null,
-            observedAt: a.created_at,
-            freshness: null,
-            confidence: null,
-            searchQuery,
-            searchRunId,
-          });
-        }
-
-        const fitScore =
-          typeof raw?.fit_score === "number" ? (raw.fit_score as number) : null;
-
-        const opener: OpenerPreview | null = draft
-          ? mapDraftToOpener(draft as never, selRecipient?.fullName ?? null)
-          : null;
-
-        const manualEng = aug.manualEngagement[a.id];
-        const manualLi = aug.manualLinkedIn[a.id];
-        const manualEmail = aug.manualEmail[a.id];
-        const manualPhone = aug.manualPhone[a.id];
-
-        const lastActivityFromAug = aug.activity
-          .filter((x) => x.leadId === a.id)
-          .sort((x, y) => y.at.localeCompare(x.at))[0];
-
-        return {
-          id: a.id,
-          workspaceId: a.workspace_id,
-          name: a.name,
-          domain: a.domain,
-          websiteUrl: a.website_url,
-          linkedinUrl: a.linkedin_url,
-          industry: a.industry,
-          employeeCount: a.employee_count,
-          location: a.location,
-          createdAt: a.created_at,
-          updatedAt: a.updated_at,
-
-          accountStatus:
-            (a.stage as LeadRow["accountStatus"]) ??
-            (fitScore != null && fitScore >= 60 ? "qualified" : "new"),
-          contactReadiness: selRecipient?.verified
-            ? "verified"
-            : selRecipient
-              ? "needs_review"
-              : "no_contact",
-          outreachStatus: opener?.status ?? "not_generated",
-          engagementStatus: (manualEng as LeadRow["engagementStatus"]) ?? "not_contacted",
-          linkedinStatus: (manualLi as LeadRow["linkedinStatus"]) ?? "not_started",
-          emailStatus:
-            (manualEmail as LeadRow["emailStatus"]) ??
-            (selRecipient?.email ? "draft" : "unavailable"),
-          phoneStatus: (manualPhone as LeadRow["phoneStatus"]) ?? "not_attempted",
-
-          fitScore,
-          fitTier: fitTierFromScore(fitScore),
-          whySelected:
-            (raw?.why_selected as string) ??
-            signalTitle ??
-            a.description ??
-            null,
-
-          sources,
-          strongestSource: sources[0] ?? null,
-          searchRunIds: searchRunId ? [searchRunId] : [],
-
-          selectedRecipient: selRecipient,
-          alternateRecipients: alternates.map((c) => ({
-            id: c.id,
-            fullName: c.full_name,
-            title: c.title,
-            linkedinUrl: c.linkedin_url,
-            email: c.email,
-            phone: c.phone,
-            verified: !!c.email,
-          })),
-
-          opener,
-
-          lastActivity: lastActivityFromAug
-            ? {
-                id: lastActivityFromAug.id,
-                type: lastActivityFromAug.type,
-                at: lastActivityFromAug.at,
-                channel: null,
-                manual: true,
-                owner: lastActivityFromAug.owner,
-              }
-            : null,
-          primaryChannel: selRecipient?.email
-            ? "email"
-            : selRecipient?.linkedinUrl
-              ? "linkedin"
-              : null,
-
+        const rowAug: RowAug = {
           lists: aug.lists[a.id] ?? [],
           tags: aug.tags[a.id] ?? [],
           followUpAt: aug.followUpAt[a.id] ?? null,
           owner: aug.owner[a.id] ?? null,
-          possibleDuplicateOf: null,
+          manualEngagement: aug.manualEngagement[a.id] as LeadRow["engagementStatus"] | undefined,
+          manualLinkedIn: aug.manualLinkedIn[a.id] as LeadRow["linkedinStatus"] | undefined,
+          manualEmail: aug.manualEmail[a.id] as LeadRow["emailStatus"] | undefined,
+          manualPhone: aug.manualPhone[a.id] as LeadRow["phoneStatus"] | undefined,
         };
+
+        return canonicalToLeadRow(view, a as never, rowAug);
       });
 
       // dedupe pass
