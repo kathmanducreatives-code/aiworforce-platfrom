@@ -38,6 +38,13 @@ import {
 } from "./sellerContext.ts";
 import { selectBestCandidate } from "./openerCandidates.ts";
 import { canonicalRecipient, type CanonicalRecipient } from "./outreachRecipient.ts";
+import {
+  resolveCanonicalSellerIdentity,
+  isSellerIdentityBlocked,
+  sellerIdentityConflictDiagnostics,
+  type CanonicalSellerIdentity,
+  type SellerIdentityConflictDiagnostics,
+} from "./sellerIdentity.ts";
 
 // ---------------------------------------------------------------- output mode --
 
@@ -120,6 +127,13 @@ export interface PersonalizationContext {
   /** Which Company Brain produced the seller context above, for provenance. */
   company_brain_id: string | null;
   company_brain_updated_at: string | null;
+  /**
+   * Canonical seller identity (name/website/domain/linkedin) resolved with one
+   * precedence: nested `company.*` outranks legacy flat fields. Carries any
+   * conflict between the two so eligibility can block a contaminated Brain
+   * before the model is ever called.
+   */
+  seller_identity: CanonicalSellerIdentity;
   /**
    * How the person above was resolved, so eligibility can distinguish "nobody
    * exists" from "stored person data is malformed", and so observability can
@@ -327,6 +341,11 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
     selected_seller_outcome: selectSellerOutcome(seller, buildIcpContext(input.saved_icp)),
     company_brain_id: input.company_brain_id ?? null,
     company_brain_updated_at: input.company_brain_updated_at ?? null,
+    seller_identity: resolveCanonicalSellerIdentity({
+      profile: input.brain_profile,
+      companyBrainId: input.company_brain_id ?? null,
+      companyBrainUpdatedAt: input.company_brain_updated_at ?? null,
+    }),
     person_resolution,
   };
 }
@@ -339,6 +358,7 @@ export type OpenerReasonCode =
   | "blocked_missing_verified_person"
   | "blocked_person_contract_invalid"
   | "blocked_missing_company_brain"
+  | "blocked_seller_identity_conflict"
   | "blocked_company_brain_conflict"
   | "blocked_missing_company_research"
   | "blocked_icp_disqualified";
@@ -361,6 +381,8 @@ export interface OpenerEligibility {
   reason_code: OpenerReasonCode;
   /** Present only when reason_code is blocked_company_brain_conflict. */
   brain_conflict?: BrainConflictDiagnostics;
+  /** Present only when reason_code is blocked_seller_identity_conflict. */
+  seller_identity_conflict?: SellerIdentityConflictDiagnostics;
   personalization_depth: PersonalizationDepth;
   allowed_evidence_ids: string[];
   missing_requirements: string[];
@@ -383,6 +405,21 @@ export function assessOpenerEligibility(
       personalization_depth: "generic_value_only",
       allowed_evidence_ids: [],
       missing_requirements: ["icp_disqualified"],
+    };
+  }
+
+  // A Company Brain whose seller IDENTITY disagrees with itself (a nested
+  // "Agentory" vs a stale flat "goji") cannot be trusted to name the seller.
+  // Silently choosing the legacy value is exactly the production defect this
+  // guard closes. Block BEFORE the model — a contaminated identity costs nothing.
+  if (isSellerIdentityBlocked(ctx.seller_identity)) {
+    return {
+      status: "blocked",
+      reason_code: "blocked_seller_identity_conflict",
+      seller_identity_conflict: sellerIdentityConflictDiagnostics(ctx.seller_identity),
+      personalization_depth: "none" as PersonalizationDepth,
+      allowed_evidence_ids: allowed,
+      missing_requirements: ["coherent_seller_identity"],
     };
   }
 
