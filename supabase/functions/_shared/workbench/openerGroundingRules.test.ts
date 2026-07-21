@@ -12,6 +12,7 @@ import {
   type ModelBoundary,
   type ModelOpenerResponse,
   type PersonalizationContext,
+  DEFAULT_OPENER_CONSTRAINTS,
 } from "./openerBackend.ts";
 import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "./accountState.ts";
 
@@ -180,8 +181,10 @@ Deno.test("35. when NO candidate is valid the result stays failed_validation", a
   const c = ctx();
   const e = assessOpenerEligibility(c, false);
   const { fn } = countingModel({
-    opener: "x".repeat(300),
-    alternative_opener: "y".repeat(300),
+    // Derived from the constant so raising the cap cannot silently make these
+    // fixtures valid again.
+    opener: "x".repeat(DEFAULT_OPENER_CONSTRAINTS.hard_max_chars + 50),
+    alternative_opener: "y".repeat(DEFAULT_OPENER_CONSTRAINTS.hard_max_chars + 50),
     used_evidence_ids: ["research_1"],
   });
   const r = await generateOpener(c, e, fn);
