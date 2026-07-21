@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import {
+  deriveLeadDetailState, RESEARCH_STATE_COPY, OUTREACH_STATE_COPY, RECIPIENT_UNKNOWN_COPY,
+} from '@/lib/leadDetailState';
 import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2, Search, Users, Briefcase, Target, Linkedin } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
@@ -46,8 +49,13 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
 
   if (!row) return null;
   const contactLocked = row.contact_status === 'needs_contact';
-  const enrichLocked = row.enrichment_status !== 'enriched';
-  const draftLocked = row.draft_status !== 'drafted' && row.draft_status !== 'approved';
+  // Canonical per-lead state. The flat `enrichment_status` / `draft_status`
+  // columns are sourcing-era fields the Workbench never updates — reading them
+  // is why a lead with completed research and a persisted opener still showed
+  // "Locked". They survive inside deriveLeadDetailState as legacy fallbacks.
+  const detail = deriveLeadDetailState(row);
+  const enrichLocked = detail.researchLocked;
+  const draftLocked = detail.outreachLocked;
   // useLeadResults sets row.raw to the DB row; the persisted lead_action results
   // (company_enrichment, decision_makers) live in the jsonb one level deeper.
   const dbRow = (row.raw && typeof row.raw === 'object' ? row.raw : {}) as Record<string, any>;
@@ -170,7 +178,21 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
           </Section>
         )}
 
-        <Section icon={User} title="Recommended contact">
+        {detail.opener && (
+          <Section icon={User} title="Selected outreach recipient">
+            {detail.selectedRecipientName ? (
+              <>
+                <Field k="Name" v={detail.selectedRecipientName} />
+                <Field k="Title" v={detail.selectedRecipientTitle} />
+                <div className="text-[10.5px] text-[#7D8590] mt-0.5">Used for this personalized opener</div>
+              </>
+            ) : (
+              <div className="text-[11px] text-amber-200/80 italic">{RECIPIENT_UNKNOWN_COPY}</div>
+            )}
+          </Section>
+        )}
+
+        <Section icon={User} title={detail.opener ? 'Other verified contacts' : 'Recommended contact'}>
           <Field k="Persona" v={row.recommended_persona} />
           <Field k="Reason" v={row.recommended_persona_reason} />
           <Field k="Status" v={<ContactStatusChip status={row.contact_status} />} />
@@ -188,9 +210,10 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
 
         <Section icon={FileText} title="Enrichment">
           {enrichLocked ? (
-            <div className="text-[11px] text-amber-200/80 italic">Locked — run "Research company context" to enrich.</div>
+            <div className="text-[11px] text-amber-200/80 italic">{RESEARCH_STATE_COPY[detail.research]} — run "Research company context" to enrich.</div>
           ) : (
             <>
+              <Field k="Status" v={RESEARCH_STATE_COPY[detail.research]} />
               <Field k="Summary" v={row.enrichment_summary} />
               <Field k="Angles" v={(row.personalization_angles ?? []).join(' · ')} />
             </>
@@ -205,7 +228,14 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
                 : 'Locked — run "Generate approval-ready outreach" to draft.'}
             </div>
           ) : (
-            <pre className="whitespace-pre-wrap text-[12px] text-[#C9D1D9] bg-white/[0.02] rounded p-2 border border-white/[0.06]">{row.personalized_message}</pre>
+            <>
+              <Field k="Status" v={OUTREACH_STATE_COPY[detail.outreach]} />
+              <pre className="whitespace-pre-wrap text-[12px] text-[#C9D1D9] bg-white/[0.02] rounded p-2 border border-white/[0.06]">{detail.opener?.opener ?? row.personalized_message}</pre>
+              {detail.opener?.generated_at && (
+                <div className="text-[10px] text-[#7D8590] mt-1">Generated {new Date(detail.opener.generated_at).toLocaleString()}</div>
+              )}
+              <div className="text-[10px] text-[#7D8590] mt-0.5">Approval required · Nothing sent</div>
+            </>
           )}
         </Section>
 
