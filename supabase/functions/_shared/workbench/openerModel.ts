@@ -82,6 +82,12 @@ export function buildOpenerPrompt(req: ModelOpenerRequest): { system: string; us
       ? `Never claim any of: ${ctx.seller.prohibited_claims.join("; ")}.`
       : "",
 
+    // A message that ends as a product statement gives the reader nothing to do.
+    "END WITH ONE low-friction next step tied to this account's situation.",
+    "The next step must point at something the Seller Context actually supports. Never invent a named resource, audit, report, framework or demo, and never offer a scheduling link.",
+    "Do not use generic asks: 'Interested?', 'Thoughts?', 'Want to learn more?', 'Book a demo', 'Would love to connect'.",
+    "Structure: verified observation -> what it implies is changing -> approved seller relevance -> one contextual next step.",
+
     "Return TWO genuinely different angles, not a reworded pair:",
     "  opener — lead with the strongest verified observation.",
     "  alternative_opener — a safer angle led by the seller outcome, usable with no timing claim.",
