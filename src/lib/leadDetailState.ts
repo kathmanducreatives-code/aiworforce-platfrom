@@ -23,7 +23,8 @@
 // Success-preserving: a later failed retry never demotes a stage that has a
 // stored success. Pure — no React, no network.
 
-import { hydrateOutreachStage, type OutreachStageView } from './outreachStageView';
+import { hydrateOutreachStage } from './outreachStageView';
+import type { OutreachStageView } from './workbenchAccountView';
 
 export type ResearchState =
   | 'not_started'
