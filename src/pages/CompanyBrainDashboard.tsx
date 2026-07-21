@@ -21,6 +21,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 import { ProgressiveBackground } from '@/components/onboarding/ProgressiveBackground';
 import { IcpHero } from '@/components/company-brain/IcpHero';
+import { deriveSellerIdentityState, sellerIdentityBanner } from '@/lib/companyBrain/sellerIdentityState';
 import { IcpSection, PillGroup, TextRows, StatementField, InlineAdd } from '@/components/company-brain/IcpSection';
 import { SystemImpactFooter } from '@/components/company-brain/SystemImpactFooter';
 import CompanyBrainEditDrawer, { type SectionKey as DrawerSectionKey } from '@/components/company-brain/CompanyBrainEditDrawer';
@@ -40,6 +41,10 @@ export default function CompanyBrainDashboard() {
   const view = useMemo(() => toSavedBrainView(data?.profile as BrainProfile | undefined), [data?.profile]);
   const { brain, raw } = view;
   const health = useMemo(() => deriveHealth(brain), [brain]);
+
+  // Seller-identity state for the diagnostic banner (nested vs hidden legacy flat).
+  const identityState = useMemo(() => deriveSellerIdentityState(data?.profile), [data?.profile]);
+  const identityBanner = useMemo(() => sellerIdentityBanner(identityState), [identityState]);
 
   const lastUpdated = data?.onboarding_completed_at
     ? new Date(data.onboarding_completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -92,6 +97,29 @@ export default function CompanyBrainDashboard() {
         {/* Background read in flight while the page stays fully usable. */}
         {isRefreshing && (
           <div className="px-1 pb-1 text-[11px] text-muted-foreground">Refreshing…</div>
+        )}
+
+        {/* Seller-identity diagnostic. Warns when a hidden legacy flat field
+            disagrees with the nested identity generation now uses — the state
+            that blocks outreach backend-side. Reads the same profile the page
+            already loaded; exposes no raw JSON. */}
+        {identityBanner && (
+          <div
+            role="alert"
+            className={
+              'mb-4 rounded-lg border px-4 py-3 text-sm ' +
+              (identityBanner.tone === 'error'
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : identityBanner.tone === 'warning'
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                : 'border-border bg-muted/40 text-muted-foreground')
+            }
+          >
+            <div className="font-medium">
+              {identityState.status === 'conflict' ? 'Identity conflict' : identityState.status === 'legacy_detected' ? 'Legacy data detected' : 'Identity needs confirmation'}
+            </div>
+            <div className="mt-0.5">{identityBanner.message}</div>
+          </div>
         )}
 
         {/* compact ICP hero */}
