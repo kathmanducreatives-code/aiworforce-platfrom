@@ -65,6 +65,9 @@ export function buildOpenerPrompt(req: ModelOpenerRequest): { system: string; us
     "Write plainly, like a competent human sending a first message.",
     "Do not praise the prospect. Do not use words like impressive, exciting, innovative, game-changing or revolutionary.",
     "Avoid filler openings such as 'I wanted to reach out', 'I came across', 'I hope you are well', 'just reaching out'.",
+    // These exact constructions shipped a generic opener in production.
+    "NEVER open with 'Since <Company> is hiring…' or 'As <Company> is hiring…'. Do not write 'I thought you might be interested'.",
+    "Do not restate the signal and then bolt on a description of the seller. Explain what the signal implies is CHANGING for this team, then why the seller is relevant to that change.",
     "Prefer direct language: saw, noticed in the job posting, your team is hiring, your company is building.",
     "Never use fake familiarity, hype, or mass-outreach language.",
     "Never mention internal system terms such as ICP, fit score, buyer role, qualification or evidence id.",
