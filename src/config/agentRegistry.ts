@@ -78,6 +78,11 @@ export interface PublicAgentProfile {
   imageCrop?: AgentImageCrop;
   /** Default status for card presentation. */
   status: AgentStatus;
+  /**
+   * True when the canonical portrait has not yet been supplied and a
+   * neutral placeholder is shown. UI can badge these differently.
+   */
+  isPlaceholder?: boolean;
 }
 
 /**
