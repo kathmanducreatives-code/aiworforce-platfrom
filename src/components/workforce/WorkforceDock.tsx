@@ -105,7 +105,7 @@ function DockItem({
         <motion.span
           style={{ opacity: labelOpacity, scale: labelScale }}
           className={cn(
-            'text-[10.5px] font-medium uppercase tracking-[0.08em] whitespace-nowrap transition-colors',
+            'text-[11.5px] font-medium uppercase tracking-[0.08em] whitespace-nowrap transition-colors',
             isSelected ? 'text-white' : 'text-neutral-400',
           )}
         >
