@@ -9,7 +9,7 @@ import {
 } from "./companyBrainCompleteness.ts";
 
 /** Agents that do NOT exist in this product — onboarding must never name them. */
-const INVENTED_AGENTS = ["Nova", "Atlas", "Mira", "Orion"];
+const INVENTED_AGENTS = ["Lyra", "Atlas", "Mira", "Orion"];
 
 Deno.test("1. BRAIN_POWERS names only agents that exist in the backend roster", () => {
   const copy = BRAIN_POWERS.map((p) => `${p.label} ${p.blurb}`).join(" ");
