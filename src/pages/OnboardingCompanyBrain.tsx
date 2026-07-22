@@ -199,7 +199,7 @@ export default function OnboardingCompanyBrain() {
       if (activate) { setActivated(true); }
       toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
         description: activate
-          ? 'Leads, Scout Radar, Content, Agents and Outreach now use it.'
+          ? 'Leads, Signal Radar, Content, Agents and Outreach now use it.'
           : 'You can finish later.',
       });
       if (activate) setTimeout(() => navigate('/dashboard'), 900);
