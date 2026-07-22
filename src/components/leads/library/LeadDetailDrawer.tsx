@@ -64,10 +64,10 @@ export function LeadDetailDrawer({
     <Sheet open={!!lead} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="w-[640px] max-w-full p-0 bg-[#0a0d12] border-l border-white/[0.08] overflow-y-auto"
+        className="w-[30vw] min-w-[420px] max-w-full p-0 overflow-y-auto border-l border-white/[0.08] bg-gradient-to-br from-[#0a0d12]/92 via-[#0f1419]/88 to-[#0a1210]/92 backdrop-blur-2xl shadow-[-20px_0_60px_-20px_rgba(0,0,0,0.7)]"
       >
         {/* Sticky header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-gradient-to-r from-[#0a0d12]/85 via-[#0f1419]/80 to-[#0a1210]/85 backdrop-blur-xl">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-[#7D8590]">Lead detail</div>
             <div className="text-[16px] font-medium text-[#F0F6FC] truncate">{lead.name}</div>
