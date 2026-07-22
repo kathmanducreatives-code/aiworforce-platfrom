@@ -18,6 +18,7 @@ import {
   nextStepFor,
 } from "@/lib/leadLibrary/types";
 import { loadLocalAug, saveLocalAug } from "@/hooks/leadLibrary/useLeadLibrary";
+import { LeadDetailActions } from "./LeadDetailActions";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Copy, RefreshCcw } from "lucide-react";
@@ -71,6 +72,10 @@ export function LeadDetailDrawer({
         </SheetHeader>
 
         <div className="mt-5 space-y-5 text-sm">
+          <Section title="Actions">
+            <LeadDetailActions lead={lead} onDone={onRefresh} />
+          </Section>
+
           <Section title="Account overview">
             <Grid>
               <Field label="Industry" value={lead.industry} />
@@ -108,7 +113,7 @@ export function LeadDetailDrawer({
                   {lead.selectedRecipient.phone && <StatusPill label={lead.selectedRecipient.phone} tone="info" />}
                 </div>
               </div>
-            ) : <Empty text="No verified buyer found. Run Find decision-makers." />}
+            ) : <Empty text="No verified buyer yet — use Find decision-makers in Actions above." />}
             {lead.alternateRecipients.length > 0 && (
               <div className="mt-2 text-xs text-muted-foreground">
                 {lead.alternateRecipients.length} alternative contact{lead.alternateRecipients.length === 1 ? "" : "s"} available.
