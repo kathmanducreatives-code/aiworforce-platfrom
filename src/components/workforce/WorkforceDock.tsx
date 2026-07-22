@@ -14,9 +14,9 @@ interface Props {
   onSelect: (id: AgentId) => void;
 }
 
-const BASE = 44;
-const MAX = 68;
-const RANGE = 140;
+const BASE = 56;
+const MAX = 84;
+const RANGE = 160;
 
 interface DockItemProps {
   id: AgentId;
@@ -43,8 +43,8 @@ function DockItem({
   });
 
   const sizeRaw = useTransform(distance, [-RANGE, 0, RANGE], [BASE, MAX, BASE]);
-  const liftRaw = useTransform(distance, [-RANGE, 0, RANGE], [0, -6, 0]);
-  const labelOpacityRaw = useTransform(distance, [-90, 0, 90], [0.55, 1, 0.55]);
+  const liftRaw = useTransform(distance, [-RANGE, 0, RANGE], [0, -8, 0]);
+  const labelOpacityRaw = useTransform(distance, [-110, 0, 110], [0.55, 1, 0.55]);
   const labelScaleRaw = useTransform(distance, [-90, 0, 90], [0.95, 1.05, 0.95]);
 
   const spring = { stiffness: 280, damping: 22, mass: 0.5 };
@@ -65,7 +65,7 @@ function DockItem({
         aria-label={`Select ${meta.name}`}
         aria-pressed={isSelected}
         className={cn(
-          'group relative flex flex-col items-center gap-1.5 px-2 py-2 rounded-xl outline-none',
+          'group relative flex flex-col items-center gap-2 px-2.5 py-2.5 rounded-xl outline-none',
           'focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
           'transition-colors duration-150',
           isSelected ? 'bg-white/[0.04]' : 'bg-transparent hover:bg-white/[0.025]',
@@ -90,7 +90,7 @@ function DockItem({
           <AgentAvatar slug={id} size="md" ring={!isSelected} />
           {badge != null && badge !== 0 && badge !== '0' && (
             <span
-              className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9.5px] font-semibold flex items-center justify-center border border-black/80 tabular-nums z-10"
+              className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 rounded-full text-[10.5px] font-semibold flex items-center justify-center border border-black/80 tabular-nums z-10"
               style={{
                 background: badge === '!' ? '#f59e0b' : 'rgba(20,20,20,0.95)',
                 color: badge === '!' ? '#000' : '#fff',
@@ -136,7 +136,7 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
     <div
       className={cn(
         'relative w-full overflow-x-auto no-scrollbar',
-        'rounded-2xl px-4 pt-3 pb-2',
+        'rounded-2xl px-5 pt-4 pb-3',
         'bg-white/[0.02] border border-white/[0.06] backdrop-blur-2xl',
         'shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]',
       )}
@@ -162,8 +162,8 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
       <motion.div
         onMouseMove={(e) => mouseX.set(e.clientX)}
         onMouseLeave={() => mouseX.set(Infinity)}
-        className="flex items-end gap-2 min-w-max"
-        style={{ minHeight: MAX + 28 }}
+        className="flex items-end gap-3 min-w-max"
+        style={{ minHeight: MAX + 34 }}
       >
         {AGENT_ORDER.map((id) => {
           const cfg = DEPT_CONFIG[id];
