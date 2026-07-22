@@ -311,6 +311,24 @@ Deno.test("38 + 39. all writes failing returns persistence_failed, sanitized", a
   assert(!s.includes("contacts_pkey"));
 });
 
+Deno.test("§4: a verified persist forwards current-employer verification into provenance", async () => {
+  // Proves — through the ACTUAL caller, not a hand-built resolver input — that
+  // the account-association resolver will receive a strong signal at persistence
+  // time. Without this forwarding the contact would always resolve to
+  // needs_review and account_id would never be written.
+  let capturedProvenance: Record<string, unknown> | null = null;
+  const { p } = ports({
+    provider: provOk([F.VERIFIED_FOUNDER]),
+    persistContact: async (c) => { capturedProvenance = c.provenance; return "contact_1"; },
+  });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(r.status, "succeeded");
+  assert(capturedProvenance, "persistContact was called for the verified founder");
+  assertEquals((capturedProvenance as Record<string, unknown>).verification_status, "verified", "verified current employer reaches persistence provenance");
+  // extractContactSignals (used by attachContactAccount) treats this as a strong
+  // current-employer signal, so a company-scoped discovery writes account_id.
+});
+
 Deno.test("31. persistence is consulted only for accepted candidates", async () => {
   const { p, calls } = ports({ provider: provOk([F.VERIFIED_FOUNDER, F.UNRELATED_CRO, F.FORMER_FOUNDER]) });
   await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);

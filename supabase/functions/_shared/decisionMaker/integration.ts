@@ -186,6 +186,14 @@ export async function runDecisionMakerAction(
           actor: (result.observability.actor_selected as string | null) ?? null,
           stage: (result.observability.stage_run as string | null) ?? null,
           verification_methods: dm.verification_methods,
+          // Forward the CURRENT-EMPLOYER verification so the account-association
+          // resolver receives a strong signal at persistence time. Without this,
+          // the contact would always resolve to needs_review and account_id would
+          // never be written (the dead forward-path the pre-merge review caught).
+          // `verified` means the pipeline proved this person belongs to the
+          // company-scoped search's company.
+          verification_status: dm.verification_status,
+          current_company_name: dm.current_company_name,
         },
       };
 

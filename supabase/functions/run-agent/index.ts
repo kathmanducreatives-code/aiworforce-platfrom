@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
+import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "../_shared/attachContactAccount.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -2002,15 +2003,25 @@ Deno.serve(async (req) => {
               }
 
               for (const att of plan) {
-                const { data: c } = await supabase.from("contacts").insert({
-                  workspace_id,
-                  full_name: att.contact.name,
-                  title: att.contact.title,
-                  linkedin_url: att.contact.linkedin_url,
-                  email: att.contact.email,
-                  raw: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
-                }).select("id").maybeSingle();
-                if (c?.id) await supabase.from("lead_candidates").update({ contact_id: c.id }).eq("id", att.lead_candidate_id);
+                // Attach to the durable account when the employer is verified. This
+                // contact-discovery path is scoped to the lead's company. The writer
+                // never puts account_id in the insert; it sets it via a guarded
+                // update only when verified, so an existing association is never
+                // nulled or silently reassigned.
+                await writeContactWithVerifiedAccount({
+                  db: supabase as unknown as ContactPersistenceDb,
+                  mode: "insert",
+                  identity: { workspace_id, full_name: att.contact.name, title: att.contact.title, linkedin_url: att.contact.linkedin_url, email: att.contact.email },
+                  rawBase: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
+                  resolve: {
+                    workspaceId: workspace_id,
+                    leadCandidateId: att.lead_candidate_id,
+                    contactLinkedInUrl: att.contact.linkedin_url ?? null,
+                    provenance: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence, company_match: (att.contact as { company_match?: unknown }).company_match ?? null },
+                    companyScopedSearch: true,
+                  },
+                  linkLeadCandidateId: att.lead_candidate_id,
+                });
               }
               console.log("[run-agent] attached contacts:", plan.length);
             } catch (e) { console.warn("[run-agent] contact attach failed:", e); }

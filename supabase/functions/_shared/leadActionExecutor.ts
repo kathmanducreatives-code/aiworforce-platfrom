@@ -21,6 +21,7 @@ import {
   buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile, buildGenerationProvenance,
   type ModelBoundary, type OutreachOutputMode,
 } from "./workbench/openerBackend.ts";
+import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "./attachContactAccount.ts";
 import { makeOpenerModel } from "./workbench/openerModel.ts";
 import {
   readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
@@ -239,14 +240,32 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
             return (data ?? []) as Array<{ id: string; linkedin_url: string | null }>;
           },
           persistContact: async (c) => {
-            const { data, error } = await ctx.admin.from("contacts").upsert({
-              workspace_id: c.workspace_id, full_name: c.full_name, title: c.title,
-              linkedin_url: c.linkedin_url,
-              raw: { via: "decision_maker_discovery", ...c.provenance },
-            }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
-            if (error || !data?.id) throw new Error("contact_write_failed");
-            await ctx.admin.from("lead_candidates").update({ contact_id: data.id }).eq("id", c.lead_candidate_id);
-            return data.id as string;
+            // Attach the contact to the DURABLE account (not just the plan-scoped
+            // lead_candidate) when the current employer is verified. Decision-maker
+            // discovery is company-scoped to this lead and carries `company_match`,
+            // so it has the account link that was previously dropped — the root
+            // cause of every production contact having account_id = null.
+            //
+            // The writer NEVER puts account_id in the identity upsert; it sets it
+            // via a separate guarded update only when verified, so a rediscovery
+            // can never null or silently reassign an existing association.
+            const res = await writeContactWithVerifiedAccount({
+              db: ctx.admin as unknown as ContactPersistenceDb,
+              mode: "upsert",
+              onConflict: "workspace_id,linkedin_url",
+              identity: { workspace_id: c.workspace_id, full_name: c.full_name, title: c.title, linkedin_url: c.linkedin_url },
+              rawBase: { via: "decision_maker_discovery", ...c.provenance },
+              resolve: {
+                workspaceId: c.workspace_id,
+                leadCandidateId: c.lead_candidate_id,
+                contactLinkedInUrl: c.linkedin_url ?? null,
+                provenance: c.provenance,
+                companyScopedSearch: true,
+              },
+              linkLeadCandidateId: c.lead_candidate_id,
+            });
+            if (!res.contactId) throw new Error("contact_write_failed");
+            return res.contactId;
           },
           // Ownership comes from the row we already loaded — no extra round-trip,
           // and it is the same record the action operates on.

@@ -19,6 +19,10 @@ export interface PersistenceCandidate {
     actor: string | null;
     stage: string | null;
     verification_methods: string[];
+    /** Current-employer verification, forwarded so the account-association
+     *  resolver receives a strong signal at persistence time. */
+    verification_status?: string | null;
+    current_company_name?: string | null;
   } | null;
 }
 
