@@ -64,14 +64,14 @@ export function LeadDetailDrawer({
     <Sheet open={!!lead} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="w-[30vw] min-w-[420px] max-w-full p-0 overflow-y-auto border-l border-white/[0.08] bg-gradient-to-br from-[#0a0d12]/92 via-[#0f1419]/88 to-[#0a1210]/92 backdrop-blur-2xl shadow-[-20px_0_60px_-20px_rgba(0,0,0,0.7)]"
+        className="w-[38vw] min-w-[560px] max-w-full p-0 overflow-y-auto border-l border-white/[0.08] bg-gradient-to-br from-[#0a0d12]/70 via-[#0f1419]/60 to-[#0a1210]/70 backdrop-blur-3xl shadow-[-30px_0_80px_-20px_rgba(0,0,0,0.75)] [&>button]:hidden"
       >
         {/* Sticky header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-gradient-to-r from-[#0a0d12]/85 via-[#0f1419]/80 to-[#0a1210]/85 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-7 py-5 border-b border-white/[0.08] bg-gradient-to-r from-[#0a0d12]/70 via-[#0f1419]/55 to-[#0a1210]/70 backdrop-blur-2xl">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-wider text-[#7D8590]">Lead detail</div>
-            <div className="text-[16px] font-medium text-[#F0F6FC] truncate">{lead.name}</div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="text-[13px] uppercase tracking-wider text-[#7D8590]">Lead detail</div>
+            <div className="text-[21px] font-semibold text-[#F0F6FC] truncate mt-0.5">{lead.name}</div>
+            <div className="flex flex-wrap gap-2 mt-3">
               <Chip tone="info">{ACCOUNT_STATUS_LABEL[lead.accountStatus]}</Chip>
               <Chip tone={lead.contactReadiness === "verified" ? "success" : "muted"}>
                 {CONTACT_READINESS_LABEL[lead.contactReadiness]}
@@ -81,30 +81,31 @@ export function LeadDetailDrawer({
               </Chip>
               {lead.possibleDuplicateOf && <Chip tone="warning">Possible duplicate</Chip>}
             </div>
-            <div className="flex items-center gap-3 mt-2 text-[11.5px] text-[#7D8590]">
+            <div className="flex items-center gap-4 mt-3 text-[14px] text-[#9aa4af]">
               {lead.domain && (
                 <a href={`https://${lead.domain}`} target="_blank" rel="noreferrer"
-                   className="hover:text-emerald-300 inline-flex items-center gap-1">
-                  {lead.domain}<ExternalLink className="h-3 w-3" />
+                   className="hover:text-emerald-300 inline-flex items-center gap-1.5">
+                  {lead.domain}<ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}
               {lead.linkedinUrl && (
                 <a href={lead.linkedinUrl} target="_blank" rel="noreferrer"
-                   className="hover:text-sky-300 inline-flex items-center gap-1">
-                  <Linkedin className="h-3 w-3" /> LinkedIn
+                   className="hover:text-sky-300 inline-flex items-center gap-1.5">
+                  <Linkedin className="h-3.5 w-3.5" /> LinkedIn
                 </a>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Button size="sm" variant="ghost" className="h-7 text-xs text-[#9aa4af] hover:text-[#F0F6FC]" onClick={onRefresh}>
-              <RefreshCcw className="h-3 w-3 mr-1" />Refresh
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" variant="ghost" className="h-9 text-[13px] text-[#9aa4af] hover:text-[#F0F6FC]" onClick={onRefresh}>
+              <RefreshCcw className="h-4 w-4 mr-1.5" />Refresh
             </Button>
-            <button onClick={onClose} className="p-1.5 rounded hover:bg-white/[0.06] text-[#9aa4af] hover:text-[#F0F6FC]">
+            <button onClick={onClose} className="p-2 rounded-md hover:bg-white/[0.06] text-[#9aa4af] hover:text-[#F0F6FC]">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
+
 
         {/* Account overview */}
         <Section icon={Building2} title="Account overview">
