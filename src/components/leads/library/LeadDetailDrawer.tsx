@@ -17,6 +17,7 @@ import {
   nextStepFor,
 } from "@/lib/leadLibrary/types";
 import { loadLocalAug, saveLocalAug } from "@/hooks/leadLibrary/useLeadLibrary";
+import { LeadDetailActions } from "./LeadDetailActions";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -107,6 +108,11 @@ export function LeadDetailDrawer({
         </div>
 
 
+        {/* Actions (PR #86) — real Research / Find decision-makers controls */}
+        <Section icon={Search} title="Actions">
+          <LeadDetailActions lead={lead} />
+        </Section>
+
         {/* Account overview */}
         <Section icon={Building2} title="Account overview">
           <Field k="Industry" v={lead.industry} />
@@ -163,7 +169,7 @@ export function LeadDetailDrawer({
               )}
             </>
           ) : (
-            <Empty text="No verified buyer found. Run Find decision-makers." />
+            <Empty text="No verified buyer yet — use Find decision-makers in Actions above." />
           )}
         </Section>
 
