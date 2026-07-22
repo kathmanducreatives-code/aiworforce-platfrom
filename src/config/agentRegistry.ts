@@ -113,7 +113,8 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
     shortDescription: 'Finds companies showing meaningful signs they may be ready to buy.',
     description:
       'Continuously scans hiring, funding, growth, and product signals to surface accounts that may be ready to buy.',
-    avatar: scoutImg,
+    avatar: novaPlaceholderImg,
+    portrait: novaPlaceholderImg,
     accent: 'blue',
     accentHex: '#3B82F6',
     department: 'growth',
@@ -136,8 +137,8 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
       'Researches every account, qualifies it against the Company Brain, and ranks the strongest opportunities.',
     description:
       'Researches accounts, cross-checks evidence against the Company Brain, and ranks the strongest opportunities so founders review what matters first.',
-    avatar: ariaImg,
-    portrait: hawkImg,
+    avatar: atlasImg,
+    portrait: atlasImg,
     accent: 'amber',
     accentHex: '#F59E0B',
     department: 'intelligence',
@@ -166,7 +167,8 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
       'Turns account research into clear, relevant outreach prepared for founder approval.',
     description:
       'Turns account research into clear, relevant outreach. Every draft is prepared for founder approval — Mira never sends without a human.',
-    avatar: pennImg,
+    avatar: miraImg,
+    portrait: miraImg,
     accent: 'emerald',
     accentHex: '#22C55E',
     department: 'growth',
@@ -190,7 +192,8 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
       'Organizes what should be reviewed, approved, contacted, watched, or skipped next.',
     description:
       'Organizes pipeline state, surfaces approval queues, and recommends the next action so founders always know what to review, approve, contact, watch, or skip.',
-    avatar: scribeImg,
+    avatar: orionImg,
+    portrait: orionImg,
     accent: 'purple',
     accentHex: '#A855F7',
     department: 'operations',
