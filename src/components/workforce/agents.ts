@@ -1,4 +1,19 @@
-// Canonical AI workforce registry. Every workforce component reads from this.
+/**
+ * Workforce module registry — legacy IDs preserved for the workforce dock
+ * typing (Record<AgentId, AgentState> is used across useWorkforceState and
+ * the dock components). Display names / roles / blurbs are the PUBLIC
+ * identities from `@/config/agentRegistry`.
+ *
+ * Public mapping applied here:
+ *   pilot  → Pilot
+ *   scout  → Nova
+ *   aria   → Atlas (qualification)
+ *   hawk   → Atlas (research) — kept as a lookup entry but excluded from
+ *                                AGENT_ORDER so the dock doesn't render two
+ *                                Atlas cards.
+ *   penn   → Mira
+ *   scribe → Orion
+ */
 
 export type AgentId = 'pilot' | 'scout' | 'aria' | 'penn' | 'hawk' | 'scribe';
 
@@ -26,54 +41,57 @@ export const AGENTS: Record<AgentId, AgentMeta> = {
   pilot: {
     id: 'pilot',
     name: 'Pilot',
-    role: 'Manager Agent',
+    role: 'AI Workforce Coordinator',
     accent: 'emerald',
     initial: 'P',
-    blurb: 'Coordinates your AI workforce and routes decisions to you.',
+    blurb: "Coordinates Agentory's specialists and presents their work for founder review.",
   },
   scout: {
     id: 'scout',
-    name: 'Scout',
-    role: 'Signal Discovery Agent',
-    accent: 'teal',
-    initial: 'S',
-    blurb: 'Finds buying signals across hiring, intent, and growth sources.',
+    name: 'Nova',
+    role: 'AI Signal Scout',
+    accent: 'blue',
+    initial: 'N',
+    blurb: 'Finds companies showing meaningful signs they may be ready to buy.',
   },
   aria: {
     id: 'aria',
-    name: 'Aria',
-    role: 'Lead Scoring Agent',
+    name: 'Atlas',
+    role: 'AI Account Analyst',
     accent: 'amber',
     initial: 'A',
-    blurb: 'Scores and prioritizes leads against your ICP.',
+    blurb: 'Researches accounts, qualifies them, and ranks the strongest opportunities.',
   },
   penn: {
     id: 'penn',
-    name: 'Penn',
-    role: 'Outreach Writer',
-    accent: 'cyan',
-    initial: 'P',
-    blurb: 'Drafts outreach in your voice. Never sends without approval.',
+    name: 'Mira',
+    role: 'AI Message Strategist',
+    accent: 'emerald',
+    initial: 'M',
+    blurb: 'Turns research into clear, relevant outreach prepared for founder approval.',
   },
   hawk: {
+    // Publicly represented by Atlas — kept as an internal alias so historical
+    // lookups (agent_slug='hawk') still resolve to the Atlas presentation.
     id: 'hawk',
-    name: 'Hawk',
-    role: 'Research Agent',
-    accent: 'blue',
-    initial: 'H',
-    blurb: 'Monitors competitors and market moves.',
+    name: 'Atlas',
+    role: 'AI Account Analyst',
+    accent: 'amber',
+    initial: 'A',
+    blurb: 'Researches accounts, qualifies them, and ranks the strongest opportunities.',
   },
   scribe: {
     id: 'scribe',
-    name: 'Scribe',
-    role: 'Content Agent',
+    name: 'Orion',
+    role: 'AI Pipeline Operator',
     accent: 'purple',
-    initial: 'S',
-    blurb: 'Turns activity and research into briefs, posts, and reports.',
+    initial: 'O',
+    blurb: 'Organizes what should be reviewed, approved, contacted, watched, or skipped next.',
   },
 };
 
-export const AGENT_ORDER: AgentId[] = ['pilot', 'scout', 'aria', 'penn', 'hawk', 'scribe'];
+// Hawk is intentionally excluded — Atlas already appears via 'aria'.
+export const AGENT_ORDER: AgentId[] = ['pilot', 'scout', 'aria', 'penn', 'scribe'];
 
 export const accentClasses = {
   emerald: { ring: 'ring-emerald-400/60', glow: 'shadow-[0_0_24px_rgba(16,185,129,0.35)]', text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', stroke: '#10b981' },
