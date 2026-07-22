@@ -51,6 +51,19 @@ describe("account grouping", () => {
     expect(v.warnings).toContain("multiple_plan_leads");
   });
 
+  it("§4. selectedPlanId is the REPRESENTATIVE row's own plan (paired, not planIds[0])", () => {
+    // Four plan rows; the winner (latest successful outreach) is l3/plan-C, which
+    // is not the first array element.
+    const l1 = lead("l1", {}, { plan_id: "plan-A", updated_at: "2026-07-20T09:00:00Z" });
+    const l2 = lead("l2", {}, { plan_id: "plan-B", updated_at: "2026-07-20T10:00:00Z" });
+    const l3 = lead("l3", opener({ status: "succeeded", opener: "Hi", generated_at: "2026-07-20T13:00:00Z", sent: false }), { plan_id: "plan-C", updated_at: "2026-07-20T13:00:00Z" });
+    const l4 = lead("l4", {}, { plan_id: "plan-D", updated_at: "2026-07-20T11:00:00Z" });
+    const v = base({ leadCandidates: [l1, l2, l3, l4] });
+    expect(v.leadRows.selectedLeadCandidateId).toBe("l3");
+    expect(v.leadRows.selectedPlanId).toBe("plan-C");
+    expect(v.leadRows.planIds[0]).not.toBe("plan-C"); // proves it is NOT array-order
+  });
+
   it("4. representative selection is deterministic (latest successful outreach wins)", () => {
     const l1 = lead("l1", opener({ status: "succeeded", opener: "Hi", generated_at: "2026-07-20T11:00:00Z", sent: false }), { updated_at: "2026-07-20T11:00:00Z" });
     const l2 = lead("l2", opener({ status: "succeeded", opener: "Hey", generated_at: "2026-07-20T12:00:00Z", sent: false }), { updated_at: "2026-07-20T12:00:00Z" });
