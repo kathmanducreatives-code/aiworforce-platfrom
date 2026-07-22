@@ -16,12 +16,15 @@
  *   Orion  — AI Pipeline Operator     (execution: operational summaries)
  */
 
-import ariaImg from '@/assets/agents/aria.png';
-import scoutImg from '@/assets/agents/scout.png';
-import pennImg from '@/assets/agents/penn.png';
-import hawkImg from '@/assets/agents/hawk.png';
-import scribeImg from '@/assets/agents/scribe.png';
+// Canonical public identity assets. Legacy files (scout.png, aria.png,
+// hawk.png, penn.png, scribe.png) remain on disk for backend-history
+// compatibility but are no longer imported by public UI as of Phase 1.6.
 import pilotImg from '@/assets/agents/pilot.png';
+import atlasImg from '@/assets/agents/public/atlas.png';
+import miraImg from '@/assets/agents/public/mira.png';
+import orionImg from '@/assets/agents/public/orion.png';
+import novaPlaceholderImg from '@/assets/agents/public/nova-placeholder.png';
+import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
 
 export type PublicAgentId = 'pilot' | 'nova' | 'atlas' | 'mira' | 'orion';
 export type LegacyAgentId = 'pilot' | 'scout' | 'aria' | 'hawk' | 'penn' | 'scribe';
