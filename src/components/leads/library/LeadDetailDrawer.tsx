@@ -315,12 +315,12 @@ export function LeadDetailDrawer({
 
 function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-white/[0.06] px-6 py-5">
-      <div className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#7D8590] mb-3">
-        <Icon className="h-4 w-4 text-emerald-300/70" />
+    <section className="border-b border-white/[0.06] px-7 py-6">
+      <div className="flex items-center gap-2 text-[14px] uppercase tracking-wider text-[#8b95a1] mb-4">
+        <Icon className="h-5 w-5 text-emerald-300/80" />
         {title}
       </div>
-      <div className="text-[14px] leading-relaxed text-[#C9D1D9] space-y-2">{children}</div>
+      <div className="text-[16px] leading-relaxed text-[#D9E1E8] space-y-3">{children}</div>
     </section>
   );
 }
@@ -328,12 +328,13 @@ function Section({ icon: Icon, title, children }: { icon: any; title: string; ch
 function Field({ k, v }: { k: string; v: React.ReactNode }) {
   if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) return null;
   return (
-    <div className="flex items-baseline gap-3">
-      <span className="text-[11.5px] uppercase tracking-wider text-[#7D8590] w-24 shrink-0">{k}</span>
-      <span className="text-[14px] leading-relaxed text-[#C9D1D9] min-w-0 break-words">{v}</span>
+    <div className="flex items-baseline gap-4">
+      <span className="text-[13px] uppercase tracking-wider text-[#7D8590] w-28 shrink-0">{k}</span>
+      <span className="text-[16px] leading-relaxed text-[#D9E1E8] min-w-0 break-words">{v}</span>
     </div>
   );
 }
+
 
 function Link({ href, label }: { href?: string | null; label: string }) {
   if (!href) return null;
