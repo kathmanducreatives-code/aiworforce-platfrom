@@ -21,6 +21,7 @@ import {
   buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile, buildGenerationProvenance,
   type ModelBoundary, type OutreachOutputMode,
 } from "./workbench/openerBackend.ts";
+import { resolveVerifiedAccountIdForContact, type ContactAccountDb } from "./attachContactAccount.ts";
 import { makeOpenerModel } from "./workbench/openerModel.ts";
 import {
   readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
@@ -239,11 +240,37 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
             return (data ?? []) as Array<{ id: string; linkedin_url: string | null }>;
           },
           persistContact: async (c) => {
-            const { data, error } = await ctx.admin.from("contacts").upsert({
+            // Attach the contact to the DURABLE account (not just the plan-scoped
+            // lead_candidate) when the current employer is verified. Decision-maker
+            // discovery is company-scoped to this lead, so it carries the account
+            // link that was previously dropped — the root cause of every
+            // production contact having account_id = null. Best-effort: never block
+            // the contact write on it, and only write account_id when verified so an
+            // existing verified link is never clobbered.
+            let verifiedAccountId: string | null = null;
+            let assoc: Record<string, unknown> | null = null;
+            try {
+              const r = await resolveVerifiedAccountIdForContact(ctx.admin as unknown as ContactAccountDb, {
+                workspaceId: c.workspace_id,
+                leadCandidateId: c.lead_candidate_id,
+                contactLinkedInUrl: c.linkedin_url ?? null,
+                provenance: c.provenance,
+                companyScopedSearch: true,
+              });
+              verifiedAccountId = r.accountId;
+              assoc = r.provenance;
+            } catch (_e) { /* association is best-effort */ }
+
+            const contactRow: Record<string, unknown> = {
               workspace_id: c.workspace_id, full_name: c.full_name, title: c.title,
               linkedin_url: c.linkedin_url,
-              raw: { via: "decision_maker_discovery", ...c.provenance },
-            }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
+              raw: { via: "decision_maker_discovery", ...c.provenance, account_association: assoc },
+            };
+            // Only set account_id when verified. Omitting it on upsert preserves any
+            // existing association rather than overwriting it with null.
+            if (verifiedAccountId) contactRow.account_id = verifiedAccountId;
+
+            const { data, error } = await ctx.admin.from("contacts").upsert(contactRow, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
             if (error || !data?.id) throw new Error("contact_write_failed");
             await ctx.admin.from("lead_candidates").update({ contact_id: data.id }).eq("id", c.lead_candidate_id);
             return data.id as string;
