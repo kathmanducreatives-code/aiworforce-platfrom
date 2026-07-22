@@ -19,12 +19,12 @@ interface Props {
 
 function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-white/[0.06] px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#7D8590] mb-1.5">
-        <Icon className="h-3 w-3 text-emerald-300/70" />
+    <section className="border-b border-white/[0.06] px-6 py-5">
+      <div className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#7D8590] mb-3">
+        <Icon className="h-4 w-4 text-emerald-300/70" />
         {title}
       </div>
-      <div className="text-[12px] text-[#C9D1D9] space-y-1">{children}</div>
+      <div className="text-[14px] leading-relaxed text-[#C9D1D9] space-y-2">{children}</div>
     </section>
   );
 }
@@ -32,9 +32,9 @@ function Section({ icon: Icon, title, children }: { icon: any; title: string; ch
 function Field({ k, v }: { k: string; v: React.ReactNode }) {
   if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return null;
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-[10.5px] uppercase tracking-wider text-[#7D8590] w-20 shrink-0">{k}</span>
-      <span className="text-[12px] text-[#C9D1D9] min-w-0 break-words">{v}</span>
+    <div className="flex items-baseline gap-3">
+      <span className="text-[11.5px] uppercase tracking-wider text-[#7D8590] w-24 shrink-0">{k}</span>
+      <span className="text-[14px] leading-relaxed text-[#C9D1D9] min-w-0 break-words">{v}</span>
     </div>
   );
 }
