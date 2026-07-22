@@ -9,9 +9,11 @@ import {
   leadActionResultMessage,
   researchActionLabel,
   decisionMakerActionLabel,
+  createLeadActionController,
 } from "./leadDetailActions";
 import type { LeadRow } from "./types";
 import type { LeadActionResult } from "@/lib/leadActions";
+import type { BuildLeadActionArgs } from "@/lib/leadActionRequest";
 
 const WS = "ws-1";
 const ACC = "acc-1";
@@ -21,6 +23,7 @@ const LEAD_ID = "lead-canonical-1";
 function row(over: {
   workspaceId?: string;
   selectedLeadCandidateId?: string | null;
+  selectedPlanId?: string | null;
   accountId?: string | null;
   planIds?: string[];
   researchStatus?: string;
@@ -35,6 +38,7 @@ function row(over: {
       identity: { workspaceId: over.workspaceId ?? WS, accountId: over.accountId === undefined ? ACC : over.accountId },
       leadRows: {
         selectedLeadCandidateId: over.selectedLeadCandidateId === undefined ? LEAD_ID : over.selectedLeadCandidateId,
+        selectedPlanId: over.selectedPlanId ?? null,
         planIds: over.planIds ?? [],
       },
       research: { status: over.researchStatus ?? "not_started" },
@@ -66,11 +70,28 @@ describe("planLeadDetailAction — payload", () => {
     expect(p.ok && p.args.leadCandidateIds).not.toContain("acc-999");
   });
 
-  it("10. plan id is included only when present", () => {
-    expect(planLeadDetailAction({ lead: row({ planIds: [] }), ...OK }, "find_decision_makers"))
+  it("10. plan id is included only when the representative row has one", () => {
+    expect(planLeadDetailAction({ lead: row({ selectedPlanId: null }), ...OK }, "find_decision_makers"))
       .toMatchObject({ ok: true, args: { planId: undefined } });
-    const withPlan = planLeadDetailAction({ lead: row({ planIds: ["plan-7"] }), ...OK }, "find_decision_makers");
+    const withPlan = planLeadDetailAction({ lead: row({ selectedPlanId: "plan-7" }), ...OK }, "find_decision_makers");
     expect(withPlan.ok && withPlan.args.planId).toBe("plan-7");
+  });
+
+  // §4 — the plan id MUST belong to the selected lead, never planIds[0].
+  it("§4. request uses the REPRESENTATIVE row's plan, not an arbitrary planIds[0]", () => {
+    // Four plans exist; the representative (selected) lead's plan is plan-C, which
+    // is NOT the first element of planIds.
+    const lead = row({
+      selectedLeadCandidateId: "lead-C",
+      selectedPlanId: "plan-C",
+      planIds: ["plan-A", "plan-B", "plan-C", "plan-D"],
+    });
+    const p = planLeadDetailAction({ lead, ...OK }, "find_decision_makers");
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.args.leadCandidateIds).toEqual(["lead-C"]);
+    expect(p.args.planId).toBe("plan-C");
+    expect(p.args.planId).not.toBe("plan-A"); // never the array-order first plan
   });
 
   it("21/22/23. the payload carries ONLY the lead id — no recipient/account/outreach", () => {
@@ -135,6 +156,69 @@ describe("leadActionResultMessage", () => {
     const m = leadActionResultMessage(res({ error: "provider_failed", message: "The provider failed." }));
     expect(m.tone).toBe("error");
     expect(m.message.toLowerCase()).not.toContain("no provider ran");
+  });
+});
+
+describe("createLeadActionController — single-flight (§5)", () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((r) => { resolve = r; });
+    return { promise, resolve };
+  }
+  const okPlan = () => planLeadDetailAction({ lead: row(), ...OK }, "find_decision_makers");
+
+  it("6/7. two clicks in the same tick fire runLeadAction exactly once", async () => {
+    let calls = 0;
+    const gate = deferred<LeadActionResult>();
+    const c = createLeadActionController({
+      runLeadAction: ((_args: BuildLeadActionArgs) => { calls += 1; return gate.promise; }) as never,
+      onSuccess: () => {}, onBlocked: () => {}, onError: () => {},
+    });
+    // Fire twice synchronously BEFORE the first promise settles.
+    const a = c.run(okPlan(), "find_decision_makers");
+    const b = c.run(okPlan(), "find_decision_makers");
+    expect(calls).toBe(1);          // second call ignored by the sync guard
+    expect(c.isRunning()).toBe("find_decision_makers");
+    gate.resolve({ success: true });
+    await Promise.all([a, b]);
+    expect(calls).toBe(1);
+    expect(c.isRunning()).toBe(null); // released after settle
+  });
+
+  it("13. a click while loading is ignored; a NEW action works after settle", async () => {
+    let calls = 0;
+    const c = createLeadActionController({
+      runLeadAction: ((_a: BuildLeadActionArgs) => { calls += 1; return Promise.resolve({ success: true } as LeadActionResult); }) as never,
+      onSuccess: () => {}, onBlocked: () => {}, onError: () => {},
+    });
+    await c.run(okPlan(), "find_decision_makers");
+    await c.run(planLeadDetailAction({ lead: row(), ...OK }, "research_company"), "research_company");
+    expect(calls).toBe(2);          // sequential actions each run
+  });
+
+  it("8/9/16. success invalidates via onSuccess; failure routes to onError; blocked to onBlocked", async () => {
+    const seen: string[] = [];
+    const mk = (result: LeadActionResult) => createLeadActionController({
+      runLeadAction: (() => Promise.resolve(result)) as never,
+      onSuccess: () => { seen.push("success"); },
+      onBlocked: () => { seen.push("blocked"); },
+      onError: () => { seen.push("error"); },
+    });
+    await mk({ success: true }).run(okPlan(), "find_decision_makers");
+    await mk({ success: false, status: "blocked", error: "blocked_missing_company_research" }).run(okPlan(), "find_decision_makers");
+    await mk({ success: false, error: "provider_failed", message: "x" }).run(okPlan(), "find_decision_makers");
+    expect(seen).toEqual(["success", "blocked", "error"]);
+  });
+
+  it("a gate failure (no session) never calls runLeadAction", async () => {
+    let calls = 0;
+    const c = createLeadActionController({
+      runLeadAction: (() => { calls += 1; return Promise.resolve({ success: true } as LeadActionResult); }) as never,
+      onSuccess: () => {}, onBlocked: () => {}, onError: () => {},
+    });
+    const badPlan = planLeadDetailAction({ lead: row(), activeWorkspaceId: WS, hasSession: false }, "find_decision_makers");
+    await c.run(badPlan, "find_decision_makers");
+    expect(calls).toBe(0);
   });
 });
 

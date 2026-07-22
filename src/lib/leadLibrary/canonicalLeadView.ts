@@ -172,6 +172,9 @@ export interface CanonicalLeadView {
   leadRows: {
     allLeadCandidateIds: string[];
     selectedLeadCandidateId: string | null;
+    /** The plan_id of the REPRESENTATIVE row — always paired with
+     *  selectedLeadCandidateId, never an arbitrary planIds[0]. */
+    selectedPlanId: string | null;
     planIds: string[];
     duplicatePlanRowCount: number;
   };
@@ -615,6 +618,9 @@ export function deriveCanonicalLeadView(input: DeriveCanonicalLeadInput): Canoni
     leadRows: {
       allLeadCandidateIds: rows.map((lc) => lc.id),
       selectedLeadCandidateId: representative?.id ?? null,
+      // The representative row's OWN plan — paired with selectedLeadCandidateId,
+      // so a lead action can never send lead A with plan B's id.
+      selectedPlanId: str(representative?.plan_id) ?? null,
       planIds,
       duplicatePlanRowCount: rows.length,
     },

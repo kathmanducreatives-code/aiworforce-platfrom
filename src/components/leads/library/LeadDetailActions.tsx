@@ -3,11 +3,12 @@
 // Replaces the previous dead "Run Find decision-makers" text with real controls
 // that go through the SAME production path the Workbench uses
 // (runLeadAction → supabase.functions.invoke('run-agent')). The lead_candidate
-// id comes from the canonical read model, workspace/session are guarded, and the
-// canonical query is invalidated on success. No new Edge Function invocation
-// implementation, no backend change.
+// id + its matching plan come from the canonical read model, workspace/session
+// are guarded, a SYNCHRONOUS single-flight guard prevents duplicate requests,
+// and the canonical query is invalidated on success (which live-refreshes the
+// drawer). No new Edge Function invocation, no backend change.
 
-import { useCallback, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -18,55 +19,54 @@ import { runLeadAction } from "@/lib/leadActions";
 import type { LeadRow } from "@/lib/leadLibrary/types";
 import {
   planLeadDetailAction,
-  leadActionResultMessage,
+  createLeadActionController,
   researchActionLabel,
   decisionMakerActionLabel,
   type LeadDetailActionKind,
 } from "@/lib/leadLibrary/leadDetailActions";
 
-export function LeadDetailActions({ lead, onDone }: { lead: LeadRow; onDone: () => void }) {
+export function LeadDetailActions({ lead }: { lead: LeadRow }) {
   const { workspaceId } = useWorkspace();
   const { session } = useAuth();
   const qc = useQueryClient();
   const [running, setRunning] = useState<LeadDetailActionKind | null>(null);
 
-  // Compute the gate once (session/workspace/actionable-lead). Used for the
-  // disabled state + tooltip so we never render a clickable-looking dead control.
+  // Latest values captured in a ref so the stable controller reads fresh deps.
+  const depsRef = useRef({ lead, workspaceId, session });
+  depsRef.current = { lead, workspaceId, session };
+
+  // Controller created ONCE. Its in-flight flag is a plain closure variable, so
+  // two clicks in the same tick can never both fire a request.
+  const controllerRef = useRef<ReturnType<typeof createLeadActionController>>();
+  if (!controllerRef.current) {
+    controllerRef.current = createLeadActionController({
+      runLeadAction,
+      onStateChange: setRunning,
+      onSuccess: async (kind) => {
+        const ws = depsRef.current.workspaceId;
+        toast.success(kind === "find_decision_makers" ? "Decision-maker search complete." : "Company research complete.");
+        // Single canonical refetch — LeadLibrary derives the open drawer's lead
+        // live from these rows, so this both refreshes the drawer and keeps it
+        // open. No optimistic contact/research is fabricated; no second refetch.
+        await qc.invalidateQueries({ queryKey: ["lead-library", ws, "canonical-v1"] });
+      },
+      onBlocked: (m) => toast.warning(m),
+      onError: (m) => toast.error(m),
+    });
+  }
+
   const gate = planLeadDetailAction({ lead, activeWorkspaceId: workspaceId, hasSession: !!session }, "find_decision_makers");
   const disabledReason = gate.ok ? null : gate.message;
+  const disabled = !gate.ok || running !== null;
 
-  const run = useCallback(async (kind: LeadDetailActionKind) => {
-    // Idempotency: one action at a time; a second click while loading is ignored.
-    if (running) return;
-
-    const plan = planLeadDetailAction({ lead, activeWorkspaceId: workspaceId, hasSession: !!session }, kind);
-    if (!plan.ok) { toast.error(plan.message); return; }
-
-    setRunning(kind);
-    try {
-      const result = await runLeadAction(plan.args);
-      const m = leadActionResultMessage(result);
-      if (m.tone === "success") {
-        toast.success(kind === "find_decision_makers" ? "Decision-maker search complete." : "Company research complete.");
-        // Canonical refetch — never patch optimistic contacts/research into state.
-        await qc.invalidateQueries({ queryKey: ["lead-library", workspaceId, "canonical-v1"] });
-        onDone(); // keep the drawer open; refresh its underlying row
-      } else if (m.tone === "blocked") {
-        toast.warning(m.message);
-      } else {
-        toast.error(m.message);
-      }
-    } catch {
-      // A thrown invoke never reached execution.
-      toast.error("The action did not reach the server. No provider ran — try again.");
-    } finally {
-      setRunning(null);
-    }
-  }, [running, lead, workspaceId, session, qc, onDone]);
+  const run = (kind: LeadDetailActionKind) => {
+    const { lead: l, workspaceId: ws, session: s } = depsRef.current;
+    const plan = planLeadDetailAction({ lead: l, activeWorkspaceId: ws, hasSession: !!s }, kind);
+    void controllerRef.current!.run(plan, kind);
+  };
 
   const researchLabel = researchActionLabel(lead.canonical?.research.status);
   const dmLabel = decisionMakerActionLabel(!!lead.selectedRecipient);
-  const disabled = !gate.ok || running !== null;
 
   return (
     <div className="space-y-2">

@@ -73,7 +73,7 @@ export function LeadDetailDrawer({
 
         <div className="mt-5 space-y-5 text-sm">
           <Section title="Actions">
-            <LeadDetailActions lead={lead} onDone={onRefresh} />
+            <LeadDetailActions lead={lead} />
           </Section>
 
           <Section title="Account overview">

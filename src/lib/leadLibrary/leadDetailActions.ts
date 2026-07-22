@@ -61,9 +61,10 @@ export function planLeadDetailAction(input: PlanLeadActionInput, kind: LeadDetai
     return { ok: false, reason: "no_actionable_lead", message: "No actionable lead record is available for this account." };
   }
 
-  // plan_id is optional trace linkage; the backend does not require it for a
-  // direct action and never invents one.
-  const planId = canonical?.leadRows.planIds?.[0];
+  // plan_id is optional trace linkage. Use the REPRESENTATIVE row's own plan
+  // (selectedPlanId) so a lead action can never pair lead A with plan B's id —
+  // never an arbitrary planIds[0].
+  const planId = canonical?.leadRows.selectedPlanId ?? undefined;
 
   return {
     ok: true,
@@ -72,6 +73,50 @@ export function planLeadDetailAction(input: PlanLeadActionInput, kind: LeadDetai
       leadCandidateIds: [selectedLeadCandidateId],
       workspaceId: activeWorkspaceId,
       ...(planId ? { planId } : {}),
+    },
+  };
+}
+
+// --------------------------------------------------------- single-flight -------
+
+export interface LeadActionControllerDeps {
+  runLeadAction: (args: BuildLeadActionArgs) => Promise<LeadActionResult>;
+  onSuccess: (kind: LeadDetailActionKind, result: LeadActionResult) => void | Promise<void>;
+  onBlocked: (message: string) => void;
+  onError: (message: string) => void;
+  /** Notifies the UI which action is running (or null when idle). */
+  onStateChange?: (running: LeadDetailActionKind | null) => void;
+}
+
+/**
+ * A synchronous single-flight runner. The in-flight flag is a plain closure
+ * variable (not React state), so two clicks in the SAME tick — before any
+ * re-render — cannot both start an invocation. Framework-agnostic and
+ * deterministically testable without a DOM.
+ */
+export function createLeadActionController(deps: LeadActionControllerDeps) {
+  let inFlight: LeadDetailActionKind | null = null;
+
+  return {
+    isRunning: (): LeadDetailActionKind | null => inFlight,
+    /** Run a pre-computed plan for `kind`. A second call while in-flight is ignored. */
+    run: async (plan: LeadActionPlan, kind: LeadDetailActionKind): Promise<void> => {
+      if (inFlight) return; // synchronous guard — one gesture, one request
+      if (!plan.ok) { deps.onError(plan.message); return; }
+      inFlight = kind;
+      deps.onStateChange?.(kind);
+      try {
+        const result = await deps.runLeadAction(plan.args);
+        const m = leadActionResultMessage(result);
+        if (m.tone === "success") await deps.onSuccess(kind, result);
+        else if (m.tone === "blocked") deps.onBlocked(m.message);
+        else deps.onError(m.message);
+      } catch {
+        deps.onError("The action did not reach the server. No provider ran — try again.");
+      } finally {
+        inFlight = null;
+        deps.onStateChange?.(null);
+      }
     },
   };
 }
