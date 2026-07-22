@@ -78,7 +78,12 @@ export function extractContactSignals(raw: unknown): {
   const r = isObj(raw) ? raw : {};
   const match = isObj(r.company_match) ? r.company_match : {};
   const prov = isObj(r.provenance) ? r.provenance : {};
-  const verified = str(match.status) === "verified" || r.current_employer_verified === true;
+  // Current-employer verification can arrive as an explicit flag, a company_match
+  // status, or (from decision-maker discovery) a forwarded `verification_status`.
+  const verified =
+    str(match.status) === "verified" ||
+    r.current_employer_verified === true ||
+    str(r.verification_status) === "verified";
   return {
     employerDomain: str(r.employer_domain) ?? str(r.company_domain) ?? str((match as Record<string, unknown>).domain) ?? str((prov as Record<string, unknown>).employer_domain),
     employerLinkedInUrl: str(r.company_linkedin_url) ?? str(r.employer_linkedin_url) ?? str((match as Record<string, unknown>).company_linkedin_url),
