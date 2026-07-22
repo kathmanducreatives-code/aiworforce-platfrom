@@ -24,13 +24,13 @@ const live = (id: string) => {
 };
 
 /**
- * DOCK_AGENTS shows the public specialist lineup: Nova, Atlas, Mira, Orion.
+ * DOCK_AGENTS shows the public specialist lineup: Lyra, Atlas, Mira, Orion.
  * Atlas is a single public card even though execution is currently split
  * across two internal engines (aria = qualification, hawk = research).
  */
 export const DOCK_AGENTS: DockAgent[] = [
   {
-    ...live('nova'),
+    ...live('lyra'),
     role: 'Your AI Signal Scout',
     currentTask: 'Scanning for buying signals',
     progress: 41,

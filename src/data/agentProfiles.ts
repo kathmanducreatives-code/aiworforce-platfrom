@@ -2,7 +2,7 @@
  * Legacy AgentProfile export — retained for backward compatibility with the
  * many components that already import from '@/data/agentProfiles'.
  *
- * The public identity data (Pilot / Nova / Atlas / Mira / Orion) is derived
+ * The public identity data (Pilot / Lyra / Atlas / Mira / Orion) is derived
  * from the canonical registry at `@/config/agentRegistry`. Historical legacy
  * slugs (scout / aria / hawk / penn / scribe) are still resolvable via
  * AGENT_BY_ID / AGENT_BY_NAME so historical rows continue to render the
@@ -23,7 +23,7 @@ export type AgentDept = RegistryAgentDept;
 export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro';
 
 /**
- * Backwards-compatible shape. `id` is the canonical public id (e.g. 'nova').
+ * Backwards-compatible shape. `id` is the canonical public id (e.g. 'lyra').
  * The `image` field is nullable in the legacy type — we always provide one.
  */
 export interface AgentProfile {
@@ -39,7 +39,7 @@ export interface AgentProfile {
 
 const MODEL_BY_PUBLIC_ID: Record<PublicAgentId, AgentModelKey> = {
   pilot: 'claude-sonnet',
-  nova: 'gpt-4o',
+  lyra: 'gpt-4o',
   atlas: 'claude-sonnet',
   mira: 'claude-haiku',
   orion: 'claude-sonnet',
@@ -69,7 +69,7 @@ export const PILOT_PROFILE: AgentProfile = toLegacyProfile(PUBLIC_AGENTS.pilot);
 /**
  * AGENT_BY_ID indexes BOTH canonical public ids AND legacy backend slugs so
  * historical rows (`agent_slug='scout'`, etc.) continue to render the public
- * identity (Nova). Values are legacy-shape AgentProfile objects.
+ * identity (Lyra). Values are legacy-shape AgentProfile objects.
  */
 export const AGENT_BY_ID: Record<string, AgentProfile> = (() => {
   const out: Record<string, AgentProfile> = {};
