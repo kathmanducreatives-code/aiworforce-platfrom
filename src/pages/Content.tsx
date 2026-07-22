@@ -145,7 +145,7 @@ export default function Content() {
         {/* Header */}
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Scribe Command Center</h1>
+            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Content Workspace</h1>
             <p className="text-[15px] md:text-[16px] text-muted-foreground mt-1.5">
               Turn signals into founder posts, comments, and approval-ready drafts. You approve everything — nothing publishes on its own.
             </p>
@@ -159,12 +159,12 @@ export default function Content() {
               onClick={() =>
                 dispatchChat(
                   commentDiscoveryReady
-                    ? "Scout, find 5 LinkedIn posts from ICP accounts to engage with — Penn will draft comments, drafts only."
+                    ? "Nova, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only."
                     : "Comment discovery requires LinkedIn or Apify. Open integrations or paste a post URL manually."
                 )
               }
             />
-            <TopBtn icon={<Repeat className="h-4 w-4" />} label="Build content loop" onClick={() => dispatchChat("Scribe, help me configure a weekly content loop — draft only.")} />
+            <TopBtn icon={<Repeat className="h-4 w-4" />} label="Build content loop" onClick={() => dispatchChat("Help me configure a weekly content loop — draft only.")} />
           </div>
         </header>
 
@@ -182,8 +182,8 @@ export default function Content() {
               {workflowRecaps.length === 0 ? (
                 <EmptyState
                   title="No workflow recaps yet."
-                  subtext="When Pilot runs a workflow (sourcing, research, drafts), Scribe saves a recap here."
-                  actions={[{ label: "Ask Scribe", onClick: () => dispatchChat("Scribe, summarize what my workforce has done recently.") }]}
+                  subtext="When Pilot runs a workflow (sourcing, research, drafts), Agentory saves a recap here."
+                  actions={[{ label: "Ask Agentory", onClick: () => dispatchChat("Summarize what my workforce has done recently.") }]}
                 />
               ) : (
                 workflowRecaps.slice(0, 5).map((b) => (
@@ -219,8 +219,8 @@ export default function Content() {
                   title={commentDiscoveryReady ? "No comment drafts yet." : "No engagement opportunities yet."}
                   subtext={
                     commentDiscoveryReady
-                      ? "Find posts from your ICP, competitors, or saved signals. Penn will draft thoughtful comments for review."
-                      : "Scout can find relevant posts once LinkedIn sources are configured. You can also paste a post manually."
+                      ? "Find posts from your ICP, competitors, or saved signals. Mira will draft thoughtful comments for review."
+                      : "Nova can find relevant posts once LinkedIn sources are configured. You can also paste a post manually."
                   }
                   actions={[
                     { label: commentDiscoveryReady ? "Find posts to comment on" : "Find opportunities", primary: true, onClick: () => dispatchChat("Scout, find 5 LinkedIn posts to engage with — draft comments only.") },

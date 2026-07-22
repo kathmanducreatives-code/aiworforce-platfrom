@@ -121,7 +121,7 @@ const DEFAULT_FIRST_MOVE: FirstMove = {
 const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   find_leads: {
     headline: 'Find 5 hiring-signal accounts',
-    body: 'Scout will source, Aria will rank, and results will open in Workbench.',
+    body: 'Nova will source, Atlas will rank, and results will open in Workbench.',
     workflowId: 'find_hiring_signal_accounts',
     workflowName: 'Find hiring-signal accounts',
     why: 'Matches your first goal of finding company accounts based on hiring signals.',
@@ -132,7 +132,7 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   },
   draft_outreach: {
     headline: 'Draft outreach to 5 prospects',
-    body: 'Penn will write approval-ready drafts using your voice. Nothing is sent automatically.',
+    body: 'Mira will write approval-ready drafts using your voice. Nothing is sent automatically.',
     workflowId: 'draft_outreach',
     workflowName: 'Draft outreach',
     why: 'Matches your goal of drafting personalized outreach sequences.',
@@ -143,7 +143,7 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   },
   create_content: {
     headline: 'Create your first LinkedIn post from your positioning',
-    body: 'Scribe will draft it in your voice. Nothing is posted automatically.',
+    body: 'Agentory will draft it in your voice. Nothing is posted automatically.',
     workflowId: 'linkedin_post_from_signals',
     workflowName: 'Create LinkedIn post',
     why: 'Matches your content goal of publishing brand-aligned posts.',
@@ -154,7 +154,7 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   },
   audit_website: {
     headline: 'Audit your website',
-    body: 'Hawk will research, Aria will prioritize issues, and Scribe will summarize.',
+    body: 'Atlas will research, prioritize issues, and summarize.',
     workflowId: 'website_audit',
     workflowName: 'Audit website',
     why: 'Matches your goal of auditing websites for growth.',
@@ -165,7 +165,7 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   },
   research_companies: {
     headline: 'Research your top target account',
-    body: 'Hawk gathers public signals, Aria highlights what matters, and Scribe writes a one-pager.',
+    body: 'Atlas gathers public signals, highlights what matters, and writes a one-pager.',
     workflowId: 'research_company',
     workflowName: 'Research company',
     why: 'Matches your goal of deep-diving into target accounts.',
@@ -176,7 +176,7 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   },
   track_competitors: {
     headline: 'Snapshot your top competitor',
-    body: 'Hawk pulls a competitor snapshot and Aria summarizes the changes worth watching.',
+    body: 'Atlas pulls a competitor snapshot and summarizes the changes worth watching.',
     workflowId: 'competitor_snapshot',
     workflowName: 'Competitor snapshot',
     why: 'Matches your goal of tracking competitors.',

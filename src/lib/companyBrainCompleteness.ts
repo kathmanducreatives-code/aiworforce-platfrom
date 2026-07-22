@@ -123,13 +123,13 @@ export function canActivateBrain(brain: CompanyBrainV2): boolean {
 /**
  * What an activated Brain powers — shown on the Activate step.
  * Agent names must match the real roster in agentorySystemPrompt.ts
- * (Pilot, Scout, Aria, Hawk, Scribe). Never name an agent that doesn't exist.
+ * (Pilot, Nova, Atlas, Mira, Orion). Never name an agent that doesn't exist.
  */
 export const BRAIN_POWERS = [
   { key: 'leads', label: 'Leads', blurb: 'ICP-filtered lead search and qualification' },
-  { key: 'radar', label: 'Scout Radar', blurb: 'Verified hiring, funding and competitor signals' },
+  { key: 'radar', label: 'Signal Radar', blurb: 'Verified hiring, funding and competitor signals' },
   { key: 'content', label: 'Content', blurb: 'On-voice posts from your angles and proof' },
-  { key: 'agents', label: 'Agents', blurb: 'Pilot, Scout, Aria, Hawk and Scribe share this context' },
+  { key: 'agents', label: 'Agents', blurb: 'Pilot, Nova, Atlas, Mira and Orion share this context' },
   { key: 'outreach', label: 'Outreach', blurb: 'Drafts that respect your disqualifiers' },
 ] as const;
 

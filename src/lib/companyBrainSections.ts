@@ -45,7 +45,7 @@ export const SECTION_META: Record<SectionKey, SectionMeta> = {
     key: 'signals',
     eyebrow: 'Buying signals',
     title: 'Buying signals',
-    explanation: 'What Scout Radar should watch for.',
+    explanation: 'What Signal Radar should watch for.',
     icon: Radar,
   },
   company: {
