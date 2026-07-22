@@ -128,6 +128,7 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
     publiclyVisible: true,
     fallbackInitial: 'N',
     status: 'active',
+    isPlaceholder: true,
   },
   atlas: {
     id: 'atlas',
