@@ -124,7 +124,7 @@ export function useWorkforceState(workspaceId: string | null) {
         id: `sig-${(s as any).id ?? i}`,
         time: fmt((s as any).created_at),
         agentId: 'scout' as AgentId,
-        text: `Nova found "${(s as any).title ?? 'a new signal'}"`,
+        text: `Lyra found "${(s as any).title ?? 'a new signal'}"`,
       })),
       ...drafts.slice(0, 2).map((d, i) => ({
         id: `draft-${(d as any).id ?? i}`,

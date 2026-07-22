@@ -10,7 +10,7 @@ import { lookupPublicAgent } from '@/config/agentRegistry';
  * DISPLAY resolver — returns a public-facing profile.
  *
  * Historical legacy slugs (scout / aria / hawk / penn / scribe) are aliased
- * to their public identity (Nova / Atlas / Atlas / Mira / Orion) so activity
+ * to their public identity (Lyra / Atlas / Atlas / Mira / Orion) so activity
  * rows, chat attribution, and dock surfaces always render the public name.
  *
  * NOTE: this resolver is intentionally used by presentation code only. It
@@ -55,7 +55,7 @@ export function inferAgentFromContent(text?: string | null): string | null {
   if (!text) return null;
   const s = String(text).toLowerCase();
   // Explicit named attribution wins — accept both legacy and public names.
-  const named = s.match(/\b(scout|aria|hawk|penn|scribe|pilot|nova|atlas|mira|orion)\b/);
+  const named = s.match(/\b(scout|aria|hawk|penn|scribe|pilot|lyra|atlas|mira|orion)\b/);
   if (named) return named[1];
 
   if (/\b(sourc(?:e|ed|ing)|raw results?|accepted \d+ qualified|apify|hiring signal|find (?:decision|contacts?))/.test(s)) return 'scout';

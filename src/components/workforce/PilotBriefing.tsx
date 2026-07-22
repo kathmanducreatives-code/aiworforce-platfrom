@@ -34,7 +34,7 @@ export default function PilotBriefing({ totals }: Props) {
   const channels = profile.gtm?.preferred_channels || [];
 
   const lines: string[] = [];
-  if (totals.signals > 0) lines.push(`Nova found ${totals.signals} new buying signal${totals.signals === 1 ? '' : 's'}.`);
+  if (totals.signals > 0) lines.push(`Lyra found ${totals.signals} new buying signal${totals.signals === 1 ? '' : 's'}.`);
   if (totals.outreachDrafts > 0) lines.push(`Mira prepared ${totals.outreachDrafts} outreach draft${totals.outreachDrafts === 1 ? '' : 's'}.`);
   if (totals.contentDrafts > 0) lines.push(`Agentory drafted ${totals.contentDrafts} content piece${totals.contentDrafts === 1 ? '' : 's'}.`);
   if (totals.approvals > 0) lines.push(`Pilot needs your approval on ${totals.approvals} item${totals.approvals === 1 ? '' : 's'}.`);
@@ -81,7 +81,7 @@ export default function PilotBriefing({ totals }: Props) {
                   <span className="h-5 w-5 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                   </span>
-                  <span className="text-neutral-100 font-medium">Nova is sourcing account opportunities.</span>
+                  <span className="text-neutral-100 font-medium">Lyra is sourcing account opportunities.</span>
                 </div>
                 <div className="flex items-center gap-3 text-[13.5px] opacity-50">
                   <span className="h-5 w-5 rounded-full bg-neutral-900 border border-white/10 text-[9px] text-neutral-400 flex items-center justify-center shrink-0">3</span>

@@ -121,7 +121,7 @@ const DEFAULT_FIRST_MOVE: FirstMove = {
 const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
   find_leads: {
     headline: 'Find 5 hiring-signal accounts',
-    body: 'Nova will source, Atlas will rank, and results will open in Workbench.',
+    body: 'Lyra will source, Atlas will rank, and results will open in Workbench.',
     workflowId: 'find_hiring_signal_accounts',
     workflowName: 'Find hiring-signal accounts',
     why: 'Matches your first goal of finding company accounts based on hiring signals.',
