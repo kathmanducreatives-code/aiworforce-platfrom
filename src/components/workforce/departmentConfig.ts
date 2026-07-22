@@ -57,7 +57,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
   },
   scout: {
-    title: 'Nova Department',
+    title: 'Lyra Department',
     subtitle: 'Lead discovery and buying signal intelligence.',
     ringHex: '#2dd4bf',
     glowRgba: 'rgba(45,212,191,0.35)',
@@ -73,7 +73,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     actions: () => [
       { label: 'Open Signal Feed', route: '/signals', primary: true },
       { label: 'Send to Atlas', route: '/leads' },
-      { label: 'Ask Nova to find more', route: '/lead-scraper' },
+      { label: 'Ask Lyra to find more', route: '/lead-scraper' },
     ],
   },
   aria: {

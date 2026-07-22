@@ -11,7 +11,7 @@ import {
 
 describe('agentRegistry — legacy alias resolution', () => {
   it.each([
-    ['scout', 'Nova'],
+    ['scout', 'Lyra'],
     ['aria', 'Atlas'],
     ['hawk', 'Atlas'],
     ['penn', 'Mira'],
@@ -22,7 +22,7 @@ describe('agentRegistry — legacy alias resolution', () => {
   });
 
   it.each([
-    ['nova', 'Nova'],
+    ['lyra', 'Lyra'],
     ['atlas', 'Atlas'],
     ['mira', 'Mira'],
     ['orion', 'Orion'],
@@ -32,7 +32,7 @@ describe('agentRegistry — legacy alias resolution', () => {
   });
 
   it('is case-insensitive for slugs and names', () => {
-    expect(lookupPublicAgent('SCOUT')?.name).toBe('Nova');
+    expect(lookupPublicAgent('SCOUT')?.name).toBe('Lyra');
     expect(lookupPublicAgent('Atlas')?.name).toBe('Atlas');
     expect(lookupPublicAgent('  Mira  ')?.name).toBe('Mira');
   });
@@ -87,7 +87,7 @@ describe('agentRegistry — public list composition', () => {
   it('publishes exactly 5 unique public identities in canonical order', () => {
     expect(PUBLIC_AGENT_LIST.map((a) => a.name)).toEqual([
       'Pilot',
-      'Nova',
+      'Lyra',
       'Atlas',
       'Mira',
       'Orion',

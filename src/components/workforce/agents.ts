@@ -6,7 +6,7 @@
  *
  * Public mapping applied here:
  *   pilot  → Pilot
- *   scout  → Nova
+ *   scout  → Lyra
  *   aria   → Atlas (qualification)
  *   hawk   → Atlas (research) — kept as a lookup entry but excluded from
  *                                AGENT_ORDER so the dock doesn't render two
@@ -48,7 +48,7 @@ export const AGENTS: Record<AgentId, AgentMeta> = {
   },
   scout: {
     id: 'scout',
-    name: 'Nova',
+    name: 'Lyra',
     role: 'AI Signal Scout',
     accent: 'blue',
     initial: 'N',

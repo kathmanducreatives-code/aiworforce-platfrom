@@ -159,7 +159,7 @@ export default function Content() {
               onClick={() =>
                 dispatchChat(
                   commentDiscoveryReady
-                    ? "Nova, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only."
+                    ? "Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only."
                     : "Comment discovery requires LinkedIn or Apify. Open integrations or paste a post URL manually."
                 )
               }
@@ -220,7 +220,7 @@ export default function Content() {
                   subtext={
                     commentDiscoveryReady
                       ? "Find posts from your ICP, competitors, or saved signals. Mira will draft thoughtful comments for review."
-                      : "Nova can find relevant posts once LinkedIn sources are configured. You can also paste a post manually."
+                      : "Lyra can find relevant posts once LinkedIn sources are configured. You can also paste a post manually."
                   }
                   actions={[
                     { label: commentDiscoveryReady ? "Find posts to comment on" : "Find opportunities", primary: true, onClick: () => dispatchChat("Scout, find 5 LinkedIn posts to engage with — draft comments only.") },
