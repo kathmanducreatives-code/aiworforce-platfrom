@@ -1,93 +1,104 @@
-# Phase 1.6 — Canonical Agent Visuals & Public Attribution
+# Lead Library — Minimal Premium Workspace Redesign
 
-Presentation-only. No backend/orchestration/prompt/DB/deploy changes.
+Frontend-only redesign of `/leads`. No backend, schema, query, filter, scoring, approval, workflow, agent-routing, or import/export logic will change. No deploy. All work stays inside `src/components/leads/library/**`, `src/pages/LeadLibrary.tsx`, and small shared token/util additions.
 
-## Approved assets (from uploads)
-- Atlas → dark-haired male, no glasses, purple-blue glow
-- Orion → male with glasses, teal glow
-- Mira → brunette woman, magenta glow
-- Pilot → keep current
-- Nova → neutral placeholder (no approved asset)
-- "Lisa" (blonde) → stored but unused
+## Goals
 
-## 1. Asset pipeline
-Upload the 3 approved images via `lovable-assets` CLI into a canonical structure:
+- Whole workspace fits inside one desktop viewport: header + Atlas strip + metric strip + toolbar + table header + ~8 rows + pagination, no page scroll.
+- Table never horizontally scrolls at standard desktop/laptop widths.
+- Command bar never covers table content.
+- Row is scannable in under three seconds; no snake_case surfaced.
 
+## Layout Shell
+
+```text
++----------------------------------------------------------+
+| Compact header (title + primary actions)        ~88px    |
++----------------------------------------------------------+
+| Atlas strip (compact)  |  Metric strip (7 items)  ~72px  |
++----------------------------------------------------------+
+| Toolbar row 1: tabs + Save view                  ~40px   |
+| Toolbar row 2: search + 5 filter selects + reset ~44px   |
++----------------------------------------------------------+
+| Table header (sticky)                            ~40px   |
+| ~8 rows                                     flex: 1      |
+| Pagination                                       ~48px   |
++----------------------------------------------------------+
+Collapsed "Ask your workforce" FAB, bottom-right, never overlaps table.
 ```
-src/assets/agents/public/
-  atlas-avatar.png.asset.json
-  atlas-portrait.png.asset.json
-  orion-avatar.png.asset.json
-  orion-portrait.png.asset.json
-  mira-avatar.png.asset.json
-  mira-portrait.png.asset.json
-  pilot-avatar.png.asset.json    (re-point to existing pilot asset)
-  pilot-portrait.png.asset.json
-  nova-placeholder.png.asset.json (neutral glyph — generated)
-  unknown-agent.png.asset.json   (neutral silhouette — generated)
-```
 
-Avatar = face/shoulders crop, no name banner. Portrait = larger character composition.
+Shell: `height: calc(100vh - <app header>); overflow: hidden;` with an inner flex column; the table region is `flex: 1; min-height: 0` and owns its own vertical scroll only when >page-size rows exist (pagination is the norm).
 
-For Atlas/Orion/Mira the same source is used for both avatar and portrait (single upload, referenced twice) — cropping handled via CSS `object-position` in `AgentAvatar` / portrait components.
+## Files To Modify
 
-Generate two neutral placeholders (Nova + unknown fallback) with `imagegen--generate_image`: geometric Agentory glyph on dark background, no human likeness.
+- `src/pages/LeadLibrary.tsx` — new fixed-height shell, remove hero/AtlasPanel-large, wire new subcomponents.
+- `src/components/leads/library/MetricStrip.tsx` — collapse into one shared container, remove per-card glass, add subtle divider + selected underline.
+- `src/components/leads/library/FilterBar.tsx` — merge with tabs into single `Toolbar`, tighten heights, specific "Any …" labels, chips row inline.
+- `src/components/leads/library/AtlasPanel.tsx` — reduce to compact strip (~360–420×~80px) using canonical Atlas asset from `agentRegistry`.
+- `src/components/leads/library/LeadTable.tsx` — new 8-column %-width layout, row upgrades, no horizontal scroll, responsive column hiding.
+- `src/components/leads/library/premium/tokens.ts` — consolidate surface/border/text/accent tokens; softer glass, less green.
 
-## 2. Registry update (`src/config/agentRegistry.ts`)
-Extend `PublicAgentProfile` with:
-```ts
-avatar: string;         // small circular UI
-portrait: string;       // large surfaces
-cardImage?: string;
-objectPosition?: string; // e.g. 'center 20%'
-fallbackInitial: string;
-isPlaceholder?: boolean; // Nova = true
-```
-Point each public id at its `agents/public/*` asset. Legacy files (`scout.png` etc.) stay on disk for historical rows but are no longer imported by public components.
+## Files To Create
 
-Add `UNKNOWN_AGENT` profile with neutral asset — must not fall back to Pilot.
+- `src/components/leads/library/LibraryHeader.tsx` — eyebrow, title, subtitle, action cluster (Create list primary, Add lead secondary, Import/Export icon buttons).
+- `src/components/leads/library/Toolbar.tsx` — tabs + Save view (row 1); search + filters + reset (row 2); active-chip row.
+- `src/components/leads/library/AtlasStrip.tsx` — compact assistant card (avatar, name/title, two metrics, on-duty dot).
+- `src/components/leads/library/LeadDetailDrawer.tsx` — right-side drawer (`Sheet`, 420–520px) with company summary, signal, fit breakdown, evidence, buyer, opener preview, approval state, activity, next action.
+- `src/components/leads/library/LeadRow.tsx` — one row component with the eight refined cells.
+- `src/components/leads/library/cells/` — small presentational cells: `LeadCell`, `SignalCell`, `FitCell`, `BuyerCell`, `ReadinessCell`, `OpenerCell`, `NextActionCell`, `UpdatedCell`.
+- `src/components/leads/library/Pagination.tsx` — page nav + rows-per-page (10/25/50).
+- `src/components/leads/library/WorkforceFab.tsx` — collapsed bottom-right FAB replacing the floating command bar on `/leads`; expands to a small popover with ≤3 suggestions using canonical names (Atlas/Mira/Orion).
+- `src/components/leads/library/EmptyState.tsx`, `TableSkeleton.tsx` — compact loading/empty states preserving table dimensions.
+- `src/lib/leadLibrary/labels.ts` — map raw values (`job_posting`, `needs_verification`, `weak`, readiness states, engagement) to user-facing labels.
+- `src/lib/leadLibrary/relativeTime.ts` — "5m ago / 2h ago / Yesterday / 4d ago / —".
 
-## 3. Resolver + component updates
-- `src/lib/agentResolver.ts`: unknown/null/malformed slugs → `UNKNOWN_AGENT` (not Pilot).
-- `src/components/agents/AgentAvatar.tsx` and `src/components/chat/workspace/agents/AgentAvatar.tsx`: read `avatar` + `objectPosition` from resolver; onError → neutral initial container (never Pilot).
-- Sweep every component in the spec's audit list (AgentBadge, AgentIdentity, WorkforceDock, OperativeDock, ChatBubble, PlanDetailView, ExecutionTaskRow, AtlasPanel, AtlasEmptyState, DepartmentCard, MeetYourAITeamSection, onboarding, etc.) and replace any direct `scout.png`/`aria.png`/`hawk.png`/`penn.png`/`scribe.png` imports with registry lookups.
+## Table Columns
 
-## 4. Public copy sweep
-Ripgrep user-visible strings for `Scout|Aria|Hawk|Penn|Scribe` across `src/**` (excluding `__tests__`, backend prompts referenced from frontend only as opaque IDs). Classify each and rewrite public occurrences:
-- Scout→Nova, Aria/Hawk→Atlas, Penn→Mira, Scribe→Orion or neutral "Agentory content workspace".
-- `departmentConfig.ts` titles/subtitles updated.
-- Content generation surfaces attributed to Scribe internally → publicly labeled "Agentory content workspace" / "Draft prepared for review" (do NOT re-attribute generic content to Orion).
-- Retained legacy strings (backend slugs, execution keys, test fixtures) documented in the final report with file/line/reason.
+Kept in main table (8, %-widths sum to 100):
 
-## 5. Scribe/Orion separation
-Orion's public copy scoped to operational surfaces (approvals, pipeline briefings, next-action recs). Any content-draft UI currently badged Scribe becomes neutral "Agentory content workspace" until a canonical owner is chosen.
+| Column | Width |
+|---|---|
+| Lead | 17% |
+| Signal | 15% |
+| Fit | 9% |
+| Buyer | 15% |
+| Readiness | 13% |
+| Opener | 17% |
+| Next action | 10% |
+| Updated | 8% (numeric, tabular-nums) |
 
-## 6. Tests (`src/config/agentRegistry.test.ts` + new)
-Add cases:
-- Nova avatar path does not contain `scout`
-- Atlas avatar path does not contain `aria` or `hawk`
-- Mira avatar path does not contain `penn`; asserts brunette canonical id
-- Orion avatar path does not contain `scribe`
-- Unknown/null/empty/malformed slug → `UNKNOWN_AGENT`, not Pilot
-- All legacy slugs still resolve to correct public profile
-- Public components' asset paths route through registry (snapshot of resolved paths)
+Moved to drawer: full source metadata, evidence list, full opener body, engagement history, raw discovery data, technical/retry statuses, full research notes, secondary badges.
 
-## 7. Validation
-Run in order and report exit codes:
-1. `bunx tsgo --noEmit`
-2. Scoped lint on all files touched across Phase 0/1/1.5/1.6
-3. `bunx vitest run src/config src/lib/agentResolver` + component tests
-4. Full `bunx vitest run`
-5. `bun run build`
-6. Playwright visual QA against localhost: Dashboard, Agents, Lead Library, Awaiting You, Workflows, Chat, Plan detail, Workbench, Department, Landing AI team, Onboarding — screenshots into `/tmp/browser/phase16/`.
+Responsive hide order (progressive): Updated → Opener → Signal → Buyer. Below `md`, table is replaced by compact `LeadCard` list (Lead, Fit, Readiness, Next action); details open in a bottom sheet reusing `LeadDetailDrawer` content.
 
-## 8. Deliverables
-Final report covering all 22 required items (assets supplied/missing, canonical paths, removed/retained legacy references, fallback impl, Scribe/Orion correction, per-route QA screenshots, all validation results, files created/modified, branch, git status, no-backend/no-DB/no-deploy confirmations, verdict).
+## How Each Constraint Is Met
 
-## Constraints reaffirmed
-No edits to `supabase/functions/**`, prompts, orchestration, schemas, records, `run-agent`, or publish. Legacy image files remain on disk. Backend `agent_slug` values untouched.
+- **No horizontal scroll:** switch from fixed pixel widths to `table-fixed` with % widths summing to 100; drop overflow columns into drawer; hide progressively at `lg`/`md`.
+- **No page scroll:** shell owns viewport height; table region flexes; overflow lives only inside table body via pagination.
+- **Command bar never covers rows:** remove floating `InlineCommandBar` from this page's layout, mount `WorkforceFab` (collapsed) in a bottom-right corner with `pointer-events` scoped to the button; expanded popover opens upward and closes on outside click. Pagination bar reserves height above it.
+- **Less green / less glass:** tokens updated to a single restrained teal accent applied only to primary action, selected tab/metric, active row, next-action button, and Atlas on-duty dot.
+- **No snake_case:** all cell renderers pass through `labels.ts`.
 
-## Technical notes
-- Assets uploaded via `lovable-assets create --file /mnt/user-uploads/<name> --filename <canonical>.png > src/assets/agents/public/<canonical>.png.asset.json`, then imported as JSON modules and used via `asset.url`.
-- Nova + unknown placeholders generated with `imagegen--generate_image` (transparent bg, neutral Agentory glyph) then externalized via `lovable-assets`.
-- Verdict expected: **visually complete for Atlas/Orion/Mira/Pilot; Nova flagged `isPlaceholder`; safe for draft PR; blocked-from-"complete" until Nova approved asset supplied.**
+## Component System (shared tokens)
+
+`tokens.ts` will expose: `surfaceBase`, `surfaceRaised`, `surfaceHover`, `borderSubtle`, `borderActive`, `textPrimary`, `textSecondary`, `textMuted`, `accentTeal`, `statusSuccess`, `statusWarning`, `statusDanger`, plus radii (`rounded-xl` / `rounded-2xl`) and one shared shadow. All new components consume tokens; hardcoded greens/hex are removed from redesigned files.
+
+## Canonical Agents
+
+Atlas asset pulled from `src/config/agentRegistry.ts` via `agentResolver`. Suggested FAB chips credit Atlas (research), Mira (opener), Orion (review). No legacy names (Scout/Aria/Hawk/Penn/Scribe/Nova) appear in copy.
+
+## Out Of Scope
+
+- `useLeadLibrary`, `deriveCanonicalLeadView`, filter predicates, `applyFilters`, list persistence, RLS, edge functions — untouched.
+- Other pages and the global `InlineCommandBar` component itself are not modified; only its usage on `/leads` is replaced by `WorkforceFab`.
+
+## Validation
+
+- `tsgo` typecheck on changed files.
+- Manual Playwright screenshots at 1440×900, 1280×800, 1024×768, 768×1024, 390×844.
+- Confirm: no horizontal table scroll, 8+ rows visible at 1280×800, FAB collapsed and non-overlapping, pagination visible.
+- No deploy, no publish, no migrations.
+
+## Deliverables (post-build report)
+
+Files modified/created, columns kept vs. drawered, how scroll and overlap were eliminated, viewport/pagination behavior, screenshots at each width, typecheck + scoped lint + build output, explicit confirmation backend/DB behavior unchanged and nothing was deployed.

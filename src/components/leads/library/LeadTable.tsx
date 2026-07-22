@@ -1,227 +1,221 @@
-import { formatDistanceToNowStrict } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "./StatusPill";
+import { ExternalLink, ArrowRight, Check } from "lucide-react";
+import type { LeadRow } from "@/lib/leadLibrary/types";
 import {
-  type LeadRow,
-  ACCOUNT_STATUS_LABEL,
-  ENGAGEMENT_STATUS_LABEL,
-  fitTierLabel,
-  nextStepFor,
-  readinessSummary,
-} from "@/lib/leadLibrary/types";
-import { ExternalLink, Linkedin } from "lucide-react";
+  signalLabel,
+  fitToneFor,
+  fitShortLabel,
+  readinessState,
+  nextActionLabel,
+  openerStatusLabel,
+  relativeTime,
+} from "@/lib/leadLibrary/labels";
 
-export function LeadTable({
-  rows,
-  selected,
-  onToggle,
-  onToggleAll,
-  onOpen,
-}: {
+interface Props {
   rows: LeadRow[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onToggleAll: (all: boolean) => void;
   onOpen: (id: string) => void;
-}) {
+}
+
+// Column widths sum to 100%.
+const COLS = [
+  { key: "chk",       cls: "w-8" },
+  { key: "lead",      cls: "w-[17%]" },
+  { key: "signal",    cls: "w-[15%] hidden lg:table-cell" },
+  { key: "fit",       cls: "w-[9%]" },
+  { key: "buyer",     cls: "w-[15%] hidden md:table-cell" },
+  { key: "ready",     cls: "w-[13%]" },
+  { key: "opener",    cls: "w-[17%] hidden xl:table-cell" },
+  { key: "action",    cls: "w-[10%]" },
+  { key: "updated",   cls: "w-[8%] hidden lg:table-cell" },
+];
+
+export function LeadTable({ rows, selected, onToggle, onToggleAll, onOpen }: Props) {
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[rgba(10,14,12,0.55)] backdrop-blur-xl overflow-hidden shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)]">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.05] bg-black/20">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-          <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
-            Accounts
-          </span>
-          <span className="text-[11px] text-muted-foreground/70">· {rows.length}</span>
-        </div>
-        <span className="text-[10.5px] text-muted-foreground/70">
-          Ranked by Atlas
-        </span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground bg-white/[0.02]">
-            <tr>
-              <th className="w-8 px-3 py-2.5">
-                <Checkbox checked={allSelected} onCheckedChange={(v) => onToggleAll(!!v)} />
-              </th>
-              <Th>Company</Th>
-              <Th>Source</Th>
-              <Th>Why selected</Th>
-              <Th>Fit</Th>
-              <Th>Selected buyer</Th>
-              <Th>Readiness</Th>
-              <Th>Opener</Th>
-              <Th>Engagement</Th>
-              <Th>Next step</Th>
-              <Th>Last activity</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <LeadRowView key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => onToggle(r.id)} onOpen={() => onOpen(r.id)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="flex-1 min-h-0 overflow-auto">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          {COLS.map((c) => <col key={c.key} className={c.cls} />)}
+        </colgroup>
+        <thead className="text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground bg-black/30 sticky top-0 z-10 backdrop-blur">
+          <tr className="border-b border-white/[0.05]">
+            <th className="px-3 h-10 text-left">
+              <Checkbox checked={allSelected} onCheckedChange={(v) => onToggleAll(!!v)} />
+            </th>
+            <Th>Lead</Th>
+            <Th className="hidden lg:table-cell">Signal</Th>
+            <Th>Fit</Th>
+            <Th className="hidden md:table-cell">Buyer</Th>
+            <Th>Readiness</Th>
+            <Th className="hidden xl:table-cell">Opener</Th>
+            <Th>Next action</Th>
+            <Th className="hidden lg:table-cell text-right pr-4">Updated</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <Row
+              key={r.id}
+              r={r}
+              selected={selected.has(r.id)}
+              onToggle={() => onToggle(r.id)}
+              onOpen={() => onOpen(r.id)}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{children}</th>;
+function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <th className={cn("px-3 h-10 text-left font-semibold whitespace-nowrap", className)}>{children}</th>;
 }
 
-
-function LeadRowView({ r, selected, onToggle, onOpen }: {
+function Row({ r, selected, onToggle, onOpen }: {
   r: LeadRow; selected: boolean; onToggle: () => void; onOpen: () => void;
 }) {
-  const readiness = readinessSummary(r);
+  const sig = signalLabel(r);
+  const ready = readinessState(r);
+  const fitTone = fitToneFor(r.fitScore);
+  const opener = openerStatusLabel(r);
+  const action = nextActionLabel(r);
+
   return (
     <tr
-      className={cn(
-        "border-t border-white/[0.04] transition-all cursor-pointer",
-        "hover:bg-[linear-gradient(90deg,rgba(16,185,129,0.05),transparent_60%)]",
-        selected && "bg-[linear-gradient(90deg,rgba(16,185,129,0.10),transparent_70%)] shadow-[inset_3px_0_0_rgba(16,185,129,0.9)]",
-      )}
       onClick={onOpen}
+      className={cn(
+        "border-b border-white/[0.03] cursor-pointer transition-colors",
+        "hover:bg-white/[0.025]",
+        selected && "bg-[linear-gradient(90deg,rgba(16,185,129,0.06),transparent_70%)] shadow-[inset_2px_0_0_rgba(16,185,129,0.8)]",
+      )}
     >
-
-      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+      <td className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
         <Checkbox checked={selected} onCheckedChange={onToggle} />
       </td>
-      <td className="px-3 py-3 min-w-[200px]">
-        <div className="font-medium text-foreground">{r.name}</div>
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
-          {r.domain && <span>{r.domain}</span>}
-          {r.linkedinUrl && (
-            <a href={r.linkedinUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-primary">
-              <Linkedin className="h-3 w-3 inline" />
-            </a>
-          )}
-          {r.websiteUrl && (
-            <a href={r.websiteUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-primary">
-              <ExternalLink className="h-3 w-3 inline" />
-            </a>
-          )}
-        </div>
-        <div className="flex gap-1 mt-1">
-          {r.industry && <StatusPill label={r.industry} tone="muted" />}
-          {r.employeeCount && <StatusPill label={r.employeeCount} tone="muted" />}
-          {r.possibleDuplicateOf && <StatusPill label="Possible duplicate" tone="warning" />}
-        </div>
-      </td>
-      <td className="px-3 py-3 min-w-[220px]">
-        {r.strongestSource ? (
-          <div className="text-xs">
-            <div className="text-foreground line-clamp-1">{r.strongestSource.headline ?? r.strongestSource.sourceType ?? "Signal"}</div>
-            <div className="text-muted-foreground line-clamp-1">
-              {[r.strongestSource.sourceType, r.strongestSource.discoveryMethod].filter(Boolean).join(" · ")}
-            </div>
-            {r.sources.length > 1 && <div className="text-primary/70 mt-0.5">{r.sources.length} sources</div>}
+
+      {/* Lead */}
+      <td className="px-3 py-2.5 align-middle min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-7 w-7 shrink-0 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-[11px] font-semibold text-foreground/80">
+            {r.name.slice(0, 1).toUpperCase()}
           </div>
-        ) : (
-          <span className="text-xs text-muted-foreground italic">Source not recorded</span>
-        )}
-      </td>
-      <td className="px-3 py-3 min-w-[200px]">
-        <div className="text-xs text-foreground line-clamp-2">{r.whySelected ?? <span className="text-muted-foreground italic">—</span>}</div>
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="text-sm font-semibold text-foreground tabular-nums">{r.fitScore ?? "—"}</span>
-          <StatusPill label={fitTierLabel(r.fitTier)} tone={r.fitTier === "strong" ? "success" : r.fitTier === "poor" ? "danger" : "neutral"} />
-          <StatusPill label={ACCOUNT_STATUS_LABEL[r.accountStatus]} tone={r.accountStatus === "qualified" ? "success" : r.accountStatus === "disqualified" ? "danger" : "muted"} />
+          <div className="min-w-0">
+            <div className="text-[13px] font-medium text-foreground truncate">{r.name}</div>
+            {r.domain && (
+              <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
+                <span className="truncate">{r.domain}</span>
+                {r.websiteUrl && (
+                  <a
+                    href={r.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-muted-foreground/70 hover:text-primary shrink-0"
+                    aria-label="Open website"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </td>
-      <td className="px-3 py-3 min-w-[180px]">
-        {r.selectedRecipient ? (
-          <div className="text-xs">
-            <div className="font-medium text-foreground">{r.selectedRecipient.fullName ?? "Unknown"}</div>
-            <div className="text-muted-foreground">{r.selectedRecipient.title ?? "—"}</div>
-            <div className="flex gap-1 mt-0.5">
-              {r.selectedRecipient.verified && <StatusPill label="Verified" tone="success" />}
-              {r.selectedRecipient.linkedinUrl && <StatusPill label="LinkedIn" tone="info" />}
-              {r.selectedRecipient.email ? <StatusPill label="Email" tone="info" /> : <StatusPill label="No email" tone="muted" />}
-            </div>
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground italic">No buyer selected</span>
-        )}
+
+      {/* Signal */}
+      <td className="px-3 py-2.5 align-middle hidden lg:table-cell min-w-0">
+        <div className="text-[12px] text-foreground truncate">{sig.label}</div>
+        {sig.sub && <div className="text-[11px] text-muted-foreground truncate">{sig.sub}</div>}
       </td>
-      <td className="px-3 py-3 min-w-[140px]">
-        <div className="flex flex-col gap-0.5 text-[11px]">
-          <ReadinessRow label="Research" val={readiness.research} />
-          <ReadinessRow label="Buyer" val={readiness.buyer} />
-          <ReadinessRow label="Opener" val={readiness.opener} />
-        </div>
-      </td>
-      <td className="px-3 py-3 min-w-[220px]">
-        {r.opener ? (
-          <div className="text-xs">
-            <div className="line-clamp-2 text-foreground">{r.opener.bodyPreview}</div>
-            <div className="flex gap-1 mt-0.5 flex-wrap">
-              {(() => {
-                // The legacy LeadRow.OutreachStatus enum cannot express
-                // "retry failed, previous draft preserved" or "sent", so read the
-                // distinction from the canonical view. `sent` is shown ONLY when
-                // explicitly persisted. Falls back to the legacy enum if canonical
-                // is somehow absent.
-                const cs = r.canonical?.outreach.status;
-                if (cs === "sent" && r.canonical?.outreach.sent) return <StatusPill label="Sent" tone="success" />;
-                if (cs === "approved") return <StatusPill label="Approved" tone="success" />;
-                if (cs === "retry_failed_previous_draft_preserved") {
-                  return <>
-                    <StatusPill label="Draft ready" tone="info" />
-                    <StatusPill label="Latest retry failed" tone="warning" />
-                  </>;
-                }
-                return <StatusPill label={r.opener.status === "approved" ? "Approved" : "Draft ready"} tone={r.opener.status === "approved" ? "success" : "info"} />;
-              })()}
-              <StatusPill label={`${r.opener.evidenceCount} evidence`} tone="muted" />
-              {!r.canonical?.outreach.sent && <StatusPill label="Approval required · Nothing sent" tone="warning" />}
-            </div>
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground italic">
-            {!r.strongestSource ? "Research company first" : !r.selectedRecipient?.verified ? "Find a verified buyer first" : "Not generated"}
+
+      {/* Fit */}
+      <td className="px-3 py-2.5 align-middle">
+        <div className="flex items-baseline gap-1.5">
+          <span
+            className={cn(
+              "text-[15px] font-semibold tabular-nums leading-none",
+              fitTone === "success" && "text-primary",
+              fitTone === "warning" && "text-amber-300",
+              fitTone === "danger" && "text-rose-300",
+              fitTone === "muted" && "text-muted-foreground",
+            )}
+          >
+            {r.fitScore ?? "—"}
           </span>
-        )}
+        </div>
+        <div className="text-[10.5px] text-muted-foreground mt-0.5 truncate">{fitShortLabel(r.fitScore)}</div>
       </td>
-      <td className="px-3 py-3">
-        <StatusPill
-          label={ENGAGEMENT_STATUS_LABEL[r.engagementStatus]}
-          tone={r.engagementStatus === "replied" || r.engagementStatus === "meeting" || r.engagementStatus === "won" ? "success" : r.engagementStatus === "lost" ? "danger" : "muted"}
-        />
-        {r.primaryChannel && <div className="text-[11px] text-muted-foreground mt-1 capitalize">{r.primaryChannel}</div>}
-      </td>
-      <td className="px-3 py-3 min-w-[140px]">
-        <span className="text-xs text-foreground">{nextStepFor(r)}</span>
-      </td>
-      <td className="px-3 py-3 min-w-[140px]">
-        {r.lastActivity ? (
-          <div className="text-xs">
-            <div className="text-foreground">{r.lastActivity.type}</div>
-            <div className="text-muted-foreground">{formatDistanceToNowStrict(new Date(r.lastActivity.at))} ago</div>
-            {r.lastActivity.manual && <StatusPill label="Manual" tone="muted" />}
+
+      {/* Buyer */}
+      <td className="px-3 py-2.5 align-middle hidden md:table-cell min-w-0">
+        {r.selectedRecipient ? (
+          <div className="min-w-0">
+            <div className="text-[12.5px] text-foreground truncate">{r.selectedRecipient.fullName ?? "Unknown"}</div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              {r.selectedRecipient.title ?? "—"}
+              {r.selectedRecipient.verified && <span className="text-primary/80 ml-1.5">· Verified</span>}
+            </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground italic">No activity</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11.5px] text-muted-foreground">No verified buyer</span>
+          </div>
         )}
+      </td>
+
+      {/* Readiness */}
+      <td className="px-3 py-2.5 align-middle">
+        <div className="text-[12px] text-foreground truncate">{ready.label}</div>
+        <div className="mt-1 flex items-center gap-1">
+          {ready.steps.map((ok, i) => (
+            <span
+              key={i}
+              className={cn(
+                "h-1.5 w-5 rounded-full",
+                ok ? "bg-primary/80" : "bg-white/[0.08]",
+              )}
+            />
+          ))}
+        </div>
+      </td>
+
+      {/* Opener */}
+      <td className="px-3 py-2.5 align-middle hidden xl:table-cell min-w-0">
+        {r.opener?.bodyPreview ? (
+          <div className="min-w-0">
+            <div className="text-[12px] text-foreground line-clamp-2">{r.opener.bodyPreview}</div>
+            <div className="mt-0.5">
+              <StatusPill label={opener.label} tone={opener.tone === "success" ? "success" : opener.tone === "warning" ? "warning" : "muted"} />
+            </div>
+          </div>
+        ) : (
+          <span className="text-[11.5px] text-muted-foreground">Not prepared</span>
+        )}
+      </td>
+
+      {/* Next action */}
+      <td className="px-3 py-2.5 align-middle">
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11.5px] font-medium text-primary bg-primary/[0.08] border border-primary/25 hover:bg-primary/[0.14] transition-colors"
+        >
+          {action === "Skip" ? <Check className="h-3 w-3" /> : <ArrowRight className="h-3 w-3" />}
+          <span className="truncate">{action}</span>
+        </button>
+      </td>
+
+      {/* Updated */}
+      <td className="px-3 py-2.5 align-middle hidden lg:table-cell text-right pr-4">
+        <span className="text-[11.5px] text-muted-foreground tabular-nums">
+          {relativeTime(r.lastActivity?.at ?? r.updatedAt)}
+        </span>
       </td>
     </tr>
-  );
-}
-
-function ReadinessRow({ label, val }: { label: string; val: string }) {
-  const tone: "success" | "warning" | "muted" =
-    val === "ready" || val === "verified" ? "success" : val === "waiting" || val === "review" ? "warning" : "muted";
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-muted-foreground">{label}</span>
-      <StatusPill label={val === "ready" ? "Ready" : val === "verified" ? "Verified" : val === "waiting" ? "Waiting" : val === "review" ? "Review" : "Missing"} tone={tone} />
-    </div>
   );
 }
