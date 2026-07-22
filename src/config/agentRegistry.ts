@@ -10,7 +10,7 @@
  *
  * Public lineup (Phase 0/1):
  *   Pilot  — AI Workforce Coordinator
- *   Nova   — AI Signal Scout          (execution: scout)
+ *   Lyra   — AI Signal Scout          (execution: scout)
  *   Atlas  — AI Account Analyst       (execution: aria qualification + hawk research)
  *   Mira   — AI Message Strategist    (execution: penn, approval-first preserved)
  *   Orion  — AI Pipeline Operator     (execution: operational summaries)
@@ -23,10 +23,12 @@ import pilotImg from '@/assets/agents/pilot.png';
 import atlasImg from '@/assets/agents/public/atlas.png';
 import miraImg from '@/assets/agents/public/mira.png';
 import orionImg from '@/assets/agents/public/orion.png';
-import novaPlaceholderImg from '@/assets/agents/public/nova-placeholder.png';
+import lyraAsset from '@/assets/agents/public/lyra.png.asset.json';
 import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
 
-export type PublicAgentId = 'pilot' | 'nova' | 'atlas' | 'mira' | 'orion';
+const lyraImg = lyraAsset.url;
+
+export type PublicAgentId = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion';
 export type LegacyAgentId = 'pilot' | 'scout' | 'aria' | 'hawk' | 'penn' | 'scribe';
 export type AnyAgentId = PublicAgentId | LegacyAgentId;
 
@@ -40,9 +42,9 @@ export interface AgentImageCrop {
 }
 
 export interface PublicAgentProfile {
-  /** Canonical public id — e.g. 'nova'. */
+  /** Canonical public id — e.g. 'lyra'. */
   id: PublicAgentId;
-  /** Public display name — e.g. 'Nova'. */
+  /** Public display name — e.g. 'Lyra'. */
   name: string;
   /** Public title — e.g. 'AI Signal Scout'. */
   title: string;
@@ -106,15 +108,15 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
     fallbackInitial: 'P',
     status: 'active',
   },
-  nova: {
-    id: 'nova',
-    name: 'Nova',
+  lyra: {
+    id: 'lyra',
+    name: 'Lyra',
     title: 'AI Signal Scout',
     shortDescription: 'Finds companies showing meaningful signs they may be ready to buy.',
     description:
       'Continuously scans hiring, funding, growth, and product signals to surface accounts that may be ready to buy.',
-    avatar: novaPlaceholderImg,
-    portrait: novaPlaceholderImg,
+    avatar: lyraImg,
+    portrait: lyraImg,
     accent: 'blue',
     accentHex: '#3B82F6',
     department: 'growth',
@@ -126,9 +128,9 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
     ],
     legacySlugs: ['scout'],
     publiclyVisible: true,
-    fallbackInitial: 'N',
+    fallbackInitial: 'L',
+    imageCrop: { objectPosition: 'center 20%' },
     status: 'active',
-    isPlaceholder: true,
   },
   atlas: {
     id: 'atlas',
@@ -217,7 +219,7 @@ export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
 
 export const PUBLIC_AGENT_ORDER: readonly PublicAgentId[] = [
   'pilot',
-  'nova',
+  'lyra',
   'atlas',
   'mira',
   'orion',
@@ -229,7 +231,7 @@ export const PUBLIC_AGENT_ORDER: readonly PublicAgentId[] = [
  */
 export const LEGACY_TO_PUBLIC: Readonly<Record<LegacyAgentId, PublicAgentId>> = {
   pilot: 'pilot',
-  scout: 'nova',
+  scout: 'lyra',
   aria: 'atlas',
   hawk: 'atlas',
   penn: 'mira',
