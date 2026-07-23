@@ -1,25 +1,21 @@
-// User-facing label helpers for the Lead Library UI. Keeps raw snake_case
-// values from the read model out of the presentation layer.
+// User-facing label helpers for the Lead Library UI. Now delegates status
+// derivations to the canonical decision layer (leadDecisionState) so the
+// table, drawer and counters never disagree.
 
 import type { LeadRow } from "./types";
+import {
+  deriveLeadDecisionState,
+  decisionLabel,
+  nextActionLabel as decisionNextActionLabel,
+  humanizeSource,
+} from "./leadDecisionState";
 
 export function signalLabel(row: LeadRow): { label: string; sub: string | null } {
   const src = row.strongestSource;
-  if (!src) return { label: "Needs verification", sub: null };
-
-  const method = (src.discoveryMethod ?? "").toLowerCase();
-  const type = (src.sourceType ?? "").toLowerCase();
-
-  let label = "Signal detected";
-  if (/job|hiring|posting/.test(method + type)) label = "Hiring signal";
-  else if (/fund|invest|series|raise/.test(method + type)) label = "Funding signal";
-  else if (/engage|reply|comment|like|profile/.test(method + type)) label = "Engagement signal";
-  else if (/news|press|announcement/.test(method + type)) label = "News signal";
-  else if (src.confidence === "verified") label = "Verified signal";
-  else if (src.confidence === "unverified") label = "Weak evidence";
-
-  const sub = src.headline ?? src.discoveryMethod ?? src.sourceType;
-  return { label, sub };
+  if (!src) return { label: "Limited timing evidence", sub: null };
+  const type = humanizeSource(src.sourceType ?? src.discoveryMethod);
+  const sub = src.headline ?? src.discoveryMethod ?? null;
+  return { label: type, sub };
 }
 
 export function fitToneFor(score: number | null): "success" | "warning" | "danger" | "muted" {
@@ -41,45 +37,26 @@ export function readinessState(row: LeadRow): {
   label: string;
   steps: [boolean, boolean, boolean]; // research, buyer, draft
 } {
-  const research = !!row.strongestSource;
-  const buyer = row.contactReadiness === "verified";
-  const draft =
-    row.opener?.status === "draft_ready" ||
-    row.opener?.status === "approved" ||
-    row.opener?.status === "edited";
-  const steps: [boolean, boolean, boolean] = [research, buyer, draft];
-
-  let label: string;
-  if (!research) label = "Researching";
-  else if (!buyer) label = "Buyer needed";
-  else if (row.opener?.status === "generating") label = "Draft preparing";
-  else if (row.opener?.status === "approved") label = "Approved";
-  else if (draft) label = "Ready for review";
-  else label = "Contact-ready";
-  return { label, steps };
+  const s = deriveLeadDecisionState(row);
+  const research = s.researchState === "ready";
+  const buyer = s.buyerState === "verified";
+  const draft = s.outreachState === "draft_ready" || s.outreachState === "awaiting_approval";
+  return { label: decisionLabel(s.decision), steps: [research, buyer, draft] };
 }
 
+// Consistent terminology: always "Find decision-makers", never "Find buyer".
 export function nextActionLabel(row: LeadRow): string {
-  if (row.accountStatus === "archived") return "Skip";
-  if (!row.strongestSource) return "Complete research";
-  if (row.contactReadiness !== "verified") return "Find buyer";
-  if (!row.opener || row.opener.status === "not_generated") return "Prepare draft";
-  if (row.opener.status === "draft_ready" || row.opener.status === "edited")
-    return "Review draft";
-  if (row.opener.status === "approved" && row.engagementStatus === "not_contacted")
-    return "Contact";
-  if (row.engagementStatus === "contacted") return "Follow up";
-  return "Watch account";
+  return decisionNextActionLabel(deriveLeadDecisionState(row).nextAction);
 }
 
 export function openerStatusLabel(row: LeadRow): { label: string; tone: "success" | "warning" | "muted" } {
-  if (!row.opener) return { label: "Not prepared", tone: "muted" };
+  if (!row.opener) return { label: "No draft", tone: "muted" };
   const s = row.opener.status;
-  if (s === "approved") return { label: "Approved", tone: "success" };
+  if (s === "approved") return { label: "Awaiting approval", tone: "success" };
   if (s === "draft_ready" || s === "edited") return { label: "Draft ready", tone: "success" };
   if (s === "generating") return { label: "Preparing", tone: "warning" };
   if (s === "failed") return { label: "Retry failed", tone: "warning" };
-  return { label: "Not prepared", tone: "muted" };
+  return { label: "No draft", tone: "muted" };
 }
 
 export function relativeTime(iso: string | null | undefined): string {
