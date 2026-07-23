@@ -1,0 +1,18 @@
+{
+  "northwind.example-0": {
+    "leadCandidateId": "lc-nw",
+    "score": 87,
+    "decision": "contact",
+    "rank": 1,
+    "whyNow": "Northwind Analytics is hiring a Sales Operations Manager for its US revenue team, suggesting it is standing up GTM operations.",
+    "outreachAngle": "Reference their Sales Operations hire and offer to build pipeline before payroll."
+  },
+  "umbrella.example-1": {
+    "leadCandidateId": "lc-um",
+    "score": 81,
+    "decision": "contact",
+    "rank": 2,
+    "whyNow": "Umbrella Cloud posted a Revenue Operations Lead role.",
+    "outreachAngle": "Reference the RevOps opening and offer pipeline help."
+  }
+}

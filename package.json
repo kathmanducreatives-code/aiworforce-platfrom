@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "verify:deploy-target": "node scripts/verify-deploy-target.mjs"
+    "verify:deploy-target": "node scripts/verify-deploy-target.mjs",
+    "qa:lead-quality": "deno run --allow-read --allow-env --allow-write --allow-net scripts/lead-quality-benchmark/run.ts",
+    "qa:lead-quality:test": "deno test --allow-read --allow-env scripts/lead-quality-benchmark/"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

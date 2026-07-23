@@ -1,0 +1,102 @@
+[
+  {
+    "provider": "apify",
+    "actorKey": "apify_jobs",
+    "actorId": "curious_coder/linkedin-jobs-scraper",
+    "actorRunId": "run_example",
+    "rawItemIndex": 0,
+    "sourceUrl": null,
+    "companyName": "Northwind Analytics",
+    "companyDomain": "northwind.example",
+    "companyLinkedinUrl": "https://linkedin.com/company/northwind-analytics",
+    "jobTitle": "Sales Operations Manager",
+    "jobDescriptionExcerpt": "Own US revenue operations and pipeline for our B2B SaaS analytics platform.",
+    "jobLocation": "Austin, United States",
+    "jobPostingUrl": "https://boards.example.com/northwind/salesops",
+    "jobObservedDate": "2026-07-12",
+    "personName": "Jordan Rivera",
+    "personTitle": "Co-Founder & CEO",
+    "personLinkedinUrl": "https://linkedin.com/in/jordan-rivera-fictional",
+    "statedCurrentCompany": "Northwind Analytics",
+    "rawLocation": null,
+    "rawMeta": {
+      "employeeCount": 45,
+      "companyDescription": "B2B SaaS analytics platform"
+    }
+  },
+  {
+    "provider": "apify",
+    "actorKey": "apify_jobs",
+    "actorId": "curious_coder/linkedin-jobs-scraper",
+    "actorRunId": "run_example",
+    "rawItemIndex": 1,
+    "sourceUrl": null,
+    "companyName": "Umbrella Cloud",
+    "companyDomain": "umbrella.example",
+    "companyLinkedinUrl": "https://linkedin.com/company/umbrella-cloud",
+    "jobTitle": "Revenue Operations Lead",
+    "jobDescriptionExcerpt": "Lead RevOps for our US SaaS platform; own forecasting and pipeline.",
+    "jobLocation": "Remote, United States",
+    "jobPostingUrl": "https://boards.example.com/umbrella/revops",
+    "jobObservedDate": "2025-11-01",
+    "personName": "Sam Okafor",
+    "personTitle": "Founder",
+    "personLinkedinUrl": "https://linkedin.com/in/sam-okafor-fictional",
+    "statedCurrentCompany": "Umbrella Cloud",
+    "rawLocation": null,
+    "rawMeta": {
+      "employeeCount": 80,
+      "companyDescription": "SaaS revenue platform"
+    }
+  },
+  {
+    "provider": "apify",
+    "actorKey": "apify_jobs",
+    "actorId": "curious_coder/linkedin-jobs-scraper",
+    "actorRunId": "run_example",
+    "rawItemIndex": 2,
+    "sourceUrl": null,
+    "companyName": "Globex Retail",
+    "companyDomain": "globex.example",
+    "companyLinkedinUrl": null,
+    "jobTitle": "Sales Operations Coordinator",
+    "jobDescriptionExcerpt": "Coordinate store sales operations for our retail chain.",
+    "jobLocation": "Chicago, United States",
+    "jobPostingUrl": "https://boards.example.com/globex/salesops",
+    "jobObservedDate": "2026-07-05",
+    "personName": null,
+    "personTitle": null,
+    "personLinkedinUrl": null,
+    "statedCurrentCompany": null,
+    "rawLocation": null,
+    "rawMeta": {
+      "industries": [
+        "Retail"
+      ]
+    }
+  },
+  {
+    "provider": "apify",
+    "actorKey": "apify_jobs",
+    "actorId": "curious_coder/linkedin-jobs-scraper",
+    "actorRunId": "run_example",
+    "rawItemIndex": 3,
+    "sourceUrl": null,
+    "companyName": "Initech Cloud",
+    "companyDomain": "initech.example",
+    "companyLinkedinUrl": null,
+    "jobTitle": "Account Executive",
+    "jobDescriptionExcerpt": "Close new business for our SaaS platform in the US.",
+    "jobLocation": "Boston, United States",
+    "jobPostingUrl": "https://boards.example.com/initech/ae",
+    "jobObservedDate": "2026-07-08",
+    "personName": null,
+    "personTitle": null,
+    "personLinkedinUrl": null,
+    "statedCurrentCompany": null,
+    "rawLocation": null,
+    "rawMeta": {
+      "companyDescription": "SaaS platform"
+    }
+  }
+]
