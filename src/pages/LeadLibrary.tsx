@@ -30,33 +30,37 @@ export default function LeadLibrary() {
 
   const [metric, setMetric] = useState<MetricKey>("all");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortKey>("recommended");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openLead, setOpenLead] = useState<string | null>(params.get("lead"));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Canonical decision states: computed once per row, reused everywhere so the
+  // metric strip, filters, table and drawer can never disagree.
+  const decisionByRow = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof deriveLeadDecisionState>>();
+    for (const r of rows) m.set(r.id, deriveLeadDecisionState(r));
+    return m;
+  }, [rows]);
+
   const metricFiltered = useMemo(() => {
-    if (metric === "all") return rows;
-    return rows.filter((r) => {
-      switch (metric) {
-        case "qualified": return r.accountStatus === "qualified";
-        case "contact_ready": return r.contactReadiness === "verified";
-        case "draft_ready": return r.opener?.status === "draft_ready" || r.opener?.status === "approved";
-        case "contacted": return r.engagementStatus === "contacted";
-        case "replied": return r.engagementStatus === "replied";
-        case "meetings": return r.engagementStatus === "meeting";
-      }
-    });
-  }, [rows, metric]);
+    const states = rows.map((r) => decisionByRow.get(r.id)!);
+    const keep = new Set(
+      rows.filter((_, i) => matchesMetric(states[i], metric)).map((r) => r.id),
+    );
+    return rows.filter((r) => keep.has(r.id));
+  }, [rows, metric, decisionByRow]);
 
   const filtered = useMemo(() => applyFilters(metricFiltered, filters), [metricFiltered, filters]);
-  useEffect(() => { setPage(1); }, [filters, metric, tab, pageSize]);
+  const sorted = useMemo(() => sortRows(filtered, decisionByRow, sort), [filtered, decisionByRow, sort]);
+  useEffect(() => { setPage(1); }, [filters, metric, tab, pageSize, sort]);
 
-  const total = filtered.length;
+  const total = sorted.length;
   const pageRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
 
   const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
   const currentLead = openLead ? rows.find((r) => r.id === openLead) ?? null : null;
