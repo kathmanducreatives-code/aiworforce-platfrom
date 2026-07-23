@@ -138,6 +138,8 @@ export default function LeadLibrary() {
           filters={filters}
           onFilters={setFilters}
           onSaveView={handleSaveView}
+          sort={sort}
+          onSort={setSort}
         />
 
         {tab === "all" && (
