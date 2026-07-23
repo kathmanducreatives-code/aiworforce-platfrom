@@ -34,3 +34,7 @@ linkedin-content-planner/release/
 supabase/.temp/
 supabase/.branches/
 RECON_REPORT.md
+
+# Lead-quality benchmark runtime artifacts (raw provider data — never committed).
+# Sanitized, deterministic examples live under scripts/lead-quality-benchmark/examples/.
+artifacts/lead-quality-benchmark/

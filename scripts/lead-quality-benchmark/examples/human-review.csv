@@ -1,0 +1,5 @@
+final_rank,company,person,audit_verdict,why_now,reviewer_contact_yes_no,reviewer_reason,ranking_correct_yes_no,why_now_useful_yes_no,notes
+1,Northwind Analytics,Jordan Rivera,CONTACT,"Northwind Analytics is hiring a Sales Operations Manager for its US revenue team, suggesting it is standing up GTM operations.",,,,,
+2,Umbrella Cloud,Sam Okafor,WATCH,Umbrella Cloud posted a Revenue Operations Lead role.,,,,,
+3,Globex Retail,,NEEDS_REVIEW,,,,,,
+4,Initech Cloud,,REJECT,,,,,,
