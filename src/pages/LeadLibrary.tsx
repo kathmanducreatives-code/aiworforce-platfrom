@@ -19,6 +19,29 @@ import { LibraryHeader } from "@/components/leads/library/LibraryHeader";
 import { AtlasStrip } from "@/components/leads/library/AtlasStrip";
 import { Toolbar, type TabId } from "@/components/leads/library/Toolbar";
 import { Pagination } from "@/components/leads/library/Pagination";
+import {
+  deriveLeadDecisionState,
+  sortRows,
+  type LeadDecisionState,
+  type SortKey,
+} from "@/lib/leadLibrary/leadDecisionState";
+
+function matchesMetric(s: LeadDecisionState, m: MetricKey): boolean {
+  switch (m) {
+    case "all": return true;
+    case "qualified":
+      return ["qualified", "buyer_needed", "draft_ready", "awaiting_approval", "contacted", "replied", "meeting"].includes(s.lifecycle);
+    case "buyer_ready":
+      return s.buyerState === "verified" &&
+        ["qualified", "draft_ready", "awaiting_approval", "contacted", "replied", "meeting"].includes(s.lifecycle);
+    case "draft_ready":
+      return s.outreachState === "draft_ready" && ["draft_ready", "awaiting_approval"].includes(s.lifecycle);
+    case "awaiting_approval": return s.lifecycle === "awaiting_approval";
+    case "contacted": return s.lifecycle === "contacted";
+    case "replied": return s.lifecycle === "replied";
+    case "meetings": return s.lifecycle === "meeting";
+  }
+}
 
 export default function LeadLibrary() {
   const { workspaceId } = useWorkspace();
