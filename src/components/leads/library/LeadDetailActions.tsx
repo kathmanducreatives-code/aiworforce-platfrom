@@ -56,8 +56,8 @@ export function LeadDetailActions({ lead }: { lead: LeadRow }) {
   }
 
   const gate = planLeadDetailAction({ lead, activeWorkspaceId: workspaceId, hasSession: !!session }, "find_decision_makers");
-  const disabledReason = gate.ok ? null : gate.message;
-  const disabled = !gate.ok || running !== null;
+  const disabledReason = gate.ok === true ? null : gate.message;
+  const disabled = gate.ok !== true || running !== null;
 
   const run = (kind: LeadDetailActionKind) => {
     const { lead: l, workspaceId: ws, session: s } = depsRef.current;
