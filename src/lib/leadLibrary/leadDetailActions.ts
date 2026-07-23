@@ -102,7 +102,7 @@ export function createLeadActionController(deps: LeadActionControllerDeps) {
     /** Run a pre-computed plan for `kind`. A second call while in-flight is ignored. */
     run: async (plan: LeadActionPlan, kind: LeadDetailActionKind): Promise<void> => {
       if (inFlight) return; // synchronous guard — one gesture, one request
-      if (!plan.ok) { deps.onError(plan.message); return; }
+      if (plan.ok !== true) { deps.onError(plan.message); return; }
       inFlight = kind;
       deps.onStateChange?.(kind);
       try {
