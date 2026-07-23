@@ -1,104 +1,111 @@
-# Lead Library — Minimal Premium Workspace Redesign
+# Lead Library Decision-System & UX Overhaul (v1)
 
-Frontend-only redesign of `/leads`. No backend, schema, query, filter, scoring, approval, workflow, agent-routing, or import/export logic will change. No deploy. All work stays inside `src/components/leads/library/**`, `src/pages/LeadLibrary.tsx`, and small shared token/util additions.
+Frontend + canonical read-model only. No backend, migrations, deploys, or model calls. One PR into `main` on branch `lead-library-decision-system-v1`. Not merged, not deployed.
 
-## Goals
+## Base & scope
+- Base SHA: latest `remix/main` (expected `1a53c041…`), verified before branching.
+- Preserves PR #84/#85/#86 wiring: `selectedLeadCandidateId`, paired `selectedPlanId`, `createLeadActionController` single-flight, shared `runLeadAction`, and React Query `canonical-v1` invalidation. `mcp/index.ts` untouched.
 
-- Whole workspace fits inside one desktop viewport: header + Atlas strip + metric strip + toolbar + table header + ~8 rows + pagination, no page scroll.
-- Table never horizontally scrolls at standard desktop/laptop widths.
-- Command bar never covers table content.
-- Row is scannable in under three seconds; no snake_case surfaced.
+## 1. Canonical decision model (single source of truth)
+New pure module `src/lib/leadLibrary/leadDecisionState.ts` exporting `deriveLeadDecisionState(row)` returning:
 
-## Layout Shell
-
-```text
-+----------------------------------------------------------+
-| Compact header (title + primary actions)        ~88px    |
-+----------------------------------------------------------+
-| Atlas strip (compact)  |  Metric strip (7 items)  ~72px  |
-+----------------------------------------------------------+
-| Toolbar row 1: tabs + Save view                  ~40px   |
-| Toolbar row 2: search + 5 filter selects + reset ~44px   |
-+----------------------------------------------------------+
-| Table header (sticky)                            ~40px   |
-| ~8 rows                                     flex: 1      |
-| Pagination                                       ~48px   |
-+----------------------------------------------------------+
-Collapsed "Ask your workforce" FAB, bottom-right, never overlaps table.
+```
+decision:      contact | watch | skip | needs_review
+lifecycle:     discovered | research_needed | buyer_needed | qualified
+               | draft_ready | awaiting_approval | contacted | replied | meeting
+fitBand:       strong | good | soft | poor | unknown  (reuses existing thresholds)
+buyerState:    verified | needs_review | missing
+researchState: ready | stale | failed_with_previous_success | needed
+outreachState: none | draft_ready | awaiting_approval | sent
+nextAction:    research_company | find_decision_makers | review_evidence
+               | review_opener | approve_draft | mark_contacted | monitor | none
+priorityScore, priorityReason, whyNowSummary
 ```
 
-Shell: `height: calc(100vh - <app header>); overflow: hidden;` with an inner flex column; the table region is `flex: 1; min-height: 0` and owns its own vertical scroll only when >page-size rows exist (pagination is the norm).
+Rules (deterministic, read-only):
+- Poor fit + no reviewed progression → `watch`/`skip`; never counts as qualified/buyer-ready/draft-ready. Historical draft stays visible in drawer, not primary action.
+- Qualified requires canonical qualification evidence (buyer alone / draft alone insufficient).
+- Buyer-ready ⇒ qualified. Draft-ready ⇒ buyer-ready. Awaiting-approval ⇒ draft-ready.
+- Contacted/replied/meeting override earlier prep stages (meeting > replied > contacted).
+- Incomplete/contradictory evidence → `needs_review`, never implicit `contact`.
 
-## Files To Modify
+All table, drawer, counter, filter, sort code consumes this one object. Existing duplicated interpreters in `labels.ts`, `canonicalLeadView.ts` consumers, `LeadTable`, drawer, metric strip are refactored to read from it.
 
-- `src/pages/LeadLibrary.tsx` — new fixed-height shell, remove hero/AtlasPanel-large, wire new subcomponents.
-- `src/components/leads/library/MetricStrip.tsx` — collapse into one shared container, remove per-card glass, add subtle divider + selected underline.
-- `src/components/leads/library/FilterBar.tsx` — merge with tabs into single `Toolbar`, tighten heights, specific "Any …" labels, chips row inline.
-- `src/components/leads/library/AtlasPanel.tsx` — reduce to compact strip (~360–420×~80px) using canonical Atlas asset from `agentRegistry`.
-- `src/components/leads/library/LeadTable.tsx` — new 8-column %-width layout, row upgrades, no horizontal scroll, responsive column hiding.
-- `src/components/leads/library/premium/tokens.ts` — consolidate surface/border/text/accent tokens; softer glass, less green.
+## 2. Top counters
+`MetricStrip` shows: All · Qualified · Buyer ready · Draft ready · Awaiting approval · Contacted · Replied · Meetings. Tooltip definitions. Invariants enforced by construction (single derivation pass). Poor-fit watch/skip never inflate readiness metrics.
 
-## Files To Create
+## 3. Table redesign
+Columns: **Account · Why now · Fit · Buyer · Decision · Next action · Updated**. Opener excerpt removed (moved to drawer). Compact opener chip only if space allows. Decision chip is the visual anchor (CONTACT / WATCH / SKIP / NEEDS REVIEW). One context-aware next action button per row using canonical `nextAction`. Consistent terminology — always "Find decision-makers". Why-now is a human sentence built from evidence; "Limited timing evidence" fallback when weak. Names/titles get tooltips; checkboxes de-emphasized.
 
-- `src/components/leads/library/LibraryHeader.tsx` — eyebrow, title, subtitle, action cluster (Create list primary, Add lead secondary, Import/Export icon buttons).
-- `src/components/leads/library/Toolbar.tsx` — tabs + Save view (row 1); search + filters + reset (row 2); active-chip row.
-- `src/components/leads/library/AtlasStrip.tsx` — compact assistant card (avatar, name/title, two metrics, on-duty dot).
-- `src/components/leads/library/LeadDetailDrawer.tsx` — right-side drawer (`Sheet`, 420–520px) with company summary, signal, fit breakdown, evidence, buyer, opener preview, approval state, activity, next action.
-- `src/components/leads/library/LeadRow.tsx` — one row component with the eight refined cells.
-- `src/components/leads/library/cells/` — small presentational cells: `LeadCell`, `SignalCell`, `FitCell`, `BuyerCell`, `ReadinessCell`, `OpenerCell`, `NextActionCell`, `UpdatedCell`.
-- `src/components/leads/library/Pagination.tsx` — page nav + rows-per-page (10/25/50).
-- `src/components/leads/library/WorkforceFab.tsx` — collapsed bottom-right FAB replacing the floating command bar on `/leads`; expands to a small popover with ≤3 suggestions using canonical names (Atlas/Mira/Orion).
-- `src/components/leads/library/EmptyState.tsx`, `TableSkeleton.tsx` — compact loading/empty states preserving table dimensions.
-- `src/lib/leadLibrary/labels.ts` — map raw values (`job_posting`, `needs_verification`, `weak`, readiness states, engagement) to user-facing labels.
-- `src/lib/leadLibrary/relativeTime.ts` — "5m ago / 2h ago / Yesterday / 4d ago / —".
+## 4. Sorting & priority
+Default sort **Recommended** using `priorityScore` with tie-break on latest meaningful signal. Order: Contact+strong+buyer → Contact+buyer-needed → Needs review w/ timing → Watch → Skip. Visible sort control: Recommended · Strongest fit · Latest signal · Recently updated.
 
-## Table Columns
+## 5. Filters
+Rebuilt on the canonical model: Decision · Stage (lifecycle) · Fit · Buyer · Industry · Source. Removes overlapping "status" controls. Search covers company, domain, buyer, title, why-now text, source label. Reset → Recommended sort + no filters + page 1.
 
-Kept in main table (8, %-widths sum to 100):
+## 6. Drawer as decision cockpit
+Keeps 38vw glassmorphic shell + responsive min/max, full width on mobile. Reordered sections:
+1. Header (name, domain, refresh, close) with clear decision/fit/buyer/engagement badges — no contradictory combos.
+2. **Decision summary card**: Decision, Fit, Timing, Buyer, Next action + one-sentence rationale from real evidence.
+3. **Primary action** — exactly one visually primary button driven by `nextAction`. Secondary safe actions (refresh research, find more DMs) de-emphasized. Wiring unchanged: same `LeadDetailActions` controller, `runLeadAction`, single-flight, canonical-v1 invalidation, `selectedPlanId` paired to `selectedLeadCandidateId`.
+4. **Why now** — readable reason, source type (humanized, not raw enums), title, observed date, confidence, URL if valid. "Limited timing evidence" when weak; progressive disclosure for multiple items.
+5. **Recommended buyer** — name, title, employer verification, contactability, verification state. Standardized copy. No silent recipient replacement.
+6. **Personalized opener** — full message + recipient + specificity + evidence count + approval state + timestamp + copy. On watch/skip: labelled historical, not primary.
+7. **Contact tracking** — grouped Engagement / LinkedIn / Email with a single selected state per group. Integration-gated states disabled with explanatory tooltip.
+8. **Activity timeline** — human event names, agent/user, timestamp, concise result.
+9. Technical/source details collapsed.
 
-| Column | Width |
-|---|---|
-| Lead | 17% |
-| Signal | 15% |
-| Fit | 9% |
-| Buyer | 15% |
-| Readiness | 13% |
-| Opener | 17% |
-| Next action | 10% |
-| Updated | 8% (numeric, tabular-nums) |
+## 7. Terminology
+Standardize user copy: Account · Why now · Fit · Recommended buyer · Verified buyer · Find decision-makers · Decision · Next action · Draft ready · Awaiting approval · Contacted · Replied · Meeting. Backend names untouched.
 
-Moved to drawer: full source metadata, evidence list, full opener body, engagement history, raw discovery data, technical/retry statuses, full research notes, secondary badges.
+## 8. Density, states, layout
+Improve secondary text contrast, unify spacing/row height, shrink checkbox emphasis, add safe bottom padding so `WorkforceDock` never overlaps table/pagination, tighten filter bar, keyboard focus preserved. Empty / loading / blocked / error / no-session / workspace-mismatch / integration-missing states each explain themselves; no dead instructional text.
 
-Responsive hide order (progressive): Updated → Opener → Signal → Buyer. Below `md`, table is replaced by compact `LeadCard` list (Lead, Fit, Readiness, Next action); details open in a bottom sheet reusing `LeadDetailDrawer` content.
+## 9. Fixtures & tests
+Add deterministic fixtures (BigID poor-fit + draft; Brain Co. medium+buyer+draft; Harmonic poor-fit historical recipient; Voice AI Space buyer-needed; strong qualified; contacted/replied/meeting) and tests covering:
+- Decision-model invariants (poor+draft ≠ qualified; buyer alone ≠ qualified; readiness implications; progression overrides; needs_review fallback)
+- Counter invariants (BuyerReady ≤ Qualified ≤ All; Draft ≤ Buyer; Approval ≤ Draft; poor-fit excluded)
+- Sorting order + deterministic tie-break
+- Table: no opener excerpt; single next action; humanized why-now; consistent terminology
+- Drawer: one primary action; PR #86 payload unchanged; `selectedPlanId` matches `selectedLeadCandidateId`; double-click → 1 invocation; success invalidates canonical-v1; drawer stays open; recipient/outreach untouched
+- Filters + search + reset
+- Multi-tenant reject; workspace/account mismatch blocks action
 
-## How Each Constraint Is Met
+Tests colocated under `src/lib/leadLibrary/__tests__/`. If repo lacks a runnable Vitest config, tests are still committed and this is reported honestly; no new framework installed.
 
-- **No horizontal scroll:** switch from fixed pixel widths to `table-fixed` with % widths summing to 100; drop overflow columns into drawer; hide progressively at `lg`/`md`.
-- **No page scroll:** shell owns viewport height; table region flexes; overflow lives only inside table body via pagination.
-- **Command bar never covers rows:** remove floating `InlineCommandBar` from this page's layout, mount `WorkforceFab` (collapsed) in a bottom-right corner with `pointer-events` scoped to the button; expanded popover opens upward and closes on outside click. Pagination bar reserves height above it.
-- **Less green / less glass:** tokens updated to a single restrained teal accent applied only to primary action, selected tab/metric, active row, next-action button, and Atlas on-duty dot.
-- **No snake_case:** all cell renderers pass through `labels.ts`.
+## Technical section
 
-## Component System (shared tokens)
+**Files (new)**
+- `src/lib/leadLibrary/leadDecisionState.ts` (model + `derive…` + `priorityScore`)
+- `src/lib/leadLibrary/leadDecisionCopy.ts` (label maps, humanized enums, tooltips)
+- `src/lib/leadLibrary/__tests__/leadDecisionState.test.ts`
+- `src/lib/leadLibrary/__tests__/fixtures.ts`
+- `src/components/leads/library/DecisionChip.tsx`
+- `src/components/leads/library/NextActionButton.tsx`
+- `src/components/leads/library/drawer/DecisionSummaryCard.tsx`
+- `src/components/leads/library/drawer/WhyNowSection.tsx` (rename/refactor)
+- `src/components/leads/library/drawer/ContactTrackingGroups.tsx`
+- `src/components/leads/library/drawer/ActivityTimeline.tsx`
 
-`tokens.ts` will expose: `surfaceBase`, `surfaceRaised`, `surfaceHover`, `borderSubtle`, `borderActive`, `textPrimary`, `textSecondary`, `textMuted`, `accentTeal`, `statusSuccess`, `statusWarning`, `statusDanger`, plus radii (`rounded-xl` / `rounded-2xl`) and one shared shadow. All new components consume tokens; hardcoded greens/hex are removed from redesigned files.
+**Files (edited)**
+- `src/pages/LeadLibrary.tsx` — sort control, filter wiring, bottom padding for dock
+- `src/components/leads/library/LeadTable.tsx` — new columns, opener removed
+- `src/components/leads/library/LeadDetailDrawer.tsx` — cockpit reorder, one primary action
+- `src/components/leads/library/LeadDetailActions.tsx` — primary/secondary hierarchy; wiring unchanged
+- `src/components/leads/library/MetricStrip.tsx` — 8 canonical metrics
+- `src/components/leads/library/FilterBar.tsx` / `Toolbar.tsx` — canonical filters + reset
+- `src/lib/leadLibrary/labels.ts` — delegates to `leadDecisionCopy`
+- `src/hooks/leadLibrary/useLeadLibrary.ts` — attaches derived decision to each row (post-map, no query shape change)
 
-## Canonical Agents
+**Untouched:** `supabase/functions/**` (incl. `mcp/index.ts`), migrations, `run-agent`, contact persistence, opener generation, recipient reconciliation, `canonicalLeadView` core derivation (only consumers change), Company Brain code.
 
-Atlas asset pulled from `src/config/agentRegistry.ts` via `agentResolver`. Suggested FAB chips credit Atlas (research), Mira (opener), Orion (review). No legacy names (Scout/Aria/Hawk/Penn/Scribe/Nova) appear in copy.
+**Commits (proposed)**
+1. `feat(lead-library): add canonical decision state`
+2. `feat(lead-library): redesign table around account decisions`
+3. `feat(lead-library): turn detail drawer into decision cockpit`
+4. `fix(lead-library): align counters, filters, and terminology`
+5. `test(lead-library): verify decision and readiness invariants`
 
-## Out Of Scope
+**Validation:** `npx tsc --noEmit`, `npm run build`, decision-model tests, existing `leadDetailActions` / `canonicalLeadView` / `canonicalIntegration` / `contactAssociationReadModel` / recipient-preservation / multi-tenant tests. Honest report if the harness cannot run committed suites.
 
-- `useLeadLibrary`, `deriveCanonicalLeadView`, filter predicates, `applyFilters`, list persistence, RLS, edge functions — untouched.
-- Other pages and the global `InlineCommandBar` component itself are not modified; only its usage on `/leads` is replaced by `WorkforceFab`.
-
-## Validation
-
-- `tsgo` typecheck on changed files.
-- Manual Playwright screenshots at 1440×900, 1280×800, 1024×768, 768×1024, 390×844.
-- Confirm: no horizontal table scroll, 8+ rows visible at 1280×800, FAB collapsed and non-overlapping, pagination visible.
-- No deploy, no publish, no migrations.
-
-## Deliverables (post-build report)
-
-Files modified/created, columns kept vs. drawered, how scroll and overlap were eliminated, viewport/pagination behavior, screenshots at each width, typecheck + scoped lint + build output, explicit confirmation backend/DB behavior unchanged and nothing was deployed.
+**PR:** `lead-library-decision-system-v1` → `main`, title `feat(lead-library): unify decisions, readiness, and account review UX`. Not merged, not deployed.

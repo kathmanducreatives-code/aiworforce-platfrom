@@ -1,35 +1,30 @@
 import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/lib/leadLibrary/types";
+import {
+  countByKey,
+  deriveLeadDecisionState,
+  type CounterKey,
+  type LeadDecisionState,
+} from "@/lib/leadLibrary/leadDecisionState";
+import { useMemo } from "react";
 
-export type MetricKey =
-  | "all"
-  | "qualified"
-  | "contact_ready"
-  | "draft_ready"
-  | "contacted"
-  | "replied"
-  | "meetings";
+// Kept for backwards compatibility with LeadLibrary.tsx.
+export type MetricKey = CounterKey;
 
-const METRICS: { key: MetricKey; label: string }[] = [
-  { key: "all", label: "All leads" },
-  { key: "qualified", label: "Qualified" },
-  { key: "contact_ready", label: "Contact-ready" },
-  { key: "draft_ready", label: "Draft-ready" },
-  { key: "contacted", label: "Contacted" },
-  { key: "replied", label: "Replied" },
-  { key: "meetings", label: "Meetings" },
+const METRICS: { key: CounterKey; label: string; help: string }[] = [
+  { key: "all", label: "All leads", help: "Every account in the library." },
+  { key: "qualified", label: "Qualified", help: "Passed the qualification threshold." },
+  { key: "buyer_ready", label: "Buyer ready", help: "Qualified with a verified buyer." },
+  { key: "draft_ready", label: "Draft ready", help: "Buyer-ready with a valid opener draft." },
+  { key: "awaiting_approval", label: "Awaiting approval", help: "Draft is prepared and waiting on your approval." },
+  { key: "contacted", label: "Contacted", help: "Outreach has been sent or logged." },
+  { key: "replied", label: "Replied", help: "The buyer has replied." },
+  { key: "meetings", label: "Meetings", help: "A meeting is booked or later." },
 ];
 
-export function computeMetric(rows: LeadRow[], key: MetricKey): number {
-  switch (key) {
-    case "all": return rows.length;
-    case "qualified": return rows.filter((r) => r.accountStatus === "qualified").length;
-    case "contact_ready": return rows.filter((r) => r.contactReadiness === "verified").length;
-    case "draft_ready": return rows.filter((r) => r.opener?.status === "draft_ready" || r.opener?.status === "approved").length;
-    case "contacted": return rows.filter((r) => r.engagementStatus === "contacted").length;
-    case "replied": return rows.filter((r) => r.engagementStatus === "replied").length;
-    case "meetings": return rows.filter((r) => r.engagementStatus === "meeting").length;
-  }
+export function computeMetric(rows: LeadRow[], key: CounterKey): number {
+  const states = rows.map(deriveLeadDecisionState);
+  return countByKey(states, key);
 }
 
 export function MetricStrip({
@@ -39,10 +34,12 @@ export function MetricStrip({
   className,
 }: {
   rows: LeadRow[];
-  active: MetricKey;
-  onSelect: (k: MetricKey) => void;
+  active: CounterKey;
+  onSelect: (k: CounterKey) => void;
   className?: string;
 }) {
+  const states: LeadDecisionState[] = useMemo(() => rows.map(deriveLeadDecisionState), [rows]);
+
   return (
     <div
       className={cn(
@@ -52,11 +49,12 @@ export function MetricStrip({
       )}
     >
       {METRICS.map((m, i) => {
-        const count = computeMetric(rows, m.key);
+        const count = countByKey(states, m.key);
         const isActive = active === m.key;
         return (
           <button
             key={m.key}
+            title={m.help}
             onClick={() => onSelect(m.key)}
             className={cn(
               "relative flex-1 min-w-0 px-3 flex flex-col justify-center gap-1 text-left transition-colors",
