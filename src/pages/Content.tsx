@@ -7,7 +7,7 @@
 // All data is real. Everything is approval-first. Backend unchanged.
 
 import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, FileEdit, RefreshCw, ChevronRight,
   TrendingUp, AlertCircle, PenLine,
@@ -170,13 +170,13 @@ export default function Content() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCreateOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-fuchsia-500/15 px-3.5 py-2 text-[13px] font-semibold text-fuchsia-200 border border-fuchsia-400/20 transition-colors hover:bg-fuchsia-500/25"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-fuchsia-500/15 px-3.5 py-2 text-[13px] font-semibold text-fuchsia-200 border border-fuchsia-400/20 transition-all hover:bg-fuchsia-500/25 active:scale-[0.97]"
                 >
                   <FileEdit className="h-4 w-4" /> Build this week's plan
                 </button>
                 <button
                   onClick={() => dispatch('Lyra, refresh LinkedIn trends for my market — draft only.')}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/35 bg-card/25 px-3.5 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/35 bg-card/25 px-3.5 py-2 text-[13px] font-medium text-muted-foreground transition-all hover:text-foreground active:scale-[0.97]"
                 >
                   <RefreshCw className="h-4 w-4" /> Refresh trends
                 </button>
@@ -246,46 +246,56 @@ export default function Content() {
 
           {/* view content */}
           <div className="min-h-[400px]">
-            {view === 'foryou' && (
-              <ForYouView
-                brief={brief}
-                posts={posts}
-                commentDrafts={commentDraftsData}
-                contentSignals={contentSignals}
-                loading={loading}
-                onOpenDraft={setOpenDraftId}
-                onTurnInto={(kind, s) => dispatch(buildTurnIntoCommand(kind, { title: s.title, sourceUrl: s.source_url }))}
-                onReviewComment={() => setView('comments')}
-                onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
-              />
-            )}
-            {view === 'trends' && (
-              <TrendsView
-                signals={contentSignals}
-                loading={loading}
-                onTurnIntoPost={(s) => dispatch(buildTurnIntoCommand('post', { title: s.title, sourceUrl: s.source_url }))}
-                onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
-              />
-            )}
-            {view === 'comments' && (
-              <CommentsView
-                commentDrafts={commentDraftsData}
-                commentDiscoveryReady={commentDiscoveryReady}
-                loading={loading}
-                onDraft={(ctx) => dispatch(`Mira, refine this comment draft — draft only: ${ctx}`)}
-                onFindPosts={() => dispatch('Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only.')}
-                onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
-              />
-            )}
-            {view === 'plan' && (
-              <PlanView
-                draftGroups={draftGroups}
-                workflowRecaps={workflowRecaps}
-                loading={loading}
-                onOpenDraft={setOpenDraftId}
-                onCreate={() => setCreateOpen(true)}
-              />
-            )}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={view}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {view === 'foryou' && (
+                  <ForYouView
+                    brief={brief}
+                    posts={posts}
+                    commentDrafts={commentDraftsData}
+                    contentSignals={contentSignals}
+                    loading={loading}
+                    onOpenDraft={setOpenDraftId}
+                    onTurnInto={(kind, s) => dispatch(buildTurnIntoCommand(kind, { title: s.title, sourceUrl: s.source_url }))}
+                    onReviewComment={() => setView('comments')}
+                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                  />
+                )}
+                {view === 'trends' && (
+                  <TrendsView
+                    signals={contentSignals}
+                    loading={loading}
+                    onTurnIntoPost={(s) => dispatch(buildTurnIntoCommand('post', { title: s.title, sourceUrl: s.source_url }))}
+                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                  />
+                )}
+                {view === 'comments' && (
+                  <CommentsView
+                    commentDrafts={commentDraftsData}
+                    commentDiscoveryReady={commentDiscoveryReady}
+                    loading={loading}
+                    onDraft={(ctx) => dispatch(`Mira, refine this comment draft — draft only: ${ctx}`)}
+                    onFindPosts={() => dispatch('Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only.')}
+                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                  />
+                )}
+                {view === 'plan' && (
+                  <PlanView
+                    draftGroups={draftGroups}
+                    workflowRecaps={workflowRecaps}
+                    loading={loading}
+                    onOpenDraft={setOpenDraftId}
+                    onCreate={() => setCreateOpen(true)}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
       </div>
@@ -413,14 +423,14 @@ function ForYouView({ brief, posts, commentDrafts, contentSignals, loading, onOp
               {topDraft ? (
                 <button
                   onClick={() => onOpenDraft(topDraft.id)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-500/15 px-4 py-2 text-[13px] font-semibold text-fuchsia-200 transition-colors hover:bg-fuchsia-500/25"
+                  className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-500/15 px-4 py-2 text-[13px] font-semibold text-fuchsia-200 transition-all hover:bg-fuchsia-500/25 active:scale-[0.97]"
                 >
                   Review draft <ChevronRight className="h-4 w-4" />
                 </button>
               ) : (
                 <button
                   onClick={() => onTurnInto('post', topSignal)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-500/15 px-4 py-2 text-[13px] font-semibold text-fuchsia-200 transition-colors hover:bg-fuchsia-500/25"
+                  className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-500/15 px-4 py-2 text-[13px] font-semibold text-fuchsia-200 transition-all hover:bg-fuchsia-500/25 active:scale-[0.97]"
                 >
                   Create draft <ChevronRight className="h-4 w-4" />
                 </button>
@@ -767,7 +777,7 @@ function QueueRow({ day, format, title, status, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-4 border-b border-border/8 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-background/12"
+      className="flex w-full items-center gap-4 border-b border-border/8 px-4 py-3 text-left transition-all last:border-b-0 hover:bg-background/12 active:scale-[0.995]"
     >
       <span className="w-[60px] shrink-0 text-[12px] font-medium text-muted-foreground/55">{day}</span>
       <div className="min-w-0 flex-1">

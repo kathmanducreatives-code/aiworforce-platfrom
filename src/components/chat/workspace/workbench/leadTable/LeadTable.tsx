@@ -92,15 +92,23 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
         <tbody>
           {rows.map((r) => {
             const isSel = selected.has(r.id);
+            // Sticky cells must stay opaque (to cover content scrolling under
+            // them), so we can't just inherit the row's translucent tint. We
+            // keep a solid base and reproduce the selection/hover tint via an
+            // inset box-shadow so the frozen columns paint the same colour as
+            // the rest of the row — no "hole" on the left edge of selected rows.
+            const stickyTint = isSel
+              ? 'bg-[#0a0d12] shadow-[inset_0_0_0_9999px_rgba(16,185,129,0.05)]'
+              : 'bg-[#0a0d12] group-hover:shadow-[inset_0_0_0_9999px_rgba(255,255,255,0.04)]';
             const contactLocked = r.contact_status === 'needs_contact';
             const enrichLocked = r.enrichment_status !== 'enriched';
             const draftLocked = r.draft_status !== 'drafted' && r.draft_status !== 'approved';
             return (
               <tr
                 key={r.id}
-                className={`group ${isSel ? 'bg-emerald-500/[0.05]' : 'hover:bg-white/[0.02]'}`}
+                className={`group ${isSel ? 'bg-emerald-500/[0.05]' : 'hover:bg-white/[0.04]'}`}
               >
-                <td className={`${COL_W.select} sticky left-0 z-[1] bg-[#0a0d12] border-b border-r border-white/[0.05] px-2`}>
+                <td className={`${COL_W.select} sticky left-0 z-[1] ${stickyTint} border-b border-r border-white/[0.05] px-2`}>
                   <input
                     type="checkbox"
                     checked={isSel}
@@ -108,7 +116,7 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                     className="h-3 w-3 rounded accent-emerald-500 cursor-pointer"
                   />
                 </td>
-                <td className={`${COL_W.company} sticky left-9 z-[1] bg-[#0a0d12] border-b border-r border-white/[0.05] px-2 py-1.5`}>
+                <td className={`${COL_W.company} sticky left-9 z-[1] ${stickyTint} border-b border-r border-white/[0.05] px-2 py-1.5`}>
                   <button onClick={() => onOpen(r)} className="text-left w-full block">
                     <div className="text-[12.5px] font-medium text-[#F0F6FC] truncate">{r.company_name ?? 'Unknown company'}</div>
                   </button>

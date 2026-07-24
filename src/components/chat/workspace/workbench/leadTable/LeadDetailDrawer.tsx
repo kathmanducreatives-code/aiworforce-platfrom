@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 import {
   X, ExternalLink, Building2, Sparkles, Mail, Activity, Code2, Search, Users,
   Briefcase, Target, Linkedin, ChevronDown, ChevronRight, ShieldCheck, Copy,
@@ -118,6 +120,7 @@ function MessageCard({ row }: { row: LeadTableRow }) {
       await navigator.clipboard.writeText(body);
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
+      toast.success('Message copied to clipboard');
     } catch { /* clipboard blocked in some browsers */ }
   };
 
@@ -207,8 +210,20 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
 
   return (
     <div className="absolute inset-0 z-30 flex justify-end pointer-events-none">
-      <div className="absolute inset-0 bg-black/40 pointer-events-auto" onClick={onClose} aria-hidden />
-      <aside className="relative w-[440px] max-w-full h-full bg-[#0a0d12] border-l border-white/[0.08] shadow-2xl pointer-events-auto flex flex-col">
+      <motion.div
+        className="absolute inset-0 bg-black/40 pointer-events-auto"
+        onClick={onClose}
+        aria-hidden
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+      />
+      <motion.aside
+        className="relative w-[440px] max-w-full h-full bg-[#0a0d12] border-l border-white/[0.08] shadow-2xl pointer-events-auto flex flex-col"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+      >
         {/* Sticky header — content cannot scroll beneath it. */}
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur shrink-0">
           <div className="min-w-0">
@@ -428,7 +443,7 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
           </div>
           <div className="text-[10px] font-mono text-[#7D8590]">{row.id.slice(0, 8)}</div>
         </div>
-      </aside>
+      </motion.aside>
     </div>
   );
 }
