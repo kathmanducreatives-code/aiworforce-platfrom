@@ -232,6 +232,43 @@ export const FIXTURES: Record<string, BenchmarkFixture> = {
     },
     note: "Non-US + former founder but Agentory scored 95/contact → benchmark REJECT + score_inflation warning.",
   },
+
+  // --- Regressions captured from the live TEST baseline (2026-07-24) ---------
+  // The live "SaaS startups hiring Sales Operations" run surfaced FOUNDERS of
+  // non-product services firms (advisory / search / consulting) as leads, with
+  // no hiring signal. These are sanitized, generalized versions (no real names).
+  F21_advisory_firm_founder: {
+    id: "F21",
+    label: "Founder of an advisory/consulting firm (services, not SaaS)",
+    raws: [raw({ rawItemIndex: 300, companyName: "Meridian Advisors", jobTitle: null,
+      jobDescriptionExcerpt: "Enterprise discipline for growth-focused SMB leaders.", jobLocation: "St. Louis, MO, United States",
+      jobPostingUrl: "https://www.linkedin.com/in/fictional-advisor", jobObservedDate: FRESH,
+      personName: "Fictional Founder", personTitle: "Founder & Principal", personLinkedinUrl: "https://www.linkedin.com/in/fictional-advisor",
+      statedCurrentCompany: "Meridian Advisors" })],
+    note: "Advisory/services firm — not a SaaS product company → company gate FAIL not_saas → REJECT.",
+  },
+
+  F22_search_firm_founder: {
+    id: "F22",
+    label: "Founder of a search/recruiting firm surfaced by a Sales-Ops query",
+    raws: [raw({ rawItemIndex: 310, companyName: "Talent Vector", jobTitle: null,
+      jobDescriptionExcerpt: "Retained search for revenue leaders.", jobLocation: "Sunnyvale, CA, United States",
+      jobPostingUrl: "https://www.linkedin.com/in/fictional-search", jobObservedDate: FRESH,
+      personName: "Fictional Consultant", personTitle: "Co-Founder and Principal Search Consultant", personLinkedinUrl: "https://www.linkedin.com/in/fictional-search",
+      statedCurrentCompany: "Talent Vector" })],
+    note: "Search/recruiting firm (title reveals it) → company gate FAIL not_saas → REJECT.",
+  },
+
+  F23_person_lead_no_hiring_signal: {
+    id: "F23",
+    label: "Founder person-lead with no hiring signal at an ambiguous company",
+    raws: [raw({ rawItemIndex: 320, companyName: "Northwind Studio", jobTitle: null,
+      jobDescriptionExcerpt: "We build things.", jobLocation: "Austin, United States",
+      jobPostingUrl: "https://www.linkedin.com/in/fictional-cofounder", jobObservedDate: FRESH,
+      personName: "Fictional Cofounder", personTitle: "Co-Founder", personLinkedinUrl: "https://www.linkedin.com/in/fictional-cofounder",
+      statedCurrentCompany: "Northwind Studio" })],
+    note: "No SaaS evidence + no hiring signal → conservatively NEEDS_REVIEW, never CONTACT.",
+  },
 };
 
 /** Evaluate one fixture, wiring its Agentory outputs by candidate id. */

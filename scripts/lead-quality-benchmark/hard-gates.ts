@@ -17,6 +17,10 @@ import { classifyJobFamily } from "./normalize.ts";
 import type { GateReport, HardGateResult, NormalizedCandidate, ReasonCode } from "./types.ts";
 
 // Explicit non-SaaS business types → hard REJECT on company type.
+// Explicit, unambiguous non-SaaS business types. Ambiguous services terms
+// (advisors/search/advisory) are intentionally NOT here — they are handled by
+// the multi-signal, SaaS-evidence-guarded detectRecruiterProxy above, so a real
+// SaaS with an advisory/search PRODUCT is never rejected on a single token.
 const NON_SAAS_RE = /\b(agency|consultancy|consulting|staffing|recruit(?:ing|ment)|manufactur(?:er|ing)|e-?commerce|retailer|retail store|restaurant|hospitality|law firm|accounting firm|media (?:company|outlet|publisher)|publishing house|marketing agency|design agency|dev shop)\b/i;
 
 const FOUNDER_RE = /\b(co[- ]?founder|founder|founding (?:ceo|partner))\b/i;
@@ -42,14 +46,16 @@ export function gateCompanyType(n: NormalizedCandidate): HardGateResult {
     industries: (n.raw.rawMeta?.industries as string[] | undefined) ?? null,
     company_description: (n.raw.rawMeta?.companyDescription as string | undefined) ?? n.raw.jobDescriptionExcerpt ?? null,
     job_title: n.raw.jobTitle,
-    job_description: n.raw.jobDescriptionExcerpt,
+    // Person-leads carry the revealing role in personTitle (e.g. "Principal
+    // Search Consultant"), so feed it into the services-firm/proxy detection.
+    job_description: [n.raw.jobDescriptionExcerpt, n.raw.personTitle].filter(Boolean).join(" ") || null,
     source_url: n.raw.sourceUrl,
     employee_count: (n.raw.rawMeta?.employeeCount as number | undefined) ?? null,
   };
   const proxy = detectRecruiterProxy(c);
   if (proxy.isProxy) return gate("company_type", "fail", proxy.reason ?? "Recruiter/staffing proxy.", "not_saas");
 
-  const hay = [n.raw.companyName, c.company_description, (c.industries ?? []).join(" ")].filter(Boolean).join(" ");
+  const hay = [n.raw.companyName, n.raw.personTitle, c.company_description, (c.industries ?? []).join(" ")].filter(Boolean).join(" ");
   if (NON_SAAS_RE.test(hay)) {
     const m = NON_SAAS_RE.exec(hay);
     return gate("company_type", "fail", `Non-SaaS business type: "${m?.[0]}".`, "not_saas");

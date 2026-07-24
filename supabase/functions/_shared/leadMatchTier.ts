@@ -37,13 +37,38 @@ const OUTBOUND_EVIDENCE_RE = /\b(outbound|pipeline|prospect|cold (call|email|out
 // Recruiter/staffing proxy posts — the real employer is hidden (Part 6).
 const RECRUITER_PROXY_RE = /\b(our client|on behalf of|we(?:'re| are) partnering with|partnering with (?:an?|our)|recruitment agency|staffing (?:agency|firm)|talent (?:agency|partner)|search firm|recruiting firm|headhunt|confidential (?:client|company)|unnamed (?:client|company)|a leading (?:client|company))\b/i;
 const RECRUITER_INDUSTRY_RE = /\b(staffing|recruit(?:ing|ment)|talent acquisition|executive search|employment agency)\b/i;
+// Non-product SERVICES firms (search/advisory/consulting/recruiting). Their
+// founders are NOT SaaS buyers — the live Sales-Ops benchmark surfaced founders
+// of "… Advisors" and "… Search" firms as leads. Matched against company NAME +
+// title (phrase-anchored so SaaS "search platform"/"advisory board" don't hit).
+// STRONG signals are unambiguous recruiting/search services → reject regardless
+// of any incidental "software" mention (a "software search consultant" recruits
+// for software; it is not a SaaS product company).
+const SERVICES_STRONG_RE = /\b(search (?:consultant|consulting|firm|partners|group|associates)|executive search|principal search|talent (?:advisory|partners)|recruit(?:ing|ment) (?:firm|agency|partners))\b/i;
+// WEAK signals (advisory/consulting) are ambiguous — they reject ONLY when there
+// is no software-product evidence, so a real SaaS whose product is advisory- or
+// consulting-adjacent (e.g. a robo-advisory platform) is never rejected on one
+// token.
+const SERVICES_WEAK_RE = /\b(advisors|advisory (?:firm|services|group|partners)|management consult(?:ing|ancy)|consult(?:ing|ancy) (?:firm|group|partners))\b/i;
 
-/** Detect a recruiter/staffing proxy post where the actual employer is hidden. */
+/** Detect a recruiter/staffing/services-firm proxy where the target is not a SaaS buyer. */
 export function detectRecruiterProxy(c: CandidateForTier): { isProxy: boolean; reason: string | null } {
-  const desc = [c.company_description, c.job_description].filter(Boolean).join(" ");
+  // Include the company NAME and job TITLE, not just descriptions — a firm named
+  // "Netsoft Search" or a "Principal Search Consultant" reveals the proxy there.
+  const hay = [c.company, c.company_description, c.job_description, c.job_title].filter(Boolean).join(" ");
   const inds = (c.industries ?? []).join(" ");
-  if (RECRUITER_PROXY_RE.test(desc)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
+  if (RECRUITER_PROXY_RE.test(hay)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
   if (RECRUITER_INDUSTRY_RE.test(inds)) return { isProxy: true, reason: "Company is a staffing/recruiting agency; not the target buyer." };
+  const svcHay = [c.company, c.job_title, c.job_description, inds].filter(Boolean).join(" ");
+  // Strong recruiting/search signals reject unconditionally (still not a buyer).
+  if (SERVICES_STRONG_RE.test(svcHay)) {
+    return { isProxy: true, reason: "Search/recruiting services firm; not a SaaS target." };
+  }
+  // Weak advisory/consulting signals reject ONLY without software-product
+  // evidence — MULTI-SIGNAL, protecting real SaaS with an advisory-adjacent product.
+  if (SERVICES_WEAK_RE.test(svcHay) && !isSaasCompany(c)) {
+    return { isProxy: true, reason: "Advisory/consulting services firm with no software-product evidence; not a SaaS target." };
+  }
   return { isProxy: false, reason: null };
 }
 
