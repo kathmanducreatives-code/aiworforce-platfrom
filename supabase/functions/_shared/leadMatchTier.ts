@@ -37,13 +37,23 @@ const OUTBOUND_EVIDENCE_RE = /\b(outbound|pipeline|prospect|cold (call|email|out
 // Recruiter/staffing proxy posts — the real employer is hidden (Part 6).
 const RECRUITER_PROXY_RE = /\b(our client|on behalf of|we(?:'re| are) partnering with|partnering with (?:an?|our)|recruitment agency|staffing (?:agency|firm)|talent (?:agency|partner)|search firm|recruiting firm|headhunt|confidential (?:client|company)|unnamed (?:client|company)|a leading (?:client|company))\b/i;
 const RECRUITER_INDUSTRY_RE = /\b(staffing|recruit(?:ing|ment)|talent acquisition|executive search|employment agency)\b/i;
+// Non-product SERVICES firms (search/advisory/consulting/recruiting). Their
+// founders are NOT SaaS buyers — the live Sales-Ops benchmark surfaced founders
+// of "… Advisors" and "… Search" firms as leads. Matched against company NAME +
+// title (phrase-anchored so SaaS "search platform"/"advisory board" don't hit).
+const SERVICES_FIRM_RE = /\b(search (?:consultant|consulting|firm|partners|group|associates)|executive search|principal search|talent (?:advisory|partners)|advisory (?:firm|services|group|partners)|advisors|management consult(?:ing|ancy)|consult(?:ing|ancy) (?:firm|group|partners)|recruit(?:ing|ment) (?:firm|agency|partners))\b/i;
 
-/** Detect a recruiter/staffing proxy post where the actual employer is hidden. */
+/** Detect a recruiter/staffing/services-firm proxy where the target is not a SaaS buyer. */
 export function detectRecruiterProxy(c: CandidateForTier): { isProxy: boolean; reason: string | null } {
-  const desc = [c.company_description, c.job_description].filter(Boolean).join(" ");
+  // Include the company NAME and job TITLE, not just descriptions — a firm named
+  // "Netsoft Search" or a "Principal Search Consultant" reveals the proxy there.
+  const hay = [c.company, c.company_description, c.job_description, c.job_title].filter(Boolean).join(" ");
   const inds = (c.industries ?? []).join(" ");
-  if (RECRUITER_PROXY_RE.test(desc)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
+  if (RECRUITER_PROXY_RE.test(hay)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
   if (RECRUITER_INDUSTRY_RE.test(inds)) return { isProxy: true, reason: "Company is a staffing/recruiting agency; not the target buyer." };
+  if (SERVICES_FIRM_RE.test([c.company, c.job_title, inds].filter(Boolean).join(" "))) {
+    return { isProxy: true, reason: "Non-product services firm (search/advisory/consulting/recruiting); not a SaaS target." };
+  }
   return { isProxy: false, reason: null };
 }
 
