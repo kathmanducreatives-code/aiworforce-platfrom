@@ -89,6 +89,11 @@ export interface LeadTableRow {
   draft_status: DraftStatus;
   personalized_message?: string | null;
   draft_id?: string | null;
+  /** Contact id the persisted draft was generated for. When this differs from
+   *  the lead's current recommended contact_id, the drawer must mark the
+   *  message as written for a previous contact (Scenario E). */
+  draft_contact_id?: string | null;
+  draft_created_at?: string | null;
 
   status: string;
   raw?: unknown;
@@ -131,21 +136,21 @@ export function useLeadResults(planId: string | null) {
       if (err) throw err;
       const rows = (data ?? []) as any[];
       const ids = rows.map((r) => r.id);
-      const accountIds = rows.map((r) => r.account_id).filter(Boolean);
 
       // Best-effort enrichment + draft joins. Either may fail silently.
-      let enrichByLead = new Map<string, any>();
-      let enrichByAccount = new Map<string, any>();
-      let draftByLead = new Map<string, any>();
+      // STRICT LEAD-LEVEL ISOLATION: both joins are keyed by lead_candidate_id
+      // only. The previous account_id fallback let one lead's enrichment leak
+      // onto another lead sharing the same account — removed.
+      const enrichByLead = new Map<string, any>();
+      const draftByLead = new Map<string, any>();
       try {
         if (ids.length) {
           const { data: enr } = await supabase
             .from('lead_enrichments' as any)
-            .select('id, lead_candidate_id, account_id, status, summary, personalization_angles')
-            .or(`lead_candidate_id.in.(${ids.join(',')})${accountIds.length ? `,account_id.in.(${accountIds.join(',')})` : ''}`);
+            .select('id, lead_candidate_id, status, summary, personalization_angles')
+            .in('lead_candidate_id', ids);
           for (const e of (enr ?? []) as any[]) {
             if (e.lead_candidate_id) enrichByLead.set(e.lead_candidate_id, e);
-            if (e.account_id) enrichByAccount.set(e.account_id, e);
           }
         }
       } catch { /* table may not exist or be denied */ }
@@ -153,10 +158,16 @@ export function useLeadResults(planId: string | null) {
         if (ids.length) {
           const { data: dr } = await supabase
             .from('outreach_drafts' as any)
-            .select('id, lead_candidate_id, status, body, channel')
-            .in('lead_candidate_id', ids);
+            .select('id, lead_candidate_id, contact_id, status, body, channel, created_at')
+            .in('lead_candidate_id', ids)
+            // A lead may have multiple drafts over time — keep the newest one
+            // per lead_candidate_id so the drawer always shows the latest
+            // approval-ready draft for THIS lead (not a sibling lead's draft).
+            .order('created_at', { ascending: false });
           for (const d of (dr ?? []) as any[]) {
-            if (d.lead_candidate_id) draftByLead.set(d.lead_candidate_id, d);
+            if (d.lead_candidate_id && !draftByLead.has(d.lead_candidate_id)) {
+              draftByLead.set(d.lead_candidate_id, d);
+            }
           }
         }
       } catch { /* ignore */ }
@@ -180,7 +191,10 @@ export function useLeadResults(planId: string | null) {
           contactEmail ? 'email_found'
           : contactLinkedin || r.contact_id ? 'profile_found'
           : 'needs_contact';
-        const enr = enrichByLead.get(r.id) ?? (r.account_id ? enrichByAccount.get(r.account_id) : null);
+        // Enrichment is associated ONLY by lead_candidate_id. The account_id
+        // fallback was removed above so this lead can never inherit another
+        // lead's enrichment. If none exists, status reflects the real state.
+        const enr = enrichByLead.get(r.id) ?? null;
         const enrichment_status: EnrichmentStatus =
           enr ? 'enriched' : (website ? 'enrichable' : 'not_started');
         const draft = draftByLead.get(r.id);
@@ -273,6 +287,8 @@ export function useLeadResults(planId: string | null) {
           draft_status,
           personalized_message: draft?.body ?? null,
           draft_id: draft?.id ?? null,
+          draft_contact_id: draft?.contact_id ?? null,
+          draft_created_at: draft?.created_at ?? null,
           status: r.status ?? 'new',
           raw: r,
         };

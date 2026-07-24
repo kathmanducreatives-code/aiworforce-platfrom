@@ -49,7 +49,9 @@ const COL_W = {
   decisionMaker: 'min-w-[180px]',
   contactInfo: 'min-w-[180px]',
   enrichment: 'min-w-[200px]',
-  message: 'min-w-[200px]',
+  // Brief: message column slightly wider than company — two-line preview with
+  // a subtle contact line needs more room, never less.
+  message: 'min-w-[260px]',
   fit: 'w-[70px]',
   source: 'min-w-[120px]',
   status: 'w-[90px]',
@@ -225,14 +227,27 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                   {rowActions?.[r.id]?.kind === 'generate_outreach' ? (
                     <RowActionCell a={rowActions[r.id]} kind="generate_outreach" />
                   ) : draftLocked ? (
-                    <LockedCell
-                      label={r.contact_status === 'needs_contact' ? 'Needs contact' : 'Generate outreach'}
-                      credits={r.contact_status === 'needs_contact' ? 0 : 2}
-                      onUnlock={() => onUnlock('draft_outreach', r.id)}
-                      disabled={r.contact_status === 'needs_contact'}
-                    />
+                    <div className="px-2.5 py-2 space-y-0.5">
+                      <div className="text-[9.5px] uppercase tracking-[0.1em] text-[#7D8590]">Personalized opener</div>
+                      {r.contact_status === 'needs_contact' ? (
+                        <div className="text-[11px] text-amber-200/80">Find a verified decision-maker first</div>
+                      ) : (
+                        <div className="text-[11px] text-[#9aa4af]">Ready to generate</div>
+                      )}
+                    </div>
+                  ) : !r.personalized_message ? (
+                    <div className="px-2.5 py-2 space-y-0.5">
+                      <div className="text-[9.5px] uppercase tracking-[0.1em] text-[#7D8590]">Personalized opener</div>
+                      <div className="text-[11px] text-[#7D8590]">No draft generated</div>
+                    </div>
                   ) : (
-                    <div className="px-2 py-1.5 text-[11px] text-[#C9D1D9] line-clamp-2">{r.personalized_message ?? '—'}</div>
+                    <div className="px-2.5 py-2 space-y-0.5">
+                      <div className="text-[9.5px] uppercase tracking-[0.1em] text-[#7D8590]">Personalized opener</div>
+                      <div className="text-[11px] text-[#C9D1D9] line-clamp-2 leading-snug">{r.personalized_message}</div>
+                      {r.contact_name && (
+                        <div className="text-[10px] text-[#7D8590] truncate">for {r.contact_name}{r.contact_title ? ` · ${r.contact_title}` : ''}</div>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className={`${COL_W.fit} border-b border-white/[0.05] px-2 py-1.5 align-top font-mono text-[11px] text-emerald-200`}>
