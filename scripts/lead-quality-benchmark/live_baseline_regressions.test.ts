@@ -28,10 +28,23 @@ Deno.test("live-regression: ambiguous person-lead is never CONTACT", () => {
 });
 
 Deno.test("real leadMatchTier.detectRecruiterProxy now flags services firms by name/title", () => {
-  // Company name reveals it.
+  // Company name reveals it (no software-product evidence).
   assert(detectRecruiterProxy({ company: "Optivas Advisors" }).isProxy);
   // Title reveals it even when the company name is generic.
   assert(detectRecruiterProxy({ company: "Netsoft", job_title: "Principal Search Consultant" }).isProxy);
-  // A genuine SaaS company with a search PRODUCT is NOT a services firm.
-  assertEquals(detectRecruiterProxy({ company: "Algolia", job_title: "Sales Operations Manager", company_description: "hosted search platform API" }).isProxy, false);
+});
+
+// Over-rejection guards: a services-firm TOKEN must not reject a real software
+// firm — rejection requires the token AND no software-product evidence.
+Deno.test("guard: SaaS with a search PRODUCT is NOT rejected (search platform/API)", () => {
+  assertEquals(detectRecruiterProxy({ company: "SearchStax", job_title: "Sales Operations Manager", company_description: "managed search software platform and API" }).isProxy, false);
+  assertEquals(detectRecruiterProxy({ company: "Algolia", company_description: "hosted search platform API" }).isProxy, false);
+});
+
+Deno.test("guard: fintech robo-advisory SaaS is NOT rejected on the 'advisors' token", () => {
+  assertEquals(detectRecruiterProxy({ company: "WealthGrid Advisors", company_description: "robo-advisory investment platform (SaaS) with an API", job_title: "Revenue Operations Manager" }).isProxy, false);
+});
+
+Deno.test("guard: 'advisors' WITHOUT software evidence is still rejected (multi-signal)", () => {
+  assert(detectRecruiterProxy({ company: "Meridian Advisors", company_description: "boutique management advisory for SMB leaders" }).isProxy);
 });

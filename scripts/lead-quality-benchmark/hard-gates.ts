@@ -17,7 +17,11 @@ import { classifyJobFamily } from "./normalize.ts";
 import type { GateReport, HardGateResult, NormalizedCandidate, ReasonCode } from "./types.ts";
 
 // Explicit non-SaaS business types → hard REJECT on company type.
-const NON_SAAS_RE = /\b(agency|consultancy|consulting|staffing|recruit(?:ing|ment)|manufactur(?:er|ing)|e-?commerce|retailer|retail store|restaurant|hospitality|law firm|accounting firm|media (?:company|outlet|publisher)|publishing house|marketing agency|design agency|dev shop|advisors|advisory (?:firm|services|group|partners)|search (?:consultant|firm|partners|group)|executive search|principal search)\b/i;
+// Explicit, unambiguous non-SaaS business types. Ambiguous services terms
+// (advisors/search/advisory) are intentionally NOT here — they are handled by
+// the multi-signal, SaaS-evidence-guarded detectRecruiterProxy above, so a real
+// SaaS with an advisory/search PRODUCT is never rejected on a single token.
+const NON_SAAS_RE = /\b(agency|consultancy|consulting|staffing|recruit(?:ing|ment)|manufactur(?:er|ing)|e-?commerce|retailer|retail store|restaurant|hospitality|law firm|accounting firm|media (?:company|outlet|publisher)|publishing house|marketing agency|design agency|dev shop)\b/i;
 
 const FOUNDER_RE = /\b(co[- ]?founder|founder|founding (?:ceo|partner))\b/i;
 const CEO_RE = /\bceo\b|chief executive officer/i;

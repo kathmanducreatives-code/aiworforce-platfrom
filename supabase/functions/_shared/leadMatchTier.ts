@@ -41,7 +41,15 @@ const RECRUITER_INDUSTRY_RE = /\b(staffing|recruit(?:ing|ment)|talent acquisitio
 // founders are NOT SaaS buyers — the live Sales-Ops benchmark surfaced founders
 // of "… Advisors" and "… Search" firms as leads. Matched against company NAME +
 // title (phrase-anchored so SaaS "search platform"/"advisory board" don't hit).
-const SERVICES_FIRM_RE = /\b(search (?:consultant|consulting|firm|partners|group|associates)|executive search|principal search|talent (?:advisory|partners)|advisory (?:firm|services|group|partners)|advisors|management consult(?:ing|ancy)|consult(?:ing|ancy) (?:firm|group|partners)|recruit(?:ing|ment) (?:firm|agency|partners))\b/i;
+// STRONG signals are unambiguous recruiting/search services → reject regardless
+// of any incidental "software" mention (a "software search consultant" recruits
+// for software; it is not a SaaS product company).
+const SERVICES_STRONG_RE = /\b(search (?:consultant|consulting|firm|partners|group|associates)|executive search|principal search|talent (?:advisory|partners)|recruit(?:ing|ment) (?:firm|agency|partners))\b/i;
+// WEAK signals (advisory/consulting) are ambiguous — they reject ONLY when there
+// is no software-product evidence, so a real SaaS whose product is advisory- or
+// consulting-adjacent (e.g. a robo-advisory platform) is never rejected on one
+// token.
+const SERVICES_WEAK_RE = /\b(advisors|advisory (?:firm|services|group|partners)|management consult(?:ing|ancy)|consult(?:ing|ancy) (?:firm|group|partners))\b/i;
 
 /** Detect a recruiter/staffing/services-firm proxy where the target is not a SaaS buyer. */
 export function detectRecruiterProxy(c: CandidateForTier): { isProxy: boolean; reason: string | null } {
@@ -51,8 +59,15 @@ export function detectRecruiterProxy(c: CandidateForTier): { isProxy: boolean; r
   const inds = (c.industries ?? []).join(" ");
   if (RECRUITER_PROXY_RE.test(hay)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
   if (RECRUITER_INDUSTRY_RE.test(inds)) return { isProxy: true, reason: "Company is a staffing/recruiting agency; not the target buyer." };
-  if (SERVICES_FIRM_RE.test([c.company, c.job_title, inds].filter(Boolean).join(" "))) {
-    return { isProxy: true, reason: "Non-product services firm (search/advisory/consulting/recruiting); not a SaaS target." };
+  const svcHay = [c.company, c.job_title, c.job_description, inds].filter(Boolean).join(" ");
+  // Strong recruiting/search signals reject unconditionally (still not a buyer).
+  if (SERVICES_STRONG_RE.test(svcHay)) {
+    return { isProxy: true, reason: "Search/recruiting services firm; not a SaaS target." };
+  }
+  // Weak advisory/consulting signals reject ONLY without software-product
+  // evidence — MULTI-SIGNAL, protecting real SaaS with an advisory-adjacent product.
+  if (SERVICES_WEAK_RE.test(svcHay) && !isSaasCompany(c)) {
+    return { isProxy: true, reason: "Advisory/consulting services firm with no software-product evidence; not a SaaS target." };
   }
   return { isProxy: false, reason: null };
 }
