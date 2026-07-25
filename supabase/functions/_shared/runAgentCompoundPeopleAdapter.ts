@@ -18,10 +18,14 @@ function firstStr(o: Record<string, unknown>, keys: string[]): string | null {
 /** Build the bounded, COMPANY-SCOPED people actor input for one verified company.
  *  Uses the strongest supported company identifier (LinkedIn URL required by the
  *  actor's company filter; domain/name carried for tracing). */
-export function buildScopedPeopleInput(scope: PeopleSearchScope, max: number): Record<string, unknown> {
-  const roleKeywords = scope.requestedRole ? [scope.requestedRole] : ["founder"];
+export function buildScopedPeopleInput(scope: PeopleSearchScope, max: number, roles?: string[]): Record<string, unknown> {
+  // Executive roles requested by the compiled intent (Founder / Co-Founder / CEO);
+  // fall back to the single scope role. These become the actor's currentJobTitles
+  // and a concise `searchQuery` role expression — never the user's sentence.
+  const roleKeywords = roles && roles.length ? roles : (scope.requestedRole ? [scope.requestedRole] : ["founder"]);
   const input: Record<string, unknown> = {
     max_results: Math.max(1, Math.min(50, max)),
+    searchQuery: roleKeywords.join(" OR "),
     currentJobTitles: roleKeywords,
     role_keywords: roleKeywords,
     // company scoping — FULL LinkedIn company URL is the only reliable filter.

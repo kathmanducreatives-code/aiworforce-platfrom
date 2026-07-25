@@ -102,7 +102,11 @@ Deno.test("24/28. an accountless / off-company candidate can never plan CONTACT"
 function execDeps(order: string[], jobRows: unknown[], peopleByKey: Record<string, unknown[]>, opts: { jobsThrow?: boolean } = {}) {
   return {
     invokeJobs: async () => { order.push("jobs"); if (opts.jobsThrow) throw new Error("boom"); return jobRows; },
-    invokePeople: async (input: Record<string, unknown>) => { order.push(`people:${input._scope_key}`); return peopleByKey[String(input._scope_key)] ?? []; },
+    invokePeople: async (envelope: Record<string, unknown>) => {
+      const native = envelope.input as Record<string, unknown>;
+      order.push(`people:${native._scope_key}`);
+      return peopleByKey[String(native._scope_key)] ?? [];
+    },
     persist: async (_p: unknown) => ({ ok: true, accountId: "acc", contactId: "c", leadCandidateId: "lc" }),
   };
 }

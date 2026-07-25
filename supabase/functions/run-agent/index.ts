@@ -567,23 +567,20 @@ Deno.serve(async (req) => {
         // turns provider output into accounts/lead_candidates. Without it the
         // 2026-07-25 live run wrote 20 unqualified companies into the Lead Library
         // while the company gate was still rejecting all 25 jobs.
-        const invokeJobs = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
-          // `input` is the COMPILED, role-focused variant (never the user's sentence).
-          const rr = await runTool("source_with_apify", {
-            selected_actor_key: "apify_jobs",
-            defer_persistence: true,
-            input: { ...input, max_results: mx },
-          }, baseCtx);
+        // `envelope` is already the COMPLETE source_with_apify tool input built by
+        // buildProviderEnvelope: wrapper controls (selected_actor_key,
+        // defer_persistence, max_results) at the TOP level — which is the only place
+        // toolRegistry reads them — and the actor-native payload under `input`.
+        // Re-nesting max_results under `input` is what made the 2026-07-25 run send
+        // an unfiltered LinkedIn search, so the envelope is passed through verbatim.
+        const invokeJobs = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", envelope, baseCtx);
           if (!rr.ok || !rr.data) throw new Error(rr.error ?? "jobs_actor_failed");
           const items = (rr.data as { items?: unknown[] }).items;
           return Array.isArray(items) ? items : [];
         };
-        const invokePeople = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
-          const rr = await runTool("source_with_apify", {
-            selected_actor_key: "apify_people_search",
-            defer_persistence: true,
-            input: { ...input, max_results: mx },
-          }, baseCtx);
+        const invokePeople = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", envelope, baseCtx);
           const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
           return Array.isArray(items) ? items : [];
         };

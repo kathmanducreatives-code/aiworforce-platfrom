@@ -29,6 +29,57 @@ export function isNonPersistingProviderInput(input: unknown): boolean {
   return (input as Record<string, unknown>)[DEFER_PERSISTENCE_KEY] === true;
 }
 
+// ---------------------------------------------------- provider envelope ----
+//
+// WRAPPER vs NATIVE. `runTool`/source_with_apify reads its control fields from the
+// TOP LEVEL of the tool input (toolRegistry: `i.query`, `i.location`,
+// `i.max_results`, `i.selected_actor_key`, `i.defer_persistence`) and passes
+// everything under `input:` to the selected actor's adapter as `user_input`.
+//
+// Putting `max_results` (or query/location) under `input:` silently loses it —
+// that is exactly how the 2026-07-25 run sent an unfiltered LinkedIn search and
+// how a people lookup would have taken 25 profiles per company instead of 2.
+// Wrapper controls must therefore NEVER be nested, and native actor fields must
+// NEVER sit at the top level.
+
+export interface ProviderEnvelope {
+  selected_actor_key: string;
+  /** Wrapper-only control; never reaches the actor's native JSON. */
+  defer_persistence: true;
+  /** Wrapper-only; the shared run-level result ceiling. */
+  max_results: number;
+  /** Actor-native fields, handed to the selected actor's adapter as user_input. */
+  input: Record<string, unknown>;
+}
+
+/**
+ * Build the tool-input envelope for an evidence-mode provider call: wrapper
+ * controls at the top level, actor-native fields under `input`.
+ */
+export function buildProviderEnvelope(
+  actorKey: string,
+  nativeInput: Record<string, unknown>,
+  maxResults: number,
+): ProviderEnvelope {
+  return {
+    selected_actor_key: actorKey,
+    defer_persistence: true,
+    max_results: Math.max(1, Math.floor(maxResults)),
+    input: nativeInput,
+  };
+}
+
+/** Wrapper controls that must never appear inside the actor-native payload. */
+export const WRAPPER_ONLY_KEYS = [
+  DEFER_PERSISTENCE_KEY, "persistence_mode", "selected_actor_key", "actor_id",
+  "workspace_id", "plan_id", "task_id", "run_id", "original_user_query", "source_type",
+] as const;
+
+/** True when a NATIVE actor payload is free of Agentory wrapper controls. */
+export function nativePayloadIsClean(native: Record<string, unknown>): boolean {
+  return !WRAPPER_ONLY_KEYS.some((k) => k in native);
+}
+
 // ------------------------------------------------------- write boundary ----
 
 export interface CompanyFirstWriteBoundary {

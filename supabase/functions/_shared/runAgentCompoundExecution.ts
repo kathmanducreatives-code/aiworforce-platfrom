@@ -10,18 +10,19 @@ import { compoundJobsFromRawRows } from "./runAgentCompoundJobAdapter.ts";
 import { buildScopedPeopleInput, compoundPeopleFromRows } from "./runAgentCompoundPeopleAdapter.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
 import type { Vertical } from "./verticalQualification.ts";
-import { buildJobsProviderInputs, JobSearchCompilationError, type JobsProviderVariantInput } from "./jobsProviderInput.ts";
+import { assertCompiledForProvider, JobSearchCompilationError } from "./jobsProviderInput.ts";
+import { buildCuriousCoderLinkedInJobsInput, buildLinkedInJobsSearchUrls } from "./curiousCoderJobsInput.ts";
 import {
-  newWriteBoundary, recordProviderInvocation, withEvidenceOnlyPersistence,
+  newWriteBoundary, recordProviderInvocation, buildProviderEnvelope,
   type CompanyFirstWriteBoundary,
 } from "./providerEvidenceMode.ts";
 
 export interface CompoundExecutionDeps {
-  /** Invoke the real bounded apify_jobs actor with a COMPILED, role-focused input
-   * (never the user's sentence); returns RAW rows. */
-  invokeJobs: (input: Record<string, unknown>, max: number) => Promise<unknown[]>;
-  /** Invoke the real bounded, company-scoped apify_people_search actor; RAW rows. */
-  invokePeople: (input: Record<string, unknown>, max: number) => Promise<unknown[]>;
+  /** Invoke apify_jobs with a COMPLETE provider envelope (wrapper controls at the
+   * top level, actor-native `urls`/`count` under `input`); returns RAW rows. */
+  invokeJobs: (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
+  /** Invoke the company-scoped apify_people_search actor with its envelope. */
+  invokePeople: (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
   /** Execute a persistence plan through the existing safe writer. */
   persist: (plan: CompoundPersistencePlan) => Promise<{ ok: boolean; accountId: string | null; contactId: string | null; leadCandidateId: string | null; reason?: string }>;
   /** True while further provider calls are within the soft/hard budget. */
@@ -62,37 +63,38 @@ export async function runAgentCompoundExecution(
     // search comes from the compiled job_search_spec — the raw sentence is never a
     // keyword (2026-07-25 live defect).
     fetchJobs: async (_query: string, max: number) => {
-      let variants: JobsProviderVariantInput[];
+      let spec;
       try {
-        variants = buildJobsProviderInputs(intent.job_search_spec, max);
+        spec = assertCompiledForProvider(intent.job_search_spec);
       } catch (e) {
         compileError = e instanceof JobSearchCompilationError ? e.reason : String(e);
         return []; // FAIL CLOSED — never fall back to the raw query.
       }
+      if (deps.budgetProceed && !deps.budgetProceed()) { diagnostics.budgetStopped = true; return []; }
 
-      const rows: unknown[] = [];
-      for (const v of variants) {
-        if (rows.length >= max) break;                                   // shared ceiling
-        if (deps.budgetProceed && !deps.budgetProceed()) { diagnostics.budgetStopped = true; break; }
-        const remaining = max - rows.length;
-        const input = withEvidenceOnlyPersistence({
-          query: v.query, location: v.location,
-          max_results: Math.min(v.max_results, remaining),
-        });
-        recordProviderInvocation(writeBoundary, input, `apify_jobs[${v._variant_keyword}]`);
-        diagnostics.jobsInvoked = true;
-        try {
-          const got = await deps.invokeJobs(input, Math.min(v.max_results, remaining));
-          diagnostics.jobVariants.push({ keyword: v.query, location: v.location, max_results: input.max_results });
-          if (Array.isArray(got)) rows.push(...got);
-        } catch (e) {
-          // Per-variant failure is recorded; the whole run only fails if NOTHING ran.
-          diagnostics.jobVariants.push({ keyword: v.query, location: v.location, max_results: input.max_results, error: String((e as Error)?.message ?? e) });
-        }
+      // `count` is a RUN-level cap that spans every URL, so all compiled keyword
+      // variants go out in ONE invocation sharing the single ceiling — never one
+      // full-limit run per variant.
+      const urls = buildLinkedInJobsSearchUrls(spec.keyword_queries, spec.location);
+      const native = buildCuriousCoderLinkedInJobsInput({ urls, maxResults: max });
+      const envelope = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
+      recordProviderInvocation(writeBoundary, envelope, "apify_jobs");
+      diagnostics.jobsInvoked = true;
+      for (const kw of spec.keyword_queries) {
+        diagnostics.jobVariants.push({ keyword: kw, location: spec.location, max_results: native.count });
       }
-      if (rows.length === 0 && diagnostics.jobVariants.every((v) => v.error)) { jobsFailed = true; return []; }
+
+      let rows: unknown[] = [];
+      try {
+        const got = await deps.invokeJobs(envelope as unknown as Record<string, unknown>, max);
+        rows = Array.isArray(got) ? got : [];
+      } catch (e) {
+        jobsFailed = true;
+        for (const v of diagnostics.jobVariants) v.error = String((e as Error)?.message ?? e);
+        return [];
+      }
       writeBoundary.rawProviderItems += rows.length;
-      const jobs = compoundJobsFromRawRows(rows, max).jobs;
+      const jobs = compoundJobsFromRawRows(rows, max).jobs;   // shared ceiling enforced here
       writeBoundary.normalizedJobs += jobs.length;
       return jobs;
     },
@@ -100,10 +102,13 @@ export async function runAgentCompoundExecution(
       // Budget bound: people calls are already bounded by the verified-company count.
       if (deps.budgetProceed && !deps.budgetProceed()) { diagnostics.budgetStopped = true; return []; }
       diagnostics.peopleCalls++;
-      const input = withEvidenceOnlyPersistence(buildScopedPeopleInput(scope, max));
-      recordProviderInvocation(writeBoundary, input, "apify_people_search");
+      // Native Harvest fields under `input`; the per-company ceiling at the TOP
+      // level, which is the only place source_with_apify reads max_results from.
+      const native = buildScopedPeopleInput(scope, max, intent.job_search_spec.requested_person_roles);
+      const envelope = buildProviderEnvelope("apify_people_search", native, max);
+      recordProviderInvocation(writeBoundary, envelope, "apify_people_search");
       let rows: unknown[];
-      try { rows = await deps.invokePeople(input, max); }
+      try { rows = await deps.invokePeople(envelope as unknown as Record<string, unknown>, max); }
       catch { return []; } // one company's failure never aborts the whole run
       const people = compoundPeopleFromRows(rows, max).people;
       writeBoundary.peopleResults += people.length;

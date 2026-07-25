@@ -105,12 +105,16 @@ Deno.test("14. the jobs call receives compiled keywords, never the original sent
   }, { now: NOW, workspaceId: "ws" });
 
   assert(sent.length > 0);
-  for (const s of sent) {
-    assertEquals(s.location, "United States");
-    assert(String(s.query).length < 40);
-    assertFalse(String(s.query).toLowerCase().includes("founders of"));
+  // Native LinkedIn URLs live under `input`; wrapper controls stay at the top.
+  const native = sent[0].input as { urls: string[]; count: number };
+  const keywords = native.urls.map((u) => new URL(u).searchParams.get("keywords"));
+  assertEquals(keywords, ["Sales Operations", "Revenue Operations", "GTM Operations"]);
+  for (const u of native.urls) {
+    assertEquals(new URL(u).searchParams.get("location"), "United States");
+    assertFalse(decodeURIComponent(u).toLowerCase().includes("founders of"));
   }
-  assertEquals(sent[0].query, "Sales Operations");
+  assertEquals(sent[0].max_results, 25);       // TOP level — where runTool reads it
+  assertEquals(sent[0].defer_persistence, true);
 });
 
 // ---- 12 no provider call when compilation fails -----------------------------
@@ -128,11 +132,16 @@ Deno.test("12b. an uncompilable request calls NO provider and reports unable_to_
 });
 
 // ---- 21 shared ceiling across variants at runtime ---------------------------
-Deno.test("21b. three keyword variants never exceed the single raw-job ceiling", async () => {
+Deno.test("21b. three keyword variants are ONE invocation sharing the single raw-job ceiling", async () => {
   let total = 0;
+  let invocations = 0;
   await runAgentCompoundExecution(intent, {
-    invokeJobs: async (input) => {
-      const n = Number(input.max_results); total += n;
+    invokeJobs: async (envelope) => {
+      invocations++;
+      const native = envelope.input as { urls: string[]; count: number };
+      assertEquals(native.urls.length, 3);        // all variants in ONE run
+      assertEquals(invocations, 1);               // never one run per variant
+      const n = native.count; total += n;
       return Array.from({ length: n }, (_, k) => jobRow({ id: `j${total}_${k}`, jobUrl: `https://j/${total}_${k}` }));
     },
     invokePeople: async () => [founder()],
