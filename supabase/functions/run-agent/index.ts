@@ -37,6 +37,7 @@ import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artif
 import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
 import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
+import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -624,17 +625,31 @@ Deno.serve(async (req) => {
           }
         };
 
+        // FINAL-LEAD QUOTA — explicit request wins; otherwise the lead-sourcing
+        // default. Deliberately NOT DEFAULT_COMPOUND_LIMITS.rawJobs: that is a
+        // provider fetch cap, and conflating the two is what made a 25-raw-job
+        // batch look like a satisfied 25-lead request.
+        const quota = resolveRequestedLeadCount({
+          explicit: (body.requested_lead_count ?? tool_input_body?.requested_lead_count ?? cfIntent.requested_count) as number | null | undefined,
+          isLeadSourcingWorkflow: true,
+        });
+
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntent, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
+          requestedLeadCount: quota.requestedLeadCount, requestedCountSource: quota.source,
           invokeJobs, invokePeople, persist: persistPlan,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
-        const taskStatus = (cf.status === "sourcing_failed" || cf.status === "persistence_failed" || cf.status === "unable_to_compile_job_search" || !!cf.writeBoundary.invariantViolation) ? "failed" : "completed";
+        // Completion is EARNED by delivering eligible leads, never by successful
+        // database writes. Anything short of the quota reports why.
+        const taskStatus = (cf.status === "provider_failure" || cf.status === "invalid_request" || !!cf.writeBoundary.invariantViolation)
+          ? "failed"
+          : cf.status === "completed" ? "completed" : "partial";
         await supabase.from("tasks").update({
           status: taskStatus,
           result: {
-            output: `Company-first sourcing (${cf.status}): ${cf.counts.contact} contact / ${cf.counts.watch} watch / ${cf.counts.needsReview} review across ${cf.counts.verifiedCompanies} verified companies.`,
+            output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
             lead_entity_intent: cfIntent,
@@ -644,9 +659,16 @@ Deno.serve(async (req) => {
 
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({
-          success: taskStatus === "completed", task_id: task.id,
-          executed_sourcing_mode: "company_first", status: cf.status, counts: cf.counts,
-          job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
+          success: cf.status === "completed", task_id: task.id,
+          executed_sourcing_mode: "company_first",
+          terminal_status: cf.status, terminal_reason: cf.terminal_reason,
+          requested_leads: cf.quota.requested_leads, eligible_leads: cf.quota.eligible_leads,
+          remaining_leads: cf.quota.remaining_leads, requested_count_source: cf.quota.requested_count_source,
+          rounds_attempted: cf.rounds_attempted, expansions_attempted: cf.expansions_attempted,
+          raw_jobs_processed: cf.counts.rawJobs, verified_companies: cf.counts.verifiedCompanies,
+          people_candidates: cf.counts.candidates, provider_calls: cf.provider_calls,
+          provider_side_writes: cf.writeBoundary.providerSideWrites, budget_consumed: cf.budget_consumed,
+          counts: cf.counts, job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
         });
       }
 

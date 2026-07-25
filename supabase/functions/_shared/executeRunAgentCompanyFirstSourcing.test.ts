@@ -17,7 +17,10 @@ interface Harness { order: string[]; peopleInputs: Record<string, unknown>[]; pl
 function harness(jobs: unknown[], peopleByCompanyDomain: Record<string, unknown[]>, opts: { jobsThrow?: boolean } = {}): Harness {
   const order: string[] = []; const peopleInputs: Record<string, unknown>[] = []; const plans: CompoundPersistencePlan[] = [];
   const deps: CompanyFirstRuntimeDeps = {
-    intent, workspaceId: "ws-1", now: NOW,
+    // These legacy scenarios assert single-round sourcing behaviour, so the quota
+    // is 1: the controller stops as soon as one eligible lead exists (or the
+    // search space is exhausted), preserving the original one-batch expectations.
+    intent, workspaceId: "ws-1", now: NOW, requestedLeadCount: 1, bounds: { maxRounds: 1 },
     invokeJobs: async () => { order.push("jobs"); if (opts.jobsThrow) throw new Error("boom"); return jobs; },
     // `envelope` = wrapper controls + actor-native fields under `input`.
     invokePeople: async (envelope) => {
@@ -79,14 +82,17 @@ Deno.test("12/13/15. off-company / historical / evidence-less never persist as C
 Deno.test("16. a generic AE job does not qualify for Sales Operations", async () => {
   const h = harness([jobRow({ title: "Account Executive", descriptionText: "Close new business deals and hit quota.", jobUrl: "https://j/ae" })], { "bigid.com": [founder()] });
   const r = await executeRunAgentCompanyFirstSourcing(h.deps);
-  assertEquals(r.status, "no_qualified_companies"); // AE dropped → no verified companies
+  // AE dropped by the job-family gate → no verified companies → quota unmet.
+  // The status vocabulary is now the typed terminal set (Part F).
+  assert(r.status !== "completed");
   assertEquals(r.counts.contact, 0);
+  assertEquals(r.quota.eligible_leads, 0);
 });
 
-Deno.test("17/19. jobs failure → sourcing_failed, ZERO people, no fallback", async () => {
+Deno.test("17/19. jobs failure → provider_failure, ZERO people, no fallback", async () => {
   const h = harness([jobRow()], { "bigid.com": [founder()] }, { jobsThrow: true });
   const r = await executeRunAgentCompanyFirstSourcing(h.deps);
-  assertEquals(r.status, "sourcing_failed");
+  assertEquals(r.status, "provider_failure");   // was "sourcing_failed"
   assertFalse(h.order.some((o) => o.startsWith("people:")));
 });
 
@@ -94,7 +100,8 @@ Deno.test("18. no qualifying companies → zero people lookups", async () => {
   const advisoryOnly = jobRow({ companyName: "Optivas Advisors", companyDescription: "management advisory firm", jobUrl: "https://j/opt", id: "j2" });
   const h = harness([advisoryOnly], {});
   const r = await executeRunAgentCompanyFirstSourcing(h.deps);
-  assertEquals(r.status, "no_qualified_companies");
+  assert(r.status !== "completed");
+  assertEquals(r.quota.eligible_leads, 0);
   assertFalse(h.order.some((o) => o.startsWith("people:")));
 });
 

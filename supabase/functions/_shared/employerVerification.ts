@@ -9,7 +9,7 @@
 import {
   resolveCompanyIdentity, strongSameCompany, hasStrongId, type CompanyIdentity,
 } from "./companyIdentity.ts";
-import { normalizeCompanyName } from "./companyIdentity.ts";
+import { normalizeCompanyName, differsOnlyByCohortLabel } from "./companyIdentity.ts";
 
 export type EmployerVerification =
   | "verified_match"
@@ -81,6 +81,23 @@ export function verifyCurrentEmployer(
     if (isHistorical) return { outcome: "historical_only", reason: "Name matches the target but the role has ended.", matchedBy: "name" };
     // A similar name without a stronger identity cannot be confirmed as current.
     return { outcome: "ambiguous", reason: "Company name matches but no strong identifier confirms it is the same current employer.", matchedBy: "name" };
+  }
+
+  // 3b) The names differ ONLY by a recognized accelerator/cohort label
+  //     ("LanceDB" vs "LanceDB (YC W22)"). That label is metadata about the same
+  //     company, not a different entity — so it must not be reported as a
+  //     mismatch. Without a strong identifier it is still not PROVEN current, so
+  //     this is `ambiguous`, never `verified_match`: normalized names alone may
+  //     not establish a match when stronger identity evidence is absent.
+  //     "(Stealth)" and other unrecognized parentheticals deliberately fall
+  //     through to the mismatch rule below.
+  if (differsOnlyByCohortLabel(person.currentCompany, target.name)) {
+    if (isHistorical) return { outcome: "historical_only", reason: "Matches the target apart from an accelerator label, but the role has ended.", matchedBy: "name" };
+    return {
+      outcome: "ambiguous",
+      reason: "Employer differs from the target only by a recognized accelerator/cohort label; no strong identifier confirms the current role.",
+      matchedBy: "name",
+    };
   }
 
   // 4) A named current employer that clearly differs from the target → mismatch.

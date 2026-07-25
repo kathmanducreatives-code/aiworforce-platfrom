@@ -45,6 +45,56 @@ const MANUFACTURER_RE = /\b(manufactur(?:er|ing|es)|fabricat(?:ion|or|ing)|machi
 const MANUFACTURER_NAICS_RE = /\b3[123]\d{2,4}\b/; // NAICS 31-33 family
 const MANUFACTURER_EXCLUDE_RE = /\b(distributor|import(?:er|s)?(?:\s+of)?|wholesaler|reseller|staffing|recruit(?:ing|ment)|job board|marketing agency|consult(?:ancy|ing) (?:firm|group))\b/i;
 
+// -- SaaS precision ---------------------------------------------------------
+// The v96 run passed "Uber Freight" as SaaS. The gate accepted generic
+// technology/platform language; a logistics network that USES software is not a
+// company that SELLS software. These are evidence classes, not a company blocklist.
+
+/** The company itself commercially sells a software product/platform. */
+// A commercially sold software product. `api`/`sdk`/`hosted <x>` count: shipping a
+// developer-facing API IS selling software, and excluding them regressed real
+// developer-product fixtures (Algolia-shaped).
+const SAAS_PRODUCT_RE = /\b(saas|software[- ]as[- ]a[- ]service|software (?:product|platform|company|suite)|subscription software|cloud (?:software|platform|application)|enterprise software|b2b software|developer (?:platform|tools?)|api|sdk|hosted (?:search|platform|software|service)|data (?:platform|warehouse|infrastructure)|security (?:platform|software)|compliance (?:platform|automation)|crm|erp|application software|open[- ]source (?:database|vector database)|vector database|database company|work management (?:platform|software))\b/i;
+/** Words that merely describe using/being adjacent to technology. */
+const SAAS_WEAK_RE = /\b(technology|tech[- ]enabled|platform|digital|ai[- ]powered|software[- ]powered|innovative|data[- ]driven|network|marketplace|app)\b/i;
+/** Primary business is operating a service/network/marketplace, not selling software. */
+const NON_SAAS_BUSINESS_RE = /\b(freight|logistics|trucking|shipping|carrier network|last[- ]mile|delivery (?:network|service)|3pl|supply[- ]chain (?:operator|services)|ride[- ]hailing|food delivery|marketplace for|brokerage|broker|staffing|recruit(?:ing|ment)|talent (?:agency|solutions)|consultanc(?:y|ies)|consulting (?:firm|group|services)|agency|managed services|outsourcing|bpo)\b/i;
+
+export type SaasReasonCode =
+  | "software_product_verified" | "technology_enabled_service" | "marketplace_not_saas"
+  | "logistics_operator" | "insufficient_product_evidence" | "mixed_business_model";
+
+function qualifySaas(c: CompanyForVertical, text: string): VerticalQualification {
+  const product = first(SAAS_PRODUCT_RE, text);
+  const nonSaas = first(NON_SAAS_BUSINESS_RE, text);
+  const weakOnly = !product && !!first(SAAS_WEAK_RE, text);
+
+  // Operating business + genuine standalone software product → mixed, review it.
+  if (product && nonSaas) {
+    return { vertical: "saas", outcome: "needs_review", reason: `Mixed business model: software-product evidence ("${product}") alongside "${nonSaas}".`, matched: "mixed_business_model" };
+  }
+  // Clear software-product evidence, corroborated by the legacy detector.
+  if (product) {
+    return { vertical: "saas", outcome: "pass", reason: `Sells a software product: "${product}".`, matched: "software_product_verified" };
+  }
+  // Logistics/marketplace/services operator with no product evidence → fail.
+  if (nonSaas) {
+    const code: SaasReasonCode = /freight|logistics|trucking|shipping|carrier|3pl|last[- ]mile|delivery/i.test(nonSaas)
+      ? "logistics_operator"
+      : /marketplace|broker/i.test(nonSaas) ? "marketplace_not_saas" : "technology_enabled_service";
+    return { vertical: "saas", outcome: "fail", reason: `Primary business is "${nonSaas}", not a software product.`, matched: code };
+  }
+  // Only buzzwords → never a confident pass.
+  if (weakOnly) {
+    return { vertical: "saas", outcome: "needs_review", reason: "Only generic technology/platform language — no evidence the company sells software.", matched: "technology_enabled_service" };
+  }
+  // Fall back to the legacy detector so existing passing fixtures do not regress.
+  if (isSaasCompany(toTier(c))) {
+    return { vertical: "saas", outcome: "pass", reason: "Software/SaaS product evidence present.", matched: "software_product_verified" };
+  }
+  return { vertical: "saas", outcome: "needs_review", reason: "No clear software-product evidence — do not assume SaaS.", matched: "insufficient_product_evidence" };
+}
+
 export function qualifyCompanyVertical(c: CompanyForVertical, vertical: Vertical): VerticalQualification {
   const text = hay(c);
 
@@ -53,10 +103,7 @@ export function qualifyCompanyVertical(c: CompanyForVertical, vertical: Vertical
   const proxy = detectRecruiterProxy(toTier(c));
   if (proxy.isProxy) return { vertical, outcome: "fail", reason: proxy.reason ?? "Services/recruiter proxy — not a target company.", matched: "recruiter_proxy" };
 
-  if (vertical === "saas") {
-    if (isSaasCompany(toTier(c))) return { vertical, outcome: "pass", reason: "Software/SaaS product evidence present.", matched: "saas" };
-    return { vertical, outcome: "needs_review", reason: "No clear software-product evidence — do not assume SaaS.", matched: null };
-  }
+  if (vertical === "saas") return qualifySaas(c, text);
 
   if (vertical === "automation_integrator") {
     const ex = first(INTEGRATOR_EXCLUDE_RE, text);

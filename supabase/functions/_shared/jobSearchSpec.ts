@@ -202,6 +202,36 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
   };
 }
 
+/**
+ * Round-scoped keyword expansion. Broadening widens the SEARCH SPACE only — every
+ * added title must still qualify under the SHARED job-family classifier, so a
+ * broadened round can never smuggle a role past the gate (and never wastes budget
+ * fetching jobs the gate will drop).
+ *
+ * Deliberately NOT added: Account Executive / Account Manager / SDR / BDR /
+ * generic Business Development / Customer Success — those are gate weakening.
+ */
+const SALES_OPS_ROUND2_VARIANTS = [
+  "Revenue Strategy and Operations",
+  "Sales Strategy and Operations",
+  "Deal Desk",
+  "Growth Operations",
+];
+
+export function keywordQueriesForRound(spec: CompiledJobSearchSpec, round: number): { keywords: string[]; expansion: string } {
+  const base = spec.keyword_queries;
+  if (round <= 1) return { keywords: base, expansion: "exact_title_synonyms" };
+  const salesOpsFamily = spec.job_families.some((f) => f === "sales_ops" || f === "rev_ops" || f === "gtm_ops");
+  if (round === 2 && salesOpsFamily) {
+    const merged = [...base];
+    for (const v of SALES_OPS_ROUND2_VARIANTS) if (!merged.includes(v)) merged.push(v);
+    return { keywords: merged, expansion: "validated_adjacent_titles" };
+  }
+  // Round 3+: no new titles — widen COVERAGE (more rows/companies) on the same
+  // validated keyword set. Handled by the controller's limit escalation.
+  return { keywords: base, expansion: "additional_coverage" };
+}
+
 function expandPersonRoles(requested: string | null, personRoles: string[]): string[] {
   const key = (requested ?? personRoles[0] ?? "").toLowerCase().trim();
   if (!key) return [];

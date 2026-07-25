@@ -50,7 +50,13 @@ export interface CompoundExecutionResult {
 export async function runAgentCompoundExecution(
   intent: LeadEntityIntent,
   deps: CompoundExecutionDeps,
-  opts: { limits?: Partial<CompoundLimits>; vertical?: Vertical; now?: string; workspaceId?: string } = {},
+  opts: {
+    limits?: Partial<CompoundLimits>; vertical?: Vertical; now?: string; workspaceId?: string;
+    /** Round-scoped broadened keywords from the quota controller. */
+    keywordQueriesOverride?: string[];
+    /** When false the caller (the controller) owns persistence. */
+    persistCandidates?: boolean;
+  } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
     { jobsInvoked: false, peopleCalls: 0, budgetStopped: false, jobVariants: [] };
@@ -75,7 +81,9 @@ export async function runAgentCompoundExecution(
       // `count` is a RUN-level cap that spans every URL, so all compiled keyword
       // variants go out in ONE invocation sharing the single ceiling — never one
       // full-limit run per variant.
-      const urls = buildLinkedInJobsSearchUrls(spec.keyword_queries, spec.location);
+      // The round controller may supply a broadened (still gate-qualifying) set.
+      const roundKeywords = opts.keywordQueriesOverride?.length ? opts.keywordQueriesOverride : spec.keyword_queries;
+      const urls = buildLinkedInJobsSearchUrls(roundKeywords, spec.location);
       const native = buildCuriousCoderLinkedInJobsInput({ urls, maxResults: max });
       const envelope = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
       recordProviderInvocation(writeBoundary, envelope, "apify_jobs");
@@ -138,11 +146,19 @@ export async function runAgentCompoundExecution(
   writeBoundary.qualifiedCandidates = run.candidates.filter((c) => c.verdict !== "REJECT").length;
   writeBoundary.rejectedCandidates = run.candidates.filter((c) => c.verdict === "REJECT").length;
   const persisted: CompoundExecutionResult["persisted"] = [];
-  for (const plan of plans) {
-    writeBoundary.persistenceAttempts += 1;
-    const r = await deps.persist(plan);
-    if (r.ok) writeBoundary.persistedRecords += 1;
-    persisted.push({ ok: r.ok, accountId: r.accountId, leadCandidateId: r.leadCandidateId, reason: r.reason });
+  if (opts.persistCandidates !== false) {
+    for (const plan of plans) {
+      // HARD GATE (Part G): REJECT/SKIP are diagnostics only — zero account,
+      // contact and lead_candidate writes. Checked BEFORE any insert.
+      if (!plan.persistable) {
+        persisted.push({ ok: false, accountId: null, leadCandidateId: null, reason: plan.persistenceReason });
+        continue;
+      }
+      writeBoundary.persistenceAttempts += 1;
+      const r = await deps.persist(plan);
+      if (r.ok) writeBoundary.persistedRecords += 1;
+      persisted.push({ ok: r.ok, accountId: r.accountId, leadCandidateId: r.leadCandidateId, reason: r.reason });
+    }
   }
 
   return { status: "ok", run, plans, persisted, diagnostics, writeBoundary };
