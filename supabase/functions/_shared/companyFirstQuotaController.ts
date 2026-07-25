@@ -17,7 +17,15 @@ import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runAgentCompoundExecution, type CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundCandidate, CompoundLimits } from "./compoundSourcingPipeline.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
-import { keywordQueriesForRound } from "./jobSearchSpec.ts";
+import { buildSourcingConstraints, type SourcingConstraints } from "./sourcingConstraints.ts";
+import {
+  buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput,
+  type BroadeningPlan, type BroadeningPlannerFn, type PlanSource, type RoundPlan,
+} from "./broadeningPlan.ts";
+import { validateRoundPlan, scanProposalForInjection } from "./broadeningValidator.ts";
+import { classifyBottleneck, emptyFunnelSummary, remedyFor, type BottleneckKind, type FunnelSummary } from "./sourcingBottleneck.ts";
+import { forecastRoundCost, roundIdempotencyKey, newIdempotencyLedger, DEFAULT_COST_POLICY, type CostForecast } from "./sourcingCostForecast.ts";
+import { shortHash } from "./planHash.ts";
 import {
   countEligible, isQuotaEligibleCandidate, leadIdentityKey, remainingLeadCount,
   DEFAULT_QUOTA_POLICY, type QuotaPolicy,
@@ -86,6 +94,12 @@ export interface QuotaControllerResult {
   /** Plans actually persisted (REJECT/SKIP excluded by policy). */
   persisted: Array<{ ok: boolean; accountId: string | null; leadCandidateId: string | null; reason?: string }>;
   writeBoundary: CompanyFirstWriteBoundary;
+  /** Generalized broadening observability. */
+  plan: BroadeningPlan | null;
+  plan_sources: PlanSource[];
+  bottlenecks: Array<{ round: number; kind: BottleneckKind; reason: string; remedy: string }>;
+  cost_forecasts: CostForecast[];
+  plan_validations: Array<{ round: number; approved: string[]; rejected: Array<{ title: string; reason: string }>; violations: string[] }>;
 }
 
 export interface QuotaControllerOpts {
@@ -96,12 +110,18 @@ export interface QuotaControllerOpts {
   vertical?: Vertical;
   now?: string;
   workspaceId?: string;
+  taskId?: string | null;
   log?: (msg: string, meta?: unknown) => void;
+}
+
+export interface QuotaControllerDeps extends CompoundExecutionDeps {
+  /** INJECTED planner. Never called by this module in tests or offline runs. */
+  proposeBroadening?: BroadeningPlannerFn;
 }
 
 export async function runCompanyFirstQuotaController(
   intent: LeadEntityIntent,
-  deps: CompoundExecutionDeps,
+  deps: QuotaControllerDeps,
   opts: QuotaControllerOpts,
 ): Promise<QuotaControllerResult> {
   const bounds = { ...DEFAULT_QUOTA_BOUNDS, ...opts.bounds };
@@ -117,6 +137,20 @@ export async function runCompanyFirstQuotaController(
   const seenJobUrls = new Set<string>();
   const writeBoundary = newWriteBoundary();
   const persisted: QuotaControllerResult["persisted"] = [];
+
+  const constraints: SourcingConstraints = await buildSourcingConstraints(intent, {
+    maxRawJobs: opts.limits?.rawJobs, maxCompanies: opts.limits?.verifiedCompanies,
+    maxPeopleLookups: opts.limits?.founderLookups, peoplePerCompany: opts.limits?.foundersPerCompany,
+  });
+  const plan = await buildInitialPlan(constraints, intent.job_search_spec.original_query.slice(0, 120));
+  const attemptedStrategies: string[] = [];
+  const planSources: PlanSource[] = [];
+  const bottlenecks: QuotaControllerResult["bottlenecks"] = [];
+  const forecasts: CostForecast[] = [];
+  const planValidations: QuotaControllerResult["plan_validations"] = [];
+  const ledger = newIdempotencyLedger();
+  let lastFunnel: FunnelSummary | null = null;
+  let lastBottleneck: BottleneckKind | null = null;
 
   let jobsCalls = 0, peopleCalls = 0, budget = 0;
   let rawJobs = 0, verifiedCompanies = 0, peopleCandidates = 0;
@@ -134,16 +168,62 @@ export async function runCompanyFirstQuotaController(
     if (jobsCalls >= bounds.maxJobsCalls) { terminal = "search_exhausted"; terminalReason = "jobs-actor call budget reached"; break; }
     if (budget + bounds.costPerJobsCall > bounds.hardBudget) { terminal = "budget_exhausted"; terminalReason = "next round would exceed the hard budget"; break; }
 
-    const { keywords, expansion } = keywordQueriesForRound(intent.job_search_spec, round);
-    if (round > 1 && !expansions.includes(expansion) && expansion === "additional_coverage" && rounds.length && rounds[rounds.length - 1].new_unique_jobs === 0) {
-      terminal = "search_exhausted"; terminalReason = "no further approved expansion produced new jobs"; break;
-    }
-    if (!expansions.includes(expansion)) expansions.push(expansion);
+    // ---- PLAN → VALIDATE → FORECAST, all before any provider call ---------
+    let roundPlan: RoundPlan | null = null;
+    let planSource: PlanSource = "deterministic_only";
 
-    // Round 3+ widens COVERAGE on the same validated keywords.
-    const roundLimits: Partial<CompoundLimits> = round >= 3
-      ? { ...opts.limits, verifiedCompanies: (opts.limits?.verifiedCompanies ?? 10) + 5, founderLookups: (opts.limits?.founderLookups ?? 8) + 4 }
-      : (opts.limits ?? {});
+    if (round > 1 && deps.proposeBroadening) {
+      // The planner sees ONLY typed summaries — never raw provider text.
+      const input = sanitizePlannerInput(constraints, { requested, eligible: eligibleBefore, remaining: remainingBefore }, lastFunnel, lastBottleneck, attemptedStrategies, Math.max(0, bounds.hardBudget - budget));
+      try {
+        const proposal = await deps.proposeBroadening(input);
+        if (!proposal) { planSource = "ai_unavailable_fallback_used"; }
+        else if (scanProposalForInjection(proposal)) { planSource = "ai_rejected_fallback_used"; }
+        else {
+          const candidateRound: RoundPlan = {
+            ...(deterministicRoundPlan(constraints, round, lastBottleneck) ?? { round_number: round, goal: "ai", title_queries: [], posting_window_days: null, raw_job_limit: constraints.soft.maxRawJobs, company_selection_limit: constraints.soft.maxCompanies, people_lookup_limit: constraints.soft.maxPeopleLookups, people_per_company: constraints.soft.peoplePerCompany, approved_actor_keys: [...constraints.soft.approvedActorKeys], proposed_changes: [], risk: "low", rationale: "", expected_bottleneck_impact: "unknown" }),
+            title_queries: proposal.title_queries ?? [],
+            goal: proposal.goal ?? "ai-proposed titles",
+            rationale: proposal.rationale ?? "ai proposal",
+          };
+          const v = await validateRoundPlan(candidateRound, constraints, constraints.hard, attemptedStrategies);
+          planValidations.push({ round, approved: v.approvedTitles, rejected: v.rejectedTitles, violations: v.violations });
+          if (v.ok) { roundPlan = { ...candidateRound, title_queries: v.approvedTitles }; planSource = "ai_approved"; }
+          else { planSource = "ai_rejected_fallback_used"; }
+        }
+      } catch { planSource = "ai_unavailable_fallback_used"; }
+    }
+
+    // Deterministic fallback whenever the AI path did not yield an approved round.
+    if (!roundPlan) roundPlan = deterministicRoundPlan(constraints, round, lastBottleneck);
+    if (!roundPlan) { terminal = "search_exhausted"; terminalReason = "no approved expansion remains for this job family"; break; }
+
+    roundPlan.strategy_hash = await shortHash({ titles: roundPlan.title_queries.slice().sort(), round });
+    if (attemptedStrategies.includes(roundPlan.strategy_hash)) {
+      terminal = "search_exhausted"; terminalReason = "the only remaining strategy was already attempted"; break;
+    }
+
+    // Cost is forecast and approved BEFORE the provider is touched.
+    const forecast: CostForecast = forecastRoundCost(roundPlan, budget, { ...DEFAULT_COST_POLICY, softBudget: bounds.softBudget, hardBudget: bounds.hardBudget, costPerJobsCall: bounds.costPerJobsCall, costPerPeopleCall: bounds.costPerPeopleCall });
+    forecasts.push(forecast);
+    if (!forecast.approved) { terminal = "budget_exhausted"; terminalReason = `round refused before execution: ${forecast.refusal_reason}`; break; }
+
+    // Idempotency: the same paid round is never charged twice on a retry.
+    const idemKey = roundIdempotencyKey({ taskId: opts.taskId ?? null, workspaceId: opts.workspaceId ?? "", round, strategyHash: roundPlan.strategy_hash, actorKey: "apify_jobs" });
+    if (!ledger.claim(idemKey)) { terminal = "search_exhausted"; terminalReason = "identical paid round already executed"; break; }
+
+    attemptedStrategies.push(roundPlan.strategy_hash);
+    planSources.push(planSource);
+    const keywords = roundPlan.title_queries;
+    const expansion = roundPlan.goal;
+    if (!expansions.includes(expansion)) expansions.push(expansion);
+    const roundLimits: Partial<CompoundLimits> = {
+      ...opts.limits,
+      rawJobs: roundPlan.raw_job_limit,
+      verifiedCompanies: roundPlan.company_selection_limit,
+      founderLookups: roundPlan.people_lookup_limit,
+      foundersPerCompany: roundPlan.people_per_company,
+    };
 
     let roundJobsCalls = 0, roundPeopleCalls = 0;
     const exec = await runAgentCompoundExecution(intent, {
@@ -205,6 +285,40 @@ export async function runCompanyFirstQuotaController(
       terminal_reason: null,
     });
 
+    // ---- MEASURED funnel → deterministic bottleneck → next round's goal ----
+    const funnel: FunnelSummary = {
+      ...emptyFunnelSummary(),
+      raw_jobs: exec.writeBoundary.rawProviderItems,
+      unique_jobs: newJobs,
+      job_family_pass: exec.run?.diagnostics.verifiedCompanies ? roundCandidates.length : 0,
+      job_family_fail: Math.max(0, exec.writeBoundary.normalizedJobs - (exec.run?.diagnostics.verifiedCompanies ?? 0)),
+      companies_qualified: exec.run?.diagnostics.verifiedCompanies ?? 0,
+      companies_rejected: Math.max(0, exec.writeBoundary.normalizedJobs - (exec.run?.diagnostics.verifiedCompanies ?? 0)),
+      companies_missing_identity: roundCandidates.filter((c) => !c.account.dedupeKey).length,
+      people_calls: roundPeopleCalls,
+      profiles_returned: exec.writeBoundary.peopleResults,
+      person_role_pass: roundCandidates.filter((c) => c.gates.person_role === "pass").length,
+      employer_verified: roundCandidates.filter((c) => c.employer.outcome === "verified_match").length,
+      employer_ambiguous: roundCandidates.filter((c) => c.employer.outcome === "ambiguous" || c.employer.outcome === "insufficient_evidence").length,
+      contact: roundCandidates.filter((c) => c.verdict === "CONTACT").length,
+      watch: roundCandidates.filter((c) => c.verdict === "WATCH").length,
+      reject: roundCandidates.filter((c) => c.verdict === "REJECT").length,
+      duplicates_removed: dupes,
+      rejection_reason_counts: roundCandidates.reduce((acc: Record<string, number>, c) => {
+        for (const [g, v] of Object.entries(c.gates)) if (v === "fail") acc[g] = (acc[g] ?? 0) + 1;
+        return acc;
+      }, {}),
+    };
+    lastFunnel = funnel;
+    const expansionAvailable = deterministicRoundPlan(constraints, round + 1, null) !== null;
+    const bn = classifyBottleneck(funnel, {
+      remainingQuota: remainingLeadCount(requested, eligibleAfter),
+      budgetRemaining: Math.max(0, bounds.hardBudget - budget),
+      expansionAvailable,
+    });
+    lastBottleneck = bn.kind;
+    bottlenecks.push({ round, kind: bn.kind, reason: bn.reason, remedy: remedyFor(bn.kind) });
+
     log("company-first round finished", { round, eligibleAfter, remaining: remainingLeadCount(requested, eligibleAfter) });
 
     if (exec.status === "unable_to_compile_job_search") { terminal = "invalid_request"; terminalReason = exec.error ?? "job search could not be compiled"; break; }
@@ -247,6 +361,7 @@ export async function runCompanyFirstQuotaController(
       provider_side_writes: writeBoundary.providerSideWrites,
       budget_consumed: Number(budget.toFixed(4)),
       rounds, candidates: dedupedCandidates, persisted, writeBoundary,
+      plan, plan_sources: planSources, bottlenecks, cost_forecasts: forecasts, plan_validations: planValidations,
     };
   }
 }
