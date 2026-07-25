@@ -688,11 +688,12 @@ function normalizeApifyPeopleItem(raw: any) {
   const exp = Array.isArray(r.experience) ? (r.experience[0] ?? {}) : {};
   const nameCombo = [r.firstName, r.lastName].filter(Boolean).join(" ").trim() || null;
   const full_name = pickStr(r, ["full_name", "fullName", "name", "personName", "displayName"]) ?? nameCombo;
-  const locObj = r.location;
+  // Provider `location` is loosely typed: a string OR a nested object. Annotate its
+  // real runtime shape so the nested extraction type-checks (behavior unchanged).
+  const locObj = r.location as string | { parsed?: { text?: string | null; city?: string | null } | null; linkedinText?: string | null } | null | undefined;
   const location = typeof locObj === "string"
     ? locObj
-    : (locObj?.parsed?.text ?? locObj?.linkedinText ?? locObj?.parsed?.city ?? null)
-      ?? pickStr(r, ["geoLocation", "city", "place", "country"]);
+    : (locObj?.parsed?.text ?? locObj?.linkedinText ?? locObj?.parsed?.city ?? pickStr(r, ["geoLocation", "city", "place", "country"]) ?? null);
   const company = pickStr(r, ["currentCompany", "companyName", "company", "employer", "organization"])
     ?? pickStr(cp, ["companyName", "company"]) ?? pickStr(exp, ["companyName", "company"]) ?? null;
   const title = pickStr(r, ["currentJobTitle", "jobTitle", "title", "position"])

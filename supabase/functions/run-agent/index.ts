@@ -31,6 +31,12 @@ import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } fro
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+// Compound-intent bridge: detect a company-first request + enforce the
+// verified-company CONTACT ceiling. Deterministic company-first sourcing +
+// verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
+import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
+import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -531,12 +537,103 @@ Deno.serve(async (req) => {
         // Routing-conflict guard (defense in depth): the selected actor must be able
         // to yield the intent's expected final artifact.
         routingConflict = detectRoutingConflict(entityIntent, planned_actor_key ?? derivedActorKey);
-        console.log("[run-agent] entity routing", { target_entity: entityIntent.target_entity, output_type: entityIntent.output_type, actor_key: planned_actor_key ?? derivedActorKey, clarification_required: entityIntent.clarification_required, conflict: !!routingConflict });
+        // Compound-intent (company-first) decision: a "founders of <company-type>
+        // [hiring <role>]" request must verify the company FIRST and gate CONTACT on
+        // it. Surfaced here for observability; the deterministic company-first
+        // sourcing + verified-company CONTACT ceiling live in _shared and are the
+        // path the (bounded) live TEST run exercises.
+        console.log("[run-agent] entity routing", { target_entity: entityIntent.target_entity, output_type: entityIntent.output_type, actor_key: planned_actor_key ?? derivedActorKey, clarification_required: entityIntent.clarification_required, conflict: !!routingConflict, execution_mode: entityIntent.execution_mode, company_first: isCompanyFirstRequest(entityIntent), company_gate_required: entityIntent.company_gate_required, requested_person_role: entityIntent.requested_person_role });
       }
 
       // Do not call any provider when a routing conflict was detected (the selected
       // actor cannot yield the intent's expected artifact) — fail closed, 0 calls.
       const shouldRun = (agent_slug === "scout" || agent_slug === "hawk") && !routingConflict;
+
+      // ---- COMPANY-FIRST compound path -----------------------------------------
+      // A "founders of <company-type> [hiring <role>]" request is sourced COMPANY-
+      // FIRST: real bounded jobs actor → verify/dedupe companies → real scoped
+      // people actor per verified company → current-employer verification →
+      // evidence binding → hard gates → safe persistence (PR #85 writer). The
+      // ordinary independent people-first branch is SKIPPED (return below), and
+      // there is NO generic founder fallback. Deterministic logic + adapters are
+      // unit-tested offline; the live actor/persistence behavior is what the
+      // bounded TEST run confirms.
+      if (shouldRun && routingEntityIntent && isCompanyFirstRequest(routingEntityIntent)) {
+        const cfIntent = routingEntityIntent;
+        console.log("[run-agent][company-first] executing", { requested_person_role: cfIntent.requested_person_role, workspace: workspace_id });
+
+        const invokeJobs = async (query: string, mx: number): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_jobs", input: { query, max_results: mx } }, baseCtx);
+          if (!rr.ok || !rr.data) throw new Error(rr.error ?? "jobs_actor_failed");
+          const items = (rr.data as { items?: unknown[] }).items;
+          return Array.isArray(items) ? items : [];
+        };
+        const invokePeople = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_people_search", input: { ...input, max_results: mx } }, baseCtx);
+          const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
+          return Array.isArray(items) ? items : [];
+        };
+        const persistPlan = async (plan: CompoundPersistencePlan) => {
+          try {
+            // 1) resolve/insert the canonical account (select-then-insert; no upsert
+            //    constraint dependency). Only for a verifiable account.
+            let accountId: string | null = null;
+            if (plan.account && (plan.account.domain || plan.account.linkedinUrl)) {
+              const domain = plan.account.domain;
+              if (domain) {
+                const { data: existing } = await supabase.from("accounts").select("id").eq("workspace_id", workspace_id).eq("domain", domain).maybeSingle();
+                accountId = (existing as { id?: string } | null)?.id ?? null;
+              }
+              if (!accountId) {
+                const { data: ins } = await supabase.from("accounts").insert({ workspace_id, name: plan.account.name, domain: plan.account.domain, linkedin_url: plan.account.linkedinUrl, description: plan.account.description, source: "compound_company_first" }).select("id").maybeSingle();
+                accountId = (ins as { id?: string } | null)?.id ?? null;
+              }
+            }
+            // INVARIANT: a CONTACT lead must have a real account_id.
+            const contactEligible = plan.verdict === "CONTACT" && !!accountId;
+            const { data: lc } = await supabase.from("lead_candidates").insert({
+              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: "person", status: "new",
+              reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
+              raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
+            }).select("id").maybeSingle();
+            const leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
+            // 2) attach the contact through the PR #85 safe writer (verified account only).
+            if (plan.contact && (plan.contact.name || plan.contact.linkedinUrl) && leadCandidateId) {
+              await writeContactWithVerifiedAccount({
+                db: supabase as unknown as ContactPersistenceDb, mode: "insert",
+                identity: { workspace_id, full_name: plan.contact.name, title: plan.contact.title, linkedin_url: plan.contact.linkedinUrl, email: null },
+                rawBase: { source: "compound_company_first", via: "company_first" },
+                resolve: { workspaceId: workspace_id, leadCandidateId, contactLinkedInUrl: plan.contact.linkedinUrl ?? null, provenance: { source: "compound_company_first", company_match: contactEligible }, companyScopedSearch: true },
+                linkLeadCandidateId: leadCandidateId,
+              });
+            }
+            return { ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId };
+          } catch (e) {
+            return { ok: false, accountId: null, contactId: null, leadCandidateId: null, reason: (e as Error).message };
+          }
+        };
+
+        const cf = await executeRunAgentCompanyFirstSourcing({
+          intent: cfIntent, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
+          invokeJobs, invokePeople, persist: persistPlan,
+          log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
+        });
+
+        const taskStatus = (cf.status === "sourcing_failed" || cf.status === "persistence_failed") ? "failed" : "completed";
+        await supabase.from("tasks").update({
+          status: taskStatus,
+          result: {
+            output: `Company-first sourcing (${cf.status}): ${cf.counts.contact} contact / ${cf.counts.watch} watch / ${cf.counts.needsReview} review across ${cf.counts.verifiedCompanies} verified companies.`,
+            executed_sourcing_mode: "company_first",
+            company_first: cf,
+            lead_entity_intent: cfIntent,
+            routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
+          },
+        }).eq("id", task.id);
+
+        // Conclusively SKIP the ordinary people-first branch for this request.
+        return json({ success: taskStatus === "completed", task_id: task.id, executed_sourcing_mode: "company_first", status: cf.status, counts: cf.counts });
+      }
 
       if (shouldRun) {
         let location: string | null = tool_input_body?.location ?? null;
@@ -1302,7 +1399,7 @@ Deno.serve(async (req) => {
           const qReq = {
             // For hiring/company sourcing the requested industry is encoded in
             // the query string, so fall back to it when no explicit industry field.
-            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.query), location: criteria.location,
+            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.category), location: criteria.location,
             stage: criteria.stage, category: criteria.category,
             strict_location: strict.location, strict_industry: strict.industry, strict_stage: strict.stage,
           };
@@ -1997,7 +2094,7 @@ Deno.serve(async (req) => {
               const { planContactAttachments } = await import("../_shared/contactDiscovery.ts");
               const plan = planContactAttachments(rawItems, attachAccounts as Array<{ lead_candidate_id: string; company: string; signal_role?: string | null }>);
               
-              const candidateIds = attachAccounts.map(a => a.lead_candidate_id).filter(Boolean);
+              const candidateIds = attachAccounts.map((a: { lead_candidate_id: string | null }) => a.lead_candidate_id).filter(Boolean);
               if (candidateIds.length > 0) {
                 await supabase.from("lead_candidates").update({ plan_id }).in("id", candidateIds);
               }
@@ -2308,7 +2405,7 @@ Deno.serve(async (req) => {
           kind: "lead_sourcing_error",
           title: "Scout could not source leads",
           message: `${sourcingFailure.message[0].toUpperCase()}${sourcingFailure.message.slice(1)}, so Scout could not run the search. No leads were saved, no credits charged, and nothing was sent.`,
-          source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
+          source_type: (tool_input_body?.source_type as string) ?? null,
           criteria, count: typeof tool_input_body?.max_results === "number" ? tool_input_body.max_results : null,
           error: sourcingFailure.error,
           retry_command: instruction,
@@ -2380,7 +2477,7 @@ Deno.serve(async (req) => {
         attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
         sourcing_attempts: sourcingAttemptAudit ?? undefined,
         lead_entity_intent: routingEntityIntent ?? undefined,
-        routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined,
+        routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source, execution_mode: routingActorPlan.execution_mode, company_first: routingActorPlan.company_first, company_gate_required: routingEntityIntent?.company_gate_required } : undefined,
         routing_conflict: routingConflict ?? undefined,
         // Section 5: surface the funnel + sanitized staged-candidate diagnostics so
         // an honest no_results explains WHY each provider candidate was held back.
@@ -2533,7 +2630,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source, execution_mode: routingActorPlan.execution_mode, company_first: routingActorPlan.company_first, company_gate_required: routingEntityIntent?.company_gate_required } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
