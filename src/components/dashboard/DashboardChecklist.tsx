@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Circle, Lock, Play, Table, UserPlus, HelpCircle, FileDown, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, Play, Table, UserPlus, HelpCircle, FileDown, ArrowRight, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
@@ -197,9 +197,18 @@ export default function DashboardChecklist() {
     ];
   }, [recentRuns, dbState, drafts, tools]);
 
-  // Hide checklist if all completed
+  const DISMISS_KEY = 'agentory.dashboard_checklist_dismissed';
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch { return false; }
+  });
+  const handleDismiss = () => {
+    try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* noop */ }
+    setDismissed(true);
+  };
+
+  // Hide checklist if all completed or dismissed
   const allCompleted = tasks.every((t) => t.checked);
-  if (allCompleted || dbState.loading || !workspaceId) return null;
+  if (allCompleted || dismissed || dbState.loading || !workspaceId) return null;
 
   return (
     <div className="mb-6 rounded-xl border border-white/[0.06] bg-neutral-950/20 p-5 backdrop-blur-sm">
@@ -208,9 +217,19 @@ export default function DashboardChecklist() {
           <h4 className="text-[14.5px] font-bold text-white tracking-tight">Your first Agentory loop</h4>
           <p className="text-[12px] text-neutral-400 mt-0.5">Complete these steps to experience the full AI outreach cycle.</p>
         </div>
-        <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/[0.06] border border-emerald-500/20 px-2 py-0.5 rounded">
-          {tasks.filter((t) => t.checked).length} / 5 complete
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/[0.06] border border-emerald-500/20 px-2 py-0.5 rounded">
+            {tasks.filter((t) => t.checked).length} / 5 complete
+          </span>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            aria-label="Dismiss checklist"
+            className="h-6 w-6 rounded-md flex items-center justify-center text-neutral-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3.5">
