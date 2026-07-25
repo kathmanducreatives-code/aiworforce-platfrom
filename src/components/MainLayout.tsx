@@ -20,11 +20,8 @@ interface MainLayoutProps {
 }
 
 const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search', '/candidates'];
-// Routes where Mira or a dedicated assistant replaces the global command dock.
-const HIDE_DOCK_ROUTES = ['/content'];
 
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const hideDock = HIDE_DOCK_ROUTES.includes(location.pathname);
   const isMobile = useIsMobile();
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -79,12 +76,10 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           </div>
         </main>
 
-        {/* Persistent command dock — hidden on routes with a dedicated assistant (e.g. Content → Mira) */}
-        {!hideDock && (
-          <ChatErrorBoundary>
-            <CommandDock sidebarCollapsed={isSidebarCollapsed} />
-          </ChatErrorBoundary>
-        )}
+        {/* Persistent command dock — unified composer + agent surface */}
+        <ChatErrorBoundary>
+          <CommandDock sidebarCollapsed={isSidebarCollapsed} />
+        </ChatErrorBoundary>
 
         {/* Full Chat Workspace drawer / fullscreen */}
         <ChatErrorBoundary>

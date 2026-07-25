@@ -72,28 +72,6 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-/**
- * Strip markdown image syntax, empty links, raw HTML, escaped newlines, and
- * excess whitespace from a composed message before it is stored. Source
- * references stay in `evidence_used` (metadata); the visible body remains clean.
- * Kept local so personalization stays import-free / unit-testable in Deno.
- */
-function cleanInline(s: string): string {
-  return s
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")        // images
-    .replace(/\[\s*\]\([^)]*\)/g, "")             // empty-link syntax
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")      // [label](url) → label
-    .replace(/<[^>]+>/g, "")                       // raw HTML tags
-    .replace(/\\[nr]/g, "\n")                      // escaped newlines
-    .replace(/\(\s*\)/g, "")                       // leftover empty parens
-    .replace(/[*`_]{1,3}/g, "")                    // emphasis leftovers
-    .replace(/[ \t]{2,}/g, " ")                    // collapse spaces
-    .replace(/^[ \t]+/gm, "")                      // trim line starts
-    .replace(/[ \t]+$/gm, "")                      // trim line ends
-    .replace(/\n{3,}/g, "\n\n")                    // cap blank runs
-    .trim();
-}
-
 function hasProof(input: PersonalizationInput): boolean {
   const arr = Array.isArray(input.sourceProof) ? input.sourceProof : [];
   const q = (input.sourceQuality ?? "").toLowerCase();
@@ -172,12 +150,6 @@ export function buildOutreachDraft(input: PersonalizationInput): OutreachDraft {
   }
 
   // ---- Build the personalized draft (Agentory voice, evidence-only) ----
-  // Structure (per Agentory messaging spec):
-  //   1. Personalized observation (interpret the signal — never just "I noticed X is hiring Y")
-  //   2. Why it may matter to the recipient right now
-  //   3. One clear Agentory relevance statement
-  //   4. One low-friction CTA
-  // Target: 70–120 words. No markdown, no escaped line breaks, no fabricated facts.
   const jobTitle = str(input.jobTitle);
   const whyNow = str(input.whyNow);
   const summary = str(input.enrichment?.company_summary ?? null) ?? str(input.companyDescription ?? null);
@@ -188,50 +160,27 @@ export function buildOutreachDraft(input: PersonalizationInput): OutreachDraft {
   if (greetingName) vars_used.push("decision_maker_name");
   if (recipientTitle) vars_used.push("decision_maker_title");
 
-  // 1) OPENER — interpret the signal. Prefer the analyst's "why now" reading,
-  // fall back to a job-title-aware interpretation. Either way, this is an
-  // observation about what the hire/motion implies — not "I noticed you're
-  // hiring a {title}".
-  let opener: string;
-  if (whyNow) {
-    opener = `${companyName} — ${whyNow.replace(/[.！]?$/, "")}.`;
-    if (jobTitle) vars_used.push("jobTitle");
-    vars_used.push("whyNow");
-  } else if (jobTitle) {
-    opener = `${companyName}'s search for a ${jobTitle} suggests the team is formalizing how that function is run — usually a sign pipeline and repeatability are becoming more important than adding headcount.`;
-    vars_used.push("jobTitle");
-  } else {
-    opener = `${companyName} looks like it's investing in its go-to-market motion right now.`;
-  }
+  const opener = jobTitle
+    ? `Noticed ${companyName} is hiring a ${jobTitle}, which usually means the founder or revenue team is building pipeline before adding more payroll.`
+    : `Noticed ${companyName} is investing in growth right now — usually a sign the founder or revenue team is building pipeline before adding more payroll.`;
+  if (jobTitle) vars_used.push("jobTitle");
 
-  // 2) WHY IT MATTERS — connect the observation to the recipient's role or the
-  // detected signal. Grounded only in fields we actually have.
-  let whyLine: string;
-  if (recipientTitle && jobTitle) {
-    whyLine = `For a ${recipientTitle}, what usually determines whether a ${jobTitle} hire compounds is how qualified the list they inherit actually is.`;
-  } else if (jobTitle) {
-    whyLine = `What usually determines whether a ${jobTitle} hire compounds is how qualified the list they're working from actually is.`;
-  } else if (summary) {
-    whyLine = `From what I can see, ${summary.replace(/\.$/, "")}.`;
-    vars_used.push(input.enrichment?.company_summary ? "companySummary" : "companyDescription");
-  } else {
-    whyLine = `What usually determines whether this moment compounds is how qualified the next list of opportunities actually is.`;
-  }
+  const whyLine = whyNow ? ` ${whyNow}` : "";
+  if (whyNow) vars_used.push("whyNow");
+
+  const contextLine = summary ? ` From what I can see, ${summary.replace(/\.$/, "")}.` : "";
+  if (summary) vars_used.push(input.enrichment?.company_summary ? "companySummary" : "companyDescription");
   if (industry) vars_used.push("industries");
 
-  // 3) AGENTORY ANGLE — one sentence, never "AI SDR", never "replace your team".
-  const angleLine = AGENTORY_POSITIONING;
-
-  // 4) CTA — low friction, no calendar link, no fake familiarity.
-  const ctaLine = `If it's useful, I can share a short list of who is actually worth contacting and the angle to use — nothing sent, no tools to adopt.`;
-
   const greeting = greetingName ? `Hi ${greetingName},` : `Hi ${companyName} team,`;
-  const body = cleanInline(`${greeting}\n\n${opener}\n\n${whyLine}\n\n${angleLine}\n\n${ctaLine}`);
+  const body =
+    `${greeting}\n\n` +
+    `${opener}${whyLine}${contextLine}\n\n` +
+    `${AGENTORY_POSITIONING}\n\n` +
+    `If it's useful, I can share exactly who's worth contacting and the angle to use — no tools to adopt, no team to replace. Worth a quick look?`;
 
   const subject = jobTitle
     ? `${companyName}: pipeline before your next ${jobTitle}`
-    : whyNow
-    ? `${companyName}: who's worth contacting right now`
     : `${companyName}: pipeline before payroll`;
 
   // ---- Risk notes (honest caveats for the approver) ----

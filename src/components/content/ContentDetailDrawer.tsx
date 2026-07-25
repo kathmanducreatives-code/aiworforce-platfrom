@@ -3,7 +3,6 @@
 // Read + approve only — nothing publishes from here.
 import { useEffect } from "react";
 import { X, ExternalLink, ShieldAlert } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 
 export interface ContentDetail {
   id: string;
@@ -26,35 +25,13 @@ export default function ContentDetailDrawer({ detail, onClose }: { detail: Conte
     return () => window.removeEventListener("keydown", onKey);
   }, [detail, onClose]);
 
-  const missing = detail?.missingProof ?? [];
+  if (!detail) return null;
+  const missing = detail.missingProof ?? [];
 
   return (
-    <AnimatePresence>
-      {detail && (
-        <motion.div
-          key="content-detail-overlay"
-          className="fixed inset-0 z-[70]"
-          role="dialog"
-          aria-modal="true"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-        <motion.div
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          onClick={onClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        />
-        <motion.aside
-          className="absolute right-0 top-0 h-full w-full max-w-[560px] bg-[#0d1117] border-l border-white/[0.08] shadow-2xl overflow-y-auto"
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-        >
+    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <aside className="absolute right-0 top-0 h-full w-full max-w-[560px] bg-[#0d1117] border-l border-white/[0.08] shadow-2xl overflow-y-auto">
         <div className="sticky top-0 z-10 bg-[#0d1117]/95 backdrop-blur border-b border-white/[0.06] px-5 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
@@ -104,13 +81,11 @@ export default function ContentDetailDrawer({ detail, onClose }: { detail: Conte
           )}
         </div>
 
-          <div className="sticky bottom-0 bg-[#0d1117]/95 backdrop-blur border-t border-white/[0.06] px-5 py-3 text-[12px] text-neutral-400">
-            Review and edit here. When you're happy, publish it yourself — Agentory never posts for you.
-          </div>
-        </motion.aside>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        <div className="sticky bottom-0 bg-[#0d1117]/95 backdrop-blur border-t border-white/[0.06] px-5 py-3 text-[12px] text-neutral-400">
+          Review and edit here. When you're happy, publish it yourself — Agentory never posts for you.
+        </div>
+      </aside>
+    </div>
   );
 }
 
