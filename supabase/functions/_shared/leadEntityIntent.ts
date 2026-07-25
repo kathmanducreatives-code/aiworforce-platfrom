@@ -18,6 +18,19 @@ export type ArtifactType = "person_candidate" | "company_candidate" | "job_signa
 export type LeadSignalType = "hiring" | "funding" | "product_launch" | "expansion" | "new_executive" | "recent_post";
 
 /**
+ * SOURCING ORDER for the compiled intent — the compound-intent model.
+ *   person_first  — pure people lookup ("find founders in Austin"). No company gate.
+ *   company_first — the request qualifies a COMPANY (and/or a company-level signal)
+ *                   even when the final output is a person: verify the company + its
+ *                   signal FIRST, then find the requested person INSIDE the verified
+ *                   company ("founders of SaaS startups hiring Sales Operations").
+ *   job_first     — a job/hiring-signal search is the primary lookup.
+ * A person noun NEVER erases the company/signal dimensions; it only sets the final
+ * output ENTITY. company_gate_required is the invariant the runtime + gates enforce.
+ */
+export type ExecutionMode = "person_first" | "company_first" | "job_first";
+
+/**
  * How FRESH must the supporting evidence be for the requested output?
  *   identity_only    — "decision-makers at Acme": prove who they are.
  *   current_fit      — "founders of B2B SaaS companies": prove current ICP fit.
@@ -49,6 +62,18 @@ export interface LeadEntityIntent {
   company_categories: string[];
   geographies: string[];
   signals: LeadSignalIntent[];
+  /** SOURCING ORDER — see ExecutionMode. Additive; existing consumers ignore it. */
+  execution_mode: ExecutionMode;
+  /** The person the request ultimately wants ("founder") when company-first; null
+   * for pure company/job searches. Preserved so the scoped people search knows the
+   * requested role without re-parsing. */
+  requested_person_role: string | null;
+  /** INVARIANT flag: a candidate for this request cannot reach CONTACT until a
+   * target COMPANY is verified/qualified. True for compound "person of <company>"
+   * and for pure company/job-qualified requests. */
+  company_gate_required: boolean;
+  /** A company-level hiring signal is part of the request (drives jobs-first). */
+  hiring_signal_required: boolean;
   /** Evidence freshness the request demands. Derived from the ORIGINAL instruction;
    * qualifies the evidence contract, never the target entity. */
   freshness: FreshnessRequirement;
@@ -63,9 +88,18 @@ const lc = (s: unknown) => String(s ?? "").toLowerCase();
 
 // --- explicit requested-OUTPUT phrases (what the user wants returned) ----------
 const JOB_OUTPUT_RE = /\b(job openings?|job postings?|job posts?|open positions?|vacan(?:cy|cies)|open [a-z/ ]{0,20}?(?:jobs?|roles?|positions?)|current [a-z ]{0,20}?jobs?|jobs? (?:open|available|posted)|which jobs?\b|open jobs?)\b/i;
-const PERSON_NOUN_RE = /\b(co-?founders?|founders?|ceos?|ctos?|cfos?|coos?|cmos?|cros?|chief [a-z]+ officers?|executives?|decision[-\s]?makers?|buying committee|people|persons?|contacts?|leaders?|operators?|prospects?|buyers?|heads? of\b|vps?|owners?|managing directors?|presidents?)\b/i;
+const PERSON_NOUN_RE = /\b(co-?founders?|founders?|ceos?|ctos?|cfos?|coos?|cmos?|cros?|chief [a-z]+ officers?|executives?|decision[-\s]?makers?|buying committee|people|persons?|contacts?|leaders?|operators?|prospects?|buyers?|heads? of\b|vps?|owners?|managing directors?|presidents?|candidates?|job seekers?)\b/i;
 const WHO_TO_CONTACT_RE = /\bwho (?:should i|to|can i|do i)\s+(?:contact|reach out to|target|talk to|email|message)\b/i;
-const COMPANY_NOUN_RE = /\b(companies|company|startups?|accounts?|businesses|business|orgs?|organi[sz]ations?|firms?|vendors?|employers?)\b/i;
+const COMPANY_NOUN_RE = /\b(companies|company|startups?|accounts?|businesses|business|orgs?|organi[sz]ations?|firms?|vendors?|employers?|integrators?|manufacturers?)\b/i;
+
+// "<person> OF/AT <company>" — a strong compound signal that the request wants a
+// person INSIDE a qualified company (so the text after the connector qualifies a
+// company even when parseMarketTerms misses the vertical, e.g. "integrators").
+const PERSON_OF_COMPANY_RE = /\b(co-?founders?|founders?|owners?|presidents?|ceos?|ctos?|cfos?|coos?|executives?|leaders?|heads?|managing directors?|vps?|decision[-\s]?makers?)\s+(?:of|at|from|for|running|leading|behind|within|inside)\s+/i;
+
+// Job-SEEKER phrasing — the PERSON is looking for a job. This is NEVER a company
+// hiring signal and must stay a pure people search (Case F).
+const JOB_SEEKER_RE = /\b(looking for (?:work|a (?:new )?(?:job|role|position|opportunity))|open to work|#?opentowork|seeking (?:work|employment|a (?:new )?(?:job|role|position|opportunity)|opportunities|new opportunities)|job seekers?|available for hire|candidates? (?:looking|seeking|open to work|available|who are looking|for hire))\b/i;
 
 // --- signals (qualify people/companies; NEVER set the entity) ------------------
 const SIGNAL_PATTERNS: Array<[LeadSignalType, RegExp]> = [
@@ -205,6 +239,44 @@ export function compileLeadEntityIntent(
   const requested_count = countM ? Math.max(1, Math.min(1000, Number(countM[1]))) : null;
   for (const s of signals) evidence_spans.push({ field: "signal", value: s.type, evidence: s.evidence });
 
+  // ---- Compound execution model ------------------------------------------------
+  // A person noun sets the final output ENTITY but NEVER erases the company/signal
+  // dimensions. When a person request also qualifies a company (an explicit company
+  // noun/vertical, a "<person> of <company>" phrasing, or ANY company-level signal
+  // such as hiring/funding/expansion), sourcing must be COMPANY-FIRST and CONTACT is
+  // gated on a verified company. A pure person lookup, or job-seeker phrasing, stays
+  // person-first with no invented company gate.
+  const isJobSeeker = JOB_SEEKER_RE.test(text);
+  const personOfCompany = PERSON_OF_COMPANY_RE.test(text);
+  const hasHiringSignal = signals.some((s) => s.type === "hiring");
+  const hasCompanySignal = signals.length > 0; // hiring/funding/expansion/… are company-level
+  const hasCompanyQualifier = company_categories.length > 0 || companyEv != null || personOfCompany;
+
+  let execution_mode: ExecutionMode;
+  let company_gate_required: boolean;
+  let hiring_signal_required = hasHiringSignal && !isJobSeeker;
+  let requested_person_role: string | null = null;
+
+  if (target_entity === "person") {
+    requested_person_role = person_roles[0] ? lc(person_roles[0]).trim() : (personEv ? lc(personEv).replace(/s\b/, "").trim() : null);
+    if (!isJobSeeker && (hasCompanyQualifier || hasCompanySignal)) {
+      execution_mode = "company_first";
+      company_gate_required = true;
+      if (personOfCompany) evidence_spans.push({ field: "execution_mode", value: "company_first", evidence: [firstMatch(PERSON_OF_COMPANY_RE, text) ?? "person-of-company"] });
+    } else {
+      execution_mode = "person_first";
+      company_gate_required = false;
+      hiring_signal_required = false; // pure person / job-seeker: no company gate
+    }
+  } else if (target_entity === "company") {
+    execution_mode = "company_first";
+    company_gate_required = true;
+  } else { // job
+    execution_mode = "job_first";
+    company_gate_required = hasCompanyQualifier;
+  }
+  if (clarification_required) { execution_mode = "person_first"; company_gate_required = false; hiring_signal_required = false; }
+
   return {
     version: 1,
     original_user_instruction: original,
@@ -215,6 +287,10 @@ export function compileLeadEntityIntent(
     company_categories,
     geographies,
     signals,
+    execution_mode,
+    requested_person_role,
+    company_gate_required,
+    hiring_signal_required,
     freshness: deriveFreshnessRequirement({ text, signals, company_categories }),
     hard_constraints: [],
     soft_constraints: signals.map((s) => `signal:${s.type}`),
@@ -231,6 +307,11 @@ export type RoutingSource = "persisted_intent_contract" | "original_user_instruc
 
 export interface ProviderActorPlan {
   target_entity: TargetEntity;
+  /** SOURCING ORDER from the intent. company_first ⇒ run the evidence (jobs) stage
+   * BEFORE the identity actor, and gate the final person on a verified company. */
+  execution_mode: ExecutionMode;
+  /** Convenience mirror of execution_mode === "company_first". */
+  company_first: boolean;
   primary_identity_actor: ActorRef;
   evidence_actors: ActorRef[];
   final_artifact_type: ArtifactType;
@@ -262,13 +343,17 @@ export function artifactTypeForActor(actorKey: string | null | undefined): Artif
  *  hiring companies) but never change the primary identity actor / artifact type. */
 export function compileActorPlan(intent: LeadEntityIntent, routing_source: RoutingSource = "persisted_intent_contract"): ProviderActorPlan {
   const hasHiring = intent.signals.some((s) => s.type === "hiring");
+  const mode = intent.execution_mode;
+  const companyFirst = mode === "company_first";
   if (intent.target_entity === "person") {
-    return { target_entity: "person", primary_identity_actor: ref("apify_people_search"), evidence_actors: hasHiring ? [ref("apify_jobs")] : [], final_artifact_type: "person_candidate", routing_source, confidence: intent.confidence };
+    // The people actor still produces the FINAL person artifact (unchanged), but in
+    // company_first mode the jobs actor runs FIRST as the company/evidence stage.
+    return { target_entity: "person", execution_mode: mode, company_first: companyFirst, primary_identity_actor: ref("apify_people_search"), evidence_actors: (companyFirst || hasHiring) ? [ref("apify_jobs")] : [], final_artifact_type: "person_candidate", routing_source, confidence: intent.confidence };
   }
   if (intent.target_entity === "job") {
-    return { target_entity: "job", primary_identity_actor: ref("apify_jobs"), evidence_actors: [], final_artifact_type: "job_signal", routing_source, confidence: intent.confidence };
+    return { target_entity: "job", execution_mode: mode, company_first: companyFirst, primary_identity_actor: ref("apify_jobs"), evidence_actors: [], final_artifact_type: "job_signal", routing_source, confidence: intent.confidence };
   }
-  return { target_entity: "company", primary_identity_actor: ref("apify_jobs"), evidence_actors: [], final_artifact_type: "company_candidate", routing_source, confidence: intent.confidence };
+  return { target_entity: "company", execution_mode: mode, company_first: companyFirst, primary_identity_actor: ref("apify_jobs"), evidence_actors: [], final_artifact_type: "company_candidate", routing_source, confidence: intent.confidence };
 }
 
 // ---------------------------------------------------------- routing conflict ----

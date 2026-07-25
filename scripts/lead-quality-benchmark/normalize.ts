@@ -10,63 +10,12 @@ import { normalizeCountry, detectCountryInText } from "../../supabase/functions/
 import type { DuplicateKeys, NormalizedCandidate, RawCandidate } from "./types.ts";
 
 // -------------------------------------------------------- job-family model ----
-
-export type JobFamily =
-  | "sales_ops"
-  | "rev_ops"
-  | "gtm_ops"
-  | "marketing_ops"
-  | "manufacturing_ops"
-  | "finance_ops"
-  | "people_ops"
-  | "sales_generic"
-  | "support"
-  | "other";
-
-const SALES_OPS_RE = /\b(sales operations|sales ops|sales strategy (?:and|&) operations|sales (?:strategy|planning) (?:and|&) operations|deal desk)\b/i;
-const REV_OPS_RE = /\b(revenue operations|rev ops|revops|revenue strategy (?:and|&) operations)\b/i;
-const GTM_OPS_RE = /\b(gtm operations|go[- ]to[- ]market operations|gtm ops|growth operations)\b/i;
-const MARKETING_OPS_RE = /\b(marketing operations|marketing ops|mops)\b/i;
-const MANUFACTURING_OPS_RE = /\b(manufacturing operations|plant operations|production operations|warehouse operations|supply chain operations)\b/i;
-const FINANCE_OPS_RE = /\b(finance operations|financial operations|accounting operations|fin ?ops)\b/i;
-const PEOPLE_OPS_RE = /\b(people operations|hr operations|people ops)\b/i;
-const SUPPORT_RE = /\b(customer support|customer success|support (?:agent|representative|specialist))\b/i;
-const SALES_GENERIC_RE = /\b(account executive|sales representative|sales rep|sales development representative|business development representative|\bsdr\b|\bbdr\b|sales manager|account manager|inside sales)\b/i;
-// A marketing-ops role only counts when it clearly carries revenue/sales scope.
-const REVENUE_SCOPE_RE = /\b(revenue|sales operations|pipeline|gtm|go[- ]to[- ]market|quota|forecast(?:ing)?|deal desk|revops)\b/i;
-
-export interface JobFamilyResult {
-  family: JobFamily;
-  /** The exact phrase that matched, for the gate's audit trail. */
-  matchedPhrase: string | null;
-  /** True when this is a Sales/Revenue-Operations family the hiring gate accepts. */
-  qualifiesAsSalesOps: boolean;
-}
-
-/** Classify a job title/description into a coarse family (deterministic). */
-export function classifyJobFamily(title: string | null, description: string | null): JobFamilyResult {
-  const hay = [title ?? "", description ?? ""].join("  ").trim();
-  const first = (re: RegExp): string | null => {
-    const m = re.exec(hay);
-    return m ? m[0] : null;
-  };
-
-  let m: string | null;
-  if ((m = first(SALES_OPS_RE))) return { family: "sales_ops", matchedPhrase: m, qualifiesAsSalesOps: true };
-  if ((m = first(REV_OPS_RE))) return { family: "rev_ops", matchedPhrase: m, qualifiesAsSalesOps: true };
-  if ((m = first(GTM_OPS_RE))) return { family: "gtm_ops", matchedPhrase: m, qualifiesAsSalesOps: true };
-  if ((m = first(MARKETING_OPS_RE))) {
-    // Marketing ops qualifies ONLY with explicit revenue/sales scope.
-    const qualifies = REVENUE_SCOPE_RE.test(hay);
-    return { family: "marketing_ops", matchedPhrase: m, qualifiesAsSalesOps: qualifies };
-  }
-  if ((m = first(MANUFACTURING_OPS_RE))) return { family: "manufacturing_ops", matchedPhrase: m, qualifiesAsSalesOps: false };
-  if ((m = first(FINANCE_OPS_RE))) return { family: "finance_ops", matchedPhrase: m, qualifiesAsSalesOps: false };
-  if ((m = first(PEOPLE_OPS_RE))) return { family: "people_ops", matchedPhrase: m, qualifiesAsSalesOps: false };
-  if ((m = first(SUPPORT_RE))) return { family: "support", matchedPhrase: m, qualifiesAsSalesOps: false };
-  if ((m = first(SALES_GENERIC_RE))) return { family: "sales_generic", matchedPhrase: m, qualifiesAsSalesOps: false };
-  return { family: "other", matchedPhrase: null, qualifiesAsSalesOps: false };
-}
+// SINGLE SOURCE OF TRUTH: the benchmark re-exports the shared runtime classifier
+// (_shared/jobFamily.ts) so runtime sourcing, hard gates, and benchmark
+// normalization can never disagree on "is this Sales/Revenue Operations?".
+export { classifyJobFamily } from "../../supabase/functions/_shared/jobFamily.ts";
+export type { JobFamily, JobFamilyResult } from "../../supabase/functions/_shared/jobFamily.ts";
+import { classifyJobFamily } from "../../supabase/functions/_shared/jobFamily.ts";
 
 // ------------------------------------------------------------ URL canonical ----
 
