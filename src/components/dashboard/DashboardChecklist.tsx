@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Circle, Lock, Play, Table, UserPlus, HelpCircle, FileDown, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, Play, Table, UserPlus, HelpCircle, FileDown, ArrowRight, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
