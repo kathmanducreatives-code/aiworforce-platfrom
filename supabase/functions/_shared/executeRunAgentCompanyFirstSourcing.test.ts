@@ -30,7 +30,11 @@ Deno.test("1/2/4/6/7. jobs first; people only for verified companies, one per co
   const h = harness([jobRow(), advisory], { "bigid.com": [founder()] });
   const r = await executeRunAgentCompanyFirstSourcing(h.deps);
   assertEquals(h.order[0], "jobs");
-  assert(h.order.slice(1).every((o) => o.startsWith("people:")));
+  // Jobs may run once per compiled keyword variant, but EVERY jobs call must
+  // precede EVERY people call.
+  const lastJobs = h.order.lastIndexOf("jobs");
+  const firstPeople = h.order.findIndex((o) => o.startsWith("people:"));
+  assert(firstPeople === -1 || lastJobs < firstPeople);
   assertFalse(h.order.some((o) => o.includes("optivas"))); // advisory dropped → no people call
   assertEquals(h.order.filter((o) => o.startsWith("people:")).length, 1); // one verified company
   assertEquals(r.status, "completed");

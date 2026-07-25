@@ -562,14 +562,28 @@ Deno.serve(async (req) => {
         const cfIntent = routingEntityIntent;
         console.log("[run-agent][company-first] executing", { requested_person_role: cfIntent.requested_person_role, workspace: workspace_id });
 
-        const invokeJobs = async (query: string, mx: number): Promise<unknown[]> => {
-          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_jobs", input: { query, max_results: mx } }, baseCtx);
+        // EVIDENCE MODE: `defer_persistence: true` is set at the TOP level of the
+        // tool input — that is where runTool checks it before writeMemoryFromToolCall
+        // turns provider output into accounts/lead_candidates. Without it the
+        // 2026-07-25 live run wrote 20 unqualified companies into the Lead Library
+        // while the company gate was still rejecting all 25 jobs.
+        const invokeJobs = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
+          // `input` is the COMPILED, role-focused variant (never the user's sentence).
+          const rr = await runTool("source_with_apify", {
+            selected_actor_key: "apify_jobs",
+            defer_persistence: true,
+            input: { ...input, max_results: mx },
+          }, baseCtx);
           if (!rr.ok || !rr.data) throw new Error(rr.error ?? "jobs_actor_failed");
           const items = (rr.data as { items?: unknown[] }).items;
           return Array.isArray(items) ? items : [];
         };
         const invokePeople = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
-          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_people_search", input: { ...input, max_results: mx } }, baseCtx);
+          const rr = await runTool("source_with_apify", {
+            selected_actor_key: "apify_people_search",
+            defer_persistence: true,
+            input: { ...input, max_results: mx },
+          }, baseCtx);
           const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
           return Array.isArray(items) ? items : [];
         };
@@ -619,7 +633,7 @@ Deno.serve(async (req) => {
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
-        const taskStatus = (cf.status === "sourcing_failed" || cf.status === "persistence_failed") ? "failed" : "completed";
+        const taskStatus = (cf.status === "sourcing_failed" || cf.status === "persistence_failed" || cf.status === "unable_to_compile_job_search" || !!cf.writeBoundary.invariantViolation) ? "failed" : "completed";
         await supabase.from("tasks").update({
           status: taskStatus,
           result: {
@@ -632,7 +646,11 @@ Deno.serve(async (req) => {
         }).eq("id", task.id);
 
         // Conclusively SKIP the ordinary people-first branch for this request.
-        return json({ success: taskStatus === "completed", task_id: task.id, executed_sourcing_mode: "company_first", status: cf.status, counts: cf.counts });
+        return json({
+          success: taskStatus === "completed", task_id: task.id,
+          executed_sourcing_mode: "company_first", status: cf.status, counts: cf.counts,
+          job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
+        });
       }
 
       if (shouldRun) {

@@ -113,7 +113,10 @@ Deno.test("31/32. jobs run BEFORE people; people only for verified companies", a
   const order: string[] = [];
   const res = await runAgentCompoundExecution(intent, execDeps(order, jobRows, peopleByKey), { now: NOW, workspaceId: "ws-1" });
   assertEquals(order[0], "jobs");
-  assert(order.slice(1).every((o) => o.startsWith("people:")));
+  // One jobs call per compiled keyword variant; all of them precede any people call.
+  const lastJobs = order.lastIndexOf("jobs");
+  const firstPeople = order.findIndex((o) => o.startsWith("people:"));
+  assert(firstPeople === -1 || lastJobs < firstPeople);
   // Optivas (advisory) is dropped → never triggers a people lookup.
   assertFalse(order.some((o) => o.includes("optivas")));
   assertEquals(res.status, "ok");

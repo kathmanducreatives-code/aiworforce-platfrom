@@ -84,7 +84,9 @@ export function qualifyCompanyVertical(c: CompanyForVertical, vertical: Vertical
 export function inferRequestedVertical(text: string | null | undefined): Vertical | null {
   const t = (text ?? "").toLowerCase();
   if (/\b(integrator|integration|plc|scada|controls engineering|robotics|machine vision|automation)\b/.test(t)) return "automation_integrator";
-  if (/\b(manufactur|fabricat|machining|factory|foundry|cnc|plastics|contract manufactur)\b/.test(t)) return "manufacturer";
+  // Prefix stems need \w* — a bare \b after "manufactur" can never match
+  // "manufacturer"/"manufacturing", so the vertical silently came back null.
+  if (/\b(manufactur\w*|fabricat\w*|machining|factory|factories|foundry|cnc|plastics)\b/.test(t)) return "manufacturer";
   if (/\b(saas|software|b2b software|platform|app|cloud|api)\b/.test(t)) return "saas";
   return null;
 }
