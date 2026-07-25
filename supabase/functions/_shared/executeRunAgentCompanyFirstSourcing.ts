@@ -10,8 +10,11 @@ import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runAgentCompoundExecution, type CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundLimits } from "./compoundSourcingPipeline.ts";
 import type { Vertical } from "./verticalQualification.ts";
+import { writeBoundaryHolds, type CompanyFirstWriteBoundary } from "./providerEvidenceMode.ts";
 
-export type CompanyFirstStatus = "completed" | "no_qualified_companies" | "partial" | "sourcing_failed" | "persistence_failed";
+export type CompanyFirstStatus =
+  | "completed" | "no_qualified_companies" | "partial" | "sourcing_failed"
+  | "persistence_failed" | "unable_to_compile_job_search";
 
 export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
   intent: LeadEntityIntent;
@@ -31,8 +34,18 @@ export interface CompanyFirstResult {
   counts: { rawJobs: number; verifiedCompanies: number; candidates: number; contact: number; watch: number; needsReview: number; reject: number; persisted: number };
   /** Safe per-lead summaries (no secrets, no raw provider dumps). */
   items: Array<{ company: string | null; person: string | null; verdict: string; accountId: string | null; leadCandidateId: string | null; jobUrl: string | null; whyNow: string | null; blockReasons: string[]; persisted: boolean }>;
-  routing: { execution_mode: "company_first"; company_first: true; requested_person_role: string | null };
-  diagnostics: { jobsInvoked: boolean; peopleCalls: number; budgetStopped: boolean };
+  routing: {
+    execution_mode: "company_first"; company_first: true; requested_person_role: string | null;
+    /** Compiled provider plan + the ORIGINAL sentence, kept apart on purpose. */
+    job_search_spec: { keyword_queries: string[]; location: string | null; company_vertical: string | null; compilation_status: string };
+    original_user_query: string;
+  };
+  diagnostics: {
+    jobsInvoked: boolean; peopleCalls: number; budgetStopped: boolean;
+    jobVariants: Array<{ keyword: string; location: string | null; max_results: number; error?: string }>;
+  };
+  /** provider_side_writes MUST be 0; anything else is an invariant violation. */
+  writeBoundary: CompanyFirstWriteBoundary;
   error?: string;
 }
 
@@ -47,7 +60,8 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
   log("compound execution finished", { status: exec.status, diagnostics: exec.diagnostics });
 
   let status: CompanyFirstStatus;
-  if (exec.status === "sourcing_failed") status = "sourcing_failed";
+  if (exec.status === "unable_to_compile_job_search") status = "unable_to_compile_job_search";
+  else if (exec.status === "sourcing_failed") status = "sourcing_failed";
   else if (exec.status === "no_jobs" || exec.status === "no_companies") status = "no_qualified_companies";
   else {
     const persistedOk = exec.persisted.filter((p) => p.ok).length;
@@ -80,8 +94,21 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
       persisted: exec.persisted.filter((p) => p.ok).length,
     },
     items,
-    routing: { execution_mode: "company_first", company_first: true, requested_person_role: deps.intent.requested_person_role },
+    routing: {
+      execution_mode: "company_first", company_first: true,
+      requested_person_role: deps.intent.requested_person_role,
+      job_search_spec: {
+        keyword_queries: deps.intent.job_search_spec.keyword_queries,
+        location: deps.intent.job_search_spec.location,
+        company_vertical: deps.intent.job_search_spec.company_vertical,
+        compilation_status: deps.intent.job_search_spec.compilation_status,
+      },
+      // Provenance only — this string is never a provider keyword.
+      original_user_query: deps.intent.job_search_spec.original_query,
+    },
     diagnostics: exec.diagnostics,
-    error: exec.error,
+    writeBoundary: exec.writeBoundary,
+    // An honest failure beats claiming clean persistence.
+    error: exec.error ?? (writeBoundaryHolds(exec.writeBoundary) ? undefined : exec.writeBoundary.invariantViolation ?? undefined),
   };
 }

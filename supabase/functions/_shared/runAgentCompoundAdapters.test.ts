@@ -102,7 +102,11 @@ Deno.test("24/28. an accountless / off-company candidate can never plan CONTACT"
 function execDeps(order: string[], jobRows: unknown[], peopleByKey: Record<string, unknown[]>, opts: { jobsThrow?: boolean } = {}) {
   return {
     invokeJobs: async () => { order.push("jobs"); if (opts.jobsThrow) throw new Error("boom"); return jobRows; },
-    invokePeople: async (input: Record<string, unknown>) => { order.push(`people:${input._scope_key}`); return peopleByKey[String(input._scope_key)] ?? []; },
+    invokePeople: async (envelope: Record<string, unknown>) => {
+      const native = envelope.input as Record<string, unknown>;
+      order.push(`people:${native._scope_key}`);
+      return peopleByKey[String(native._scope_key)] ?? [];
+    },
     persist: async (_p: unknown) => ({ ok: true, accountId: "acc", contactId: "c", leadCandidateId: "lc" }),
   };
 }
@@ -113,7 +117,10 @@ Deno.test("31/32. jobs run BEFORE people; people only for verified companies", a
   const order: string[] = [];
   const res = await runAgentCompoundExecution(intent, execDeps(order, jobRows, peopleByKey), { now: NOW, workspaceId: "ws-1" });
   assertEquals(order[0], "jobs");
-  assert(order.slice(1).every((o) => o.startsWith("people:")));
+  // One jobs call per compiled keyword variant; all of them precede any people call.
+  const lastJobs = order.lastIndexOf("jobs");
+  const firstPeople = order.findIndex((o) => o.startsWith("people:"));
+  assert(firstPeople === -1 || lastJobs < firstPeople);
   // Optivas (advisory) is dropped → never triggers a people lookup.
   assertFalse(order.some((o) => o.includes("optivas")));
   assertEquals(res.status, "ok");

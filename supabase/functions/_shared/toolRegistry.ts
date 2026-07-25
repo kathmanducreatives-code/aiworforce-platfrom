@@ -12,6 +12,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
+import { buildCuriousCoderLinkedInJobsInput } from "./curiousCoderJobsInput.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
@@ -315,14 +316,8 @@ type ApifyActorCfg = {
   }) => Record<string, unknown>;
 };
 
-function buildLinkedInJobsSearchUrl(keywords: string | null | undefined, location: string | null | undefined): string {
-  const params = new URLSearchParams();
-  if (keywords && keywords.trim()) params.set("keywords", keywords.trim());
-  if (location && location.trim()) params.set("location", location.trim());
-  params.set("position", "1");
-  params.set("pageNum", "0");
-  return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
-}
+// URL construction + native payload live in the dedicated actor adapter so the
+// jobs actor and the Harvest actor can never share a serializer.
 
 // Apify actor registry. Apify is reserved for structured sourcing actors
 // (jobs/hiring/company data). Broad web search stays on `search_web`
@@ -335,24 +330,21 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     enabled_by_default: true,
     use_for: ["hiring signals", "companies hiring roles", "job openings"],
     description: "LinkedIn jobs search with company details",
+    // Dedicated Curious-Coder adapter — maps generic Agentory input to the actor's
+    // native { urls, count, scrapeCompany, … } schema. Never forwards raw Agentory
+    // wrapper fields (query / max_results / defer_persistence) to the actor.
     input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
       const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
         ? role_keywords.join(" ")
         : null;
-      const keywords = (user_input?.keywords as string | undefined)
-        ?? kwFromRoles
-        ?? query
-        ?? null;
-      const urls = Array.isArray(user_input?.urls) && (user_input!.urls as unknown[]).length > 0
-        ? (user_input!.urls as string[])
-        : [buildLinkedInJobsSearchUrl(keywords, location)];
-      // Actor minimum is 10.
-      const count = Math.max(10, Math.min(100, max_results));
-      return {
-        urls,
-        count,
-        scrapeCompany: user_input?.scrapeCompany ?? true,
-      };
+      const keywords = (user_input?.keywords as string | undefined) ?? kwFromRoles ?? query ?? null;
+      return buildCuriousCoderLinkedInJobsInput({
+        urls: Array.isArray(user_input?.urls) ? (user_input!.urls as string[]) : null,
+        keywords, location, maxResults: max_results,
+        scrapeCompany: typeof user_input?.scrapeCompany === "boolean" ? user_input.scrapeCompany : undefined,
+        useIncognitoMode: typeof user_input?.useIncognitoMode === "boolean" ? user_input.useIncognitoMode : undefined,
+        splitByLocation: typeof user_input?.splitByLocation === "boolean" ? user_input.splitByLocation : undefined,
+      }) as unknown as Record<string, unknown>;
     },
   },
   advanced_jobs: {

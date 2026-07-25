@@ -19,7 +19,13 @@ function harness(jobs: unknown[], peopleByCompanyDomain: Record<string, unknown[
   const deps: CompanyFirstRuntimeDeps = {
     intent, workspaceId: "ws-1", now: NOW,
     invokeJobs: async () => { order.push("jobs"); if (opts.jobsThrow) throw new Error("boom"); return jobs; },
-    invokePeople: async (input) => { order.push(`people:${input._scope_domain ?? input._scope_key}`); peopleInputs.push(input); return peopleByCompanyDomain[String(input._scope_domain ?? "")] ?? []; },
+    // `envelope` = wrapper controls + actor-native fields under `input`.
+    invokePeople: async (envelope) => {
+      const native = envelope.input as Record<string, unknown>;
+      order.push(`people:${native._scope_domain ?? native._scope_key}`);
+      peopleInputs.push(native);
+      return peopleByCompanyDomain[String(native._scope_domain ?? "")] ?? [];
+    },
     persist: async (plan) => { plans.push(plan); return { ok: true, accountId: plan.verdict === "CONTACT" ? "acc-1" : null, contactId: null, leadCandidateId: "lc-1" }; },
   };
   return { order, peopleInputs, plans, deps };
@@ -30,7 +36,11 @@ Deno.test("1/2/4/6/7. jobs first; people only for verified companies, one per co
   const h = harness([jobRow(), advisory], { "bigid.com": [founder()] });
   const r = await executeRunAgentCompanyFirstSourcing(h.deps);
   assertEquals(h.order[0], "jobs");
-  assert(h.order.slice(1).every((o) => o.startsWith("people:")));
+  // Jobs may run once per compiled keyword variant, but EVERY jobs call must
+  // precede EVERY people call.
+  const lastJobs = h.order.lastIndexOf("jobs");
+  const firstPeople = h.order.findIndex((o) => o.startsWith("people:"));
+  assert(firstPeople === -1 || lastJobs < firstPeople);
   assertFalse(h.order.some((o) => o.includes("optivas"))); // advisory dropped → no people call
   assertEquals(h.order.filter((o) => o.startsWith("people:")).length, 1); // one verified company
   assertEquals(r.status, "completed");
@@ -41,7 +51,9 @@ Deno.test("5. the scoped people input carries the company LinkedIn URL + role", 
   await executeRunAgentCompanyFirstSourcing(h.deps);
   const inp = h.peopleInputs[0];
   assert(JSON.stringify(inp.currentCompanies).includes("linkedin.com/company/bigid"));
-  assertEquals((inp.currentJobTitles as string[])[0], "founder");
+  // Titles now come from the compiled intent's expanded executive roles.
+  assertEquals(inp.currentJobTitles, ["Founder", "Co-Founder", "CEO"]);
+  assertEquals(inp.searchQuery, "Founder OR Co-Founder OR CEO");
 });
 
 Deno.test("8/11. a verified founder persists as CONTACT with an account id", async () => {

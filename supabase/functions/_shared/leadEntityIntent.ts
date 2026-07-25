@@ -11,6 +11,7 @@
 
 import { parsePersonRoles, parseMarketTerms } from "./peopleSearchQueryBuilder.ts";
 import type { ExplicitTimingWindow } from "./timingFreshnessPolicy.ts";
+import { compileJobSearchSpec, type CompiledJobSearchSpec } from "./jobSearchSpec.ts";
 
 export type TargetEntity = "person" | "company" | "job";
 export type OutputType = "qualified_people" | "qualified_companies" | "job_postings";
@@ -74,6 +75,12 @@ export interface LeadEntityIntent {
   company_gate_required: boolean;
   /** A company-level hiring signal is part of the request (drives jobs-first). */
   hiring_signal_required: boolean;
+  /** DETERMINISTIC provider search plan for the hiring signal. The jobs actor is
+   * driven by THIS, never by original_user_instruction — sending the whole
+   * sentence as LinkedIn keywords is what produced 25 irrelevant jobs and zero
+   * qualified companies in the 2026-07-25 live run. `not_applicable` for requests
+   * with no employer-side hiring signal. */
+  job_search_spec: CompiledJobSearchSpec;
   /** Evidence freshness the request demands. Derived from the ORIGINAL instruction;
    * qualifies the evidence contract, never the target entity. */
   freshness: FreshnessRequirement;
@@ -87,7 +94,10 @@ export interface LeadEntityIntent {
 const lc = (s: unknown) => String(s ?? "").toLowerCase();
 
 // --- explicit requested-OUTPUT phrases (what the user wants returned) ----------
-const JOB_OUTPUT_RE = /\b(job openings?|job postings?|job posts?|open positions?|vacan(?:cy|cies)|open [a-z/ ]{0,20}?(?:jobs?|roles?|positions?)|current [a-z ]{0,20}?jobs?|jobs? (?:open|available|posted)|which jobs?\b|open jobs?)\b/i;
+// The last alternation covers a plain "<role> jobs in <place>" ask, which the
+// 2026-07-25 review found fell through to clarification_required (placeholder
+// person) instead of the job-first path it plainly is.
+const JOB_OUTPUT_RE = /\b(job openings?|job postings?|job posts?|open positions?|vacan(?:cy|cies)|open [a-z/ ]{0,20}?(?:jobs?|roles?|positions?)|current [a-z ]{0,20}?jobs?|jobs? (?:open|available|posted)|which jobs?\b|open jobs?|[a-z][a-z ]{1,40}\bjobs?\s+(?:in|near|across|within)\b)/i;
 const PERSON_NOUN_RE = /\b(co-?founders?|founders?|ceos?|ctos?|cfos?|coos?|cmos?|cros?|chief [a-z]+ officers?|executives?|decision[-\s]?makers?|buying committee|people|persons?|contacts?|leaders?|operators?|prospects?|buyers?|heads? of\b|vps?|owners?|managing directors?|presidents?|candidates?|job seekers?)\b/i;
 const WHO_TO_CONTACT_RE = /\bwho (?:should i|to|can i|do i)\s+(?:contact|reach out to|target|talk to|email|message)\b/i;
 const COMPANY_NOUN_RE = /\b(companies|company|startups?|accounts?|businesses|business|orgs?|organi[sz]ations?|firms?|vendors?|employers?|integrators?|manufacturers?)\b/i;
@@ -291,6 +301,13 @@ export function compileLeadEntityIntent(
     requested_person_role,
     company_gate_required,
     hiring_signal_required,
+    job_search_spec: compileJobSearchSpec({
+      text,
+      hiringSignalRequired: hiring_signal_required,
+      requestedPersonRole: requested_person_role,
+      personRoles: person_roles,
+      jobFirst: execution_mode === "job_first",
+    }),
     freshness: deriveFreshnessRequirement({ text, signals, company_categories }),
     hard_constraints: [],
     soft_constraints: signals.map((s) => `signal:${s.type}`),
