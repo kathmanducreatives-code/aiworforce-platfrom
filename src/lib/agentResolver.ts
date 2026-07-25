@@ -1,13 +1,40 @@
-import { AGENT_BY_ID, AGENT_BY_NAME, PILOT_PROFILE, type AgentProfile } from '@/data/agentProfiles';
+import {
+  AGENT_BY_ID,
+  AGENT_BY_NAME,
+  PILOT_PROFILE,
+  type AgentProfile,
+} from '@/data/agentProfiles';
+import { lookupPublicAgent } from '@/config/agentRegistry';
 
-/** Resolve a slug or name to a profile, falling back to Pilot. */
+/**
+ * DISPLAY resolver — returns a public-facing profile.
+ *
+ * Historical legacy slugs (scout / aria / hawk / penn / scribe) are aliased
+ * to their public identity (Lyra / Atlas / Atlas / Mira / Orion) so activity
+ * rows, chat attribution, and dock surfaces always render the public name.
+ *
+ * NOTE: this resolver is intentionally used by presentation code only. It
+ * MUST NOT be used to reroute execution — orchestration continues to route
+ * by the underlying legacy slug.
+ *
+ * Fallback policy:
+ *   - null / undefined / empty / unknown → Pilot (kept for backward
+ *     compatibility with existing call sites that assumed Pilot fallback).
+ *     Prefer `resolveAgentForDisplay(..., { pilotFallback: false })` from
+ *     `@/config/agentRegistry` for new surfaces that need a neutral
+ *     "Unattributed" fallback instead of silently attributing to Pilot.
+ */
 export function resolveAgent(input?: string | null): AgentProfile {
   if (!input) return PILOT_PROFILE;
   const key = String(input).trim().toLowerCase();
+  // Legacy compat table already includes both public and legacy keys.
   return AGENT_BY_ID[key] ?? AGENT_BY_NAME[key] ?? PILOT_PROFILE;
 }
 
-/** Infer the responsible agent slug from a workflow step / event_type / tool name. */
+/** Infer the responsible agent slug from a workflow step / event_type / tool name.
+ *  Returns a LEGACY slug — callers that display should run it through
+ *  `resolveAgent()` so the public identity is shown.
+ */
 export function inferAgentFromAction(action?: string | null): string {
   if (!action) return 'pilot';
   const s = String(action).toLowerCase();
@@ -27,8 +54,8 @@ export function inferAgentFromAction(action?: string | null): string {
 export function inferAgentFromContent(text?: string | null): string | null {
   if (!text) return null;
   const s = String(text).toLowerCase();
-  // Explicit "Agent ..." attribution wins.
-  const named = s.match(/\b(scout|aria|hawk|penn|scribe|pilot)\b/);
+  // Explicit named attribution wins — accept both legacy and public names.
+  const named = s.match(/\b(scout|aria|hawk|penn|scribe|pilot|lyra|atlas|mira|orion)\b/);
   if (named) return named[1];
 
   if (/\b(sourc(?:e|ed|ing)|raw results?|accepted \d+ qualified|apify|hiring signal|find (?:decision|contacts?))/.test(s)) return 'scout';
@@ -55,9 +82,16 @@ export function resolveAgentFromMetadata(
   if (fallbackSlug && fallbackSlug.toLowerCase() !== 'pilot') {
     return resolveAgent(fallbackSlug);
   }
-  // Last-resort content inference for legacy Pilot-attributed messages.
   const inferred = inferAgentFromContent(content);
   if (inferred) return resolveAgent(inferred);
   if (fallbackSlug) return resolveAgent(fallbackSlug);
   return PILOT_PROFILE;
+}
+
+/**
+ * Public identity accessor — returns the canonical public identity for any
+ * legacy or public slug/name. Prefer this in new display surfaces.
+ */
+export function resolvePublicAgent(input?: string | null) {
+  return lookupPublicAgent(input);
 }

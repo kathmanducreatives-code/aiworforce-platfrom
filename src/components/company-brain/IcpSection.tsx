@@ -26,9 +26,9 @@ const HEALTH_DOT_CLS: Record<SectionHealth, string> = {
   'needs-detail': 'bg-muted-foreground/60',
 };
 
-const HEALTH_PILL_TONE: Record<SectionHealth, 'emerald' | 'amber' | 'neutral'> = {
+const HEALTH_PILL_TONE: Record<SectionHealth, 'emerald' | 'warning' | 'neutral'> = {
   configured: 'emerald',
-  'needs-confirmation': 'amber',
+  'needs-confirmation': 'warning',
   'needs-detail': 'neutral',
 };
 

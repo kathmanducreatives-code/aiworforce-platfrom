@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
@@ -16,6 +16,20 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runLeadAction } from '@/lib/leadActions';
 import { LEAD_ACTION_LOADING, workbenchActionToLeadKind, type LeadActionKind } from '@/lib/leadActionRequest';
 import { deriveRowAction, rowsForExport, type RowAction } from '@/lib/leadRowAction';
+import { emptyBatchTally, formatBatchSummary } from '@/lib/leadActionOutcome';
+import {
+  emptyAccountView, mergeWorkbenchStage, STAGE_FOR_ACTION,
+  type WorkbenchAccountView,
+} from '@/lib/workbenchAccountView';
+import { buildCompanyResearchView } from '@/lib/companyResearchDisplay';
+import { toOutreachStageView } from '@/lib/outreachStageView';
+import { hydrateAccountView, applyHydrationFloor, savedIcpFromBrain, hydrateAccountResearchSnapshot } from '@/lib/accountResearchHydration';
+import { buildWhyRelevant } from '@/lib/icpSnapshot';
+import {
+  buildPersonalizationContext, assessOpenerEligibility, brainContextFromProfile,
+  buildOutreachRowHint, type OutreachRowHint,
+} from '@/lib/outreachOpener';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -31,6 +45,10 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   // global banner is kept for selection/errors only.
   const [directRunning, setDirectRunning] = useState<LeadActionKind | null>(null);
   const [rowActions, setRowActions] = useState<Record<string, RowAction>>({});
+  // Account-centric state: one slot PER STAGE per lead. rowActions holds only the
+  // latest attempt for progress/banner purposes and must never decide which
+  // completed stages still exist.
+  const [accountViews, setAccountViews] = useState<Record<string, WorkbenchAccountView>>({});
   const [actionOutcome, setActionOutcome] = useState<{ kind: LeadActionKind; success: boolean; error?: string; summary?: string } | null>(null);
   const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
@@ -38,6 +56,55 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerRow, setDrawerRow] = useState<LeadTableRow | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ action: LeadResultPanelAction; ids: string[]; credits: number } | null>(null);
+
+  // Active workspace Company Brain → saved ICP (never generic defaults).
+  const { data: brain } = useCompanyBrain();
+  const savedIcp = useMemo(
+    () => savedIcpFromBrain((brain as { profile?: unknown } | null)?.profile ?? null),
+    [brain],
+  );
+
+  // Zero-credit hydration. Seed each loaded account's research + saved-ICP stage
+  // from data Agentory ALREADY collected (verified website, company LinkedIn, live
+  // job posting, source proof, enrichment summary). Hydration is a FLOOR — an
+  // action-updated stage always wins (applyHydrationFloor), so completed
+  // intelligence survives every later action and no user is charged to rediscover
+  // sources. No provider call, no network, no writes.
+  useEffect(() => {
+    if (items.length === 0) return;
+    setAccountViews((prev) => {
+      const next: Record<string, WorkbenchAccountView> = { ...prev };
+      for (const r of items) {
+        const { view } = hydrateAccountView(r, savedIcp);
+        next[r.id] = applyHydrationFloor(view, prev[r.id]);
+      }
+      return next;
+    });
+  }, [items, savedIcp]);
+
+  // Per-row personalized-opener hint (pure, zero-credit). Drives the Personalized
+  // Message cell: a persisted opener, or a SPECIFIC blocker — never the generic
+  // "Complete the required previous step first". Generation itself runs later via
+  // run-agent with output_mode: "personalized_opener".
+  const outreachHints = useMemo<Record<string, OutreachRowHint>>(() => {
+    const brainCtx = brainContextFromProfile((brain as { profile?: unknown } | null)?.profile ?? null);
+    const out: Record<string, OutreachRowHint> = {};
+    for (const r of items) {
+      const view = accountViews[r.id];
+      const icpSnap = view?.icp_snapshot ?? null;
+      if (!icpSnap) continue;
+      const snap = hydrateAccountResearchSnapshot(r);
+      const dm = view?.decision_makers.last_success?.primary_decision_maker ?? null;
+      const ctx = buildPersonalizationContext({
+        snapshot: snap, icp_snapshot: icpSnap, saved_icp: savedIcp, brain: brainCtx,
+        decision_maker: dm, why_relevant: buildWhyRelevant(icpSnap),
+      });
+      const eligibility = assessOpenerEligibility(ctx, icpSnap);
+      const persisted = (view?.outreach.last_success as { opener?: string } | null) ?? null;
+      out[r.id] = buildOutreachRowHint({ eligibility, persisted: persisted && 'opener' in persisted ? persisted as never : null, source_count: snap.source_count });
+    }
+    return out;
+  }, [items, accountViews, savedIcp, brain]);
 
   const filtered = useMemo(() => items.filter((r) => {
     if (onlyWithWebsite && !r.website) return false;
@@ -108,21 +175,65 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     }
     setActionOutcome(null);
     setDirectRunning(kind);
-    setRowActions((s) => { const n = { ...s }; for (const r of rows) n[r.id] = { kind, state: 'running' }; return n; });
-    let ok = 0;
+    setRowActions((s) => { const n = { ...s }; for (const r of rows) n[r.id] = { kind, status: 'running' }; return n; });
+
+    // Tally by CATEGORY. A batch of pre-execution rejections must report
+    // "4 request errors", not "0/4 succeeded" — the latter falsely implies four
+    // leads were examined and none qualified.
+    const tally = emptyBatchTally(rows.length);
     for (const r of rows) {
       try {
         const res = await runLeadAction({ leadAction: kind, leadCandidateIds: [r.id], workspaceId, planId: meta.plan_id });
         const p = (res.per_lead && res.per_lead[0]) ? res.per_lead[0] as Record<string, unknown> : {};
         const ra = deriveRowAction(kind, res, p);
-        if (ra.state === 'success') ok++;
+        if (ra.status !== 'running') tally[ra.status] += 1;
         setRowActions((s) => ({ ...s, [r.id]: ra }));
+
+        // Stage-aware merge: this updates ONE stage and carries every other
+        // completed stage forward. Running Generate outreach can no longer
+        // erase the research column.
+        const stage = STAGE_FOR_ACTION[kind];
+        setAccountViews((prev) => ({
+          ...prev,
+          [r.id]: mergeWorkbenchStage(prev[r.id] ?? emptyAccountView(r.id), {
+            stage,
+            lead_candidate_id: r.id,
+            status: ra.status,
+            reason_code: ra.reason_code,
+            message: ra.detail,
+            payload: stage === 'company_research'
+              ? buildCompanyResearchView(p as never, ra.status === 'succeeded' ? 'succeeded' : 'partial')
+              : stage === 'decision_makers'
+                ? ra.decisionMakers ?? null
+                // The FULL canonical outreach result. This used to be
+                // `{ status: ra.status }`, which discarded the generated opener
+                // along with its depth, evidence ids and approval state — the
+                // row then had a success status and nothing to render.
+                : toOutreachStageView({ ...p, status: ra.status, reason_code: ra.reason_code }),
+            now: new Date().toISOString(),
+          }),
+        }));
       } catch (e) {
-        setRowActions((s) => ({ ...s, [r.id]: { kind, state: 'error', detail: e instanceof Error ? e.message : 'failed' } }));
+        // A thrown invoke never reached execution either.
+        tally.request_error += 1;
+        setRowActions((s) => ({
+          ...s,
+          [r.id]: { kind, status: 'request_error', detail: e instanceof Error ? e.message : undefined },
+        }));
+        // A thrown request is an attempt, not a reason to discard prior stages.
+        setAccountViews((prev) => ({
+          ...prev,
+          [r.id]: mergeWorkbenchStage(prev[r.id] ?? emptyAccountView(r.id), {
+            stage: STAGE_FOR_ACTION[kind],
+            lead_candidate_id: r.id,
+            status: 'request_error',
+            now: new Date().toISOString(),
+          }),
+        }));
       }
     }
     setDirectRunning(null);
-    setActionOutcome({ kind, success: ok > 0, summary: `${ok}/${rows.length} succeeded — see each row. Nothing sent.` });
+    setActionOutcome({ kind, success: tally.succeeded > 0, summary: formatBatchSummary(tally) });
     await refresh();
   }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 
@@ -263,6 +374,8 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           rows={filtered}
           selected={selected}
           rowActions={rowActions}
+          accountViews={accountViews}
+          outreachHints={outreachHints}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}

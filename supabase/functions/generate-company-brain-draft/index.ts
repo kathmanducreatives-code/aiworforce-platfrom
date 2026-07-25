@@ -18,6 +18,14 @@ import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/compa
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
+import { resolveCanonicalSellerIdentity } from "../_shared/workbench/sellerIdentity.ts";
+import {
+  classifyWebsiteSourceRole,
+  stripNonSellerIdentityFields,
+  SELLER_IDENTITY_FIELD_PATHS,
+} from "../_shared/companyBrainSourceRole.ts";
+import { computeBrainRefreshDiff } from "../_shared/companyBrainRefreshDiff.ts";
+import { resolveOriginAwareSave } from "../_shared/companyBrainOriginSave.ts";
 import { buildActivationSuggestions } from "../_shared/companyBrainResearch/activationSuggestions.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "../_shared/companyBrainCompleteness.ts";
@@ -244,6 +252,44 @@ Deno.serve(async (req) => {
       };
 
       const r = await generateBrainDraft(draftInput, deps);
+
+      // Source-role safety + refresh review state. A draft extracted from a
+      // website that CONTRADICTS the workspace's existing canonical seller
+      // identity (the production competitor-URL case) must not carry seller
+      // identity/positioning fields into the profile. We strip those fields from
+      // the returned draft and hand back a per-field diff so the UI can present a
+      // review instead of a silent overwrite. Purely additive — nothing is
+      // persisted here.
+      let source_role: string | undefined;
+      let stripped_seller_fields: string[] | undefined;
+      let refresh_diff: unknown | undefined;
+      let safeDraft: unknown = r.draft;
+      if (r.ok && r.draft) {
+        const existingProfile = draftInput.existing_company_brain ?? {};
+        const canonicalIdentity = resolveCanonicalSellerIdentity({ profile: existingProfile });
+        const draftObj = r.draft as unknown as AnyObj;
+        const submittedWebsite =
+          String((draftInput.company_input as AnyObj)?.website_url ?? "") ||
+          String((draftObj?.company as AnyObj)?.website_url ?? "");
+        const decision = classifyWebsiteSourceRole({
+          submittedUrl: submittedWebsite,
+          canonicalIdentity,
+          // The onboarding company-website field is the user's own company URL.
+          // A divergent domain vs an EXISTING identity is still forced to
+          // `unknown` inside the classifier, so a competitor URL cannot pass.
+          userConfirmedAsSeller: true,
+        });
+        const { safePatch, stripped } = stripNonSellerIdentityFields(draftObj, decision.role);
+        safeDraft = safePatch;
+        source_role = decision.role;
+        stripped_seller_fields = stripped;
+        refresh_diff = computeBrainRefreshDiff(existingProfile, safePatch, SELLER_IDENTITY_FIELD_PATHS, {
+          source: "company_website",
+          source_role: decision.role,
+          confidence: null,
+        });
+      }
+
       await recordRun({
         source_type: "ai_draft", provider: "claude",
         status: r.ok ? "completed" : "failed",
@@ -251,14 +297,50 @@ Deno.serve(async (req) => {
         output: r.draft ?? {}, evidence: r.draft?.evidence ?? {},
         error_message: r.ok ? undefined : r.error,
       });
-      return json({ ok: r.ok, draft: r.draft, error: r.error });
+      return json({ ok: r.ok, draft: safeDraft, source_role, stripped_seller_fields, refresh_diff, error: r.error });
     }
 
     // ---------------- Step 4/5: save draft, then activate -------------------
     if (action === "save_draft" || action === "activate") {
       const patch = (body.patch ?? {}) as CompanyBrainV2Patch;
-      const existing = await loadProfile();
-      const result = applyBrainSave(existing, patch, { activate: action === "activate" });
+
+      // Load existing profile AND its version for the origin-aware save boundary.
+      const { data: existingRow } = await admin
+        .from("company_brain").select("profile, updated_at").eq("workspace_id", workspace_id).maybeSingle();
+      const existing = (existingRow?.profile as AnyObj) ?? {};
+      const currentUpdatedAt = (existingRow as { updated_at?: string } | null)?.updated_at ?? null;
+
+      // THE save boundary. A save with no declared origin is treated as an
+      // automated refresh (fill-empty only) — a generic save_draft can never
+      // silently apply an entire automated draft over confirmed fields. The
+      // onboarding wizard declares `onboarding_seller_confirmation`; a manual
+      // edit declares `manual_edit`; an approval declares
+      // `approved_refresh_suggestions` with the reviewed version.
+      const saveDecision = resolveOriginAwareSave({
+        existing,
+        patch: patch as Record<string, unknown>,
+        origin: body.change_origin,
+        // Validated inside resolveOriginAwareSave (invalid → treated as unknown).
+        sourceRole: body.source_role as import("../_shared/companyBrainSourceRole.ts").SourceRole | undefined,
+        approvedPaths: Array.isArray(body.approved_paths) ? (body.approved_paths as string[]) : undefined,
+        confirmedPaths: Array.isArray(body.confirmed_paths) ? (body.confirmed_paths as string[]) : undefined,
+        expectedUpdatedAt: typeof body.expected_updated_at === "string" ? body.expected_updated_at : null,
+        currentUpdatedAt,
+      });
+      if (!saveDecision.ok) {
+        return json({
+          ok: false,
+          rejected_reason: saveDecision.rejected_reason,
+          effective_origin: saveDecision.effective_origin,
+          message: saveDecision.rejected_reason === "stale_review"
+            ? "The Company Brain changed since these suggestions were reviewed. Re-review before approving."
+            : saveDecision.rejected_reason === "identity_conflict"
+            ? "This change would create a conflicting seller identity. Resolve the company name/website first."
+            : "Unrecognized change origin.",
+        }, 409);
+      }
+
+      const result = applyBrainSave(existing, saveDecision.safe_patch as CompanyBrainV2Patch, { activate: action === "activate" });
 
       if (action === "activate" && !result.onboarding_completed) {
         // Refuse to mark a half-built Brain as ready — but keep the draft saved,
@@ -271,6 +353,9 @@ Deno.serve(async (req) => {
           ok: false, activated: false, blocked_reasons: result.blocked_reasons,
           completeness: result.completeness, profile: result.profile,
           suggested_fixes: buildActivationSuggestions(result.normalized, result.completeness),
+          effective_origin: saveDecision.effective_origin,
+          applied_paths: saveDecision.applied_paths,
+          pending_review: saveDecision.pending_review,
         }, 200);
       }
 
@@ -297,6 +382,9 @@ Deno.serve(async (req) => {
       return json({
         ok: true, activated: result.onboarding_completed,
         completeness: result.completeness, profile: result.profile,
+        effective_origin: saveDecision.effective_origin,
+        applied_paths: saveDecision.applied_paths,
+        pending_review: saveDecision.pending_review,
       });
     }
 

@@ -221,7 +221,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
             status: t.status as any,
           }))}
         />
-        <ul className="flex-1 min-w-0 space-y-2">
+        <ul className="flex-1 min-w-0 space-y-1">
           {tasks.map((t, i) => (
             <ExecutionTaskRow
               key={t.id}

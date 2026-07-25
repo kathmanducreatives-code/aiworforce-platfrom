@@ -179,7 +179,14 @@ export default function OnboardingCompanyBrain() {
     setBusy(activate ? 'activate' : 'save'); setError(null);
     try {
       const patch = buildSavePatch({ founder, company, brain });
-      const r = await call(activate ? 'activate' : 'save_draft', { patch });
+      // These are the user's own typed/confirmed company values — an explicit
+      // seller confirmation, the one non-manual origin allowed to write seller
+      // identity. Without this the save boundary treats it as an automated
+      // refresh and only fills empty fields.
+      const r = await call(activate ? 'activate' : 'save_draft', {
+        patch,
+        change_origin: 'onboarding_seller_confirmation',
+      });
       if (activate && !r?.activated) {
         // Blocked: keep the additive suggested_fixes so the user can accept them.
         setSuggestedFixes(r?.suggested_fixes ?? null);
@@ -192,7 +199,7 @@ export default function OnboardingCompanyBrain() {
       if (activate) { setActivated(true); }
       toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
         description: activate
-          ? 'Leads, Scout Radar, Content, Agents and Outreach now use it.'
+          ? 'Leads, Signal Radar, Content, Agents and Outreach now use it.'
           : 'You can finish later.',
       });
       if (activate) setTimeout(() => navigate('/dashboard'), 900);

@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deriveRowAction, unwrapLeadRaw, companyDisplayLinks, rowsForExport } from "./leadRowAction.ts";
+import { deriveRowAction, rowActionCopy, unwrapLeadRaw, companyDisplayLinks, rowsForExport } from "./leadRowAction.ts";
+import { isRetryableStatus } from "./leadActionOutcome.ts";
 
 // Part 7 — CSV export never headers-only when rows are visible.
 Deno.test("rowsForExport: no selection → visible rows; selection → selected rows", () => {
@@ -25,54 +26,98 @@ Deno.test("companyDisplayLinks: LinkedIn shows even when website missing; emptie
   assertEquals(b.linkedinUrl, null);
 });
 
-// Part J #7 — running → success
-Deno.test("research_company enriched → success with summary detail", () => {
+// Row states now read the CANONICAL status the backend assigned, rather than
+// re-deriving an outcome from provider-shaped fields.
+Deno.test("research_company succeeded → succeeded with summary detail", () => {
   const a = deriveRowAction("research_company", { success: true, per_lead: [{}] },
-    { status: "enriched", summary_lines: ["Summary: Acme builds robots", "Confidence: medium"] });
-  assertEquals(a.state, "success");
+    { status: "succeeded", reason_code: "company_enriched", summary_lines: ["Summary: Acme builds robots", "Confidence: medium"] });
+  assertEquals(a.status, "succeeded");
   assert(/Acme builds robots/.test(a.detail ?? ""));
 });
 
-Deno.test("research_company blocked no website → empty 'Blocked: no website'", () => {
+Deno.test("research_company missing identity → distinct status + copy", () => {
   const a = deriveRowAction("research_company", { success: true, per_lead: [{}] },
-    { status: "blocked", blocked_reason: "no company website/domain — enrichment blocked" });
-  assertEquals(a.state, "empty");
-  assertEquals(a.detail, "Blocked: no website");
+    { status: "missing_company_identity", reason_code: "company_domain_missing" });
+  assertEquals(a.status, "missing_company_identity");
+  assertEquals(a.reason_code, "company_domain_missing");
+  assertEquals(rowActionCopy(a), "Verify the company domain or LinkedIn page first");
 });
 
-// Part J #8 — running → empty for no decision-maker
-Deno.test("find_decision_makers needs_manual_review → empty (No verified decision-maker)", () => {
+Deno.test("find_decision_makers no_match is an ANSWER, not a crash", () => {
   const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
-    { needs_manual_review: true, decision_makers: [] });
-  assertEquals(a.state, "empty");
+    { status: "no_match", reason_code: "provider_no_results", decision_makers: [] });
+  assertEquals(a.status, "no_match");
+  assertEquals(rowActionCopy(a), "No verified founder or GTM leader found");
 });
 
-Deno.test("find_decision_makers verified → success with recipient detail", () => {
+Deno.test("find_decision_makers unavailable → provider-disabled copy, not failure", () => {
   const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
-    { needs_manual_review: false, decision_makers: [{ name: "Jane Doe", title: "CEO" }] });
-  assertEquals(a.state, "success");
+    { status: "unavailable", reason_code: "people_search_disabled" });
+  assertEquals(a.status, "unavailable");
+  assertEquals(rowActionCopy(a), "People search is disabled in this environment");
+});
+
+Deno.test("find_decision_makers needs_manual_review is distinct from no_match", () => {
+  const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
+    { status: "needs_manual_review", reason_code: "employment_unverified" });
+  assertEquals(a.status, "needs_manual_review");
+  assertEquals(rowActionCopy(a), "Profiles were found but current employment could not be verified");
+});
+
+Deno.test("find_decision_makers timed_out is distinct and retryable", () => {
+  const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
+    { status: "timed_out", reason_code: "provider_timed_out" });
+  assertEquals(a.status, "timed_out");
+  assertEquals(rowActionCopy(a), "Decision-maker search timed out");
+  assert(isRetryableStatus(a.status));
+});
+
+Deno.test("find_decision_makers succeeded → recipient detail (legacy alias shape)", () => {
+  // A displayable decision-maker needs a contact link: decidePersistence rejects
+  // invalid_profile_url, so a verified person always has one. Legacy name/title
+  // aliases still map through the display adapter.
+  const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
+    { status: "succeeded", reason_code: "decision_maker_found",
+      decision_makers: [{ name: "Jane Doe", title: "CEO", linkedinUrl: "https://www.linkedin.com/in/synthetic-jane" }] });
+  assertEquals(a.status, "succeeded");
   assert(/Jane Doe · CEO/.test(a.detail ?? ""));
 });
 
-// Part J #10 — outreach without verified contact
-Deno.test("generate_outreach insufficient → insufficient_context with missing", () => {
-  const a = deriveRowAction("generate_outreach", { success: true, per_lead: [{}] },
-    { status: "insufficient_context", missing_context: ["recipient_or_company_context"] });
-  assertEquals(a.state, "insufficient_context");
-  assert(/recipient_or_company_context/.test(a.detail ?? ""));
+Deno.test("find_decision_makers: a person with NO contact link is a contract error", () => {
+  const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
+    { status: "succeeded", decision_makers: [{ name: "Jane Doe", title: "CEO" }] });
+  assertEquals(a.status, "failed");
+  assertEquals(a.reason_code, "decision_maker_display_contract_invalid");
 });
 
-Deno.test("generate_outreach draft → success 'Draft ready for approval'", () => {
+Deno.test("generate_outreach blocked → 'complete the required previous step'", () => {
   const a = deriveRowAction("generate_outreach", { success: true, per_lead: [{}] },
-    { status: "draft_needs_approval", recipient: "Jane Doe" });
-  assertEquals(a.state, "success");
-  assertEquals(a.detail, "Draft ready for approval");
+    { status: "blocked", reason_code: "verified_decision_maker_required" });
+  assertEquals(a.status, "blocked");
+  assertEquals(rowActionCopy(a), "Complete the required previous step first");
 });
 
-Deno.test("hard failure (no per_lead) → error", () => {
+Deno.test("generate_outreach succeeded → draft ready for approval", () => {
+  const a = deriveRowAction("generate_outreach", { success: true, per_lead: [{}] },
+    { status: "succeeded", reason_code: "draft_ready_for_approval" });
+  assertEquals(a.status, "succeeded");
+  assertEquals(rowActionCopy(a), "Draft ready for approval");
+});
+
+// THE REGRESSION: a request rejected before execution must NOT look like a lead
+// that was examined and found wanting.
+Deno.test("pre-execution rejection → request_error, never failed/no_match", () => {
+  const a = deriveRowAction("find_decision_makers",
+    { success: false, error: "task_insert_failed", message: "Couldn't start the action — try again.", requestError: true }, {});
+  assertEquals(a.status, "request_error");
+  assertEquals(a.reason_code, "task_insert_failed");
+  assertEquals(rowActionCopy(a), "Action request was rejected before execution");
+});
+
+Deno.test("hard failure with no per_lead → request_error", () => {
   const a = deriveRowAction("research_company", { success: false, error: "run_agent_failed" }, {});
-  assertEquals(a.state, "error");
-  assertEquals(a.detail, "run_agent_failed");
+  assertEquals(a.status, "request_error");
+  assertEquals(a.reason_code, "run_agent_failed");
 });
 
 // Part J #11 — CSV uses raw.raw fallback (the nesting fix)

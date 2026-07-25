@@ -9,11 +9,25 @@
 // peopleSearchQuery) are exported for unit testing without a DB.
 
 import {
-  runCompanyEnrichment, runDecisionMakerDiscovery, runGenerateOutreach,
-  buildPeopleSearchInput, type LeadRecord, type FirecrawlFn, type PeopleSearchFn, type PeopleSearchInput,
+  runCompanyEnrichment, runGenerateOutreach,
+  type LeadRecord, type FirecrawlFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
 import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
+import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/integration.ts";
+import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
+import {
+  buildPersonalizationContext, assessOpenerEligibility, generateOpener,
+  buildOpenerStagePayload, buildOpenerObservability, brainContextFromProfile, buildGenerationProvenance,
+  type ModelBoundary, type OutreachOutputMode,
+} from "./workbench/openerBackend.ts";
+import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "./attachContactAccount.ts";
+import { makeOpenerModel } from "./workbench/openerModel.ts";
+import {
+  readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
+  nextBestAction, WORKBENCH_STATE_KEY,
+  type CompanyResearchState, type DecisionMakerState,
+} from "./workbench/accountState.ts";
 
 export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
 
@@ -44,7 +58,8 @@ export type RunToolFn = (toolName: string, input: unknown, ctx: any) => Promise<
 export interface ExecCtx {
   admin: any;                 // supabase service client (same one run-agent holds)
   workspace_id: string;
-  plan_id: string;
+  /** Null for a direct Workbench action, which has no orchestrated plan. */
+  plan_id: string | null;
   task_id: string;
   agent_id?: string | null;
   agent_slug?: string | null;
@@ -52,12 +67,33 @@ export interface ExecCtx {
   user_id?: string | null;
   /** Requested execution mode; source_and_qualify_only forbids draft writes. */
   execution_mode?: string | null;
+  /**
+   * EXPLICIT outreach output mode. Absent → full_draft, which is exactly the
+   * pre-existing behaviour for every non-Workbench caller.
+   */
+  output_mode?: OutreachOutputMode | null;
+  /** Injected in tests so no model is ever reached. */
+  openerModel?: ModelBoundary;
   runTool: RunToolFn;
   toolCtx: unknown;           // ToolContext passed straight through to runTool
 }
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/** Injectable-friendly clock. Stage timestamps must be deterministic in tests. */
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/** A posting older than 60 days may not ground a "they're hiring" claim. */
+const POSTING_FRESH_DAYS = 60;
+export function isFreshPosting(postedAt: string | null | undefined, now: Date = new Date()): boolean {
+  if (!postedAt) return false;
+  const t = Date.parse(postedAt);
+  if (Number.isNaN(t)) return false;
+  return (now.getTime() - t) <= POSTING_FRESH_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /** Map a lead_candidates DB row (with joined account) into a runner LeadRecord. */
@@ -127,7 +163,7 @@ export function normalizePeopleSearchRows(data: unknown): PeopleSearchContact[] 
 async function loadLeads(ctx: ExecCtx, leadIds: string[]): Promise<any[]> {
   const { data } = await ctx.admin
     .from("lead_candidates")
-    .select("id, raw, account_id, accounts(name, domain, website_url, linkedin_url)")
+    .select("id, raw, workspace_id, account_id, accounts(name, domain, website_url, linkedin_url)")
     .in("id", leadIds);
   return Array.isArray(data) ? data : [];
 }
@@ -162,54 +198,321 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       const firecrawl: FirecrawlFn = async (url) => mapFirecrawlResult(await ctx.runTool("scrape_url", { url, extraction_goal: `Company research for ${lead.company_name ?? url}`, max_pages: 1 }, ctx.toolCtx));
       const res = await runCompanyEnrichment(lead, firecrawl);
       if (res.status !== "blocked") {
-        await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, { company_enrichment: res.enrichment });
+        // Record the stage in the account state as well, so a later action can
+        // read what research established without re-deriving it from prose.
+        const e = res.enrichment;
+        const evidence_urls = Array.isArray(e?.evidence_urls) ? e.evidence_urls : [];
+        const researchPayload: CompanyResearchState = {
+          summary: (e?.company_summary as string | undefined) ?? null,
+          evidence_urls,
+          missing_evidence: Array.isArray(e?.missing_evidence) ? e.missing_evidence : [],
+          confidence: (e?.confidence as string | undefined) ?? null,
+          // "Provider completed" is not enough: usable means we actually hold a
+          // summary backed by at least one source.
+          usable: !!e?.company_summary && evidence_urls.length > 0,
+        };
+        const merged = applyStageUpdate(
+          readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id),
+          "company_research",
+          { status: res.status === "enriched" ? "succeeded" : "partial", reason_code: res.blocked_reason ?? null, payload: researchPayload },
+          nowIso(),
+        );
+        await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
+          company_enrichment: res.enrichment,
+          [WORKBENCH_STATE_KEY]: merged,
+        });
       }
       per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: res.status, blocked_reason: res.blocked_reason, pages_fetched: res.pages_fetched, summary_lines: res.summary_lines });
 
     } else if (action === "find_decision_makers") {
-      const peopleSearch: PeopleSearchFn = async (input) => {
-        const r = await ctx.runTool("source_with_apify", {
-          tool_name: "source_with_apify", selected_actor_key: "apify_people_search", source_type: "people_profiles",
-          query: peopleSearchQuery(input), company_linkedin_url: input.company_linkedin_url, domain: input.domain,
-          role_keywords: input.titles, max_results: input.max_results,
-          // Bug #2: the executor persists ONLY the verified top contact — never let
-          // the tool auto-write all raw people into contacts.
-          defer_persistence: true, attach_to_accounts: false,
-        }, ctx.toolCtx);
-        return r.ok ? normalizePeopleSearchRows(r.data) : [];
+      // Reliable pipeline (identity → bounded search → normalize → verify current
+      // employer → classify role → dedupe → rank → verified-only persistence).
+      // It replaces the legacy peopleContactsToDecisionMakers path, which accepted
+      // name-only and headline matches and collapsed every provider failure into
+      // an empty array.
+      const res = await runDecisionMakerAction(
+        lead as unknown as LeadRecordLike,
+        { workspace_id: ctx.workspace_id },
+        {
+          provider: makePeopleSearchProvider(ctx.runTool, ctx.toolCtx),
+          lookupContacts: async (workspaceId) => {
+            const { data } = await ctx.admin.from("contacts").select("id, linkedin_url").eq("workspace_id", workspaceId);
+            return (data ?? []) as Array<{ id: string; linkedin_url: string | null }>;
+          },
+          persistContact: async (c) => {
+            // Attach the contact to the DURABLE account (not just the plan-scoped
+            // lead_candidate) when the current employer is verified. Decision-maker
+            // discovery is company-scoped to this lead and carries `company_match`,
+            // so it has the account link that was previously dropped — the root
+            // cause of every production contact having account_id = null.
+            //
+            // The writer NEVER puts account_id in the identity upsert; it sets it
+            // via a separate guarded update only when verified, so a rediscovery
+            // can never null or silently reassign an existing association.
+            const res = await writeContactWithVerifiedAccount({
+              db: ctx.admin as unknown as ContactPersistenceDb,
+              mode: "upsert",
+              onConflict: "workspace_id,linkedin_url",
+              identity: { workspace_id: c.workspace_id, full_name: c.full_name, title: c.title, linkedin_url: c.linkedin_url },
+              rawBase: { via: "decision_maker_discovery", ...c.provenance },
+              resolve: {
+                workspaceId: c.workspace_id,
+                leadCandidateId: c.lead_candidate_id,
+                contactLinkedInUrl: c.linkedin_url ?? null,
+                provenance: c.provenance,
+                companyScopedSearch: true,
+              },
+              linkLeadCandidateId: c.lead_candidate_id,
+            });
+            if (!res.contactId) throw new Error("contact_write_failed");
+            return res.contactId;
+          },
+          // Ownership comes from the row we already loaded — no extra round-trip,
+          // and it is the same record the action operates on.
+          resolveLeadWorkspace: async () => (row?.workspace_id as string | undefined) ?? null,
+        },
+      );
+
+      // raw.decision_makers is ALSO read by runGenerateOutreach, which expects the
+      // legacy DecisionMaker shape (name / title / linkedinUrl / company_match).
+      // Persist a superset: legacy keys keep outreach personalization working,
+      // new keys carry the verification detail.
+      const rawDecisionMakers = res.decision_makers.map((d) => ({
+        name: d.full_name,
+        title: d.current_title,
+        linkedinUrl: d.linkedin_url,
+        source: "linkedin_people_search",
+        confidence: d.confidence,
+        evidence_url: d.linkedin_url,
+        contact_status: "profile_only",
+        email: null,
+        email_source_url: null,
+        company_match: {
+          status: d.verification_status === "verified" ? "verified" : "likely",
+          reason: d.verification_methods.join(", ") || "verified current employer",
+          matched_on: d.verification_methods,
+        },
+        // New-engine detail, additive.
+        full_name: d.full_name,
+        linkedin_url: d.linkedin_url,
+        current_title: d.current_title,
+        current_company_name: d.current_company_name,
+        role_family: d.role_family,
+        verification_status: d.verification_status,
+        verification_methods: d.verification_methods,
+        rank: d.rank,
+        rank_reasons: d.rank_reasons,
+        persisted: d.persisted,
+      }));
+
+      const topDm = res.decision_makers[0];
+      const dmPayload: DecisionMakerState = {
+        verified_count: res.verified_profile_count,
+        manual_review_count: res.manual_review_count,
+        primary_full_name: topDm?.full_name ?? null,
+        primary_linkedin_url: topDm?.linkedin_url ?? null,
+        primary_role_family: topDm?.role_family ?? null,
+        primary_company_name: topDm?.current_company_name ?? null,
+        primary_verification_methods: topDm?.verification_methods ?? [],
+        contact_id: topDm?.contact_id ?? null,
       };
-      const res = await runDecisionMakerDiscovery(lead, { peopleSearch });
+      const dmMerged = applyStageUpdate(
+        readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id),
+        "decision_makers",
+        { status: res.status === "succeeded" ? "succeeded" : (res.status as never), reason_code: res.reason_code, payload: dmPayload },
+        nowIso(),
+      );
+      // Record the provenance the draft gate reads. This does NOT lower the bar:
+      // employerVerification only reaches "verified" on an identifier match, and
+      // the person came from a provider run — so a verified decision-maker IS
+      // provider-backed person identity with a verified company association.
+      const gateFields = deriveGateFields(dmMerged);
+
       await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
-        decision_makers: res.decision_makers,
-        decision_maker_status: res.needs_manual_review ? "needs_manual_review" : "resolved",
-        buyer_clues: res.buyer_clues,
-        decision_makers_rejected: res.rejected,
+        decision_makers: rawDecisionMakers,
+        decision_maker_status: res.status,
+        decision_maker_reason_code: res.reason_code,
+        [WORKBENCH_STATE_KEY]: dmMerged,
+        ...(gateFields.canonical_final_decision
+          ? {
+            canonical_final_decision: gateFields.canonical_final_decision,
+            contact_ready: gateFields.contact_ready,
+            provider_provenance: gateFields.provider_provenance,
+            evidence_url: gateFields.evidence_url,
+          }
+          : {}),
+        // Array (not just counts) so the UI can still say who was dropped and why.
+        decision_makers_rejected: (res.rejected_profiles as Array<Record<string, unknown>>).map((r) => ({
+          name: r.full_name, title: r.current_title, linkedin_url: r.linkedin_url, reason: r.reason_code,
+        })),
+        decision_makers_rejection_summary: res.rejection_summary,
       });
-      // Persist ONLY the top company-verified (verified/likely) decision-maker as a
-      // contact, idempotently (upsert by linkedin_url), and link it. Never persist
-      // weak/no-match or low-confidence people. (Bugs #1 + #2 + #3/C)
-      const top = res.decision_makers.find((d) =>
-        d.linkedinUrl && d.confidence !== "low" &&
-        (d.company_match.status === "verified" || d.company_match.status === "likely")) ?? null;
-      if (top?.linkedinUrl) {
-        const { data: c } = await ctx.admin.from("contacts").upsert({
-          workspace_id: ctx.workspace_id, full_name: top.name, title: top.title, linkedin_url: top.linkedinUrl, email: top.email,
-          raw: { source: top.source, via: "decision_maker_discovery", confidence: top.confidence, evidence_url: top.evidence_url, email_source_url: top.email_source_url, company_match: top.company_match },
-        }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
-        if (c?.id) await ctx.admin.from("lead_candidates").update({ contact_id: c.id }).eq("id", lead.lead_candidate_id);
-      }
-      per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, needs_manual_review: res.needs_manual_review, used_people_search: res.used_people_search, decision_makers: res.decision_makers, rejected_count: res.rejected.length });
+
+      // The pipeline's canonical status is carried through verbatim — downstream
+      // must never re-infer it from decision_makers.length.
+      per_lead.push({
+        lead_candidate_id: res.lead_candidate_id,
+        company: lead.company_name,
+        status: res.status,
+        reason_code: res.reason_code,
+        retryable: res.retryable,
+        decision_makers: res.decision_makers,
+        provider_run_id: res.provider_run_id,
+        returned_profile_count: res.returned_profile_count,
+        verified_profile_count: res.verified_profile_count,
+        rejected_count: res.rejected_profile_count,
+        manual_review_count: res.manual_review_count,
+        persisted_count: res.persisted_count,
+        existing_contact_count: res.existing_contact_count,
+        needs_manual_review: res.status === "needs_manual_review",
+        observability: res.observability,
+      });
+
+    } else if (action === "generate_outreach" && ctx.output_mode === "personalized_opener") {
+      // ---- PERSONALIZED OPENER -------------------------------------------
+      // Explicitly requested mode. Gates on WORKBENCH-established evidence
+      // rather than the sourcing-era draft-gate fields, and produces ONE short
+      // opening line — never an email. The legacy full_draft path below is
+      // untouched, so every non-Workbench caller behaves exactly as before.
+      const acctOpener = readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id);
+
+      // Saved Company Brain for THIS workspace only.
+      const { data: brainRow } = await ctx.admin
+        .from("company_brain").select("profile, updated_at").eq("workspace_id", ctx.workspace_id).maybeSingle();
+
+      const rawRow = (row.raw ?? {}) as Record<string, unknown>;
+      const openerCtx = buildPersonalizationContext({
+        lead_candidate_id: lead.lead_candidate_id,
+        company_name: lead.company_name ?? null,
+        industry: Array.isArray(lead.industries) ? (lead.industries[0] ?? null) : null,
+        account: acctOpener,
+        // Compatibility fallback for accounts whose decision-maker run predates
+        // the namespaced stage — the resolver decides whether it is usable.
+        legacy_decision_makers: rawRow.decision_makers,
+        brain_profile: brainRow?.profile ?? null,
+        // Saved ICP selects WHICH seller outcome is most relevant. It never
+        // contributes a prospect fact and never reaches the message verbatim.
+        saved_icp: brainRow?.profile ?? null,
+        // Brain provenance: the row is workspace-keyed, so workspace_id IS its
+        // identity. updated_at distinguishes versions.
+        company_brain_id: ctx.workspace_id,
+        company_brain_updated_at: brainRow?.updated_at ?? null,
+        icp_matched_criteria: typeof rawRow.icp_fit_summary === "string" ? [rawRow.icp_fit_summary] : [],
+        why_now: typeof rawRow.why_now === "string" ? rawRow.why_now : null,
+        job_posting: lead.job_title
+          ? { role: lead.job_title ?? null, fresh: isFreshPosting(lead.posted_at), source_domain: undefined }
+          : null,
+      });
+
+      // A hard saved-ICP disqualifier overrides everything.
+      const icpExcluded = rawRow.canonical_final_decision === "skip" ||
+        (typeof rawRow.gate_decision === "string" && rawRow.gate_decision === "reject");
+
+      const eligibility = assessOpenerEligibility(openerCtx, icpExcluded);
+      const model = ctx.openerModel ?? makeOpenerModel({ workspaceId: ctx.workspace_id, agentSlug: ctx.agent_slug ?? "penn" });
+      const openerResult = await generateOpener(openerCtx, eligibility, model);
+
+      // Provenance: which seller identity + Brain version produced this attempt.
+      // Stamped on the persisted opener so a message can PROVE it came from the
+      // current, coherent Brain — never a stale flat or competitor-contaminated
+      // field. Historical messages without provenance stay historical.
+      const provenance = buildGenerationProvenance({ ctx: openerCtx, result: openerResult, now: nowIso() });
+      const stagePayload = buildOpenerStagePayload(openerResult, nowIso(), provenance);
+      const persisted = openerResult.status === "succeeded";
+
+      // A blocked seller-identity conflict records SANITIZED diagnostics (no raw
+      // Brain/prompt) on the failed attempt, so the UI can explain what to fix
+      // without exposing seller internals. The previous valid opener survives.
+      const blockedDiagnostics = eligibility.reason_code === "blocked_seller_identity_conflict"
+        ? { seller_identity_conflict: eligibility.seller_identity_conflict ?? null, provenance }
+        : eligibility.reason_code === "blocked_company_brain_conflict"
+        ? { brain_conflict: eligibility.brain_conflict ?? null, provenance }
+        : null;
+
+      // Merge into the OUTREACH stage only — research, ICP and decision-maker
+      // state are carried through untouched, and a failed retry keeps the last
+      // valid opener.
+      const openerMerged = applyStageUpdate(
+        acctOpener,
+        "outreach",
+        {
+          status: persisted ? "succeeded" : (openerResult.status === "blocked" ? "failed" : openerResult.status as never),
+          reason_code: openerResult.reason_code,
+          payload: persisted ? stagePayload : (blockedDiagnostics as Record<string, unknown> | null),
+        },
+        nowIso(),
+      );
+      await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, { [WORKBENCH_STATE_KEY]: openerMerged });
+
+      if (persisted) needsApproval = true;
+
+      per_lead.push({
+        lead_candidate_id: lead.lead_candidate_id,
+        company: lead.company_name,
+        output_mode: "personalized_opener",
+        status: openerResult.status,
+        reason_code: openerResult.reason_code,
+        opener: openerResult.opener ?? null,
+        alternative_opener: openerResult.alternative_opener ?? null,
+        personalization_depth: openerResult.personalization_depth,
+        used_evidence_ids: openerResult.used_evidence_ids,
+        validation: openerResult.validation ?? null,
+        approval_required: true,
+        approval_status: "draft",
+        sent: false,
+        // Sanitized conflict diagnostics so the UI can explain a blocked identity
+        // without exposing the Brain. Absent unless the attempt was blocked on it.
+        seller_identity_conflict: eligibility.seller_identity_conflict ?? null,
+        // Provenance the message was (or would have been) generated from.
+        generation_provenance: provenance,
+        retryable: openerResult.status === "timed_out" || openerResult.status === "failed",
+        observability: buildOpenerObservability({
+          lead_candidate_id: lead.lead_candidate_id,
+          workspace_id: ctx.workspace_id,
+          ctx: openerCtx,
+          eligibility,
+          result: openerResult,
+          persisted,
+        }),
+      });
 
     } else if (action === "generate_outreach") {
+      // ---- LEGACY FULL DRAFT (unchanged) ---------------------------------
       // Centralized draft gate — no outreach_drafts insert may bypass it. A draft
       // is allowed ONLY for a persisted, provider-verified, contact-ready lead whose
       // canonical decision is `contact`, and never when the mode forbids drafting.
+      // Overlay the provenance the Workbench stages established, so the gate
+      // evaluates the CURRENT account state rather than only sourcing-era fields.
+      const acct = readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id);
+      const derived = deriveGateFields(acct);
+      const gateRaw = {
+        ...((row.raw ?? {}) as Record<string, unknown>),
+        ...(derived.canonical_final_decision
+          ? {
+            canonical_final_decision: derived.canonical_final_decision,
+            contact_ready: derived.contact_ready,
+            provider_provenance: derived.provider_provenance,
+            evidence_url: derived.evidence_url ?? (row.raw as Record<string, unknown>)?.evidence_url,
+            company: derived.company ?? (row.raw as Record<string, unknown>)?.company,
+          }
+          : {}),
+      };
       const gate = evaluateDraftGate(buildDraftGateInputFromRaw(
-        (row.raw ?? {}) as Record<string, unknown>,
+        gateRaw,
         { execution_mode: ctx.execution_mode, persisted_lead_candidate_id: lead.lead_candidate_id },
       ));
       if (!gate.allowed) {
-        per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: "blocked_draft_gate", blocked_reasons: gate.blocked_reasons });
+        // Name the SPECIFIC missing prerequisite instead of "complete the
+        // required previous step first".
+        const prereq = outreachPrerequisite(acct);
+        per_lead.push({
+          lead_candidate_id: lead.lead_candidate_id, company: lead.company_name,
+          status: "blocked_draft_gate",
+          reason_code: prereq.reason,
+          message: prereq.message,
+          blocked_reasons: gate.blocked_reasons,
+          next_best_action: nextBestAction(acct),
+        });
         continue;
       }
       const res = runGenerateOutreach(lead);

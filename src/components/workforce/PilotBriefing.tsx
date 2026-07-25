@@ -26,7 +26,7 @@ export default function PilotBriefing({ totals }: Props) {
 
   const runningRun = useMemo(() => recentRuns.find((r) => r.status === 'running'), [recentRuns]);
 
-  const profile = brain?.profile || {};
+  const profile = (brain?.profile || {}) as any;
   const founderName = profile.founder?.name || '';
   const companyName = profile.company?.name || '';
   const firstHelp = profile.founder?.first_help_goal || '';
@@ -34,9 +34,9 @@ export default function PilotBriefing({ totals }: Props) {
   const channels = profile.gtm?.preferred_channels || [];
 
   const lines: string[] = [];
-  if (totals.signals > 0) lines.push(`Scout found ${totals.signals} new buying signal${totals.signals === 1 ? '' : 's'}.`);
-  if (totals.outreachDrafts > 0) lines.push(`Penn prepared ${totals.outreachDrafts} outreach draft${totals.outreachDrafts === 1 ? '' : 's'}.`);
-  if (totals.contentDrafts > 0) lines.push(`Scribe drafted ${totals.contentDrafts} content piece${totals.contentDrafts === 1 ? '' : 's'}.`);
+  if (totals.signals > 0) lines.push(`Lyra found ${totals.signals} new buying signal${totals.signals === 1 ? '' : 's'}.`);
+  if (totals.outreachDrafts > 0) lines.push(`Mira prepared ${totals.outreachDrafts} outreach draft${totals.outreachDrafts === 1 ? '' : 's'}.`);
+  if (totals.contentDrafts > 0) lines.push(`Agentory drafted ${totals.contentDrafts} content piece${totals.contentDrafts === 1 ? '' : 's'}.`);
   if (totals.approvals > 0) lines.push(`Pilot needs your approval on ${totals.approvals} item${totals.approvals === 1 ? '' : 's'}.`);
   
   if (lines.length === 0) {
@@ -49,7 +49,7 @@ export default function PilotBriefing({ totals }: Props) {
 
   const next =
     totals.approvals > 0
-      ? { label: 'Review approvals so Penn can continue.', primary: 'Review approvals', route: '/awaiting-you' }
+      ? { label: 'Review approvals so Mira can continue.', primary: 'Review approvals', route: '/awaiting-you' }
       : totals.signals > 0
       ? { label: 'New signals are ready for triage.', primary: 'Open signal feed', route: '/signals' }
       : { label: 'Kick off your first mission.', primary: 'Ask Pilot', route: '/dashboard' };
@@ -81,11 +81,11 @@ export default function PilotBriefing({ totals }: Props) {
                   <span className="h-5 w-5 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                   </span>
-                  <span className="text-neutral-100 font-medium">Scout is sourcing account opportunities.</span>
+                  <span className="text-neutral-100 font-medium">Lyra is sourcing account opportunities.</span>
                 </div>
                 <div className="flex items-center gap-3 text-[13.5px] opacity-50">
                   <span className="h-5 w-5 rounded-full bg-neutral-900 border border-white/10 text-[9px] text-neutral-400 flex items-center justify-center shrink-0">3</span>
-                  <span className="text-neutral-300">Aria will rank accepted results.</span>
+                  <span className="text-neutral-300">Atlas will rank accepted results.</span>
                 </div>
               </div>
             </div>

@@ -57,7 +57,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
   },
   scout: {
-    title: 'Scout Department',
+    title: 'Lyra Department',
     subtitle: 'Lead discovery and buying signal intelligence.',
     ringHex: '#2dd4bf',
     glowRgba: 'rgba(45,212,191,0.35)',
@@ -72,12 +72,12 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
     actions: () => [
       { label: 'Open Signal Feed', route: '/signals', primary: true },
-      { label: 'Send to Aria', route: '/leads' },
-      { label: 'Ask Scout to find more', route: '/lead-scraper' },
+      { label: 'Send to Atlas', route: '/leads' },
+      { label: 'Ask Lyra to find more', route: '/lead-scraper' },
     ],
   },
   aria: {
-    title: 'Aria Department',
+    title: 'Atlas Department',
     subtitle: 'Lead ranking, scoring and ICP fit analysis.',
     ringHex: '#a855f7',
     glowRgba: 'rgba(168,85,247,0.35)',
@@ -101,7 +101,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
         ]),
   },
   penn: {
-    title: 'Penn Department',
+    title: 'Mira Department',
     subtitle: 'Outreach drafts, messages and follow-up sequences.',
     ringHex: '#22d3ee',
     glowRgba: 'rgba(34,211,238,0.35)',
@@ -121,7 +121,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
   },
   hawk: {
-    title: 'Hawk Department',
+    title: 'Atlas Research',
     subtitle: 'Competitor intelligence and market signals.',
     ringHex: '#60a5fa',
     glowRgba: 'rgba(96,165,250,0.35)',
@@ -140,7 +140,7 @@ export const DEPT_CONFIG: Record<AgentId, DeptConfig> = {
     ],
   },
   scribe: {
-    title: 'Scribe Department',
+    title: 'Content Workspace',
     subtitle: 'Content drafts, briefs and pipeline reports.',
     ringHex: '#a855f7',
     glowRgba: 'rgba(168,85,247,0.35)',

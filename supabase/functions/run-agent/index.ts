@@ -6,12 +6,20 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
+import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "../_shared/attachContactAccount.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
+import {
+  isDirectLeadActionAttempt,
+  validateDirectLeadActionRequest,
+  resolveTaskUserId,
+  type DirectLeadActionRequest,
+} from "../_shared/leadActionRequestContract.ts";
+import { classifyLeadOutcome, summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
@@ -23,6 +31,12 @@ import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } fro
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+// Compound-intent bridge: detect a company-first request + enforce the
+// verified-company CONTACT ceiling. Deterministic company-first sourcing +
+// verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
+import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
+import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -117,21 +131,48 @@ Deno.serve(async (req) => {
   // the generic LLM. Read it now so provider-sourcing steps are routed + gated.
   const tool_needed_body: string | null = body.tool_needed ?? null;
 
-  if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
+  // ---- Request-mode routing --------------------------------------------------
+  // A DIRECT Workbench lead action must be recognised BEFORE the plan-step gate:
+  // it legitimately has no plan_id / step_index / caller instruction, and forcing
+  // it to invent them would either reject a valid action or push fabricated
+  // orchestration metadata into the task trace.
+  const isDirectLeadAction = isDirectLeadActionAttempt(tool_input_body);
+  let directRequest: DirectLeadActionRequest | null = null;
+
+  if (isDirectLeadAction) {
+    const validated = validateDirectLeadActionRequest({ workspace_id, tool_input: tool_input_body });
+    if (!validated.ok) {
+      return json({ success: false, error: validated.error_code, message: validated.message }, validated.status);
+    }
+    directRequest = validated.request;
+    // Derived internally — never trusted from the browser.
+    agent_slug = directRequest.agent_slug;
+  } else if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
+    // Orchestrated plan steps keep their existing contract, unchanged.
     return json({ error: "missing_required_fields" }, 400);
   }
+
+  // Both modes require a workspace by this point (direct validated it as a UUID,
+  // orchestrated required it above); restated so it narrows for the code below.
+  if (!workspace_id) return json({ error: "missing_required_fields" }, 400);
+
+  const effectiveInstruction: string = directRequest ? directRequest.instruction : instruction!;
 
   // ---- Workspace access guard ------------------------------------------------
   // orchestrate calls with the SERVICE_ROLE bearer (already gated the user). A
   // direct browser call carries a user JWT and MUST be a member of workspace_id,
   // so a frontend-supplied workspace_id cannot reach another workspace's brain.
+  let authenticatedUserId: string | null = null;
+  // Derived ONLY from the actual Authorization bearer — never from the body — and
+  // hoisted because task attribution below must know whether this is a system
+  // call. See resolveTaskUserId's trust-boundary note.
+  let bearerIsServiceRole = false;
   {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
+    bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
 
-    let authenticatedUserId: string | null = null;
     let isMember = false;
     if (!bearerIsServiceRole) {
       try {
@@ -165,15 +206,27 @@ Deno.serve(async (req) => {
   }
   agent_slug = agent.slug ?? agent_slug;
 
-  // Insert task row with real columns.
+  // Insert task row with real columns. `tasks.user_id` is NOT NULL: orchestrate
+  // threads body.user_id, but the direct Workbench action only carries a JWT, so
+  // fall back to the user the workspace guard already authenticated. Passing null
+  // here is what produced the 500 task_insert_failed / "0/4 succeeded" incident.
+  // body.user_id is honoured ONLY for verified service-role callers; a browser
+  // request is always attributed to its JWT user, so a spoofed body.user_id has
+  // no effect.
+  const taskUserId = resolveTaskUserId({ bearerIsServiceRole, bodyUserId: user_id, authenticatedUserId });
+  if (!taskUserId) {
+    return json({ success: false, error: "unidentified_user", message: "Sign in again to run this action." }, 401);
+  }
+
   const { data: task, error: taskErr } = await supabase
     .from("tasks")
     .insert({
-      plan_id,
+      plan_id: plan_id ?? null,
       agent_slug,
-      user_id: user_id ?? null,
+      user_id: taskUserId,
+      workspace_id,
       status: "running",
-      payload: { instruction, input, step_index },
+      payload: { instruction: effectiveInstruction, input, step_index: step_index ?? null, lead_action: directRequest?.action ?? null },
     })
     .select("id")
     .single();
@@ -189,7 +242,7 @@ Deno.serve(async (req) => {
     agent_id: agent.id,
     event_type: "agent_started",
     title: `${agent.name} started`,
-    body: instruction,
+    body: effectiveInstruction,
     metadata: { step_index, task_id: task.id, agent_slug },
   });
 
@@ -197,23 +250,39 @@ Deno.serve(async (req) => {
   // Generate outreach). Additive early-return: only runs when the caller passes
   // tool_input.lead_action + lead_candidate_ids. Evidence-first + approval-gated;
   // Firecrawl/Apify are called per-company via runTool; nothing is ever sent.
-  const leadAction = tool_input_body?.lead_action as string | undefined;
-  if (leadAction === "research_company" || leadAction === "find_decision_makers" || leadAction === "generate_outreach") {
-    // A lead action operates on EXISTING selected rows. Never fall through to
-    // Scout sourcing: with no ids, refuse explicitly instead of starting a search.
-    const { validateLeadActionRequest } = await import("../_shared/leadActionExecutor.ts");
-    const valid = validateLeadActionRequest(leadAction, tool_input_body?.lead_candidate_ids);
-    if (!valid.ok) {
-      await supabase.from("tasks").update({ status: "failed", error_message: valid.error }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, status: "failed", error: valid.error, message: valid.message }, 400);
+  if (directRequest) {
+    const leadAction = directRequest.action;
+    // Already validated above (before the plan gate) — ids are known-good UUIDs
+    // scoped to this workspace, so a lead action can never fall through to Scout
+    // sourcing and start an unrequested provider search.
+    const leadIds = directRequest.lead_candidate_ids;
+
+    // Ownership guard: workspace membership alone is not enough — the caller must
+    // also own every row it named. Without this, a member of workspace A could
+    // pass workspace B's lead ids and have the service-role client happily
+    // enrich/draft against them.
+    const { data: ownedRows, error: ownErr } = await supabase
+      .from("lead_candidates").select("id").eq("workspace_id", workspace_id).in("id", leadIds);
+    if (ownErr) {
+      await supabase.from("tasks").update({ status: "failed", error_message: "lead_ownership_check_failed" }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, error: "lead_ownership_check_failed", message: "Could not verify the selected rows." }, 500);
     }
-    const leadIds = valid.ids;
-    const toolCtx = { admin: supabase, workspace_id, agent_slug, agent_id: agent.id, agent_name: agent.name, plan_id, task_id: task.id, user_id: user_id ?? null };
+    const ownedIds = new Set((ownedRows ?? []).map((r: { id: string }) => r.id));
+    if (leadIds.some((id) => !ownedIds.has(id))) {
+      await supabase.from("tasks").update({ status: "failed", error_message: "lead_not_in_workspace" }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, error: "lead_not_in_workspace", message: "Those rows aren't in this workspace." }, 403);
+    }
+
+    // Resolved agent always wins; the contract-derived slug is the floor.
+    const execAgentSlug: string = agent_slug ?? directRequest.agent_slug;
+    const toolCtx = { admin: supabase, workspace_id, agent_slug: execAgentSlug, agent_id: agent.id, agent_name: agent.name, plan_id: plan_id ?? null, task_id: task.id, user_id: taskUserId };
     try {
       const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
-      const outcome = await executeLeadAction(leadAction as "research_company" | "find_decision_makers" | "generate_outreach", leadIds, {
-        admin: supabase, workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
-        agent_slug, agent_name: agent.name, user_id: user_id ?? null, runTool, toolCtx,
+      const outcome = await executeLeadAction(leadAction, leadIds, {
+        admin: supabase, workspace_id, plan_id: plan_id ?? null, task_id: task.id, agent_id: agent.id,
+        agent_slug: execAgentSlug, agent_name: agent.name, user_id: taskUserId, runTool, toolCtx,
+        // EXPLICIT mode from the validated direct-action contract.
+        output_mode: directRequest.output_mode,
       });
       await supabase.from("tasks").update({
         status: outcome.needs_approval ? "awaiting_approval" : "complete",
@@ -225,7 +294,7 @@ Deno.serve(async (req) => {
         // standalone review item, not a re-opening of the sourcing plan.
         await supabase.from("approvals").insert({
           workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
-          title: `${agent.name} needs approval`, description: instruction, status: "pending",
+          title: `${agent.name} needs approval`, description: effectiveInstruction, status: "pending",
         });
       }
       await supabase.from("activity_feed").insert({
@@ -234,13 +303,45 @@ Deno.serve(async (req) => {
         title: `${agent.name}: ${leadAction.replace(/_/g, " ")}`, body: outcome.summary,
         metadata: { step_index, task_id: task.id, lead_action: leadAction },
       });
-      return json({ success: true, task_id: task.id, status: outcome.needs_approval ? "awaiting_approval" : "complete", summary: outcome.summary, per_lead: outcome.per_lead });
+      // Classify once here so the Workbench renders a status it was handed rather
+      // than re-deriving one from provider-shaped fields.
+      const classified = outcome.per_lead.map((row) => classifyLeadOutcome(leadAction, row));
+      const perLead = outcome.per_lead.map((row, i) => ({ ...row, ...classified[i] }));
+
+      return json({
+        success: true,
+        action: leadAction,
+        task_id: task.id,
+        status: outcome.needs_approval ? "awaiting_approval" : "complete",
+        summary: summarizeDirectAction(classified, leadIds.length),
+        summary_text: outcome.summary,
+        per_lead: perLead,
+      });
     } catch (e) {
+      // An executor throw is an infrastructure failure, not a business outcome —
+      // but every requested row still gets an honest, retryable per-lead entry so
+      // the batch never silently reports "0 succeeded" with no explanation.
       console.error("[run-agent] lead_action failed:", e);
       await supabase.from("tasks").update({ status: "failed", error_message: String(e) }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, status: "failed", error: "lead_action_failed" }, 500);
+      const failed = leadIds.map((id) => ({
+        lead_candidate_id: id, status: "failed" as const, reason_code: "provider_failed", retryable: true,
+      }));
+      return json({
+        success: false,
+        action: leadAction,
+        task_id: task.id,
+        status: "failed",
+        error: "lead_action_failed",
+        summary: summarizeDirectAction(failed, leadIds.length),
+        per_lead: failed,
+      }, 500);
     }
   }
+
+  // Past the direct-action early return, this is the ORCHESTRATED path only, where
+  // the plan-step gate above already guaranteed an instruction. Restated so it
+  // narrows for the rest of the function.
+  if (instruction === undefined) return json({ error: "missing_required_fields" }, 400);
 
   // Load company_brain. `onboarding_completed` gates whether the ACTIVE brain
   // is injected into the agent prompt (see renderBrainForAgent).
@@ -350,7 +451,9 @@ Deno.serve(async (req) => {
       agent_name: agent.name,
       plan_id,
       task_id: task.id,
-      user_id: user_id ?? null,
+      // Resolved attribution, not the raw body value: the orchestrated path is
+      // reachable from a browser too, so it must honour the same trust boundary.
+      user_id: taskUserId,
     };
 
     // 1) Firecrawl scrape — if instruction/input contains URLs.
@@ -434,12 +537,103 @@ Deno.serve(async (req) => {
         // Routing-conflict guard (defense in depth): the selected actor must be able
         // to yield the intent's expected final artifact.
         routingConflict = detectRoutingConflict(entityIntent, planned_actor_key ?? derivedActorKey);
-        console.log("[run-agent] entity routing", { target_entity: entityIntent.target_entity, output_type: entityIntent.output_type, actor_key: planned_actor_key ?? derivedActorKey, clarification_required: entityIntent.clarification_required, conflict: !!routingConflict });
+        // Compound-intent (company-first) decision: a "founders of <company-type>
+        // [hiring <role>]" request must verify the company FIRST and gate CONTACT on
+        // it. Surfaced here for observability; the deterministic company-first
+        // sourcing + verified-company CONTACT ceiling live in _shared and are the
+        // path the (bounded) live TEST run exercises.
+        console.log("[run-agent] entity routing", { target_entity: entityIntent.target_entity, output_type: entityIntent.output_type, actor_key: planned_actor_key ?? derivedActorKey, clarification_required: entityIntent.clarification_required, conflict: !!routingConflict, execution_mode: entityIntent.execution_mode, company_first: isCompanyFirstRequest(entityIntent), company_gate_required: entityIntent.company_gate_required, requested_person_role: entityIntent.requested_person_role });
       }
 
       // Do not call any provider when a routing conflict was detected (the selected
       // actor cannot yield the intent's expected artifact) — fail closed, 0 calls.
       const shouldRun = (agent_slug === "scout" || agent_slug === "hawk") && !routingConflict;
+
+      // ---- COMPANY-FIRST compound path -----------------------------------------
+      // A "founders of <company-type> [hiring <role>]" request is sourced COMPANY-
+      // FIRST: real bounded jobs actor → verify/dedupe companies → real scoped
+      // people actor per verified company → current-employer verification →
+      // evidence binding → hard gates → safe persistence (PR #85 writer). The
+      // ordinary independent people-first branch is SKIPPED (return below), and
+      // there is NO generic founder fallback. Deterministic logic + adapters are
+      // unit-tested offline; the live actor/persistence behavior is what the
+      // bounded TEST run confirms.
+      if (shouldRun && routingEntityIntent && isCompanyFirstRequest(routingEntityIntent)) {
+        const cfIntent = routingEntityIntent;
+        console.log("[run-agent][company-first] executing", { requested_person_role: cfIntent.requested_person_role, workspace: workspace_id });
+
+        const invokeJobs = async (query: string, mx: number): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_jobs", input: { query, max_results: mx } }, baseCtx);
+          if (!rr.ok || !rr.data) throw new Error(rr.error ?? "jobs_actor_failed");
+          const items = (rr.data as { items?: unknown[] }).items;
+          return Array.isArray(items) ? items : [];
+        };
+        const invokePeople = async (input: Record<string, unknown>, mx: number): Promise<unknown[]> => {
+          const rr = await runTool("source_with_apify", { selected_actor_key: "apify_people_search", input: { ...input, max_results: mx } }, baseCtx);
+          const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
+          return Array.isArray(items) ? items : [];
+        };
+        const persistPlan = async (plan: CompoundPersistencePlan) => {
+          try {
+            // 1) resolve/insert the canonical account (select-then-insert; no upsert
+            //    constraint dependency). Only for a verifiable account.
+            let accountId: string | null = null;
+            if (plan.account && (plan.account.domain || plan.account.linkedinUrl)) {
+              const domain = plan.account.domain;
+              if (domain) {
+                const { data: existing } = await supabase.from("accounts").select("id").eq("workspace_id", workspace_id).eq("domain", domain).maybeSingle();
+                accountId = (existing as { id?: string } | null)?.id ?? null;
+              }
+              if (!accountId) {
+                const { data: ins } = await supabase.from("accounts").insert({ workspace_id, name: plan.account.name, domain: plan.account.domain, linkedin_url: plan.account.linkedinUrl, description: plan.account.description, source: "compound_company_first" }).select("id").maybeSingle();
+                accountId = (ins as { id?: string } | null)?.id ?? null;
+              }
+            }
+            // INVARIANT: a CONTACT lead must have a real account_id.
+            const contactEligible = plan.verdict === "CONTACT" && !!accountId;
+            const { data: lc } = await supabase.from("lead_candidates").insert({
+              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: "person", status: "new",
+              reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
+              raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
+            }).select("id").maybeSingle();
+            const leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
+            // 2) attach the contact through the PR #85 safe writer (verified account only).
+            if (plan.contact && (plan.contact.name || plan.contact.linkedinUrl) && leadCandidateId) {
+              await writeContactWithVerifiedAccount({
+                db: supabase as unknown as ContactPersistenceDb, mode: "insert",
+                identity: { workspace_id, full_name: plan.contact.name, title: plan.contact.title, linkedin_url: plan.contact.linkedinUrl, email: null },
+                rawBase: { source: "compound_company_first", via: "company_first" },
+                resolve: { workspaceId: workspace_id, leadCandidateId, contactLinkedInUrl: plan.contact.linkedinUrl ?? null, provenance: { source: "compound_company_first", company_match: contactEligible }, companyScopedSearch: true },
+                linkLeadCandidateId: leadCandidateId,
+              });
+            }
+            return { ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId };
+          } catch (e) {
+            return { ok: false, accountId: null, contactId: null, leadCandidateId: null, reason: (e as Error).message };
+          }
+        };
+
+        const cf = await executeRunAgentCompanyFirstSourcing({
+          intent: cfIntent, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
+          invokeJobs, invokePeople, persist: persistPlan,
+          log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
+        });
+
+        const taskStatus = (cf.status === "sourcing_failed" || cf.status === "persistence_failed") ? "failed" : "completed";
+        await supabase.from("tasks").update({
+          status: taskStatus,
+          result: {
+            output: `Company-first sourcing (${cf.status}): ${cf.counts.contact} contact / ${cf.counts.watch} watch / ${cf.counts.needsReview} review across ${cf.counts.verifiedCompanies} verified companies.`,
+            executed_sourcing_mode: "company_first",
+            company_first: cf,
+            lead_entity_intent: cfIntent,
+            routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
+          },
+        }).eq("id", task.id);
+
+        // Conclusively SKIP the ordinary people-first branch for this request.
+        return json({ success: taskStatus === "completed", task_id: task.id, executed_sourcing_mode: "company_first", status: cf.status, counts: cf.counts });
+      }
 
       if (shouldRun) {
         let location: string | null = tool_input_body?.location ?? null;
@@ -1205,7 +1399,7 @@ Deno.serve(async (req) => {
           const qReq = {
             // For hiring/company sourcing the requested industry is encoded in
             // the query string, so fall back to it when no explicit industry field.
-            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.query), location: criteria.location,
+            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.category), location: criteria.location,
             stage: criteria.stage, category: criteria.category,
             strict_location: strict.location, strict_industry: strict.industry, strict_stage: strict.stage,
           };
@@ -1900,21 +2094,31 @@ Deno.serve(async (req) => {
               const { planContactAttachments } = await import("../_shared/contactDiscovery.ts");
               const plan = planContactAttachments(rawItems, attachAccounts as Array<{ lead_candidate_id: string; company: string; signal_role?: string | null }>);
               
-              const candidateIds = attachAccounts.map(a => a.lead_candidate_id).filter(Boolean);
+              const candidateIds = attachAccounts.map((a: { lead_candidate_id: string | null }) => a.lead_candidate_id).filter(Boolean);
               if (candidateIds.length > 0) {
                 await supabase.from("lead_candidates").update({ plan_id }).in("id", candidateIds);
               }
 
               for (const att of plan) {
-                const { data: c } = await supabase.from("contacts").insert({
-                  workspace_id,
-                  full_name: att.contact.name,
-                  title: att.contact.title,
-                  linkedin_url: att.contact.linkedin_url,
-                  email: att.contact.email,
-                  raw: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
-                }).select("id").maybeSingle();
-                if (c?.id) await supabase.from("lead_candidates").update({ contact_id: c.id }).eq("id", att.lead_candidate_id);
+                // Attach to the durable account when the employer is verified. This
+                // contact-discovery path is scoped to the lead's company. The writer
+                // never puts account_id in the insert; it sets it via a guarded
+                // update only when verified, so an existing association is never
+                // nulled or silently reassigned.
+                await writeContactWithVerifiedAccount({
+                  db: supabase as unknown as ContactPersistenceDb,
+                  mode: "insert",
+                  identity: { workspace_id, full_name: att.contact.name, title: att.contact.title, linkedin_url: att.contact.linkedin_url, email: att.contact.email },
+                  rawBase: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
+                  resolve: {
+                    workspaceId: workspace_id,
+                    leadCandidateId: att.lead_candidate_id,
+                    contactLinkedInUrl: att.contact.linkedin_url ?? null,
+                    provenance: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence, company_match: (att.contact as { company_match?: unknown }).company_match ?? null },
+                    companyScopedSearch: true,
+                  },
+                  linkLeadCandidateId: att.lead_candidate_id,
+                });
               }
               console.log("[run-agent] attached contacts:", plan.length);
             } catch (e) { console.warn("[run-agent] contact attach failed:", e); }
@@ -2201,7 +2405,7 @@ Deno.serve(async (req) => {
           kind: "lead_sourcing_error",
           title: "Scout could not source leads",
           message: `${sourcingFailure.message[0].toUpperCase()}${sourcingFailure.message.slice(1)}, so Scout could not run the search. No leads were saved, no credits charged, and nothing was sent.`,
-          source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
+          source_type: (tool_input_body?.source_type as string) ?? null,
           criteria, count: typeof tool_input_body?.max_results === "number" ? tool_input_body.max_results : null,
           error: sourcingFailure.error,
           retry_command: instruction,
@@ -2273,7 +2477,7 @@ Deno.serve(async (req) => {
         attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
         sourcing_attempts: sourcingAttemptAudit ?? undefined,
         lead_entity_intent: routingEntityIntent ?? undefined,
-        routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined,
+        routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source, execution_mode: routingActorPlan.execution_mode, company_first: routingActorPlan.company_first, company_gate_required: routingEntityIntent?.company_gate_required } : undefined,
         routing_conflict: routingConflict ?? undefined,
         // Section 5: surface the funnel + sanitized staged-candidate diagnostics so
         // an honest no_results explains WHY each provider candidate was held back.
@@ -2426,7 +2630,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source, execution_mode: routingActorPlan.execution_mode, company_first: routingActorPlan.company_first, company_gate_required: routingEntityIntent?.company_gate_required } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
@@ -2617,7 +2821,9 @@ Deno.serve(async (req) => {
         step_index: (step_index as number) + 1,
         agent_slug: nextStep.agent_slug,
         workspace_id,
-        user_id,
+        // Carry the RESOLVED user into the chained step so attribution can't be
+        // laundered through a hand-crafted first step.
+        user_id: taskUserId,
         instruction: nextStep.instruction,
         input: handoffInput,
         needs_approval: nextStep.needs_approval === true,

@@ -1,13 +1,31 @@
-import ariaImg from '@/assets/agents/aria.png';
-import scoutImg from '@/assets/agents/scout.png';
-import pennImg from '@/assets/agents/penn.png';
-import hawkImg from '@/assets/agents/hawk.png';
-import scribeImg from '@/assets/agents/scribe.png';
-import pilotImg from '@/assets/agents/pilot.png';
+/**
+ * Legacy AgentProfile export — retained for backward compatibility with the
+ * many components that already import from '@/data/agentProfiles'.
+ *
+ * The public identity data (Pilot / Lyra / Atlas / Mira / Orion) is derived
+ * from the canonical registry at `@/config/agentRegistry`. Historical legacy
+ * slugs (scout / aria / hawk / penn / scribe) are still resolvable via
+ * AGENT_BY_ID / AGENT_BY_NAME so historical rows continue to render the
+ * correct public identity.
+ */
 
-export type AgentDept = 'talent' | 'growth' | 'content' | 'intelligence' | 'operations';
+import {
+  PUBLIC_AGENTS,
+  PUBLIC_AGENT_ORDER,
+  LEGACY_TO_PUBLIC,
+  type PublicAgentProfile,
+  type PublicAgentId,
+  type LegacyAgentId,
+  type AgentDept as RegistryAgentDept,
+} from '@/config/agentRegistry';
+
+export type AgentDept = RegistryAgentDept;
 export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro';
 
+/**
+ * Backwards-compatible shape. `id` is the canonical public id (e.g. 'lyra').
+ * The `image` field is nullable in the legacy type — we always provide one.
+ */
 export interface AgentProfile {
   id: string;
   name: string;
@@ -19,42 +37,80 @@ export interface AgentProfile {
   description?: string;
 }
 
-export const AGENT_PROFILES: AgentProfile[] = [
-  { id: 'aria',   name: 'Aria',   role: 'Ranking',  department: 'talent',       image: ariaImg,   model: 'claude-sonnet', accentHex: '#8B5CF6', description: 'Scores and prioritizes opportunities' },
-  { id: 'scout',  name: 'Scout',  role: 'Sourcing', department: 'talent',       image: scoutImg,  model: 'gpt-4o',         accentHex: '#3B82F6', description: 'Finds leads, companies, and signals' },
-  { id: 'penn',   name: 'Penn',   role: 'Outreach', department: 'growth',       image: pennImg,   model: 'claude-haiku',   accentHex: '#10B981', description: 'Writes approval-ready outreach drafts' },
-  { id: 'hawk',   name: 'Hawk',   role: 'Research', department: 'intelligence', image: hawkImg,   model: 'gemini-pro',     accentHex: '#F59E0B', description: 'Researches companies, competitors, and websites' },
-  { id: 'scribe', name: 'Scribe', role: 'Content',  department: 'content',      image: scribeImg, model: 'claude-sonnet',  accentHex: '#A855F7', description: 'Writes content, summaries, and reports' },
-];
-
-// Pilot has no PNG asset — kept separate so iterators over AGENT_PROFILES
-// (rosters, docks, department pages) are unchanged. Lookups via AGENT_BY_ID /
-// AGENT_BY_NAME do include Pilot, so chat/workbench surfaces resolve correctly.
-export const PILOT_PROFILE: AgentProfile = {
-  id: 'pilot',
-  name: 'Pilot',
-  role: 'Manager',
-  department: 'operations',
-  image: pilotImg,
-  model: 'claude-sonnet',
-  accentHex: '#10B981',
-  description: 'Coordinates the AI workforce',
+const MODEL_BY_PUBLIC_ID: Record<PublicAgentId, AgentModelKey> = {
+  pilot: 'claude-sonnet',
+  lyra: 'gpt-4o',
+  atlas: 'claude-sonnet',
+  mira: 'claude-haiku',
+  orion: 'claude-sonnet',
 };
 
-const LOOKUP_PROFILES: AgentProfile[] = [...AGENT_PROFILES, PILOT_PROFILE];
+function toLegacyProfile(p: PublicAgentProfile): AgentProfile {
+  return {
+    id: p.id,
+    name: p.name,
+    role: p.title,
+    department: p.department,
+    image: p.avatar,
+    model: MODEL_BY_PUBLIC_ID[p.id],
+    accentHex: p.accentHex,
+    description: p.shortDescription,
+  };
+}
 
-export const AGENT_BY_ID: Record<string, AgentProfile> =
-  Object.fromEntries(LOOKUP_PROFILES.map((a) => [a.id, a]));
+/** Public specialist list (Pilot handled separately, mirroring prior shape). */
+export const AGENT_PROFILES: AgentProfile[] = PUBLIC_AGENT_ORDER
+  .filter((id) => id !== 'pilot')
+  .map((id) => toLegacyProfile(PUBLIC_AGENTS[id]));
 
-export const AGENT_BY_NAME: Record<string, AgentProfile> =
-  Object.fromEntries(LOOKUP_PROFILES.map((a) => [a.name.toLowerCase(), a]));
+/** Pilot profile — kept separate so iterators over AGENT_PROFILES are unchanged. */
+export const PILOT_PROFILE: AgentProfile = toLegacyProfile(PUBLIC_AGENTS.pilot);
+
+/**
+ * AGENT_BY_ID indexes BOTH canonical public ids AND legacy backend slugs so
+ * historical rows (`agent_slug='scout'`, etc.) continue to render the public
+ * identity (Lyra). Values are legacy-shape AgentProfile objects.
+ */
+export const AGENT_BY_ID: Record<string, AgentProfile> = (() => {
+  const out: Record<string, AgentProfile> = {};
+  for (const id of PUBLIC_AGENT_ORDER) {
+    out[id] = toLegacyProfile(PUBLIC_AGENTS[id]);
+  }
+  for (const legacy of Object.keys(LEGACY_TO_PUBLIC) as LegacyAgentId[]) {
+    const publicId = LEGACY_TO_PUBLIC[legacy];
+    out[legacy] = toLegacyProfile(PUBLIC_AGENTS[publicId]);
+  }
+  return out;
+})();
+
+export const AGENT_BY_NAME: Record<string, AgentProfile> = (() => {
+  const out: Record<string, AgentProfile> = {};
+  for (const id of PUBLIC_AGENT_ORDER) {
+    const p = PUBLIC_AGENTS[id];
+    out[p.name.toLowerCase()] = toLegacyProfile(p);
+  }
+  // Also resolve historical names (scout / aria / hawk / penn / scribe) so
+  // any component that stored the legacy display name still resolves.
+  const legacyNames: Record<LegacyAgentId, string> = {
+    pilot: 'pilot',
+    scout: 'scout',
+    aria: 'aria',
+    hawk: 'hawk',
+    penn: 'penn',
+    scribe: 'scribe',
+  };
+  for (const legacy of Object.keys(LEGACY_TO_PUBLIC) as LegacyAgentId[]) {
+    out[legacyNames[legacy]] = toLegacyProfile(PUBLIC_AGENTS[LEGACY_TO_PUBLIC[legacy]]);
+  }
+  return out;
+})();
 
 export const deptRing: Record<AgentDept, string> = {
   talent:       'ring-emerald-500/70',
   growth:       'ring-blue-500/70',
   intelligence: 'ring-amber-500/70',
   content:      'ring-violet-500/70',
-  operations:   'ring-slate-400/70',
+  operations:   'ring-emerald-500/70',
 };
 
 export const deptDot: Record<AgentDept, string> = {
@@ -62,7 +118,7 @@ export const deptDot: Record<AgentDept, string> = {
   growth:       'bg-blue-500',
   intelligence: 'bg-amber-500',
   content:      'bg-violet-500',
-  operations:   'bg-slate-400',
+  operations:   'bg-emerald-500',
 };
 
 export const deptText: Record<AgentDept, string> = {
@@ -70,5 +126,5 @@ export const deptText: Record<AgentDept, string> = {
   growth:       'text-blue-400',
   intelligence: 'text-amber-400',
   content:      'text-violet-400',
-  operations:   'text-slate-300',
+  operations:   'text-emerald-400',
 };

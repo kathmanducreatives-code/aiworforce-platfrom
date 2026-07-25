@@ -1,0 +1,568 @@
+[
+  {
+    "normalized": {
+      "candidateId": "northwind.example-0",
+      "normalizedCompanyName": "Northwind Analytics",
+      "canonicalDomain": "northwind.example",
+      "normalizedPersonName": "Jordan Rivera",
+      "normalizedJobTitle": "sales operations manager",
+      "normalizedJobFamily": "sales_ops",
+      "normalizedLocation": "Austin, United States",
+      "normalizedCountry": "US",
+      "companyLinkedinUrl": "linkedin.com/company/northwind-analytics",
+      "personLinkedinUrl": "linkedin.com/in/jordan-rivera-fictional",
+      "sourceDate": "2026-07-12",
+      "evidenceUrl": "https://boards.example.com/northwind/salesops",
+      "evidenceFreshnessDays": 11,
+      "currentEmployerMatch": true,
+      "duplicateKeys": {
+        "accountByDomain": "domain:northwind.example",
+        "accountByLinkedin": "company_li:linkedin.com/company/northwind-analytics",
+        "accountByNameFallback": "company_name:Northwind Analytics",
+        "personByLinkedin": "person_li:linkedin.com/in/jordan-rivera-fictional",
+        "personByCompanyNameFallback": "person_name:Northwind Analytics|Jordan Rivera"
+      },
+      "raw": {
+        "provider": "apify",
+        "actorKey": "apify_jobs",
+        "actorId": "curious_coder/linkedin-jobs-scraper",
+        "actorRunId": "run_example",
+        "rawItemIndex": 0,
+        "sourceUrl": null,
+        "companyName": "Northwind Analytics",
+        "companyDomain": "northwind.example",
+        "companyLinkedinUrl": "https://linkedin.com/company/northwind-analytics",
+        "jobTitle": "Sales Operations Manager",
+        "jobDescriptionExcerpt": "Own US revenue operations and pipeline for our B2B SaaS analytics platform.",
+        "jobLocation": "Austin, United States",
+        "jobPostingUrl": "https://boards.example.com/northwind/salesops",
+        "jobObservedDate": "2026-07-12",
+        "personName": "Jordan Rivera",
+        "personTitle": "Co-Founder & CEO",
+        "personLinkedinUrl": "https://linkedin.com/in/jordan-rivera-fictional",
+        "statedCurrentCompany": "Northwind Analytics",
+        "rawLocation": null,
+        "rawMeta": {
+          "employeeCount": 45,
+          "companyDescription": "B2B SaaS analytics platform"
+        }
+      }
+    },
+    "gates": {
+      "candidateId": "northwind.example-0",
+      "gates": [
+        {
+          "id": "company_type",
+          "outcome": "pass",
+          "detail": "Credible software/SaaS evidence in company/role text."
+        },
+        {
+          "id": "hiring_signal",
+          "outcome": "pass",
+          "detail": "Matched Sales/Revenue-Operations role: \"Sales Operations\" (sales_ops)."
+        },
+        {
+          "id": "us_relevance",
+          "outcome": "pass",
+          "detail": "Job country resolves to the United States."
+        },
+        {
+          "id": "founder_role",
+          "outcome": "pass",
+          "detail": "Current founder title: \"Co-Founder & CEO\"."
+        },
+        {
+          "id": "employer_match",
+          "outcome": "pass",
+          "detail": "Founder's verified current employer matches \"Northwind Analytics\"."
+        },
+        {
+          "id": "evidence",
+          "outcome": "pass",
+          "detail": "Hiring evidence URL present with founder relationship support."
+        }
+      ],
+      "allHardPass": true,
+      "anyNeedsReview": false,
+      "failedCodes": []
+    },
+    "secondary": {
+      "b2bRelevance": 1,
+      "companySizeFit": 1,
+      "earlyOrGrowthStage": 0.4,
+      "recentFunding": 0,
+      "smallRevenueTeam": 1,
+      "activeGtmHiring": 1,
+      "founderLedSalesLikely": 1,
+      "pipelineNeed": 1,
+      "signalRecency": 1,
+      "evidenceQuality": 1,
+      "domainConfidence": 1
+    },
+    "benchmarkScore": {
+      "total": 100,
+      "components": {
+        "saas_validity": 15,
+        "hiring_signal": 25,
+        "us_relevance": 15,
+        "founder_validity": 15,
+        "employer_match": 15,
+        "evidence": 10,
+        "icp_relevance": 5
+      }
+    },
+    "verdict": "CONTACT",
+    "whyNow": {
+      "statement": "Northwind Analytics is hiring a Sales Operations Manager for its US revenue team, suggesting it is standing up GTM operations.",
+      "namesSignal": true,
+      "inventsFacts": false,
+      "distinguishesInference": true,
+      "companySpecific": true,
+      "unsupportedClauses": [],
+      "supported": true
+    },
+    "outreachAngle": {
+      "angle": "Reference their Sales Operations hire and offer to build pipeline before payroll.",
+      "referencesSignal": true,
+      "connectsToValue": true,
+      "violations": [],
+      "ok": true
+    },
+    "duplicateStatus": "unique",
+    "agentory": {
+      "leadCandidateId": "lc-nw",
+      "score": 87,
+      "decision": "contact",
+      "rank": 1,
+      "whyNow": "Northwind Analytics is hiring a Sales Operations Manager for its US revenue team, suggesting it is standing up GTM operations.",
+      "outreachAngle": "Reference their Sales Operations hire and offer to build pipeline before payroll."
+    },
+    "scoreDiff": 13,
+    "inflationWarning": false,
+    "underRankWarning": false,
+    "finalRank": 1
+  },
+  {
+    "normalized": {
+      "candidateId": "umbrella.example-1",
+      "normalizedCompanyName": "Umbrella Cloud",
+      "canonicalDomain": "umbrella.example",
+      "normalizedPersonName": "Sam Okafor",
+      "normalizedJobTitle": "revenue operations lead",
+      "normalizedJobFamily": "rev_ops",
+      "normalizedLocation": "Remote, United States",
+      "normalizedCountry": "US",
+      "companyLinkedinUrl": "linkedin.com/company/umbrella-cloud",
+      "personLinkedinUrl": "linkedin.com/in/sam-okafor-fictional",
+      "sourceDate": "2025-11-01",
+      "evidenceUrl": "https://boards.example.com/umbrella/revops",
+      "evidenceFreshnessDays": 264,
+      "currentEmployerMatch": true,
+      "duplicateKeys": {
+        "accountByDomain": "domain:umbrella.example",
+        "accountByLinkedin": "company_li:linkedin.com/company/umbrella-cloud",
+        "accountByNameFallback": "company_name:Umbrella Cloud",
+        "personByLinkedin": "person_li:linkedin.com/in/sam-okafor-fictional",
+        "personByCompanyNameFallback": "person_name:Umbrella Cloud|Sam Okafor"
+      },
+      "raw": {
+        "provider": "apify",
+        "actorKey": "apify_jobs",
+        "actorId": "curious_coder/linkedin-jobs-scraper",
+        "actorRunId": "run_example",
+        "rawItemIndex": 1,
+        "sourceUrl": null,
+        "companyName": "Umbrella Cloud",
+        "companyDomain": "umbrella.example",
+        "companyLinkedinUrl": "https://linkedin.com/company/umbrella-cloud",
+        "jobTitle": "Revenue Operations Lead",
+        "jobDescriptionExcerpt": "Lead RevOps for our US SaaS platform; own forecasting and pipeline.",
+        "jobLocation": "Remote, United States",
+        "jobPostingUrl": "https://boards.example.com/umbrella/revops",
+        "jobObservedDate": "2025-11-01",
+        "personName": "Sam Okafor",
+        "personTitle": "Founder",
+        "personLinkedinUrl": "https://linkedin.com/in/sam-okafor-fictional",
+        "statedCurrentCompany": "Umbrella Cloud",
+        "rawLocation": null,
+        "rawMeta": {
+          "employeeCount": 80,
+          "companyDescription": "SaaS revenue platform"
+        }
+      }
+    },
+    "gates": {
+      "candidateId": "umbrella.example-1",
+      "gates": [
+        {
+          "id": "company_type",
+          "outcome": "pass",
+          "detail": "Credible software/SaaS evidence in company/role text."
+        },
+        {
+          "id": "hiring_signal",
+          "outcome": "pass",
+          "detail": "Matched Sales/Revenue-Operations role: \"Revenue Operations\" (rev_ops)."
+        },
+        {
+          "id": "us_relevance",
+          "outcome": "pass",
+          "detail": "Job country resolves to the United States."
+        },
+        {
+          "id": "founder_role",
+          "outcome": "pass",
+          "detail": "Current founder title: \"Founder\"."
+        },
+        {
+          "id": "employer_match",
+          "outcome": "pass",
+          "detail": "Founder's verified current employer matches \"Umbrella Cloud\"."
+        },
+        {
+          "id": "evidence",
+          "outcome": "pass",
+          "detail": "Hiring evidence URL present with founder relationship support."
+        }
+      ],
+      "allHardPass": true,
+      "anyNeedsReview": false,
+      "failedCodes": []
+    },
+    "secondary": {
+      "b2bRelevance": 1,
+      "companySizeFit": 1,
+      "earlyOrGrowthStage": 0.4,
+      "recentFunding": 0,
+      "smallRevenueTeam": 1,
+      "activeGtmHiring": 1,
+      "founderLedSalesLikely": 1,
+      "pipelineNeed": 1,
+      "signalRecency": 0.2,
+      "evidenceQuality": 1,
+      "domainConfidence": 1
+    },
+    "benchmarkScore": {
+      "total": 100,
+      "components": {
+        "saas_validity": 15,
+        "hiring_signal": 25,
+        "us_relevance": 15,
+        "founder_validity": 15,
+        "employer_match": 15,
+        "evidence": 10,
+        "icp_relevance": 5
+      }
+    },
+    "verdict": "WATCH",
+    "whyNow": {
+      "statement": "Umbrella Cloud posted a Revenue Operations Lead role.",
+      "namesSignal": true,
+      "inventsFacts": false,
+      "distinguishesInference": true,
+      "companySpecific": true,
+      "unsupportedClauses": [],
+      "supported": true
+    },
+    "outreachAngle": {
+      "angle": "Reference the RevOps opening and offer pipeline help.",
+      "referencesSignal": true,
+      "connectsToValue": true,
+      "violations": [],
+      "ok": true
+    },
+    "duplicateStatus": "unique",
+    "agentory": {
+      "leadCandidateId": "lc-um",
+      "score": 81,
+      "decision": "contact",
+      "rank": 2,
+      "whyNow": "Umbrella Cloud posted a Revenue Operations Lead role.",
+      "outreachAngle": "Reference the RevOps opening and offer pipeline help."
+    },
+    "scoreDiff": 19,
+    "inflationWarning": false,
+    "underRankWarning": false,
+    "finalRank": 2
+  },
+  {
+    "normalized": {
+      "candidateId": "globex.example-2",
+      "normalizedCompanyName": "Globex Retail",
+      "canonicalDomain": "globex.example",
+      "normalizedPersonName": null,
+      "normalizedJobTitle": "sales operations coordinator",
+      "normalizedJobFamily": "sales_ops",
+      "normalizedLocation": "Chicago, United States",
+      "normalizedCountry": "US",
+      "companyLinkedinUrl": null,
+      "personLinkedinUrl": null,
+      "sourceDate": "2026-07-05",
+      "evidenceUrl": "https://boards.example.com/globex/salesops",
+      "evidenceFreshnessDays": 18,
+      "currentEmployerMatch": false,
+      "duplicateKeys": {
+        "accountByDomain": "domain:globex.example",
+        "accountByLinkedin": null,
+        "accountByNameFallback": "company_name:Globex Retail",
+        "personByLinkedin": null,
+        "personByCompanyNameFallback": null
+      },
+      "raw": {
+        "provider": "apify",
+        "actorKey": "apify_jobs",
+        "actorId": "curious_coder/linkedin-jobs-scraper",
+        "actorRunId": "run_example",
+        "rawItemIndex": 2,
+        "sourceUrl": null,
+        "companyName": "Globex Retail",
+        "companyDomain": "globex.example",
+        "companyLinkedinUrl": null,
+        "jobTitle": "Sales Operations Coordinator",
+        "jobDescriptionExcerpt": "Coordinate store sales operations for our retail chain.",
+        "jobLocation": "Chicago, United States",
+        "jobPostingUrl": "https://boards.example.com/globex/salesops",
+        "jobObservedDate": "2026-07-05",
+        "personName": null,
+        "personTitle": null,
+        "personLinkedinUrl": null,
+        "statedCurrentCompany": null,
+        "rawLocation": null,
+        "rawMeta": {
+          "industries": [
+            "Retail"
+          ]
+        }
+      }
+    },
+    "gates": {
+      "candidateId": "globex.example-2",
+      "gates": [
+        {
+          "id": "company_type",
+          "outcome": "needs_review",
+          "detail": "No clear SaaS/software evidence — do not assume SaaS.",
+          "reasonCode": "insufficient_company_evidence"
+        },
+        {
+          "id": "hiring_signal",
+          "outcome": "pass",
+          "detail": "Matched Sales/Revenue-Operations role: \"Sales Operations\" (sales_ops)."
+        },
+        {
+          "id": "us_relevance",
+          "outcome": "pass",
+          "detail": "Job country resolves to the United States."
+        },
+        {
+          "id": "founder_role",
+          "outcome": "needs_review",
+          "detail": "No founder/decision-maker discovered yet.",
+          "reasonCode": "insufficient_founder_evidence"
+        },
+        {
+          "id": "employer_match",
+          "outcome": "needs_review",
+          "detail": "No founder discovered — employer match not evaluable yet.",
+          "reasonCode": "insufficient_founder_evidence"
+        },
+        {
+          "id": "evidence",
+          "outcome": "pass",
+          "detail": "Hiring evidence URL present."
+        }
+      ],
+      "allHardPass": false,
+      "anyNeedsReview": true,
+      "failedCodes": []
+    },
+    "secondary": {
+      "b2bRelevance": 0.3,
+      "companySizeFit": 0.4,
+      "earlyOrGrowthStage": 0.4,
+      "recentFunding": 0,
+      "smallRevenueTeam": 0.4,
+      "activeGtmHiring": 0.4,
+      "founderLedSalesLikely": 0.4,
+      "pipelineNeed": 0.3,
+      "signalRecency": 1,
+      "evidenceQuality": 1,
+      "domainConfidence": 1
+    },
+    "benchmarkScore": {
+      "total": 70.5,
+      "components": {
+        "saas_validity": 6.75,
+        "hiring_signal": 25,
+        "us_relevance": 15,
+        "founder_validity": 6.75,
+        "employer_match": 4.5,
+        "evidence": 10,
+        "icp_relevance": 2.5
+      }
+    },
+    "verdict": "NEEDS_REVIEW",
+    "whyNow": {
+      "statement": null,
+      "namesSignal": false,
+      "inventsFacts": false,
+      "distinguishesInference": false,
+      "companySpecific": false,
+      "unsupportedClauses": [],
+      "supported": false
+    },
+    "outreachAngle": {
+      "angle": null,
+      "referencesSignal": false,
+      "connectsToValue": false,
+      "violations": [],
+      "ok": false
+    },
+    "duplicateStatus": "unique",
+    "agentory": null,
+    "scoreDiff": null,
+    "inflationWarning": false,
+    "underRankWarning": false,
+    "finalRank": 3
+  },
+  {
+    "normalized": {
+      "candidateId": "initech.example-3",
+      "normalizedCompanyName": "Initech Cloud",
+      "canonicalDomain": "initech.example",
+      "normalizedPersonName": null,
+      "normalizedJobTitle": "account executive",
+      "normalizedJobFamily": "sales_generic",
+      "normalizedLocation": "Boston, United States",
+      "normalizedCountry": "US",
+      "companyLinkedinUrl": null,
+      "personLinkedinUrl": null,
+      "sourceDate": "2026-07-08",
+      "evidenceUrl": "https://boards.example.com/initech/ae",
+      "evidenceFreshnessDays": 15,
+      "currentEmployerMatch": false,
+      "duplicateKeys": {
+        "accountByDomain": "domain:initech.example",
+        "accountByLinkedin": null,
+        "accountByNameFallback": "company_name:Initech Cloud",
+        "personByLinkedin": null,
+        "personByCompanyNameFallback": null
+      },
+      "raw": {
+        "provider": "apify",
+        "actorKey": "apify_jobs",
+        "actorId": "curious_coder/linkedin-jobs-scraper",
+        "actorRunId": "run_example",
+        "rawItemIndex": 3,
+        "sourceUrl": null,
+        "companyName": "Initech Cloud",
+        "companyDomain": "initech.example",
+        "companyLinkedinUrl": null,
+        "jobTitle": "Account Executive",
+        "jobDescriptionExcerpt": "Close new business for our SaaS platform in the US.",
+        "jobLocation": "Boston, United States",
+        "jobPostingUrl": "https://boards.example.com/initech/ae",
+        "jobObservedDate": "2026-07-08",
+        "personName": null,
+        "personTitle": null,
+        "personLinkedinUrl": null,
+        "statedCurrentCompany": null,
+        "rawLocation": null,
+        "rawMeta": {
+          "companyDescription": "SaaS platform"
+        }
+      }
+    },
+    "gates": {
+      "candidateId": "initech.example-3",
+      "gates": [
+        {
+          "id": "company_type",
+          "outcome": "pass",
+          "detail": "Credible software/SaaS evidence in company/role text."
+        },
+        {
+          "id": "hiring_signal",
+          "outcome": "fail",
+          "detail": "Role \"Account Executive\" is sales_generic, not Sales/Revenue Operations.",
+          "reasonCode": "hiring_role_mismatch"
+        },
+        {
+          "id": "us_relevance",
+          "outcome": "pass",
+          "detail": "Job country resolves to the United States."
+        },
+        {
+          "id": "founder_role",
+          "outcome": "needs_review",
+          "detail": "No founder/decision-maker discovered yet.",
+          "reasonCode": "insufficient_founder_evidence"
+        },
+        {
+          "id": "employer_match",
+          "outcome": "needs_review",
+          "detail": "No founder discovered — employer match not evaluable yet.",
+          "reasonCode": "insufficient_founder_evidence"
+        },
+        {
+          "id": "evidence",
+          "outcome": "pass",
+          "detail": "Hiring evidence URL present."
+        }
+      ],
+      "allHardPass": false,
+      "anyNeedsReview": true,
+      "failedCodes": [
+        "hiring_role_mismatch"
+      ]
+    },
+    "secondary": {
+      "b2bRelevance": 1,
+      "companySizeFit": 0.4,
+      "earlyOrGrowthStage": 0.4,
+      "recentFunding": 0,
+      "smallRevenueTeam": 0.4,
+      "activeGtmHiring": 1,
+      "founderLedSalesLikely": 0.4,
+      "pipelineNeed": 1,
+      "signalRecency": 1,
+      "evidenceQuality": 1,
+      "domainConfidence": 1
+    },
+    "benchmarkScore": {
+      "total": 55.5,
+      "components": {
+        "saas_validity": 15,
+        "hiring_signal": 0,
+        "us_relevance": 15,
+        "founder_validity": 6.75,
+        "employer_match": 4.5,
+        "evidence": 10,
+        "icp_relevance": 4.25
+      }
+    },
+    "verdict": "REJECT",
+    "whyNow": {
+      "statement": null,
+      "namesSignal": false,
+      "inventsFacts": false,
+      "distinguishesInference": false,
+      "companySpecific": false,
+      "unsupportedClauses": [],
+      "supported": false
+    },
+    "outreachAngle": {
+      "angle": null,
+      "referencesSignal": false,
+      "connectsToValue": false,
+      "violations": [],
+      "ok": false
+    },
+    "duplicateStatus": "unique",
+    "agentory": null,
+    "scoreDiff": null,
+    "inflationWarning": false,
+    "underRankWarning": false,
+    "finalRank": 4
+  }
+]

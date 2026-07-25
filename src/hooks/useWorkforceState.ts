@@ -80,7 +80,7 @@ export function useWorkforceState(workspaceId: string | null) {
             todayOutput: 'Waiting on ICP confirmation',
             nextAction: { label: 'Complete Company Brain', route: '/onboarding/company-brain' },
             badgeCount: 0,
-            blockedReason: 'Aria needs your ICP, offer, and target market before she can score leads.',
+            blockedReason: 'Atlas needs your ICP, offer, and target market before she can score leads.',
           },
       penn: {
         id: 'penn',
@@ -88,7 +88,7 @@ export function useWorkforceState(workspaceId: string | null) {
         statusText: outreachDrafts > 0 ? 'Waiting for approval' : 'Ready to draft',
         todayOutput: `${outreachDrafts} draft${outreachDrafts === 1 ? '' : 's'} ready`,
         context: 'Nothing is sent without your approval.',
-        nextAction: { label: outreachDrafts > 0 ? 'Review drafts' : 'Ask Penn to draft', route: '/awaiting-you' },
+        nextAction: { label: outreachDrafts > 0 ? 'Review drafts' : 'Ask Mira to draft', route: '/awaiting-you' },
         badgeCount: outreachDrafts,
       },
       hawk: {
@@ -124,13 +124,13 @@ export function useWorkforceState(workspaceId: string | null) {
         id: `sig-${(s as any).id ?? i}`,
         time: fmt((s as any).created_at),
         agentId: 'scout' as AgentId,
-        text: `Scout found "${(s as any).title ?? 'a new signal'}"`,
+        text: `Lyra found "${(s as any).title ?? 'a new signal'}"`,
       })),
       ...drafts.slice(0, 2).map((d, i) => ({
         id: `draft-${(d as any).id ?? i}`,
         time: fmt((d as any).created_at),
         agentId: 'penn' as AgentId,
-        text: `Penn prepared a ${(d as any).channel ?? 'outreach'} draft`,
+        text: `Mira prepared a ${(d as any).channel ?? 'outreach'} draft`,
       })),
       ...approvals.slice(0, 2).map((a) => ({
         id: `apr-${a.id}`,

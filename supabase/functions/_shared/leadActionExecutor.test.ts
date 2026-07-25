@@ -91,7 +91,7 @@ function fakeAdmin(seedRows: any[]) {
 }
 
 const seedLead = {
-  id: "lead-1", contact_id: null,
+  id: "lead-1", contact_id: null, workspace_id: "ws",
   accounts: { name: "Acme Robotics", domain: "acme.com", website_url: "https://acme.com", linkedin_url: "https://linkedin.com/company/acme" },
   raw: {
     company_website: "https://acme.com", domain: "acme.com", company_linkedin_url: "https://linkedin.com/company/acme",
@@ -134,22 +134,24 @@ Deno.test("executeLeadAction research_company: rejected lead → blocked, no cra
   assertEquals((out.per_lead[0] as any).status, "blocked");
 });
 
-Deno.test("executeLeadAction find_decision_makers: poster founder resolved, persisted, no people search", async () => {
+// BEHAVIOUR CHANGE (decision-maker integration): a job poster is a HINT, not
+// proof of employment. The poster record carries only name/title/profile URL, so
+// it cannot verify a current employer and no longer short-circuits the search.
+// Previously it was accepted on trust and persisted as the decision-maker.
+Deno.test("find_decision_makers: an unverifiable poster hint no longer short-circuits the search", async () => {
   const { api, state } = fakeAdmin([seedLead]);
   let searched = 0;
   const runTool = async (name: string): Promise<ToolResultLike> => { if (name === "source_with_apify") searched++; return { ok: true, data: { items: [] } }; };
   const out = await executeLeadAction("find_decision_makers", ["lead-1"], mkCtx(api, runTool));
-  assertEquals(searched, 0);
-  const dmUpdate = state.updates.find((u) => u.patch?.raw?.decision_makers);
-  assert(dmUpdate);
-  assertEquals(dmUpdate.patch.raw.decision_makers[0].name, "Jane Doe");
-  assert(state.inserts.some((i) => i.table === "contacts" && i.vals.full_name === "Jane Doe"));
-  assertEquals((out.per_lead[0] as any).needs_manual_review, false);
+  assert(searched > 0, "the bounded search runs because the poster could not be verified");
+  // Nothing is persisted on an unverified poster + empty provider result.
+  assertEquals(state.inserts.filter((i) => i.table === "contacts").length, 0);
+  assertEquals((out.per_lead[0] as any).status, "no_match");
 });
 
 // A lead with NO poster hint → forces the per-company people search to run.
 const noPosterLead = {
-  ...seedLead, id: "lead-2",
+  ...seedLead, id: "lead-2", workspace_id: "ws",
   raw: { ...seedLead.raw, poster_contact_hint: { name: null, profile_url: null, title: null }, job_description: "Join us." },
 };
 
@@ -183,6 +185,7 @@ Deno.test("Bug2 #10/#12: only verified DM persisted + linked; off-company reject
   const out = await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
   const dmUpdate = state.updates.find((u) => u.patch?.raw?.decision_makers);
   assertEquals(dmUpdate.patch.raw.decision_makers.map((d: any) => d.name), ["Real Founder"]);
+  assertEquals(dmUpdate.patch.raw.decision_makers[0].verification_status, "verified");
   assertEquals(dmUpdate.patch.raw.decision_makers_rejected.map((r: any) => r.name), ["Off Founder"]);
   // contact_id linked to the verified contact
   assert(state.updates.some((u) => u.table === "lead_candidates" && u.patch?.contact_id));
@@ -209,7 +212,11 @@ Deno.test("Bug1 #12b: all no-match → no contact linked, needs_manual_review", 
   const out = await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
   assertEquals(state.inserts.filter((i) => i.table === "contacts").length, 0);
   assert(!state.updates.some((u) => u.table === "lead_candidates" && u.patch?.contact_id));
-  assertEquals((out.per_lead[0] as any).needs_manual_review, true);
+  // BEHAVIOUR CHANGE: a person at a DIFFERENT company is a rejection, not
+  // something for a human to review. needs_manual_review is now reserved for
+  // profiles whose employment could not be confirmed either way.
+  assertEquals((out.per_lead[0] as any).status, "no_match");
+  assertEquals((out.per_lead[0] as any).needs_manual_review, false);
 });
 
 // A gate-eligible lead: provider-verified (person-level), contact-ready, canonical

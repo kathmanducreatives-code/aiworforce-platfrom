@@ -1,0 +1,35 @@
+{
+  "runId": "lead-quality-sales-ops-us-EXAMPLE",
+  "query": "Founders of SaaS startups hiring Sales Operations in the United States",
+  "gitSha": "EXAMPLE",
+  "testSupabaseRef": "zbwsbnqqpkvdhqwavjke",
+  "workspaceId": "ws-qa-example",
+  "mode": "replay",
+  "actorIds": [
+    "curious_coder/linkedin-jobs-scraper",
+    "harvestapi/linkedin-profile-search"
+  ],
+  "actorRunIds": [
+    "run_example"
+  ],
+  "providerLimits": {
+    "rawMaxResults": 25,
+    "verifyMaxAccounts": 10,
+    "founderLookupMaxAccounts": 8,
+    "founderCandidatesPerAccount": 2,
+    "finalRankedMax": 10
+  },
+  "apifyReportedSpendUsd": 0,
+  "estimatedMaxUsd": 2.93,
+  "modelCallCount": 0,
+  "modelCallPurposes": [
+    "qualification",
+    "ranking"
+  ],
+  "startedAt": "2026-07-23T00:00:00.000Z",
+  "finishedAt": "2026-07-23T00:00:00.000Z",
+  "artifactHashes": {
+    "raw": "a1728b10",
+    "evaluation": "8010abdf"
+  }
+}
