@@ -225,12 +225,16 @@ export interface ResolvedJobIntent extends JobIntent {
 export function resolveJobIntent(query: string | null | undefined): ResolvedJobIntent {
   const intent = compileJobIntent(query);
   const def = getJobFamily(intent.family_key);
+  // EXACT titles only. Synonyms and adjacent titles are what broadening is
+  // allowed to add later, after deterministic validation — never up front.
+  const titles = def ? [...def.exact] : [];
   return {
     ...intent,
+    // The titles belong to the HIRING role, so they are carried there too — a
+    // caller must never be able to read them as decision-maker titles.
+    hiring_role: { ...intent.hiring_role, titles },
     family_label: def?.label ?? null,
-    // EXACT titles only. Synonyms and adjacent titles are what broadening is
-    // allowed to add later, after deterministic validation — never up front.
-    titles: def ? [...def.exact] : [],
+    titles,
     excluded_titles: def ? [...def.excluded] : [],
   };
 }

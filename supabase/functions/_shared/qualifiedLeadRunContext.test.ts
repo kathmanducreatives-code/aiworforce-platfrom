@@ -67,14 +67,17 @@ Deno.test("PART 2: every required field is POPULATED from a real run", async () 
   assert((ctx.round_number ?? 0) >= 1);
   assert(ctx.planner_source && ctx.planner_source.length > 0, "planner_source must never be blank");
   assert(ctx.planner_status && ctx.planner_status.length > 0, "planner_status must never be blank");
-  assertStringIncludes(ctx.parsed_intent_summary!, "sales_operations");
+  assertStringIncludes(ctx.parsed_intent_summary!, "hiring=sales_operations");
   assertStringIncludes(ctx.parsed_intent_summary!, "department=revenue");
+  // THE PART 1 GUARANTEE, restated at the diagnostics boundary.
+  assertEquals(ctx.hiring_seniority, [], "the founder CONTACT leaked into the hiring seniority");
+  assertEquals(ctx.decision_maker_seniority, ["founder", "c_level"]);
 });
 
 Deno.test("PART 2: the summary describes the DIMENSIONS, not just a status word", async () => {
   const cf = await realRun();
   const ctx = buildQualifiedLeadRunContext({ result: cf, jobIntent: compileJobIntent(TARGET) });
-  for (const dim of ["department=", "seniority=", "stage=", "vertical=", "geography="]) {
+  for (const dim of ["department=", "hiring_seniority=", "decision_maker=", "stage=", "vertical=", "geography="]) {
     assertStringIncludes(ctx.parsed_intent_summary!, dim);
   }
 });
@@ -99,7 +102,7 @@ Deno.test("PART 2: the context never carries a provider payload, prompt or trace
   }
   // Exactly the declared field set, plus the version. Nothing extra rides along.
   const keys = Object.keys(JSON.parse(blob)).sort();
-  assertEquals(keys, ["version", ...REQUIRED_RUN_CONTEXT_FIELDS].sort());
+  assertEquals(keys, ["version", "hiring_seniority", "decision_maker_seniority", ...REQUIRED_RUN_CONTEXT_FIELDS].sort());
 });
 
 Deno.test("PART 2: missingRunContextFields actually detects an empty field", () => {

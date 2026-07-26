@@ -43,7 +43,8 @@ import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
-import { decideClaimAttempt, claimContinuation, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb } from "../_shared/continuationClaim.ts";
+import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
+import { projectStatus, readStatuses } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
@@ -258,13 +259,33 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
-    const claim = newClaim(crypto.randomUUID(), new Date().toISOString(), decision.nextRound);
-    const cas = await claimContinuation({
-      db: supabase as unknown as ClaimDb,
-      taskId: decision.taskId,
-      observedStatus,
-      resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
+    const claimId = crypto.randomUUID();
+    const claim = newClaim(claimId, new Date().toISOString(), decision.nextRound);
+
+    // DURABLE PATH FIRST. `claim_sourcing_continuation` takes SELECT … FOR UPDATE
+    // before deciding, so even two stale reclaimers are serialised. It reports
+    // `available: false` when its migration has not been applied, in which case
+    // the conditional update below is used — that fallback is exclusive for a
+    // LIVE claim but not for two simultaneous stale reclaims.
+    const rpc = await claimContinuationViaRpc({
+      db: supabase as unknown as RpcDb,
+      taskId: decision.taskId, workspaceId: workspace_id, claimId,
     });
+    if (rpc.available && !rpc.claimed) {
+      return json({
+        success: false, error: "continuation_refused", reason: rpc.reason,
+        message: CLAIM_REFUSAL_MESSAGE[rpc.reason], held_until: rpc.heldUntil,
+      }, 409);
+    }
+
+    const cas = rpc.available
+      ? { claimed: true as const }
+      : await claimContinuation({
+          db: supabase as unknown as ClaimDb,
+          taskId: decision.taskId,
+          observedStatus,
+          resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
+        });
     if (!cas.claimed) {
       // Another invocation moved the status first. It owns this checkpoint; this
       // one must NOT run it, or the same round is paid for twice.
@@ -276,7 +297,8 @@ Deno.serve(async (req) => {
 
     task = { id: decision.taskId };
     console.log("[run-agent][company-first] resuming task", {
-      task_id: decision.taskId, next_round: decision.nextRound, claim: attempt.reason,
+      task_id: decision.taskId, next_round: decision.nextRound,
+      claim: attempt.reason, claim_path: rpc.available ? "rpc_for_update" : "conditional_update",
     });
   }
 
@@ -731,17 +753,23 @@ Deno.serve(async (req) => {
         // database writes. Anything short of the quota reports why.
         // `continuation_required` is NOT terminal — the task stays `partial` with a
         // checkpoint so a later invocation resumes instead of restarting.
-        const taskStatus = (cf.status === "provider_failure" || cf.status === "invalid_request" || !!cf.writeBoundary.invariantViolation)
-          ? "failed"
-          : cf.status === "completed" ? "completed" : "partial";
+        // STATUS SEPARATION. The COLUMN carries database execution state only
+        // (the values every declared constraint agrees on); the sourcing outcome
+        // and the quota outcome live in `result`. Overloading the column made it
+        // mean two things at once and would break the moment the constraint
+        // declared in migration 20260519104244 is actually applied.
+        const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation);
+        const taskStatus = statuses.taskStatus;
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
         const { data: finishedRow } = await supabase.from("tasks").select("result").eq("id", task.id).maybeSingle();
         const priorTaskResult = releaseClaim(((finishedRow as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>);
         await supabase.from("tasks").update({
-          status: taskStatus,
+          status: statuses.rowStatus,
           result: {
             ...priorTaskResult,
+            task_status: statuses.taskStatus,
+            terminal_status: statuses.terminalStatus,
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,

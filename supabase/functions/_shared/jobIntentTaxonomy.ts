@@ -34,9 +34,6 @@ export type Department =
   | "revenue" | "engineering" | "finance" | "operations"
   | "marketing" | "clinical" | "partnerships" | "executive";
 
-/** The seniority BAR the request implies, not a guess at a specific level. */
-export type Seniority = "ic" | "manager" | "director" | "vp" | "c_level";
-
 export type TeamStage = "first_hire" | "building" | "scaling" | "established";
 
 export type CompanyVertical =
@@ -76,20 +73,42 @@ export function inferVertical(...sources: Array<string | null | undefined>): Com
 }
 
 // ----------------------------------------------------------------- seniority --
+//
+// Seniority is only ever reported when the text ACTUALLY states it. An empty
+// array means "unspecified", which is different from "individual contributor" —
+// conflating the two is what let a request for a CEO *contact* be read as a
+// request for a C-level Sales-Operations *hire*.
 
-const SENIORITY_RULES: Array<[Seniority, RegExp]> = [
-  ["c_level", /\b(chief \w+ officer|\bceos?\b|\bcoos?\b|\bcros?\b|\bcfos?\b|\bctos?\b|presidents?|founders?|owners?)\b/i],
-  // "leadership" and "head of" are VP-shaped asks; "VP Sales" and "Head of Sales"
-  // are the same bar in practice.
-  ["vp", /\b(vps?\b|vice presidents?|head of|leadership|svps?\b)\b/i],
+export type SeniorityToken = "junior" | "ic" | "manager" | "director" | "head" | "vp" | "c_level" | "founder";
+
+/** Ordered so the most senior stated token is reported first. */
+const SENIORITY_TOKENS: Array<[SeniorityToken, RegExp]> = [
+  ["founder", /\b(founders?|co-?founders?|owners?)\b/i],
+  ["c_level", /\b(chief \w+ officer|\bceos?\b|\bcoos?\b|\bcros?\b|\bcfos?\b|\bctos?\b|presidents?|c-level|c-suite)\b/i],
+  ["vp", /\b(vps?\b|vice presidents?|svps?\b|leadership)\b/i],
+  ["head", /\bheads? of\b/i],
   ["director", /\b(directors?|leaders?|principals?)\b/i],
   ["manager", /\b(managers?|supervisors?)\b/i],
+  ["junior", /\b(junior|entry[- ]level|associate|graduate|jr\.?)\b/i],
 ];
 
-export function inferSeniority(text: string): Seniority {
+/**
+ * Every seniority level the text states, most senior first. Empty when the text
+ * never says one.
+ */
+export function seniorityTokens(text: string): SeniorityToken[] {
   const t = norm(text);
-  for (const [level, re] of SENIORITY_RULES) if (re.test(t)) return level;
-  return "ic";
+  const out: SeniorityToken[] = [];
+  for (const [tok, re] of SENIORITY_TOKENS) if (re.test(t)) out.push(tok);
+  // "Head of X" is a director-or-above bar; report both so callers can test
+  // either without knowing the wording the user happened to use.
+  if (out.includes("head") && !out.includes("director")) out.push("director");
+  return out;
+}
+
+/** True when nothing above IC was requested — a junior/unspecified hire. */
+export function isIcCompatible(tokens: SeniorityToken[]): boolean {
+  return !tokens.some((t) => ["manager", "director", "head", "vp", "c_level", "founder"].includes(t));
 }
 
 // ---------------------------------------------------------------- team stage --
@@ -126,7 +145,7 @@ const MARKETING_RE = /\b(marketing|demand gen(?:eration)?|product marketing|bran
 const OPERATIONS_RE = /\b(operations?|ops\b|supply chain|logistics managers?|program managers?|business operations)\b/i;
 const EXECUTIVE_RE = /\b(chief \w+ officer|\bceos?\b|\bcoos?\b|general managers?|managing directors?|executive teams?)\b/i;
 
-export function inferFunction(text: string, seniority: Seniority, stage: TeamStage): JobFunction | null {
+export function inferFunction(text: string, seniority: SeniorityToken[], stage: TeamStage): JobFunction | null {
   const t = norm(text);
 
   // Sales Operations is its own discipline and is matched BEFORE anything that
@@ -154,7 +173,7 @@ export function inferFunction(text: string, seniority: Seniority, stage: TeamSta
   //   first hire stage → early / commercial sales
   //   explicit IC role → quota-carrying IC
   if (SALES_ANY_RE.test(t) || SALES_IC_RE.test(t)) {
-    if (seniority === "vp" || seniority === "c_level" || seniority === "director") return "sales_leadership";
+    if (seniority.some((x) => ["vp", "c_level", "director", "head"].includes(x))) return "sales_leadership";
     if (stage === "first_hire") return "early_sales";
     if (SALES_IC_RE.test(t)) return "sales_ic";
     return "sales_ic";
@@ -245,55 +264,173 @@ export function inferGeography(text: string): string[] {
   return found;
 }
 
+// ------------------------------------------------------- clause segmentation --
+//
+// THE DEFECT THIS FIXES
+//
+// "Find founders of SaaS startups hiring Sales Operations" was read as ONE bag of
+// words, so "founders" — which describes the PERSON TO CONTACT — was scored as the
+// seniority of the JOB BEING HIRED. The request was reported as a company hiring
+// a C-level Sales-Operations employee, which nobody asked for.
+//
+// The request is split at the hiring verb. Everything after it describes the ROLE
+// BEING HIRED; everything before it describes the COMPANY and the DECISION-MAKER
+// to contact. The two are then classified independently and never share a field.
+
+const HIRING_PIVOT_RE = /\b(hiring|recruiting|looking to hire|seeking|searching for|expanding|growing|building out|standing up|that need|who need|with an open|with open)\b/i;
+
+export interface RequestClauses {
+  /** Company + person-target text — everything before the hiring verb. */
+  personClause: string;
+  /** The role being hired — everything after the hiring verb. */
+  hiringClause: string;
+  /** False when no hiring verb was found; the whole text is then the hiring clause. */
+  split: boolean;
+}
+
+export function splitRequestClauses(text: string): RequestClauses {
+  const t = String(text ?? "");
+  const m = HIRING_PIVOT_RE.exec(t);
+  if (!m || m.index < 0) return { personClause: "", hiringClause: t, split: false };
+  return {
+    personClause: t.slice(0, m.index),
+    hiringClause: t.slice(m.index + m[0].length),
+    split: true,
+  };
+}
+
+// ------------------------------------------------------- decision-maker intent --
+
+/** Person-target phrases, mapped to the canonical roles Agentory will contact. */
+const DECISION_MAKER_RULES: Array<[RegExp, string[]]> = [
+  // A "founder" ask conventionally covers the whole founding/CEO set.
+  [/\b(founders?|co-?founders?)\b/i, ["Founder", "Co-Founder", "CEO"]],
+  [/\bowners?\b/i, ["Owner", "Founder", "CEO"]],
+  [/\bceos?\b|\bchief executive officers?\b/i, ["CEO"]],
+  [/\bctos?\b|\bchief technology officers?\b/i, ["CTO"]],
+  [/\bcoos?\b/i, ["COO"]],
+  [/\bcfos?\b/i, ["CFO"]],
+  [/\bcros?\b/i, ["CRO"]],
+  [/\bpresidents?\b/i, ["President"]],
+  [/\bheads? of ([a-z& ]+?)\b(?: at| in| for|$|,)/i, []],   // captured below
+  [/\bdecision[-\s]?makers?\b/i, ["Founder", "CEO", "VP"]],
+  [/\bexecutives?\b/i, ["CEO", "COO", "VP"]],
+];
+
+export interface DecisionMakerIntent {
+  /** Canonical roles to contact. EMPTY when the request never named a person. */
+  roles: string[];
+  seniority: SeniorityToken[];
+  /** A contactable person must currently work at the qualified company. */
+  currentEmployerRequired: boolean;
+}
+
+export function extractDecisionMaker(personClause: string): DecisionMakerIntent {
+  const t = String(personClause ?? "");
+  const roles: string[] = [];
+
+  // "Heads of Engineering" / "Directors of Clinical Operations" keep their own
+  // wording — inventing a generic role would lose the department the user named.
+  const headOf = /\b(heads?|directors?|vps?|vice presidents?) of ([a-z&][a-z& ]*?)(?=\s+(?:at|in|for|from)\b|[,.]|$)/i.exec(t);
+  if (headOf) {
+    const level = headOf[1].replace(/s$/i, "").replace(/^vp$/i, "VP");
+    const dept = headOf[2].trim().split(/\s+/).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+    roles.push(`${level[0].toUpperCase()}${level.slice(1)} of ${dept}`);
+  }
+
+  for (const [re, mapped] of DECISION_MAKER_RULES) {
+    if (mapped.length && re.test(t)) for (const r of mapped) if (!roles.includes(r)) roles.push(r);
+  }
+
+  return {
+    roles,
+    // Seniority of the PERSON, read from the person clause AND the roles it
+    // resolved to — a "founders" ask expands to include the CEO, so the bar it
+    // actually searches is founder AND c_level. Read only from this clause, so
+    // the job being hired can never inherit it.
+    seniority: roles.length ? seniorityTokens(`${t} ${roles.join(" ")}`) : [],
+    // Only meaningful when there is a person to verify.
+    currentEmployerRequired: roles.length > 0,
+  };
+}
+
 // -------------------------------------------------------------- the compiler --
+
+/** The role being hired. Independent of who Agentory will contact about it. */
+export interface HiringRoleIntent {
+  /** The clause the classification was actually read from. */
+  rawText: string;
+  function: JobFunction | null;
+  department: Department | null;
+  /** Stated levels only. EMPTY means unspecified — never "IC by default". */
+  seniority: SeniorityToken[];
+  teamStage: TeamStage;
+  /** Canonical titles; resolved by jobFamilyRegistry.resolveJobIntent. */
+  titles: string[];
+}
 
 export interface JobIntent {
   original_query: string;
-  function: JobFunction | null;
-  department: Department | null;
-  seniority: Seniority;
-  team_stage: TeamStage;
+  hiring_role: HiringRoleIntent;
+  decision_maker: DecisionMakerIntent;
   vertical: CompanyVertical | null;
   geography: string[];
-  /** Registry family key, or null when nothing safe could be inferred. */
+  /** Registry family key for the HIRING role, or null when unknown. */
   family_key: string | null;
 }
 
 /**
- * Decompose a request into its independent dimensions and derive the title
- * strategy from their combination.
+ * Decompose a request into two INDEPENDENT entities plus the shared company
+ * dimensions.
  *
- * An UNRECOGNISED request returns `function: null` with no titles. That is
- * deliberate: inventing a family is how a Sales-Operations search became an SDR
- * search. Callers fall back to their own conservative behaviour.
+ * The hiring role is classified from the hiring clause alone, so a request for a
+ * CEO *contact* can never raise the seniority of the *job*. The decision-maker is
+ * extracted from the person clause alone, so a request for a VP of Sales *hire*
+ * can never invent a person target.
  */
 export function compileJobIntent(query: string | null | undefined): JobIntent {
   const text = String(query ?? "");
-  const seniority = inferSeniority(text);
-  const team_stage = inferTeamStage(text);
+  const clauses = splitRequestClauses(text);
+
+  // Company-level dimensions read the WHOLE request: the vertical, geography and
+  // team stage describe the target company, not one clause of the sentence.
   const vertical = inferVertical(text);
-  const fn = inferFunction(text, seniority, team_stage);
+  const geography = inferGeography(text);
+  const teamStage = inferTeamStage(text);
+
+  // Role-level dimensions read the HIRING clause only.
+  const hiringSeniority = seniorityTokens(clauses.hiringClause);
+  const fn = inferFunction(clauses.hiringClause, hiringSeniority, teamStage);
+
   return {
     original_query: text,
-    function: fn,
-    department: fn ? DEPARTMENT_FOR_FUNCTION[fn] : null,
-    seniority,
-    team_stage,
+    hiring_role: {
+      rawText: clauses.hiringClause.trim(),
+      function: fn,
+      department: fn ? DEPARTMENT_FOR_FUNCTION[fn] : null,
+      seniority: hiringSeniority,
+      teamStage,
+      titles: [],   // filled by resolveJobIntent, which owns the title data
+    },
+    decision_maker: extractDecisionMaker(clauses.personClause),
     vertical,
-    geography: inferGeography(text),
+    geography,
     family_key: familyKeyFor(fn, vertical),
   };
 }
 
 /** One-line human summary for diagnostics and the CSV export. */
 export function summarizeJobIntent(intent: JobIntent): string {
-  const parts = [
-    intent.function ?? "unclassified_function",
-    `department=${intent.department ?? "unknown"}`,
-    `seniority=${intent.seniority}`,
-    `stage=${intent.team_stage}`,
+  const h = intent.hiring_role;
+  const d = intent.decision_maker;
+  return [
+    `hiring=${h.function ?? "unclassified"}`,
+    `department=${h.department ?? "unknown"}`,
+    `hiring_seniority=${h.seniority.length ? h.seniority.join("/") : "unspecified"}`,
+    `stage=${h.teamStage}`,
+    `decision_maker=${d.roles.length ? d.roles.join("/") : "none"}`,
+    `decision_maker_seniority=${d.seniority.length ? d.seniority.join("/") : "none"}`,
     `vertical=${intent.vertical ?? "unspecified"}`,
     `geography=${intent.geography.length ? intent.geography.join("/") : "unspecified"}`,
-  ];
-  return parts.join("; ");
+  ].join("; ");
 }
