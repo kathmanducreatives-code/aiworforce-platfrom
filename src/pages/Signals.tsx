@@ -140,7 +140,7 @@ export default function Signals() {
 
   return (
     <>
-      <DepartmentWorkspaceShell
+      <DepartmentWorkspaceShell<PrimaryTab>
         eyebrow="Growth · Signals"
         title="Company Brain Radar"
         description="Verified market signals from your ICP — hiring, funding, competitor moves and buying-window activity, monitored by Scout."
@@ -148,9 +148,9 @@ export default function Signals() {
           name: scout.name,
           role: scout.role,
           status: 'On duty',
-          avatar: scout.avatar,
+          avatar: scout.image ?? '',
           accentHex: accent,
-          fallbackInitial: scout.fallbackInitial,
+          fallbackInitial: (scout.name?.[0] ?? 'S').toUpperCase(),
         }}
         metrics={metrics}
         primaryAction={{
@@ -184,7 +184,7 @@ export default function Signals() {
           <ScoutCopilot
             agentName={scout.name}
             agentRole={scout.role}
-            agentAvatar={scout.avatar}
+            agentAvatar={scout.image ?? ''}
             accentHex={accent}
             onRunRadarScan={handleRunScan}
             onEditRadar={() => setEditRadarOpen(true)}
