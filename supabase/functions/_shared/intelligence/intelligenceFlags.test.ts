@@ -5,8 +5,10 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   INTELLIGENCE_FLAGS, parseIntelligenceFlag, isIntelligenceFlagEnabled,
   readIntelligenceFlags, allIntelligenceFlagsOff, GEOGRAPHY_GATED_FLAGS,
-  GEOGRAPHY_GATE_NOTE, isGeographyGated, type IntelligenceFlag,
+  GEOGRAPHY_GATE_NOTE, isGeographyGated, GEOGRAPHY_GATE_CLEARED, geographyGateSatisfied,
+  type IntelligenceFlag,
 } from "./intelligenceFlags.ts";
+import { inferGeography } from "../jobIntentTaxonomy.ts";
 import {
   buildPlannerDiagnostics, auditRedaction, extractTokenUsage, attachDiagnostics,
   diagnosticsHash, PLANNER_DIAGNOSTICS_KEY,
@@ -69,6 +71,24 @@ Deno.test("31.A the geography gate is documented and names the planning flags", 
   assert(isGeographyGated("GLOBAL_ROLE_PLANNING"));
   assertFalse(isGeographyGated("CONTENT_INTELLIGENCE_KERNEL"));
   for (const f of GEOGRAPHY_GATED_FLAGS) assert((INTELLIGENCE_FLAGS as readonly string[]).includes(f));
+});
+
+Deno.test("31.B the geography gate is CLEARED, and clearing it enables nothing", () => {
+  assert(GEOGRAPHY_GATE_CLEARED, "Phase 2 removed the ambiguous-`us` defect");
+  assert(GEOGRAPHY_GATE_NOTE.startsWith("CLEARED"));
+  for (const flag of INTELLIGENCE_FLAGS) {
+    assert(geographyGateSatisfied(flag), `${flag} still reports a geography block`);
+  }
+  // The prerequisite is satisfied; the flags themselves are still OFF.
+  assert(allIntelligenceFlagsOff(NO_ENV),
+    "clearing a prerequisite must never turn a flag on");
+});
+
+Deno.test("31.C the parser itself no longer invents the United States", () => {
+  // The behavioral proof behind the cleared gate. Full coverage lives in
+  // _shared/geographyAmbiguity.test.ts; this is the flag-side assertion.
+  assertEquals(inferGeography("Show us founders in Germany"), []);
+  assertEquals(inferGeography("Find founders in the United States"), ["United States"]);
 });
 
 // ---- behavior preservation -------------------------------------------------

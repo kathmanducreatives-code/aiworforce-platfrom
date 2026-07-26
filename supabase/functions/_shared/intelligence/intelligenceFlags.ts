@@ -102,29 +102,47 @@ export function allIntelligenceFlagsOff(read?: EnvReader): boolean {
 
 // ---------------------------------------------------------------- the gate ----
 //
-// GEOGRAPHY GATE.
+// GEOGRAPHY GATE — CLEARED IN PHASE 2.
 //
-// `inferGeography` in _shared/jobIntentTaxonomy.ts resolves only US states plus
-// /\b(united states|usa|u\.s\.|\bus\b)\b/. Two consequences:
+// The blocker was `inferGeography` in _shared/jobIntentTaxonomy.ts, whose United
+// States alternation was `/\b(united states|usa|u\.s\.|\bus\b)\b/i`. Under `/i`,
+// `\bus\b` matched the PRONOUN, so "Show us founders in Germany" compiled to
+// geography ["United States"] — a country the user never named, contradicting a
+// request that explicitly named another one.
 //
-//   1. Every non-US location ("Germany", "the UK", "Canada") resolves to [].
-//   2. The `\bus\b` alternative matches the PRONOUN. "Show us founders in Germany"
-//      compiles to geography ["United States"] — a location the user never named,
-//      contradicting a request that explicitly named another country.
+// Under the deterministic runtime that silently narrowed a search. Under
+// Claude-first planning it would have handed the planner a confident false premise
+// to plan against, which is why enabling was gated on it.
 //
-// Under the deterministic runtime this is a narrowing bug. Under Claude-first
-// planning it becomes a CORRECTNESS bug with a much larger blast radius: the
-// planner would receive parser output that confidently asserts the wrong country
-// and would plan sourcing against it.
+// FIXED: lowercase `us` is no longer a United-States signal at all. Only
+// unambiguous forms are accepted — "United States", "United States of America",
+// "USA", "U.S.", "U.S.A.", and standalone uppercase `US` read from the
+// original-case query (and not from SHOUTED text, where case carries no meaning).
+// See `mentionsUnitedStates` and _shared/geographyAmbiguity.test.ts.
 //
-// The mission contract (mission.ts) already defends against this by keeping
-// explicit user wording separate from, and authoritative over, parser output. That
-// makes Phase 1 safe to BUILD. It does not make Phase 2 safe to ENABLE.
+// STILL TRUE, and NOT what this gate covered: the parser remains US-only, so a
+// non-US location resolves to []. That is now honest rather than wrong — it reports
+// "nothing I understand" instead of asserting the wrong country. Full worldwide
+// normalization is Phase 4 and is gated separately by GLOBAL_ROLE_PLANNING.
+//
+// Clearing the gate does NOT enable anything. Every flag still defaults OFF.
 
 export const GEOGRAPHY_GATE_NOTE =
-  "The lowercase `us` false positive must be removed before claude_first_lead_planning can be enabled.";
+  "CLEARED (Phase 2): the lowercase `us` false positive has been removed, so " +
+  "claude_first_lead_planning is no longer blocked by it. Enabling remains opt-in " +
+  "and per-workspace; the flag still defaults OFF.";
 
-/** Flags that must not be enabled until the geography defect is fixed. */
+/** True once the ambiguous-`us` defect is fixed. Phase 2 cleared it. */
+export const GEOGRAPHY_GATE_CLEARED = true;
+
+/**
+ * Flags that were blocked on the geography defect.
+ *
+ * Kept as a record of WHY these three were gated, and still consulted by
+ * `isGeographyGated`. With the gate cleared this is history rather than a live
+ * restriction — but the list stays, because GLOBAL_ROLE_PLANNING has its own,
+ * separate Phase 4 dependency on worldwide normalization.
+ */
 export const GEOGRAPHY_GATED_FLAGS: readonly IntelligenceFlag[] = [
   "CLAUDE_FIRST_LEAD_PLANNING",
   "CLAUDE_LEAD_REPLANNING",
@@ -133,4 +151,9 @@ export const GEOGRAPHY_GATED_FLAGS: readonly IntelligenceFlag[] = [
 
 export function isGeographyGated(flag: IntelligenceFlag): boolean {
   return GEOGRAPHY_GATED_FLAGS.includes(flag);
+}
+
+/** May this flag be enabled, as far as the geography prerequisite is concerned? */
+export function geographyGateSatisfied(flag: IntelligenceFlag): boolean {
+  return !isGeographyGated(flag) || GEOGRAPHY_GATE_CLEARED;
 }
