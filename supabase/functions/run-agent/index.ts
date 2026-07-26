@@ -40,6 +40,7 @@ import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersist
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
+import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -648,12 +649,15 @@ Deno.serve(async (req) => {
           proposeBroadening: broadeningPlanner.plan,
           plannerMetadata: broadeningPlanner.lastMetadata,
           durableIdempotency: supabaseToolCallReader(supabase as never),
+          stateStore: supabaseSourcingStateStore(supabase as never),
           invokeJobs, invokePeople, persist: persistPlan,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
         // Completion is EARNED by delivering eligible leads, never by successful
         // database writes. Anything short of the quota reports why.
+        // `continuation_required` is NOT terminal — the task stays `partial` with a
+        // checkpoint so a later invocation resumes instead of restarting.
         const taskStatus = (cf.status === "provider_failure" || cf.status === "invalid_request" || !!cf.writeBoundary.invariantViolation)
           ? "failed"
           : cf.status === "completed" ? "completed" : "partial";
@@ -681,7 +685,7 @@ Deno.serve(async (req) => {
           provider_side_writes: cf.writeBoundary.providerSideWrites, budget_consumed: cf.budget_consumed,
           counts: cf.counts, job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
           plan_sources: cf.plan_sources, planner_metadata: cf.planner_metadata,
-          bottlenecks: cf.bottlenecks, idempotency: cf.idempotency,
+          bottlenecks: cf.bottlenecks, idempotency: cf.idempotency, continuation: cf.continuation,
         });
       }
 

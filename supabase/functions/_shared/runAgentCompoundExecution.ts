@@ -59,6 +59,10 @@ export async function runAgentCompoundExecution(
     persistCandidates?: boolean;
     /** Durable paid-call key; recorded in tool_calls.input_json. */
     idempotencyKey?: string;
+    /** Builds a per-company durable key for each scoped people call. */
+    peopleIdempotencyKey?: (companyKey: string) => string;
+    /** Skip a people call whose durable key already completed. */
+    peopleCallCompleted?: (key: string) => boolean;
   } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
@@ -117,7 +121,12 @@ export async function runAgentCompoundExecution(
       // Native Harvest fields under `input`; the per-company ceiling at the TOP
       // level, which is the only place source_with_apify reads max_results from.
       const native = buildScopedPeopleInput(scope, max, intent.job_search_spec.requested_person_roles);
-      const envelope = buildProviderEnvelope("apify_people_search", native, max);
+      const env0 = buildProviderEnvelope("apify_people_search", native, max);
+      // EVERY provider call carries a durable key — jobs AND each company-scoped
+      // people call (the 2026-07-26 run stamped jobs only).
+      const pKey = opts.peopleIdempotencyKey?.(scope.companyDedupeKey ?? scope.companyName ?? "unknown");
+      if (pKey && opts.peopleCallCompleted?.(pKey)) return [];   // already paid for
+      const envelope = pKey ? stampIdempotencyKey(env0 as unknown as Record<string, unknown>, pKey) : (env0 as unknown as Record<string, unknown>);
       recordProviderInvocation(writeBoundary, envelope, "apify_people_search");
       let rows: unknown[];
       try { rows = await deps.invokePeople(envelope as unknown as Record<string, unknown>, max); }

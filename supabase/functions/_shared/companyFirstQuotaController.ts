@@ -29,6 +29,11 @@ import { shortHash } from "./planHash.ts";
 import { stampIdempotencyKey, lookupDurableCall, type ToolCallReader, type DurableLookupKind } from "./durableIdempotency.ts";
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import {
+  newSourcingState, stateBelongsTo, isResumable, deltaTitles, hasCompletedCall, recordCompletedCall,
+  type CompanyFirstSourcingState, type SourcingStateStore, type RoundCheckpoint,
+} from "./companyFirstSourcingState.ts";
+import { createExecutionDeadline, type ExecutionBudget, type ExecutionDeadline } from "./executionDeadline.ts";
+import {
   countEligible, isQuotaEligibleCandidate, leadIdentityKey, remainingLeadCount,
   DEFAULT_QUOTA_POLICY, type QuotaPolicy,
 } from "./leadQuotaPolicy.ts";
@@ -37,7 +42,9 @@ import type { Vertical } from "./verticalQualification.ts";
 
 export type CompanyFirstTerminalStatus =
   | "completed" | "quota_not_met" | "search_exhausted" | "budget_exhausted"
-  | "round_limit_reached" | "provider_failure" | "invalid_request";
+  | "round_limit_reached" | "provider_failure" | "invalid_request"
+  /** NOT terminal: the safe time boundary was reached; the task can be resumed. */
+  | "continuation_required";
 
 export interface RoundRecord {
   round_number: number;
@@ -104,6 +111,16 @@ export interface QuotaControllerResult {
   plan_validations: Array<{ round: number; approved: string[]; rejected: Array<{ title: string; reason: string }>; violations: string[] }>;
   /** Per-round planner provenance (no chain-of-thought, no secrets). */
   planner_metadata: Array<PlannerMetadata & { round: number }>;
+  /** Continuation contract when the time boundary stopped the run. */
+  continuation: {
+    required: boolean;
+    next_action: string;
+    next_round: number | null;
+    checkpoint_at: string | null;
+    /** Stable identity a later invocation resumes with. */
+    continuation_token: string | null;
+    resumed_from_round: number;
+  };
   /** Per-round durable-idempotency decision. */
   idempotency: Array<{ round: number; key: string; kind: DurableLookupKind; reason: string }>;
 }
@@ -117,6 +134,10 @@ export interface QuotaControllerOpts {
   now?: string;
   workspaceId?: string;
   taskId?: string | null;
+  /** Wall-clock budget; defaults sit below the Edge Function limit. */
+  executionBudget?: Partial<ExecutionBudget>;
+  /** Injectable clock so tests can simulate a platform kill without sleeping. */
+  clock?: () => number;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -127,6 +148,8 @@ export interface QuotaControllerDeps extends CompoundExecutionDeps {
   plannerMetadata?: () => PlannerMetadata | null;
   /** Restart-safe paid-call ledger backed by tool_calls (no migration). */
   durableIdempotency?: ToolCallReader;
+  /** Checkpoint store over tasks.result (no migration). */
+  stateStore?: SourcingStateStore;
 }
 
 export async function runCompanyFirstQuotaController(
@@ -164,7 +187,35 @@ export async function runCompanyFirstQuotaController(
   let lastFunnel: FunnelSummary | null = null;
   let lastBottleneck: BottleneckKind | null = null;
 
-  let jobsCalls = 0, peopleCalls = 0, budget = 0;
+  const deadline: ExecutionDeadline = createExecutionDeadline(opts.executionBudget, opts.clock);
+  const nowIso = () => opts.now ?? new Date().toISOString();
+  const taskId = opts.taskId ?? null;
+  const wsId = opts.workspaceId ?? "";
+
+  // RESUME: load a prior checkpoint for this exact task/workspace.
+  let state: CompanyFirstSourcingState | null = null;
+  if (deps.stateStore && taskId) {
+    const loaded = await deps.stateStore.load(taskId);
+    if (stateBelongsTo(loaded, wsId, taskId) && isResumable(loaded)) state = loaded;
+  }
+  const resumedFromRound = state ? state.current_round : 1;
+  if (!state) {
+    state = newSourcingState({ workspaceId: wsId, taskId: taskId ?? "no-task", requestedLeadCount: requested, quotaPolicy: policy, now: nowIso() });
+  } else {
+    // Rehydrate dedupe + accounting so a continuation never re-pays or double-counts.
+    for (const u of state.seen_job_urls) seenJobUrls.add(u);
+    for (const c of state.seen_company_keys) seenCompanyKeys.add(c);
+    for (const k of state.seen_lead_keys) seenLeadKeys.add(k);
+    for (const h of state.attempted_strategy_hashes) { attemptedStrategies.push(h); ledger.claim(h); }
+    for (const r of state.completed_rounds) rounds.push(r as unknown as RoundRecord);
+  }
+
+  // Quota progress from EARLIER invocations. New candidates add on top; the
+  // seen_lead_keys set stops the same lead being counted twice.
+  const carriedEligible = state.eligible_leads;
+  const carriedPersisted = new Set(state.persisted_lead_keys);
+  let jobsCalls = 0, peopleCalls = 0, budget = state.actual_cost;
+  let continuationRequired = false;
   let rawJobs = 0, verifiedCompanies = 0, peopleCandidates = 0;
   let terminal: CompanyFirstTerminalStatus | null = null;
   let terminalReason = "";
@@ -173,8 +224,15 @@ export async function runCompanyFirstQuotaController(
     return finish("invalid_request", `requested_lead_count must be a positive integer (got ${requested})`);
   }
 
-  for (let round = 1; round <= bounds.maxRounds; round++) {
-    const eligibleBefore = countEligible(dedupedCandidates, policy);
+  for (let round = resumedFromRound; round <= bounds.maxRounds; round++) {
+    // TIME BOUNDARY — never begin a round that cannot finish safely.
+    if (deadline.softExpired() || !deadline.canAfford("jobs")) {
+      continuationRequired = true;
+      terminal = "continuation_required";
+      terminalReason = `safe execution window reached after ${Math.round(deadline.elapsedMs() / 1000)}s; ${rounds.length} round(s) checkpointed`;
+      break;
+    }
+    const eligibleBefore = carriedEligible + countEligible(dedupedCandidates, policy);
     const remainingBefore = remainingLeadCount(requested, eligibleBefore);
     if (remainingBefore === 0) { terminal = "completed"; terminalReason = "quota reached"; break; }
     if (jobsCalls >= bounds.maxJobsCalls) { terminal = "search_exhausted"; terminalReason = "jobs-actor call budget reached"; break; }
@@ -184,7 +242,7 @@ export async function runCompanyFirstQuotaController(
     let roundPlan: RoundPlan | null = null;
     let planSource: PlanSource = "deterministic_only";
 
-    if (round > 1 && deps.proposeBroadening) {
+    if (round > 1 && deps.proposeBroadening && deadline.canAfford("planner")) {
       // The planner sees ONLY typed summaries — never raw provider text.
       const input = sanitizePlannerInput(constraints, { requested, eligible: eligibleBefore, remaining: remainingBefore }, lastFunnel, lastBottleneck, attemptedStrategies, Math.max(0, bounds.hardBudget - budget));
       try {
@@ -243,8 +301,21 @@ export async function runCompanyFirstQuotaController(
     const idempotencyStamp = idemKey;
 
     attemptedStrategies.push(roundPlan.strategy_hash);
+    state.attempted_strategy_hashes.push(roundPlan.strategy_hash);
     planSources.push(planSource);
-    const keywords = roundPlan.title_queries;
+    // DELTA-ONLY: never re-send a title an earlier round already searched.
+    const newTitles = deltaTitles(state, roundPlan.title_queries);
+    if (newTitles.length === 0) {
+      terminal = "search_exhausted";
+      terminalReason = "every approved title for this family has already been searched";
+      break;
+    }
+    // A completed jobs call for this exact key is reused, never re-paid.
+    if (hasCompletedCall(state, idemKey)) {
+      idempotency.push({ round, key: idemKey, kind: "cached", reason: "jobs call already completed in an earlier invocation" });
+      continue;
+    }
+    const keywords = newTitles;
     const expansion = roundPlan.goal;
     if (!expansions.includes(expansion)) expansions.push(expansion);
     const roundLimits: Partial<CompoundLimits> = {
@@ -269,6 +340,12 @@ export async function runCompanyFirstQuotaController(
       },
     }, {
       ...opts, limits: roundLimits, keywordQueriesOverride: keywords, idempotencyKey: idempotencyStamp,
+      peopleIdempotencyKey: (companyKey: string) => roundIdempotencyKey({ taskId, workspaceId: wsId, round, strategyHash: `${roundPlan!.strategy_hash}:${companyKey}`, actorKey: "apify_people_search" }),
+      peopleCallCompleted: (key: string) => {
+        if (hasCompletedCall(state!, key)) return true;
+        recordCompletedCall(state!, { idempotency_key: key, round, actor_key: "apify_people_search", company_key: key.split("::")[3] ?? null, item_count: 0, completed_at: nowIso() });
+        return false;
+      },
       persistCandidates: false,          // the controller owns persistence
     });
 
@@ -299,7 +376,7 @@ export async function runCompanyFirstQuotaController(
     writeBoundary.normalizedJobs += exec.writeBoundary.normalizedJobs;
     writeBoundary.peopleResults += exec.writeBoundary.peopleResults;
 
-    const eligibleAfter = countEligible(dedupedCandidates, policy);
+    const eligibleAfter = carriedEligible + countEligible(dedupedCandidates, policy);
     const newEligible = eligibleAfter - eligibleBefore;
 
     rounds.push({
@@ -349,6 +426,56 @@ export async function runCompanyFirstQuotaController(
     lastBottleneck = bn.kind;
     bottlenecks.push({ round, kind: bn.kind, reason: bn.reason, remedy: remedyFor(bn.kind) });
 
+    // ---- PER-ROUND guarded persistence: eligible/reviewable only, ONCE per lead.
+    // Writing here (not only at the end) is what makes progress survive a kill.
+    for (const cand of roundCandidates) {
+      const lk = leadIdentityKey(cand);
+      if (carriedPersisted.has(lk)) continue;
+      const plan: CompoundPersistencePlan = buildCompoundPersistencePlan(cand, wsId);
+      if (!plan.persistable) {                       // REJECT/SKIP → diagnostics only
+        persisted.push({ ok: false, accountId: null, leadCandidateId: null, reason: plan.persistenceReason });
+        continue;
+      }
+      writeBoundary.persistenceAttempts += 1;
+      const pr = await deps.persist(plan);
+      if (pr.ok) writeBoundary.persistedRecords += 1;
+      carriedPersisted.add(lk);
+      persisted.push({ ok: pr.ok, accountId: pr.accountId, leadCandidateId: pr.leadCandidateId, reason: pr.reason });
+    }
+    state.persisted_lead_keys = [...carriedPersisted];
+
+    // ---- CHECKPOINT: a platform kill after this point loses nothing --------
+    state.current_round = round + 1;
+    state.eligible_leads = eligibleAfter;
+    state.remaining_leads = remainingLeadCount(requested, eligibleAfter);
+    state.attempted_titles = [...new Set([...state.attempted_titles, ...keywords])];
+    state.seen_job_urls = [...seenJobUrls];
+    state.seen_company_keys = [...seenCompanyKeys];
+    state.seen_lead_keys = [...seenLeadKeys];
+    state.estimated_cost = Number((state.estimated_cost + (forecast.estimated_provider_cost ?? 0)).toFixed(4));
+    state.actual_cost = Number(budget.toFixed(4));
+    state.next_action = "start_round";
+    state.checkpoint_at = nowIso();
+    recordCompletedCall(state, {
+      idempotency_key: idemKey, round, actor_key: "apify_jobs", company_key: null,
+      item_count: exec.writeBoundary.rawProviderItems, completed_at: nowIso(),
+    });
+    const checkpoint: RoundCheckpoint = {
+      round_number: round, strategy_hash: roundPlan.strategy_hash,
+      title_queries: roundPlan.title_queries, delta_titles: keywords,
+      plan_source: planSource, planner_status: plannerMetadata.at(-1)?.status ?? null,
+      funnel: Object.fromEntries(Object.entries(funnel).filter(([, v]) => typeof v === "number")) as Record<string, number>,
+      eligible_after: eligibleAfter, remaining_after: remainingLeadCount(requested, eligibleAfter),
+      estimated_cost: forecast.estimated_provider_cost ?? 0,
+      actual_provider_calls: roundJobsCalls + roundPeopleCalls, completed_at: nowIso(),
+    };
+    state.completed_rounds.push(checkpoint);
+    state.planner_metadata = plannerMetadata as unknown as Array<Record<string, unknown>>;
+    if (deps.stateStore && taskId) {
+      // `partial` — never leave the task at `running`.
+      await deps.stateStore.save(taskId, state, "partial");
+    }
+
     log("company-first round finished", { round, eligibleAfter, remaining: remainingLeadCount(requested, eligibleAfter) });
 
     if (exec.status === "unable_to_compile_job_search") { terminal = "invalid_request"; terminalReason = exec.error ?? "job search could not be compiled"; break; }
@@ -363,23 +490,34 @@ export async function runCompanyFirstQuotaController(
       : "sourcing ended without meeting the requested quota";
   }
 
-  // ---- persistence: eligible/reviewable only, once, after all rounds --------
-  for (const c of dedupedCandidates) {
-    const plan: CompoundPersistencePlan = buildCompoundPersistencePlan(c, opts.workspaceId ?? "");
-    if (!plan.persistable) {
-      persisted.push({ ok: false, accountId: null, leadCandidateId: null, reason: plan.persistenceReason });
-      continue;
+  // FINALIZATION runs ONLY on a true terminal condition. A continuation must not
+  // persist a partial result — the resuming invocation owns final persistence.
+  if (continuationRequired) {
+    if (deps.stateStore && taskId) {
+      state.next_action = "start_round";
+      state.checkpoint_at = nowIso();
+      await deps.stateStore.save(taskId, state, "partial");
     }
-    writeBoundary.persistenceAttempts += 1;
-    const r = await deps.persist(plan);
-    if (r.ok) writeBoundary.persistedRecords += 1;
-    persisted.push({ ok: r.ok, accountId: r.accountId, leadCandidateId: r.leadCandidateId, reason: r.reason });
+    return finish("continuation_required", terminalReason);
+  }
+  if (!deadline.canAfford("persistence")) {
+    if (deps.stateStore && taskId) { state.next_action = "finalize"; state.checkpoint_at = nowIso(); await deps.stateStore.save(taskId, state, "partial"); }
+    return finish("continuation_required", "insufficient time remaining to finalize safely");
   }
 
+  // Persistence already happened per round (guarded, once per lead).
+
+  if (deps.stateStore && taskId) {
+    state.terminal_status = terminal;
+    state.terminal_reason = terminalReason;
+    state.next_action = "stopped";
+    state.checkpoint_at = nowIso();
+    await deps.stateStore.save(taskId, state, terminal === "completed" ? "completed" : "partial");
+  }
   return finish(terminal, terminalReason);
 
   function finish(status: CompanyFirstTerminalStatus, reason: string): QuotaControllerResult {
-    const eligible = countEligible(dedupedCandidates, policy);
+    const eligible = carriedEligible + countEligible(dedupedCandidates, policy);
     return {
       terminal_status: status, terminal_reason: reason,
       requested_leads: requested, eligible_leads: eligible,
@@ -393,6 +531,14 @@ export async function runCompanyFirstQuotaController(
       rounds, candidates: dedupedCandidates, persisted, writeBoundary,
       plan, plan_sources: planSources, bottlenecks, cost_forecasts: forecasts, plan_validations: planValidations,
       planner_metadata: plannerMetadata, idempotency,
+      continuation: {
+        required: status === "continuation_required",
+        next_action: status === "continuation_required" ? "start_round" : "finalize",
+        next_round: status === "continuation_required" ? (state?.current_round ?? null) : null,
+        checkpoint_at: state?.checkpoint_at ?? null,
+        continuation_token: status === "continuation_required" ? taskId : null,
+        resumed_from_round: resumedFromRound,
+      },
     };
   }
 }

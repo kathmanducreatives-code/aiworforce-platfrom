@@ -46,8 +46,10 @@ export interface CompoundPerson {
 
 export interface CompoundLimits {
   rawJobs: number; verifiedCompanies: number; founderLookups: number; foundersPerCompany: number; ranked: number;
+  /** Bounded deterministic people-call concurrency. */
+  peopleConcurrency?: number;
 }
-export const DEFAULT_COMPOUND_LIMITS: CompoundLimits = { rawJobs: 25, verifiedCompanies: 10, founderLookups: 8, foundersPerCompany: 2, ranked: 10 };
+export const DEFAULT_COMPOUND_LIMITS: CompoundLimits = { rawJobs: 25, verifiedCompanies: 10, founderLookups: 8, foundersPerCompany: 2, ranked: 10, peopleConcurrency: 3 };
 
 export interface CompoundDeps {
   fetchJobs: (query: string, max: number) => CompoundJob[] | Promise<CompoundJob[]>;
@@ -172,11 +174,31 @@ export async function runCompoundSourcing(
   // 4) SCOPED people search per verified company; verify + gate each person.
   const candidates: CompoundCandidate[] = [];
   const seenPeople = new Set<string>();
-  for (const c of companies.slice(0, limits.founderLookups)) {
-    const scope = buildPeopleScope(c.identity, { requestedRole: intent.requested_person_role, queryIntent: intent.original_user_instruction, location: c.identity.location, sourceJobId: c.jobs[0].job.url });
-    if (!scope) continue; // unverified company cannot trigger a qualified lookup
-    diagnostics.scopedLookups++;
-    const people = (await deps.fetchPeopleForCompany(scope, limits.foundersPerCompany)).slice(0, limits.foundersPerCompany);
+  // BOUNDED CONCURRENCY: people calls run in small deterministic batches so a
+  // multi-company round fits the wall-clock budget. Results are re-ordered to the
+  // original company order, so output stays deterministic regardless of timing.
+  const selected = companies.slice(0, limits.founderLookups);
+  const scoped = selected
+    .map((c) => ({ c, scope: buildPeopleScope(c.identity, { requestedRole: intent.requested_person_role, queryIntent: intent.original_user_instruction, location: c.identity.location, sourceJobId: c.jobs[0].job.url }) }))
+    .filter((x): x is { c: typeof selected[number]; scope: NonNullable<ReturnType<typeof buildPeopleScope>> } => x.scope !== null);
+
+  const concurrency = Math.max(1, Math.min(8, limits.peopleConcurrency ?? 3));
+  const fetched: Array<{ c: typeof selected[number]; people: CompoundPerson[] }> = [];
+  for (let i = 0; i < scoped.length; i += concurrency) {
+    const batch = scoped.slice(i, i + concurrency);
+    const settled = await Promise.all(batch.map(async ({ c, scope }) => {
+      diagnostics.scopedLookups++;
+      try {
+        const people = (await deps.fetchPeopleForCompany(scope, limits.foundersPerCompany)).slice(0, limits.foundersPerCompany);
+        return { c, people };
+      } catch {
+        return { c, people: [] as CompoundPerson[] };  // one failure never drops the batch
+      }
+    }));
+    fetched.push(...settled);   // batch order preserved => deterministic
+  }
+
+  for (const { c, people } of fetched) {
     diagnostics.peopleReturned += people.length;
     const primaryJob = c.jobs[0].job;
 

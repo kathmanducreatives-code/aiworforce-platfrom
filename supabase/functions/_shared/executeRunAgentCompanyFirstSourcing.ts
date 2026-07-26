@@ -11,6 +11,8 @@ import { runCompanyFirstQuotaController, type CompanyFirstTerminalStatus, type Q
 import type { BroadeningPlannerFn } from "./broadeningPlan.ts";
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import type { ToolCallReader } from "./durableIdempotency.ts";
+import type { SourcingStateStore } from "./companyFirstSourcingState.ts";
+import type { ExecutionBudget } from "./executionDeadline.ts";
 import type { CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundLimits } from "./compoundSourcingPipeline.ts";
 import type { Vertical } from "./verticalQualification.ts";
@@ -37,6 +39,10 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
   plannerMetadata?: () => PlannerMetadata | null;
   /** Restart-safe paid-call ledger over tool_calls. */
   durableIdempotency?: ToolCallReader;
+  /** Checkpoint store over tasks.result (no migration). */
+  stateStore?: SourcingStateStore;
+  executionBudget?: Partial<ExecutionBudget>;
+  clock?: () => number;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -79,6 +85,8 @@ export interface CompanyFirstResult {
   planner_metadata: Array<PlannerMetadata & { round: number }>;
   idempotency: Array<{ round: number; key: string; kind: string; reason: string }>;
   bottlenecks: Array<{ round: number; kind: string; reason: string; remedy: string }>;
+  /** Resume contract when the safe time boundary stopped the run. */
+  continuation: { required: boolean; next_action: string; next_round: number | null; checkpoint_at: string | null; continuation_token: string | null; resumed_from_round: number };
   error?: string;
 }
 
@@ -87,11 +95,12 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
   const res = await runCompanyFirstQuotaController(deps.intent, {
     invokeJobs: deps.invokeJobs, invokePeople: deps.invokePeople, persist: deps.persist, budgetProceed: deps.budgetProceed,
     proposeBroadening: deps.proposeBroadening, plannerMetadata: deps.plannerMetadata,
-    durableIdempotency: deps.durableIdempotency,
+    durableIdempotency: deps.durableIdempotency, stateStore: deps.stateStore,
   }, {
     requestedLeadCount: deps.requestedLeadCount,
     quotaPolicy: deps.quotaPolicy, bounds: deps.bounds, limits: deps.limits,
-    vertical: deps.vertical, now: deps.now, workspaceId: deps.workspaceId, taskId: deps.taskId ?? null, log,
+    vertical: deps.vertical, now: deps.now, workspaceId: deps.workspaceId, taskId: deps.taskId ?? null,
+    executionBudget: deps.executionBudget, clock: deps.clock, log,
   });
 
   const countVerdict = (v: string) => res.candidates.filter((c) => c.verdict === v).length;
@@ -152,6 +161,7 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     planner_metadata: res.planner_metadata,
     idempotency: res.idempotency,
     bottlenecks: res.bottlenecks,
+    continuation: res.continuation,
     error: res.writeBoundary.invariantViolation ?? undefined,
   };
 }
