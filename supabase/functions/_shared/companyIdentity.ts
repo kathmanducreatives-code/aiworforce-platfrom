@@ -34,9 +34,34 @@ const SUFFIX_RE = /\b(inc|inc\.|llc|l\.l\.c\.|ltd|ltd\.|corp|corporation|co|comp
 
 /** Strip common suffixes so "Acme, Inc." and "Acme" collapse (but "Acme East"
  *  and "Acme West" stay distinct — only noise suffixes are removed). */
+// RECOGNIZED non-identity decorations. Deliberately a closed list: an arbitrary
+// parenthetical can denote a genuinely DIFFERENT entity, so blindly stripping all
+// of them would make "Vanta (Stealth)" collapse into "Vanta". Accelerator/cohort
+// labels are pure metadata about the same company; "(Stealth)", "(Acquired)",
+// "(EMEA)" and friends are not, and are intentionally absent here.
+const COHORT_LABEL_RE = /\(\s*(?:yc|y[\s-]?combinator)\s*[wsfa]?\s*\d{0,4}\s*\)|\((?:techstars|500\s*startups|a16z\s*speedrun)[^)]*\)/gi;
+
+/** True when the ONLY textual difference is a recognized cohort/accelerator label. */
+export function differsOnlyByCohortLabel(a: string | null | undefined, b: string | null | undefined): boolean {
+  const sa = (a ?? "").trim(), sb = (b ?? "").trim();
+  if (!sa || !sb) return false;
+  const stripped = (s: string) => normalizeCompanyName(s.replace(COHORT_LABEL_RE, " "));
+  const na = stripped(sa), nb = stripped(sb);
+  if (!na || !nb || na !== nb) return false;
+  // At least one side must actually carry a cohort label, otherwise this is a
+  // plain equality and the caller should treat it as such. A fresh RegExp avoids
+  // the shared /g lastIndex making .test() stateful across calls.
+  const hasLabel = (s: string) => new RegExp(COHORT_LABEL_RE.source, "i").test(s);
+  return hasLabel(sa) || hasLabel(sb);
+}
+
 export function normalizeCompanyName(name: string | null | undefined): string | null {
   let n = normalizeTerm(name ?? "");
   if (!n) return null;
+  // Recognized cohort labels are dropped BEFORE suffix/punctuation normalization
+  // so "LanceDB (YC W22)" and "LanceDB" normalize identically, while
+  // "Vanta (Stealth)" keeps its distinguishing text.
+  n = n.replace(COHORT_LABEL_RE, " ");
   n = n.toLowerCase().replace(SUFFIX_RE, " ").replace(/[.,&]/g, " ").replace(/\s+/g, " ").trim();
   return n || null;
 }

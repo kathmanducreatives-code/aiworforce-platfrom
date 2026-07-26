@@ -7,6 +7,7 @@
 import type { CompoundCandidate, CompoundVerdict } from "./compoundSourcingPipeline.ts";
 import { compoundContactCeiling, clampToCeiling, type ContactCeiling } from "./runAgentCompoundBridge.ts";
 import { hasStrongId } from "./companyIdentity.ts";
+import { isQuotaEligibleCandidate } from "./leadQuotaPolicy.ts";
 
 export interface CompoundPersistencePlan {
   workspaceId: string;
@@ -22,6 +23,11 @@ export interface CompoundPersistencePlan {
   };
   /** Final verdict AFTER the ceiling clamp — a score can never exceed this. */
   verdict: CompoundVerdict;
+  /** HARD persistence policy. REJECT/SKIP are diagnostics only: they must create
+   * zero accounts, zero contacts and zero lead_candidates. Checked by the caller
+   * BEFORE any insert. */
+  persistable: boolean;
+  persistenceReason: string;
   /** True when this candidate must NOT be persisted as a contactable lead. */
   contactBlocked: boolean;
   blockReasons: string[];
@@ -42,6 +48,13 @@ export function buildCompoundPersistencePlan(candidate: CompoundCandidate, works
   const finalCeiling = clampToCeiling(VERDICT_TO_CEIL[candidate.verdict], ceiling);
   const verdict = CEIL_TO_VERDICT[finalCeiling];
   const contactBlocked = verdict !== "CONTACT";
+
+  // HARD PERSISTENCE POLICY (Part G): REJECT/SKIP never reach the Lead Library.
+  // Evaluated on the CLAMPED verdict so a ceiling downgrade also blocks the write.
+  // SKIP is not part of CompoundVerdict today; compared as a string so the policy
+  // still holds if the verdict vocabulary gains it later.
+  const persistable = !["REJECT", "SKIP"].includes(String(verdict));
+  const persistenceReason = persistable ? `disposition_persistable:${verdict}` : "disposition_not_persistable";
 
   const blockReasons: string[] = [];
   if (!hasVerifiedAccount) blockReasons.push("no_verified_account");
@@ -76,9 +89,30 @@ export function buildCompoundPersistencePlan(candidate: CompoundCandidate, works
         job_evidence: { title: candidate.jobEvidence.title, url: candidate.jobEvidence.url, location: candidate.jobEvidence.location, posted: candidate.jobEvidence.postedDate },
         evidence_ids: candidate.evidence.map((e) => e.id),
         source_actor: { jobs: "curious_coder/linkedin-jobs-scraper", people: "harvestapi/linkedin-profile-search" },
+        // Part J — identify the rejected person WITHOUT a contacts join.
+        person_name: candidate.person.name ?? null,
+        person_profile_url: candidate.person.linkedinUrl ?? null,
+        person_headline: candidate.person.title ?? null,
+        parsed_current_employer: candidate.person.currentCompany ?? null,
+        profile_current_company_domain: candidate.person.currentCompanyDomain ?? null,
+        employer_match_status: candidate.employer.outcome,
+        employer_match_reason: candidate.employer.reason,
+        employer_identity_evidence: candidate.employer.matchedBy,
+        company_name: candidate.account.name ?? null,
+        company_domain: candidate.account.canonicalDomain ?? null,
+        company_linkedin_url: candidate.account.linkedinUrl ?? null,
+        company_identity_key: candidate.account.dedupeKey ?? null,
+        company_type_status: candidate.vertical.outcome,
+        company_type_reason: candidate.vertical.reason,
+        us_relevance_status: candidate.gates.us_relevance,
+        failed_gates: Object.entries(candidate.gates).filter(([, v]) => v === "fail").map(([k]) => k),
+        quota_eligible: isQuotaEligibleCandidate({ verdict }),
       },
     },
     verdict,
+    // HARD POLICY: a rejected/skipped candidate is diagnostics only.
+    persistable,
+    persistenceReason,
     contactBlocked,
     blockReasons,
   };

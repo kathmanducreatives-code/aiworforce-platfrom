@@ -20,6 +20,7 @@
 import { classifyJobFamily, type JobFamily } from "./jobFamily.ts";
 import { inferRequestedVertical, type Vertical } from "./verticalQualification.ts";
 import { normalizeCountry, detectCountryInText } from "./locationMatch.ts";
+import { getJobFamily, inferFamilyKey } from "./jobFamilyRegistry.ts";
 
 export type JobSearchCompilationStatus = "compiled" | "insufficient" | "not_applicable";
 
@@ -116,7 +117,8 @@ function singularizeHead(phrase: string): string {
   if (!words.length) return phrase;
   const last = words[words.length - 1];
   if (/(ss|us|Ops|ops)$/.test(last)) return phrase;
-  if (/^(Operations|operations)$/.test(last)) return phrase;
+  // Domain words that only LOOK plural — "VP Sales" must not become "VP Sale".
+  if (/^(operations|sales|analytics|systems|solutions|services|finance)$/i.test(last)) return phrase;
   if (/s$/.test(last)) words[words.length - 1] = last.replace(/s$/, "");
   return words.join(" ");
 }
@@ -200,6 +202,37 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
     requested_person_roles, original_query: text,
     compilation_status: "compiled", insufficient_reason: null,
   };
+}
+
+/**
+ * Round-scoped keyword expansion. Broadening widens the SEARCH SPACE only — every
+ * added title must still qualify under the SHARED job-family classifier, so a
+ * broadened round can never smuggle a role past the gate (and never wastes budget
+ * fetching jobs the gate will drop).
+ *
+ * Deliberately NOT added: Account Executive / Account Manager / SDR / BDR /
+ * generic Business Development / Customer Success — those are gate weakening.
+ */
+/**
+ * DEPRECATED shim. Broadening is now owned by the general architecture:
+ *   jobFamilyRegistry → sourcingConstraints → BroadeningPlan → validator →
+ *   cost forecast → companyFirstQuotaController.
+ *
+ * The old body hardcoded Sales-Operations variants, so every other request
+ * ("hiring software engineers") had no safe expansion at all. It now delegates to
+ * the registry so any family broadens correctly, and an unknown family stays on
+ * its exact titles.
+ */
+export function keywordQueriesForRound(spec: CompiledJobSearchSpec, round: number): { keywords: string[]; expansion: string } {
+  const base = spec.keyword_queries;
+  if (round <= 1) return { keywords: base, expansion: "exact_title_synonyms" };
+  const familyKey = inferFamilyKey(spec.job_families as string[], base);
+  const def = getJobFamily(familyKey);
+  if (!def) return { keywords: base, expansion: "exact_titles_only" };
+  const merged = [...base];
+  for (const v of def.synonyms) if (!merged.includes(v)) merged.push(v);
+  if (round >= 3) for (const a of def.adjacent) if (!merged.includes(a)) merged.push(a);
+  return { keywords: merged, expansion: round >= 3 ? "approved_adjacent_titles" : "validated_adjacent_titles" };
 }
 
 function expandPersonRoles(requested: string | null, personRoles: string[]): string[] {

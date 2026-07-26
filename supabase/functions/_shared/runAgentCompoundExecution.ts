@@ -12,6 +12,7 @@ import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./ru
 import type { Vertical } from "./verticalQualification.ts";
 import { assertCompiledForProvider, JobSearchCompilationError } from "./jobsProviderInput.ts";
 import { buildCuriousCoderLinkedInJobsInput, buildLinkedInJobsSearchUrls } from "./curiousCoderJobsInput.ts";
+import { stampIdempotencyKey } from "./durableIdempotency.ts";
 import {
   newWriteBoundary, recordProviderInvocation, buildProviderEnvelope,
   type CompanyFirstWriteBoundary,
@@ -50,7 +51,19 @@ export interface CompoundExecutionResult {
 export async function runAgentCompoundExecution(
   intent: LeadEntityIntent,
   deps: CompoundExecutionDeps,
-  opts: { limits?: Partial<CompoundLimits>; vertical?: Vertical; now?: string; workspaceId?: string } = {},
+  opts: {
+    limits?: Partial<CompoundLimits>; vertical?: Vertical; now?: string; workspaceId?: string;
+    /** Round-scoped broadened keywords from the quota controller. */
+    keywordQueriesOverride?: string[];
+    /** When false the caller (the controller) owns persistence. */
+    persistCandidates?: boolean;
+    /** Durable paid-call key; recorded in tool_calls.input_json. */
+    idempotencyKey?: string;
+    /** Builds a per-company durable key for each scoped people call. */
+    peopleIdempotencyKey?: (companyKey: string) => string;
+    /** Skip a people call whose durable key already completed. */
+    peopleCallCompleted?: (key: string) => boolean;
+  } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
     { jobsInvoked: false, peopleCalls: 0, budgetStopped: false, jobVariants: [] };
@@ -75,9 +88,12 @@ export async function runAgentCompoundExecution(
       // `count` is a RUN-level cap that spans every URL, so all compiled keyword
       // variants go out in ONE invocation sharing the single ceiling — never one
       // full-limit run per variant.
-      const urls = buildLinkedInJobsSearchUrls(spec.keyword_queries, spec.location);
+      // The round controller may supply a broadened (still gate-qualifying) set.
+      const roundKeywords = opts.keywordQueriesOverride?.length ? opts.keywordQueriesOverride : spec.keyword_queries;
+      const urls = buildLinkedInJobsSearchUrls(roundKeywords, spec.location);
       const native = buildCuriousCoderLinkedInJobsInput({ urls, maxResults: max });
-      const envelope = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
+      const envelope0 = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
+      const envelope = opts.idempotencyKey ? stampIdempotencyKey(envelope0 as unknown as Record<string, unknown>, opts.idempotencyKey) : (envelope0 as unknown as Record<string, unknown>);
       recordProviderInvocation(writeBoundary, envelope, "apify_jobs");
       diagnostics.jobsInvoked = true;
       for (const kw of spec.keyword_queries) {
@@ -105,7 +121,12 @@ export async function runAgentCompoundExecution(
       // Native Harvest fields under `input`; the per-company ceiling at the TOP
       // level, which is the only place source_with_apify reads max_results from.
       const native = buildScopedPeopleInput(scope, max, intent.job_search_spec.requested_person_roles);
-      const envelope = buildProviderEnvelope("apify_people_search", native, max);
+      const env0 = buildProviderEnvelope("apify_people_search", native, max);
+      // EVERY provider call carries a durable key — jobs AND each company-scoped
+      // people call (the 2026-07-26 run stamped jobs only).
+      const pKey = opts.peopleIdempotencyKey?.(scope.companyDedupeKey ?? scope.companyName ?? "unknown");
+      if (pKey && opts.peopleCallCompleted?.(pKey)) return [];   // already paid for
+      const envelope = pKey ? stampIdempotencyKey(env0 as unknown as Record<string, unknown>, pKey) : (env0 as unknown as Record<string, unknown>);
       recordProviderInvocation(writeBoundary, envelope, "apify_people_search");
       let rows: unknown[];
       try { rows = await deps.invokePeople(envelope as unknown as Record<string, unknown>, max); }
@@ -138,11 +159,19 @@ export async function runAgentCompoundExecution(
   writeBoundary.qualifiedCandidates = run.candidates.filter((c) => c.verdict !== "REJECT").length;
   writeBoundary.rejectedCandidates = run.candidates.filter((c) => c.verdict === "REJECT").length;
   const persisted: CompoundExecutionResult["persisted"] = [];
-  for (const plan of plans) {
-    writeBoundary.persistenceAttempts += 1;
-    const r = await deps.persist(plan);
-    if (r.ok) writeBoundary.persistedRecords += 1;
-    persisted.push({ ok: r.ok, accountId: r.accountId, leadCandidateId: r.leadCandidateId, reason: r.reason });
+  if (opts.persistCandidates !== false) {
+    for (const plan of plans) {
+      // HARD GATE (Part G): REJECT/SKIP are diagnostics only — zero account,
+      // contact and lead_candidate writes. Checked BEFORE any insert.
+      if (!plan.persistable) {
+        persisted.push({ ok: false, accountId: null, leadCandidateId: null, reason: plan.persistenceReason });
+        continue;
+      }
+      writeBoundary.persistenceAttempts += 1;
+      const r = await deps.persist(plan);
+      if (r.ok) writeBoundary.persistedRecords += 1;
+      persisted.push({ ok: r.ok, accountId: r.accountId, leadCandidateId: r.leadCandidateId, reason: r.reason });
+    }
   }
 
   return { status: "ok", run, plans, persisted, diagnostics, writeBoundary };
