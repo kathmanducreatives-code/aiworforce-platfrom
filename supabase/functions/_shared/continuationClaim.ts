@@ -45,7 +45,10 @@ export type ClaimRefusal =
   | "task_not_found"
   | "workspace_mismatch"
   | "no_checkpoint"
-  | "already_terminal";
+  | "already_terminal"
+  | "not_resumable_state"
+  | "not_permitted"
+  | "claim_unavailable";
 
 export type ClaimDecision =
   | { ok: true; reason: "fresh_claim" | "stale_reclaim"; previousToken: string | null }
@@ -138,6 +141,10 @@ export const CLAIM_REFUSAL_MESSAGE: Record<ClaimRefusal, string> = {
   workspace_mismatch: "That sourcing run belongs to a different workspace.",
   no_checkpoint: "That run has no saved checkpoint to continue from.",
   already_terminal: "That run has already finished.",
+  not_resumable_state: "That run is not in a resumable state.",
+  not_permitted: "You do not have permission to continue this run.",
+  // Deliberately generic: the raw database error is logged, never rendered.
+  claim_unavailable: "Continuation is temporarily unavailable. Try again shortly.",
 };
 
 // --------------------------------------------------------------- RPC path ----
@@ -157,17 +164,52 @@ export interface RpcDb {
 }
 
 export type RpcClaimOutcome =
-  | { available: false }                                     // migration not applied
+  /** The migration is genuinely absent — and ONLY then may the caller fall back. */
+  | { available: false; category: "missing_function" }
   | { available: true; claimed: true; checkpointVersion: number | null }
-  | { available: true; claimed: false; reason: ClaimRefusal; heldUntil: string | null };
-
-/** Postgres error codes meaning "this function does not exist here (yet)". */
-const MISSING_FUNCTION_CODES = new Set(["42883", "PGRST202", "PGRST302"]);
+  | { available: true; claimed: false; reason: ClaimRefusal; heldUntil: string | null; category: ClaimErrorCategory | null; code: string | null };
 
 /**
- * Try the durable claim. Returns `available: false` — never an error — when the
- * migration has not been applied, so the caller can fall back cleanly.
+ * The ONLY conditions that mean "this RPC does not exist here yet".
+ *
+ *   42883   Postgres: undefined_function
+ *   PGRST202 PostgREST: the function is not in the schema cache
+ *
+ * Everything else — a conflict, a permission denial, an RLS refusal, a timeout,
+ * a malformed response, an unknown code — FAILS CLOSED. Falling back on those
+ * would silently downgrade to the weaker claim exactly when the database was
+ * telling us something was wrong, which is how a "safety" fallback becomes the
+ * hole it was meant to cover.
  */
+const MISSING_FUNCTION_CODES = new Set(["42883", "PGRST202"]);
+const MISSING_FUNCTION_MESSAGE =
+  /(function .*does not exist|could not find the function|schema cache)/i;
+
+export type ClaimErrorCategory =
+  | "missing_function" | "conflict" | "permission" | "validation"
+  | "database" | "transport" | "unexpected_response" | "unknown";
+
+/** Internal diagnostics only. Never rendered to a user. */
+export interface ClaimDiagnostics {
+  claim_path: "rpc" | "compatibility_fallback" | "none";
+  claim_error_code: string | null;
+  claim_error_category: ClaimErrorCategory | null;
+}
+
+/** Classify an RPC error WITHOUT leaking its text to the caller's response. */
+export function classifyClaimError(err: { code?: string; message?: string } | null | undefined): ClaimErrorCategory {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? "");
+  if (MISSING_FUNCTION_CODES.has(code) || MISSING_FUNCTION_MESSAGE.test(msg)) return "missing_function";
+  // 42501 insufficient_privilege; PGRST301 JWT/RLS; 'permission denied' text.
+  if (code === "42501" || code === "PGRST301" || /permission denied|row-level security|not authorized/i.test(msg)) return "permission";
+  if (code === "23505" || /conflict|already claimed/i.test(msg)) return "conflict";
+  if (code === "22P02" || code === "23514" || /invalid input|violates check/i.test(msg)) return "validation";
+  if (code.startsWith("08") || code === "57014" || code === "53300" || /timeout|connection/i.test(msg)) return "database";
+  if (code) return "database";
+  return "unknown";
+}
+
 export async function claimContinuationViaRpc(args: {
   db: RpcDb; taskId: string; workspaceId: string; claimId: string; leaseSeconds?: number;
 }): Promise<RpcClaimOutcome> {
@@ -179,25 +221,38 @@ export async function claimContinuationViaRpc(args: {
       p_claim_id: args.claimId,
       p_lease_seconds: Math.max(30, Math.floor((args.leaseSeconds ?? STALE_CLAIM_MS / 1000))),
     });
-  } catch {
-    return { available: false };
+  } catch (e) {
+    // A TRANSPORT failure is not evidence the function is missing. Fail closed.
+    return {
+      available: true, claimed: false, reason: "claim_unavailable", heldUntil: null,
+      category: "transport", code: String((e as { code?: string })?.code ?? "") || null,
+    };
   }
 
   const err = res.error as { code?: string; message?: string } | null;
   if (err) {
-    const code = String(err.code ?? "");
-    if (MISSING_FUNCTION_CODES.has(code) || /does not exist|could not find the function/i.test(String(err.message ?? ""))) {
-      return { available: false };
-    }
-    // A real error is NOT a claim. Failing closed keeps the checkpoint safe.
-    return { available: true, claimed: false, reason: "lost_race", heldUntil: null };
+    const category = classifyClaimError(err);
+    // The ONLY path to the weaker fallback.
+    if (category === "missing_function") return { available: false, category };
+    return {
+      available: true, claimed: false,
+      reason: category === "permission" ? "not_permitted" : "claim_unavailable",
+      heldUntil: null, category, code: String(err.code ?? "") || null,
+    };
   }
 
   const row = (Array.isArray(res.data) ? res.data[0] : res.data) as RpcClaimRow | undefined;
-  if (!row) return { available: false };
+  if (!row || typeof row.claimed !== "boolean") {
+    // An UNEXPECTED response shape is not "unavailable" — the function may well
+    // have run. Treating it as absent could double-claim the checkpoint.
+    return {
+      available: true, claimed: false, reason: "claim_unavailable", heldUntil: null,
+      category: "unexpected_response", code: null,
+    };
+  }
   if (row.claimed) return { available: true, claimed: true, checkpointVersion: row.checkpoint_version };
 
-  const reason = (["already_claimed", "task_not_found", "workspace_mismatch", "no_checkpoint", "already_terminal"] as const)
+  const reason = (["already_claimed", "task_not_found", "workspace_mismatch", "no_checkpoint", "already_terminal", "not_resumable_state"] as const)
     .find((r) => r === row.reason) ?? "lost_race";
-  return { available: true, claimed: false, reason, heldUntil: row.held_until };
+  return { available: true, claimed: false, reason, heldUntil: row.held_until, category: "conflict", code: null };
 }

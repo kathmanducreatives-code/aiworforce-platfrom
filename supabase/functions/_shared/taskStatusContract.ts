@@ -23,15 +23,51 @@
 // The separation below is therefore about correctness of meaning, not about
 // working around a constraint:
 //
-//   tasks.status          DATABASE EXECUTION STATE   — did the row finish running
-//   result.task_status    SOURCING PROGRESS          — partial / completed / failed
-//   result.terminal_status QUOTA OUTCOME             — why sourcing stopped
+//   tasks.status          DATABASE LIFECYCLE  — pending / running / ready /
+//                                               awaiting_approval / complete /
+//                                               failed / skipped
+//   result.task_status    WORKFLOW PROGRESS   — partial / completed / failed
+//   result.terminal_status SOURCING OUTCOME   — why sourcing stopped
 //
 // Pure — no network, no writes.
 
-/** Values the task ROW may hold. Intersection of every declared constraint. */
-export const TASK_ROW_STATUSES = ["pending", "running", "complete", "failed", "skipped"] as const;
+/**
+ * Values the task ROW may hold — the DATABASE LIFECYCLE, nothing else.
+ *
+ *   pending  → not yet started
+ *   running  → currently executing
+ *   ready    → checkpointed and available for continuation
+ *   awaiting_approval → blocked on a user decision
+ *   complete → a genuine TERMINAL sourcing outcome was reached
+ *   failed   → execution failed
+ *   skipped  → preserved for backward compatibility
+ *
+ * `ready` is the important one: a checkpointed run is NOT complete. Writing
+ * `complete` for a continuation made a task that still owes the user four leads
+ * indistinguishable from one that finished, and made "is this resumable?"
+ * unanswerable from the row alone.
+ */
+export const TASK_ROW_STATUSES = [
+  "pending", "running", "ready", "awaiting_approval", "complete", "failed", "skipped",
+] as const;
 export type TaskRowStatus = typeof TASK_ROW_STATUSES[number];
+
+/** The row state a continuation claim normally moves FROM. */
+export const RESUMABLE_ROW_STATUS: TaskRowStatus = "ready";
+
+/**
+ * Row states a checkpointed task may legitimately be found in.
+ *
+ * `ready` is what every new checkpoint writes. The rest are LEGACY: rows written
+ * before this change used the column for workflow progress, so a real checkpoint
+ * can still be sitting behind `partial`, `running` or `complete`. They are read,
+ * never rewritten.
+ */
+export const LEGACY_RESUMABLE_ROW_STATUSES: readonly string[] = ["partial", "running", "complete"];
+
+export function isResumableRowStatus(status: string | null | undefined): boolean {
+  return status === RESUMABLE_ROW_STATUS || LEGACY_RESUMABLE_ROW_STATUSES.includes(String(status ?? ""));
+}
 
 /** Sourcing progress, stored in `result.task_status`. */
 export const TASK_RESULT_STATUSES = ["partial", "completed", "failed"] as const;
@@ -62,11 +98,10 @@ export interface StatusProjection {
 /**
  * Project one sourcing outcome onto the three fields.
  *
- * `continuation_required` is the interesting case: the ROW is `complete` (this
- * invocation finished cleanly and is no longer executing), while the RESULT says
- * `partial` and the terminal status says more sourcing is required. Leaving the
- * row at `running` would make a checkpointed task indistinguishable from one that
- * is still executing.
+ * `continuation_required` is the interesting case: the ROW becomes `ready` — the
+ * invocation is no longer executing, but the workflow is not finished either.
+ * Leaving it `running` makes a checkpoint look like a live run; marking it
+ * `complete` makes it look finished. Neither is true, and `ready` is.
  */
 export function projectStatus(terminal: string, invariantViolation?: string | null): StatusProjection {
   const t = (TERMINAL_STATUSES as readonly string[]).includes(terminal)
@@ -76,11 +111,22 @@ export function projectStatus(terminal: string, invariantViolation?: string | nu
   if (invariantViolation || t === "provider_failure" || t === "invalid_request") {
     return { rowStatus: "failed", taskStatus: "failed", terminalStatus: t };
   }
-  if (t === "completed") {
-    return { rowStatus: "complete", taskStatus: "completed", terminalStatus: t };
+
+  // CHECKPOINT, NOT COMPLETION. The invocation finished cleanly but the workflow
+  // owes the user more rounds, so the row advertises itself as resumable.
+  if (t === "continuation_required") {
+    return { rowStatus: "ready", taskStatus: "partial", terminalStatus: t };
   }
-  // Everything else delivered SOMETHING but not the whole quota.
-  return { rowStatus: "complete", taskStatus: "partial", terminalStatus: t };
+
+  // Everything else is a genuine terminal outcome: the WORKFLOW is finished, even
+  // when the quota was not filled. `terminal_status` carries the honest reason —
+  // `task_status: completed` means "no further rounds", never "quota met".
+  return { rowStatus: "complete", taskStatus: "completed", terminalStatus: t };
+}
+
+/** Projection for a run blocked on user approval. No terminal outcome yet. */
+export function projectApprovalPending(): { rowStatus: TaskRowStatus; taskStatus: TaskResultStatus } {
+  return { rowStatus: "awaiting_approval", taskStatus: "partial" };
 }
 
 /** Is a further continuation allowed for this outcome? */
@@ -90,6 +136,11 @@ export function isContinuable(terminalStatus: string | null | undefined): boolea
 
 export function isTerminalOutcome(terminalStatus: string | null | undefined): boolean {
   return !!terminalStatus && NON_RESUMABLE.has(terminalStatus);
+}
+
+/** `ready` is a checkpoint; `complete` and `failed` are ends of the lifecycle. */
+export function isTerminalRowStatus(rowStatus: string | null | undefined): boolean {
+  return rowStatus === "complete" || rowStatus === "failed" || rowStatus === "skipped";
 }
 
 // ------------------------------------------------------ backward compatibility --
@@ -128,11 +179,15 @@ export function readStatuses(row: LegacyStatusRow | null | undefined): ReadStatu
     return { rowStatus, taskStatus: explicitTask, terminalStatus: explicitTerminal ?? cfStatus, legacy: false };
   }
 
-  // LEGACY: the column itself held a sourcing outcome.
-  const legacyOverloaded = rowStatus === "partial" || rowStatus === "completed";
+  // LEGACY: the column itself held workflow progress. `done` is an older dialect
+  // still present in TEST data (11 rows as of the 2026-07-26 audit).
+  const legacyOverloaded = rowStatus === "partial" || rowStatus === "completed" || rowStatus === "done";
+  const legacyTaskStatus = rowStatus === "partial" ? "partial"
+    : (rowStatus === "completed" || rowStatus === "done") ? "completed"
+    : null;
   return {
     rowStatus,
-    taskStatus: legacyOverloaded ? rowStatus : (cfStatus ? (cfStatus === "completed" ? "completed" : "partial") : null),
+    taskStatus: legacyTaskStatus ?? (cfStatus ? (cfStatus === "completed" ? "completed" : "partial") : null),
     terminalStatus: cfStatus,
     legacy: legacyOverloaded || !!cfStatus,
   };

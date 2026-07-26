@@ -139,3 +139,32 @@ Deno.test("PART 7: a completed run states the delivered count, not a bare succes
   const v = buildContinuationView({ terminal_status: "completed", requested_leads: 5, eligible_leads: 5, remaining_leads: 0 });
   assertEquals(v.lines, ["Completed", "5 of 5 CONTACT-ready leads"]);
 });
+
+// ---- PART 1/7: Continue-sourcing visibility follows the LIFECYCLE ----------
+
+Deno.test("LIFECYCLE: Continue appears only for a resumable row with a token", () => {
+  const base = { ...CONTINUATION_RESPONSE };
+  // ready + continuation_required + token → offered.
+  assert(buildContinuationView({ ...base, row_status: "ready" }).canContinue);
+  // Legacy rows that still carry the old vocabulary stay continuable.
+  for (const legacy of ["partial", "running", "complete"]) {
+    assert(buildContinuationView({ ...base, row_status: legacy }).canContinue, legacy);
+  }
+  // A row whose lifecycle ended is never continuable, whatever the outcome says.
+  for (const dead of ["failed", "skipped"]) {
+    const v = buildContinuationView({ ...base, row_status: dead });
+    assertFalse(v.canContinue, dead);
+    assertEquals(v.actionLabel, null, dead);
+  }
+});
+
+Deno.test("LIFECYCLE: a terminal outcome never offers Continue, even at status ready", () => {
+  for (const terminal of TRUE_TERMINAL_STATUSES) {
+    const v = buildContinuationView({ ...CONTINUATION_RESPONSE, terminal_status: terminal, row_status: "ready" });
+    assertFalse(v.canContinue, terminal);
+  }
+});
+
+Deno.test("LIFECYCLE: no token means no Continue, whatever the row says", () => {
+  assertFalse(buildContinuationView({ ...CONTINUATION_RESPONSE, row_status: "ready", continuation_token: null }).canContinue);
+});

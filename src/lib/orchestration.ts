@@ -172,7 +172,13 @@ export interface DBTask {
   agent_slug?: string | null;
   step_index: number;
   description: string;
-  status: 'pending' | 'running' | 'complete' | 'failed' | 'skipped';
+  /**
+   * DATABASE LIFECYCLE only. `ready` means checkpointed and available for
+   * continuation — it is NOT complete. Legacy rows may still carry `partial`,
+   * `completed` or `done`, which the status adapter reads.
+   */
+  status: 'pending' | 'running' | 'ready' | 'awaiting_approval' | 'complete' | 'failed' | 'skipped'
+    | 'partial' | 'completed' | 'done';
   input: any;
   output: any;
   payload?: any;

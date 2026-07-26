@@ -46,7 +46,7 @@ function checkpointState(over: Partial<CompanyFirstSourcingState> = {}): Company
 
 function taskRow(over: Record<string, unknown> = {}) {
   return {
-    id: TASK, workspace_id: WS, status: "partial",
+    id: TASK, workspace_id: WS, status: "ready",
     result: { [SOURCING_STATE_KEY]: checkpointState() },
     payload: { instruction: "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads." },
     ...over,
@@ -135,6 +135,8 @@ Deno.test("3.9 a completed task cannot be resumed", () => {
 Deno.test("3.10 invalid checkpoints are refused (the caller returns 409)", () => {
   const cases: Array<[string, ReturnType<typeof taskRow> | null, string]> = [
     ["missing task", null, "task_not_found"],
+    ["terminal row state", taskRow({ status: "failed" }), "not_resumable_state"],
+    ["terminal result", taskRow({ result: { [SOURCING_STATE_KEY]: checkpointState(), terminal_status: "search_exhausted" } }), "already_terminal"],
     ["id mismatch", taskRow({ id: "other-id" }), "task_not_found"],
     ["no checkpoint", taskRow({ result: {} }), "no_checkpoint"],
     ["stale version", taskRow({ result: { [SOURCING_STATE_KEY]: { ...checkpointState(), version: "company-first-state-0.9.0" } } }), "checkpoint_version_mismatch"],
@@ -156,7 +158,7 @@ Deno.test("3.11 a failed continuation leaves the previous checkpoint untouched",
   // still holds the `partial` it observed, so its CAS predicate cannot match.
   const db = fakeDb({ id: TASK, status: "running" }, /* current row value */ "running");
   const res = await claimContinuation({
-    db, taskId: TASK, observedStatus: "partial",
+    db, taskId: TASK, observedStatus: "ready",
     resultWithClaim: { ...stored, [CLAIM_KEY]: newClaim("t", "2026-07-26T12:02:00.000Z", 2) },
   });
   assertFalse(res.claimed);
@@ -214,14 +216,14 @@ Deno.test("4.2 a LIVE claim refuses a second continuation", () => {
 });
 
 Deno.test("4.3 two CONCURRENT claims: exactly one wins the compare-and-swap", async () => {
-  const row = { id: TASK, status: "partial" };
+  const row = { id: TASK, status: "ready" };
   const writes: Array<Record<string, unknown>> = [];
-  const db = fakeDb(row, "partial", (v) => writes.push(v));
+  const db = fakeDb(row, "ready", (v) => writes.push(v));
 
-  // Both invocations read `partial` at the same instant — the real race.
+  // Both invocations read `ready` at the same instant — the real race.
   const [a, b] = await Promise.all([
-    claimContinuation({ db, taskId: TASK, observedStatus: "partial", resultWithClaim: { [CLAIM_KEY]: newClaim("A", "2026-07-26T12:00:00.000Z", 2) } }),
-    claimContinuation({ db, taskId: TASK, observedStatus: "partial", resultWithClaim: { [CLAIM_KEY]: newClaim("B", "2026-07-26T12:00:00.000Z", 2) } }),
+    claimContinuation({ db, taskId: TASK, observedStatus: "ready", resultWithClaim: { [CLAIM_KEY]: newClaim("A", "2026-07-26T12:00:00.000Z", 2) } }),
+    claimContinuation({ db, taskId: TASK, observedStatus: "ready", resultWithClaim: { [CLAIM_KEY]: newClaim("B", "2026-07-26T12:00:00.000Z", 2) } }),
   ]);
 
   const winners = [a, b].filter((r) => r.claimed);
@@ -232,11 +234,11 @@ Deno.test("4.3 two CONCURRENT claims: exactly one wins the compare-and-swap", as
 });
 
 Deno.test("4.4 the loser does not execute the checkpoint", async () => {
-  const row = { id: TASK, status: "partial" };
-  const db = fakeDb(row, "partial");
+  const row = { id: TASK, status: "ready" };
+  const db = fakeDb(row, "ready");
   let roundsExecuted = 0;
   const runIfClaimed = async (token: string) => {
-    const r = await claimContinuation({ db, taskId: TASK, observedStatus: "partial", resultWithClaim: { [CLAIM_KEY]: newClaim(token, "2026-07-26T12:00:00.000Z", 2) } });
+    const r = await claimContinuation({ db, taskId: TASK, observedStatus: "ready", resultWithClaim: { [CLAIM_KEY]: newClaim(token, "2026-07-26T12:00:00.000Z", 2) } });
     if (r.claimed) roundsExecuted++;
   };
   await Promise.all([runIfClaimed("A"), runIfClaimed("B"), runIfClaimed("C")]);
@@ -295,6 +297,8 @@ Deno.test("WIRING: run-agent takes the claim before it resumes, and releases it 
   assertStringIncludes(src, "claimContinuation({");
   assertStringIncludes(src, "observedStatus,");
   assertStringIncludes(src, 'error: "continuation_refused", reason: cas.reason');
+  // The compatibility path moves ready → running.
+  assertStringIncludes(src, 'observedStatus,');
   assertStringIncludes(src, "releaseClaim(");
   // The resume path must never fall through to the insert.
   assertStringIncludes(src, "if (!task) {");

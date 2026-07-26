@@ -272,12 +272,23 @@ Deno.serve(async (req) => {
       taskId: decision.taskId, workspaceId: workspace_id, claimId,
     });
     if (rpc.available && !rpc.claimed) {
+      // FAIL CLOSED. A conflict, a permission/RLS refusal, a timeout or an
+      // unexpected response all stop here — only a genuinely missing function
+      // reaches the weaker compatibility path below.
+      console.error("[run-agent][company-first] claim refused", {
+        task_id: decision.taskId, claim_path: "rpc",
+        claim_error_category: rpc.category, claim_error_code: rpc.code,
+      });
       return json({
         success: false, error: "continuation_refused", reason: rpc.reason,
         message: CLAIM_REFUSAL_MESSAGE[rpc.reason], held_until: rpc.heldUntil,
-      }, 409);
+        claim_path: "rpc", claim_error_category: rpc.category,
+      }, rpc.reason === "not_permitted" ? 403 : 409);
     }
 
+    // COMPATIBILITY PATH — reached only when the RPC's migration is absent. It
+    // moves `ready → running`, so a task that is not advertising itself as
+    // resumable cannot be claimed by it either.
     const cas = rpc.available
       ? { claimed: true as const }
       : await claimContinuation({
@@ -287,18 +298,23 @@ Deno.serve(async (req) => {
           resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
         });
     if (!cas.claimed) {
+      console.error("[run-agent][company-first] claim refused", {
+        task_id: decision.taskId, claim_path: "compatibility_fallback",
+        claim_error_category: "conflict", claim_error_code: null,
+      });
       // Another invocation moved the status first. It owns this checkpoint; this
       // one must NOT run it, or the same round is paid for twice.
       return json({
         success: false, error: "continuation_refused", reason: cas.reason,
         message: CLAIM_REFUSAL_MESSAGE[cas.reason],
+        claim_path: "compatibility_fallback", claim_error_category: "conflict",
       }, 409);
     }
 
     task = { id: decision.taskId };
     console.log("[run-agent][company-first] resuming task", {
       task_id: decision.taskId, next_round: decision.nextRound,
-      claim: attempt.reason, claim_path: rpc.available ? "rpc_for_update" : "conditional_update",
+      claim: attempt.reason, claim_path: rpc.available ? "rpc" : "compatibility_fallback",
     });
   }
 

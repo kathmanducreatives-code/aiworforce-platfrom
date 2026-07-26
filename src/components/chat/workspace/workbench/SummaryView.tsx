@@ -89,6 +89,8 @@ export default function SummaryView({ task, toolCall, agentName, planTitle, work
         // block for tasks written before the status split.
         terminal_status: (task?.result as { terminal_status?: string } | null)?.terminal_status ?? companyFirst.status ?? null,
         task_status: (task?.result as { task_status?: string } | null)?.task_status ?? task?.status ?? null,
+        // The database lifecycle state, kept distinct from workflow progress.
+        row_status: task?.status ?? null,
         task_id: task?.id ?? null,
         continuation_token: companyFirst.continuation?.continuation_token ?? null,
         next_round: companyFirst.continuation?.next_round ?? null,

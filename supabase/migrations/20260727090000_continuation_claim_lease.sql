@@ -68,8 +68,16 @@ comment on column public.tasks.checkpoint_version is
 -- so every concurrent caller is serialised and each one sees the previous
 -- winner's committed state.
 --
--- SECURITY: SECURITY INVOKER (the default) so row-level security still applies,
--- and the workspace is checked explicitly as defence in depth.
+-- SECURITY
+--   * SECURITY INVOKER (the default) — RLS still applies to the caller. No
+--     SECURITY DEFINER, because nothing here needs to exceed the caller's rights.
+--   * `search_path` is pinned to `public, pg_temp` so a hostile search_path
+--     cannot shadow a referenced object.
+--   * The function takes NO caller-supplied JSON, so no protected task field can
+--     be overwritten through it.
+--   * The returned columns are the minimum the caller needs to decide — never the
+--     task payload, result or any other tenant data.
+--   * EXECUTE is revoked from PUBLIC and granted only to service_role.
 
 create or replace function public.claim_sourcing_continuation(
   p_task_id       uuid,
@@ -130,6 +138,22 @@ begin
     return;
   end if;
 
+  -- A task that reached the END of its lifecycle is finished, whatever a stale
+  -- checkpoint claims. `complete`/`failed`/`skipped` are terminal ROW states.
+  if v_row.status in ('complete', 'failed', 'skipped') and v_terminal is distinct from 'continuation_required' then
+    return query select false, 'already_terminal'::text, p_task_id, v_row.checkpoint_version, null::uuid, null::timestamptz;
+    return;
+  end if;
+
+  -- RESUMABLE STATE. `ready` is what every new checkpoint writes. The legacy
+  -- values are accepted only so rows persisted before the lifecycle change stay
+  -- continuable; nothing here rewrites them.
+  if v_row.status is distinct from 'ready'
+     and v_row.status not in ('partial', 'running', 'complete') then
+    return query select false, 'not_resumable_state'::text, p_task_id, v_row.checkpoint_version, null::uuid, null::timestamptz;
+    return;
+  end if;
+
   -- A LIVE claim wins. Because the row is locked, a second caller reaching this
   -- line always sees the first caller's committed claim — including two stale
   -- reclaimers, which is the case the PostgREST version could not separate.
@@ -142,13 +166,27 @@ begin
   end if;
 
   -- Fresh claim, or an expired lease being reclaimed EXACTLY once.
+  --
+  -- `result` is MERGED (`||`), never replaced, and the function accepts no
+  -- caller-supplied JSON at all — so a checkpoint written concurrently cannot be
+  -- clobbered, and no caller can overwrite a protected task field through this
+  -- path. Only the claim bookkeeping keys are touched.
   update public.tasks
      set continuation_claim_id         = p_claim_id,
          continuation_claimed_at       = now(),
          continuation_claim_expires_at = now() + make_interval(secs => greatest(p_lease_seconds, 30)),
          checkpoint_version            = public.tasks.checkpoint_version + 1,
+         -- ready → running. The row is executing again for the duration of the lease.
          status                        = 'running',
-         updated_at                    = now()
+         updated_at                    = now(),
+         result                        = coalesce(public.tasks.result, '{}'::jsonb) || jsonb_build_object(
+                                           'continuation_claim',
+                                           jsonb_build_object(
+                                             'claim_id', p_claim_id,
+                                             'claimed_at', now(),
+                                             'expires_at', now() + make_interval(secs => greatest(p_lease_seconds, 30))
+                                           )
+                                         )
    where id = p_task_id;
 
   return query select true, 'claimed'::text, p_task_id,
@@ -168,7 +206,7 @@ create or replace function public.release_sourcing_continuation(
   p_task_id      uuid,
   p_workspace_id uuid,
   p_claim_id     uuid,
-  p_row_status   text default 'complete'
+  p_row_status   text default 'ready'
 )
 returns boolean
 language plpgsql
@@ -178,18 +216,25 @@ as $$
 declare
   v_released integer;
 begin
-  if p_row_status not in ('pending', 'running', 'complete', 'failed', 'skipped') then
+  -- Only the DATABASE LIFECYCLE vocabulary. `ready` is what a continuation
+  -- checkpoint releases to; `complete` is a genuine terminal outcome.
+  if p_row_status not in ('pending', 'running', 'ready', 'awaiting_approval', 'complete', 'failed', 'skipped') then
     raise exception 'invalid task row status: %', p_row_status;
   end if;
 
+  -- The claim bookkeeping is REMOVED from result via `-`, again without touching
+  -- any other key, so releasing cannot lose a checkpoint written during the round.
   update public.tasks
      set continuation_claim_id         = null,
          continuation_claimed_at       = null,
          continuation_claim_expires_at = null,
          status                        = p_row_status,
-         updated_at                    = now()
+         updated_at                    = now(),
+         result                        = coalesce(public.tasks.result, '{}'::jsonb) - 'continuation_claim'
    where id = p_task_id
      and workspace_id = p_workspace_id
+     -- CLAIM-SCOPED: only the holder may release. A superseded straggler cannot
+     -- clear the lease of the invocation that replaced it.
      and continuation_claim_id = p_claim_id;
 
   get diagnostics v_released = row_count;

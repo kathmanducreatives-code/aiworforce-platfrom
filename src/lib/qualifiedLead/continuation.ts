@@ -26,9 +26,16 @@ export const TRUE_TERMINAL_STATUSES: readonly TerminalStatus[] = [
   'round_limit_reached', 'provider_failure', 'invalid_request',
 ];
 
+/** Row states from which a checkpoint may still be continued. */
+export const RESUMABLE_ROW_STATUSES: readonly string[] = ['ready', 'partial', 'running', 'complete'];
+/** Row states that end the lifecycle; a Continue button must never appear. */
+export const TERMINAL_ROW_STATUSES: readonly string[] = ['failed', 'skipped'];
+
 export interface CompanyFirstResponse {
   terminal_status?: string | null;
   task_status?: string | null;
+  /** `tasks.status` — the database lifecycle state. */
+  row_status?: string | null;
   task_id?: string | null;
   continuation_token?: string | null;
   requested_leads?: number | null;
@@ -91,7 +98,13 @@ export function buildContinuationView(res: CompanyFirstResponse | null | undefin
   if (status === 'continuation_required') {
     // "Completed / 0 of 5" must never occur; this is the branch that used to
     // produce it, because a 200 with a checkpoint looked like a finished run.
-    const canContinue = !!token;
+    //
+    // Continue is offered ONLY when all three hold: the outcome is
+    // continuation_required, a token exists, and the ROW still advertises itself
+    // as resumable. A row that has been failed or skipped is not continuable
+    // however the outcome reads.
+    const rowResumable = res?.row_status == null || !TERMINAL_ROW_STATUSES.includes(String(res.row_status));
+    const canContinue = !!token && rowResumable;
     return {
       status,
       canContinue,
