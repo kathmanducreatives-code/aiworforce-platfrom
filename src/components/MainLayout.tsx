@@ -54,7 +54,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         )}
 
         <main
-          className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
+          className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
             isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-[68px]' : 'ml-[260px]'
           }`}
         >
