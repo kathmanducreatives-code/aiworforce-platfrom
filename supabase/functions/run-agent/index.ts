@@ -38,6 +38,8 @@ import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
 import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
+import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
+import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -634,9 +636,18 @@ Deno.serve(async (req) => {
           isLeadSourcingWorkflow: true,
         });
 
+        // REAL AI planner over Agentory's existing approved model infrastructure
+        // (_shared/aiProvider.ts). It only PROPOSES titles; every proposal is
+        // re-validated deterministically and cost-approved before any paid call,
+        // and any failure falls back to the deterministic plan.
+        const broadeningPlanner = createBroadeningPlanner({ workspaceId: workspace_id, agentSlug: agent_slug });
+
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntent, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           requestedLeadCount: quota.requestedLeadCount, requestedCountSource: quota.source,
+          proposeBroadening: broadeningPlanner.plan,
+          plannerMetadata: broadeningPlanner.lastMetadata,
+          durableIdempotency: supabaseToolCallReader(supabase as never),
           invokeJobs, invokePeople, persist: persistPlan,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
@@ -669,6 +680,8 @@ Deno.serve(async (req) => {
           people_candidates: cf.counts.candidates, provider_calls: cf.provider_calls,
           provider_side_writes: cf.writeBoundary.providerSideWrites, budget_consumed: cf.budget_consumed,
           counts: cf.counts, job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
+          plan_sources: cf.plan_sources, planner_metadata: cf.planner_metadata,
+          bottlenecks: cf.bottlenecks, idempotency: cf.idempotency,
         });
       }
 

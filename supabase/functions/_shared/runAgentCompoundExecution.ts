@@ -12,6 +12,7 @@ import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./ru
 import type { Vertical } from "./verticalQualification.ts";
 import { assertCompiledForProvider, JobSearchCompilationError } from "./jobsProviderInput.ts";
 import { buildCuriousCoderLinkedInJobsInput, buildLinkedInJobsSearchUrls } from "./curiousCoderJobsInput.ts";
+import { stampIdempotencyKey } from "./durableIdempotency.ts";
 import {
   newWriteBoundary, recordProviderInvocation, buildProviderEnvelope,
   type CompanyFirstWriteBoundary,
@@ -56,6 +57,8 @@ export async function runAgentCompoundExecution(
     keywordQueriesOverride?: string[];
     /** When false the caller (the controller) owns persistence. */
     persistCandidates?: boolean;
+    /** Durable paid-call key; recorded in tool_calls.input_json. */
+    idempotencyKey?: string;
   } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
@@ -85,7 +88,8 @@ export async function runAgentCompoundExecution(
       const roundKeywords = opts.keywordQueriesOverride?.length ? opts.keywordQueriesOverride : spec.keyword_queries;
       const urls = buildLinkedInJobsSearchUrls(roundKeywords, spec.location);
       const native = buildCuriousCoderLinkedInJobsInput({ urls, maxResults: max });
-      const envelope = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
+      const envelope0 = buildProviderEnvelope("apify_jobs", native as unknown as Record<string, unknown>, max);
+      const envelope = opts.idempotencyKey ? stampIdempotencyKey(envelope0 as unknown as Record<string, unknown>, opts.idempotencyKey) : (envelope0 as unknown as Record<string, unknown>);
       recordProviderInvocation(writeBoundary, envelope, "apify_jobs");
       diagnostics.jobsInvoked = true;
       for (const kw of spec.keyword_queries) {

@@ -26,6 +26,8 @@ import { validateRoundPlan, scanProposalForInjection } from "./broadeningValidat
 import { classifyBottleneck, emptyFunnelSummary, remedyFor, type BottleneckKind, type FunnelSummary } from "./sourcingBottleneck.ts";
 import { forecastRoundCost, roundIdempotencyKey, newIdempotencyLedger, DEFAULT_COST_POLICY, type CostForecast } from "./sourcingCostForecast.ts";
 import { shortHash } from "./planHash.ts";
+import { stampIdempotencyKey, lookupDurableCall, type ToolCallReader, type DurableLookupKind } from "./durableIdempotency.ts";
+import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import {
   countEligible, isQuotaEligibleCandidate, leadIdentityKey, remainingLeadCount,
   DEFAULT_QUOTA_POLICY, type QuotaPolicy,
@@ -100,6 +102,10 @@ export interface QuotaControllerResult {
   bottlenecks: Array<{ round: number; kind: BottleneckKind; reason: string; remedy: string }>;
   cost_forecasts: CostForecast[];
   plan_validations: Array<{ round: number; approved: string[]; rejected: Array<{ title: string; reason: string }>; violations: string[] }>;
+  /** Per-round planner provenance (no chain-of-thought, no secrets). */
+  planner_metadata: Array<PlannerMetadata & { round: number }>;
+  /** Per-round durable-idempotency decision. */
+  idempotency: Array<{ round: number; key: string; kind: DurableLookupKind; reason: string }>;
 }
 
 export interface QuotaControllerOpts {
@@ -117,6 +123,10 @@ export interface QuotaControllerOpts {
 export interface QuotaControllerDeps extends CompoundExecutionDeps {
   /** INJECTED planner. Never called by this module in tests or offline runs. */
   proposeBroadening?: BroadeningPlannerFn;
+  /** Safe provenance for the most recent planner call. */
+  plannerMetadata?: () => PlannerMetadata | null;
+  /** Restart-safe paid-call ledger backed by tool_calls (no migration). */
+  durableIdempotency?: ToolCallReader;
 }
 
 export async function runCompanyFirstQuotaController(
@@ -148,6 +158,8 @@ export async function runCompanyFirstQuotaController(
   const bottlenecks: QuotaControllerResult["bottlenecks"] = [];
   const forecasts: CostForecast[] = [];
   const planValidations: QuotaControllerResult["plan_validations"] = [];
+  const plannerMetadata: QuotaControllerResult["planner_metadata"] = [];
+  const idempotency: QuotaControllerResult["idempotency"] = [];
   const ledger = newIdempotencyLedger();
   let lastFunnel: FunnelSummary | null = null;
   let lastBottleneck: BottleneckKind | null = null;
@@ -192,6 +204,8 @@ export async function runCompanyFirstQuotaController(
           else { planSource = "ai_rejected_fallback_used"; }
         }
       } catch { planSource = "ai_unavailable_fallback_used"; }
+      const pm = deps.plannerMetadata?.();
+      if (pm) plannerMetadata.push({ ...pm, round, status: planSource as PlannerMetadata["status"] });
     }
 
     // Deterministic fallback whenever the AI path did not yield an approved round.
@@ -210,7 +224,23 @@ export async function runCompanyFirstQuotaController(
 
     // Idempotency: the same paid round is never charged twice on a retry.
     const idemKey = roundIdempotencyKey({ taskId: opts.taskId ?? null, workspaceId: opts.workspaceId ?? "", round, strategyHash: roundPlan.strategy_hash, actorKey: "apify_jobs" });
-    if (!ledger.claim(idemKey)) { terminal = "search_exhausted"; terminalReason = "identical paid round already executed"; break; }
+    if (!ledger.claim(idemKey)) { terminal = "search_exhausted"; terminalReason = "identical paid round already executed (in-process)"; break; }
+    // RESTART-SAFE: an identical completed paid call in tool_calls is never repeated.
+    if (deps.durableIdempotency) {
+      const dur = await lookupDurableCall(deps.durableIdempotency, { workspaceId: opts.workspaceId ?? "", key: idemKey, now: opts.now });
+      idempotency.push({ round, key: idemKey, kind: dur.kind, reason: dur.reason });
+      if (dur.kind === "cached") {
+        // The prior result already counted toward this run; do not re-charge and
+        // do not count it twice.
+        terminal = "search_exhausted";
+        terminalReason = "an identical paid round already completed and was reused";
+        break;
+      }
+    } else {
+      idempotency.push({ round, key: idemKey, kind: "new", reason: "in-process ledger only" });
+    }
+    // The key travels with the envelope so tool_calls.input_json records it.
+    const idempotencyStamp = idemKey;
 
     attemptedStrategies.push(roundPlan.strategy_hash);
     planSources.push(planSource);
@@ -238,7 +268,7 @@ export async function runCompanyFirstQuotaController(
         return spent + bounds.costPerPeopleCall <= ceiling && (peopleCalls + roundPeopleCalls) < bounds.maxPeopleCalls;
       },
     }, {
-      ...opts, limits: roundLimits, keywordQueriesOverride: keywords,
+      ...opts, limits: roundLimits, keywordQueriesOverride: keywords, idempotencyKey: idempotencyStamp,
       persistCandidates: false,          // the controller owns persistence
     });
 
@@ -362,6 +392,7 @@ export async function runCompanyFirstQuotaController(
       budget_consumed: Number(budget.toFixed(4)),
       rounds, candidates: dedupedCandidates, persisted, writeBoundary,
       plan, plan_sources: planSources, bottlenecks, cost_forecasts: forecasts, plan_validations: planValidations,
+      planner_metadata: plannerMetadata, idempotency,
     };
   }
 }
