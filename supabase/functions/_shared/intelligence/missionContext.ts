@@ -60,7 +60,13 @@ const SECRET_VALUE_RES: RegExp[] = [
   /\bghp_[A-Za-z0-9]{20,}/,             // GitHub
   /\bey[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}/, // JWT
   /\bAKIA[0-9A-Z]{16}\b/,               // AWS access key id
-  /\b(?:api[_ -]?key|secret|password|token)\b\s*[:=]\s*\S{8,}/i,
+  /\b(?:api[_ -]?key|secret|password|token|authorization|auth[_ -]?token|bearer)\b\s*[:=]\s*\S{8,}/i,
+  // A bearer token pasted WITHOUT a "key: value" separator — the literal header
+  // form. `authorization` is caught above as a KEY name, but a credential pasted
+  // into ordinary free text (a note, a pain point) arrives under an innocent key
+  // and would otherwise reach the prompt. Requires the literal `Bearer` prefix and
+  // a credential-length token, so prose like "Authorization workflows" is untouched.
+  /\bBearer\s+[A-Za-z0-9._~+/-]{16,}=*/,
 ];
 
 /**

@@ -118,6 +118,31 @@ Deno.test("5.C looksLikeSecret catches both key-shape and value-shape", () => {
   assertFalse(looksLikeSecret("industries", "B2B SaaS"));
 });
 
+Deno.test("5.C2 bearer tokens and authorization headers are removed as VALUES", () => {
+  // Key-shape detection catches a field NAMED `authorization`. A credential pasted
+  // into ordinary free text arrives under an innocent key, so the value shape has
+  // to catch it too.
+  for (const secret of [
+    "Bearer abcdefgh12345678901234",
+    "authorization: Bearer abcdefgh12345678",
+    "auth_token = abcdefgh12345678",
+  ]) {
+    assert(looksLikeSecret("pain_points", secret), `not detected: ${secret}`);
+    assertEquals(bounded([secret]), [], `not stripped from a list: ${secret}`);
+  }
+});
+
+Deno.test("5.C3 secret patterns do NOT over-remove ordinary business language", () => {
+  // Each of these contains a credential-ish WORD but is legitimate ICP vocabulary.
+  const ordinary = [
+    "Token Metrics", "Password manager vendors", "Secretarial services",
+    "Authorization workflows", "Bearer of record", "API key management platforms",
+    "B2B SaaS", "Revenue Operations", "employer_verified",
+  ];
+  assertEquals(bounded(ordinary).length, ordinary.length,
+    `dropped: ${ordinary.filter((o) => !bounded(ordinary).includes(o)).join(", ")}`);
+});
+
 Deno.test("5.D stripSecrets preserves structure it does not remove", () => {
   const cleaned = stripSecrets({ keep: ["a"], drop: { api_key: "x" }, deep: { ok: 1, secret: "y" } });
   assertEquals((cleaned as Record<string, unknown>).keep, ["a"]);
