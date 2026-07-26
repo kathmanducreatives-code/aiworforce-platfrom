@@ -155,13 +155,27 @@ Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-
   }
 });
 
-Deno.test("32.E the kernel is not imported BY any edge function yet", async () => {
+Deno.test("32.E only run-agent imports the kernel, and only through the gated bridge", async () => {
   const root = new URL("../../", import.meta.url);   // supabase/functions/
-  for (const fn of ["run-agent", "orchestrate", "pilot-chat"]) {
+
+  // Phase 2 deliberately wires ONE entry point into the Lead path. Orchestrate and
+  // pilot-chat remain untouched, so the blast radius stays a single function.
+  for (const fn of ["orchestrate", "pilot-chat"]) {
     const src = await Deno.readTextFile(new URL(`${fn}/index.ts`, root));
-    assertFalse(src.includes("intelligence/"),
-      `${fn} already imports the kernel — Phase 1 must remain unwired`);
+    assertFalse(src.includes("intelligence/"), `${fn} must not import the kernel`);
   }
+
+  const runAgent = await Deno.readTextFile(new URL("run-agent/index.ts", root));
+  const kernelImports = [...runAgent.matchAll(/from "\.\.\/_shared\/intelligence\/[^"]+"/g)].map((m) => m[0]);
+  assertEquals(kernelImports.length, 1, `run-agent must import exactly one kernel module, got: ${kernelImports.join(", ")}`);
+  assert(kernelImports[0].includes("leads/leadPlanningBridge.ts"),
+    "run-agent must reach the kernel only through the gated bridge");
+
+  // The planner itself is never called directly from the edge function.
+  assertFalse(runAgent.includes("planInitialLeadSourcing("),
+    "run-agent must not call the planner directly — the bridge owns enablement");
+  assertFalse(runAgent.includes("runPlanner("),
+    "run-agent must not call the model wrapper directly");
 });
 
 // ---- diagnostics -----------------------------------------------------------

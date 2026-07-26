@@ -36,6 +36,12 @@ import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artif
 // verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
 import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
 import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
+// PHASE 2 — Claude-first INITIAL planning. Gated by CLAUDE_FIRST_LEAD_PLANNING
+// *and* an explicit workspace allow-list, so no single environment variable can
+// enable it globally. With either absent this is inert: no mission is built, no
+// prompt assembled, no model contacted, and the spec below is passed through by
+// reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
+import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
@@ -747,8 +753,34 @@ Deno.serve(async (req) => {
         // and any failure falls back to the deterministic plan.
         const broadeningPlanner = createBroadeningPlanner({ workspaceId: workspace_id, agentSlug: agent_slug });
 
+        // CLAUDE-FIRST INITIAL PLANNING. Proposes the role keywords for round one;
+        // everything downstream is unchanged. A validated Claude strategy replaces
+        // `keyword_queries` only — person roles, location, country and vertical are
+        // carried through untouched, so the planner cannot redefine who we contact
+        // or where. Any failure, timeout, policy violation or approval requirement
+        // returns the deterministic spec, which is exactly today's behavior.
+        const claudeFirst = await applyClaudeFirstLeadPlanning({
+          workspaceId: workspace_id,
+          originalInstruction: cfIntent.job_search_spec.original_query,
+          spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
+          environment: "test",
+          missionId: `${task.id}:1`,
+          taskId: task.id,
+          requestedLeadCount: quota.requestedLeadCount,
+        });
+        const cfIntentPlanned = claudeFirst.specRewritten
+          ? { ...cfIntent, job_search_spec: claudeFirst.spec as unknown as typeof cfIntent.job_search_spec }
+          : cfIntent;
+        if (claudeFirst.outcome) {
+          console.log("[run-agent][claude-first]", {
+            task_id: task.id,
+            planner_source: claudeFirst.outcome.source,
+            fallback_reason: claudeFirst.outcome.fallbackReason,
+          });
+        }
+
         const cf = await executeRunAgentCompanyFirstSourcing({
-          intent: cfIntent, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
+          intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           requestedLeadCount: quota.requestedLeadCount, requestedCountSource: quota.source,
           proposeBroadening: broadeningPlanner.plan,
           plannerMetadata: broadeningPlanner.lastMetadata,
@@ -797,6 +829,9 @@ Deno.serve(async (req) => {
             // Carried in the task row too, so the Workbench can render the run
             // context after a page reload without re-reading the response.
             qualified_lead_run_context: runContext,
+            // Phase 2 planner diagnostics. Additive: one new key, hashes rather
+            // than content, and absent-by-default shape when planning did not run.
+            claude_first_planning: bridgeDiagnostics(claudeFirst),
             lead_entity_intent: cfIntent,
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },
