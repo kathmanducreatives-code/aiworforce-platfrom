@@ -121,7 +121,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       {/* Navigation */}
       <nav
         aria-label="Primary"
-        className="flex-1 overflow-y-auto px-2 py-3 space-y-6"
+        className="flex-1 overflow-y-auto px-2 py-3 space-y-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {navGroups.map((group) => (
           <div
