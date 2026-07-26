@@ -20,6 +20,7 @@
 //   policy violation              -> deterministic
 //   approval required             -> deterministic, with the request surfaced
 //   compile failure               -> deterministic
+//   structurally incomplete plan  -> deterministic (checked AFTER filtering)
 //
 // "Approval required" is worth stating plainly: Phase 2 does NOT block the run
 // waiting for a human. It falls back to the deterministic plan and REPORTS what
@@ -39,7 +40,7 @@ import type { AgentoryEnvironmentMode } from "../mission.ts";
 import type { LeadSourcingMission } from "./leadMission.ts";
 import { parseLeadStrategy, LEAD_STRATEGY_OUTPUT_SCHEMA, type LeadInitialStrategy } from "./leadStrategy.ts";
 import { reviewStrategyTitles, checkLeadPreservation, registryFallbackTitles, type TitleDecision } from "./leadStrategyValidation.ts";
-import { compileLeadStrategy, compileDeterministicPlan, type CompiledLeadPlan } from "./leadStrategyCompiler.ts";
+import { compileLeadStrategy, compileDeterministicPlan, assessPlanCompleteness, type CompiledLeadPlan } from "./leadStrategyCompiler.ts";
 
 export type LeadPlanSource = "claude" | "deterministic_registry";
 
@@ -103,19 +104,29 @@ export async function planInitialLeadSourcing(input: PlanLeadSourcingInput): Pro
 
   const deterministicTitles = registryFallbackTitles(mission);
 
-  const fallback = async (
-    reason: string,
-    call: PlannerCallDiagnostics,
-    extra: Partial<LeadPlanDiagnostics> = {},
-  ): Promise<LeadPlanOutcome> => {
+  // Compiled at most once, and reused: it is both the fallback plan AND the
+  // baseline the accepted Claude plan is measured against for completeness.
+  let deterministicMemo: CompiledLeadPlan | null = null;
+  const deterministicPlan = async (): Promise<CompiledLeadPlan> => {
+    if (deterministicMemo) return deterministicMemo;
     const compiled = await compileDeterministicPlan(mission, deterministicTitles, environment);
     if (!compiled.ok) {
       // The deterministic path itself could not compile. Surfaced honestly rather
       // than papered over — an empty plan is not a plan.
       throw new Error(`deterministic_plan_uncompilable:${compiled.reason}`);
     }
+    deterministicMemo = compiled.plan;
+    return compiled.plan;
+  };
+
+  const fallback = async (
+    reason: string,
+    call: PlannerCallDiagnostics,
+    extra: Partial<LeadPlanDiagnostics> = {},
+  ): Promise<LeadPlanOutcome> => {
+    const plan = await deterministicPlan();
     return {
-      plan: compiled.plan,
+      plan,
       source: "deterministic_registry",
       strategy: null,
       fallbackReason: reason,
@@ -137,8 +148,8 @@ export async function planInitialLeadSourcing(input: PlanLeadSourcingInput): Pro
         // spread win here would label a deterministic run as a Claude run and
         // attach the abandoned strategy's hash to it.
         planner_source: "deterministic_registry",
-        approved_titles: compiled.plan.approvedTitles,
-        plan_hash: compiled.plan.planHash,
+        approved_titles: plan.approvedTitles,
+        plan_hash: plan.planHash,
         fallback_reason: reason,
       },
     };
@@ -268,6 +279,22 @@ export async function planInitialLeadSourcing(input: PlanLeadSourcingInput): Pro
   });
   if (!compiled.ok) {
     return fallback(`compile_failed:${compiled.reason}`, outcome.diagnostics, diagBase({}));
+  }
+
+  // STRUCTURAL COMPLETENESS, checked on what will ACTUALLY execute.
+  //
+  // Everything above validates the strategy Claude PROPOSED. This is the last gate,
+  // and the only one that sees the plan after rejected and approval-required titles
+  // have been filtered out and title-less searches dropped. A strategy can clear
+  // every policy check and still compile into something that cannot find anything —
+  // and without this it would run, and be recorded as a Claude-planned run.
+  //
+  // Falling back here also keeps the diagnostics honest: `fallback()` re-labels the
+  // record as deterministic with a reason, so the source, plan hash and status
+  // always describe the plan that really ran.
+  const completeness = assessPlanCompleteness(compiled.plan, await deterministicPlan());
+  if (!completeness.ok) {
+    return fallback(`plan_incomplete:${completeness.reason}`, outcome.diagnostics, diagBase({}));
   }
 
   return {

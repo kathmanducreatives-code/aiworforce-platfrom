@@ -164,6 +164,47 @@ export async function compileLeadStrategy(input: CompileInput): Promise<CompileR
   };
 }
 
+export type PlanCompleteness = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Is a compiled Claude plan still structurally able to do the job?
+ *
+ * WHY THIS EXISTS. Filtering happens AFTER the strategy is validated: rejected and
+ * approval-required titles are removed, and a search left with none is dropped.
+ * A strategy can therefore pass every policy check and still compile down to
+ * something that cannot work — the discovery search deleted because its only title
+ * was registry-excluded, a discovery search that carried keywords but no titles, or
+ * every result target clamped to zero. Each of those compiles "successfully" into a
+ * plan that finds nothing, and would be recorded as a Claude-planned run.
+ *
+ * THE MEASURE IS THE DETERMINISTIC PLAN, not an invented ideal. For every stage the
+ * registry baseline can actually execute, the Claude plan must be able to execute it
+ * too. That keeps the rule general — it is derived from the mission's own baseline
+ * rather than from a hardcoded list of purposes — and it never rejects a Claude plan
+ * for a gap the fallback shares, which would be noise rather than safety.
+ *
+ * A stage is EXECUTABLE when it has at least one title and a non-zero result limit.
+ * Titles without a limit fetch nothing; a limit without titles is a far broader
+ * search than the one that was approved.
+ */
+export function assessPlanCompleteness(
+  plan: CompiledLeadPlan,
+  baseline: CompiledLeadPlan,
+): PlanCompleteness {
+  const executable = (p: CompiledLeadPlan, purpose: LeadSearchPurpose) =>
+    p.searches.some((s) => s.purpose === purpose && s.titles.length > 0 && s.limit > 0);
+
+  for (const purpose of [...new Set(baseline.searches.map((s) => s.purpose))]) {
+    // A stage the baseline itself cannot execute is not a bar the planner must clear.
+    if (!executable(baseline, purpose)) continue;
+    if (!executable(plan, purpose)) return { ok: false, reason: `no_executable_${purpose}` };
+  }
+
+  if (plan.forecast.maxResults <= 0) return { ok: false, reason: "zero_result_targets" };
+
+  return { ok: true };
+}
+
 /**
  * The DETERMINISTIC plan — what the workflow does today, and what it falls back to.
  *
