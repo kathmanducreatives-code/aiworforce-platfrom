@@ -140,7 +140,7 @@ export default function Signals() {
 
   return (
     <>
-      <DepartmentWorkspaceShell<PrimaryTab>
+      <DepartmentWorkspaceShell
         eyebrow="Growth · Signals"
         title="Company Brain Radar"
         description="Verified market signals from your ICP — hiring, funding, competitor moves and buying-window activity, monitored by Scout."
