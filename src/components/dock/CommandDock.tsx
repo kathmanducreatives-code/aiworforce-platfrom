@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowUp, ChevronUp, Loader2, Plus } from 'lucide-react';
+import { ArrowUp, ChevronUp, Loader2, Plus, MessageSquare, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AGENT_PROFILES, type AgentProfile } from '@/data/agentProfiles';
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
@@ -35,6 +36,16 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
   const { mode, open, view, setView, setPending } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
   const isMobile = useIsMobile();
+  const location = useLocation();
+
+  // Department pages own their own agent rail; collapse the global composer
+  // into a small "Open workforce chat" pill so it never overlaps the page.
+  const DEPT_PATHS = ['/signals', '/content'];
+  const isDeptPage = DEPT_PATHS.some((p) => location.pathname.startsWith(p));
+  const [deptCollapsed, setDeptCollapsed] = useState<boolean>(isDeptPage);
+  useEffect(() => {
+    setDeptCollapsed(isDeptPage);
+  }, [isDeptPage, location.pathname]);
 
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
