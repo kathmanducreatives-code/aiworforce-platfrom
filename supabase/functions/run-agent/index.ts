@@ -43,7 +43,8 @@ import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
-import { decideClaimAttempt, claimContinuation, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb } from "../_shared/continuationClaim.ts";
+import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
+import { projectStatus, readStatuses } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
@@ -235,6 +236,10 @@ Deno.serve(async (req) => {
   // inserts. Refusals are explicit — a bad token never degrades into a new
   // (billable) round-1 run.
   let task: { id: string } | null = null;
+  // The lease taken on the RPC path lives in COLUMNS, so it must be released
+  // explicitly when the round ends. Held here because the claim is taken in this
+  // block but released after the sourcing outcome is written, far below.
+  let heldClaim: { claimId: string; viaRpc: boolean } | null = null;
   if (resume_task_id) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
@@ -258,25 +263,63 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
-    const claim = newClaim(crypto.randomUUID(), new Date().toISOString(), decision.nextRound);
-    const cas = await claimContinuation({
-      db: supabase as unknown as ClaimDb,
-      taskId: decision.taskId,
-      observedStatus,
-      resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
+    const claimId = crypto.randomUUID();
+    const claim = newClaim(claimId, new Date().toISOString(), decision.nextRound);
+
+    // DURABLE PATH FIRST. `claim_sourcing_continuation` takes SELECT … FOR UPDATE
+    // before deciding, so even two stale reclaimers are serialised. It reports
+    // `available: false` when its migration has not been applied, in which case
+    // the conditional update below is used — that fallback is exclusive for a
+    // LIVE claim but not for two simultaneous stale reclaims.
+    const rpc = await claimContinuationViaRpc({
+      db: supabase as unknown as RpcDb,
+      taskId: decision.taskId, workspaceId: workspace_id, claimId,
     });
+    if (rpc.available && !rpc.claimed) {
+      // FAIL CLOSED. A conflict, a permission/RLS refusal, a timeout or an
+      // unexpected response all stop here — only a genuinely missing function
+      // reaches the weaker compatibility path below.
+      console.error("[run-agent][company-first] claim refused", {
+        task_id: decision.taskId, claim_path: "rpc",
+        claim_error_category: rpc.category, claim_error_code: rpc.code,
+      });
+      return json({
+        success: false, error: "continuation_refused", reason: rpc.reason,
+        message: CLAIM_REFUSAL_MESSAGE[rpc.reason], held_until: rpc.heldUntil,
+        claim_path: "rpc", claim_error_category: rpc.category,
+      }, rpc.reason === "not_permitted" ? 403 : 409);
+    }
+
+    // COMPATIBILITY PATH — reached only when the RPC's migration is absent. It
+    // moves `ready → running`, so a task that is not advertising itself as
+    // resumable cannot be claimed by it either.
+    const cas = rpc.available
+      ? { claimed: true as const }
+      : await claimContinuation({
+          db: supabase as unknown as ClaimDb,
+          taskId: decision.taskId,
+          observedStatus,
+          resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
+        });
     if (!cas.claimed) {
+      console.error("[run-agent][company-first] claim refused", {
+        task_id: decision.taskId, claim_path: "compatibility_fallback",
+        claim_error_category: "conflict", claim_error_code: null,
+      });
       // Another invocation moved the status first. It owns this checkpoint; this
       // one must NOT run it, or the same round is paid for twice.
       return json({
         success: false, error: "continuation_refused", reason: cas.reason,
         message: CLAIM_REFUSAL_MESSAGE[cas.reason],
+        claim_path: "compatibility_fallback", claim_error_category: "conflict",
       }, 409);
     }
 
     task = { id: decision.taskId };
+    heldClaim = { claimId, viaRpc: rpc.available };
     console.log("[run-agent][company-first] resuming task", {
-      task_id: decision.taskId, next_round: decision.nextRound, claim: attempt.reason,
+      task_id: decision.taskId, next_round: decision.nextRound,
+      claim: attempt.reason, claim_path: rpc.available ? "rpc" : "compatibility_fallback",
     });
   }
 
@@ -731,17 +774,23 @@ Deno.serve(async (req) => {
         // database writes. Anything short of the quota reports why.
         // `continuation_required` is NOT terminal — the task stays `partial` with a
         // checkpoint so a later invocation resumes instead of restarting.
-        const taskStatus = (cf.status === "provider_failure" || cf.status === "invalid_request" || !!cf.writeBoundary.invariantViolation)
-          ? "failed"
-          : cf.status === "completed" ? "completed" : "partial";
+        // STATUS SEPARATION. The COLUMN carries database execution state only
+        // (the values every declared constraint agrees on); the sourcing outcome
+        // and the quota outcome live in `result`. Overloading the column made it
+        // mean two things at once and would break the moment the constraint
+        // declared in migration 20260519104244 is actually applied.
+        const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation);
+        const taskStatus = statuses.taskStatus;
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
         const { data: finishedRow } = await supabase.from("tasks").select("result").eq("id", task.id).maybeSingle();
         const priorTaskResult = releaseClaim(((finishedRow as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>);
         await supabase.from("tasks").update({
-          status: taskStatus,
+          status: statuses.rowStatus,
           result: {
             ...priorTaskResult,
+            task_status: statuses.taskStatus,
+            terminal_status: statuses.terminalStatus,
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
@@ -752,6 +801,26 @@ Deno.serve(async (req) => {
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },
         }).eq("id", task.id);
+
+        // RELEASE THE DURABLE LEASE. `releaseClaim` above only strips the
+        // `result` key the compatibility path writes; the RPC's lease lives in
+        // `tasks.continuation_claim_*` COLUMNS. Leaving them set makes the next
+        // `Continue sourcing` fail `already_claimed` until the lease expires.
+        // Best-effort: the outcome is already committed, so a failure here costs
+        // one lease interval, never a result.
+        if (heldClaim?.viaRpc) {
+          const released = await releaseContinuationViaRpc({
+            db: supabase as unknown as RpcDb,
+            taskId: task.id, workspaceId: workspace_id,
+            claimId: heldClaim.claimId, rowStatus: statuses.rowStatus,
+          });
+          if (!released.released) {
+            console.error("[run-agent][company-first] claim release failed", {
+              task_id: task.id, claim_path: "rpc",
+              claim_error_category: released.category, claim_error_code: released.code,
+            });
+          }
+        }
 
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({

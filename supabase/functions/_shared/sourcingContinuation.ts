@@ -14,6 +14,7 @@
 // Pure — no network, no client. The caller supplies the already-loaded row.
 
 import { SOURCING_STATE_KEY, SOURCING_STATE_VERSION } from "./companyFirstSourcingState.ts";
+import { isResumableRowStatus, isTerminalOutcome } from "./taskStatusContract.ts";
 
 export interface ResumableTaskRow {
   id?: string | null;
@@ -28,7 +29,8 @@ export type ResumeRefusal =
   | "workspace_mismatch"
   | "no_checkpoint"
   | "checkpoint_version_mismatch"
-  | "already_terminal";
+  | "already_terminal"
+  | "not_resumable_state";
 
 export type ResumeDecision =
   | { ok: true; taskId: string; nextRound: number; instruction: string | null }
@@ -52,6 +54,13 @@ export function decideResume(
   // A finished run must not be resumable — that is what the terminal statuses mean.
   if (state.terminal_status) return { ok: false, reason: "already_terminal" };
 
+  // The ROW must also advertise itself as resumable. A task sitting at `complete`
+  // with a genuine terminal result is finished, whatever a stale checkpoint says.
+  const resultTerminal = typeof (row.result ?? {})["terminal_status"] === "string"
+    ? String((row.result ?? {})["terminal_status"]) : null;
+  if (isTerminalOutcome(resultTerminal)) return { ok: false, reason: "already_terminal" };
+  if (!isResumableRowStatus(row.status)) return { ok: false, reason: "not_resumable_state" };
+
   const instruction = typeof row.payload?.instruction === "string" ? row.payload.instruction : null;
   return {
     ok: true,
@@ -68,4 +77,5 @@ export const RESUME_REFUSAL_MESSAGE: Record<ResumeRefusal, string> = {
   no_checkpoint: "That run has no saved checkpoint to continue from.",
   checkpoint_version_mismatch: "That run's checkpoint was written by an older version and cannot be resumed.",
   already_terminal: "That run has already finished.",
+  not_resumable_state: "That run is not in a resumable state.",
 };

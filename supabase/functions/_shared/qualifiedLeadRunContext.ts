@@ -14,7 +14,7 @@
 //
 // Pure — no network, no model call.
 
-import type { JobIntent } from "./jobIntentTaxonomy.ts";
+import { summarizeJobIntent, type JobIntent } from "./jobIntentTaxonomy.ts";
 import { inferCompanyStage } from "./qualifiedLeadRouting.ts";
 
 export const RUN_CONTEXT_VERSION = "qualified-lead-run-context-1.0.0";
@@ -31,6 +31,10 @@ export interface QualifiedLeadRunContext {
   company_vertical: string | null;
   company_stage: string | null;
   requested_person_roles: string[];
+  /** Seniority of the ROLE BEING HIRED. Empty means the request never said. */
+  hiring_seniority: string[];
+  /** Seniority of the PERSON TO CONTACT. Never mixed with the above. */
+  decision_maker_seniority: string[];
   requested_lead_count: number | null;
   count_entity: string | null;
   quota_policy: string | null;
@@ -103,7 +107,7 @@ export function buildQualifiedLeadRunContext(input: RunContextInput): QualifiedL
     // The taxonomy's own summary is the richest honest description of what we
     // understood; the compiler's status is the fallback.
     parsed_intent_summary: firstNonEmpty(
-      intent ? summarize(intent) : null,
+      intent ? summarizeJobIntent(intent) : null,
       spec.compilation_status,
     ),
     workflow_kind: input.workflowKind ?? "qualified_lead_sourcing",
@@ -117,9 +121,15 @@ export function buildQualifiedLeadRunContext(input: RunContextInput): QualifiedL
     // taxonomy's TEAM stage (whether this is a first hire). They are different
     // questions and the visible contract asks for the former.
     company_stage: inferCompanyStage(r.routing.original_user_query) ?? "unspecified",
+    // DECISION-MAKER roles — who Agentory will contact. Deliberately NOT derived
+    // from the hiring role: the two are separate entities in the request.
     requested_person_roles: input.requestedPersonRoles?.length
       ? [...input.requestedPersonRoles]
-      : (r.routing.requested_person_role ? [r.routing.requested_person_role] : []),
+      : intent?.decision_maker.roles.length
+        ? [...intent.decision_maker.roles]
+        : (r.routing.requested_person_role ? [r.routing.requested_person_role] : []),
+    hiring_seniority: intent ? [...intent.hiring_role.seniority] : [],
+    decision_maker_seniority: intent ? [...intent.decision_maker.seniority] : [],
     requested_lead_count: r.quota.requested_leads,
     count_entity: input.countEntity ?? "contact_ready_lead",
     quota_policy: r.quota.quota_policy,
@@ -135,16 +145,7 @@ export function buildQualifiedLeadRunContext(input: RunContextInput): QualifiedL
   };
 }
 
-function summarize(intent: JobIntent): string {
-  return [
-    intent.function ?? "unclassified_function",
-    `department=${intent.department ?? "unknown"}`,
-    `seniority=${intent.seniority}`,
-    `stage=${intent.team_stage}`,
-    `vertical=${intent.vertical ?? "unspecified"}`,
-    `geography=${intent.geography.length ? intent.geography.join("/") : "unspecified"}`,
-  ].join("; ");
-}
+
 
 /** Fields that are null/empty. Empty array means the context is fully populated. */
 export function missingRunContextFields(ctx: QualifiedLeadRunContext): string[] {
