@@ -21,6 +21,7 @@ import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, c
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
+import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
 
 
 const cors = {
@@ -157,6 +158,7 @@ Respond with ONLY a JSON object containing the "intent" key. Example: {"intent":
 function roleFamilyLabel(fam: RoleFamily): string {
   switch (fam) {
     case "assistant_founder_support": return "Assistant / Founder-Support";
+    case "sales_operations": return "Sales / Revenue Operations";
     case "gtm_sales": return "GTM / Sales";
     case "marketing_growth": return "Marketing / Growth";
     case "engineering": return "Engineering";
@@ -179,23 +181,65 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
   const buyer = intent.target_buyer.join(", ");
   const industry = intent.target_industry.join(", ");
   const location = intent.target_geography[0] ?? company?.location ?? "USA";
+
+  // DETERMINISTIC ROUTE — decided from the user's own words, before any template
+  // or model output, and authoritative over both. A request naming people to
+  // contact or a final lead quota is company-first qualified-lead sourcing, not an
+  // account-only signal scan (the 2026-07-26 manual-run corruption).
+  const route = routeQualifiedLead(prompt);
+  const requestedLeadCount = extractRequestedLeadCount(prompt) ?? intent.count;
+  const isQualifiedLead = route.workflowKind === "qualified_lead_sourcing";
+  const personRoles = isQualifiedLead ? ["Founder", "Co-Founder", "CEO"] : [];
+
   return {
-    workflow_id: "find_hiring_signal_accounts",
-    workflow_name: `Find ${roleFamilyLabel(fam)} hiring-signal accounts`,
+    workflow_id: isQualifiedLead ? "find_qualified_leads" : "find_hiring_signal_accounts",
+    workflow_name: isQualifiedLead
+      ? `Find ${personRoles[0].toLowerCase()}s at ${industry || "target"} companies hiring ${roleFamilyLabel(fam)}`
+      : `Find ${roleFamilyLabel(fam)} hiring-signal accounts`,
+    // ROUTE CONTRACT — the frontend renders from these, and run-agent routes on them.
+    workflow_kind: route.workflowKind,
+    execution_mode: route.executionMode,
+    execution_mode_label: isQualifiedLead ? "Company-first qualified lead sourcing" : "Fast account sourcing",
+    route_reason_codes: route.reasonCodes,
+    // The ORIGINAL instruction stays authoritative; the generated title never
+    // replaces it as the thing we execute.
+    original_instruction: prompt,
     goal: prompt,
     agent_team: ["pilot", "scout", "aria"],
     inputs: {
-      count: intent.count,
+      count: requestedLeadCount,
+      count_entity: route.countEntity,
+      quota_policy: route.quotaPolicy,
       source: "hiring signals",
       hiring_role: roleDisplay,
+      decision_makers: personRoles,
       target_buyer: buyer,
       target_industry: industry, // never the user's product
       location,
       user_product: intent.user_product?.category, // shown as product, not industry
     },
-    output: "Account opportunities in Workbench",
+    output: isQualifiedLead
+      ? "Qualified company + verified decision-maker leads in Workbench"
+      : "Account opportunities in Workbench",
     safety: "Nothing will be sent. Draft-only by default.",
-    estimated_credits: Math.max(5, intent.count),
+    estimated_credits: Math.max(5, requestedLeadCount),
+    // Structured contract carried through Start Workflow → orchestrate → run-agent.
+    qualified_lead_contract: isQualifiedLead
+      ? {
+          workflow_kind: route.workflowKind,
+          execution_mode: "company_first",
+          signal_type: "hiring",
+          job_family: fam,
+          job_titles: roleFamilyAliases(fam),
+          company_vertical: industry || null,
+          geography: intent.target_geography,
+          requested_person_roles: personRoles,
+          current_employer_required: true,
+          requested_lead_count: requestedLeadCount,
+          quota_policy: route.quotaPolicy,
+          count_entity: route.countEntity,
+        }
+      : null,
     // Company-Brain transparency (Phase 11): what we target vs. exclude.
     target_company: icpTargetSummary(intent),
     excluded_company: icpExcludedSummary(intent),

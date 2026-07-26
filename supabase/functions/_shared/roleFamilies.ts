@@ -10,6 +10,7 @@ import { SUPPORT_ROLE_ALIASES, SUPPORT_ROLE_RE } from "./broaden.ts";
 
 export type RoleFamily =
   | "assistant_founder_support"
+  | "sales_operations"
   | "gtm_sales"
   | "marketing_growth"
   | "engineering"
@@ -21,6 +22,14 @@ export type RoleFamily =
 
 export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, string[]> = {
   assistant_founder_support: SUPPORT_ROLE_ALIASES,
+  // Sales/Revenue OPERATIONS is its own discipline. It is deliberately NOT part of
+  // gtm_sales: a "Sales Operations" request must never be widened into SDR/BDR/AE
+  // quota-carrying roles. Aligned with the backend jobFamilyRegistry
+  // (sales_operations) so the UI and the sourcing runtime agree.
+  sales_operations: [
+    "Sales Operations", "Revenue Operations", "GTM Operations",
+    "Revenue Strategy and Operations", "Sales Strategy and Operations",
+  ],
   gtm_sales: [
     "SDR", "BDR", "Sales Development Representative", "Account Executive",
     "Founding SDR", "Founding AE", "Head of Sales", "Growth", "GTM",
@@ -61,6 +70,10 @@ const PROFILE_OR_EQUITY_RE =
 // "Operations Associate" / "Chief of Staff" land in assistant, not gtm/ops.
 const FAMILY_DETECT: Array<[Exclude<RoleFamily, null | "custom">, RegExp]> = [
   ["assistant_founder_support", SUPPORT_ROLE_RE],
+  // MUST precede gtm_sales: its \bsales\b / revenue alternatives would otherwise
+  // capture "Sales Operations" and produce SDR/BDR/AE aliases (the 2026-07-26
+  // manual-run corruption).
+  ["sales_operations", /\b(sales op(?:s|erations)|revenue op(?:s|erations)|rev ?ops|gtm op(?:s|erations)|revenue strategy (?:and|&) operations|sales strategy (?:and|&) operations)\b/i],
   ["gtm_sales", /\b(sdrs?|bdrs?|account executives?|\baes?\b|sales development|founding (?:sdr|ae)|head of sales|gtm|go-?to-?market|business development|demand gen(?:eration)?|\bsales\b|revenue)\b/i],
   ["marketing_growth", /\b(growth marketers?|product marketing|content marketing|lifecycle marketing|performance marketing|growth marketing|brand marketing|\bmarketing\b|\bgrowth\b)\b/i],
   ["engineering", /\b(software engineers?|backend engineers?|frontend engineers?|full ?stack|ai engineers?|ml engineers?|\bengineers?\b|developers?|\bswe\b)\b/i],
