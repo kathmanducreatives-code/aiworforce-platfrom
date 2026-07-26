@@ -81,8 +81,8 @@ export default function Content() {
 
   const briefSignals: ContentBriefSignal[] = useMemo(() =>
     contentSignals.map((s) => ({
-      title: s.title, signal_type: s.signal_type, score: s.score,
-      company: s.company_name ?? null, source_url: s.source_url ?? null,
+      title: s.title, signal_type: s.signal_type, score: s.fit_score ?? 0,
+      company: s.account_name ?? null, source_url: s.source_url ?? null,
     })), [contentSignals]);
   const brief = useMemo(() => deriveContentBrief(briefSignals, posts.length), [briefSignals, posts.length]);
 
@@ -535,14 +535,15 @@ function TrendsView({ signals, loading, onTurnIntoPost, onAskMira }: {
         Top {signals.length} LinkedIn conversation{signals.length === 1 ? '' : 's'} for your market — ranked by Company Brain relevance, not just popularity.
       </p>
       {signals.map((s, i) => {
-        const relevance = s.score > 0 ? Math.min(99, Math.round(s.score)) : null;
+        const score = s.fit_score ?? 0;
+        const relevance = score > 0 ? Math.min(99, Math.round(score)) : null;
         return (
           <div key={s.id} className="group flex items-center gap-4 rounded-xl border border-border/10 bg-card/[0.08] px-4 py-3 transition-colors hover:border-border/22 hover:bg-card/15">
             <span className="w-8 shrink-0 text-center text-[16px] font-bold tabular-nums text-muted-foreground/40">#{i + 1}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-medium text-foreground/90">{s.title}</p>
               <div className="mt-1 flex items-center gap-2.5 text-[11px] text-muted-foreground/50">
-                {s.company_name && <span>{s.company_name}</span>}
+                {s.account_name && <span>{s.account_name}</span>}
                 {s.signal_type && <span className="rounded bg-background/30 px-1.5 py-0.5">{s.signal_type}</span>}
                 {relevance !== null && <span className="text-teal-400/60">ICP relevance: {relevance}</span>}
               </div>
