@@ -1,6 +1,10 @@
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { unwrapLeadRaw } from '@/lib/leadRowAction';
 import { hydrateOutreachStage, OUTREACH_DRAFT_READY_COPY } from '@/lib/outreachStageView';
+import {
+  buildQualifiedLeadDiagnostics, QUALIFIED_LEAD_EXTRA_COLUMNS,
+  type RunDiagnosticsSource,
+} from '@/lib/qualifiedLead/diagnostics';
 
 // "Locked" only means the user has not run the unlock action yet. After running,
 // the persisted status tells the real story (Part F).
@@ -12,7 +16,16 @@ function esc(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s}"` : s;
 }
 
-export function rowsToCsv(rows: LeadTableRow[]): string {
+/**
+ * Export rows, optionally with the qualified-lead run context.
+ *
+ * The run-level diagnostics (query, family, titles, quota, planner, terminal
+ * status) are identical for every row and are appended as their own columns, so
+ * an export can always answer "what did this run actually search for, and why
+ * did this row not count?". Account-only exports pass no run context and those
+ * columns are legitimately blank.
+ */
+export function rowsToCsv(rows: LeadTableRow[], run?: RunDiagnosticsSource | null): string {
   const headers = [
     'company', 'website', 'domain', 'company_linkedin_url', 'company_logo', 'company_slogan',
     'company_description', 'industries', 'employee_count', 'location',
@@ -57,6 +70,9 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     'intent_tier', 'relaxation_step_used', 'match_tier',
     'funding_required', 'funding_proof_found', 'funding_source_url',
     'recruiter_proxy', 'rejected_or_risk_reason',
+    // Qualified-lead run + per-row qualification diagnostics. Only the fields
+    // that do not already have a column above, so no header is duplicated.
+    ...QUALIFIED_LEAD_EXTRA_COLUMNS,
   ];
   const lines = [headers.join(',')];
   for (const r of rows) {
@@ -126,6 +142,18 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       Array.isArray(r.risk_flags) && r.risk_flags.length ? (r.risk_flags as unknown[]).join(' · ') : '',
       gateRejected && Array.isArray(raw.gate_reasons) && (raw.gate_reasons as unknown[]).length ? (raw.gate_reasons as unknown[]).join(' · ') : '',
     ].find((x) => x) ?? '';
+    // Runtime diagnostics for this row. The per-candidate half comes from the
+    // preserved jsonb; the run-level half is identical for every row.
+    const diag = buildQualifiedLeadDiagnostics(run, {
+      quota_eligible: typeof raw.quota_eligible === 'boolean' ? raw.quota_eligible : null,
+      failed_gates: (raw.failed_gates as string[]) ?? null,
+      employer_match_status: (raw.employer_match_status as string) ?? null,
+      employer_match_reason: (raw.employer_match_reason as string) ?? null,
+      persistence_reason: (raw.persistence_reason as string) ?? null,
+      decision_maker_status: dmStatus || null,
+      person: (raw.person_name as string) ?? r.contact_name ?? null,
+      round_number: typeof raw.round_number === 'number' ? raw.round_number : null,
+    });
     lines.push([
       esc(r.company_name),
       esc(r.website),
@@ -226,10 +254,12 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(persistedOpener ? (persistedOpener.used_evidence_ids?.length ?? 0) : ''),
       // Query trace + explainability (Parts 1/3/7).
       esc(raw.run_id),
-      esc(raw.original_user_query),
-      esc(raw.parsed_intent_summary),
-      esc(raw.provider_query_keywords),
-      esc(raw.provider_query_location),
+      // Backfilled from the run context when the persisted row predates it —
+      // never left blank for something the runtime actually produced.
+      esc(raw.original_user_query ?? diag.original_user_query),
+      esc(raw.parsed_intent_summary ?? diag.parsed_intent_summary),
+      esc(raw.provider_query_keywords ?? diag.provider_query_keywords),
+      esc(raw.provider_query_location ?? diag.provider_query_location),
       esc(raw.intent_tier),
       esc(raw.relaxation_step_used),
       esc(raw.match_tier),
@@ -238,6 +268,7 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(raw.funding_source_url),
       esc(raw.recruiter_proxy ? 'yes' : ''),
       esc(rejectedOrRiskReason),
+      ...QUALIFIED_LEAD_EXTRA_COLUMNS.map((f) => esc(diag[f])),
     ].join(','));
   }
   return lines.join('\n');

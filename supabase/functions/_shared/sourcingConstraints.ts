@@ -49,7 +49,7 @@ export async function buildSourcingConstraints(
   opts: { maxRawJobs?: number; maxCompanies?: number; maxPeopleLookups?: number; peoplePerCompany?: number } = {},
 ): Promise<SourcingConstraints> {
   const spec = intent.job_search_spec;
-  const familyKey = inferFamilyKey(spec.job_families as string[], spec.keyword_queries);
+  const familyKey = inferFamilyKey(spec.job_families as string[], spec.keyword_queries, spec.original_query);
 
   const hard: HardConstraints = {
     jobFamilyKey: familyKey,

@@ -30,6 +30,9 @@ import {
   buildOutreachRowHint, type OutreachRowHint,
 } from '@/lib/outreachOpener';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { buildQuotaProgress } from '@/lib/qualifiedLead/quotaProgress';
+import { buildWorkbenchCounts } from '@/lib/qualifiedLead/workbenchCounts';
+import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -137,6 +140,20 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     draftReady: items.filter((r) => r.draft_status === 'drafted' || r.draft_status === 'approved').length,
   }), [items]);
 
+  // QUALIFIED-LEAD COUNTS. Present only when the run reported a CONTACT quota;
+  // otherwise the account-shaped chips below stay exactly as they were.
+  const qualifiedLeadCounts = useMemo(() => {
+    const run = meta.qualified_lead_run;
+    if (!run || run.count_entity !== 'contact_ready_lead') return null;
+    const progress = buildQuotaProgress({
+      requested_leads: run.requested_lead_count ?? null,
+      quota_policy: run.quota_policy ?? null,
+      terminal_status: run.terminal_status ?? null,
+      rounds_completed: run.rounds_completed ?? null,
+    }, items.map(qualificationFromRow));
+    return buildWorkbenchCounts({ rows: items.map(qualificationFromRow), progress });
+  }, [meta.qualified_lead_run, items]);
+
   const recommendation = useMemo(() => meta.recommended_next_action
     ? {
         action: (meta.recommended_next_action.action as LeadResultPanelAction) ?? 'find_contacts',
@@ -239,7 +256,9 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
 
   const runAction = useCallback((action: LeadResultPanelAction, rows: LeadTableRow[]) => {
     if (action === 'export_csv') {
-      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, rowsToCsv(rows));
+      // The run context travels with the export so every row can be traced back
+      // to the query, family and quota that produced it.
+      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, rowsToCsv(rows, meta.qualified_lead_run ?? null));
       return;
     }
     const kind = workbenchActionToLeadKind(action);
@@ -305,13 +324,31 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           </span>
         </div>
 
-        {/* Summary chips */}
+        {/* Summary chips.
+
+            For a qualified-lead run the account-shaped and lead-shaped counts are
+            rendered as separate, separately labelled groups from the quota
+            adapter — `Found` (rows) and `Contact-ready` (a contact field) are not
+            answers to "how many of the five leads do I have?". */}
         <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[10.5px]">
-          <Chip label="Found" v={counts.found} tone="default" />
-          <Chip label="Contact-ready" v={counts.contactReady} tone={counts.contactReady > 0 ? 'good' : 'muted'} />
-          <Chip label="Needs contact" v={counts.needContact} tone={counts.needContact > 0 ? 'warn' : 'muted'} />
-          <Chip label="Enrichable" v={counts.enrichable} tone={counts.enrichable > 0 ? 'good' : 'muted'} />
-          <Chip label="Drafts" v={counts.draftReady} tone={counts.draftReady > 0 ? 'good' : 'muted'} />
+          {qualifiedLeadCounts ? (
+            qualifiedLeadCounts.map((c) => (
+              <Chip
+                key={c.key}
+                label={c.label}
+                v={c.value}
+                tone={c.tone === 'positive' ? 'good' : c.tone === 'warning' ? 'warn' : 'default'}
+              />
+            ))
+          ) : (
+            <>
+              <Chip label="Found" v={counts.found} tone="default" />
+              <Chip label="Contact-ready" v={counts.contactReady} tone={counts.contactReady > 0 ? 'good' : 'muted'} />
+              <Chip label="Needs contact" v={counts.needContact} tone={counts.needContact > 0 ? 'warn' : 'muted'} />
+              <Chip label="Enrichable" v={counts.enrichable} tone={counts.enrichable > 0 ? 'good' : 'muted'} />
+              <Chip label="Drafts" v={counts.draftReady} tone={counts.draftReady > 0 ? 'good' : 'muted'} />
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-1.5">
             <Filter className="h-3 w-3 text-[#7D8590]" />

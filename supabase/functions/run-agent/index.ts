@@ -41,6 +41,10 @@ import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
+import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
+import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
+import { decideClaimAttempt, claimContinuation, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb } from "../_shared/continuationClaim.ts";
+import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
@@ -134,6 +138,11 @@ Deno.serve(async (req) => {
   // a source_with_apify step whose tool_input carried no tool_name fell through to
   // the generic LLM. Read it now so provider-sourcing steps are routed + gated.
   const tool_needed_body: string | null = body.tool_needed ?? null;
+  // CONTINUATION. `continuation_required` writes a checkpoint into
+  // tasks.result.company_first_state; resuming must reuse THAT task so the
+  // controller finds the checkpoint. Inserting a new task would silently restart
+  // round 1 and re-pay for provider calls that already completed.
+  const resume_task_id: string | undefined = body.resume_task_id ?? body.continuation_token ?? undefined;
 
   // ---- Request-mode routing --------------------------------------------------
   // A DIRECT Workbench lead action must be recognised BEFORE the plan-step gate:
@@ -222,22 +231,74 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "unidentified_user", message: "Sign in again to run this action." }, 401);
   }
 
-  const { data: task, error: taskErr } = await supabase
-    .from("tasks")
-    .insert({
-      plan_id: plan_id ?? null,
-      agent_slug,
-      user_id: taskUserId,
-      workspace_id,
-      status: "running",
-      payload: { instruction: effectiveInstruction, input, step_index: step_index ?? null, lead_action: directRequest?.action ?? null },
-    })
-    .select("id")
-    .single();
+  // RESUME PATH. A continuation reuses the checkpointed task; only a fresh run
+  // inserts. Refusals are explicit — a bad token never degrades into a new
+  // (billable) round-1 run.
+  let task: { id: string } | null = null;
+  if (resume_task_id) {
+    const { data: existing } = await supabase
+      .from("tasks").select("id, workspace_id, status, result, payload")
+      .eq("id", resume_task_id).maybeSingle();
+    const decision = decideResume(existing as ResumableTaskRow | null, workspace_id, resume_task_id);
+    if (!decision.ok) {
+      return json({ success: false, error: "continuation_refused", reason: decision.reason, message: RESUME_REFUSAL_MESSAGE[decision.reason] }, 409);
+    }
 
-  if (taskErr || !task) {
-    console.error("[run-agent] failed to insert task:", taskErr);
-    return json({ error: "task_insert_failed", details: taskErr?.message }, 500);
+    // SERVER-SIDE CONCURRENCY CONTROL. Frontend double-click guarding cannot see
+    // a second tab, a retry, or a poll racing the click — so the claim is taken
+    // here, as a compare-and-swap on the status we just read.
+    const priorResult = ((existing as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>;
+    const observedStatus = String((existing as { status?: string } | null)?.status ?? "");
+    const held = priorResult[CLAIM_KEY] as ContinuationClaim | undefined;
+    const attempt = decideClaimAttempt(held ?? null, Date.now());
+    if (!attempt.ok) {
+      return json({
+        success: false, error: "continuation_refused", reason: attempt.reason,
+        message: CLAIM_REFUSAL_MESSAGE[attempt.reason], held_since: attempt.heldSince ?? null,
+      }, 409);
+    }
+
+    const claim = newClaim(crypto.randomUUID(), new Date().toISOString(), decision.nextRound);
+    const cas = await claimContinuation({
+      db: supabase as unknown as ClaimDb,
+      taskId: decision.taskId,
+      observedStatus,
+      resultWithClaim: { ...priorResult, [CLAIM_KEY]: claim },
+    });
+    if (!cas.claimed) {
+      // Another invocation moved the status first. It owns this checkpoint; this
+      // one must NOT run it, or the same round is paid for twice.
+      return json({
+        success: false, error: "continuation_refused", reason: cas.reason,
+        message: CLAIM_REFUSAL_MESSAGE[cas.reason],
+      }, 409);
+    }
+
+    task = { id: decision.taskId };
+    console.log("[run-agent][company-first] resuming task", {
+      task_id: decision.taskId, next_round: decision.nextRound, claim: attempt.reason,
+    });
+  }
+
+  if (!task) {
+    const { data: inserted, error: taskErr } = await supabase
+      .from("tasks")
+      .insert({
+        plan_id: plan_id ?? null,
+        agent_slug,
+        user_id: taskUserId,
+        workspace_id,
+        status: "running",
+        payload: { instruction: effectiveInstruction, input, step_index: step_index ?? null, lead_action: directRequest?.action ?? null },
+      })
+      .select("id")
+      .single();
+
+    if (taskErr || !inserted) {
+      console.error("[run-agent] failed to insert task:", taskErr);
+      return json({ error: "task_insert_failed", details: taskErr?.message }, 500);
+    }
+    task = inserted as { id: string };
   }
 
   await supabase.from("activity_feed").insert({
@@ -654,6 +715,18 @@ Deno.serve(async (req) => {
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
+        // ONE canonical run context, built once and carried unchanged into the
+        // response, the UI panel, the task result and the CSV export. Surfaces
+        // used to rebuild their own subset from different places, which is why
+        // fields the runtime had produced still rendered blank downstream.
+        const runContext = buildQualifiedLeadRunContext({
+          result: cf,
+          jobIntent: compileJobIntent(cf.routing.original_user_query),
+          requestedPersonRoles: cfIntent.job_search_spec.requested_person_roles ?? null,
+          workflowKind: (body.workflow_kind as string) ?? "qualified_lead_sourcing",
+          countEntity: (body.count_entity as string) ?? "contact_ready_lead",
+        });
+
         // Completion is EARNED by delivering eligible leads, never by successful
         // database writes. Anything short of the quota reports why.
         // `continuation_required` is NOT terminal — the task stays `partial` with a
@@ -661,12 +734,20 @@ Deno.serve(async (req) => {
         const taskStatus = (cf.status === "provider_failure" || cf.status === "invalid_request" || !!cf.writeBoundary.invariantViolation)
           ? "failed"
           : cf.status === "completed" ? "completed" : "partial";
+        // The claim is RELEASED here so the next Continue can take it. Leaving it
+        // set would make the task look permanently in-flight.
+        const { data: finishedRow } = await supabase.from("tasks").select("result").eq("id", task.id).maybeSingle();
+        const priorTaskResult = releaseClaim(((finishedRow as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>);
         await supabase.from("tasks").update({
           status: taskStatus,
           result: {
+            ...priorTaskResult,
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
+            // Carried in the task row too, so the Workbench can render the run
+            // context after a page reload without re-reading the response.
+            qualified_lead_run_context: runContext,
             lead_entity_intent: cfIntent,
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },
@@ -677,6 +758,35 @@ Deno.serve(async (req) => {
           success: cf.status === "completed", task_id: task.id,
           executed_sourcing_mode: "company_first",
           terminal_status: cf.status, terminal_reason: cf.terminal_reason,
+          // FRONTEND QUOTA CONTRACT. The UI must never re-derive CONTACT progress
+          // from accepted accounts or persisted rows, so every number it needs is
+          // stated here explicitly — including what the count actually counts.
+          task_status: taskStatus,
+          workflow_kind: "qualified_lead_sourcing",
+          count_entity: "contact_ready_lead",
+          quota_policy: cf.quota.quota_policy,
+          rounds_completed: cf.rounds_attempted,
+          continuation_token: cf.continuation.continuation_token,
+          next_round: cf.continuation.next_round,
+          checkpoint_at: cf.continuation.checkpoint_at,
+          // Per-candidate diagnostics for Workbench cards + CSV export. Company,
+          // person and job URL only — no provider payloads, prompts or traces.
+          candidates: cf.items,
+          run_context: runContext,
+          // The Workbench reads its panel from here; the run context travels with
+          // it so the CSV export can populate every diagnostic column.
+          ui_panel: {
+            kind: "lead_results",
+            title: "Qualified lead sourcing",
+            subtitle: `${cf.quota.eligible_leads} of ${cf.quota.requested_leads} CONTACT-ready leads`,
+            source_type: "hiring_signal",
+            plan_id: plan_id ?? null,
+            lead_count: cf.quota.eligible_leads,
+            enrichable_count: 0,
+            lead_candidate_ids: cf.items.map((i) => i.leadCandidateId).filter(Boolean),
+            actions: [],
+            qualified_lead_run: runContext,
+          },
           requested_leads: cf.quota.requested_leads, eligible_leads: cf.quota.eligible_leads,
           remaining_leads: cf.quota.remaining_leads, requested_count_source: cf.quota.requested_count_source,
           rounds_attempted: cf.rounds_attempted, expansions_attempted: cf.expansions_attempted,

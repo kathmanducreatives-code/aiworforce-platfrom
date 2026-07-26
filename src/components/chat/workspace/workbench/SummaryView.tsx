@@ -7,6 +7,9 @@ import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { dispatchNextStepAction } from '@/lib/chatActions';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
+import QualifiedLeadProgressCard from './QualifiedLeadProgressCard';
+import { continueQualifiedLeadSourcing } from '@/lib/qualifiedLead/continueSourcing';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface Props {
   task: DBTask | null;
@@ -26,6 +29,7 @@ function fmtDuration(startedAt: string | null, finishedAt: string | null): strin
 }
 
 export default function SummaryView({ task, toolCall, agentName, planTitle, workbenchRows, conversationId }: Props) {
+  const { workspaceId } = useWorkspace();
   const status = toolCall?.status ?? task?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
   const isComplete = status === 'succeeded' || status === 'complete';
@@ -44,6 +48,7 @@ export default function SummaryView({ task, toolCall, agentName, planTitle, work
       : null;
 
   const duration = fmtDuration(toolCall?.started_at ?? task?.started_at, toolCall?.completed_at ?? task?.finished_at);
+  const companyFirstOutcome = !!(task?.result as { company_first?: unknown } | null)?.company_first;
 
   // Narrative sentences
   const requested = planTitle;
@@ -54,8 +59,11 @@ export default function SummaryView({ task, toolCall, agentName, planTitle, work
   if (failed) {
     outcome = 'The step did not complete. See the recovery options below or open the Raw tab for the full payload.';
   } else if (isComplete) {
-    outcome =
-      total != null
+    // A qualified-lead run reports its own quota above; "Returned N results" here
+    // would restate tool-output items as delivered leads.
+    outcome = companyFirstOutcome
+      ? `See the CONTACT-ready quota above${duration ? ` — ran in ${duration}` : ''}.`
+      : total != null
         ? `Returned ${total} result${total === 1 ? '' : 's'}${duration ? ` in ${duration}` : ''}.`
         : `Completed${duration ? ` in ${duration}` : ''}.`;
   } else if (status === 'running' || status === 'queued') {
@@ -71,9 +79,58 @@ export default function SummaryView({ task, toolCall, agentName, planTitle, work
     ? 'text-emerald-300'
     : 'text-sky-300';
 
+  // COMPANY-FIRST QUALIFIED-LEAD RUN. Its quota, funnel and continuation state
+  // come from the runtime's own contract — never from `total`, which counts tool
+  // output items and would report a satisfied run with zero CONTACT-ready leads.
+  const companyFirst = (task?.result as { company_first?: Record<string, any> } | null)?.company_first ?? null;
+  const qualifiedLeadRun = companyFirst
+    ? {
+        terminal_status: companyFirst.status ?? null,
+        task_status: task?.status ?? null,
+        task_id: task?.id ?? null,
+        continuation_token: companyFirst.continuation?.continuation_token ?? null,
+        next_round: companyFirst.continuation?.next_round ?? null,
+        checkpoint_at: companyFirst.continuation?.checkpoint_at ?? null,
+        rounds_completed: companyFirst.rounds_attempted ?? null,
+        requested_leads: companyFirst.quota?.requested_leads ?? null,
+        eligible_leads: companyFirst.quota?.eligible_leads ?? null,
+        remaining_leads: companyFirst.quota?.remaining_leads ?? null,
+        quota_policy: companyFirst.quota?.quota_policy ?? null,
+        counts: companyFirst.counts ?? null,
+      }
+    : null;
+  const qualifiedLeadCandidates = Array.isArray(companyFirst?.items)
+    ? companyFirst!.items.map((it: Record<string, any>) => ({
+        company: it.company ?? null,
+        person: it.person ?? null,
+        quota_eligible: it.quotaEligible ?? null,
+        disposition: it.verdict ?? null,
+        employer_match_status: it.employerMatch ?? null,
+        decision_maker_status: it.person ? 'verified' : 'missing',
+        persistence_reason: it.persistenceReason ?? null,
+      }))
+    : [];
+
   return (
     <div className="space-y-4">
       {failed && <FailureRecoveryCard toolCall={toolCall} task={task} />}
+
+      {qualifiedLeadRun && (
+        <QualifiedLeadProgressCard
+          response={qualifiedLeadRun}
+          candidates={qualifiedLeadCandidates}
+          taskId={task?.id ?? null}
+          onContinue={(req) => {
+            if (!req) return Promise.reject(new Error('No continuation token available.'));
+            return continueQualifiedLeadSourcing({
+              request: req,
+              workspaceId: workspaceId!,
+              planId: task?.plan_id ?? null,
+              instruction: planTitle,
+            });
+          }}
+        />
+      )}
 
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
         <Row label="Requested" value={requested} />

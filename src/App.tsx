@@ -10,6 +10,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import VerificationPanel from "./components/dev/VerificationPanel";
 import PreviewDiagnostics from "./components/dev/PreviewDiagnostics";
+import EnvironmentBadge from "./components/dev/EnvironmentBadge";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import Landing from "./pages/Landing";
@@ -89,6 +90,9 @@ const App = () => (
                 <ClientThemeProvider>
                   <Toaster />
                   <Sonner />
+                  {/* Names the Supabase project this build talks to. Renders
+                      nothing in production. */}
+                  <EnvironmentBadge />
                   {import.meta.env.DEV && import.meta.env.VITE_ENABLE_VERIFICATION_PANEL === 'true' && (
                     <AppErrorBoundary>
                       <VerificationPanel />

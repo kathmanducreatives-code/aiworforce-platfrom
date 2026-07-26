@@ -226,7 +226,7 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
 export function keywordQueriesForRound(spec: CompiledJobSearchSpec, round: number): { keywords: string[]; expansion: string } {
   const base = spec.keyword_queries;
   if (round <= 1) return { keywords: base, expansion: "exact_title_synonyms" };
-  const familyKey = inferFamilyKey(spec.job_families as string[], base);
+  const familyKey = inferFamilyKey(spec.job_families as string[], base, spec.original_query);
   const def = getJobFamily(familyKey);
   if (!def) return { keywords: base, expansion: "exact_titles_only" };
   const merged = [...base];

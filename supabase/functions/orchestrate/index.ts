@@ -4,6 +4,7 @@
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -1193,6 +1194,12 @@ Return ONLY valid JSON, no prose, no markdown:
 
     // Kick off first step (non-blocking).
     const firstStep = parsed!.steps[0];
+    // DETERMINISTIC route from the user's own words — authoritative over the
+    // planner/template, exactly as pilot-chat decides it.
+    const qlRoute = routeQualifiedLead(user_instruction ?? "");
+    const qualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
+    const qualifiedLeadCount = extractRequestedLeadCount(user_instruction ?? "") ?? 5;
+
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
       headers: {
@@ -1212,8 +1219,20 @@ Return ONLY valid JSON, no prose, no markdown:
         // Per-step tool_input wins (lets step 0 use a different tool than the
         // plan default, e.g. discovery's Hawk-scrape step 0 before Scout-apify).
         tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
-        execution_mode: executionMode,
+        execution_mode: qualifiedLead ? "company_first" : executionMode,
         lead_routing: leadRouting,
+        // QUALIFIED-LEAD ROUTE. run-agent's company-first branch needs (a) an
+        // unpinned actor so it compiles the entity intent itself, and (b) the
+        // FINAL-LEAD quota. Without these the request silently degrades to the
+        // legacy account-signal path (the 2026-07-26 manual-run defect).
+        ...(qualifiedLead
+          ? {
+              workflow_kind: "qualified_lead_sourcing",
+              requested_lead_count: qualifiedLeadCount,
+              quota_policy: "contact_only",
+              count_entity: "contact_ready_lead",
+            }
+          : {}),
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 

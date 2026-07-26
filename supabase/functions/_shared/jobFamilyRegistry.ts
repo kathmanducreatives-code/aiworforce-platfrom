@@ -7,6 +7,8 @@
 // An UNKNOWN family stays deliberately conservative: exact requested title only,
 // no invented synonyms, and honest search exhaustion when nothing safe remains.
 
+import { compileJobIntent, type JobIntent } from "./jobIntentTaxonomy.ts";
+
 export interface JobFamilyDefinition {
   key: string;
   label: string;
@@ -74,6 +76,71 @@ export const JOB_FAMILY_REGISTRY: Record<string, JobFamilyDefinition> = {
     excluded: ["SDR", "BDR", "Sales Development Representative", "Business Development Representative",
       "Account Executive", "Sales Operations", "Customer Success"],
   },
+  // Vertical-neutral sales leadership. `cybersecurity_sales` stays as the security
+  // specialisation so established MSSP broadening behaviour is unchanged; every
+  // other vertical asking for "sales leadership" lands here instead of falling
+  // through to quota-carrying IC aliases.
+  sales_leadership: {
+    key: "sales_leadership", label: "Sales Leadership",
+    exact: ["VP Sales", "Head of Sales", "Sales Director"],
+    synonyms: ["Vice President of Sales", "Chief Revenue Officer", "VP of Revenue", "Regional Sales Director"],
+    adjacent: ["Enterprise Sales Director", "Area Sales Manager", "Commercial Director"],
+    excluded: ["SDR", "BDR", "Sales Development Representative", "Business Development Representative",
+      "Account Executive", "Sales Operations", "Revenue Operations", "Customer Success", "Recruiter"],
+  },
+  // Quota-carrying individual contributors — deliberately SEPARATE from both
+  // leadership and Sales Operations.
+  sales_ic: {
+    key: "sales_ic", label: "Sales (Individual Contributor)",
+    exact: ["Account Executive", "Sales Development Representative", "Business Development Representative"],
+    synonyms: ["SDR", "BDR", "Enterprise Account Executive", "Mid-Market Account Executive"],
+    adjacent: ["Inside Sales Representative", "Sales Associate"],
+    excluded: ["Sales Operations", "Revenue Operations", "VP Sales", "Head of Sales", "Sales Director",
+      "Recruiter", "Customer Success Manager"],
+  },
+  clinical_operations: {
+    key: "clinical_operations", label: "Clinical Operations",
+    exact: ["Clinical Operations Manager", "Director of Clinical Operations", "Head of Clinical Operations"],
+    synonyms: ["VP Clinical Operations", "Clinical Trial Manager", "Clinical Program Manager"],
+    adjacent: ["Clinical Research Manager", "Clinical Project Manager"],
+    excluded: ["Registered Nurse", "Medical Assistant", "Sales Operations", "Account Executive",
+      "Software Engineer", "Recruiter"],
+  },
+  energy_engineering: {
+    key: "energy_engineering", label: "Power / Grid Engineering",
+    exact: ["Grid Engineer", "Power Systems Engineer", "Transmission Engineer"],
+    synonyms: ["Distribution Engineer", "Substation Engineer", "Interconnection Engineer"],
+    adjacent: ["Electrical Engineer", "Renewable Energy Engineer"],
+    excluded: ["Software Engineer", "Sales Operations", "Account Executive", "Recruiter", "Field Technician"],
+  },
+  operations: {
+    key: "operations", label: "Business Operations",
+    exact: ["Operations Manager", "Head of Operations", "Director of Operations"],
+    synonyms: ["Business Operations Manager", "Operations Lead", "VP Operations"],
+    adjacent: ["Program Manager", "Supply Chain Manager"],
+    excluded: ["Sales Operations", "Revenue Operations", "Account Executive", "Software Engineer", "Recruiter"],
+  },
+  marketing: {
+    key: "marketing", label: "Marketing",
+    exact: ["Marketing Manager", "Head of Marketing", "Demand Generation Manager"],
+    synonyms: ["Product Marketing Manager", "Growth Marketing Manager", "Content Marketing Manager"],
+    adjacent: ["Brand Manager", "Lifecycle Marketing Manager"],
+    excluded: ["Sales Operations", "SDR", "BDR", "Account Executive", "Recruiter"],
+  },
+  partnerships: {
+    key: "partnerships", label: "Partnerships / Alliances",
+    exact: ["Head of Partnerships", "Director of Partnerships", "Partnerships Manager"],
+    synonyms: ["Partner Manager", "Alliances Manager", "Channel Partnerships Manager"],
+    adjacent: ["Strategic Partnerships Lead", "Business Development Manager"],
+    excluded: ["SDR", "BDR", "Sales Operations", "Account Executive", "Recruiter", "Customer Success Manager"],
+  },
+  executive: {
+    key: "executive", label: "Executive",
+    exact: ["Chief Executive Officer", "Chief Operating Officer", "President"],
+    synonyms: ["CEO", "COO", "Managing Director"],
+    adjacent: ["General Manager", "Chief of Staff"],
+    excluded: ["SDR", "BDR", "Account Executive", "Sales Operations", "Intern", "Recruiter"],
+  },
 };
 
 export function getJobFamily(key: string | null | undefined): JobFamilyDefinition | null {
@@ -111,16 +178,59 @@ export function validateTitleForFamily(familyKey: string | null, title: string):
   return { verdict: "not_in_family", reason: `"${title}" is not an approved ${def.label} title` };
 }
 
-/** Infer the registry family from the compiled intent's own job families/keywords. */
-export function inferFamilyKey(jobFamilies: string[], keywords: string[]): string | null {
+/**
+ * Infer the registry family from the compiled intent's own job families/keywords.
+ *
+ * This used to be an ordered regex ladder over the flattened keyword string,
+ * which could not represent seniority or vertical — so "sales leadership"
+ * matched nothing and fell through to quota-carrying IC aliases. It now defers
+ * to the composable taxonomy, which decides function from the role signal PLUS
+ * the seniority and team-stage it derived independently.
+ *
+ * The explicit `job_families` hint still wins: a caller that already knows the
+ * discipline is more authoritative than any inference over keywords.
+ */
+export function inferFamilyKey(
+  jobFamilies: string[],
+  keywords: string[],
+  /**
+   * The ORIGINAL request, when the caller has it. Compiled keyword queries carry
+   * the role but drop the industry, and the industry is what decides whether a
+   * sales title strategy is AE/SDR or Sales Representative — so passing this is
+   * what keeps "MSSPs hiring VP Sales" a SECURITY leadership search.
+   */
+  context?: string | null,
+): string | null {
   const jf = jobFamilies.map((f) => f.toLowerCase());
   if (jf.some((f) => ["sales_ops", "rev_ops", "gtm_ops"].includes(f))) return "sales_operations";
-  const hay = norm(keywords.join(" "));
-  if (/\b(ai|machine learning|ml|llm|generative)\b/.test(hay)) return "ai_engineering";
-  if (/\b(software|backend|frontend|full stack)\b/.test(hay)) return "software_engineering";
-  if (/\b(controls|plc|scada|automation)\b/.test(hay)) return "controls_engineering";
-  if (/\bfp&a|financial planning\b/.test(hay)) return "finance_operations";
-  if (/\b(vp sales|head of sales|sales director)\b/.test(hay)) return "cybersecurity_sales";
-  if (/\b(sales representative|territory sales|account manager)\b/.test(hay)) return "manufacturing_sales";
-  return null;   // conservative: unknown family
+  const text = [...keywords, context ?? ""].filter(Boolean).join(" ");
+  if (!text.trim()) return null;
+  return compileJobIntent(text).family_key;   // null stays conservative
+}
+
+/**
+ * The full job intent for a request, with the family's titles resolved.
+ *
+ * `compileJobIntent` deliberately owns no title data (so it can stay
+ * import-free); this is where the two halves meet.
+ */
+export interface ResolvedJobIntent extends JobIntent {
+  family_label: string | null;
+  /** Canonical titles to search. Empty when no family could be inferred. */
+  titles: string[];
+  /** Titles that must never be searched for this request. */
+  excluded_titles: string[];
+}
+
+export function resolveJobIntent(query: string | null | undefined): ResolvedJobIntent {
+  const intent = compileJobIntent(query);
+  const def = getJobFamily(intent.family_key);
+  return {
+    ...intent,
+    family_label: def?.label ?? null,
+    // EXACT titles only. Synonyms and adjacent titles are what broadening is
+    // allowed to add later, after deterministic validation — never up front.
+    titles: def ? [...def.exact] : [],
+    excluded_titles: def ? [...def.excluded] : [],
+  };
 }
