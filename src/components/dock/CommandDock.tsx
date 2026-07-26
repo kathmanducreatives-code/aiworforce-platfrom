@@ -166,6 +166,27 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
 
   if (hidden) return null;
 
+  // Department page: collapsed pill instead of the full centered dock.
+  if (deptCollapsed) {
+    return (
+      <div
+        className={cn(
+          'fixed z-40 pointer-events-none',
+          isMobile ? 'left-0 right-0 flex justify-center' : sidebarCollapsed ? 'left-[68px] right-4 flex justify-end' : 'left-[260px] right-4 flex justify-end',
+        )}
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
+      >
+        <button
+          onClick={() => setDeptCollapsed(false)}
+          className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#0A0A0A]/85 px-4 py-2.5 text-[12.5px] font-medium text-neutral-300 shadow-2xl backdrop-blur-xl transition-colors hover:text-foreground"
+        >
+          <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+          Open workforce chat
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Focus dim — full viewport, between page and dock */}
