@@ -7,7 +7,7 @@ import {
   isTerminalRowStatus, isResumableRowStatus,
   TASK_ROW_STATUSES, TASK_RESULT_STATUSES, TERMINAL_STATUSES,
 } from "./taskStatusContract.ts";
-import { claimContinuationViaRpc, classifyClaimError, CLAIM_REFUSAL_MESSAGE, type ClaimRefusal, type ClaimErrorCategory } from "./continuationClaim.ts";
+import { claimContinuationViaRpc, releaseContinuationViaRpc, classifyClaimError, CLAIM_REFUSAL_MESSAGE, type ClaimRefusal, type ClaimErrorCategory } from "./continuationClaim.ts";
 
 // ---- PART 3: the three vocabularies stay separate --------------------------
 
@@ -275,4 +275,75 @@ Deno.test("MIGRATION CONTRACT: the claim RPC declares the required properties, a
 
   // NOT APPLIED: the file exists in the repo and nothing in this branch runs it.
   assertStringIncludes(sql, "NOT APPLIED");
+});
+
+// ---- PART 6: the durable lease is RELEASED when the round ends -------------
+//
+// REGRESSION. The RPC claim writes its lease into `tasks.continuation_claim_*`
+// COLUMNS, but the finishing write only stripped the `result.continuation_claim`
+// KEY — which is all the compatibility path ever wrote. The lease therefore
+// survived the round and refused the next `Continue sourcing` with
+// `already_claimed` until it expired. Invisible offline, because it only
+// manifests once the migration is applied.
+
+function releaseDb(response: { data: unknown; error: unknown }) {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  return {
+    calls,
+    db: { rpc: async (fn: string, args: Record<string, unknown>) => { calls.push({ fn, args }); return response; } },
+  };
+}
+
+Deno.test("6.A releasing calls the claim-scoped RPC with task, workspace and claim id", async () => {
+  const { db, calls } = releaseDb({ data: true, error: null });
+  const r = await releaseContinuationViaRpc({ db, taskId: "t", workspaceId: "ws", claimId: "c", rowStatus: "ready" });
+  assertEquals(r, { available: true, released: true, category: null, code: null });
+  assertEquals(calls[0].fn, "release_sourcing_continuation");
+  assertEquals(calls[0].args, { p_task_id: "t", p_workspace_id: "ws", p_claim_id: "c", p_row_status: "ready" });
+});
+
+Deno.test("6.B a superseded straggler is told it did NOT release", async () => {
+  // The RPC returns false when continuation_claim_id no longer matches.
+  const { db } = releaseDb({ data: false, error: null });
+  const r = await releaseContinuationViaRpc({ db, taskId: "t", workspaceId: "ws", claimId: "stale", rowStatus: "ready" });
+  assert(r.available);
+  assertFalse(r.released, "a non-matching claim id must never report a successful release");
+});
+
+Deno.test("6.C release failures are reported, never thrown — the outcome is already committed", async () => {
+  const db = { rpc: async () => { throw new Error("network down"); } };
+  const r = await releaseContinuationViaRpc({ db, taskId: "t", workspaceId: "ws", claimId: "c", rowStatus: "complete" });
+  assertFalse(r.released);
+  assertEquals(r.category, "transport");
+
+  const missing = releaseDb({ data: null, error: { code: "42883", message: "function release_sourcing_continuation does not exist" } });
+  const m = await releaseContinuationViaRpc({ db: missing.db, taskId: "t", workspaceId: "ws", claimId: "c", rowStatus: "ready" });
+  assertFalse(m.available, "a missing release RPC is the pre-migration state, not an error");
+  assertFalse(m.released);
+});
+
+Deno.test("6.D every row status the projection can produce is accepted by the release RPC", async () => {
+  const sql = await Deno.readTextFile(new URL("../../migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
+  const allowed = /p_row_status not in \(([^)]*)\)/.exec(sql)?.[1] ?? "";
+  for (const terminal of TERMINAL_STATUSES) {
+    const { rowStatus } = projectStatus(terminal);
+    assertStringIncludes(allowed, `'${rowStatus}'`,
+      `${terminal} projects rowStatus=${rowStatus}, which release_sourcing_continuation would reject`);
+  }
+});
+
+Deno.test("6.E WIRING: run-agent releases the RPC lease on the finishing write", async () => {
+  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  assertStringIncludes(src, "releaseContinuationViaRpc({");
+  // Released only on the path that actually took a column lease.
+  assertStringIncludes(src, "if (heldClaim?.viaRpc)");
+  assertStringIncludes(src, "heldClaim = { claimId, viaRpc: rpc.available };");
+  // The release carries the same row status the projection just wrote.
+  assertStringIncludes(src, "rowStatus: statuses.rowStatus,");
+});
+
+Deno.test("6.F MIGRATION CONTRACT: the documented rollback drops the real signature", async () => {
+  const sql = await Deno.readTextFile(new URL("../../migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
+  // release_sourcing_continuation is (uuid, uuid, uuid, text) — a 3-arg DROP fails.
+  assertStringIncludes(sql, "drop function public.release_sourcing_continuation(uuid, uuid, uuid, text);");
 });

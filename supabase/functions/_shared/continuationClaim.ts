@@ -256,3 +256,54 @@ export async function claimContinuationViaRpc(args: {
     .find((r) => r === row.reason) ?? "lost_race";
   return { available: true, claimed: false, reason, heldUntil: row.held_until, category: "conflict", code: null };
 }
+
+// ------------------------------------------------------------------ release ----
+//
+// WHY THIS EXISTS.
+//
+// The RPC claim writes its lease into COLUMNS (`continuation_claim_id`,
+// `continuation_claim_expires_at`), not into `result`. `releaseClaim()` above only
+// strips the `result.continuation_claim` KEY, which is all the compatibility path
+// ever wrote — so on the RPC path it clears nothing the RPC actually set.
+//
+// Without this call the lease stays live for its full duration after a round ends,
+// and the NEXT legitimate `Continue sourcing` is refused `already_claimed` until it
+// expires. The failure appears only once the migration is applied, which is why no
+// offline test caught it.
+//
+// Releasing is best-effort BY DESIGN: the round's outcome is already committed by
+// the caller before this runs. A failure here costs one lease interval of delay,
+// never a lost result, so it is logged and never thrown.
+
+export type RpcReleaseOutcome =
+  | { available: false; released: false; category: "missing_function"; code: string | null }
+  | { available: true; released: boolean; category: ClaimErrorCategory | null; code: string | null };
+
+export async function releaseContinuationViaRpc(args: {
+  db: RpcDb; taskId: string; workspaceId: string; claimId: string; rowStatus: string;
+}): Promise<RpcReleaseOutcome> {
+  let res: { data: unknown; error: unknown };
+  try {
+    res = await args.db.rpc("release_sourcing_continuation", {
+      p_task_id: args.taskId,
+      p_workspace_id: args.workspaceId,
+      p_claim_id: args.claimId,
+      p_row_status: args.rowStatus,
+    });
+  } catch (e) {
+    return { available: true, released: false, category: "transport", code: String((e as { code?: string })?.code ?? "") || null };
+  }
+
+  const err = res.error as { code?: string; message?: string } | null;
+  if (err) {
+    const category = classifyClaimError(err);
+    if (category === "missing_function") {
+      return { available: false, released: false, category, code: String(err.code ?? "") || null };
+    }
+    return { available: true, released: false, category, code: String(err.code ?? "") || null };
+  }
+
+  // The function returns a bare boolean: false means the claim id did not match,
+  // i.e. this invocation was superseded and must NOT clear the winner's lease.
+  return { available: true, released: res.data === true, category: null, code: null };
+}

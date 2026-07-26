@@ -43,7 +43,7 @@ import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
-import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
+import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import { projectStatus, readStatuses } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
@@ -236,6 +236,10 @@ Deno.serve(async (req) => {
   // inserts. Refusals are explicit — a bad token never degrades into a new
   // (billable) round-1 run.
   let task: { id: string } | null = null;
+  // The lease taken on the RPC path lives in COLUMNS, so it must be released
+  // explicitly when the round ends. Held here because the claim is taken in this
+  // block but released after the sourcing outcome is written, far below.
+  let heldClaim: { claimId: string; viaRpc: boolean } | null = null;
   if (resume_task_id) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
@@ -312,6 +316,7 @@ Deno.serve(async (req) => {
     }
 
     task = { id: decision.taskId };
+    heldClaim = { claimId, viaRpc: rpc.available };
     console.log("[run-agent][company-first] resuming task", {
       task_id: decision.taskId, next_round: decision.nextRound,
       claim: attempt.reason, claim_path: rpc.available ? "rpc" : "compatibility_fallback",
@@ -796,6 +801,26 @@ Deno.serve(async (req) => {
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },
         }).eq("id", task.id);
+
+        // RELEASE THE DURABLE LEASE. `releaseClaim` above only strips the
+        // `result` key the compatibility path writes; the RPC's lease lives in
+        // `tasks.continuation_claim_*` COLUMNS. Leaving them set makes the next
+        // `Continue sourcing` fail `already_claimed` until the lease expires.
+        // Best-effort: the outcome is already committed, so a failure here costs
+        // one lease interval, never a result.
+        if (heldClaim?.viaRpc) {
+          const released = await releaseContinuationViaRpc({
+            db: supabase as unknown as RpcDb,
+            taskId: task.id, workspaceId: workspace_id,
+            claimId: heldClaim.claimId, rowStatus: statuses.rowStatus,
+          });
+          if (!released.released) {
+            console.error("[run-agent][company-first] claim release failed", {
+              task_id: task.id, claim_path: "rpc",
+              claim_error_category: released.category, claim_error_code: released.code,
+            });
+          }
+        }
 
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({

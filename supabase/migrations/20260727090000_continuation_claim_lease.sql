@@ -31,7 +31,7 @@
 --
 -- ROLLBACK
 --   drop function public.claim_sourcing_continuation(uuid, uuid, uuid, integer);
---   drop function public.release_sourcing_continuation(uuid, uuid, uuid);
+--   drop function public.release_sourcing_continuation(uuid, uuid, uuid, text);
 --   drop index if exists idx_tasks_continuation_claim;
 --   alter table public.tasks
 --     drop column if exists continuation_claim_id,
