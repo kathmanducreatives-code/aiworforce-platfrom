@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { AgentDept } from '@/data/agentProfiles';
 import { setChatOpener } from '@/lib/chatCommandBus';
+import type { RunDiagnosticsSource } from '@/lib/qualifiedLead/diagnostics';
 
 export type ChatViewKind =
   | { kind: 'empty' }
@@ -72,6 +73,10 @@ export interface LeadResultsPanelMeta {
   outcome?: { status: 'complete' | 'partial' | 'failed'; line: string; quality_lines: string[] } | null;
   next_actions?: string[];
   source_brief?: string | null;
+  // Qualified-lead run context (query, family, titles, quota, planner, terminal
+  // status). Identical for every row; threaded into the CSV export so a
+  // disappointing run can be explained from the file alone.
+  qualified_lead_run?: RunDiagnosticsSource | null;
 }
 
 export interface WorkbenchSelection {

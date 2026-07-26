@@ -21,7 +21,8 @@ import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, c
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
-import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
+import { routeQualifiedLead, extractRequestedLeadCount, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
+import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
 
 
 const cors = {
@@ -226,18 +227,30 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
     // Structured contract carried through Start Workflow → orchestrate → run-agent.
     qualified_lead_contract: isQualifiedLead
       ? {
-          workflow_kind: route.workflowKind,
+          workflow_kind: "qualified_lead_sourcing",
           execution_mode: "company_first",
+          target_entity: "company_and_person",
           signal_type: "hiring",
           job_family: fam,
-          job_titles: roleFamilyAliases(fam),
-          company_vertical: industry || null,
-          geography: intent.target_geography,
+          // The family's canonical titles — never widened into quota-carrying
+          // sales roles for a Sales-Operations request. The backend registry wins
+          // when it recognises the request, because the UI families are coarser
+          // (gtm_sales leads with SDR/BDR, which is wrong for a first salesperson).
+          job_titles: contractJobTitles(
+            roleFamilyAliases(fam),
+            getJobFamily(inferFamilyKey([], [prompt, ...job.role_keywords]))?.exact,
+          ),
+          // CANONICAL vocabulary, not whatever wording the industry string had:
+          // the preview renders from this contract, so it must be stable.
+          company_vertical: normalizeCompanyVertical(industry, ...(intent.target_industry ?? []), prompt),
+          company_stage: inferCompanyStage(...(intent.company_stage ?? []), prompt),
+          geography: intent.target_geography?.length ? intent.target_geography : [location],
           requested_person_roles: personRoles,
           current_employer_required: true,
           requested_lead_count: requestedLeadCount,
           quota_policy: route.quotaPolicy,
           count_entity: route.countEntity,
+          original_instruction: prompt,
         }
       : null,
     // Company-Brain transparency (Phase 11): what we target vs. exclude.

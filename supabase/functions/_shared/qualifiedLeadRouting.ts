@@ -61,6 +61,83 @@ export function routeQualifiedLead(instruction: string | null | undefined): Qual
   };
 }
 
+// --------------------------------------------------------- contract vocabulary
+//
+// The preview renders from the CONTRACT, never from the generated workflow title,
+// so the vocabulary has to be canonical and stable rather than whatever wording
+// the industry string happened to carry.
+
+export type CompanyVertical = "b2b_saas" | "manufacturing" | "cybersecurity" | "agency_services" | "other" | null;
+export type CompanyStage = "startup_or_small_team" | "growth_stage" | "enterprise" | null;
+
+const VERTICAL_RULES: Array<[Exclude<CompanyVertical, null>, RegExp]> = [
+  ["b2b_saas", /\b(b2b saas|saas|software as a service|software compan(?:y|ies)|software startups?)\b/i],
+  ["cybersecurity", /\b(cyber ?security|infosec|mssps?|security vendors?)\b/i],
+  ["manufacturing", /\b(manufactur\w*|industrial|fabricat\w*|machine shops?)\b/i],
+  ["agency_services", /\b(agenc(?:y|ies)|integrators?|consultanc(?:y|ies)|system integrators?)\b/i],
+];
+
+/** Canonical vertical for the contract. Never invents one from a bare noun. */
+export function normalizeCompanyVertical(...sources: Array<string | null | undefined>): CompanyVertical {
+  const text = sources.filter(Boolean).join(" ");
+  if (!text.trim()) return null;
+  for (const [key, re] of VERTICAL_RULES) if (re.test(text)) return key;
+  return "other";
+}
+
+const STAGE_RULES: Array<[Exclude<CompanyStage, null>, RegExp]> = [
+  ["startup_or_small_team", /\b(startups?|early[-\s]stage|seed|small (?:team|business|compan(?:y|ies))|smb|founder[-\s]led)\b/i],
+  ["growth_stage", /\b(growth[-\s]stage|scale[-\s]?ups?|series [b-d]\b|mid[-\s]market)\b/i],
+  ["enterprise", /\b(enterprises?|fortune 500|large (?:compan(?:y|ies)|organi[sz]ations?))\b/i],
+];
+
+/** Canonical stage, or null when the request never constrained company size. */
+export function inferCompanyStage(...sources: Array<string | null | undefined>): CompanyStage {
+  const text = sources.filter(Boolean).join(" ");
+  if (!text.trim()) return null;
+  for (const [key, re] of STAGE_RULES) if (re.test(text)) return key;
+  return null;
+}
+
+/**
+ * The titles the preview shows and the runtime searches for.
+ *
+ * The UI role families are coarse: `gtm_sales` leads with SDR/BDR, so a request
+ * for a manufacturer's FIRST SALESPERSON would have previewed "SDR, BDR, Sales
+ * Development Representative" — titles that company never posts. The backend
+ * registry is the more precise source when it recognises the request, so it wins;
+ * the UI alias set is the fallback.
+ */
+export function contractJobTitles(
+  uiFamilyAliases: string[],
+  registryExactTitles: string[] | null | undefined,
+): string[] {
+  const registry = (registryExactTitles ?? []).filter(Boolean);
+  return (registry.length ? registry : uiFamilyAliases).slice(0, 3);
+}
+
+/**
+ * The structured contract carried through Start Workflow → orchestrate →
+ * run-agent. Emitted by Pilot; rendered verbatim by the workflow preview.
+ */
+export interface QualifiedLeadContract {
+  workflow_kind: "qualified_lead_sourcing";
+  execution_mode: "company_first";
+  target_entity: "company_and_person";
+  signal_type: string;
+  job_family: string | null;
+  job_titles: string[];
+  company_vertical: CompanyVertical;
+  company_stage: CompanyStage;
+  geography: string[];
+  requested_person_roles: string[];
+  current_employer_required: true;
+  requested_lead_count: number;
+  count_entity: "contact_ready_lead";
+  quota_policy: "contact_only";
+  original_instruction: string;
+}
+
 /** The final-lead quota when the request states one ("Return 5 qualified leads"). */
 export function extractRequestedLeadCount(instruction: string | null | undefined): number | null {
   const m = LEAD_QUOTA_RE.exec(String(instruction ?? ""));

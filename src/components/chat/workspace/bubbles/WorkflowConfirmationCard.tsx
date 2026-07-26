@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { dispatchChatAction } from '@/lib/chatActions';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
+import {
+  isQualifiedLeadPayload, buildWorkflowPreview, buildStartWorkflowPayload,
+  type QualifiedLeadContract,
+} from '@/lib/qualifiedLead/contract';
+import { executionStages, COMPOUND_STAGE_NOTE } from '@/lib/qualifiedLead/planCopy';
 
 interface WorkflowConfirmationPayload {
   workflow_id: string;
@@ -44,6 +49,13 @@ interface WorkflowConfirmationPayload {
     exclude_role_keywords?: string[];
     [k: string]: unknown;
   };
+  // QUALIFIED-LEAD ROUTE. When present, the preview renders from this structured
+  // contract — never from `workflow_name` or a reconstructed command string.
+  workflow_kind?: string;
+  execution_mode?: string;
+  execution_mode_label?: string;
+  original_instruction?: string;
+  qualified_lead_contract?: QualifiedLeadContract | null;
 }
 
 interface Props {
@@ -85,30 +97,32 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     .map(([k, v]) => (k === 'count' ? `${v} ${Number(v) === 1 ? 'result' : 'results'}` : String(v)))
     .slice(0, 5);
 
+  // The qualified-lead route, decided by Pilot from the user's own words.
+  const qualifiedLead = isQualifiedLeadPayload(payload);
+  const preview = qualifiedLead ? buildWorkflowPreview(payload.qualified_lead_contract) : null;
+  const stages = qualifiedLead ? executionStages('qualified_lead_sourcing') : [];
+
   const handleStart = () => {
     if (blocked) return;
-    let cmd = `Run workflow: ${payload.workflow_name}. `;
-    if (inputs.count) cmd += `Count: ${inputs.count}. `;
-    if (inputs.location) cmd += `Location: ${inputs.location}. `;
-    if (inputs.industry) cmd += `Industry: ${inputs.industry}. `;
-    if (inputs.persona) cmd += `Persona: ${inputs.persona}. `;
-    if (inputs.url) cmd += `URL: ${inputs.url}. `;
-    if (inputs.source) cmd += `Source: ${inputs.source}. `;
+
+    // START SENDS THE ORIGINAL REQUEST.
+    //
+    // This used to send `Run workflow: <generated title>. Count: 5. …`, so the
+    // request that actually reached orchestrate was a reconstruction of a title
+    // that had already lost the quota, the roles and the discipline. The
+    // structured contract now travels in metadata alongside the real sentence.
+    const start = buildStartWorkflowPayload(payload, inputs);
 
     dispatchChatAction({
-      text: cmd,
+      text: start.text,
       conversation_id: conversationId,
       action_source: 'lead_intake_card', // reuse source category to trigger planner
       metadata: {
-        confirmed: true,
-        workflow_id: payload.workflow_id,
-        workflow_inputs: inputs,
-        // Preserve the original extracted intent so the confirmed Start honors
-        // it (no re-classification → no hiring→people misroute).
-        lead_intent: payload.lead_intent,
-        workflow_category: payload.lead_intent?.workflow_type,
-        source_type: payload.lead_intent?.source_type,
-        selected_actor_key: payload.lead_intent?.workflow_type === 'company_hiring_sourcing' ? 'apify_jobs' : undefined,
+        ...start.metadata,
+        // Legacy actor hint for the account path; the qualified-lead path sets
+        // its own inside buildStartWorkflowPayload.
+        selected_actor_key: (start.metadata.selected_actor_key as string | undefined)
+          ?? (payload.lead_intent?.workflow_type === 'company_hiring_sourcing' ? 'apify_jobs' : undefined),
       },
     });
     setSubmitted(true);
@@ -139,9 +153,16 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
           <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-emerald-400/80">
             Workflow ready
           </div>
+          {/* The title comes from the CONTRACT for a qualified-lead request, so
+              it can never disagree with what will execute. */}
           <h4 className="text-[15.5px] font-bold text-white tracking-tight mt-0.5 truncate">
-            {payload.workflow_name}
+            {preview ? preview.title : payload.workflow_name}
           </h4>
+          {preview && (
+            <div className="mt-1 text-[13px] font-semibold text-emerald-300">
+              Target: {preview.target}
+            </div>
+          )}
         </div>
         {teamNames.length > 0 && (
           <div className="flex items-center gap-1 shrink-0 text-[12px] font-semibold text-[#C9D1D9] pt-1">
@@ -166,9 +187,36 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
         </div>
       )}
 
+      {/* QUALIFIED-LEAD PREVIEW — rendered from the structured contract only.
+          The generic input chips below are suppressed for this route because
+          they are what rendered "5 results" for a five-LEAD request. */}
+      {preview && !isEditing && (
+        <div className="mt-3 space-y-2">
+          <PreviewRow label="Hiring roles" items={preview.hiringRoles} tone="emerald" />
+          <PreviewRow label="Decision-makers" items={preview.decisionMakers} tone="sky" />
+          <PreviewRow label="Company" items={preview.companyConstraints} tone="neutral" />
+          <div className="flex items-baseline gap-2 text-[12.5px]">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590] shrink-0 w-[104px]">Execution</span>
+            <span className="text-[#C9D1D9]">{preview.executionMode}</span>
+          </div>
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590]">Plan</div>
+            <ol className="mt-1 space-y-0.5">
+              {stages.map((s, i) => (
+                <li key={s.id} className="text-[12px] text-[#C9D1D9] flex gap-1.5">
+                  <span className="text-[#7D8590] tabular-nums">{i + 1}.</span>
+                  <span>{s.label}</span>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-1.5 text-[11px] text-[#7D8590] italic">{COMPOUND_STAGE_NOTE}</div>
+          </div>
+        </div>
+      )}
+
       {/* Inputs */}
       <div className="mt-3">
-        {isEditing ? (
+        {preview && !isEditing ? null : isEditing ? (
           <div className="bg-white/[0.01] border border-white/[0.08] rounded-xl p-3 space-y-2.5">
             {Object.keys(inputs).map((key) => {
               if (key === 'strictness') {
@@ -255,7 +303,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
       {/* Output */}
       <div className="mt-3 flex items-baseline gap-2 text-[12.5px]">
         <span className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590] shrink-0">Output</span>
-        <span className="text-[#C9D1D9]">{payload.output}</span>
+        <span className="text-[#C9D1D9]">{preview ? preview.output : payload.output}</span>
       </div>
 
       {/* Safety + credits */}
@@ -279,7 +327,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
               : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.18)]'
           }`}
         >
-          <Play className="h-3.5 w-3.5" /> Start workflow
+          <Play className="h-3.5 w-3.5" /> Start Workflow
         </Button>
         {!blocked && !isEditing && (
           <Button
@@ -298,6 +346,29 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
         >
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+const TONE_CLASS: Record<string, string> = {
+  emerald: 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200',
+  sky: 'border-sky-500/20 bg-sky-500/[0.06] text-sky-200',
+  neutral: 'border-white/[0.08] bg-white/[0.03] text-[#C9D1D9]',
+};
+
+/** One labelled chip row of the qualified-lead preview. */
+function PreviewRow({ label, items, tone }: { label: string; items: string[]; tone: keyof typeof TONE_CLASS }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590] shrink-0 pt-0.5 w-[104px]">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {items.map((t) => (
+          <span key={t} className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] ${TONE_CLASS[tone]}`}>
+            {t}
+          </span>
+        ))}
       </div>
     </div>
   );

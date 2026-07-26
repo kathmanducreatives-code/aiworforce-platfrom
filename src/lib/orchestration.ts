@@ -176,6 +176,8 @@ export interface DBTask {
   input: any;
   output: any;
   payload?: any;
+  /** run-agent writes the structured run result here (incl. `company_first`). */
+  result?: any;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;

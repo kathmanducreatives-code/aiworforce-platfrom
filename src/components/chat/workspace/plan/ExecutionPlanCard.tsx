@@ -13,6 +13,7 @@ import LiveProgressLine from './LiveProgressLine';
 import { inferStage } from '@/lib/chat/progressCopy';
 import { isWorkflowActive, isLongRunning } from '@/lib/chat/state';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
+import { executionStages, executionModeBadge, COMPOUND_STAGE_NOTE, runningCopy } from '@/lib/qualifiedLead/planCopy';
 
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
     agents?: string[];
     connector_limitations?: string[];
     execution_mode?: string;
+    /** Set by Pilot for a company-first qualified-lead run. */
+    workflow_kind?: string;
   };
 }
 
@@ -155,7 +158,16 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     return sum;
   }, [toolCalls]);
 
-  const executionMode = meta?.execution_mode ?? (plan as any)?.payload?.execution_mode ?? null;
+  // QUALIFIED-LEAD PLAN COPY. The company-first runtime is multi-round and
+  // quota-bound, so it must not describe itself as a Fast-mode Apify+ranking run.
+  const workflowKind = meta?.workflow_kind
+    ?? (plan as any)?.payload?.workflow_kind
+    ?? (plan as any)?.payload?.metadata?.workflow_kind
+    ?? null;
+  const isQualifiedLead = workflowKind === 'qualified_lead_sourcing';
+  const rawExecutionMode = meta?.execution_mode ?? (plan as any)?.payload?.execution_mode ?? null;
+  const executionMode = executionModeBadge(workflowKind, rawExecutionMode);
+  const productStages = isQualifiedLead ? executionStages(workflowKind) : [];
   const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => slugForTask(t) === 'penn');
 
   if (loading && !plan) {
@@ -213,6 +225,21 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
       )}
 
 
+      {productStages.length > 0 && (
+        <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#7D8590] font-semibold">What this run does</div>
+          <ol className="mt-1.5 space-y-0.5">
+            {productStages.map((s, i) => (
+              <li key={s.id} className="text-[12.5px] text-[#C9D1D9] flex gap-1.5">
+                <span className="text-[#7D8590] tabular-nums">{i + 1}.</span>
+                <span>{s.label}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-1.5 text-[11px] text-[#7D8590] italic">{COMPOUND_STAGE_NOTE}</div>
+        </div>
+      )}
+
       <div className="mt-3 flex gap-3 items-start">
         <AgentProcessRail
           className="pt-1 shrink-0"
@@ -250,6 +277,17 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
           toolName: tc?.tool_name ?? null,
         });
         const longRunning = isLongRunning(lastActivityAt);
+        // A qualified-lead run reports the PRODUCT stage it is on, not
+        // "Scout is sourcing signals through Apify".
+        if (isQualifiedLead) {
+          return (
+            <div className="mt-2 text-[12px] text-sky-300 flex items-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {runningCopy(workflowKind, null)}
+              {longRunning && <span className="text-[#7D8590]">— this run continues in rounds until the quota is met.</span>}
+            </div>
+          );
+        }
         return <LiveProgressLine stage={stage} longRunning={longRunning} />;
       })()}
 
