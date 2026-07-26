@@ -93,6 +93,69 @@ Deno.test("PART 8: a verified person yields decision_maker_status 'verified'", (
   assertEquals(d.quota_eligible, true);
 });
 
+// ---- the canonical run context (backend-built) -----------------------------
+
+// Exactly what run-agent now emits, built by buildQualifiedLeadRunContext.
+const RUN_CONTEXT = {
+  version: "qualified-lead-run-context-1.0.0",
+  original_user_query: TARGET_CONTRACT.original_instruction,
+  parsed_intent_summary: "sales_operations; department=revenue; seniority=c_level; stage=established; vertical=b2b_saas; geography=United States",
+  workflow_kind: "qualified_lead_sourcing",
+  execution_mode: "company_first",
+  job_family: "sales_operations",
+  job_titles: ["Sales Operations", "Revenue Operations", "GTM Operations"],
+  company_vertical: "b2b_saas",
+  company_stage: "startup_or_small_team",
+  requested_person_roles: ["Founder", "Co-Founder", "CEO"],
+  requested_lead_count: 5,
+  count_entity: "contact_ready_lead",
+  quota_policy: "contact_only",
+  provider_query_keywords: ["Sales Operations", "Revenue Operations", "GTM Operations"],
+  provider_query_location: "United States",
+  planner_source: "ai_planner",
+  planner_status: "validated",
+  round_number: 1,
+  terminal_status: "continuation_required",
+  requested_leads: 5,
+  eligible_leads: 0,
+  remaining_leads: 5,
+};
+
+Deno.test("PART 2: the frontend copies run_context verbatim — no re-derivation", () => {
+  // Deliberately hostile envelope: the legacy fields disagree with the context.
+  const run = runDiagnosticsFromResponse({
+    run_context: RUN_CONTEXT,
+    routing: { original_user_query: "WRONG QUERY", job_search_spec: { keyword_queries: ["SDR"], location: "Nowhere" } },
+    terminal_status: "completed",
+    requested_leads: 999,
+  }, { job_family: "WRONG_FAMILY" });
+
+  assertEquals(run.original_user_query, TARGET_CONTRACT.original_instruction);
+  assertEquals(run.job_family, "sales_operations", "the context must win over the contract");
+  assertEquals(run.provider_query_keywords, ["Sales Operations", "Revenue Operations", "GTM Operations"]);
+  assertEquals(run.provider_query_location, "United States");
+  assertEquals(run.terminal_status, "continuation_required", "the context must win over the envelope");
+  assertEquals(run.requested_lead_count, 5);
+});
+
+Deno.test("PART 2: every CSV diagnostic cell is populated from the run context", () => {
+  const run = runDiagnosticsFromResponse({ run_context: RUN_CONTEXT }, null);
+  const d = buildQualifiedLeadDiagnostics(run, CANDIDATE);
+  const blank = QUALIFIED_LEAD_DIAGNOSTIC_FIELDS.filter((f) => d[f] === null || d[f] === "");
+  assertEquals(blank, ["employer_match_reason"], "run-context fields reached the export empty");
+  assertEquals(d.planner_source, "ai_planner");
+  assertEquals(d.planner_status, "validated");
+  assertEquals(d.round_number, 1);
+  assertEquals(d.company_stage, "startup_or_small_team");
+});
+
+Deno.test("PART 2: a task result's stored context is read the same way", () => {
+  // After a reload the Workbench reads tasks.result, not the HTTP response.
+  const run = runDiagnosticsFromResponse({ qualified_lead_run_context: RUN_CONTEXT }, null);
+  assertEquals(run.workflow_kind, "qualified_lead_sourcing");
+  assertEquals(run.job_titles, ["Sales Operations", "Revenue Operations", "GTM Operations"]);
+});
+
 Deno.test("PART 8: an account-only workflow is 'account' and claims no CONTACT quota", () => {
   const d = accountOnlyDiagnostics("Find five SaaS companies with sales hiring signals.");
   assertEquals(d.count_entity, "account");

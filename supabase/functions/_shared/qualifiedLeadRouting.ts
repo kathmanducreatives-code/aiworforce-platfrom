@@ -10,6 +10,8 @@
 // contact, or a final lead quota, is a qualified-lead request — never an
 // account-only signal scan.
 
+import { inferVertical, type CompanyVertical as TaxonomyVertical } from "./jobIntentTaxonomy.ts";
+
 export type WorkflowKind = "account_opportunity_sourcing" | "qualified_lead_sourcing";
 export type WorkflowExecutionMode = "fast" | "company_first";
 
@@ -67,22 +69,21 @@ export function routeQualifiedLead(instruction: string | null | undefined): Qual
 // so the vocabulary has to be canonical and stable rather than whatever wording
 // the industry string happened to carry.
 
-export type CompanyVertical = "b2b_saas" | "manufacturing" | "cybersecurity" | "agency_services" | "other" | null;
+export type CompanyVertical = TaxonomyVertical | null;
 export type CompanyStage = "startup_or_small_team" | "growth_stage" | "enterprise" | null;
 
-const VERTICAL_RULES: Array<[Exclude<CompanyVertical, null>, RegExp]> = [
-  ["b2b_saas", /\b(b2b saas|saas|software as a service|software compan(?:y|ies)|software startups?)\b/i],
-  ["cybersecurity", /\b(cyber ?security|infosec|mssps?|security vendors?)\b/i],
-  ["manufacturing", /\b(manufactur\w*|industrial|fabricat\w*|machine shops?)\b/i],
-  ["agency_services", /\b(agenc(?:y|ies)|integrators?|consultanc(?:y|ies)|system integrators?)\b/i],
-];
-
-/** Canonical vertical for the contract. Never invents one from a bare noun. */
+/**
+ * Canonical vertical for the contract.
+ *
+ * Delegates to the ONE rule table in the taxonomy, so the preview the user
+ * approves and the family the runtime searches can never disagree about the
+ * industry. Returns "other" — not null — when text was supplied but matched
+ * nothing, which is how the contract distinguishes "unrecognised" from "unstated".
+ */
 export function normalizeCompanyVertical(...sources: Array<string | null | undefined>): CompanyVertical {
   const text = sources.filter(Boolean).join(" ");
   if (!text.trim()) return null;
-  for (const [key, re] of VERTICAL_RULES) if (re.test(text)) return key;
-  return "other";
+  return inferVertical(text) ?? "other";
 }
 
 const STAGE_RULES: Array<[Exclude<CompanyStage, null>, RegExp]> = [

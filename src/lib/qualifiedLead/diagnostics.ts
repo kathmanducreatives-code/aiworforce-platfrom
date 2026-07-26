@@ -154,6 +154,36 @@ export function runDiagnosticsFromResponse(
   contract?: Record<string, unknown> | null,
 ): RunDiagnosticsSource {
   const res = (response ?? {}) as Record<string, any>;
+
+  // CANONICAL PATH. run-agent now emits one `run_context` built from what the
+  // runtime actually did. When it is present it is copied verbatim — the
+  // reconstruction below is only for responses that predate it.
+  const rc = res.run_context ?? res.qualified_lead_run_context ?? null;
+  if (rc && typeof rc === "object") {
+    return {
+      original_user_query: rc.original_user_query ?? null,
+      parsed_intent_summary: rc.parsed_intent_summary ?? null,
+      workflow_kind: rc.workflow_kind ?? null,
+      execution_mode: rc.execution_mode ?? null,
+      job_family: rc.job_family ?? null,
+      job_titles: rc.job_titles ?? null,
+      company_vertical: rc.company_vertical ?? null,
+      company_stage: rc.company_stage ?? null,
+      requested_person_roles: rc.requested_person_roles ?? null,
+      requested_lead_count: rc.requested_lead_count ?? null,
+      count_entity: rc.count_entity ?? null,
+      quota_policy: rc.quota_policy ?? null,
+      provider_query_keywords: rc.provider_query_keywords ?? null,
+      provider_query_location: rc.provider_query_location ?? null,
+      // Already resolved by the backend; kept as a single-entry list so the
+      // per-round lookup below still finds it.
+      planner_metadata: [{ round: rc.round_number ?? null, source: rc.planner_source ?? null, status: rc.planner_status ?? null }],
+      plan_sources: rc.planner_source ? [rc.planner_source] : null,
+      terminal_status: rc.terminal_status ?? null,
+      rounds_completed: rc.round_number ?? null,
+    };
+  }
+
   const routing = (res.routing ?? {}) as Record<string, any>;
   const spec = (routing.job_search_spec ?? res.job_search ?? {}) as Record<string, any>;
   const ct = (contract ?? {}) as Record<string, any>;
