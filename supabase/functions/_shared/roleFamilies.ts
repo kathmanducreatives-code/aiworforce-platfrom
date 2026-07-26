@@ -30,10 +30,14 @@ export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, s
     "Sales Operations", "Revenue Operations", "GTM Operations",
     "Revenue Strategy and Operations", "Sales Strategy and Operations",
   ],
+  // Quota-carrying commercial sales. "First salesperson" / "first sales hire"
+  // requests belong HERE — they are a company's first revenue-carrying hire, not
+  // a Sales-Operations discipline hire.
   gtm_sales: [
     "SDR", "BDR", "Sales Development Representative", "Account Executive",
     "Founding SDR", "Founding AE", "Head of Sales", "Growth", "GTM",
     "Go-to-Market", "Business Development", "Demand Generation", "Revenue",
+    "Salesperson", "Sales Representative", "Territory Sales Manager",
   ],
   marketing_growth: [
     "Growth Marketer", "Product Marketing", "Content Marketing", "Demand Gen",
@@ -74,7 +78,11 @@ const FAMILY_DETECT: Array<[Exclude<RoleFamily, null | "custom">, RegExp]> = [
   // capture "Sales Operations" and produce SDR/BDR/AE aliases (the 2026-07-26
   // manual-run corruption).
   ["sales_operations", /\b(sales op(?:s|erations)|revenue op(?:s|erations)|rev ?ops|gtm op(?:s|erations)|revenue strategy (?:and|&) operations|sales strategy (?:and|&) operations)\b/i],
-  ["gtm_sales", /\b(sdrs?|bdrs?|account executives?|\baes?\b|sales development|founding (?:sdr|ae)|head of sales|gtm|go-?to-?market|business development|demand gen(?:eration)?|\bsales\b|revenue)\b/i],
+  // "first salesperson" / "founding salesperson" / "first sales hire" — a first
+  // revenue-carrying hire. Matched here (AFTER sales_operations, so a "Sales
+  // Operations" request can never be captured by it) because `\bsales\b` does not
+  // reach inside "salesperson"/"salespeople", which is why these resolved to null.
+  ["gtm_sales", /\b(sdrs?|bdrs?|account executives?|\baes?\b|sales development|founding (?:sdr|ae)|head of sales|gtm|go-?to-?market|business development|demand gen(?:eration)?|sales ?(?:person|people)|salesperson|salespeople|\bsales\b|revenue)\b/i],
   ["marketing_growth", /\b(growth marketers?|product marketing|content marketing|lifecycle marketing|performance marketing|growth marketing|brand marketing|\bmarketing\b|\bgrowth\b)\b/i],
   ["engineering", /\b(software engineers?|backend engineers?|frontend engineers?|full ?stack|ai engineers?|ml engineers?|\bengineers?\b|developers?|\bswe\b)\b/i],
   ["customer_success", /\b(customer success|\bcsm\b|account managers?|customer support|onboarding specialists?|support engineers?)\b/i],

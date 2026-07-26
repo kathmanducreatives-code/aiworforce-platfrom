@@ -121,6 +121,10 @@ export function inferFamilyKey(jobFamilies: string[], keywords: string[]): strin
   if (/\b(controls|plc|scada|automation)\b/.test(hay)) return "controls_engineering";
   if (/\bfp&a|financial planning\b/.test(hay)) return "finance_operations";
   if (/\b(vp sales|head of sales|sales director)\b/.test(hay)) return "cybersecurity_sales";
+  // A company's FIRST revenue-carrying hire is commercial sales, not Sales Ops.
+  // `manufacturing_sales` is the registry's early/commercial sales family, and its
+  // `excluded` list already blocks Sales Operations titles from leaking in.
+  if (/\b(sales ?(?:person|people)|first sales hire|founding sales)\b/.test(hay)) return "manufacturing_sales";
   if (/\b(sales representative|territory sales|account manager)\b/.test(hay)) return "manufacturing_sales";
   return null;   // conservative: unknown family
 }

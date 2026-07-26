@@ -68,9 +68,9 @@ const BLAST: Array<[string, string, string]> = [
   ["Find companies hiring software engineers", "engineering", "fast"],
   ["Find US SaaS companies hiring AI engineers", "engineering", "fast"],
   ["Find automation integrators hiring controls engineers in Texas", "engineering", "fast"],
-  // KNOWN GAP (pre-existing, unrelated to this fix): "salesperson" is in no alias
-  // set, so the family is null. Recorded truthfully rather than asserted away.
-  ["Find small manufacturers hiring their first salesperson in Ohio", "NULL_KNOWN_GAP", "fast"],
+  // Was NULL_KNOWN_GAP: "salesperson" matched no alias set. Closed by the Part 10
+  // taxonomy fix — a first revenue-carrying hire is commercial sales.
+  ["Find small manufacturers hiring their first salesperson in Ohio", "gtm_sales", "fast"],
   ["Find companies expanding FP&A teams", "finance", "fast"],
   ["Find MSSPs hiring sales leadership", "gtm_sales", "fast"],
 ];
