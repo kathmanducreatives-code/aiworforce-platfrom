@@ -166,7 +166,7 @@ export default function Signals() {
         }}
         tabs={primaryTabs}
         activeTab={tab}
-        onTabChange={setTab}
+        onTabChange={(id) => setTab(id as PrimaryTab)}
         filtersSlot={
           <SignalsFilters
             query={query}
