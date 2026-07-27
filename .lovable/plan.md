@@ -1,162 +1,134 @@
 
-# Read-only audit — PR #104–#111 Lead sourcing system
+# Wire bounded source feedback into sequential sourcing
 
-This is the audit report. **No files, secrets, flags, migrations, deployments, or provider calls were touched.** Nothing here proposes to change production; the "Next actions" section is optional and only runs on your explicit go-ahead.
+## Confirmed defect (pre-work)
 
-## Phase 1 — Real main branch
+- `origin/main` tip: `3dd53ff8` — contains PR #104–#111.
+- Modules present: `sourceFeedbackRuntime.ts`, `sourceFeedbackContract.ts`, `sourceFeedbackValidation.ts`, `sequentialSourceRuntime.ts`, `sequentialSourceBridge.ts`, `hiringEvidenceFusion.ts`, `hiringSourcePlan.ts`.
+- Production call graph (verified with `rg` excluding `*.test.ts`):
+  - `sourceFeedbackRuntime.ts` — **no production caller** (only its own test imports the runtime symbols).
+  - `applyObservation` — **no production caller** (only tests).
+  - `applyObservationWithFeedback` / `decideNextActionWithFeedback` — **no production caller**.
+- The `sequentialSourceBridge` restores/passes through a `SourceFeedbackLedger` and reports ledger diagnostics, but never runs the runtime, never advances the ledger, and never calls `applyObservation`. `CLAUDE_SOURCE_FEEDBACK=true` therefore has zero effect today. Confirmed orphaned.
 
-- Latest `main` SHA: **`3dd53ff8`** — *"Merge pull request #111 from … fix/source-broadening-capability-compatibility"* (2026-07-27).
-- Working tree `HEAD` diff vs `main`: `0 0` (identical content — I'm on an editor branch pointing at the same commit).
-- PR ancestry in `main`:
+## The correct seam (identified, not invented)
 
-  | PR | Merge commit | Status in main |
-  |----|--------------|----------------|
-  | #104 | `f8489e70` fix/company-first-company-brain-enforcement | present |
-  | #105 | *(no merge into main by number)* | **behavior re-targeted via #106** — see Phase 2 |
-  | #106 | `935edb02` fix/contact-ready-compound-orchestration | present |
-  | #107 | `51715fdd` feat/dynamic-hiring-source-planning | present |
-  | #108 | `0172498f` feat/sequential-hiring-source-execution | present |
-  | #109 | `174599e7` feat/multi-source-hiring-evidence-fusion | present |
-  | #110 | `061b5b16` feat/bounded-claude-source-feedback | present |
-  | #111 | `3dd53ff8` fix/source-broadening-capability-compatibility | present |
-
-- `PR_111_NOT_IN_MAIN`: **does not apply** — PR #111 is the tip of main.
-- Note: I could not fetch the external `remix/main` from this sandbox (no credentials) but `origin/main` (Lovable mirror) already contains PR #111, so this is not the same gap that blocked the prior turn.
-
-## Phase 2 — Per-PR code presence and invariants
-
-Verified by reading `supabase/functions/_shared/*` and `supabase/functions/run-agent/index.ts`. A deeper file-by-file line-level sweep is still in flight in a background sub-audit; the classifications below are based on direct spot-checks that verified the load-bearing symbols.
-
-| PR | Load-bearing modules confirmed present | Wired into runtime? | Classification (code) |
-|----|----------------------------------------|---------------------|-----------------------|
-| #104 Company Brain enforcement | `companyBrainCompiler.ts`, `companyBrainEffectivePolicy.ts` imported by `run-agent/index.ts` (lines 39–40); `evaluateCompanyBrainEvidence` and `companyIcpFilter` present in `_shared`. | Yes — via `executeRunAgentCompanyFirstSourcing`. | PRESENT / wired |
-| #105 behavior via #106 (contact-ready orchestration) | `runAgentCompoundBridge.ts` (`isCompanyFirstRequest`), `executeRunAgentCompanyFirstSourcing.ts`, `compoundSourcingPipeline.ts`, `pendingDecisionMakers`/`assertDecisionMakerRole`/`decisionMakerTitlesFor` symbols present. | Yes — invoked from run-agent's compound branch. | PRESENT / wired |
-| #107 Ordered dynamic hiring-source planning | `hiringSourcePlan.ts` with `isDynamicSourcePlanningEnabled` (flag + allow-list); `hiringSourceCatalog.ts` capabilities: `yc_job_discovery`, `indeed_job_discovery`, `linkedin_job_discovery`, `glassdoor_job_discovery`, `ats_job_verification`. | Yes — consumed by `sequentialSourceBridge`. | PRESENT_BUT_DISABLED (flag off) |
-| #108 Sequential source execution | `sequentialSourceRuntime.ts`, `sequentialSourceBridge.ts`, `companyFirstSourcingState.ts`. `applySequentialSourceExecution` called from `run-agent/index.ts:830`; `sequentialSourceDiagnostics` used for observability. Feature-OFF path returns the caller's `invokeJobs` unchanged (documented invariant). | Yes — bridge wired. | PRESENT_BUT_DISABLED (flag off) |
-| #109 SignalEvent evidence fusion | `signalEvent.ts`, `jobsSignalAdapter.ts` (`jobRecordToSignalEvent`), `hiringEvidenceFusion.ts`, plus existing `signalQuality/signalFreshness/timingAssessment/timingFreshnessPolicy`. Bridge emits `evidence_fusion` diagnostics when engaged. | Yes — via sequential bridge (same gate). | PRESENT_BUT_DISABLED (flag off) |
-| #110 Bounded Claude source feedback | `sourceFeedbackContract.ts`, `sourceFeedbackValidation.ts`, `sourceFeedbackRuntime.ts`, `plannerWrapper.ts`, `promptAssembly.ts` all present with full flag+allow-list gating. **However:** `rg` across `supabase/functions/**/*.ts` (excluding tests) shows `sourceFeedbackRuntime.ts` is imported **only** by its own test file. The sequential bridge imports the *contract* (`SourceFeedbackLedger`, `newFeedbackLedger`) but never constructs or advances the runtime. The `feedback` diagnostics field is a passthrough of any restored ledger — nothing populates a new one. | **No production caller.** | **WIRED_BUT_UNREACHABLE / orphaned** |
-| #111 Source broadening compatibility | `assessBroadeningCompatibility` in `actorInputPlanner.ts`; called from `hiringSourcePlan.ts:632` while building rungs. Compiled-input comparison, YC-recency exclusion, Indeed 1/3/7/14 buckets, alias no-op removal all covered by `sourceBroadeningCompatibility.test.ts`. | Yes — inside plan build. Only reachable when #107 is enabled. | PRESENT_BUT_DISABLED (flag off) |
-
-## Phase 3 — Real runtime path
-
-Traced from UI to run-agent:
+Tracing the real lifecycle:
 
 ```text
-Agentory UI (Pilot / Workbench)
-  ├─ src/lib/leadActions.ts:55                    supabase.functions.invoke('run-agent', ...)
-  └─ src/lib/qualifiedLead/continueSourcing.ts:23 supabase.functions.invoke('run-agent', ... resume_task_id)
-        │
-        ▼
-supabase/functions/run-agent/index.ts
-  ├─ line 46  applyClaudeFirstLeadPlanning        (flag CLAUDE_FIRST_LEAD_PLANNING + allow-list)
-  ├─ line 52  applySequentialSourceExecution      (flag DYNAMIC_HIRING_SOURCE_PLANNING + allow-list)
-  ├─ line 770 claudeFirst = await applyClaudeFirstLeadPlanning({...})
-  └─ line 830 sequentialSources = await applySequentialSourceExecution({...})
-        │
-        ▼
-_shared/sequentialSourceBridge.ts
-  ├─ constructs plan via hiringSourcePlan.ts (uses assessBroadeningCompatibility — PR #111)
-  ├─ wraps invokeJobs so provider calls follow ordered plan (PR #108)
-  ├─ emits evidence_fusion diagnostics through hiringEvidenceFusion.ts (PR #109)
-  └─ carries SourceFeedbackLedger passthrough — NEVER invokes sourceFeedbackRuntime (PR #110 orphaned)
-        │
-        ▼
-Company Brain gate (PR #104) → company-first executor → decision-maker workflow (PR #105/#106)
-→ CONTACT-ready result → task.result → Workbench UI
+run-agent
+ └── executeRunAgentCompanyFirstSourcing
+      └── runCompanyFirstQuotaController  ← loops rounds
+           └── invokeJobs (already wrapped by sequentialJobsInvoker)
+                └── provider → dedupe → fuseSourceResults
+           └── verify / people-search / brain gate / CONTACT-classify / persist
+           └── round record produced (has totalContactReady + incrementalContactReady + stepId + sourceExhausted)
 ```
 
-### Dead / unreachable modules found
+The post-funnel checkpoint the feedback runtime needs is exactly the **end of each quota-controller round**. That is where:
+- fusion has completed (invoker fused before returning),
+- Company Brain + contact funnel finished (round persisted),
+- CONTACT-ready totals are authoritative,
+- deterministic stop/exhaustion signals are already computed,
+- the next round has not yet been chosen.
 
-- **`_shared/sourceFeedbackRuntime.ts`** — no production caller. All PR #110 behavior is inert regardless of `CLAUDE_SOURCE_FEEDBACK` state, because nothing constructs the runtime, feeds it an observation, or persists the ledger back.
-- **UI-side dedicated surfaces** for the new state model (see Phase 7) — a UI sub-audit is still in flight; preliminary read shows `TaskPlanPage.tsx` renders generic task result JSON, and `LeadDetailActions.tsx` consumes the CONTACT-only result shape, but there are no dedicated components for "pending decision-makers", "source order / current step", "broadening action", "feedback recommendation", or "deterministic fallback".
+No such seam is currently exposed to the bridge. This plan adds exactly one hook — a callback the controller invokes once per completed round — and wires the existing feedback runtime through it. No second executor, no second decision engine, no second ledger.
 
-## Phase 4 — Deployment verification
+## Files edited
 
-- Function log analytics (`function_edge_logs` + `function_logs`, 14-day window) show only **one** `function_id` in the platform logs — not `run-agent`. This is a log-naming/scope quirk (the tool's `edge_function_logs` for `run-agent` also returns "No logs found"), not proof of no invocations: `public.tasks` shows **102 rows created in the last 21 days**, including 9 in the last 48 hours — so run-agent IS executing.
-- Deployment commit hash is **not directly retrievable** from the platform tools available to me → **`DEPLOYMENT_COMMIT_UNVERIFIED`** on both production and TEST. Best available evidence is the prior turn's redeploy of `run-agent` at hash `61cee5d7…` (post-PR #106, before PRs #107–#111 merged) plus the *this-session* deploys referenced earlier in history. **No deploy of `run-agent` has been performed by me during this audit turn** — read-only per your rules.
-- Shared-module surface for PRs #107–#111 is entirely under `supabase/functions/_shared/*` and is imported by `run-agent`. Only `run-agent` needs redeployment for those PRs to reach the runtime. Other functions (`orchestrate`, `pilot-chat`) do not import the new bridges.
-- **Strong indirect signal that the deployed run-agent predates PRs #107–#111:** among 102 recent tasks, `result::text` matches for `sequential_source`, `dynamic_hiring_source`, `source_feedback`, `claude_first`/`claude-first`, `pending_decision_makers`, and `contact_ready_lead` all return **0**. Even with the flags off, the disabled-path diagnostics helpers (`sequentialSourceDiagnostics` returns `sequential_source_execution: false, enablement_reason: ...`) would leave a marker in any task processed by a build that includes these PRs. Zero markers across 102 tasks = deployed run-agent almost certainly does not yet include PRs #107–#111. TEST project cannot be inspected from this project's Supabase tools.
+1. **`supabase/functions/_shared/sequentialSourceBridge.ts`**
+   - Add `onObservation(observation): Promise<void>` to `SequentialSourceBridgeResult` (a no-op when disabled — the caller invokes it unconditionally).
+   - When enabled, `onObservation` inside the bridge:
+     1. Runs mandatory deterministic short-circuits first (quota reached / valid exhaustion / single executable action) via `decideNextAction` + `runtimeStateFor(state)` — if only one safe action exists it uses it directly, no model call.
+     2. Otherwise calls the existing `decideNextActionWithFeedback` from `sourceFeedbackRuntime.ts` with the shared plan/state/fusion/feedback + a `generate` closure that uses the existing `plannerWrapper` model gateway (repair disabled).
+     3. Feeds the returned action into `applyObservation(plan, state, observation, action)` — **once per observation**.
+     4. Persists the updated ledger back into `result.feedback` (mutated in place; the caller reads it from the bridge result on checkpoint).
+   - Preserve function-object identity for `invokeJobs` when disabled (unchanged).
+   - Diagnostics from `sequentialSourceDiagnostics` gain per-checkpoint entries taken from `ledger.checkpoints[]` — no raw prompt, no raw response, no keys.
 
-## Phase 5 — Feature flags (production project `wqnigjhcwjxtmordrwno`)
+2. **`supabase/functions/_shared/companyFirstQuotaController.ts`**
+   - Accept a new optional dependency `onRoundComplete?: (obs: SourceStepObservation) => Promise<void>`.
+   - After each round is finalized (right before deciding the next round), if provided, build a `SourceStepObservation` from the round record + running `eligible_leads` and `await` the hook.
+   - No change to the controller's own decision logic (quota controller remains the sole quota authority). Continuation semantics unchanged.
 
-Secret names present (values not revealed):
+3. **`supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts`**
+   - Add optional `onRoundComplete` on `CompanyFirstRuntimeDeps` and pass it straight into `runCompanyFirstQuotaController`.
 
-| Flag | Present? | Effective state |
-|------|----------|-----------------|
-| `CLAUDE_FIRST_LEAD_PLANNING` | yes | Per last turn's confirmed action: **OFF** (`"false"`) |
-| `CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES` | yes | value not read; irrelevant while flag is off |
-| `DYNAMIC_HIRING_SOURCE_PLANNING` | **absent** | OFF (parser returns false on missing) |
-| `DYNAMIC_HIRING_SOURCE_PLANNING_WORKSPACES` | **absent** | no allow-list |
-| `CLAUDE_SOURCE_FEEDBACK` | **absent** | OFF |
-| `CLAUDE_SOURCE_FEEDBACK_WORKSPACES` | **absent** | no allow-list |
+4. **`supabase/functions/run-agent/index.ts`**
+   - At the existing `executeRunAgentCompanyFirstSourcing({...})` call site, pass `onRoundComplete: sequentialSources.onObservation` so the sequential bridge and the quota controller share the same one-hook path.
+   - After the run, the ledger checkpoint captured on `sequentialSources.feedback` is already carried into `company_first_state` (the bridge slot is already persisted); no new persistence surface required.
+   - Idempotency: because `sourceFeedbackContract` computes request keys from `(observationHash, stepId, availableActions)` and the ledger is restored via `restoredFeedback`, a resumed task with the same round observation yields the same key and the runtime short-circuits without a model call — this is the existing contract, we just make it reachable.
 
-Fail-closed behaviour of the flag parser (`intelligenceFlags.ts` — only `true`/`1`/`enabled` enable) confirmed by source reading.
+## Files not touched
 
-TEST project (`zbwsbnqqpkvdhqwavjke`) flags: **UNVERIFIED** from this project's tooling.
+- `supabase/functions/mcp/index.ts` — never staged, never restored, never committed (explicit exclusion).
+- `sourceFeedbackRuntime.ts`, `sourceFeedbackContract.ts`, `sourceFeedbackValidation.ts` — reused as-is; no logic changes. Only imported from new production callers.
+- `hiringSourcePlan.ts`, `sequentialSourceRuntime.ts`, `hiringEvidenceFusion.ts` — unchanged.
+- Company Brain compiler / policy — unchanged.
+- Quota / persistence / decision-maker workflow — unchanged.
 
-## Phase 6 — Required credentials (production)
+## Feature-gate behavior
 
-Present: `ANTHROPIC_API_KEY`, `APIFY_API_TOKEN`, `APIFY_ACTOR_LINKEDIN_COMPANY_SCRAPER` (+ `_FALLBACK`), `APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER` (+ `_FALLBACK`), `APIFY_ACTOR_PEOPLE_SEARCH`, `APIFY_ENABLE_PEOPLE_SEARCH`, `FIRECRAWL_API_KEY`, `GOOGLE_AI_API_KEY`, `OPENAI_API_KEY`, `LOVABLE_API_KEY` (managed), `RESEND_API_KEY`, `RADAR_ENABLE_APIFY_JOBS`.
+- All flags stay OFF in this branch. No `.env` edit, no secret write, no deploy.
+- When `DYNAMIC_HIRING_SOURCE_PLANNING` is off → bridge returns inert result → `onObservation` is a no-op → identical to today.
+- When dynamic sequential sourcing is on but `CLAUDE_SOURCE_FEEDBACK` is off (or workspace not allow-listed) → deterministic-only path, still no model call. `applyObservation` runs exactly once per round with the deterministic decision.
+- Every mandatory deterministic case skips Claude: quota reached, valid exhaustion, budget exhausted, one executable action.
 
-Missing / not-a-secret: no `ATS_*` / dedicated Glassdoor / dedicated YC actor keys — these are handled inside the Apify actor abstraction as capabilities and do not need separate secrets today.
+## Tests added
 
-No credential gap prevents PR #104–#111 from executing once flags are on. Every phase has the API key it needs.
+New file: **`supabase/functions/_shared/sequentialSourceBridge.feedback.test.ts`**
 
-## Phase 7 — UI and result surface
+- `runtime import-graph guard`: assert that `sourceFeedbackRuntime.ts` is imported by `sequentialSourceBridge.ts` at build time (static import graph read from the file, not from the test file).
+- `feature OFF → no model call, no ledger change`.
+- `workspace not allow-listed → no model call`.
+- `dynamic sequential sourcing OFF → onObservation is a no-op`.
+- `quota reached → skip feedback, ledger records skipped_reason`.
+- `valid exhaustion → skip feedback`.
+- `budget exhausted → skip feedback`.
+- `one executable action → skip feedback, action applied directly`.
+- `two+ safe alternatives → model.fn called at most once, recommendation validated, applied`.
+- `invalid model output → deterministic fallback used, action still applied once`.
+- `applyObservation runs exactly once per observation` (spy through `applyObservationWithFeedback` fake plumbing).
+- `ledger.checkpoints[] persisted on bridge result; second observation with the same key does not re-invoke model` (continuation idempotency).
+- `feedback receives fused unique counts, not raw duplicates` (observation built from fusion outcome, not raw row count).
+- `no live provider/model call anywhere` — mocked `generate` throws on unexpected input.
 
-Preliminary reading (deeper UI sub-audit still in flight):
+New file: **`supabase/functions/_shared/companyFirstQuotaController.onRoundComplete.test.ts`**
 
-- Submission entry points: `src/lib/leadActions.ts:55` and `src/lib/qualifiedLead/continueSourcing.ts:23`. Both call `run-agent` — no legacy route. `TaskPlanPage.tsx` shows the resulting task lifecycle.
-- Distinct rendering exists for: raw job signals, canonical companies, CONTACT-ready people, WATCH/REJECT, remaining quota.
-- **Missing / generic-only rendering** for: pending-identity companies, pending-decision-makers, source order + current source step, broadening action, evidence-fusion multi-source view, feedback recommendation, deterministic fallback rationale. These will surface only as raw JSON inside the task result panel.
-- No evidence that jobs/companies are labelled as CONTACT-ready leads in the current UI (PR #106's separation appears respected by `LeadDetailActions` and the Lead Library table).
+- `onRoundComplete invoked once per round with post-funnel counts`.
+- `omitting the hook keeps behavior byte-for-byte identical to today` (round records identical to baseline).
+- `hook does not influence quota decisions` (controller remains sole authority).
+- `jobs/signals/companies never counted toward quota — only CONTACT persists a bump`.
 
-## Phase 8 — Test evidence
+## Verification (all offline)
 
-Skipped per your instruction.
+1. Record baseline first: `deno test --allow-env --allow-read supabase/functions/_shared/` on `main` (SHA `3dd53ff8`) — capture exact pass/fail counts.
+2. On branch, run focused suites:
+   - `sourceFeedback.test.ts`, `sourceFeedbackValidation.test.ts`, `plannerWrapper.test.ts`
+   - `sequentialSource*.test.ts`, `hiringSourcePlan*.test.ts`, `hiringEvidenceFusion.test.ts`
+   - `sourceBroadeningCompatibility.test.ts`, `companyFirstQuotaController*.test.ts`
+   - `runAgent*.test.ts`, continuation tests, Company Brain compiler tests
+3. Then the full backend `_shared` suite.
+4. Only baseline-known failures may remain.
+5. `deno check` on every modified module + `run-agent`.
+6. `./node_modules/.bin/tsc --noEmit`.
+7. `npm run build`.
+8. Diff scan for `sk-ant`, `ANTHROPIC_API_KEY=`, bearer tokens, hardcoded authorization headers.
+9. Confirm `git status` shows `supabase/functions/mcp/index.ts` unmodified / unstaged.
 
-## Final classification
+## Commits
 
-| PR | Classification | Reason |
-|----|----------------|--------|
-| #104 | **WIRED_BUT_UNREACHABLE** in deployed prod / PRESENT_BUT_DISABLED in main | Code merged & wired; effectively active without flags. Deployed run-agent likely predates it (zero markers in 102 recent tasks). |
-| #105/#106 | **WIRED_BUT_UNREACHABLE** in deployed prod / PRESENT in main | Same as #104 — merged, wired, no runtime signal in tasks. |
-| #107 | **PRESENT_BUT_DISABLED** (+ MERGED_NOT_DEPLOYED indirectly) | Flag `DYNAMIC_HIRING_SOURCE_PLANNING` absent in prod; deployed build likely predates it. |
-| #108 | **PRESENT_BUT_DISABLED** (+ MERGED_NOT_DEPLOYED indirectly) | Bridge wired but same flag gate; same deployment concern. |
-| #109 | **PRESENT_BUT_DISABLED** | Fusion only engages via sequential bridge → same gate as #108. |
-| #110 | **WIRED_BUT_UNREACHABLE (orphaned)** | Runtime module has no production caller anywhere in `supabase/functions/*` (only its own test imports it). Even flag-on has no effect. |
-| #111 | **PRESENT_BUT_DISABLED** | Compat check is invoked from `hiringSourcePlan.ts`, but that plan builder only runs when #107 flag is on. |
+- `fix(intelligence): invoke bounded source feedback` — bridge + tests
+- `fix(leads): persist accepted feedback actions` — quota controller hook + executor wiring
+- `test(intelligence): cover runtime feedback wiring` — import-graph guard + edge-case tests
 
-### Overall
+## Push & PR
 
-**MERGED_NOT_DEPLOYED + PRESENT_BUT_DISABLED + one WIRED_BUT_UNREACHABLE.**
+- Branch: `fix/wire-bounded-source-feedback-runtime`
+- `git push -u remix fix/wire-bounded-source-feedback-runtime`
+- Open PR against `remix/main`. Title: `fix(leads): wire bounded source feedback into sequential sourcing`.
+- Do not merge. Do not deploy. Do not apply migrations. All flags OFF.
 
-Would the full PR #104–#111 system function correctly if deployed, configured, and enabled? **No — not without one code change.** PR #110's runtime is orphaned (not called by the sequential bridge or run-agent). PRs #104, #105/#106, #107, #108, #109, #111 would function correctly once the current `main` is deployed and the two flag pairs are set with the workspace allow-listed.
+## Final report contents
 
-### Primary reasons the system appears not to work today
-
-1. **Deployment**: strong indirect evidence that deployed `run-agent` predates PRs #107–#111 (0 diagnostic markers across 102 recent tasks). `DEPLOYMENT_COMMIT_UNVERIFIED` from platform-side tooling.
-2. **Flags**: `DYNAMIC_HIRING_SOURCE_PLANNING`, `DYNAMIC_HIRING_SOURCE_PLANNING_WORKSPACES`, `CLAUDE_SOURCE_FEEDBACK`, `CLAUDE_SOURCE_FEEDBACK_WORKSPACES` all absent in production; `CLAUDE_FIRST_LEAD_PLANNING` explicitly `"false"`.
-3. **Runtime wiring defect (PR #110)**: `sourceFeedbackRuntime.ts` has no caller in `supabase/functions/*` outside its test. This is a real code gap, not a flag issue.
-4. **UI**: several new domain states have no dedicated surface (pending decision-makers, source step, broadening, feedback, fallback). Not blocking; degrades transparency.
-
-### Not the cause
-
-- Not "not merged" — everything is in `main`.
-- Not missing credentials — all required secrets are present.
-- Not a UI-routing defect for the submission path — the UI already calls `run-agent`.
-- Not a qualification / provider failure — no provider was invoked in this audit.
-
-### Minimum next actions (not applied — awaiting your explicit go-ahead)
-
-To make the system **testable** (still off by default for everyone else):
-1. Deploy `run-agent` from `main` (`3dd53ff8`) to production project `wqnigjhcwjxtmordrwno`.
-2. Wire `sourceFeedbackRuntime` from `sequentialSourceRuntime` after each source observation (or add a bridge call inside `applySequentialSourceExecution`). Without this, PR #110 remains inert.
-
-To make the system **active** in production for one allow-listed workspace:
-3. Set `DYNAMIC_HIRING_SOURCE_PLANNING=true` and `DYNAMIC_HIRING_SOURCE_PLANNING_WORKSPACES=e510c1a6-2bb8-4aa4-95f7-0beb786ed995`.
-4. Optionally set `CLAUDE_FIRST_LEAD_PLANNING=true` (existing allow-list already targets the same workspace) — the previous canary showed the deterministic router still wins on the Sales-Ops prompt, but Claude-first is available for other prompts.
-5. Optionally set `CLAUDE_SOURCE_FEEDBACK=true` + `CLAUDE_SOURCE_FEEDBACK_WORKSPACES=…` — only after action (2) above; otherwise the flag has no effect.
-6. Add UI surfaces for the missing states in Phase 7 before opening this beyond one workspace.
-
-Reply with which of the above (if any) you want me to execute; nothing will change until you do.
+Base SHA · branch · orphaned-state proof · production caller added · post-fix call graph · stable checkpoint used (round-complete) · fusion-before-feedback proof · funnel-metrics availability · eligibility behavior · mandatory-skip cases · available-action projection · one-request-per-observation proof · validation path · deterministic fallback · applyObservation-runs-once proof · ledger persistence · continuation reuse · feature-OFF compatibility · diagnostics fields · tests added · baseline vs branch results · deno / tsc / build results · files changed · commits · remote SHA · PR # + URL · negative confirmations (no second runtime, gateway, decision engine, executor, quota or brain change; no deploy; no migration; no live model / Actor / Firecrawl call; flags OFF; no secrets in diff; MCP file untouched).
