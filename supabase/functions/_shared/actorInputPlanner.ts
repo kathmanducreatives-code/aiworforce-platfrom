@@ -599,3 +599,128 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
     },
   };
 }
+
+// ============================================================================
+// BROADENING COMPATIBILITY — can this source actually express this rung?
+// ============================================================================
+//
+// PR #110 found YC Jobs being offered `extend_recency_window` even though the
+// verified YC Actor input has no posting-window field at all. The rung compiled
+// to a byte-identical call: a second paid request for the same rows, presented to
+// the strategy layer as if it had broadened something.
+//
+// The defence is behavioural rather than a hand-maintained table. A rung is
+// COMPATIBLE only when applying it changes the compiled input — and because the
+// compiled input IS the Actor's verified schema shape, a changed hash proves a
+// supported field moved. There is nothing to keep in sync when a schema changes:
+// the compiler is the single source of truth, and this reads it.
+//
+// One application function serves BOTH the compatibility check and the runtime's
+// real call, so the rung assessed at plan time is the rung that later executes.
+
+/** A rung, structurally. Not imported from the plan module, to keep this leaf-ward. */
+export interface BroadeningIntentChange {
+  action: string;
+  aliases?: string[];
+  wording?: string;
+  remotePolicy?: string;
+  postingWindowDays?: number;
+  candidateTarget?: number;
+  capability?: string;
+}
+
+/**
+ * Apply one approved rung to a semantic intent.
+ *
+ * THE ONLY PLACE a rung becomes a change. Three rungs are deliberately absent:
+ *
+ *   use_equivalent_query_wording — free text with no registry behind it. The
+ *     alias rung is restricted to the approved role-family registry; `wording` is
+ *     not, so compiling it would be a hole in exactly the constraint that keeps a
+ *     broadened search on-role. Left unapplied, it compiles identically and is
+ *     therefore never offered, which is the honest outcome for something we
+ *     cannot express safely.
+ *
+ *   activate_broader_approved_source / activate_fallback_source — these do not
+ *     change THIS step's input; they mean "run a different source". That is what
+ *     `advance_to_next_source` already does, through the ordered chain, with the
+ *     activation conditions the plan authored. Treating them as input broadening
+ *     would be a second, unordered way to reach a source.
+ */
+export function applyBroadeningToIntent(
+  intent: HiringSourceIntent,
+  rung: BroadeningIntentChange | null | undefined,
+): HiringSourceIntent {
+  if (!rung) return intent;
+  switch (rung.action) {
+    case "add_approved_role_aliases":
+      if (!rung.aliases?.length) return intent;
+      return { ...intent, titleAliases: [...new Set([...(intent.titleAliases ?? []), ...rung.aliases])] };
+
+    case "increase_result_target":
+      if (rung.candidateTarget == null) return intent;
+      return { ...intent, candidateTarget: rung.candidateTarget };
+
+    case "extend_recency_window":
+      if (rung.postingWindowDays == null) return intent;
+      return { ...intent, postingWindowDays: rung.postingWindowDays };
+
+    case "include_supported_remote_variants": {
+      const policy = String(rung.remotePolicy ?? "").trim().toLowerCase();
+      // Only the four the intent contract defines. An unrecognised policy is not
+      // guessed at — it simply does not apply, and the rung drops out as a no-op.
+      if (policy !== "any" && policy !== "remote" && policy !== "hybrid" && policy !== "onsite") return intent;
+      return { ...intent, remotePolicy: policy };
+    }
+
+    default:
+      return intent;
+  }
+}
+
+export interface BroadeningCompatibility {
+  supported: boolean;
+  /** Safe, stable code. Null when supported. */
+  reason:
+    | "unsupported_by_source_schema"
+    | "not_an_input_change"
+    | "uncompilable_before"
+    | "uncompilable_after"
+    | null;
+}
+
+/** Rungs that describe activating another source rather than changing this input. */
+const SOURCE_ACTIVATION_RUNGS = new Set([
+  "activate_broader_approved_source", "activate_fallback_source",
+]);
+
+/**
+ * Would this rung meaningfully change the call this step makes?
+ *
+ * Compiles the intent twice — before and after — and compares the normalized
+ * hashes. Identical means the Actor's schema has nowhere to put the change (YC and
+ * recency), or the value lands in the same repaired bucket (Indeed 14 -> 30 days,
+ * both of which clamp to `datePosted: "14"`), or the value was already there.
+ *
+ * A rung that cannot compile at all is likewise not offered: `deferred` is the
+ * right answer for ATS without a resolved slug, but it is not a broadening option.
+ */
+export async function assessBroadeningCompatibility(
+  intent: HiringSourceIntent,
+  rung: BroadeningIntentChange,
+): Promise<BroadeningCompatibility> {
+  if (SOURCE_ACTIVATION_RUNGS.has(rung.action)) {
+    return { supported: false, reason: "not_an_input_change" };
+  }
+
+  const before = await compileHiringSourceInput(intent);
+  if (!before.ok) return { supported: false, reason: "uncompilable_before" };
+
+  const after = await compileHiringSourceInput(applyBroadeningToIntent(intent, rung));
+  if (!after.ok) return { supported: false, reason: "uncompilable_after" };
+
+  if (after.inputHash === before.inputHash) {
+    return { supported: false, reason: "unsupported_by_source_schema" };
+  }
+  return { supported: true, reason: null };
+}

@@ -30,6 +30,7 @@ import {
 } from "./hiringSourcePlan.ts";
 import { isStepFinished, stepOf, type SourceExecutionState } from "./sourceExecutionState.ts";
 import { prepareStepCall } from "./sequentialSourceRuntime.ts";
+import type { BroadeningIntentChange } from "./actorInputPlanner.ts";
 import {
   EXPECTED_IMPROVEMENTS, FEEDBACK_BOUNDS, SOURCE_FEEDBACK_REASON_CODES, SOURCE_FEEDBACK_VERSION,
   type AvailableBoundedAction, type ClaudeSourceFeedbackResponse, type FeedbackProjectionContext,
@@ -362,7 +363,7 @@ export async function validateFeedbackRecommendation(
       if (codes.length === 0) {
         const prepared = await prepareStepCall({
           taskId: input.taskId, step, state,
-          broadening: broadeningForCompile(rec.broadeningAction),
+          broadening: rec.broadeningAction as BroadeningIntentChange,
         });
         if (!prepared.ok && prepared.status === "duplicate_input") codes.push("identical_provider_input");
         else if (!prepared.ok) codes.push(`uncompilable:${prepared.status}`);
@@ -478,16 +479,6 @@ function weakensHardConstraint(
     }
   }
   return codes;
-}
-
-/** The compile-time view of a rung, in the shape `prepareStepCall` accepts. */
-function broadeningForCompile(b: SafeBroadeningAction) {
-  switch (b.action) {
-    case "add_approved_role_aliases": return { action: b.action, aliases: b.aliases };
-    case "increase_result_target": return { action: b.action, candidateTarget: b.candidateTarget };
-    case "extend_recency_window": return { action: b.action, postingWindowDays: b.postingWindowDays };
-    default: return { action: b.action };
-  }
 }
 
 function unknownIds(ids: string[], known: string[], code: string): string[] {
