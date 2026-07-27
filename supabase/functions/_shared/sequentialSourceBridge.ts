@@ -21,6 +21,7 @@ import { newSourceExecutionState, stateMatchesPlan, type SourceExecutionState } 
 import { sequentialJobsInvoker, actorKeyForCapability, sourceExecutionDiagnostics,
   type ActivationContext, type SequentialCallOutcome } from "./sequentialSourceRuntime.ts";
 import type { EnvReader } from "./intelligence/intelligenceFlags.ts";
+import { newFusionState, fusionDiagnostics, type HiringEvidenceFusionState } from "./hiringEvidenceFusion.ts";
 
 export type InvokeJobsFn = (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
 
@@ -32,6 +33,8 @@ export interface SequentialSourceBridgeInput {
   profile: LeadMissionSourceProfile;
   /** Restored slice from the existing company-first checkpoint, when resuming. */
   restoredState?: SourceExecutionState | null;
+  /** Restored fusion slice from the same checkpoint, when resuming. */
+  restoredFusion?: HiringEvidenceFusionState | null;
   costPerCall?: number;
   activationContext?: () => ActivationContext;
   readEnv?: EnvReader;
@@ -45,6 +48,8 @@ export interface SequentialSourceBridgeResult {
   reason: string;
   plan: OrderedHiringSourcePlan | null;
   state: SourceExecutionState | null;
+  /** Canonical fused evidence for this task. Null when disabled. */
+  fusion: HiringEvidenceFusionState | null;
   lastOutcome: () => SequentialCallOutcome | null;
 }
 
@@ -60,7 +65,7 @@ export async function applySequentialSourceExecution(
 ): Promise<SequentialSourceBridgeResult> {
   const inert = (reason: string): SequentialSourceBridgeResult => ({
     invokeJobs: input.invokeJobs, enabled: false, reason,
-    plan: null, state: null, lastOutcome: () => null,
+    plan: null, state: null, fusion: null, lastOutcome: () => null,
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
@@ -90,10 +95,16 @@ export async function applySequentialSourceExecution(
         now: new Date().toISOString(),
       });
 
+  // Fused evidence lives beside the step state in the SAME checkpoint, restored
+  // together so a resumed run cannot hold step progress that disagrees with the
+  // evidence it was derived from.
+  const fusion = input.restoredFusion ?? newFusionState();
+
   const handle = sequentialJobsInvoker({
     taskId: input.taskId,
     plan: approved,
     state,
+    fusion: { state: fusion, workspaceId: input.workspaceId },
     invokeJobs: input.invokeJobs,
     costPerCall: input.costPerCall,
     activationContext: input.activationContext,
@@ -106,6 +117,7 @@ export async function applySequentialSourceExecution(
     reason: "enabled",
     plan: approved,
     state,
+    fusion,
     lastOutcome: handle.lastOutcome,
   };
 }
@@ -119,5 +131,6 @@ export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Re
     sequential_source_execution: true,
     enablement_reason: r.reason,
     ...sourceExecutionDiagnostics(r.plan, r.state, r.lastOutcome()),
+    ...(r.fusion ? { evidence_fusion: fusionDiagnostics(r.fusion, r.lastOutcome()?.fusion ?? null) } : {}),
   };
 }
