@@ -348,7 +348,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
         <Button
           size="sm"
           onClick={handleStart}
-          disabled={blocked}
+          disabled={blocked || routingMismatch}
           className={`font-bold flex items-center gap-1.5 h-8 px-3.5 rounded-lg transition-colors ${
             blocked
               ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/[0.04]'
