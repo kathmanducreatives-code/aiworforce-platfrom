@@ -40,11 +40,16 @@ import {
 import { isIntelligenceFlagEnabled, type EnvReader } from "./intelligence/intelligenceFlags.ts";
 import {
   decideNextAction,
-  type ApprovedSourceNextAction, type OrderedHiringSourcePlan, type SourceStepObservation,
+  type ApprovedSourceNextAction, type OrderedHiringSourcePlan, type SourceRuntimeState,
+  type SourceStepObservation,
 } from "./hiringSourcePlan.ts";
 import type { SourceExecutionState } from "./sourceExecutionState.ts";
-import { applyObservation, type ApplyObservationResult } from "./sequentialSourceRuntime.ts";
 import {
+  applyObservation, runtimeStateFor, withDuplicateBroadening,
+  type ApplyObservationResult,
+} from "./sequentialSourceRuntime.ts";
+import {
+  actionIsExecutable,
   buildFeedbackRequest, checkpointFor, emptyProjectionContext, feedbackRequestKey,
   mandatoryDeterministicAction, observationHash, projectAvailableActions,
   CLAUDE_SOURCE_FEEDBACK_WORKSPACES_ENV, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK,
@@ -251,7 +256,13 @@ export async function decideNextActionWithFeedback(
 ): Promise<FeedbackDecisionResult> {
   const { plan, state, observation } = input;
   const now = input.now ?? (() => new Date().toISOString());
-  const deterministic = () => decideNextAction(plan, observation);
+
+  // STATE-AWARE FROM THE FIRST LINE. Projecting the checkpoint is pure, cheap and
+  // free of any model, prompt or mutation, so it is not gated on the feature: the
+  // deterministic decision must be the same one `applyObservation` would reach
+  // whether or not this workspace ever opted in.
+  const baseRuntime = runtimeStateFor(state);
+  const deterministic = (rt: SourceRuntimeState = baseRuntime) => decideNextAction(plan, observation, rt);
 
   const inert = (skipped: FeedbackSkipReason | null, available: AvailableBoundedAction[] = []): FeedbackDecisionResult => ({
     action: deterministic(),
@@ -269,11 +280,34 @@ export async function decideNextActionWithFeedback(
   if (!enablement.enabled) return inert(enablement.reason as FeedbackSkipReason);
 
   const context = input.context ?? emptyProjectionContext();
-  const available = projectAvailableActions({ plan, state, observation, context });
+
+  // The stronger runtime view: rungs whose compiled call has ALREADY been paid for
+  // are excluded before anything is offered or decided. Only reachable here
+  // because this path may await; `applyObservation` cannot, and still catches the
+  // duplicate later at `prepareStepCall`.
+  const runtime = await withDuplicateBroadening(baseRuntime, {
+    taskId: input.taskId, plan, state, stepId: observation.stepId,
+  });
+  const available = projectAvailableActions({ plan, state, observation, context, runtime });
+
+  /**
+   * The deterministic answer, guaranteed executable.
+   *
+   * The authority and the projection are built from the same helpers and agree by
+   * construction, so this containment check should never fire. It stays because
+   * "should never" is the state this blocker was filed about: an unexecutable
+   * deterministic action is a stalled run, and honest exhaustion is the correct
+   * thing to say when nothing can run.
+   */
+  const executableDeterministic = (): ApprovedSourceNextAction => {
+    const candidate = deterministic(runtime);
+    if (actionIsExecutable(candidate, available)) return candidate;
+    return { action: "stop_valid_exhaustion", reason: "no_executable_action" };
+  };
 
   // MANDATORY DECISIONS NEVER COST A MODEL CALL. Quota reached, budget or calls
   // exhausted, one option, no option: each already has exactly one right answer.
-  const mandatory = mandatoryDeterministicAction(plan, state, observation, available);
+  const mandatory = mandatoryDeterministicAction(plan, state, observation, available, runtime);
   if (mandatory) {
     return {
       ...inert(`mandatory:${mandatory.reason}` as FeedbackSkipReason, available),
@@ -298,7 +332,7 @@ export async function decideNextActionWithFeedback(
   const prior = checkpointFor(input.ledger, requestKey);
   if (prior) {
     return {
-      action: prior.acceptedAction ?? deterministic(),
+      action: prior.acceptedAction ?? executableDeterministic(),
       source: prior.status === "model_recommended" && prior.acceptedAction ? "claude" : "deterministic",
       feedback: prior,
       skippedReason: "continuation_reuse",
@@ -327,7 +361,7 @@ export async function decideNextActionWithFeedback(
   // A STRICT PER-TASK CEILING, checked before the credential so that an exhausted
   // allowance is reported as such rather than as an availability problem.
   if (input.ledger.callsUsed >= MAX_SOURCE_FEEDBACK_CALLS_PER_TASK) {
-    const action = deterministic();
+    const action = executableDeterministic();
     const checkpoint = record({ ...baseCheckpoint("deterministic_fallback"), acceptedAction: action, reasonCode: "feedback_call_limit" });
     return {
       action, source: "deterministic", feedback: checkpoint,
@@ -338,7 +372,7 @@ export async function decideNextActionWithFeedback(
 
   // NO CREDENTIAL, NO CALL. `claude_feedback_unavailable` in the contract's terms.
   if (!modelGatewayAvailable(input.readEnv)) {
-    const action = deterministic();
+    const action = executableDeterministic();
     const checkpoint = record({ ...baseCheckpoint("model_unavailable"), acceptedAction: action });
     return {
       action, source: "deterministic", feedback: checkpoint,
@@ -359,6 +393,8 @@ export async function decideNextActionWithFeedback(
     priorActions: input.priorActions,
   });
 
+  // CHARGED BEFORE THE CALL, so a request that never returns is still accounted
+  // for. `callsUsed` counts HTTP REQUESTS, not decisions — see below.
   input.ledger.callsUsed += 1;
 
   const outcome = await runPlannerWithPrompt<ClaudeSourceFeedbackResponse>({
@@ -369,10 +405,24 @@ export async function decideNextActionWithFeedback(
     enabled: true,
     workspaceId: input.workspaceId,
     timeoutMs: input.timeoutMs,
+    // ONE OBSERVATION, AT MOST ONE HTTP REQUEST.
+    //
+    // The wrapper's constrained repair is right for initial planning, where a
+    // mis-serialized strategy is expensive to lose and there is no cheap
+    // substitute. Here there is: `decideNextAction` is sitting right there with a
+    // correct answer, and a feedback recommendation only ever breaks a tie between
+    // options that are all already safe. Paying a second request to maybe improve
+    // a tie-break is the wrong trade, so a malformed response resolves immediately.
+    allowRepairAttempt: false,
   });
 
+  // Reconcile against what the wrapper ACTUALLY issued. With repair suppressed
+  // this is always zero; it exists so the ledger cannot silently under-count if
+  // the wrapper ever gains another request path.
+  input.ledger.callsUsed += Math.max(0, (outcome.diagnostics.model_requests ?? 1) - 1);
+
   if (!outcome.ok) {
-    const action = deterministic();
+    const action = executableDeterministic();
     const checkpoint = record({
       ...baseCheckpoint(statusForPlannerFailure(outcome.reason)),
       acceptedAction: action,
@@ -399,7 +449,7 @@ export async function decideNextActionWithFeedback(
   if (!validation.ok) {
     // REJECTED. The recommendation is recorded for debugging and the deterministic
     // authority decides — an invalid recommendation never reaches the executor.
-    const action = deterministic();
+    const action = executableDeterministic();
     const checkpoint = record({
       ...baseCheckpoint("rejected_by_validator"),
       recommendedAction: response.recommendation,
@@ -493,8 +543,10 @@ export function sourceFeedbackDiagnostics(
     feedback_eligible: result.skippedReason === null || result.skippedReason === "continuation_reuse",
     available_actions: result.available.map((a) => a.action),
     model_called: result.modelCalled,
+    // HTTP requests, not decisions — see `SourceFeedbackLedger.callsUsed`.
     feedback_calls_used: result.callsUsed,
     feedback_calls_remaining: Math.max(0, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK - result.callsUsed),
+    ...(result.diagnostics ? { model_http_requests: result.diagnostics.model_requests ?? 1 } : {}),
     accepted_action: result.action.action,
     action_source: result.source,
     ...(f ? {

@@ -34,9 +34,9 @@
 
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import {
-  decideNextAction, isSafeBroadeningAction,
+  decideNextAction, eligibleBroadening, nextExecutableStepId, stepIsFinished,
   type ApprovedSourceNextAction, type OrderedHiringSourcePlan, type OrderedSourceStep,
-  type SafeBroadeningAction, type SourceStepObservation,
+  type SafeBroadeningAction, type SourceRuntimeState, type SourceStepObservation,
 } from "./hiringSourcePlan.ts";
 import { isStepFinished, stepOf, type SourceExecutionState } from "./sourceExecutionState.ts";
 import {
@@ -55,11 +55,15 @@ export const SOURCE_FEEDBACK_KEY = "source_feedback";
 export const CLAUDE_SOURCE_FEEDBACK_WORKSPACES_ENV = "CLAUDE_SOURCE_FEEDBACK_WORKSPACES";
 
 /**
- * Hard ceiling on feedback calls per task.
+ * Hard ceiling on model HTTP requests per task, across every checkpoint.
  *
  * Conservative on purpose. A five-step plan has at most a handful of checkpoints,
  * and the value of a second opinion falls off sharply after the first two — while
  * the cost does not. Below the plan's own provider-call ceiling by construction.
+ *
+ * One observation costs at most one request: the feedback adapter suppresses the
+ * planner wrapper's repair retry, so this ceiling is a request budget rather than
+ * an approximate one.
  */
 export const MAX_SOURCE_FEEDBACK_CALLS_PER_TASK = 3;
 
@@ -195,13 +199,19 @@ export function emptyProjectionContext(): FeedbackProjectionContext {
   };
 }
 
-/** Unused rungs of a step's own approved ladder, in ladder order. */
+/**
+ * Unused rungs of a step's own approved ladder, in ladder order.
+ *
+ * Delegates to the plan authority's own eligibility rule rather than repeating it,
+ * so the menu the model is shown and the menu the deterministic decision picks
+ * from cannot drift apart.
+ */
 export function remainingBroadening(
   step: OrderedSourceStep,
   observation: SourceStepObservation,
+  runtime?: SourceRuntimeState,
 ): SafeBroadeningAction[] {
-  const used = new Set(observation.broadeningActionsUsed ?? []);
-  return (step.broadeningLadder ?? []).filter((b) => isSafeBroadeningAction(b) && !used.has(b.action));
+  return eligibleBroadening(step, observation, runtime);
 }
 
 /**
@@ -217,9 +227,12 @@ export function projectAvailableActions(args: {
   state: SourceExecutionState;
   observation: SourceStepObservation;
   context?: FeedbackProjectionContext;
+  /** Supplied by the caller so the menu and the deterministic decision agree. */
+  runtime?: SourceRuntimeState;
 }): AvailableBoundedAction[] {
   const { plan, state, observation } = args;
   const ctx = args.context ?? emptyProjectionContext();
+  const runtime = args.runtime;
   const out: AvailableBoundedAction[] = [];
 
   // Quota is the completion authority. A satisfied request has no next action to
@@ -237,19 +250,22 @@ export function projectAvailableActions(args: {
     if (
       !observation.sourceExhausted
       && (!record || !isStepFinished(record))
+      && !stepIsFinished(runtime, step.stepId)
       && observation.attempt < plan.maximumBroadeningAttempts
     ) {
-      const rungs = remainingBroadening(step, observation);
+      const rungs = remainingBroadening(step, observation, runtime);
       if (rungs.length > 0) {
         out.push({ action: "broaden_current_source", stepId: step.stepId, broadeningActions: rungs });
       }
     }
 
-    // The validated successor, and only a successor that is not already finished.
-    const next = step.nextStepId ? plan.steps.find((s) => s.stepId === step.nextStepId) : undefined;
-    const nextRecord = next ? stepOf(state, next.stepId) : null;
-    if (next && (!nextRecord || !isStepFinished(nextRecord))) {
-      out.push({ action: "advance_to_next_source", currentStepId: step.stepId, nextStepId: next.stepId });
+    // The next step the ORDERED CHAIN can actually reach — the plan authority's
+    // own walk, so a finished successor is stepped over here exactly as the
+    // deterministic decision steps over it.
+    const nextId = nextExecutableStepId(plan, step, runtime);
+    const nextRecord = nextId ? stepOf(state, nextId) : null;
+    if (nextId && (!nextRecord || !isStepFinished(nextRecord))) {
+      out.push({ action: "advance_to_next_source", currentStepId: step.stepId, nextStepId: nextId });
     }
 
     // Verification is conditional on identity, never on ambition: without a resolved
@@ -258,6 +274,7 @@ export function projectAvailableActions(args: {
     const verificationRecord = verificationStep ? stepOf(state, verificationStep.stepId) : null;
     if (
       verificationStep && (!verificationRecord || !isStepFinished(verificationRecord))
+      && !stepIsFinished(runtime, verificationStep.stepId)
       && ctx.atsIdentitiesAvailable > 0 && ctx.companiesForVerification.length > 0
     ) {
       out.push({ action: "verify_selected_jobs", companyIds: boundIds(ctx.companiesForVerification) });
@@ -281,6 +298,53 @@ export function projectAvailableActions(args: {
 
 // ------------------------------------------------ mandatory determinism ------
 
+/**
+ * Is this action present in the currently projected executable set?
+ *
+ * The two STOP actions are always executable: stopping needs no capacity, and
+ * `stop_quota_reached` is deliberately absent from the menu because a satisfied
+ * request has nothing to choose between.
+ *
+ * Identifiers are compared, not just action names — "advance to the step the
+ * projection offered" and "advance to some other step" are different actions that
+ * happen to share a word.
+ */
+export function actionIsExecutable(
+  action: ApprovedSourceNextAction,
+  available: AvailableBoundedAction[],
+): boolean {
+  if (action.action === "stop_quota_reached" || action.action === "stop_valid_exhaustion") return true;
+
+  for (const offer of available) {
+    if (offer.action !== action.action) continue;
+    switch (action.action) {
+      case "broaden_current_source":
+        if (offer.action !== "broaden_current_source") break;
+        if (offer.stepId !== action.stepId) break;
+        if (offer.broadeningActions.some((b) => b.action === action.broadeningAction.action)) return true;
+        break;
+      case "advance_to_next_source":
+        if (offer.action !== "advance_to_next_source") break;
+        if (offer.currentStepId === action.currentStepId && offer.nextStepId === action.nextStepId) return true;
+        break;
+      case "verify_selected_jobs":
+      case "enrich_company_identity": {
+        if (offer.action !== "verify_selected_jobs" && offer.action !== "enrich_company_identity") break;
+        const offered = new Set(offer.companyIds);
+        if (action.companyIds.every((id) => offered.has(id))) return true;
+        break;
+      }
+      case "enrich_contacts": {
+        if (offer.action !== "enrich_contacts") break;
+        const offered = new Set(offer.personIds);
+        if (action.personIds.every((id) => offered.has(id))) return true;
+        break;
+      }
+    }
+  }
+  return false;
+}
+
 export interface MandatoryDecision {
   action: ApprovedSourceNextAction;
   reason:
@@ -303,8 +367,9 @@ export function mandatoryDeterministicAction(
   state: SourceExecutionState,
   observation: SourceStepObservation,
   available: AvailableBoundedAction[],
+  runtime?: SourceRuntimeState,
 ): MandatoryDecision | null {
-  const deterministic = () => decideNextAction(plan, observation);
+  const deterministic = () => decideNextAction(plan, observation, runtime);
 
   if (observation.totalContactReady >= plan.completionCondition.target) {
     return { action: deterministic(), reason: "quota_reached" };
@@ -656,7 +721,15 @@ export interface SourceFeedbackState {
 /** Every feedback checkpoint of one task, plus the call ledger. */
 export interface SourceFeedbackLedger {
   version: typeof SOURCE_FEEDBACK_VERSION;
-  /** Model calls actually ATTEMPTED. Bounded by MAX_SOURCE_FEEDBACK_CALLS_PER_TASK. */
+  /**
+   * Model HTTP REQUESTS actually issued. Bounded by
+   * MAX_SOURCE_FEEDBACK_CALLS_PER_TASK.
+   *
+   * Requests, not decisions. A checkpoint that timed out, returned malformed JSON
+   * or was rejected by the validator still cost a request and is still charged —
+   * cost accounting that only counted useful answers would under-report exactly
+   * when a run is going wrong.
+   */
   callsUsed: number;
   checkpoints: SourceFeedbackState[];
 }

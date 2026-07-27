@@ -7,16 +7,19 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  decideNextAction, deterministicOrderedPlan,
+  decideNextAction, deterministicOrderedPlan, eligibleBroadening, nextExecutableStepId,
   type ApprovedSourceNextAction, type LeadMissionSourceProfile,
   type OrderedHiringSourcePlan, type SourceStepObservation,
 } from "./hiringSourcePlan.ts";
 import {
   newSourceExecutionState, stepOf, type SourceExecutionState,
 } from "./sourceExecutionState.ts";
-import { actorKeyForCapability, prepareStepCall } from "./sequentialSourceRuntime.ts";
+import {
+  actorKeyForCapability, applyObservation, prepareStepCall, runtimeStateFor, withDuplicateBroadening,
+} from "./sequentialSourceRuntime.ts";
 import { newFusionState, type HiringEvidenceFusionState } from "./hiringEvidenceFusion.ts";
 import {
+  actionIsExecutable,
   boundIds, buildFeedbackRequest, checkpointFor, emptyFusedMetrics, feedbackRequestKey,
   fusedEvidenceHash, fusedMetricsFrom, mandatoryDeterministicAction, newFeedbackLedger,
   observationHash, projectAvailableActions, remainingBroadening,
@@ -33,6 +36,7 @@ import {
   isSourceFeedbackEnabled, modelGatewayAvailable, sourceFeedbackDiagnostics,
 } from "./sourceFeedbackRuntime.ts";
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "./sequentialSourceBridge.ts";
+import { runPlannerWithPrompt } from "./intelligence/plannerWrapper.ts";
 import type { EnvReader } from "./intelligence/intelligenceFlags.ts";
 import type { GenerateOpts, GenerateResult } from "./aiProvider.ts";
 
@@ -1074,7 +1078,7 @@ Deno.test("59. diagnostics carry no secrets, prompts, reasoning or raw responses
   const d = sourceFeedbackDiagnostics(r, h.ledger);
   const blob = JSON.stringify(d).toLowerCase();
 
-  for (const forbidden of ["anthropic_api_key", "lovable_api_key", "bearer", "<mission>", "system_policy", "retrieved_evidence", "concisereason", "http"]) {
+  for (const forbidden of ["anthropic_api_key", "lovable_api_key", "bearer", "<mission>", "system_policy", "retrieved_evidence", "concisereason", "http://", "https://"]) {
     assertFalse(blob.includes(forbidden), `"${forbidden}" leaked into diagnostics`);
   }
   assertEquals(d.claude_source_feedback, true);
@@ -1212,4 +1216,315 @@ Deno.test("B2 the evidence hash is order-independent and change-sensitive", asyn
 
   b.companies["domain:beta.com"] = { ...b.companies["domain:beta.com"], evidenceHash: "h3" };
   assert(await fusedEvidenceHash(a) !== await fusedEvidenceHash(b), "changed evidence must change the hash");
+});
+
+// ======================================= BLOCKER 1: one request per observation ==
+//
+// The wrapper's constrained repair is correct for initial planning and stays on
+// there. Bounded feedback opts out: a malformed response resolves immediately to
+// the deterministic answer that was already available.
+
+Deno.test("R1 valid feedback uses exactly ONE model HTTP request", async () => {
+  const h = await harness();
+  const m = mockModel(response({
+    action: "advance_to_next_source",
+    currentStepId: h.plan.steps[0].stepId, nextStepId: h.plan.steps[1].stepId,
+  }));
+  const r = await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn }));
+  assertEquals(m.calls.length, 1);
+  assertEquals(r.source, "claude");
+  assertEquals(r.diagnostics?.model_requests, 1);
+  assertEquals(h.ledger.callsUsed, 1);
+});
+
+Deno.test("R2/R3/R4/R5/R10 one invalid response = one request, then deterministic", async () => {
+  const cases: Array<[string, Mock]> = [
+    // Invalid JSON — the gateway returned something that is not an object at all.
+    ["invalid_json", mockRaw("]]not json[[")],
+    // Valid JSON, invalid schema.
+    ["invalid_schema", mockModel(response({ action: "advance_to_next_source" }, { reasonCode: "vibes" }))],
+    // Parses cleanly, violates a constraint — rejected by the validator.
+    ["constraint_violation", mockModel(response({ action: "stop_quota_reached" }, { reasonCode: "quota_reached" }))],
+  ];
+
+  for (const [label, m] of cases) {
+    const h = await harness();
+    const r = await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn }));
+
+    assertEquals(m.calls.length, 1, `${label} issued a repair request`);
+    assertEquals(r.diagnostics?.model_requests, 1, label);
+    assertEquals(h.ledger.callsUsed, 1, `${label} mis-accounted the request`);
+    assertEquals(r.source, "deterministic", label);
+    assertEquals(r.action, decideNextAction(h.plan, h.obs, runtimeStateFor(h.state)), label);
+    // No prompt in this suite ever contains a repair block.
+    for (const call of m.calls) {
+      assertFalse(String(call.messages[0].content).includes("<repair_request>"), `${label} sent a repair`);
+    }
+  }
+});
+
+Deno.test("R6 the initial planner's repair behavior is UNCHANGED", async () => {
+  // Same wrapper, same malformed response, default settings: still two requests.
+  const prompt = {
+    systemPrompt: "policy",
+    userMessage: "<mission>m</mission>\n<retrieved_evidence>e</retrieved_evidence>\n<output_schema>{}</output_schema>",
+  };
+  const bad = mockRaw({ strategy: { nope: true } });
+  const withRepair = await runPlannerWithPrompt<{ ok: true }>({
+    prompt, enabled: true, generate: bad.fn,
+    fallbackStrategy: { ok: true },
+    validateStrategy: () => ({ ok: false, problem: "always_invalid" }),
+  });
+  assertEquals(bad.calls.length, 2, "the default must still repair once");
+  assert(withRepair.diagnostics.repair_attempted);
+  assertEquals(withRepair.diagnostics.model_requests, 2);
+  assert(String(bad.calls[1].messages[0].content).includes("<repair_request>"));
+
+  // And the opt-out suppresses exactly that second request.
+  const suppressed = mockRaw({ strategy: { nope: true } });
+  const noRepair = await runPlannerWithPrompt<{ ok: true }>({
+    prompt, enabled: true, generate: suppressed.fn, allowRepairAttempt: false,
+    fallbackStrategy: { ok: true },
+    validateStrategy: () => ({ ok: false, problem: "always_invalid" }),
+  });
+  assertEquals(suppressed.calls.length, 1);
+  assertFalse(noRepair.ok);
+  assertEquals(noRepair.diagnostics.model_requests, 1);
+  assertFalse(noRepair.diagnostics.repair_attempted, "no repair was sent, so none is claimed");
+});
+
+Deno.test("R7/R8 an invalid response cannot be re-asked, live or after continuation", async () => {
+  const h = await harness();
+  const m = mockRaw("garbage");
+  const first = await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn }));
+  assertEquals(m.calls.length, 1);
+
+  // Same key, same invocation.
+  await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn }));
+  assertEquals(m.calls.length, 1, "the same request key was asked twice");
+
+  // Same key, after a restart.
+  const restored: SourceFeedbackLedger = JSON.parse(JSON.stringify(h.ledger));
+  const resumedHarness = await harness();
+  const resumed = await decideNextActionWithFeedback(decisionInput(resumedHarness, { generate: m.fn, ledger: restored }));
+  assertEquals(m.calls.length, 1, "a resumed task re-asked a failed observation");
+  assertEquals(resumed.skippedReason, "continuation_reuse");
+  assertEquals(resumed.action, first.action);
+  assertEquals(restored.callsUsed, 1, "the failed request stays charged across the restart");
+});
+
+Deno.test("R9 actual HTTP requests stay bounded per task", async () => {
+  const ledger = newFeedbackLedger();
+  // Every response is malformed, so every checkpoint would have repaired under the
+  // default. The task-level ceiling is a REQUEST budget, not a decision budget.
+  const m = mockRaw("garbage");
+  for (let i = 1; i <= MAX_SOURCE_FEEDBACK_CALLS_PER_TASK + 4; i++) {
+    const h = await harness({ rejectionSummary: { ...observation("x").rejectionSummary, wrongRole: i } });
+    await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn, ledger }));
+  }
+  assertEquals(m.calls.length, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK);
+  assertEquals(ledger.callsUsed, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK);
+});
+
+// ================================ BLOCKER 2: state-aware deterministic decision ==
+
+/** Mark a step finished in the execution state, the way the runtime would. */
+function finish(state: SourceExecutionState, stepId: string, status: "completed" | "exhausted" | "inactive_quota_met" | "failed") {
+  const rec = stepOf(state, stepId)!;
+  rec.status = status;
+  if (status === "completed") state.completed_step_ids.push(stepId);
+  if (status === "exhausted") state.exhausted_step_ids.push(stepId);
+}
+
+Deno.test("S1/S2/S3 a completed, exhausted or quota-inactive next source is never returned", async () => {
+  for (const status of ["completed", "exhausted", "inactive_quota_met", "failed"] as const) {
+    const h = await harness({ sourceExhausted: true });
+    finish(h.state, h.plan.steps[1].stepId, status);
+
+    const runtime = runtimeStateFor(h.state);
+    const action = decideNextAction(h.plan, h.obs, runtime);
+    assert(action.action !== "advance_to_next_source" || action.nextStepId !== h.plan.steps[1].stepId,
+      `${status} step was returned as the advance target`);
+    // The chain is followed, not abandoned: step 3 is the next thing that can run.
+    assertEquals(action, {
+      action: "advance_to_next_source",
+      currentStepId: h.plan.steps[0].stepId, nextStepId: h.plan.steps[2].stepId,
+    }, status);
+  }
+});
+
+Deno.test("S4 a broadening rung whose call was already paid for is not returned", async () => {
+  const h = await harness();
+  const step = h.plan.steps[0];
+  const rung = eligibleBroadening(step, h.obs)[0];
+
+  const prepared = await prepareStepCall({
+    taskId: "t", step, state: h.state,
+    broadening: { action: rung.action, ...(rung.action === "add_approved_role_aliases" ? { aliases: rung.aliases } : {}) },
+  });
+  assert(prepared.ok);
+  stepOf(h.state, step.stepId)!.input_hashes.push(prepared.call.inputHash);
+
+  const runtime = await withDuplicateBroadening(runtimeStateFor(h.state), {
+    taskId: "t", plan: h.plan, state: h.state, stepId: step.stepId,
+  });
+  // The alias rung is flagged — and so is `extend_recency_window`, because the YC
+  // Actor's input has no posting-window field at all, so that rung compiles to the
+  // very same call. A rung the provider cannot express is a duplicate, and finding
+  // that out here is cheaper than paying for it.
+  assert(runtime.duplicateBroadeningByStep?.[step.stepId]?.includes(rung.action),
+    JSON.stringify(runtime.duplicateBroadeningByStep));
+
+  const offered = eligibleBroadening(step, h.obs, runtime).map((b) => b.action);
+  assertFalse(offered.includes(rung.action), "a rung compiling to an already-sent input was offered");
+  assert(offered.includes("increase_result_target"), "a rung that DOES change the call must survive");
+
+  const action = decideNextAction(h.plan, h.obs, runtime);
+  assert(action.action !== "broaden_current_source" || action.broadeningAction.action !== rung.action);
+});
+
+Deno.test("S5 a used broadening action is not returned", async () => {
+  const h = await harness();
+  const step = h.plan.steps[0];
+  const rung = eligibleBroadening(step, h.obs)[0];
+  stepOf(h.state, step.stepId)!.broadening_used.push(rung.action);
+
+  const action = decideNextAction(h.plan, h.obs, runtimeStateFor(h.state));
+  assert(action.action !== "broaden_current_source" || action.broadeningAction.action !== rung.action);
+});
+
+Deno.test("S6 the deterministic action is always contained in availableActions", async () => {
+  const shapes: Array<[string, Partial<SourceStepObservation>, (s: SourceExecutionState, p: OrderedHiringSourcePlan) => void]> = [
+    ["fresh", {}, () => {}],
+    ["exhausted source", { sourceExhausted: true }, () => {}],
+    ["exhausted + finished successor", { sourceExhausted: true }, (s, p) => finish(s, p.steps[1].stepId, "completed")],
+    ["all rungs used", { broadeningActionsUsed: ["add_approved_role_aliases", "increase_result_target", "extend_recency_window"] }, () => {}],
+    ["attempt ceiling", { attempt: 99 }, () => {}],
+    ["quota met", { totalContactReady: 5, remainingQuota: 0 }, () => {}],
+    ["budget gone", { remainingBudgetUsd: 0 }, () => {}],
+    ["calls gone", {}, (s, p) => { s.provider_calls = p.maximumProviderCalls; }],
+    ["everything finished", { sourceExhausted: true }, (s) => { for (const st of s.steps) st.status = "exhausted"; }],
+  ];
+
+  for (const [label, obs, mutate] of shapes) {
+    const h = await harness(obs);
+    mutate(h.state, h.plan);
+    const runtime = runtimeStateFor(h.state);
+    const available = projectAvailableActions({ plan: h.plan, state: h.state, observation: h.obs, runtime });
+    const action = decideNextAction(h.plan, h.obs, runtime);
+    assert(actionIsExecutable(action, available),
+      `${label}: deterministic chose ${action.action} but the menu was [${available.map((a) => a.action)}]`);
+  }
+});
+
+Deno.test("S7 an eligible validated successor can still be selected", async () => {
+  const h = await harness({ sourceExhausted: true });
+  assertEquals(decideNextAction(h.plan, h.obs, runtimeStateFor(h.state)), {
+    action: "advance_to_next_source",
+    currentStepId: h.plan.steps[0].stepId, nextStepId: h.plan.steps[1].stepId,
+  });
+});
+
+Deno.test("S8 the walk follows the ordered chain and never jumps arbitrarily", async () => {
+  const h = await harness();
+  const step = h.plan.steps[0];
+
+  // With nothing finished, the successor is the successor.
+  assertEquals(nextExecutableStepId(h.plan, step), step.nextStepId);
+
+  // With the middle finished, the walk steps over it — to the NEXT link, not to
+  // whichever later step looks most appealing.
+  finish(h.state, h.plan.steps[1].stepId, "completed");
+  assertEquals(nextExecutableStepId(h.plan, step, runtimeStateFor(h.state)), h.plan.steps[2].stepId);
+
+  // A corrupted chain that points at itself terminates instead of looping.
+  const looped: OrderedHiringSourcePlan = {
+    ...h.plan,
+    steps: h.plan.steps.map((s, i) => (i === 0 ? { ...s, nextStepId: s.stepId } : s)),
+  };
+  assertEquals(nextExecutableStepId(looped, looped.steps[0]), null);
+});
+
+Deno.test("S9 no executable successor produces stop_valid_exhaustion", async () => {
+  const h = await harness({ sourceExhausted: true });
+  for (const s of h.state.steps.slice(1)) s.status = "exhausted";
+  assertEquals(decideNextAction(h.plan, h.obs, runtimeStateFor(h.state)), {
+    action: "stop_valid_exhaustion", reason: "all_approved_steps_exhausted",
+  });
+
+  // The call ceiling is exhaustion too, rather than an advance nobody can pay for.
+  const spent = await harness({ sourceExhausted: true });
+  spent.state.provider_calls = spent.plan.maximumProviderCalls;
+  assertEquals(decideNextAction(spent.plan, spent.obs, runtimeStateFor(spent.state)).action, "stop_valid_exhaustion");
+});
+
+Deno.test("S10 continuation restores the same state-aware decision", async () => {
+  const h = await harness({ sourceExhausted: true });
+  finish(h.state, h.plan.steps[1].stepId, "exhausted");
+
+  const m = mockFailure("timeout");
+  const live = await decideNextActionWithFeedback(decisionInput(h, { generate: m.fn }));
+  const restored: SourceFeedbackLedger = JSON.parse(JSON.stringify(h.ledger));
+
+  const resumed = await harness({ sourceExhausted: true });
+  finish(resumed.state, resumed.plan.steps[1].stepId, "exhausted");
+  const again = await decideNextActionWithFeedback(decisionInput(resumed, { generate: m.fn, ledger: restored }));
+
+  assertEquals(again.action, live.action);
+  assert(again.action.action !== "advance_to_next_source" || again.action.nextStepId !== resumed.plan.steps[1].stepId);
+});
+
+Deno.test("S11/S12 every fallback path avoids completed work", async () => {
+  const models: Array<[string, Mock | null]> = [
+    ["model_unavailable", null],
+    ["provider_error", mockFailure("provider_exception")],
+    ["timeout", mockFailure("timeout")],
+    ["invalid_response", mockRaw("garbage")],
+    ["rejected_by_validator", mockModel(response({ action: "stop_quota_reached" }, { reasonCode: "quota_reached" }))],
+  ];
+
+  for (const [label, m] of models) {
+    const h = await harness({ sourceExhausted: true });
+    finish(h.state, h.plan.steps[1].stepId, "completed");
+
+    const r = await decideNextActionWithFeedback(decisionInput(h, {
+      ...(m ? { generate: m.fn } : { readEnv: noCredentialEnv }),
+    }));
+
+    assertEquals(r.source, "deterministic", label);
+    if (r.action.action === "advance_to_next_source") {
+      assert(r.action.nextStepId !== h.plan.steps[1].stepId, `${label} advanced onto completed work`);
+      assertEquals(r.action.nextStepId, h.plan.steps[2].stepId, label);
+    }
+    const runtime = runtimeStateFor(h.state);
+    const available = projectAvailableActions({ plan: h.plan, state: h.state, observation: h.obs, runtime });
+    assert(actionIsExecutable(r.action, available), `${label} produced an unexecutable action`);
+  }
+});
+
+Deno.test("S13/S14/S15 ordering, the executor and the single authority are unchanged", async () => {
+  const h = await harness();
+
+  // S13 the plan's own ordering still decides which source is next.
+  assertEquals(h.plan.steps.map((s) => s.order), [1, 2, 3, 4, 5]);
+  assertEquals(nextExecutableStepId(h.plan, h.plan.steps[0]), h.plan.steps[1].stepId);
+
+  // S14 `applyObservation` — PR #108's state machine — still performs the fold, and
+  // is now state-aware through the same authority.
+  finish(h.state, h.plan.steps[1].stepId, "exhausted");
+  const applied = applyObservation(h.plan, h.state, observation(h.plan.steps[0].stepId, { sourceExhausted: true }));
+  assertEquals(applied.action, {
+    action: "advance_to_next_source",
+    currentStepId: h.plan.steps[0].stepId, nextStepId: h.plan.steps[2].stepId,
+  });
+  assertEquals(h.state.current_step_id, h.plan.steps[2].stepId);
+
+  // S15 one authority: omitting the runtime reproduces the pre-PR-#110 answer
+  // exactly, so nothing forked.
+  const fresh = await harness({ sourceExhausted: true });
+  assertEquals(
+    decideNextAction(fresh.plan, fresh.obs),
+    decideNextAction(fresh.plan, fresh.obs, runtimeStateFor(fresh.state)),
+    "an untouched state must decide identically with and without the runtime",
+  );
 });
