@@ -21,7 +21,11 @@
 // PURE. No network, no database, no provider calls. The model is injected.
 
 import { isIntelligenceFlagEnabled, type EnvReader } from "../intelligenceFlags.ts";
-import type { AgentoryEnvironmentMode } from "../mission.ts";
+import {
+  resolveRuntimeEnvironment,
+  environmentFallbackReason,
+  type EnvironmentResolution,
+} from "../runtimeEnvironment.ts";
 import type { MissionContext } from "../missionContext.ts";
 import type { GenerateJsonFn } from "../plannerWrapper.ts";
 import type { EvidenceItem } from "../promptAssembly.ts";
@@ -86,7 +90,6 @@ export interface LeadPlanningBridgeInput {
   /** The user's instruction, verbatim. */
   originalInstruction: string;
   spec: JobSearchSpecSlice;
-  environment: AgentoryEnvironmentMode;
   missionId: string;
   taskId?: string | null;
   context?: MissionContext | null;
@@ -113,6 +116,15 @@ export interface LeadPlanningBridgeResult {
   outcome: LeadPlanOutcome | null;
   mission: LeadSourcingMission | null;
   enablement: EnablementDecision;
+  /**
+   * The resolved runtime environment, or NULL when the workspace was never
+   * eligible and resolution was therefore never attempted.
+   *
+   * This is what distinguishes "Phase 2 does not apply here" from "Phase 2 applied
+   * and could not proceed" — a distinction `bridgeDiagnostics` needs in order to
+   * stay silent in the first case and speak in the second.
+   */
+  environment: EnvironmentResolution | null;
 }
 
 /**
@@ -126,24 +138,42 @@ export interface LeadPlanningBridgeResult {
 export async function applyClaudeFirstLeadPlanning(
   input: LeadPlanningBridgeInput,
 ): Promise<LeadPlanningBridgeResult> {
+  // GATE FIRST, ALWAYS. Nothing above this line may do work: not resolving the
+  // environment, not reading a project ref, not building a mission. When Phase 2
+  // does not apply, the only thing that happens is this one comparison.
   const enablement = isClaudeFirstLeadPlanningEnabled(input.workspaceId, input.readEnv);
   if (!enablement.enabled) {
-    return { spec: input.spec, specRewritten: false, outcome: null, mission: null, enablement };
+    return {
+      spec: input.spec, specRewritten: false,
+      outcome: null, mission: null, enablement, environment: null,
+    };
   }
+
+  // WHICH ENVIRONMENT, TRULY. Resolved from the running project rather than
+  // assumed, because it decides which capabilities may be selected. It fails
+  // closed: an unrecognised project is not planned for at all.
+  const environment = resolveRuntimeEnvironment(input.readEnv);
+  if (!environment.ok) {
+    return {
+      spec: input.spec, specRewritten: false,
+      outcome: null, mission: null, enablement, environment,
+    };
+  }
+  const environmentMode = environment.mode;
 
   const mission = buildLeadMission({
     missionId: input.missionId,
     workspaceId: input.workspaceId,
     originalInstruction: input.originalInstruction,
     context: input.context ?? null,
-    environmentMode: input.environment,
+    environmentMode,
     workflow: input.requestedLeadCount ? { requested_count: input.requestedLeadCount } : null,
   });
 
   const outcome = await planInitialLeadSourcing({
     mission,
     context: input.context ?? null,
-    environment: input.environment,
+    environment: environmentMode,
     enabled: true,
     generate: input.generate,
     evidence: input.evidence ?? null,
@@ -155,13 +185,13 @@ export async function applyClaudeFirstLeadPlanning(
   // it would be a no-op at best and a subtle divergence at worst, so the original
   // spec is returned untouched and only the diagnostics carry the attempt.
   if (outcome.source !== "claude") {
-    return { spec: input.spec, specRewritten: false, outcome, mission, enablement };
+    return { spec: input.spec, specRewritten: false, outcome, mission, enablement, environment };
   }
 
   const discovery = outcome.plan.searches.find((s) => s.purpose === "discover_hiring_companies");
   const titles = discovery?.titles ?? [];
   if (titles.length === 0) {
-    return { spec: input.spec, specRewritten: false, outcome, mission, enablement };
+    return { spec: input.spec, specRewritten: false, outcome, mission, enablement, environment };
   }
 
   return {
@@ -173,16 +203,43 @@ export async function applyClaudeFirstLeadPlanning(
     outcome,
     mission,
     enablement,
+    environment,
   };
 }
 
-/** The diagnostics block for the task result. Safe fields only. */
-export function bridgeDiagnostics(result: LeadPlanningBridgeResult): Record<string, unknown> {
+/**
+ * The diagnostics block for the task result. Safe fields only.
+ *
+ * Returns NULL when Phase 2 never engaged — flag off, no allow-list, or a
+ * workspace that is not on it. THE ABSENCE OF THIS BLOCK IS THE DISABLED SIGNAL.
+ *
+ * Reporting a `{ status: "disabled" }` record instead would put a Phase 2 key into
+ * every task result of every workspace that never opted in, which is a change to
+ * the stored task shape, the run context the Workbench reads back, and anything
+ * exporting it. "Off" has to mean the feature is not there.
+ *
+ * A record IS produced once a workspace is eligible, including when the run could
+ * not proceed — an eligible workspace that fell back deserves an explanation.
+ */
+export function bridgeDiagnostics(result: LeadPlanningBridgeResult): Record<string, unknown> | null {
+  if (!result.enablement.enabled) return null;
+
+  // Eligible, but the environment could not be resolved, so nothing was planned.
+  if (result.environment && !result.environment.ok) {
+    return {
+      planner_source: "deterministic_registry",
+      claude_first_enabled: true,
+      enablement_reason: result.enablement.reason,
+      fallback_reason: environmentFallbackReason(result.environment.reason),
+    };
+  }
+
   if (!result.outcome) {
     return {
       planner_source: "deterministic_registry",
-      claude_first_enabled: false,
+      claude_first_enabled: true,
       enablement_reason: result.enablement.reason,
+      fallback_reason: "planner_not_run",
     };
   }
   const d = result.outcome.diagnostics;

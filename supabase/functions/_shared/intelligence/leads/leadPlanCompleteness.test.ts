@@ -189,17 +189,19 @@ Deno.test("PC7 an incomplete plan is never REPORTED as Claude-generated", async 
     location: null, country: null, original_query: PRIMARY,
   };
   const res = await applyClaudeFirstLeadPlanning({
-    workspaceId: "ws-1", originalInstruction: PRIMARY, spec, environment: "test",
+    workspaceId: "ws-1", originalInstruction: PRIMARY, spec,
     missionId: "m-1", generate: mock(envelope(s)),
     readEnv: (k) =>
       k === "CLAUDE_FIRST_LEAD_PLANNING" ? "true"
         : k === "CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES" ? "ws-1"
+        : k === "SUPABASE_URL" ? "https://zbwsbnqqpkvdhqwavjke.supabase.co"
         : undefined,
   });
 
   assertEquals(res.specRewritten, false, "the deterministic spec is what executes");
 
   const d = bridgeDiagnostics(res) as Record<string, unknown>;
+  assert(d, "an eligible workspace must still produce diagnostics");
   assertEquals(d.planner_source, "deterministic_registry", "the record must match what ran");
   assert(String(d.fallback_reason ?? "").startsWith("plan_incomplete:"), `fallback_reason was ${d.fallback_reason}`);
   assertEquals(d.plan_hash, res.outcome?.plan.planHash, "the hash must be the executed plan's");

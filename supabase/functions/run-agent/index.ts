@@ -763,7 +763,6 @@ Deno.serve(async (req) => {
           workspaceId: workspace_id,
           originalInstruction: cfIntent.job_search_spec.original_query,
           spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
-          environment: "test",
           missionId: `${task.id}:1`,
           taskId: task.id,
           requestedLeadCount: quota.requestedLeadCount,
@@ -771,11 +770,14 @@ Deno.serve(async (req) => {
         const cfIntentPlanned = claudeFirst.specRewritten
           ? { ...cfIntent, job_search_spec: claudeFirst.spec as unknown as typeof cfIntent.job_search_spec }
           : cfIntent;
-        if (claudeFirst.outcome) {
+        // NULL whenever this workspace never opted in. The key is then omitted
+        // entirely below, so a task result is byte-identical to pre-Phase-2.
+        const claudeFirstDiagnostics = bridgeDiagnostics(claudeFirst);
+        if (claudeFirstDiagnostics) {
           console.log("[run-agent][claude-first]", {
             task_id: task.id,
-            planner_source: claudeFirst.outcome.source,
-            fallback_reason: claudeFirst.outcome.fallbackReason,
+            planner_source: claudeFirstDiagnostics.planner_source,
+            fallback_reason: claudeFirstDiagnostics.fallback_reason,
           });
         }
 
@@ -829,9 +831,11 @@ Deno.serve(async (req) => {
             // Carried in the task row too, so the Workbench can render the run
             // context after a page reload without re-reading the response.
             qualified_lead_run_context: runContext,
-            // Phase 2 planner diagnostics. Additive: one new key, hashes rather
-            // than content, and absent-by-default shape when planning did not run.
-            claude_first_planning: bridgeDiagnostics(claudeFirst),
+            // Phase 2 planner diagnostics — hashes rather than content, and present
+            // ONLY for a workspace that opted in. With the feature off the key does
+            // not exist, so the task result, the run context the Workbench reads
+            // back, and every export are unchanged from before Phase 2.
+            ...(claudeFirstDiagnostics ? { claude_first_planning: claudeFirstDiagnostics } : {}),
             lead_entity_intent: cfIntent,
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },

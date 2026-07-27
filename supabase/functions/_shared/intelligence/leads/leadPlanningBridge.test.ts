@@ -23,8 +23,12 @@ function spec(): JobSearchSpecSlice {
   };
 }
 
+/** The canonical TEST project. Enabled cases resolve to environment "test". */
+const TEST_SUPABASE_URL = "https://zbwsbnqqpkvdhqwavjke.supabase.co";
+
 function env(vars: Record<string, string>) {
-  return (k: string) => vars[k];
+  const all: Record<string, string> = { SUPABASE_URL: TEST_SUPABASE_URL, ...vars };
+  return (k: string) => all[k];
 }
 
 const GOOD_STRATEGY = {
@@ -107,7 +111,7 @@ Deno.test("B8 DISABLED: the spec is returned BY REFERENCE and no model is contac
   let called = false;
   const r = await applyClaudeFirstLeadPlanning({
     workspaceId: WS, originalInstruction: PRIMARY, spec: original,
-    environment: "test", missionId: "m", readEnv: () => undefined,
+    missionId: "m", readEnv: () => undefined,
     generate: async () => { called = true; throw new Error("must not be reached"); },
   });
   assertFalse(called, "a model was contacted while disabled");
@@ -121,7 +125,7 @@ Deno.test("B9 ENABLED: only keyword_queries change; everything else passes throu
   const original = spec();
   const r = await applyClaudeFirstLeadPlanning({
     workspaceId: WS, originalInstruction: PRIMARY, spec: original,
-    environment: "test", missionId: "m", generate: mock,
+    missionId: "m", generate: mock,
     readEnv: env({ CLAUDE_FIRST_LEAD_PLANNING: "true", [CLAUDE_FIRST_WORKSPACES_ENV]: WS }),
   });
 
@@ -140,7 +144,7 @@ Deno.test("B10 a planner FAILURE leaves the deterministic spec untouched", async
   const original = spec();
   const r = await applyClaudeFirstLeadPlanning({
     workspaceId: WS, originalInstruction: PRIMARY, spec: original,
-    environment: "test", missionId: "m",
+    missionId: "m",
     generate: async () => ({ ok: false, content: "", provider: "none", model: "", errorCode: "boom", latencyMs: 1 } as GenerateResult),
     readEnv: env({ CLAUDE_FIRST_LEAD_PLANNING: "true", [CLAUDE_FIRST_WORKSPACES_ENV]: WS }),
   });
@@ -152,7 +156,7 @@ Deno.test("B11 the person roles are never overwritten by hiring-role titles", as
   const original = spec();
   const r = await applyClaudeFirstLeadPlanning({
     workspaceId: WS, originalInstruction: PRIMARY, spec: original,
-    environment: "test", missionId: "m", generate: mock,
+    missionId: "m", generate: mock,
     readEnv: env({ CLAUDE_FIRST_LEAD_PLANNING: "true", [CLAUDE_FIRST_WORKSPACES_ENV]: WS }),
   });
   assertEquals(r.spec.requested_person_roles, ["Founder", "Co-Founder", "CEO"]);
@@ -164,25 +168,32 @@ Deno.test("B11 the person roles are never overwritten by hiring-role titles", as
 
 // ---- diagnostics ------------------------------------------------------------
 
-Deno.test("B12 disabled diagnostics are honest and carry no planner fields", async () => {
-  const r = await applyClaudeFirstLeadPlanning({
-    workspaceId: WS, originalInstruction: PRIMARY, spec: spec(),
-    environment: "test", missionId: "m", readEnv: () => undefined,
-  });
-  const d = bridgeDiagnostics(r);
-  assertEquals(d.planner_source, "deterministic_registry");
-  assertEquals(d.claude_first_enabled, false);
-  assertEquals(d.enablement_reason, "flag_off");
-  assertFalse("model" in d, "a run that never planned must not report a model");
+Deno.test("B12 DISABLED emits no diagnostics block at all", async () => {
+  // The ABSENCE of the block is the disabled signal. A `{ status: "disabled" }`
+  // record would add a Phase 2 key to every task result of every workspace that
+  // never opted in — a change to the stored shape, the run context and exports.
+  for (const readEnv of [
+    () => undefined,
+    env({ CLAUDE_FIRST_LEAD_PLANNING: "true" }),                        // no allow-list
+    env({ CLAUDE_FIRST_LEAD_PLANNING: "true", [CLAUDE_FIRST_WORKSPACES_ENV]: "other-ws" }),
+  ]) {
+    const r = await applyClaudeFirstLeadPlanning({
+      workspaceId: WS, originalInstruction: PRIMARY, spec: spec(),
+      missionId: "m", readEnv,
+    });
+    assertEquals(bridgeDiagnostics(r), null, `reason ${r.enablement.reason} must emit nothing`);
+    assertEquals(r.environment, null, "the environment must not even be resolved");
+  }
 });
 
 Deno.test("B13 enabled diagnostics carry hashes, not content", async () => {
   const r = await applyClaudeFirstLeadPlanning({
     workspaceId: WS, originalInstruction: PRIMARY, spec: spec(),
-    environment: "test", missionId: "m", generate: mock,
+    missionId: "m", generate: mock,
     readEnv: env({ CLAUDE_FIRST_LEAD_PLANNING: "true", [CLAUDE_FIRST_WORKSPACES_ENV]: WS }),
   });
-  const d = bridgeDiagnostics(r);
+  const d = bridgeDiagnostics(r)!;
+  assert(d, "an eligible workspace must produce diagnostics");
   assertEquals(d.planner_source, "claude");
   assertEquals(d.model, "claude-test");
   assert(String(d.plan_hash).length > 0);
