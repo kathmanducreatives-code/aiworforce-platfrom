@@ -19,7 +19,7 @@ import {
 } from "./companyIcpFilter.ts";
 import { verifyCurrentEmployer, type EmployerVerifyResult } from "./employerVerification.ts";
 import { buildPeopleScope, type PeopleSearchScope } from "./scopedPeopleSearch.ts";
-import { normalizeCountry, detectCountryInText } from "./locationMatch.ts";
+import { normalizeCountry, detectCountryInText, detectCountryFromRegionText } from "./locationMatch.ts";
 
 export interface CompoundJob {
   title: string | null;
@@ -66,6 +66,38 @@ export interface CompoundDeps {
   fetchPeopleForCompany: (scope: PeopleSearchScope, max: number) => CompoundPerson[] | Promise<CompoundPerson[]>;
 }
 
+/** A qualified company that could not reach a scoped decision-maker search. */
+export interface PendingDecisionMaker {
+  company: CompanyIdentity;
+  reason: "company_identity_insufficient_for_scoped_search";
+}
+
+/** Titles that describe the role being HIRED, never the person to contact. */
+const HIRING_ROLE_TITLE_RE =
+  /\b(sales|revenue|gtm|go-to-market)\s+(operations|ops)\b|\b(sdr|bdr|account executive|sales development|business development representative)\b/i;
+
+/**
+ * Refuse a hiring-role title in the decision-maker slot.
+ *
+ * Searching "Sales Operations" as a PERSON title is the Phase 0 role-contamination
+ * defect, and the people stage is where it would be least visible: the query
+ * would succeed and return real people who are simply the wrong ones.
+ */
+export function assertDecisionMakerRole(role: string | null | undefined): void {
+  const r = String(role ?? "").trim();
+  if (!r) return;
+  if (HIRING_ROLE_TITLE_RE.test(r)) {
+    throw new Error(`decision_maker_role_contaminated: "${r}" is a hiring role, not a person to contact`);
+  }
+}
+
+/** The person titles a decision-maker search may use. */
+export function decisionMakerTitlesFor(role: string | null | undefined): string[] {
+  const r = String(role ?? "").trim().toLowerCase();
+  if (!r || /founder|ceo|owner|chief executive/.test(r)) return ["Founder", "Co-Founder", "CEO"];
+  return [r.replace(/\b\w/g, (m) => m.toUpperCase())];
+}
+
 export type G = "pass" | "fail" | "unknown";
 export type CompoundVerdict = "CONTACT" | "WATCH" | "NEEDS_REVIEW" | "REJECT";
 
@@ -90,6 +122,12 @@ export interface CompoundCandidate {
 
 export interface CompoundRunResult {
   candidates: CompoundCandidate[];
+  /**
+   * Qualified companies that could NOT be scoped to a decision-maker search.
+   * Reported so the run can say "decision-maker research pending" instead of
+   * quietly presenting them as finished leads. Never quota-eligible.
+   */
+  pendingDecisionMakers: PendingDecisionMaker[];
   diagnostics: {
     rawJobs: number; acceptedJobs: number; verifiedCompanies: number;
     scopedLookups: number; peopleReturned: number;
@@ -106,6 +144,28 @@ export interface CompoundRunResult {
       rejectReasons: Record<string, number>;
       policyHash: string | null;
       enforced: boolean;
+    };
+    /**
+     * The DECISION-MAKER stage funnel. Before this, a qualified company that
+     * could not be scoped was silently filtered out of the people stage: no
+     * search, no candidate, no record. It then surfaced downstream only as an
+     * account row, which is how a run with zero CONTACT-ready people could look
+     * like it had found leads.
+     */
+    decisionMaker: {
+      qualifiedCompanies: number;
+      searchesPlanned: number;
+      searchesExecuted: number;
+      /** Qualified but unscopeable — needs company-identity enrichment. */
+      pendingIdentity: number;
+      scopedBy: Record<string, number>;
+      roleTitlesUsed: string[];
+      peopleReturned: number;
+      roleMatches: number;
+      employerVerified: number;
+      employerMismatch: number;
+      employerAmbiguous: number;
+      contactReady: number;
     };
   };
 }
@@ -125,7 +185,15 @@ function roleMatches(role: string | null, title: string | null): G {
 
 function usRelevance(job: CompoundJob, requireUS: boolean): G {
   if (!requireUS) return "pass";
-  const country = normalizeCountry(job.location) ?? detectCountryInText([job.location, job.descriptionExcerpt].filter(Boolean).join(" "));
+  // Subnational evidence counts. PR #102 taught the qualified-lead location gate
+  // that "Dallas, TX" names a country; this is the SECOND US check in the system
+  // and it never learned. Without it a job in "San Francisco, CA" resolves to
+  // `unknown`, which makes `verdictFromGates` return WATCH — so a fully verified
+  // founder at a fully qualified company could never become CONTACT, and no US
+  // company-first run could complete its contact quota.
+  const country = normalizeCountry(job.location)
+    ?? detectCountryInText([job.location, job.descriptionExcerpt].filter(Boolean).join(" "))
+    ?? detectCountryFromRegionText(job.location);
   if (country === "US") return "pass";
   if (/\bexcluding (?:the )?us|us not eligible|emea only|apac only|eu only\b/i.test(job.descriptionExcerpt ?? "")) return "fail";
   if (country && country !== "US") return "fail";
@@ -181,6 +249,11 @@ export async function runCompoundSourcing(
       evaluated: 0, hardPass: 0, hardFail: 0, evidencePending: 0,
       blockedBeforePeopleSearch: 0, rejectReasons: {},
       policyHash: opts.brainPolicyHash ?? null, enforced: !!opts.brainConstraints,
+    },
+    decisionMaker: {
+      qualifiedCompanies: 0, searchesPlanned: 0, searchesExecuted: 0, pendingIdentity: 0,
+      scopedBy: {}, roleTitlesUsed: [], peopleReturned: 0, roleMatches: 0,
+      employerVerified: 0, employerMismatch: 0, employerAmbiguous: 0, contactReady: 0,
     },
   };
 
@@ -259,14 +332,57 @@ export async function runCompoundSourcing(
 
   // 4) SCOPED people search per verified company; verify + gate each person.
   const candidates: CompoundCandidate[] = [];
+  const pendingDecisionMakers: PendingDecisionMaker[] = [];
   const seenPeople = new Set<string>();
   // BOUNDED CONCURRENCY: people calls run in small deterministic batches so a
   // multi-company round fits the wall-clock budget. Results are re-ordered to the
   // original company order, so output stays deterministic regardless of timing.
   const selected = companies.slice(0, limits.founderLookups);
-  const scoped = selected
-    .map((c) => ({ c, scope: buildPeopleScope(c.identity, { requestedRole: intent.requested_person_role, queryIntent: intent.original_user_instruction, location: c.identity.location, sourceJobId: c.jobs[0].job.url }) }))
+  diagnostics.decisionMaker.qualifiedCompanies = companies.length;
+
+  // ROLE SEPARATION, enforced at the boundary. The people stage searches for the
+  // person to CONTACT. A hiring-role title reaching this filter would search for
+  // the role being hired instead — the Phase 0 defect, in the one place it would
+  // be least visible. This is asserted rather than assumed.
+  assertDecisionMakerRole(intent.requested_person_role);
+
+  const withScope = selected.map((c) => ({
+    c,
+    scope: buildPeopleScope(c.identity, {
+      requestedRole: intent.requested_person_role,
+      queryIntent: intent.original_user_instruction,
+      location: c.identity.location,
+      sourceJobId: c.jobs[0].job.url,
+    }),
+  }));
+
+  // A company we cannot scope is NOT dropped in silence any more.
+  //
+  // `buildPeopleScope` returns null when a company has only a weak (name)
+  // identity, and that refusal is correct — a name-only people search returns
+  // the wrong people. What was wrong was the `.filter()` that followed: the
+  // company simply disappeared from the run. No search, no candidate, no
+  // counter, nothing to explain. Downstream it reappeared as an "account
+  // opportunity", so a run with zero contact-ready people looked like progress.
+  //
+  // It is now recorded as DECISION-MAKER PENDING: visible, counted, explicitly
+  // needing company-identity enrichment, and never quota-eligible.
+  const unscopeable = withScope.filter((x) => x.scope === null);
+  diagnostics.decisionMaker.pendingIdentity = unscopeable.length;
+  for (const { c } of unscopeable) {
+    pendingDecisionMakers.push({
+      company: c.identity,
+      reason: "company_identity_insufficient_for_scoped_search",
+    });
+  }
+
+  const scoped = withScope
     .filter((x): x is { c: typeof selected[number]; scope: NonNullable<ReturnType<typeof buildPeopleScope>> } => x.scope !== null);
+  diagnostics.decisionMaker.searchesPlanned = scoped.length;
+  for (const { scope } of scoped) {
+    diagnostics.decisionMaker.scopedBy[scope.scopedBy] = (diagnostics.decisionMaker.scopedBy[scope.scopedBy] ?? 0) + 1;
+  }
+  diagnostics.decisionMaker.roleTitlesUsed = decisionMakerTitlesFor(intent.requested_person_role);
 
   const concurrency = Math.max(1, Math.min(8, limits.peopleConcurrency ?? 3));
   const fetched: Array<{ c: typeof selected[number]; people: CompoundPerson[] }> = [];
@@ -274,6 +390,7 @@ export async function runCompoundSourcing(
     const batch = scoped.slice(i, i + concurrency);
     const settled = await Promise.all(batch.map(async ({ c, scope }) => {
       diagnostics.scopedLookups++;
+      diagnostics.decisionMaker.searchesExecuted++;
       try {
         const people = (await deps.fetchPeopleForCompany(scope, limits.foundersPerCompany)).slice(0, limits.foundersPerCompany);
         return { c, people };
@@ -286,11 +403,16 @@ export async function runCompoundSourcing(
 
   for (const { c, people } of fetched) {
     diagnostics.peopleReturned += people.length;
+    diagnostics.decisionMaker.peopleReturned += people.length;
     const primaryJob = c.jobs[0].job;
 
     for (const person of people) {
       const employer = verifyCurrentEmployer(person, c.identity, { now: opts.now });
       if (employer.outcome === "verified_mismatch") diagnostics.offCompanyPeople++;
+      if (employer.outcome === "verified_match") diagnostics.decisionMaker.employerVerified++;
+      else if (employer.outcome === "verified_mismatch" || employer.outcome === "historical_only") diagnostics.decisionMaker.employerMismatch++;
+      else diagnostics.decisionMaker.employerAmbiguous++;
+      if (roleMatches(intent.requested_person_role, person.title) === "pass") diagnostics.decisionMaker.roleMatches++;
 
       const companyKeyForEvidence = c.identity.dedupeKey ?? "co";
       const evidence: EvidenceRef[] = [
@@ -329,5 +451,6 @@ export async function runCompoundSourcing(
   const ranked = candidates.slice(0, Math.max(limits.ranked, candidates.length)).map((c, i) => ({ ...c, rank: i + 1 }));
   for (const c of ranked) diagnostics.verdicts[c.verdict]++;
 
-  return { candidates: ranked, diagnostics };
+  diagnostics.decisionMaker.contactReady = ranked.filter((c) => c.verdict === "CONTACT").length;
+  return { candidates: ranked, pendingDecisionMakers, diagnostics };
 }
