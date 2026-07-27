@@ -69,6 +69,16 @@ export interface PlannerCallDiagnostics {
   input_hash: string;
   output_hash: string | null;
   repair_attempted: boolean;
+  /**
+   * ACTUAL model HTTP requests this call made — 1, or 2 when a repair was sent.
+   *
+   * Distinct from `repair_attempted`, which says whether a repair was WARRANTED.
+   * A repair that was warranted but suppressed (`allowRepairAttempt: false`) still
+   * reports one request, and a caller accounting for cost needs the request count
+   * rather than the intent. Optional so the callers that build this record by hand
+   * are unchanged; absent means one request.
+   */
+  model_requests?: number;
   /** Present only when the provider reported it. */
   token_usage?: unknown;
 }
@@ -103,6 +113,18 @@ export interface PlannerCallInput<TStrategy> {
    * reach a model by forgetting an argument.
    */
   enabled?: boolean;
+  /**
+   * May a malformed response be re-asked once? DEFAULT TRUE — that is the existing
+   * planner behavior and every current caller depends on it.
+   *
+   * Set FALSE where the contract is "one observation, at most one model request".
+   * Bounded source feedback is that case: the repair exists to rescue an expensive
+   * strategy that was merely mis-serialized, but a feedback recommendation is worth
+   * far less than the plan it comments on, and there is always a deterministic
+   * answer sitting right there. Paying twice to maybe improve a tie-break is the
+   * wrong trade, so that caller takes the deterministic answer immediately.
+   */
+  allowRepairAttempt?: boolean;
 }
 
 export interface PlannerRunInput<TStrategy> extends AssemblePromptInput, PlannerCallInput<TStrategy> {}
@@ -269,6 +291,8 @@ export async function runPlannerWithPrompt<TStrategy>(
 ): Promise<PlannerOutcome<TStrategy>> {
   const started = Date.now();
   const assembled = input.prompt;
+  /** Every HTTP request this call actually issued. Incremented at the call site. */
+  let requests = 0;
   const inputHash = await sha256Hex(canonicalJson({
     system: assembled.systemPrompt,
     user: assembled.userMessage,
@@ -284,6 +308,9 @@ export async function runPlannerWithPrompt<TStrategy>(
     input_hash: inputHash,
     output_hash: extra.output_hash ?? null,
     repair_attempted: extra.repair_attempted ?? false,
+    // Counted, not inferred: a suppressed repair is still one request, and a
+    // caller enforcing a per-task HTTP ceiling must not have to guess.
+    model_requests: extra.model_requests ?? requests,
     ...(extra.token_usage !== undefined ? { token_usage: extra.token_usage } : {}),
   });
 
@@ -310,8 +337,9 @@ export async function runPlannerWithPrompt<TStrategy>(
       error: String(e), errorCode: "provider_exception", latencyMs: 0,
     }));
 
-  const call = (userMessage: string): Promise<GenerateResult> =>
-    withTimeout(
+  const call = (userMessage: string): Promise<GenerateResult> => {
+    requests += 1;
+    return withTimeout(
       guarded({
         taskType: "orchestration_plan",
         // CLAUDE-FIRST MEANS CLAUDE.
@@ -341,6 +369,7 @@ export async function runPlannerWithPrompt<TStrategy>(
         error: "planner_timeout", errorCode: "timeout", latencyMs: timeoutMs,
       }),
     );
+  };
 
   let res = await call(assembled.userMessage);
   if (!res.ok) {
@@ -351,8 +380,12 @@ export async function runPlannerWithPrompt<TStrategy>(
   let parsed = parsePlannerResponse<TStrategy>(res.json, input.validateStrategy);
   let repairAttempted = false;
 
-  // ONE repair, and never for an injection finding.
-  if (!parsed.ok && parsed.status !== "fallback_injection") {
+  // ONE repair — never for an injection finding, and never when the caller has
+  // declared a one-request budget. `repairAttempted` still records that a repair
+  // was WARRANTED, so a suppressed one is visible in diagnostics rather than
+  // looking like a response that parsed cleanly.
+  const repairAllowed = input.allowRepairAttempt !== false;
+  if (!parsed.ok && parsed.status !== "fallback_injection" && repairAllowed) {
     repairAttempted = true;
     const repairMessage = [
       assembled.userMessage,
