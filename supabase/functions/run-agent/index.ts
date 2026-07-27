@@ -44,6 +44,12 @@ import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectiveP
 // prompt assembled, no model contacted, and the spec below is passed through by
 // reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
 import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+// PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
+// Gated by DYNAMIC_HIRING_SOURCE_PLANNING *and* an explicit workspace allow-list.
+// When either is absent the bridge returns `invokeJobs` UNCHANGED — the same
+// function object, so the default path is not merely equivalent to today's
+// behavior, it is today's behavior.
+import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
@@ -817,6 +823,33 @@ Deno.serve(async (req) => {
           size: effectivePolicy.provenance.size,
         });
 
+        // ORDERED SOURCE EXECUTION. Wraps the existing `invokeJobs` so provider
+        // calls follow the validated plan one step at a time. Everything after the
+        // call — normalization, Company Brain, decision-maker workflow, employer
+        // verification, CONTACT quota, persistence — is untouched.
+        const sequentialSources = await applySequentialSourceExecution({
+          workspaceId: workspace_id,
+          taskId: task.id,
+          invokeJobs,
+          profile: {
+            industries: cfIntent.job_search_spec.company_vertical ? [String(cfIntent.job_search_spec.company_vertical)] : [],
+            stages: [],
+            triggerRequirements: ["active_hiring"],
+            hiring: {
+              required: true,
+              approvedAliases: cfIntentPlanned.job_search_spec.keyword_queries ?? [],
+              geography: cfIntent.job_search_spec.location ?? undefined,
+            },
+            decisionMakerRoles: cfIntent.job_search_spec.requested_person_roles ?? [],
+            currentEmployerRequired: true,
+            requestedCount: quota.requestedLeadCount,
+            countEntity: "contact_ready_lead",
+            quotaPolicy: "contact_only",
+            requiredEvidence: [],
+          },
+          log: (m, meta) => console.log("[run-agent][sequential-source]", m, meta),
+        });
+
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
@@ -826,7 +859,7 @@ Deno.serve(async (req) => {
           plannerMetadata: broadeningPlanner.lastMetadata,
           durableIdempotency: supabaseToolCallReader(supabase as never),
           stateStore: supabaseSourcingStateStore(supabase as never),
-          invokeJobs, invokePeople, persist: persistPlan,
+          invokeJobs: sequentialSources.invokeJobs, invokePeople, persist: persistPlan,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
