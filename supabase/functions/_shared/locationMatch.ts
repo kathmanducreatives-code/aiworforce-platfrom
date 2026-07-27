@@ -87,9 +87,15 @@ const REGION_NAME_TO_COUNTRY: Record<string, string> = {};
 /** Region CODES → country. Codes claimed by two countries are omitted. */
 const REGION_CODE_TO_COUNTRY: Record<string, string> = {};
 
-function registerRegions(country: string, entries: Array<[string, string | null]>): void {
+/**
+ * Register a country's regions.
+ *
+ * A NULL name means "code only": the region's full name collides with something
+ * else (a sovereign country) and must not be matched as text.
+ */
+function registerRegions(country: string, entries: Array<[string | null, string | null]>): void {
   for (const [name, code] of entries) {
-    REGION_NAME_TO_COUNTRY[name.toLowerCase()] = country;
+    if (name) REGION_NAME_TO_COUNTRY[name.toLowerCase()] = country;
     if (code) {
       // A code already claimed by another country is ambiguous: remove both.
       const existing = REGION_CODE_TO_COUNTRY[code];
@@ -110,7 +116,15 @@ const AMBIGUOUS_REGION_CODES = new Set<string>(["SA"]);
 registerRegions("US", [
   ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"],
   ["California", "CA"], ["Colorado", "CO"], ["Connecticut", "CT"], ["Delaware", "DE"],
-  ["Florida", "FL"], ["Georgia", "GA"], ["Hawaii", "HI"], ["Idaho", "ID"],
+  ["Florida", "FL"],
+  // "Georgia" is a SOVEREIGN COUNTRY as well as a US state, so the NAME is
+  // deliberately NOT registered — "Tbilisi, Georgia" must not resolve to the
+  // United States. The code `GA` is unambiguous and still resolves, so
+  // "Atlanta, GA" works. Same principle as WA / NT / SA: when a token names two
+  // places, the unambiguous form is required and a false ACCEPT is never traded
+  // away for reach.
+  [null, "GA"],
+  ["Hawaii", "HI"], ["Idaho", "ID"],
   ["Illinois", "IL"], ["Indiana", "IN"], ["Iowa", "IA"], ["Kansas", "KS"],
   ["Kentucky", "KY"], ["Louisiana", "LA"], ["Maine", "ME"], ["Maryland", "MD"],
   ["Massachusetts", "MA"], ["Michigan", "MI"], ["Minnesota", "MN"], ["Mississippi", "MS"],

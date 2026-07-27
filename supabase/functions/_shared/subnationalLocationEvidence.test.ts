@@ -39,7 +39,7 @@ Deno.test("L1 US city/state job locations are US evidence", () => {
     "Remote - United States",
     "New York, NY",
     "Seattle, Washington",
-    "Atlanta, Georgia",
+    "Atlanta, GA",
   ]) {
     const m = matchesRequiredLocationFromFields(job(loc), US);
     assertEquals(m.ok, true, `${loc} should satisfy United States (reason: ${m.reason})`);
@@ -109,6 +109,15 @@ Deno.test("L7 region-shaped tokens in prose are not geography", () => {
   ]) {
     assertEquals(detectCountryFromRegionText(text), null, `must not infer from: ${text}`);
   }
+});
+
+Deno.test("L8b a US state whose NAME is also a country resolves only by code", () => {
+  // Georgia is a sovereign country as well as a US state. The name must not
+  // resolve; the unambiguous code still does.
+  assertEquals(detectCountryFromRegionText("Tbilisi, Georgia"), null);
+  assertEquals(detectCountryFromRegionText("Atlanta, GA"), "US");
+  assertEquals(matchesRequiredLocationFromFields(job("Tbilisi, Georgia"), US).ok, false);
+  assertEquals(matchesRequiredLocationFromFields(job("Atlanta, GA"), US).ok, true);
 });
 
 Deno.test("L8 codes claimed by two countries are refused", () => {
