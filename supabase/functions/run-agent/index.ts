@@ -3226,7 +3226,7 @@ Deno.serve(async (req) => {
         const qCounts = (sourceQuality && typeof sourceQuality === "object")
           ? sourceQuality as unknown as { raw_result_count: number; accepted_count: number; rejected_count: number; duplicate_count: number; persisted_count: number; requested_count: number; reject_reason_counts: Record<string, number>; status: "complete" | "partial" | "failed" }
           : { raw_result_count: produced, accepted_count: produced, rejected_count: 0, duplicate_count: 0, persisted_count: produced, requested_count: requested, reject_reason_counts: {}, status: planStatus as "complete" | "partial" | "failed" };
-        const outcome = buildOutcomeReport({ counts: qCounts, requested, has_contacts: canDraft });
+        const outcome = buildOutcomeReport({ counts: qCounts, requested, has_contacts: canDraft, source_type: sourceType });
         const uiPanel = {
           kind: "lead_results" as const,
           view: "spreadsheet" as const,
