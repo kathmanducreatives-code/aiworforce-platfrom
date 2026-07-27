@@ -166,17 +166,48 @@ export function acceptanceRate(counts: { raw_result_count: number; accepted_coun
  * honest counts. Complete/partial show forward actions; failed shows recovery
  * actions. `has_contacts` toggles find_contacts vs draft-ready actions.
  */
+/**
+ * What KIND of thing was reviewed, in the user's words.
+ *
+ * Production task bb1ce7fe reported "20 profiles reviewed" when all 20 artifacts
+ * were job postings and no profile was ever fetched — the run had died at the
+ * source location gate before people search. Saying "profiles" told the user we
+ * had looked at 20 founders and rejected them, which is the opposite of what
+ * happened and sent the diagnosis in the wrong direction.
+ *
+ * Driven by the source_type the pipeline already carries, so it stays correct for
+ * every workflow rather than being special-cased for one query. An unknown or
+ * mixed source falls back to the neutral "result".
+ */
+export function reviewedArtifactNoun(sourceType: string | null | undefined): string {
+  const t = String(sourceType ?? "").toLowerCase();
+  if (!t) return "result";
+  if (/job|hiring/.test(t)) return "job result";
+  if (/compan|account/.test(t)) return "company";
+  if (/people|profile|person|contact/.test(t)) return "profile";
+  return "result";
+}
+
+/** Pluralize the artifact noun for a count. "20 job results", "1 company". */
+export function reviewedArtifactLabel(count: number, sourceType: string | null | undefined): string {
+  const noun = reviewedArtifactNoun(sourceType);
+  if (count === 1) return `1 ${noun}`;
+  return `${count} ${noun === "company" ? "companies" : `${noun}s`}`;
+}
+
 export function buildOutcomeReport(opts: {
   counts: SourceQualityCounts;
   requested: number;
   has_contacts?: boolean;
+  /** Artifact kind, so the summary names what was actually reviewed. */
+  source_type?: string | null;
 }): OutcomeReport {
   const { counts } = opts;
   const requested = opts.requested ?? counts.requested_count;
   const accepted = counts.accepted_count;
 
   const quality_lines: string[] = [
-    `Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}.`,
+    `Scout reviewed ${reviewedArtifactLabel(counts.raw_result_count, opts.source_type)}.`,
   ];
   if (accepted > 0) quality_lines.push(`${accepted} ${accepted === 1 ? "was" : "were"} accepted as qualified opportunit${accepted === 1 ? "y" : "ies"}.`);
   if (counts.rejected_count > 0) quality_lines.push(`${counts.rejected_count} ${counts.rejected_count === 1 ? "was" : "were"} rejected.`);
@@ -218,13 +249,15 @@ export function buildProcessNarrative(opts: {
   attempt_labels: string[];
   entity_label: string; // "accounts" | "contacts" | "signals"
   aria_ran: boolean;
+  /** Artifact kind, so the narrative names what was actually reviewed. */
+  source_type?: string | null;
 }): string[] {
   const { counts } = opts;
   const lines: string[] = [];
   lines.push("Pilot planned the workflow.");
   lines.push("Scout created the actor input.");
   lines.push(`Scout ran ${opts.actor_label}.`);
-  lines.push(`Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}.`);
+  lines.push(`Scout reviewed ${reviewedArtifactLabel(counts.raw_result_count, opts.source_type)}.`);
   if (counts.accepted_count > 0) {
     lines.push(`Scout accepted ${counts.accepted_count} qualified ${opts.entity_label}.`);
     if (opts.attempt_labels.length > 1) {
@@ -233,7 +266,7 @@ export function buildProcessNarrative(opts: {
     if (opts.aria_ran) lines.push(`Aria ranked ${counts.accepted_count} accepted ${opts.entity_label}.`);
     lines.push("Pilot opened the Workbench.");
   } else {
-    lines.push(`Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}, but none matched closely enough.`);
+    lines.push(`Scout reviewed ${reviewedArtifactLabel(counts.raw_result_count, opts.source_type)}, but none matched closely enough.`);
     lines.push("Aria skipped because there were no accepted leads to rank.");
   }
   return lines;
