@@ -148,9 +148,18 @@ export const SYSTEM_POLICY = [
 
 // -------------------------------------------------------------- assembling ---
 
-function fence(section: PromptSection, body: string): string {
+/**
+ * Fence one section.
+ *
+ * Exported so a caller that assembles its own prompt — the bounded source-feedback
+ * adapter — produces the SAME section markers `verifyTrustBoundary` checks, rather
+ * than inventing a second set of boundaries that nothing verifies.
+ */
+export function fenceSection(section: PromptSection, body: string): string {
   return `<${section}>\n${body}\n</${section}>`;
 }
+
+const fence = fenceSection;
 
 export interface AssemblePromptInput {
   mission: AgentoryMission;

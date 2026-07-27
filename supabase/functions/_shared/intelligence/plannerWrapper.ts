@@ -80,7 +80,16 @@ export type PlannerOutcome<TStrategy> =
 /** The model call, injected so tests never touch a network. Defaults to aiProvider. */
 export type GenerateJsonFn = (opts: GenerateOpts) => Promise<GenerateResult>;
 
-export interface PlannerRunInput<TStrategy> extends AssemblePromptInput {
+/**
+ * Everything the wrapper needs EXCEPT the prompt.
+ *
+ * Split out so a caller that assembles its own fenced prompt — the bounded
+ * source-feedback adapter does, because its input is aggregate funnel metrics
+ * rather than a mission envelope — reaches the model through this same wrapper
+ * instead of a second one. The timeout, the throw/timeout distinction, the
+ * injection scan, the single constrained repair and the diagnostics are shared.
+ */
+export interface PlannerCallInput<TStrategy> {
   /** Department-supplied validation of the `strategy` field. Shape-only, no policy. */
   validateStrategy: (candidate: unknown) => { ok: true; strategy: TStrategy } | { ok: false; problem: string };
   /** Always available. Used whenever the model cannot be trusted or reached. */
@@ -94,6 +103,18 @@ export interface PlannerRunInput<TStrategy> extends AssemblePromptInput {
    * reach a model by forgetting an argument.
    */
   enabled?: boolean;
+}
+
+export interface PlannerRunInput<TStrategy> extends AssemblePromptInput, PlannerCallInput<TStrategy> {}
+
+/** A prompt that has already been assembled and fenced by the caller. */
+export interface AssembledPromptCore {
+  systemPrompt: string;
+  userMessage: string;
+}
+
+export interface PlannerPromptRunInput<TStrategy> extends PlannerCallInput<TStrategy> {
+  prompt: AssembledPromptCore;
 }
 
 // ------------------------------------------------------------------ bounding --
@@ -234,8 +255,20 @@ function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => T): Promise<
 export async function runPlanner<TStrategy>(
   input: PlannerRunInput<TStrategy>,
 ): Promise<PlannerOutcome<TStrategy>> {
+  return await runPlannerWithPrompt({ ...input, prompt: assemblePlannerPrompt(input) });
+}
+
+/**
+ * The wrapper's core, over an ALREADY-assembled prompt.
+ *
+ * `runPlanner` is this function plus `assemblePlannerPrompt`, so mission-shaped
+ * callers are unchanged and there is still exactly one path to the model.
+ */
+export async function runPlannerWithPrompt<TStrategy>(
+  input: PlannerPromptRunInput<TStrategy>,
+): Promise<PlannerOutcome<TStrategy>> {
   const started = Date.now();
-  const assembled = assemblePlannerPrompt(input);
+  const assembled = input.prompt;
   const inputHash = await sha256Hex(canonicalJson({
     system: assembled.systemPrompt,
     user: assembled.userMessage,

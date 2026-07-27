@@ -44,6 +44,8 @@ export const INTELLIGENCE_FLAGS = [
   "CROSS_DEPARTMENT_INTELLIGENCE",
   /** PR #106. Mission-aware selection of approved hiring-source channels. */
   "DYNAMIC_HIRING_SOURCE_PLANNING",
+  /** PR #110. Claude recommends ONE approved next action after a source attempt. */
+  "CLAUDE_SOURCE_FEEDBACK",
 ] as const;
 
 export type IntelligenceFlag = typeof INTELLIGENCE_FLAGS[number];
@@ -82,6 +84,7 @@ export interface IntelligenceFlagState {
   content_intelligence_kernel: boolean;
   cross_department_intelligence: boolean;
   dynamic_hiring_source_planning: boolean;
+  claude_source_feedback: boolean;
 }
 
 /** Snapshot every flag at once, for diagnostics and for the all-off assertion. */
@@ -96,6 +99,7 @@ export function readIntelligenceFlags(read?: EnvReader): IntelligenceFlagState {
     content_intelligence_kernel: isIntelligenceFlagEnabled("CONTENT_INTELLIGENCE_KERNEL", read),
     cross_department_intelligence: isIntelligenceFlagEnabled("CROSS_DEPARTMENT_INTELLIGENCE", read),
     dynamic_hiring_source_planning: isIntelligenceFlagEnabled("DYNAMIC_HIRING_SOURCE_PLANNING", read),
+    claude_source_feedback: isIntelligenceFlagEnabled("CLAUDE_SOURCE_FEEDBACK", read),
   };
 }
 
