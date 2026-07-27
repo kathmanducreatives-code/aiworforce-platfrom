@@ -44,6 +44,10 @@ import {
   dedupeAgainstState, hasSentInput, isStepFinished, jobDedupeKey, stepOf,
   type SourceExecutionState, type SourceStepRecord,
 } from "./sourceExecutionState.ts";
+import {
+  fuseSourceResults, type FusionSourceId, type FuseSourceOutcome,
+  type HiringEvidenceFusionState,
+} from "./hiringEvidenceFusion.ts";
 
 // ------------------------------------------------------------- activation ---
 
@@ -226,6 +230,13 @@ export interface SequentialInvokerDeps {
   /** Per-call cost estimate, for the plan's own ceiling. */
   costPerCall?: number;
   activationContext?: () => ActivationContext;
+  /**
+   * Fuse each source's rows into canonical evidence IMMEDIATELY after the attempt,
+   * rather than at task completion. Optional: without it the runtime behaves
+   * exactly as PR #108 shipped, so fusion is additive rather than a new
+   * precondition.
+   */
+  fusion?: { state: HiringEvidenceFusionState; workspaceId: string };
   log?: (msg: string, meta?: unknown) => void;
   now?: () => string;
 }
@@ -239,6 +250,15 @@ export interface SequentialCallOutcome {
   duplicateCount: number;
   reason: string | null;
   idempotencyKey: string | null;
+  /**
+   * Fused yield. Present only when a fusion state was supplied.
+   *
+   * `freshCount` above counts rows this task had not SEEN; this counts what they
+   * actually added to the evidence picture. Twenty-five duplicate postings are
+   * real rows and zero new events, and only the second number should ever look
+   * like progress to the plan.
+   */
+  fusion: FuseSourceOutcome | null;
 }
 
 /** The last outcome, for diagnostics. Set by the invoker on every call. */
@@ -268,7 +288,7 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       last = {
         ran: false, stepId: decision.stepId ?? null, actorKey: null,
         rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: decision.reason, idempotencyKey: null,
+        reason: decision.reason, idempotencyKey: null, fusion: null,
       };
       log("[sequential-source] no step executable", { reason: decision.reason });
       return [];
@@ -286,7 +306,7 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       last = {
         ran: false, stepId: step.stepId, actorKey: null,
         rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: `${prepared.status}:${prepared.reason}`, idempotencyKey: null,
+        reason: `${prepared.status}:${prepared.reason}`, idempotencyKey: null, fusion: null,
       };
       log("[sequential-source] step not runnable", { step: step.stepId, status: prepared.status });
       return [];
@@ -299,7 +319,7 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       last = {
         ran: false, stepId: step.stepId, actorKey: call.actorKey,
         rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: "already_paid", idempotencyKey: call.idempotencyKey,
+        reason: "already_paid", idempotencyKey: call.idempotencyKey, fusion: null,
       };
       log("[sequential-source] call already completed", { step: step.stepId, key: call.idempotencyKey });
       return [];
@@ -335,7 +355,7 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       last = {
         ran: true, stepId: step.stepId, actorKey: call.actorKey,
         rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: `provider_failed:${record.failure_category}`, idempotencyKey: call.idempotencyKey,
+        reason: `provider_failed:${record.failure_category}`, idempotencyKey: call.idempotencyKey, fusion: null,
       };
       log("[sequential-source] provider failed", { step: step.stepId, category: record.failure_category });
       return [];
@@ -350,10 +370,25 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
     deps.state.cumulative_cost += deps.costPerCall ?? 0;
     deps.state.checkpoint_at = now();
 
+    // FUSE NOW, not at task completion: the plan's next decision depends on what
+    // this source actually ADDED, and that is only knowable after reconciliation.
+    let fusion: FuseSourceOutcome | null = null;
+    const fusionSource = fusionSourceFor(step.capability);
+    if (deps.fusion && fusionSource) {
+      fusion = await fuseSourceResults({
+        state: deps.fusion.state,
+        source: fusionSource,
+        actorKey: call.actorKey,
+        rows: [...dedupe.fresh, ...dedupe.unidentified] as Array<Record<string, unknown>>,
+        workspaceId: deps.fusion.workspaceId,
+        observedAt: now(),
+      });
+    }
+
     last = {
       ran: true, stepId: step.stepId, actorKey: call.actorKey,
       rawCount: rows.length, freshCount: dedupe.fresh.length, duplicateCount: dedupe.duplicates.length,
-      reason: null, idempotencyKey: call.idempotencyKey,
+      reason: null, idempotencyKey: call.idempotencyKey, fusion,
     };
     log("[sequential-source] step executed", {
       step: step.stepId, actor: call.actorKey,
@@ -366,6 +401,16 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
   };
 
   return { invokeJobs, lastOutcome: () => last };
+}
+
+/** The ordered plan's capability ids ARE the fusion source ids. */
+function fusionSourceFor(capability: string): FusionSourceId | null {
+  switch (capability) {
+    case "yc_job_discovery": case "indeed_job_discovery": case "linkedin_job_discovery":
+    case "glassdoor_job_discovery": case "ats_job_verification":
+      return capability;
+    default: return null;
+  }
 }
 
 function asJob(row: unknown): Parameters<typeof jobDedupeKey>[0] {
