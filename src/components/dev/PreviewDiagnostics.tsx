@@ -43,6 +43,8 @@ export default function PreviewDiagnostics() {
             <Row k="auth" v={authLoading ? 'loading…' : user ? 'signed-in' : 'anon'} />
             <Row k="user" v={user?.id ? `${user.id.slice(0, 8)}…` : '—'} />
             <Row k="workspace" v={wsLoading ? 'loading…' : workspaceId ? `${workspaceId.slice(0, 8)}…` : '—'} />
+            <Row k="supabase" v={(import.meta.env.VITE_SUPABASE_URL ?? '').replace(/^https?:\/\//, '').split('.')[0]?.slice(-6) || '—'} />
+            <Row k="mode" v={import.meta.env.MODE ?? '—'} />
             {wsError && <Row k="ws.error" v={wsError.message.slice(0, 40)} />}
           </div>
         </div>

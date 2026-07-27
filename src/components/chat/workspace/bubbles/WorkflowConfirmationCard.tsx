@@ -102,8 +102,22 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
   const preview = qualifiedLead ? buildWorkflowPreview(payload.qualified_lead_contract) : null;
   const stages = qualifiedLead ? executionStages('qualified_lead_sourcing') : [];
 
+  // DEV-ONLY ROUTING-MISMATCH GUARD.
+  //
+  // If the user's original request implies qualified-lead sourcing — person-target
+  // verbs (founder/CEO/owner/decision-maker) OR an explicit "N qualified leads"
+  // quota — but the returned preview is account-shaped (isQualifiedLeadPayload
+  // returned false), we surface the mismatch instead of silently running the
+  // legacy account-signal workflow. Gated on DEV so it never blocks end users.
+  const originalRequest = String(payload.original_instruction ?? payload.goal ?? '');
+  const impliesQualifiedLead =
+    /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?)\b/i.test(originalRequest)
+    || /\b(qualified leads?|contact[-\s]?ready|verified contacts?)\b/i.test(originalRequest)
+    || /\b\d{1,3}\s+(?:qualified|contact[-\s]?ready|verified)?\s*leads?\b/i.test(originalRequest);
+  const routingMismatch = import.meta.env.DEV && impliesQualifiedLead && !qualifiedLead;
+
   const handleStart = () => {
-    if (blocked) return;
+    if (blocked || routingMismatch) return;
 
     // START SENDS THE ORIGINAL REQUEST.
     //
@@ -128,6 +142,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     setSubmitted(true);
   };
 
+
   if (cancelled) {
     return (
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2.5 text-[13px] text-[#7D8590] italic max-w-[420px]">
@@ -147,6 +162,19 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-emerald-500/[0.04] to-[#0d1117]/60 backdrop-blur-sm p-4 max-w-[440px] shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
+      {routingMismatch && (
+        <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-200 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-300 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-red-100">Routing mismatch detected (dev)</div>
+            <div className="mt-0.5 text-red-200/90">
+              This request requires qualified-lead sourcing, but an account-only workflow was returned.
+              Start is disabled to prevent running the legacy path. Check workspace / Claude-first flag / backend routing.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Title + agent team */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -320,7 +348,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
         <Button
           size="sm"
           onClick={handleStart}
-          disabled={blocked}
+          disabled={blocked || routingMismatch}
           className={`font-bold flex items-center gap-1.5 h-8 px-3.5 rounded-lg transition-colors ${
             blocked
               ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-white/[0.04]'
