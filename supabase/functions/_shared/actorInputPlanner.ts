@@ -362,3 +362,240 @@ export async function planActorInput(args: PlanArgs): Promise<PlanResult> {
 
 /** Test helper: reset the per-isolate AI call counter. */
 export function _resetPlannerBudget(): void { _plannerAiCalls = 0; }
+
+// ============================================================================
+// HIRING-SOURCE SEMANTIC COMPILATION (PR #106)
+// ============================================================================
+//
+// Extends THIS module — the existing compilation authority — rather than adding
+// a parallel compiler registry. Semantic intent in, verified Actor input out.
+//
+// Every field below exists in the Actor's audited input schema. Where a source
+// cannot express a requested filter the compiler REPAIRS deterministically and
+// records why, or refuses. It never invents a field to make an intent fit:
+// pretending Indeed supports a 45-day window, or that YC can filter by funding
+// stage, would produce input the provider silently ignores and a plan that lies
+// about what it searched.
+
+import {
+  resolveHiringSourceActor, type HiringSourceCapabilityId,
+} from "./hiringSourceCatalog.ts";
+import { canonicalJson as _canonicalJson, sha256Hex as _sha256Hex } from "./planHash.ts";
+
+/** What a planner may ask for. Provider-neutral by construction. */
+export interface HiringSourceIntent {
+  capability: HiringSourceCapabilityId;
+  /** Approved hiring-role aliases. NEVER decision-maker titles. */
+  titleAliases: string[];
+  roleFamily?: string | null;
+  geography?: string | null;
+  countryCode?: string | null;
+  postingWindowDays?: number | null;
+  employmentTypes?: string[] | null;
+  remotePolicy?: "any" | "remote" | "hybrid" | "onsite" | null;
+  candidateTarget?: number | null;
+  /** Required for ats_job_verification only. */
+  companies?: Array<{ ats?: string | null; slug: string }> | null;
+}
+
+export interface CompiledHiringSourceInput {
+  ok: true;
+  capability: HiringSourceCapabilityId;
+  actorKey: string;
+  input: Record<string, unknown>;
+  inputHash: string;
+  repairs: string[];
+  /** Redacted summary safe for diagnostics. */
+  summary: Record<string, unknown>;
+}
+export interface DeferredHiringSourceInput {
+  ok: false;
+  capability: HiringSourceCapabilityId;
+  status: "deferred" | "rejected";
+  reason: string;
+}
+export type HiringSourceCompileResult = CompiledHiringSourceInput | DeferredHiringSourceInput;
+
+/** Indeed exposes exactly these `datePosted` buckets. Nothing else is valid. */
+export const INDEED_DATE_POSTED_BUCKETS = [1, 3, 7, 14] as const;
+
+/**
+ * Map a requested window onto Indeed's supported buckets.
+ *
+ * Documented policy: 1 -> 1, 2-3 -> 3, 4-7 -> 7, 8-14 -> 14, >14 -> clamp to 14
+ * and record a repair. The clamp is NARROWER than requested, which is the safe
+ * direction: it under-reports recency rather than claiming a 45-day search the
+ * source never performed.
+ */
+export function indeedDatePostedBucket(days: number | null | undefined): { value: string; repair: string | null } {
+  if (days == null || !Number.isFinite(days) || days <= 0) return { value: "", repair: null };
+  const d = Math.floor(days);
+  if (d <= 1) return { value: "1", repair: null };
+  if (d <= 3) return { value: "3", repair: null };
+  if (d <= 7) return { value: "7", repair: null };
+  if (d <= 14) return { value: "14", repair: null };
+  return { value: "14", repair: `posting_window_clamped:${d}d->14d (indeed supports 1/3/7/14 only)` };
+}
+
+/** LinkedIn expresses recency in SECONDS, from a fixed set. */
+export function linkedinTimePostedRange(days: number | null | undefined): { value: string; repair: string | null } {
+  if (days == null || !Number.isFinite(days) || days <= 0) return { value: "", repair: null };
+  const d = Math.floor(days);
+  if (d <= 1) return { value: "86400", repair: null };
+  if (d <= 3) return { value: "259200", repair: null };
+  if (d <= 7) return { value: "604800", repair: null };
+  if (d <= 30) return { value: "2592000", repair: null };
+  return { value: "2592000", repair: `posting_window_clamped:${d}d->30d (linkedin supports 1/3/7/30 only)` };
+}
+
+/** YC's `roleFilter` enum. An unmapped family is omitted, never invented. */
+const YC_ROLE_FILTER = new Set([
+  "software-engineer", "designer", "product-manager", "data-scientist",
+  "sales", "marketing", "support", "operations", "recruiting", "science",
+]);
+export function ycRoleFilter(roleFamily: string | null | undefined): { value: string; repair: string | null } {
+  const r = String(roleFamily ?? "").trim().toLowerCase().replace(/[_\s]+/g, "-");
+  if (!r) return { value: "", repair: null };
+  if (YC_ROLE_FILTER.has(r)) return { value: r, repair: null };
+  if (/ops|operation/.test(r)) return { value: "operations", repair: `yc_role_mapped:${r}->operations` };
+  if (/sales|revenue|gtm/.test(r)) return { value: "sales", repair: `yc_role_mapped:${r}->sales` };
+  return { value: "", repair: `yc_role_unsupported:${r} (left unfiltered; keywords still applied)` };
+}
+
+const clampInt = (n: unknown, min: number, max: number, dflt: number): number => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return dflt;
+  return Math.max(min, Math.min(max, Math.floor(v)));
+};
+
+/**
+ * Compile semantic intent into verified Actor input.
+ *
+ * Resolution goes through the catalog, so a disabled provider refuses here
+ * rather than producing input nobody can run.
+ */
+export async function compileHiringSourceInput(intent: HiringSourceIntent): Promise<HiringSourceCompileResult> {
+  const resolved = resolveHiringSourceActor(intent.capability);
+  if (!resolved.ok) {
+    return { ok: false, capability: intent.capability, status: "rejected", reason: resolved.reason };
+  }
+  const { capability, actorKey } = resolved;
+  const repairs: string[] = [];
+
+  const titles = [...new Set((intent.titleAliases ?? []).map((t) => String(t ?? "").trim()).filter(Boolean))];
+  const query = titles.join(" OR ");
+  const cap = capability.operatingPolicy.maximumResultsPerCall;
+  const target = clampInt(intent.candidateTarget, 1, cap, Math.min(50, cap));
+  if (intent.candidateTarget != null && Number(intent.candidateTarget) > cap) {
+    repairs.push(`result_target_capped:${intent.candidateTarget}->${cap}`);
+  }
+
+  let input: Record<string, unknown>;
+
+  switch (intent.capability) {
+    case "indeed_job_discovery": {
+      if (!query) return { ok: false, capability: intent.capability, status: "rejected", reason: "missing_title_aliases" };
+      const dp = indeedDatePostedBucket(intent.postingWindowDays);
+      if (dp.repair) repairs.push(dp.repair);
+      const employment = (intent.employmentTypes ?? []).map((e) => String(e).toLowerCase());
+      const jobType = employment.includes("full_time") || employment.includes("fulltime") ? "fulltime" : "";
+      input = {
+        query,
+        location: intent.geography ?? "",
+        country: (intent.countryCode ?? "US").toUpperCase(),
+        maxItems: target,
+        jobType,
+        datePosted: dp.value,
+        includeDescription: true,
+      };
+      break;
+    }
+
+    case "linkedin_job_discovery": {
+      if (!query) return { ok: false, capability: intent.capability, status: "rejected", reason: "missing_title_aliases" };
+      const tp = linkedinTimePostedRange(intent.postingWindowDays);
+      if (tp.repair) repairs.push(tp.repair);
+      const remote = intent.remotePolicy;
+      input = {
+        query,
+        location: intent.geography ?? "",
+        timePostedRange: tp.value,
+        // REQUIRED by the schema (1-1000); Agentory caps far tighter.
+        jobsToFetch: target,
+        onSite: remote === "onsite" || remote === "any" || remote == null,
+        remote: remote === "remote" || remote === "any",
+        hybrid: remote === "hybrid" || remote === "any",
+        fullTime: true,
+        enrichCompanyDetails: true,
+      };
+      break;
+    }
+
+    case "glassdoor_job_discovery": {
+      // BOTH are required by the verified schema. Refuse rather than send junk.
+      if (!query) return { ok: false, capability: intent.capability, status: "rejected", reason: "glassdoor_requires_keywords" };
+      if (!intent.geography) return { ok: false, capability: intent.capability, status: "rejected", reason: "glassdoor_requires_location" };
+      const days = clampInt(intent.postingWindowDays ?? 30, 1, 365, 30);
+      input = {
+        keywords: query,
+        location: intent.geography,
+        daysOld: days,
+        limit: target,
+        sortBy: "date_desc",
+      };
+      break;
+    }
+
+    case "yc_job_discovery": {
+      const rf = ycRoleFilter(intent.roleFamily);
+      if (rf.repair) repairs.push(rf.repair);
+      // NO stage / batch / team-size fields: the Actor has none. Those remain
+      // Company Brain constraints applied downstream.
+      input = {
+        searchQuery: query,
+        roleFilter: rf.value,
+        locationFilter: intent.geography ?? "",
+        maxResults: target,
+      };
+      break;
+    }
+
+    case "ats_job_verification": {
+      const companies = (intent.companies ?? [])
+        .map((c) => ({ ats: c.ats ? String(c.ats).toLowerCase() : undefined, company: String(c.slug ?? "").trim() }))
+        .filter((c) => !!c.company);
+      // The Actor cannot verify without a company slug. This is a DEFERRAL, not
+      // a failure: the company may become identifiable after enrichment.
+      if (companies.length === 0) {
+        return {
+          ok: false, capability: intent.capability, status: "deferred",
+          reason: "ats_verification_requires_resolved_company_slug",
+        };
+      }
+      input = {
+        companies,
+        titleKeyword: titles[0] ?? "",
+        locationKeyword: intent.geography ?? "",
+        maxJobsPerCompany: clampInt(intent.candidateTarget, 1, 50, 10),
+        includeDescriptions: false,
+        outputProfile: "compact",
+      };
+      break;
+    }
+  }
+
+  const inputHash = await _sha256Hex(_canonicalJson({ actorKey, input }));
+  return {
+    ok: true, capability: intent.capability, actorKey, input, inputHash, repairs,
+    summary: {
+      capability: intent.capability,
+      actor_key: actorKey,
+      title_alias_count: titles.length,
+      geography: intent.geography ?? null,
+      result_target: target,
+      posting_window_days: intent.postingWindowDays ?? null,
+      repairs,
+      input_hash: inputHash,
+    },
+  };
+}
