@@ -102,8 +102,22 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
   const preview = qualifiedLead ? buildWorkflowPreview(payload.qualified_lead_contract) : null;
   const stages = qualifiedLead ? executionStages('qualified_lead_sourcing') : [];
 
+  // DEV-ONLY ROUTING-MISMATCH GUARD.
+  //
+  // If the user's original request implies qualified-lead sourcing — person-target
+  // verbs (founder/CEO/owner/decision-maker) OR an explicit "N qualified leads"
+  // quota — but the returned preview is account-shaped (isQualifiedLeadPayload
+  // returned false), we surface the mismatch instead of silently running the
+  // legacy account-signal workflow. Gated on DEV so it never blocks end users.
+  const originalRequest = String(payload.original_instruction ?? payload.goal ?? '');
+  const impliesQualifiedLead =
+    /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?)\b/i.test(originalRequest)
+    || /\b(qualified leads?|contact[-\s]?ready|verified contacts?)\b/i.test(originalRequest)
+    || /\b\d{1,3}\s+(?:qualified|contact[-\s]?ready|verified)?\s*leads?\b/i.test(originalRequest);
+  const routingMismatch = import.meta.env.DEV && impliesQualifiedLead && !qualifiedLead;
+
   const handleStart = () => {
-    if (blocked) return;
+    if (blocked || routingMismatch) return;
 
     // START SENDS THE ORIGINAL REQUEST.
     //
@@ -127,6 +141,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     });
     setSubmitted(true);
   };
+
 
   if (cancelled) {
     return (
