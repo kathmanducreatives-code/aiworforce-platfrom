@@ -73,3 +73,12 @@ Deno.test("A7 qualification behavior is untouched by the label", () => {
   assertEquals(a.status, b.status);
   assertEquals(a.next_actions, b.next_actions);
 });
+
+Deno.test("A8 run-agent threads source_type into the outcome report", async () => {
+  // The label helper is only useful if the ONE real caller passes the artifact
+  // type. Without this the production line silently falls back to "20 results",
+  // which is neutral but not the fix that was asked for.
+  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const call = /buildOutcomeReport\(\{[^}]*\}\)/.exec(src)?.[0] ?? "";
+  assertEquals(call.includes("source_type"), true, `buildOutcomeReport must receive source_type: ${call}`);
+});
