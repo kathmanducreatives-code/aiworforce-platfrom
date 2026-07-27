@@ -42,6 +42,8 @@ export const INTELLIGENCE_FLAGS = [
   "CONTENT_INTELLIGENCE_KERNEL",
   /** Phase 6. Cross-department mission handoffs. */
   "CROSS_DEPARTMENT_INTELLIGENCE",
+  /** PR #106. Mission-aware selection of approved hiring-source channels. */
+  "DYNAMIC_HIRING_SOURCE_PLANNING",
 ] as const;
 
 export type IntelligenceFlag = typeof INTELLIGENCE_FLAGS[number];
@@ -79,6 +81,7 @@ export interface IntelligenceFlagState {
   signal_intelligence_kernel: boolean;
   content_intelligence_kernel: boolean;
   cross_department_intelligence: boolean;
+  dynamic_hiring_source_planning: boolean;
 }
 
 /** Snapshot every flag at once, for diagnostics and for the all-off assertion. */
@@ -92,6 +95,7 @@ export function readIntelligenceFlags(read?: EnvReader): IntelligenceFlagState {
     signal_intelligence_kernel: isIntelligenceFlagEnabled("SIGNAL_INTELLIGENCE_KERNEL", read),
     content_intelligence_kernel: isIntelligenceFlagEnabled("CONTENT_INTELLIGENCE_KERNEL", read),
     cross_department_intelligence: isIntelligenceFlagEnabled("CROSS_DEPARTMENT_INTELLIGENCE", read),
+    dynamic_hiring_source_planning: isIntelligenceFlagEnabled("DYNAMIC_HIRING_SOURCE_PLANNING", read),
   };
 }
 

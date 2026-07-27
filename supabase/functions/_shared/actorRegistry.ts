@@ -22,6 +22,18 @@ export type ActorEntry = {
   compliance_level: string;
   missing_message?: string;
   required_env?: string;
+  /**
+   * TRUE for provider variants that may ONLY be selected through the semantic
+   * hiring-source catalog, never by `source_type` resolution.
+   *
+   * Several approved variants deliberately share a `source_type` with a
+   * long-standing entry (`indeed_jobs` with the legacy Curious Coder Indeed;
+   * `jobs` with the canonical LinkedIn jobs Actor) so that both normalize into the
+   * same canonical job-signal structure. `resolveActorForSourceType` returns the
+   * FIRST match, so without this marker adding a variant silently repoints the
+   * legacy path to a different vendor purely because of declaration order.
+   */
+  dynamic_source_only?: boolean;
 };
 
 // ---- Env helpers ---------------------------------------------------------
@@ -50,6 +62,126 @@ function actorId(envName: string, fallback: string | null): string | null {
 // ---- Registry ------------------------------------------------------------
 
 export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
+  // ---- APPROVED HIRING-SOURCE PROVIDER VARIANTS (PR #106) ----------------
+  //
+  // Actor IDs live HERE and only here. The semantic catalog
+  // (hiringSourceCatalog.ts) maps a capability like `indeed_job_discovery` to one
+  // of these KEYS, so a planner never sees an implementation id, a build number
+  // or a provider field name.
+  //
+  // COEXISTENCE, not replacement. `apify_indeed_jobs` (curious_coder) already
+  // exists and is wired into the legacy deterministic path. Its Actor id, source
+  // type and normalization are deliberately untouched: repointing it would swap
+  // the vendor behind a live path whose output shape differs. The approved
+  // Automation Lab Actor is registered as a SEPARATE variant that only the new
+  // semantic capability selects.
+  //
+  // All five default to DISABLED. Registering a source is not switching it on.
+  apify_indeed_jobs_automation_lab: {
+    key: "apify_indeed_jobs_automation_lab",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_INDEED_JOBS_AUTOMATION_LAB", "automation-lab/indeed-scraper"),
+    source_type: "indeed_jobs",
+    label: "Indeed Jobs Scraper (Automation Lab)",
+    // Default OFF: `required_env` is re-read at call time by
+    // isActorRuntimeEnabled, so enablement stays dynamic and testable.
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: ["broad role-first hiring discovery", "SMB and mid-market coverage", "companies outside startup ecosystems"],
+    not_for: ["individual people profiles", "private contact data"],
+    output_type: "job_posts_and_hiring_companies",
+    default_max_results: 50,
+    max_safe_results: 200,
+    compliance_level: "public_jobs",
+    required_env: "APIFY_ENABLE_INDEED_JOBS_AUTOMATION_LAB",
+    missing_message: "Indeed discovery (Automation Lab) is not enabled for this workspace.",
+  },
+  apify_linkedin_jobs_crawlworks: {
+    key: "apify_linkedin_jobs_crawlworks",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_JOBS_CRAWLWORKS", "crawlworks/linkedin-jobs-scraper"),
+    source_type: "jobs",
+    label: "LinkedIn Jobs Scraper (crawlworks)",
+    // Default OFF: `required_env` is re-read at call time by
+    // isActorRuntimeEnabled, so enablement stays dynamic and testable.
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: ["professional-company hiring discovery", "strong company LinkedIn identity", "remote and hybrid filters"],
+    not_for: ["individual people profiles", "private contact data"],
+    output_type: "job_posts_and_hiring_companies",
+    default_max_results: 25,
+    max_safe_results: 200,
+    compliance_level: "public_jobs",
+    required_env: "APIFY_ENABLE_LINKEDIN_JOBS_CRAWLWORKS",
+    missing_message: "LinkedIn job discovery (crawlworks) is not enabled for this workspace.",
+  },
+  apify_glassdoor_jobs: {
+    key: "apify_glassdoor_jobs",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_GLASSDOOR_JOBS", "valig/glassdoor-jobs-scraper"),
+    source_type: "jobs",
+    label: "Glassdoor Jobs Scraper",
+    // Default OFF: `required_env` is re-read at call time by
+    // isActorRuntimeEnabled, so enablement stays dynamic and testable.
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: ["inexpensive recall expansion", "companies missed by primary sources"],
+    not_for: ["individual people profiles", "primary discovery when precision matters"],
+    output_type: "job_posts_and_hiring_companies",
+    default_max_results: 50,
+    max_safe_results: 200,
+    compliance_level: "public_jobs",
+    required_env: "APIFY_ENABLE_GLASSDOOR_JOBS",
+    missing_message: "Glassdoor job discovery is not enabled for this workspace.",
+  },
+  apify_yc_jobs: {
+    key: "apify_yc_jobs",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_YC_JOBS", "parsebird/yc-jobs-scraper"),
+    source_type: "jobs",
+    label: "Y Combinator Jobs Scraper",
+    // Default OFF: `required_env` is re-read at call time by
+    // isActorRuntimeEnabled, so enablement stays dynamic and testable.
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: ["high-precision startup hiring discovery", "early-stage SaaS", "founder-led startup teams"],
+    not_for: ["local businesses", "enterprise discovery", "non-startup verticals"],
+    output_type: "job_posts_and_hiring_companies",
+    default_max_results: 100,
+    max_safe_results: 200,
+    compliance_level: "public_jobs",
+    required_env: "APIFY_ENABLE_YC_JOBS",
+    missing_message: "YC job discovery is not enabled for this workspace.",
+  },
+  apify_ats_verification: {
+    key: "apify_ats_verification",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_ATS_VERIFICATION", "bovi/greenhouse-lever-ashby-job-scraper"),
+    source_type: "jobs",
+    label: "Greenhouse / Lever / Ashby ATS Verification",
+    // Default OFF: `required_env` is re-read at call time by
+    // isActorRuntimeEnabled, so enablement stays dynamic and testable.
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: ["verifying an opening is still live", "canonical requisition evidence", "de-duplicating stale aggregator signals"],
+    not_for: ["discovery without a known company", "individual people profiles"],
+    output_type: "job_posts_and_hiring_companies",
+    default_max_results: 50,
+    max_safe_results: 200,
+    compliance_level: "public_jobs",
+    required_env: "APIFY_ENABLE_ATS_VERIFICATION",
+    missing_message: "ATS job verification is not enabled for this workspace.",
+  },
   apify_jobs: {
     key: "apify_jobs",
     tool_name: "source_with_apify",
@@ -472,9 +604,24 @@ export function getEnabledActors(): ActorEntry[] {
   return Object.values(ACTOR_REGISTRY).filter(isActorRuntimeEnabled);
 }
 
+/**
+ * The canonical Actor for a `source_type`.
+ *
+ * Variants marked `dynamic_source_only` are SKIPPED. They are reachable only
+ * through the semantic hiring-source catalog, which resolves them by registry key.
+ *
+ * Without that skip this function is order-dependent in a dangerous way: it
+ * returns the first declaration match, so registering the Automation Lab Indeed
+ * variant above the legacy Curious Coder entry silently changes which vendor
+ * `indeed_jobs` resolves to — and registering the LinkedIn/Glassdoor/YC/ATS
+ * variants above `apify_jobs` does the same to the canonical `jobs` path that
+ * company-first sourcing depends on. Coexistence has to survive declaration order,
+ * not depend on it.
+ */
 export function resolveActorForSourceType(source_type: string | null | undefined): ActorEntry | null {
   if (!source_type) return null;
   for (const a of Object.values(ACTOR_REGISTRY)) {
+    if (a.dynamic_source_only) continue;
     if (a.source_type === source_type) return a;
   }
   return null;
