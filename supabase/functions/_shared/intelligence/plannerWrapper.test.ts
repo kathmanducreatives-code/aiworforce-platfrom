@@ -236,3 +236,42 @@ Deno.test("20.C the same input hashes identically across runs", async () => {
   assertEquals(a.diagnostics.input_hash, b.diagnostics.input_hash);
   assertEquals(a.diagnostics.output_hash, b.diagnostics.output_hash);
 });
+
+// ============================================================ provider routing ===
+
+Deno.test("PR1 the planner asks for Anthropic explicitly", async () => {
+  // aiProvider maps `orchestration_plan` to a Gemini model and tries the Lovable
+  // gateway FIRST whenever LOVABLE_API_KEY is set. Both keys are configured in the
+  // real environments, so without an explicit preference the "Claude-first"
+  // planner would be authored by Gemini and report provider "lovable-ai".
+  const seen: Array<Record<string, unknown>> = [];
+  const capture: GenerateJsonFn = async (opts) => {
+    seen.push(opts as unknown as Record<string, unknown>);
+    return ok(GOOD_RESPONSE);
+  };
+
+  const out = await runPlanner<TestStrategy>({
+    mission, context: emptyMissionContext("ws-1"),
+    capabilities: plannerCapabilityMenu({ department: "leads", environment: "test" }),
+    outputSchema: { type: "object" }, validateStrategy, fallbackStrategy: FALLBACK,
+    generate: capture, enabled: true, workspaceId: "ws-1",
+  } as PlannerRunInput<TestStrategy>);
+
+  assert(out.ok, "precondition: the mocked plan is accepted");
+  assertEquals(seen.length, 1, "exactly one model call");
+  assertEquals(seen[0].preferredProvider, "anthropic", "the planner must request Anthropic");
+  assertEquals(seen[0].taskType, "orchestration_plan");
+  assertEquals(seen[0].jsonMode, true);
+});
+
+Deno.test("PR2 the preference does not become a hard requirement", async () => {
+  // A provider failure must still fall back, not hang or throw: asking for
+  // Anthropic reorders attempts, it does not remove the others.
+  const out = await runPlanner<TestStrategy>({
+    mission, context: emptyMissionContext("ws-1"),
+    capabilities: plannerCapabilityMenu({ department: "leads", environment: "test" }),
+    outputSchema: { type: "object" }, validateStrategy, fallbackStrategy: FALLBACK,
+    generate: async () => fail("no_provider"), enabled: true, workspaceId: "ws-1",
+  } as PlannerRunInput<TestStrategy>);
+  assertFalse(out.ok, "a provider failure still falls back deterministically");
+});

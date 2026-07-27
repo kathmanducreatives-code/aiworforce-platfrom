@@ -281,6 +281,19 @@ export async function runPlanner<TStrategy>(
     withTimeout(
       guarded({
         taskType: "orchestration_plan",
+        // CLAUDE-FIRST MEANS CLAUDE.
+        //
+        // `orchestration_plan` maps to a Gemini model on the Lovable gateway, and
+        // aiProvider tries Lovable FIRST whenever LOVABLE_API_KEY is present. Both
+        // keys are configured, so without this the Agentory planner — the whole
+        // point of which is that CLAUDE authors the strategy — would silently be
+        // authored by Gemini, and the diagnostics would report `lovable-ai`.
+        //
+        // This asks for Anthropic explicitly. It is a PREFERENCE, not a
+        // requirement: `wantsAnthropicFirst` only reorders the attempts when
+        // ANTHROPIC_API_KEY exists, so an environment without it still falls
+        // through to the existing providers rather than losing planning entirely.
+        preferredProvider: "anthropic",
         systemPrompt: assembled.systemPrompt,
         messages: [{ role: "user", content: userMessage }],
         temperature: PLANNER_TEMPERATURE,
