@@ -162,6 +162,19 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-emerald-500/[0.04] to-[#0d1117]/60 backdrop-blur-sm p-4 max-w-[440px] shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
+      {routingMismatch && (
+        <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-200 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-300 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-red-100">Routing mismatch detected (dev)</div>
+            <div className="mt-0.5 text-red-200/90">
+              This request requires qualified-lead sourcing, but an account-only workflow was returned.
+              Start is disabled to prevent running the legacy path. Check workspace / Claude-first flag / backend routing.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Title + agent team */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
