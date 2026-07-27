@@ -258,11 +258,14 @@ Deno.test("33.F approval requirements are visible in diagnostics", () => {
 
 // ---- the flag list itself --------------------------------------------------
 
-Deno.test("34.A the eight Phase 1 flags are all declared", () => {
+Deno.test("34.A every intelligence flag is declared", () => {
+  // PR #106 added DYNAMIC_HIRING_SOURCE_PLANNING through this same resolver
+  // rather than a second parser, so the list grows here by design.
   const expected: IntelligenceFlag[] = [
     "CLAUDE_FIRST_LEAD_PLANNING", "CLAUDE_LEAD_REPLANNING", "SEMANTIC_TITLE_VALIDATION",
     "GLOBAL_ROLE_PLANNING", "LEAD_STRATEGY_MEMORY", "SIGNAL_INTELLIGENCE_KERNEL",
     "CONTENT_INTELLIGENCE_KERNEL", "CROSS_DEPARTMENT_INTELLIGENCE",
+    "DYNAMIC_HIRING_SOURCE_PLANNING",
   ];
   assertEquals([...INTELLIGENCE_FLAGS].sort(), expected.sort());
 });
