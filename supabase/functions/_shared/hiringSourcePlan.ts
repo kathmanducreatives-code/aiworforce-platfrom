@@ -295,16 +295,117 @@ export type ApprovedSourceNextAction =
   | { action: "stop_valid_exhaustion"; reason: string };
 
 /**
+ * What the RUNTIME knows that the plan cannot.
+ *
+ * A plan is a graph of intentions; this is what actually happened to it. The two
+ * are separate because the plan is authored once and the state changes with every
+ * attempt — but a decision made from the plan alone can name a step that has
+ * already finished, which is a decision nobody can execute.
+ *
+ * Every field is optional. Omitting the whole context is the pre-PR-#110 behavior,
+ * exactly, which is what keeps existing callers correct.
+ */
+export interface SourceRuntimeState {
+  /** Steps that ran and finished: completed, exhausted, failed or quota-inactive. */
+  finishedStepIds?: string[];
+  /** Broadening rungs already spent, per step. Never reoffered. */
+  broadeningUsedByStep?: Record<string, string[]>;
+  /**
+   * Rungs known to compile to a provider input this step ALREADY SENT.
+   *
+   * Compilation is async and belongs to the runtime, so the fact is supplied
+   * rather than derived here — this module stays pure. A rung listed here is
+   * ineligible: re-sending an identical input pays again for a call whose answer
+   * is already in hand.
+   */
+  duplicateBroadeningByStep?: Record<string, string[]>;
+  providerCallsUsed?: number;
+  cumulativeCostUsd?: number;
+}
+
+/** Has this step already finished, as far as the runtime is concerned? */
+export function stepIsFinished(runtime: SourceRuntimeState | undefined, stepId: string): boolean {
+  return (runtime?.finishedStepIds ?? []).includes(stepId);
+}
+
+/**
+ * The rungs of this step's ladder that may still be spent.
+ *
+ * Three exclusions, and they are different questions: the observation reports what
+ * THIS attempt already used, the runtime reports what the STEP has used across
+ * attempts, and the duplicate map reports what would compile to a call already
+ * paid for. A rung has to clear all three.
+ */
+export function eligibleBroadening(
+  step: OrderedSourceStep,
+  observation: SourceStepObservation,
+  runtime?: SourceRuntimeState,
+): SafeBroadeningAction[] {
+  const used = new Set<string>([
+    ...(observation.broadeningActionsUsed ?? []),
+    ...(runtime?.broadeningUsedByStep?.[step.stepId] ?? []),
+    ...(runtime?.duplicateBroadeningByStep?.[step.stepId] ?? []),
+  ]);
+  return (step.broadeningLadder ?? []).filter((b) => isSafeBroadeningAction(b) && !used.has(b.action));
+}
+
+/**
+ * The next step that can actually run, following the ORDERED CHAIN.
+ *
+ * Finished steps are stepped over rather than stopped at — a completed second
+ * source should not end a run that still has a third — but only along the chain
+ * the plan itself authored. There is no search for "some later step that looks
+ * eligible", because that is precisely the arbitrary jump the ordered contract
+ * exists to prevent.
+ *
+ * Returns null when the chain runs out, which is what makes honest exhaustion
+ * reachable instead of an advance nobody can execute.
+ */
+export function nextExecutableStepId(
+  plan: OrderedHiringSourcePlan,
+  from: OrderedSourceStep,
+  runtime?: SourceRuntimeState,
+): string | null {
+  const byId = new Map(plan.steps.map((s) => [s.stepId, s]));
+  const seen = new Set<string>([from.stepId]);
+  let candidateId = from.nextStepId;
+
+  while (candidateId) {
+    // The plan is validated acyclic, but a checkpoint can outlive the validation
+    // that produced it, so the walk refuses to visit the same step twice.
+    if (seen.has(candidateId)) return null;
+    seen.add(candidateId);
+
+    const candidate = byId.get(candidateId);
+    if (!candidate) return null;
+    if (!stepIsFinished(runtime, candidate.stepId)) return candidate.stepId;
+    candidateId = candidate.nextStepId;
+  }
+  return null;
+}
+
+/**
  * The deterministic next move.
  *
  * Agentory decides this, not the planner — a recommendation is only ever compared
  * against this result. The order of the checks is the policy: quota first (so a
  * satisfied request never spends another cent), then broadening within the current
  * source (cheaper than a new vendor), then advancing, then honest exhaustion.
+ *
+ * `runtime` makes the decision STATE-AWARE. Without it this consulted the plan
+ * only, and would happily return `advance_to_next_source` toward a step already
+ * marked completed or exhausted. The executor refused that step, so no duplicate
+ * work was ever paid for — but the decision was still one nobody could carry out,
+ * and a run whose only remaining instruction is impossible is a run that has
+ * stalled without saying so. With the runtime supplied, every action this returns
+ * is one the current state can actually execute.
+ *
+ * The parameter is optional so existing callers keep their exact behavior.
  */
 export function decideNextAction(
   plan: OrderedHiringSourcePlan,
   observation: SourceStepObservation,
+  runtime?: SourceRuntimeState,
 ): ApprovedSourceNextAction {
   if (observation.totalContactReady >= plan.completionCondition.target) {
     return { action: "stop_quota_reached" };
@@ -316,18 +417,30 @@ export function decideNextAction(
   if (observation.remainingBudgetUsd <= 0) {
     return { action: "stop_valid_exhaustion", reason: "budget_exhausted" };
   }
+  if (runtime?.cumulativeCostUsd != null && runtime.cumulativeCostUsd >= plan.maximumEstimatedCostUsd) {
+    return { action: "stop_valid_exhaustion", reason: "budget_exhausted" };
+  }
+  // A step nobody can pay to call is not an option, so the ceiling ends the run
+  // here rather than producing an advance the executor would refuse.
+  if (runtime?.providerCallsUsed != null && runtime.providerCallsUsed >= plan.maximumProviderCalls) {
+    return { action: "stop_valid_exhaustion", reason: "maximum_provider_calls_reached" };
+  }
 
   // Broaden the CURRENT source before paying a new vendor — but only with a rung
   // of this step's own ladder that has not been used yet, and only while the
   // attempt budget allows.
-  if (!observation.sourceExhausted && observation.attempt < plan.maximumBroadeningAttempts) {
-    const used = new Set(observation.broadeningActionsUsed);
-    const next = step.broadeningLadder.find((b) => !used.has(b.action));
+  if (
+    !observation.sourceExhausted
+    && !stepIsFinished(runtime, step.stepId)
+    && observation.attempt < plan.maximumBroadeningAttempts
+  ) {
+    const next = eligibleBroadening(step, observation, runtime)[0];
     if (next) return { action: "broaden_current_source", stepId: step.stepId, broadeningAction: next };
   }
 
-  if (step.nextStepId && plan.steps.some((s) => s.stepId === step.nextStepId)) {
-    return { action: "advance_to_next_source", currentStepId: step.stepId, nextStepId: step.nextStepId };
+  const nextStepId = nextExecutableStepId(plan, step, runtime);
+  if (nextStepId) {
+    return { action: "advance_to_next_source", currentStepId: step.stepId, nextStepId };
   }
 
   return { action: "stop_valid_exhaustion", reason: "all_approved_steps_exhausted" };

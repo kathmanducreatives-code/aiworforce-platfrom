@@ -36,7 +36,7 @@ import {
 } from "./actorInputPlanner.ts";
 import {
   decideNextAction, isSafeBroadeningAction,
-  type OrderedHiringSourcePlan, type OrderedSourceStep,
+  type OrderedHiringSourcePlan, type OrderedSourceStep, type SourceRuntimeState,
   type SourceStepObservation, type ApprovedSourceNextAction,
 } from "./hiringSourcePlan.ts";
 import { resolveHiringSourceActor } from "./hiringSourceCatalog.ts";
@@ -437,6 +437,73 @@ export function safeFailureCategory(e: unknown): string {
   return "provider_error";
 }
 
+// --------------------------------------------------------- runtime state ----
+
+/**
+ * Project the execution state into the shape the deterministic authority reads.
+ *
+ * A TRANSLATION, not a second store: every value is read straight off the
+ * checkpoint. It exists so `hiringSourcePlan` can stay pure and free of any
+ * dependency on the execution state's own shape, while still deciding from what
+ * actually happened rather than from the plan alone.
+ */
+export function runtimeStateFor(state: SourceExecutionState): SourceRuntimeState {
+  const broadeningUsedByStep: Record<string, string[]> = {};
+  for (const s of state.steps) {
+    if (s.broadening_used.length > 0) broadeningUsedByStep[s.step_id] = [...s.broadening_used];
+  }
+  return {
+    finishedStepIds: state.steps.filter(isStepFinished).map((s) => s.step_id),
+    broadeningUsedByStep,
+    providerCallsUsed: state.provider_calls,
+    cumulativeCostUsd: state.cumulative_cost,
+  };
+}
+
+/**
+ * Add the rungs that would compile to an input this step already sent.
+ *
+ * Separate from `runtimeStateFor`, and asynchronous, because compilation runs
+ * through the existing Actor input planner. Callers that cannot await — the
+ * synchronous `applyObservation` — simply do without it and lose nothing they had
+ * before; the duplicate is still caught at `prepareStepCall` when the call is
+ * assembled. Callers that CAN await get the stronger guarantee: a rung whose call
+ * has already been paid for is never even offered.
+ */
+export async function withDuplicateBroadening(
+  runtime: SourceRuntimeState,
+  args: { taskId: string; plan: OrderedHiringSourcePlan; state: SourceExecutionState; stepId: string },
+): Promise<SourceRuntimeState> {
+  const step = args.plan.steps.find((s) => s.stepId === args.stepId);
+  const record = stepOf(args.state, args.stepId);
+  if (!step || !record || record.input_hashes.length === 0) return runtime;
+
+  const duplicates: string[] = [];
+  for (const rung of step.broadeningLadder ?? []) {
+    if (!isSafeBroadeningAction(rung)) continue;
+    const prepared = await prepareStepCall({
+      taskId: args.taskId, step, state: args.state, broadening: broadeningForCompile(rung),
+    });
+    if (!prepared.ok && prepared.status === "duplicate_input") duplicates.push(rung.action);
+  }
+  if (duplicates.length === 0) return runtime;
+
+  return {
+    ...runtime,
+    duplicateBroadeningByStep: { ...(runtime.duplicateBroadeningByStep ?? {}), [args.stepId]: duplicates },
+  };
+}
+
+/** The compile-time view of a rung, in the shape `prepareStepCall` accepts. */
+function broadeningForCompile(b: import("./hiringSourcePlan.ts").SafeBroadeningAction) {
+  switch (b.action) {
+    case "add_approved_role_aliases": return { action: b.action, aliases: b.aliases };
+    case "increase_result_target": return { action: b.action, candidateTarget: b.candidateTarget };
+    case "extend_recency_window": return { action: b.action, postingWindowDays: b.postingWindowDays };
+    default: return { action: b.action };
+  }
+}
+
 // ------------------------------------------------------------ observation ---
 
 export interface ApplyObservationResult {
@@ -476,7 +543,9 @@ export function applyObservation(
   state.total_contact_ready = observation.totalContactReady;
   state.remaining_quota = Math.max(0, plan.completionCondition.target - observation.totalContactReady);
 
-  const action = decided ?? decideNextAction(plan, observation);
+  // STATE-AWARE. The checkpoint is projected into the deterministic authority, so
+  // it can never advance toward a step this task has already finished.
+  const action = decided ?? decideNextAction(plan, observation, runtimeStateFor(state));
   state.pending_next_action = action.action;
 
   switch (action.action) {
