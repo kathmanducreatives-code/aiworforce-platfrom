@@ -22,6 +22,10 @@ import { sequentialJobsInvoker, actorKeyForCapability, sourceExecutionDiagnostic
   type ActivationContext, type SequentialCallOutcome } from "./sequentialSourceRuntime.ts";
 import type { EnvReader } from "./intelligence/intelligenceFlags.ts";
 import { newFusionState, fusionDiagnostics, type HiringEvidenceFusionState } from "./hiringEvidenceFusion.ts";
+import {
+  newFeedbackLedger, SOURCE_FEEDBACK_VERSION, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK,
+  type SourceFeedbackLedger,
+} from "./sourceFeedbackContract.ts";
 
 export type InvokeJobsFn = (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
 
@@ -35,6 +39,8 @@ export interface SequentialSourceBridgeInput {
   restoredState?: SourceExecutionState | null;
   /** Restored fusion slice from the same checkpoint, when resuming. */
   restoredFusion?: HiringEvidenceFusionState | null;
+  /** Restored feedback ledger from the same checkpoint, when resuming. */
+  restoredFeedback?: SourceFeedbackLedger | null;
   costPerCall?: number;
   activationContext?: () => ActivationContext;
   readEnv?: EnvReader;
@@ -50,6 +56,14 @@ export interface SequentialSourceBridgeResult {
   state: SourceExecutionState | null;
   /** Canonical fused evidence for this task. Null when disabled. */
   fusion: HiringEvidenceFusionState | null;
+  /**
+   * The bounded-feedback ledger for this task. Null when disabled.
+   *
+   * Carried here so it is restored and checkpointed with the step state and the
+   * fused evidence it was derived from — a resumed run must not hold a decision
+   * that disagrees with the observation that produced it.
+   */
+  feedback: SourceFeedbackLedger | null;
   lastOutcome: () => SequentialCallOutcome | null;
 }
 
@@ -65,7 +79,7 @@ export async function applySequentialSourceExecution(
 ): Promise<SequentialSourceBridgeResult> {
   const inert = (reason: string): SequentialSourceBridgeResult => ({
     invokeJobs: input.invokeJobs, enabled: false, reason,
-    plan: null, state: null, fusion: null, lastOutcome: () => null,
+    plan: null, state: null, fusion: null, feedback: null, lastOutcome: () => null,
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
@@ -100,6 +114,14 @@ export async function applySequentialSourceExecution(
   // evidence it was derived from.
   const fusion = input.restoredFusion ?? newFusionState();
 
+  // The feedback ledger travels with them. A restored ledger from an older
+  // contract version is discarded rather than trusted: its request keys were
+  // computed under a different policy and would suppress a call they never
+  // actually answered.
+  const feedback = input.restoredFeedback?.version === SOURCE_FEEDBACK_VERSION
+    ? input.restoredFeedback
+    : newFeedbackLedger();
+
   const handle = sequentialJobsInvoker({
     taskId: input.taskId,
     plan: approved,
@@ -118,6 +140,7 @@ export async function applySequentialSourceExecution(
     plan: approved,
     state,
     fusion,
+    feedback,
     lastOutcome: handle.lastOutcome,
   };
 }
@@ -132,5 +155,15 @@ export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Re
     enablement_reason: r.reason,
     ...sourceExecutionDiagnostics(r.plan, r.state, r.lastOutcome()),
     ...(r.fusion ? { evidence_fusion: fusionDiagnostics(r.fusion, r.lastOutcome()?.fusion ?? null) } : {}),
+    // Ledger-level only. The per-checkpoint record is reported by the feedback
+    // runtime itself, which is the only thing that has one.
+    ...(r.feedback ? {
+      source_feedback: {
+        calls_used: r.feedback.callsUsed,
+        calls_remaining: Math.max(0, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK - r.feedback.callsUsed),
+        checkpoints: r.feedback.checkpoints.length,
+        statuses: r.feedback.checkpoints.map((c) => c.status),
+      },
+    } : {}),
   };
 }

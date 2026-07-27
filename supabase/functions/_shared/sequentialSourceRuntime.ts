@@ -453,11 +453,19 @@ export interface ApplyObservationResult {
  * consulted here: a source that returned four hundred jobs and zero contactable
  * founders has not succeeded, and treating volume as success is what makes a run
  * keep paying for the wrong thing.
+ *
+ * `decided` lets a caller supply an action that has ALREADY been chosen and
+ * validated — PR #110's bounded feedback does, having compared a recommendation
+ * against `decideNextAction`'s own answer. It changes only WHICH approved action is
+ * folded in; every state transition below is identical either way, so there is one
+ * place that knows what "advance" does to a checkpoint. Omitting it is the default
+ * and is byte-for-byte today's behavior.
  */
 export function applyObservation(
   plan: OrderedHiringSourcePlan,
   state: SourceExecutionState,
   observation: SourceStepObservation,
+  decided?: ApprovedSourceNextAction,
 ): ApplyObservationResult {
   const record = stepOf(state, observation.stepId);
   if (record) {
@@ -468,7 +476,7 @@ export function applyObservation(
   state.total_contact_ready = observation.totalContactReady;
   state.remaining_quota = Math.max(0, plan.completionCondition.target - observation.totalContactReady);
 
-  const action = decideNextAction(plan, observation);
+  const action = decided ?? decideNextAction(plan, observation);
   state.pending_next_action = action.action;
 
   switch (action.action) {
