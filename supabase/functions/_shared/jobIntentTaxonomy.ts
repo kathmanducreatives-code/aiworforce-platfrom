@@ -255,12 +255,71 @@ const US_STATES = [
   "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
 ];
 
-/** Geography named by the request. Never invented from the vertical. */
+// UNITED STATES — UNAMBIGUOUS FORMS ONLY.
+//
+// The previous alternation was `/\b(united states|usa|u\.s\.|\bus\b)\b/i`. Under
+// `/i`, `\bus\b` matches the PRONOUN, so:
+//
+//   "Show us founders in Germany"   ->  ["United States"]
+//   "Find us five leads in France"  ->  ["United States"]
+//
+// The request named another country, and the parser asserted a country the user
+// never mentioned. Under the deterministic runtime that silently narrows a search;
+// under Claude-first planning it hands the planner a confident false premise.
+//
+// Lowercase `us` is therefore no longer a United-States signal at all. It is a
+// common English pronoun, and no amount of surrounding context makes it reliable.
+// Only forms that cannot be an ordinary word are accepted.
+
+/** Forms that are unambiguous regardless of case. */
+const US_UNAMBIGUOUS = [
+  /\bunited states of america\b/i,
+  /\bunited states\b/i,
+  /\bu\.s\.a\./i,
+  /\bu\.s\./i,
+  /\busa\b/i,
+];
+
+/**
+ * Standalone uppercase `US`, read from the ORIGINAL-CASE text.
+ *
+ * Case-sensitive on purpose: `US` is the country, `us` is the pronoun, and the
+ * distinction is exactly the information the old `/i` flag threw away. Letter
+ * look-arounds (rather than `\b`) so `US-based` matches while `USB` does not.
+ */
+const US_UPPERCASE_STANDALONE = /(?<![A-Za-z])US(?![A-Za-z])/;
+
+/**
+ * True when the text carries no lowercase letters at all.
+ *
+ * In SHOUTED text every word is uppercase, so `US` no longer distinguishes the
+ * country from the pronoun — "FIND US FOUNDERS IN GERMANY" would reintroduce the
+ * very bug this function exists to remove. The uppercase signal is only trusted
+ * when the author was actually using case to mean something.
+ */
+function isAllUpperCase(text: string): boolean {
+  return /[A-Z]/.test(text) && !/[a-z]/.test(text);
+}
+
+/** Does the text name the United States in an unambiguous way? */
+export function mentionsUnitedStates(text: string): boolean {
+  const t = String(text ?? "");
+  if (US_UNAMBIGUOUS.some((re) => re.test(t))) return true;
+  return !isAllUpperCase(t) && US_UPPERCASE_STANDALONE.test(t);
+}
+
+/**
+ * Geography named by the request. Never invented from the vertical.
+ *
+ * Still US-only — full worldwide normalization is a later phase. What changed is
+ * that a NON-US request now correctly resolves to `[]` (nothing named that this
+ * parser understands) instead of to the United States.
+ */
 export function inferGeography(text: string): string[] {
   const t = String(text ?? "");
   const found: string[] = [];
   for (const s of US_STATES) if (new RegExp(`\\b${s}\\b`, "i").test(t)) found.push(s);
-  if (found.length === 0 && /\b(united states|usa|u\.s\.|\bus\b)\b/i.test(t)) found.push("United States");
+  if (found.length === 0 && mentionsUnitedStates(t)) found.push("United States");
   return found;
 }
 

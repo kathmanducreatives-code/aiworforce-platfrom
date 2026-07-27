@@ -5,8 +5,10 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   INTELLIGENCE_FLAGS, parseIntelligenceFlag, isIntelligenceFlagEnabled,
   readIntelligenceFlags, allIntelligenceFlagsOff, GEOGRAPHY_GATED_FLAGS,
-  GEOGRAPHY_GATE_NOTE, isGeographyGated, type IntelligenceFlag,
+  GEOGRAPHY_GATE_NOTE, isGeographyGated, GEOGRAPHY_GATE_CLEARED, geographyGateSatisfied,
+  type IntelligenceFlag,
 } from "./intelligenceFlags.ts";
+import { inferGeography } from "../jobIntentTaxonomy.ts";
 import {
   buildPlannerDiagnostics, auditRedaction, extractTokenUsage, attachDiagnostics,
   diagnosticsHash, PLANNER_DIAGNOSTICS_KEY,
@@ -69,6 +71,24 @@ Deno.test("31.A the geography gate is documented and names the planning flags", 
   assert(isGeographyGated("GLOBAL_ROLE_PLANNING"));
   assertFalse(isGeographyGated("CONTENT_INTELLIGENCE_KERNEL"));
   for (const f of GEOGRAPHY_GATED_FLAGS) assert((INTELLIGENCE_FLAGS as readonly string[]).includes(f));
+});
+
+Deno.test("31.B the geography gate is CLEARED, and clearing it enables nothing", () => {
+  assert(GEOGRAPHY_GATE_CLEARED, "Phase 2 removed the ambiguous-`us` defect");
+  assert(GEOGRAPHY_GATE_NOTE.startsWith("CLEARED"));
+  for (const flag of INTELLIGENCE_FLAGS) {
+    assert(geographyGateSatisfied(flag), `${flag} still reports a geography block`);
+  }
+  // The prerequisite is satisfied; the flags themselves are still OFF.
+  assert(allIntelligenceFlagsOff(NO_ENV),
+    "clearing a prerequisite must never turn a flag on");
+});
+
+Deno.test("31.C the parser itself no longer invents the United States", () => {
+  // The behavioral proof behind the cleared gate. Full coverage lives in
+  // _shared/geographyAmbiguity.test.ts; this is the flag-side assertion.
+  assertEquals(inferGeography("Show us founders in Germany"), []);
+  assertEquals(inferGeography("Find founders in the United States"), ["United States"]);
 });
 
 // ---- behavior preservation -------------------------------------------------
@@ -135,13 +155,27 @@ Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-
   }
 });
 
-Deno.test("32.E the kernel is not imported BY any edge function yet", async () => {
+Deno.test("32.E only run-agent imports the kernel, and only through the gated bridge", async () => {
   const root = new URL("../../", import.meta.url);   // supabase/functions/
-  for (const fn of ["run-agent", "orchestrate", "pilot-chat"]) {
+
+  // Phase 2 deliberately wires ONE entry point into the Lead path. Orchestrate and
+  // pilot-chat remain untouched, so the blast radius stays a single function.
+  for (const fn of ["orchestrate", "pilot-chat"]) {
     const src = await Deno.readTextFile(new URL(`${fn}/index.ts`, root));
-    assertFalse(src.includes("intelligence/"),
-      `${fn} already imports the kernel — Phase 1 must remain unwired`);
+    assertFalse(src.includes("intelligence/"), `${fn} must not import the kernel`);
   }
+
+  const runAgent = await Deno.readTextFile(new URL("run-agent/index.ts", root));
+  const kernelImports = [...runAgent.matchAll(/from "\.\.\/_shared\/intelligence\/[^"]+"/g)].map((m) => m[0]);
+  assertEquals(kernelImports.length, 1, `run-agent must import exactly one kernel module, got: ${kernelImports.join(", ")}`);
+  assert(kernelImports[0].includes("leads/leadPlanningBridge.ts"),
+    "run-agent must reach the kernel only through the gated bridge");
+
+  // The planner itself is never called directly from the edge function.
+  assertFalse(runAgent.includes("planInitialLeadSourcing("),
+    "run-agent must not call the planner directly — the bridge owns enablement");
+  assertFalse(runAgent.includes("runPlanner("),
+    "run-agent must not call the model wrapper directly");
 });
 
 // ---- diagnostics -----------------------------------------------------------
