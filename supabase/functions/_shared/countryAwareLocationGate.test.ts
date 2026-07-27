@@ -80,11 +80,20 @@ Deno.test("12: San Francisco Bay Area does not satisfy 'London'", () => {
 Deno.test("13: missing structured country falls back to explicit 'United States' string", () => {
   assertEquals(matchesRequiredLocation(cand(null, null, "United States"), "United States").ok, true);
 });
-Deno.test("14: unknown city with no structured country does NOT infer a country", () => {
+Deno.test("14: an unrecognised city with no structured country does NOT infer a country", () => {
+  // `detectCountryInText` is still country-names-and-codes only — unchanged.
   assertEquals(detectCountryInText("Greater Philadelphia"), null);
   assertEquals(detectCountryInText("Houston"), null); // no false 'us' substring match
-  const m = matchesRequiredLocation(cand(null, null, "Greater Philadelphia"), "United States");
-  assertEquals(m.reason, "missing location evidence");
+  assertEquals(detectCountryInText("Dallas, TX"), null);
+
+  // CONTRACT NARROWED (production task bb1ce7fe): the MATCHER now also consults
+  // reviewed subnational evidence, so a US state or named metro resolves on its
+  // own. That is the fix — "Dallas, TX" rejected as unknown killed the whole
+  // company-first funnel. A city with no reviewed geography still resolves to
+  // nothing, which is what this pins.
+  const unknown = matchesRequiredLocation(cand(null, null, "Springfield"), "United States");
+  assertEquals(unknown.reason, "missing location evidence");
+  assertEquals(matchesRequiredLocation(cand(null, null, "Greater Philadelphia"), "United States").ok, true);
 });
 
 // 15-17: provider evidence retention + provenance.

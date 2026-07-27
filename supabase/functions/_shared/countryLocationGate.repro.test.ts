@@ -41,10 +41,23 @@ Deno.test("fix: a genuinely UK profile ('Greater London' + United Kingdom) is re
   assertEquals(res.rejected[0]?.reason, "wrong country (strict)");
 });
 
-Deno.test("fix: a US city string WITHOUT structured country is honest 'missing location evidence', not 'wrong location'", () => {
-  const res = classifyResults([{ name: "No Country", location: MAPPED_LOCATION_A, source_url: "https://linkedin.com/in/nc" }], crit(REQUIRED_US), STRICT);
+Deno.test("fix: an UNRESOLVABLE location string is honest 'missing location evidence', not 'wrong location'", () => {
+  // CONTRACT NARROWED (production task bb1ce7fe). This case used to assert that
+  // ANY city string without a structured country was "missing evidence" — which
+  // also rejected "Dallas, TX" and every other US city/state job, killing the
+  // company-first funnel before enrichment.
+  //
+  // Reviewed subnational and metro evidence (a US state code, a state name, a
+  // named metro) now resolves a country on its own. What stays "missing" is a
+  // string carrying no reviewed geography at all, which is what this now pins.
+  const res = classifyResults([{ name: "No Country", location: "Remote", source_url: "https://linkedin.com/in/nc" }], crit(REQUIRED_US), STRICT);
   assertEquals(res.accepted.length, 0);
   assertEquals(res.rejected[0]?.reason, "missing location evidence (strict)");
+});
+
+Deno.test("fix: a reviewed US metro string now resolves without structured country", () => {
+  const res = classifyResults([{ name: "Metro Only", location: MAPPED_LOCATION_A, source_url: "https://linkedin.com/in/mo" }], crit(REQUIRED_US), STRICT);
+  assertEquals(res.accepted.length, 1, `${MAPPED_LOCATION_A} is unambiguously US`);
 });
 
 Deno.test("repro: frozen Q1 facts (22 US profiles were all rejected pre-fix)", () => {
