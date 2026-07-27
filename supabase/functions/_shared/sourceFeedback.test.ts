@@ -205,6 +205,25 @@ function firstRung(h: Harness) {
   return remainingBroadening(h.plan.steps[0], h.obs)[0];
 }
 
+/**
+ * A harness whose first step can still broaden BY ALIAS.
+ *
+ * The deterministic plan starts every step with the full approved alias list, so
+ * "add the approved aliases" changes nothing there and is now correctly dropped
+ * from the ladder as unsupported. A narrower starting intent — which is what a
+ * Claude-authored plan looks like — is what makes the rung meaningful.
+ */
+async function aliasHarness(): Promise<Harness> {
+  const h = await harness();
+  const step = h.plan.steps[0];
+  step.semanticIntent = { ...step.semanticIntent, approvedTitleAliases: ["Revenue Operations"] };
+  step.broadeningLadder = [
+    { action: "add_approved_role_aliases", aliases: ["Revenue Operations", "GTM Operations", "Sales Operations"] },
+    ...step.broadeningLadder,
+  ];
+  return h;
+}
+
 const context = (o: Partial<FeedbackProjectionContext> = {}): FeedbackProjectionContext => ({
   atsIdentitiesAvailable: 0,
   companiesForVerification: [], companiesNeedingIdentity: [], peopleNeedingContact: [],
@@ -399,7 +418,7 @@ Deno.test("12.B a broadening rung cannot carry a hard-constraint change", () => 
 });
 
 Deno.test("13. unknown role aliases are rejected", async () => {
-  const h = await harness();
+  const h = await aliasHarness();
   const step = h.plan.steps[0];
   const available = projectAvailableActions({ plan: h.plan, state: h.state, observation: h.obs });
   const strategy = (parseSourceFeedbackResponse(response({
@@ -415,7 +434,7 @@ Deno.test("13. unknown role aliases are rejected", async () => {
 });
 
 Deno.test("13.B an approved alias from the step's own ladder is accepted", async () => {
-  const h = await harness();
+  const h = await aliasHarness();
   const step = h.plan.steps[0];
   const available = projectAvailableActions({ plan: h.plan, state: h.state, observation: h.obs });
   const rung = firstRung(h);
@@ -465,7 +484,8 @@ Deno.test("15./16. completed and exhausted steps cannot be reactivated", async (
 });
 
 Deno.test("17. an already-used broadening rung cannot repeat", async () => {
-  const h = await harness({ broadeningActionsUsed: ["add_approved_role_aliases"] });
+  const h = await aliasHarness();
+  h.obs = { ...h.obs, broadeningActionsUsed: ["add_approved_role_aliases"] };
   const step = h.plan.steps[0];
   const r = await validateAction(h, {
     action: "broaden_current_source", stepId: step.stepId,
@@ -480,10 +500,7 @@ Deno.test("18. an identical compiled provider input cannot repeat", async () => 
   const step = h.plan.steps[0];
   const rung = firstRung(h);
   // Pre-record the very input this rung would compile to.
-  const prepared = await prepareStepCall({
-    taskId: "t", step, state: h.state,
-    broadening: { action: rung.action, ...(rung.action === "add_approved_role_aliases" ? { aliases: rung.aliases } : {}) },
-  });
+  const prepared = await prepareStepCall({ taskId: "t", step, state: h.state, broadening: rung });
   assert(prepared.ok);
   stepOf(h.state, step.stepId)!.input_hashes.push(prepared.call.inputHash);
 
@@ -1354,24 +1371,21 @@ Deno.test("S1/S2/S3 a completed, exhausted or quota-inactive next source is neve
 });
 
 Deno.test("S4 a broadening rung whose call was already paid for is not returned", async () => {
-  const h = await harness();
+  // Two real rungs, so "the paid one drops out" and "the other survives" are
+  // separable. `extend_recency_window` is deliberately not among them: YC has no
+  // posting-window field, so the plan no longer offers that rung at all.
+  const h = await aliasHarness();
   const step = h.plan.steps[0];
   const rung = eligibleBroadening(step, h.obs)[0];
+  assertEquals(rung.action, "add_approved_role_aliases");
 
-  const prepared = await prepareStepCall({
-    taskId: "t", step, state: h.state,
-    broadening: { action: rung.action, ...(rung.action === "add_approved_role_aliases" ? { aliases: rung.aliases } : {}) },
-  });
+  const prepared = await prepareStepCall({ taskId: "t", step, state: h.state, broadening: rung });
   assert(prepared.ok);
   stepOf(h.state, step.stepId)!.input_hashes.push(prepared.call.inputHash);
 
   const runtime = await withDuplicateBroadening(runtimeStateFor(h.state), {
     taskId: "t", plan: h.plan, state: h.state, stepId: step.stepId,
   });
-  // The alias rung is flagged — and so is `extend_recency_window`, because the YC
-  // Actor's input has no posting-window field at all, so that rung compiles to the
-  // very same call. A rung the provider cannot express is a duplicate, and finding
-  // that out here is cheaper than paying for it.
   assert(runtime.duplicateBroadeningByStep?.[step.stepId]?.includes(rung.action),
     JSON.stringify(runtime.duplicateBroadeningByStep));
 

@@ -259,6 +259,9 @@ Deno.test("V7 UNSAFE broadening rungs are dropped; the closed union has no shape
   enableProviders();
   const v = await validateOrderedPlan(planOf([{
     capability: "indeed_job_discovery",
+    // The step must already search SOMETHING for the alias rung to broaden it —
+    // a step with no titles at all cannot compile, and its ladder is moot.
+    semanticIntent: { candidateTarget: 25, approvedTitleAliases: ["Revenue Operations"] },
     broadeningLadder: [
       { action: "add_approved_role_aliases", aliases: ["GTM Operations"] },
       { action: "raise_employee_maximum", max: 5000 } as never,
