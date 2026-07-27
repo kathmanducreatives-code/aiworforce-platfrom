@@ -1,69 +1,84 @@
+# Claude-first Canary — Disable + Read-Only Forensic Audit
 
-# Claude-first Canary — Single Workflow on Production
+Scope: production project `wqnigjhcwjxtmordrwno`, workspace `e510c1a6-2bb8-4aa4-95f7-0beb786ed995`. No provider calls, no deploys, no code changes, no workflow re-runs. The only state change is setting one secret to `false`.
 
-Scope: workspace `e510c1a6-2bb8-4aa4-95f7-0beb786ed995` only. One prompt, at most one continuation, hard cost ceiling $5. Flag is disabled again at the end regardless of outcome.
+## Step 1 — Disable the flag (only mutation)
 
-## Step 1 — Enable flag (production)
+- `secrets--set_secret` → `CLAUDE_FIRST_LEAD_PLANNING = "false"` on prod.
+- `secrets--fetch_secrets` → confirm value.
+- Leave `CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES` in place for forensic comparison.
 
-Set two runtime secrets on production project `wqnigjhcwjxtmordrwno`:
+## Step 2 — Environment + deployment provenance
 
-- `CLAUDE_FIRST_LEAD_PLANNING = "true"`
-- `CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES = "e510c1a6-2bb8-4aa4-95f7-0beb786ed995"`
+- `supabase--project_info` → confirm project ref `wqnigjhcwjxtmordrwno`.
+- Read current deployed `run-agent`, `orchestrate`, `pilot-chat` metadata (version, deployed_at) via supabase tools; compare `deployed_at` to the failed task's `created_at` to prove whether PR #101 code was live at run time.
+- Cross-check tree markers of PR #101 (`_shared/qualifiedLeadRouting.ts`, continuation RPC usage, company-first funnel diagnostics) against what the deployed bundle reports.
 
-Confirm both via `fetch_secrets` before invoking any function.
+## Step 3 — Locate the failed task (read-only SQL)
 
-## Step 2 — Trigger exactly one workflow
+Query `public.tasks` + `public.task_plans` in workspace `e510c1a6…`, most recent match on:
+- instruction equals the exact prompt,
+- `result` diagnostics show 20 reviewed / 0 accepted,
+- rejection reasons include `wrong_role` or strict-location.
 
-Invoke the production planner path with the prompt:
+Return: task_id, plan_id, conversation_id, created_at / finished_at, `status`, `result.terminal_status`, `continuation_claim_*`, `checkpoint_version`, round number, quota requested / eligible / remaining.
 
-> Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.
+## Step 4 — Planner provenance
 
-Target workspace: `e510c1a6-2bb8-4aa4-95f7-0beb786ed995`. Record the returned `task_id` / `plan_id`.
+From the task's `result` / `plan_summary` diagnostics report (no prompts, no keys):
+planner source, provider, model, planner_status, deterministic_fallback flag + reason, strategy_hash, selected capabilities, accepted / rejected / approval-required titles.
 
-## Step 3 — Pre-execution planner verification (abort gate)
+Do not assume Claude caused the failure — same symptom was seen with the flag off.
 
-Before any provider (Apify / enrichment) execution runs, read the task's `result` / `task_plans.plan_summary` diagnostics and confirm ALL of:
+## Step 5 — Company-first funnel counts
 
-- planner provider = Anthropic, source = Claude, status = successful
-- no `deterministic_fallback` marker
-- accepted hiring titles = {Sales Operations, Revenue Operations, GTM Operations}
-- decision-makers = {Founder, Co-Founder, CEO}
-- requested count = 5, quota mode = `contact_only`, geography = United States
-- estimated total provider cost ≤ $5
-- diagnostics contain no raw Actor IDs, credentials, or raw prompts
+From diagnostics, report the funnel stage-by-stage: raw jobs → relevant jobs → unique hiring companies → qualified companies → companies passed to people search → people returned → founder/CEO candidates → current-employer matches → CONTACT-ready → WATCH → REJECT/SKIP.
 
-If ANY check fails → immediately set `CLAUDE_FIRST_LEAD_PLANNING=false`, stop, and report.
+Confirm the runtime executed: discover hiring companies → qualify → decision-maker search within them → verify current employment → contact-ready gate. Flag any people-first / generic search.
 
-## Step 4 — Execution monitoring (abort gate)
+## Step 6 — People-search input inspection
 
-While the task runs, poll `public.tasks` for the plan. Abort (set flag false, stop) if:
+From the compiled provider inputs recorded in `tool_calls` / task diagnostics (secret-free): capability, adapter, company URLs / names supplied, current-company filters, titles supplied, geography, per-call result limit, number of company-scoped searches, idempotency keys, actual provider call count + cost.
 
-- provider switches away from Anthropic
-- deterministic fallback fires
-- any mission field mutates
-- plan becomes incomplete
-- estimated/actual cost exceeds $5
-- WATCH candidates count against quota
-- continuation spawns a NEW task row (must be same task ID)
-- completed provider calls repeat
-- diagnostics leak secrets/raw prompts
+Expected titles: Founder, Co-Founder, CEO. Forbidden: Sales Ops, Rev Ops, GTM Ops, SDR, BDR, AE.
 
-## Step 5 — Continuation (at most once)
+Trace the title set through: mission → strategy → compiler → adapter → provider request. Identify the first layer where decision-maker titles are lost (compare against `_shared/decisionMaker/searchPlanner.ts` `TITLE_FILTERS` and `sourcingConstraints.ts` `hard.requestedTitles`).
 
-If terminal status = `continuation_required`, call `claim_sourcing_continuation` + resume once on the SAME task ID. Verify: same task ID, cumulative quota + cost, no duplicate completed provider calls, previous results preserved, continuation claim released via `release_sourcing_continuation`. No second continuation is allowed.
+## Step 7 — Company scoping audit
 
-## Step 6 — Disable flag
+For each people-search `tool_calls` row, determine scope key: linkedin company URL, linkedin id, verified domain, or name+location — via `scopedPeopleSearch.ts::buildPeopleScope`. Count: qualified companies searched, qualified companies with no people query, results whose resolved `companyDedupeKey` did not match the scope (via `resultBelongsToScope`), employer-match outcomes, ambiguous identities.
 
-Regardless of outcome, set `CLAUDE_FIRST_LEAD_PLANNING = "false"` on production and confirm via `fetch_secrets`. Leave `CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES` in place (harmless when flag is off) unless you want it cleared too.
+## Step 8 — Location-rule audit
 
-## Step 7 — Report
+Locate the geography validator in the people-qualification path and classify what evidence it accepts: (A) hiring-job geo, (B) company HQ/operating geo, (C) personal profile geo. Report the exact file/function and the hierarchy it uses.
 
-Return: task ID, planner provider/model, accepted titles, capabilities, CONTACT-ready count, WATCH count, total cost, terminal status, continuation result, and confirmation `CLAUDE_FIRST_LEAD_PLANNING=false`.
+Classify each location-based rejection: no job geo / no company geo / no personal profile geo / conflicting / parser failure / other. Do not loosen the rule.
+
+## Step 9 — 20-candidate breakdown
+
+For each of the 20 reviewed people (from task diagnostics only — no PII beyond safe qualification facts): normalized title, founder/CEO match, intended company, returned current company, employer-match result, location-evidence type available, final block reasons, qualification state.
+
+Aggregate: wrong title, wrong employer, ambiguous employer, missing personal location, missing company/job location, duplicate, missing contact method, other.
+
+## Step 10 — REJECT persistence contract
+
+Determine where REJECT rows live: task `result` only, a transient candidate table, or `lead_candidates` in Lead Library. Confirm whether they are user-visible and whether they count toward CONTACT quota. Do NOT label as a bug until intended contract is stated — just describe observed behavior + code path.
+
+## Step 11 — Continuation behavior
+
+Report: round number, max rounds, remaining quota, remaining budget, remaining approved strategies, terminal status, continuation eligibility, `continuation_claim_id/expires_at`, task row status. Determine which of {should-have-continued / correctly returned continuation_required / exhausted / budget-capped / old-fast-workflow-controlled} applies. Do not resume.
+
+## Step 12 — Compare with TEST task `281b6c2b-b80b-4072-97a2-f43bddb9f1df`
+
+If accessible (may require TEST project connection — if not accessible, say so and skip). Compare: planner enabled, job queries, companies found, decision-maker input, employer verification, geography rejection, terminal status. State whether both failures share the same deterministic people-stage defect.
+
+## Step 13 — Root-cause classification (A–J) + final report
+
+Deliver the 25-item final report specified, including primary + secondary root causes, the smallest correct code change (proposed only — not applied), and the regression tests it requires. End with an explicit confirmation that no workflow, provider call, or deployment happened during this audit and that `CLAUDE_FIRST_LEAD_PLANNING=false` on prod.
 
 ## Technical notes
 
-- Secrets managed via `secrets--set_secret` (create) / `secrets--update_secret` interactive form is NOT viable here — use `set_secret` for the fixed string `"true"` / `"false"` values, and same for the workspace UUID allowlist.
-- Task trigger: invoke the same production edge function the UI uses for Pilot lead planning (`pilot-chat` → `orchestrate` → `run-agent`) via `supabase--curl_edge_functions` with a service-role JWT scoped to the target workspace, OR insert directly into `task_plans` using the documented planner entrypoint if the HTTP path requires a user session.
-- Diagnostic reads use `supabase--read_query` on `public.tasks` and `public.task_plans` (fields: `result`, `plan_summary`, `status`, `checkpoint_version`, `continuation_claim_*`).
-- Cost tallying uses `ai_gateway_logs--list_ai_gateway_requests` filtered by the task's `run_id` for the Anthropic planner call, plus any provider tool_calls rows for downstream spend.
-- Hard stop: if at any abort gate the flag flip fails, retry `set_secret` up to 2×, then escalate in the report.
+- Reads: `supabase--read_query` on `tasks`, `task_plans`, `tool_calls`, `signals`, `lead_candidates`, `agent_runs`, `handoffs`; `supabase--edge_function_logs` on `run-agent`/`orchestrate`/`pilot-chat` scoped to the task window; `ai_gateway_logs--list_ai_gateway_requests` filtered by the task's `run_id` for planner cost + model.
+- Mutation: exactly one `secrets--set_secret` call. Nothing else writes.
+- Secret hygiene: never surface Actor IDs, API keys, raw prompts, or PII beyond safe qualification facts. Redact provider inputs to filter shape + counts.
+- If any step's data is unavailable in production, report "unavailable" — do not infer.
