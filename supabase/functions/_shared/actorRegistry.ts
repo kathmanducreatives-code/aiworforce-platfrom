@@ -22,6 +22,18 @@ export type ActorEntry = {
   compliance_level: string;
   missing_message?: string;
   required_env?: string;
+  /**
+   * TRUE for provider variants that may ONLY be selected through the semantic
+   * hiring-source catalog, never by `source_type` resolution.
+   *
+   * Several approved variants deliberately share a `source_type` with a
+   * long-standing entry (`indeed_jobs` with the legacy Curious Coder Indeed;
+   * `jobs` with the canonical LinkedIn jobs Actor) so that both normalize into the
+   * same canonical job-signal structure. `resolveActorForSourceType` returns the
+   * FIRST match, so without this marker adding a variant silently repoints the
+   * legacy path to a different vendor purely because of declaration order.
+   */
+  dynamic_source_only?: boolean;
 };
 
 // ---- Env helpers ---------------------------------------------------------
@@ -67,6 +79,8 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   // All five default to DISABLED. Registering a source is not switching it on.
   apify_indeed_jobs_automation_lab: {
     key: "apify_indeed_jobs_automation_lab",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
     tool_name: "source_with_apify",
     actor_id: actorId("APIFY_ACTOR_INDEED_JOBS_AUTOMATION_LAB", "automation-lab/indeed-scraper"),
     source_type: "indeed_jobs",
@@ -86,6 +100,8 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   },
   apify_linkedin_jobs_crawlworks: {
     key: "apify_linkedin_jobs_crawlworks",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
     tool_name: "source_with_apify",
     actor_id: actorId("APIFY_ACTOR_LINKEDIN_JOBS_CRAWLWORKS", "crawlworks/linkedin-jobs-scraper"),
     source_type: "jobs",
@@ -105,6 +121,8 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   },
   apify_glassdoor_jobs: {
     key: "apify_glassdoor_jobs",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
     tool_name: "source_with_apify",
     actor_id: actorId("APIFY_ACTOR_GLASSDOOR_JOBS", "valig/glassdoor-jobs-scraper"),
     source_type: "jobs",
@@ -124,6 +142,8 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   },
   apify_yc_jobs: {
     key: "apify_yc_jobs",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
     tool_name: "source_with_apify",
     actor_id: actorId("APIFY_ACTOR_YC_JOBS", "parsebird/yc-jobs-scraper"),
     source_type: "jobs",
@@ -143,6 +163,8 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   },
   apify_ats_verification: {
     key: "apify_ats_verification",
+    // Selectable ONLY via the semantic catalog. See `dynamic_source_only`.
+    dynamic_source_only: true,
     tool_name: "source_with_apify",
     actor_id: actorId("APIFY_ACTOR_ATS_VERIFICATION", "bovi/greenhouse-lever-ashby-job-scraper"),
     source_type: "jobs",
@@ -582,9 +604,24 @@ export function getEnabledActors(): ActorEntry[] {
   return Object.values(ACTOR_REGISTRY).filter(isActorRuntimeEnabled);
 }
 
+/**
+ * The canonical Actor for a `source_type`.
+ *
+ * Variants marked `dynamic_source_only` are SKIPPED. They are reachable only
+ * through the semantic hiring-source catalog, which resolves them by registry key.
+ *
+ * Without that skip this function is order-dependent in a dangerous way: it
+ * returns the first declaration match, so registering the Automation Lab Indeed
+ * variant above the legacy Curious Coder entry silently changes which vendor
+ * `indeed_jobs` resolves to — and registering the LinkedIn/Glassdoor/YC/ATS
+ * variants above `apify_jobs` does the same to the canonical `jobs` path that
+ * company-first sourcing depends on. Coexistence has to survive declaration order,
+ * not depend on it.
+ */
 export function resolveActorForSourceType(source_type: string | null | undefined): ActorEntry | null {
   if (!source_type) return null;
   for (const a of Object.values(ACTOR_REGISTRY)) {
+    if (a.dynamic_source_only) continue;
     if (a.source_type === source_type) return a;
   }
   return null;
