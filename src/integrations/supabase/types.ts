@@ -3234,7 +3234,11 @@ export type Database = {
         Row: {
           agent_id: string | null
           agent_slug: string
+          checkpoint_version: number
           completed_at: string | null
+          continuation_claim_expires_at: string | null
+          continuation_claim_id: string | null
+          continuation_claimed_at: string | null
           created_at: string
           depends_on: string[]
           description: string | null
@@ -3257,7 +3261,11 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           agent_slug: string
+          checkpoint_version?: number
           completed_at?: string | null
+          continuation_claim_expires_at?: string | null
+          continuation_claim_id?: string | null
+          continuation_claimed_at?: string | null
           created_at?: string
           depends_on?: string[]
           description?: string | null
@@ -3280,7 +3288,11 @@ export type Database = {
         Update: {
           agent_id?: string | null
           agent_slug?: string
+          checkpoint_version?: number
           completed_at?: string | null
+          continuation_claim_expires_at?: string | null
+          continuation_claim_id?: string | null
+          continuation_claimed_at?: string | null
           created_at?: string
           depends_on?: string[]
           description?: string | null
@@ -3521,6 +3533,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_sourcing_continuation: {
+        Args: {
+          p_claim_id: string
+          p_lease_seconds?: number
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          checkpoint_version: number
+          claimed: boolean
+          held_by: string
+          held_until: string
+          reason: string
+          task_id: string
+        }[]
+      }
       get_client_branding: {
         Args: { client_uuid: string }
         Returns: {
@@ -3557,6 +3585,15 @@ export type Database = {
       provision_workspace_for_user: {
         Args: { _user_id: string }
         Returns: string
+      }
+      release_sourcing_continuation: {
+        Args: {
+          p_claim_id: string
+          p_row_status?: string
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: boolean
       }
       update_screening_application_with_token: {
         Args: {
