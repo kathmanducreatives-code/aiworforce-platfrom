@@ -31,6 +31,10 @@
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import { isIntelligenceFlagEnabled, type EnvReader } from "./intelligence/intelligenceFlags.ts";
 import {
+  assessBroadeningCompatibility,
+  type BroadeningIntentChange, type HiringSourceIntent,
+} from "./actorInputPlanner.ts";
+import {
   HIRING_SOURCE_CATALOG, isHiringSourceCapability, resolveHiringSourceActor,
   type HiringSourceCapabilityId,
 } from "./hiringSourceCatalog.ts";
@@ -581,6 +585,57 @@ function orderedSeeds(p: LeadMissionSourceProfile): StepSeed[] {
   ];
 }
 
+/**
+ * The semantic intent a step would compile, before any broadening.
+ *
+ * The BASELINE a rung is measured against. It mirrors what `prepareStepCall`
+ * builds at execution time, so a rung judged compatible here is the same rung that
+ * later produces a different call.
+ */
+export function baseIntentForStep(
+  step: Pick<OrderedSourceStep, "capability" | "semanticIntent">,
+  p: LeadMissionSourceProfile,
+): HiringSourceIntent {
+  const intent = step.semanticIntent;
+  return {
+    capability: step.capability,
+    titleAliases: [...(intent.approvedTitleAliases ?? [])],
+    roleFamily: intent.roleFamily ?? p.hiring?.roleFamily ?? null,
+    geography: intent.geography ?? p.hiring?.geography ?? null,
+    postingWindowDays: intent.postingWindowDays ?? null,
+    remotePolicy: null,
+    employmentTypes: intent.employmentTypes ?? null,
+    candidateTarget: intent.candidateTarget,
+  };
+}
+
+/**
+ * Keep only the rungs this capability can actually express.
+ *
+ * A rung that compiles to the identical Actor input is not broadening — it is a
+ * second paid request for the same rows, wearing the label of a strategy change.
+ * Dropping it HERE, at plan construction, is what makes every downstream consumer
+ * safe at once: the deterministic decision, the projected menu the model sees and
+ * the validator all read the ladder, and none of them has to re-derive this.
+ */
+async function supportedLadder(
+  capability: HiringSourceCapabilityId,
+  ladder: SafeBroadeningAction[],
+  p: LeadMissionSourceProfile,
+  intentSeed: OrderedSourceStep["semanticIntent"],
+): Promise<{ ladder: SafeBroadeningAction[]; dropped: Array<{ action: string; reason: string }> }> {
+  const base = baseIntentForStep({ capability, semanticIntent: intentSeed }, p);
+  const kept: SafeBroadeningAction[] = [];
+  const dropped: Array<{ action: string; reason: string }> = [];
+
+  for (const rung of ladder) {
+    const compatibility = await assessBroadeningCompatibility(base, rung as BroadeningIntentChange);
+    if (compatibility.supported) kept.push(rung);
+    else dropped.push({ action: rung.action, reason: compatibility.reason ?? "unsupported_by_source_schema" });
+  }
+  return { ladder: kept, dropped };
+}
+
 /** The ladder for a step. Verification steps never broaden. */
 function ladderFor(seed: StepSeed, p: LeadMissionSourceProfile, target: number): SafeBroadeningAction[] {
   if (seed.role === "verification") return [];
@@ -676,6 +731,14 @@ export async function deterministicOrderedPlan(
       stopConditions: ["contact_ready_quota_reached", "budget_exhausted", "maximum_provider_calls_reached", "valid_exhaustion"],
     };
   });
+
+  // Keep only the rungs each capability can actually express. A ladder is a
+  // promise that broadening will change the call; a rung the Actor's schema has
+  // nowhere to put would break that promise on the first attempt.
+  for (const step of steps) {
+    const { ladder } = await supportedLadder(step.capability, step.broadeningLadder, p, step.semanticIntent);
+    step.broadeningLadder = ladder;
+  }
 
   // Link the chain. The last step has no successor, which is what makes valid
   // exhaustion reachable rather than an infinite loop.
@@ -826,7 +889,15 @@ export async function validateOrderedPlan(
       repairs.push(`unsafe_broadening_dropped:${s.capability}:${String((b as { action?: unknown })?.action)}`);
       return false;
     });
-    s.broadeningLadder = s.role === "verification" ? [] : ladder;
+
+    // ...and only rungs this capability can EXPRESS. A planner may propose
+    // extending a recency window on a source that has no such field; approved and
+    // executable are different questions, and both have to be answered.
+    const compatible = await supportedLadder(s.capability, ladder, p, s.semanticIntent);
+    for (const d of compatible.dropped) {
+      repairs.push(`unsupported_broadening_dropped:${s.capability}:${d.action}:${d.reason}`);
+    }
+    s.broadeningLadder = s.role === "verification" ? [] : compatible.ladder;
 
     approvedSteps.push(s);
   }

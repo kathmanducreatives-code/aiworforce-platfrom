@@ -32,7 +32,8 @@
 // access of its own.
 
 import {
-  compileHiringSourceInput, type HiringSourceCompileResult,
+  applyBroadeningToIntent, compileHiringSourceInput,
+  type BroadeningIntentChange, type HiringSourceCompileResult, type HiringSourceIntent,
 } from "./actorInputPlanner.ts";
 import {
   decideNextAction, isSafeBroadeningAction,
@@ -160,33 +161,26 @@ export async function prepareStepCall(args: {
   taskId: string;
   step: OrderedSourceStep;
   state: SourceExecutionState;
-  broadening?: { action: string; aliases?: string[]; candidateTarget?: number; postingWindowDays?: number } | null;
+  broadening?: BroadeningIntentChange | null;
 }): Promise<PrepareResult> {
   const { step, state } = args;
   const intent = step.semanticIntent;
 
-  // Apply at most one approved broadening rung to the compiled intent.
-  const b = args.broadening;
-  const titleAliases = b?.action === "add_approved_role_aliases" && b.aliases?.length
-    ? [...new Set([...(intent.approvedTitleAliases ?? []), ...b.aliases])]
-    : intent.approvedTitleAliases;
-  const candidateTarget = b?.action === "increase_result_target" && b.candidateTarget
-    ? b.candidateTarget
-    : intent.candidateTarget;
-  const postingWindowDays = b?.action === "extend_recency_window" && b.postingWindowDays
-    ? b.postingWindowDays
-    : intent.postingWindowDays;
-
-  const compiled: HiringSourceCompileResult = await compileHiringSourceInput({
-    capability: step.capability,
-    roleFamily: intent.roleFamily,
-    titleAliases: titleAliases ?? [],
-    geography: intent.geography,
-    postingWindowDays,
-    remotePolicy: intent.remotePolicy,
-    employmentTypes: intent.employmentTypes,
-    candidateTarget,
-  } as never);
+  // ONE application authority. `applyBroadeningToIntent` is the same function the
+  // plan used to decide this rung was worth offering, so the rung that was judged
+  // compatible is exactly the rung that executes.
+  const compiled: HiringSourceCompileResult = await compileHiringSourceInput(
+    applyBroadeningToIntent({
+      capability: step.capability,
+      roleFamily: intent.roleFamily,
+      titleAliases: [...(intent.approvedTitleAliases ?? [])],
+      geography: intent.geography,
+      postingWindowDays: intent.postingWindowDays,
+      remotePolicy: (intent.remotePolicy ?? null) as HiringSourceIntent["remotePolicy"],
+      employmentTypes: intent.employmentTypes,
+      candidateTarget: intent.candidateTarget,
+    }, args.broadening),
+  );
 
   if (!compiled.ok) {
     return { ok: false, status: compiled.status, reason: compiled.reason, stepId: step.stepId };
@@ -482,7 +476,7 @@ export async function withDuplicateBroadening(
   for (const rung of step.broadeningLadder ?? []) {
     if (!isSafeBroadeningAction(rung)) continue;
     const prepared = await prepareStepCall({
-      taskId: args.taskId, step, state: args.state, broadening: broadeningForCompile(rung),
+      taskId: args.taskId, step, state: args.state, broadening: rung as BroadeningIntentChange,
     });
     if (!prepared.ok && prepared.status === "duplicate_input") duplicates.push(rung.action);
   }
@@ -492,16 +486,6 @@ export async function withDuplicateBroadening(
     ...runtime,
     duplicateBroadeningByStep: { ...(runtime.duplicateBroadeningByStep ?? {}), [args.stepId]: duplicates },
   };
-}
-
-/** The compile-time view of a rung, in the shape `prepareStepCall` accepts. */
-function broadeningForCompile(b: import("./hiringSourcePlan.ts").SafeBroadeningAction) {
-  switch (b.action) {
-    case "add_approved_role_aliases": return { action: b.action, aliases: b.aliases };
-    case "increase_result_target": return { action: b.action, candidateTarget: b.candidateTarget };
-    case "extend_recency_window": return { action: b.action, postingWindowDays: b.postingWindowDays };
-    default: return { action: b.action };
-  }
 }
 
 // ------------------------------------------------------------ observation ---
