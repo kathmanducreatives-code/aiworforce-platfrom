@@ -21,7 +21,16 @@ import type { CompanyFirstWriteBoundary } from "./providerEvidenceMode.ts";
 
 export type CompanyFirstStatus = CompanyFirstTerminalStatus;
 
+import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
+
 export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
+  /**
+   * Company Brain HARD constraints for this workspace. When present every
+   * company must clear them before it may reach people search. Absent means
+   * not enforced, which is the pre-existing behavior.
+   */
+  brainConstraints?: CompanyBrainHardConstraints | null;
+  brainPolicyHash?: string | null;
   intent: LeadEntityIntent;
   workspaceId: string;
   planId?: string | null;
@@ -100,6 +109,7 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     requestedLeadCount: deps.requestedLeadCount,
     quotaPolicy: deps.quotaPolicy, bounds: deps.bounds, limits: deps.limits,
     vertical: deps.vertical, now: deps.now, workspaceId: deps.workspaceId, taskId: deps.taskId ?? null,
+    brainConstraints: deps.brainConstraints ?? null, brainPolicyHash: deps.brainPolicyHash ?? null,
     executionBudget: deps.executionBudget, clock: deps.clock, log,
   });
 

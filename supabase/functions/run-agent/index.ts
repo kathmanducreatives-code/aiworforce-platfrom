@@ -36,6 +36,8 @@ import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artif
 // verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
 import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
 import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
+import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectivePolicy.ts";
 // PHASE 2 — Claude-first INITIAL planning. Gated by CLAUDE_FIRST_LEAD_PLANNING
 // *and* an explicit workspace allow-list, so no single environment variable can
 // enable it globally. With either absent this is inert: no mission is built, no
@@ -781,8 +783,44 @@ Deno.serve(async (req) => {
           });
         }
 
+        // COMPANY BRAIN AS A HARD GATE.
+        //
+        // Until now the company-first path never consulted the Brain: the ICP
+        // filter existed but was only wired into the older lead-search flow, so
+        // a company discovered from a hiring signal could reach the accepted set
+        // without ever being checked for size, stage, industry or founder-led.
+        // That is how a 7,337-employee company appeared under a Brain that asks
+        // for small, early-stage, founder-led teams.
+        //
+        // The policy is compiled once per run and threaded down; the pipeline
+        // enforces it before any people call, so a rejected company costs
+        // nothing. A missing Brain leaves it unenforced — the previous behavior.
+        const brainIcpCtx = compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> });
+        const effectivePolicy = await compileEffectiveCompanyPolicy({
+          industries: brainIcpCtx.icp.industries,
+          categories: brainIcpCtx.icp.categories,
+          business_models: brainIcpCtx.icp.business_models,
+          company_size_min: brainIcpCtx.icp.company_size_min ?? null,
+          company_size_max: brainIcpCtx.icp.company_size_max ?? null,
+          maturity_stage: brainIcpCtx.icp.maturity_stage,
+          target_customer_segments: brainIcpCtx.icp.target_customer_segments,
+          disqualifier_industries: brainIcpCtx.disqualifiers?.industries ?? [],
+          disqualifier_company_types: brainIcpCtx.disqualifiers?.company_types ?? [],
+          disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
+          brainVersion: (brainRow as { updated_at?: string } | null)?.updated_at ?? null,
+        });
+        const brainEnforced = effectivePolicy.provenance.hard_constraints.length > 0;
+        console.log("[run-agent][company-brain]", {
+          task_id: task.id, enforced: brainEnforced,
+          policy_hash: effectivePolicy.policyHash,
+          hard_constraints: effectivePolicy.provenance.hard_constraints,
+          size: effectivePolicy.provenance.size,
+        });
+
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
+          brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
+          brainPolicyHash: brainEnforced ? effectivePolicy.policyHash : null,
           requestedLeadCount: quota.requestedLeadCount, requestedCountSource: quota.source,
           proposeBroadening: broadeningPlanner.plan,
           plannerMetadata: broadeningPlanner.lastMetadata,
@@ -836,6 +874,18 @@ Deno.serve(async (req) => {
             // not exist, so the task result, the run context the Workbench reads
             // back, and every export are unchanged from before Phase 2.
             ...(claudeFirstDiagnostics ? { claude_first_planning: claudeFirstDiagnostics } : {}),
+            // Which Company Brain policy actually gated this run. Safe metadata
+            // only: versions, a hash and constraint NAMES — never Brain prose.
+            company_brain_policy: {
+              enforced: brainEnforced,
+              policy_hash: effectivePolicy.policyHash,
+              policy_version: effectivePolicy.provenance.policy_version,
+              brain_version: effectivePolicy.provenance.brain_version,
+              hard_constraints: effectivePolicy.provenance.hard_constraints,
+              unknown_evidence: effectivePolicy.provenance.unknown_evidence,
+              size: effectivePolicy.provenance.size,
+              rejected_broadening: effectivePolicy.provenance.rejected_broadening,
+            },
             lead_entity_intent: cfIntent,
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
           },

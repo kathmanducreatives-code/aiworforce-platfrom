@@ -212,3 +212,212 @@ export function icpTopRejectReasons(trace: IcpTrace[], n = 5): Array<{ reason: s
   for (const t of trace) for (const [k, v] of Object.entries(t.rejected_reasons)) agg[k] = (agg[k] ?? 0) + v;
   return Object.entries(agg).sort((a, b) => b[1] - a[1]).slice(0, n).map(([reason, count]) => ({ reason, count }));
 }
+
+// ============================================================================
+// TRI-STATE COMPANY BRAIN EVALUATION
+// ============================================================================
+//
+// WHY THIS EXISTS, next to `filterByIcp` rather than replacing it.
+//
+// `filterByIcp` is a FILTER: it answers "which of these may I keep?" and, by
+// design, keeps anything it cannot disprove. Look at its size step — when
+// `parseEmployeeCount` returns null the candidate passes, because a filter that
+// dropped every company with a missing field would return nothing.
+//
+// That is the exact behavior that let a 7,337-employee company through the
+// company-first path: nothing asserted a headcount, so nothing rejected it.
+// (The deeper defect was that `filterByIcp` was never called there at all.)
+//
+// A hard GATE needs a third answer. "I have no evidence" is not "pass" — it is
+// a reason to research, watch, or reject, and the Company Brain gets to say
+// which. This evaluator provides that tri-state verdict per constraint while
+// reusing this module's own tables and parsers, so there is still exactly ONE
+// place that knows what a megacorp is or how to read a headcount.
+//
+// PURE. No network, database, provider or model access.
+
+export type ConstraintOutcome = "pass" | "fail" | "unknown";
+
+/** What to do when a HARD constraint has no evidence either way. */
+export type UnknownEvidencePolicy = "research" | "watch" | "reject";
+
+export interface CompanyBrainHardConstraints extends IcpConstraints {
+  /** Funding/company stages the Brain accepts, lowercase ("seed", "series a"). */
+  allowed_stages?: string[];
+  /** Business models the Brain accepts ("saas", "marketplace"). */
+  business_models?: string[];
+  /** True when the Brain requires founder-led companies. */
+  require_founder_led?: boolean;
+  /** Behavior for a hard constraint with no evidence. Defaults to "research". */
+  unknown_evidence?: UnknownEvidencePolicy;
+}
+
+/** Company evidence, beyond what the ICP filter already reads. */
+export interface CompanyBrainEvidence extends IcpCandidate {
+  employee_count?: number | string | null;
+  company_stage?: string | null;
+  business_model?: string | null;
+  /** Tri-state: true/false when known, null/undefined when unresolved. */
+  founder_led?: boolean | null;
+}
+
+export interface BrainConstraintResult {
+  constraint: "employee_count" | "industry" | "business_model" | "company_stage" | "founder_led";
+  outcome: ConstraintOutcome;
+  reason: string;
+}
+
+export interface CompanyBrainEvaluation {
+  outcome: ConstraintOutcome;
+  results: BrainConstraintResult[];
+  failedConstraints: string[];
+  unknownConstraints: string[];
+  reasons: string[];
+}
+
+/**
+ * Funding ladder, lowest first. Position is what makes "Series C fails a
+ * pre-seed–Series A policy" decidable rather than a string comparison.
+ */
+const STAGE_LADDER: Array<{ rank: number; aliases: string[] }> = [
+  { rank: 0, aliases: ["pre-seed", "preseed", "pre seed", "idea", "bootstrapped"] },
+  { rank: 1, aliases: ["seed"] },
+  { rank: 2, aliases: ["series a", "series-a", "seriesa"] },
+  { rank: 3, aliases: ["series b", "series-b"] },
+  { rank: 4, aliases: ["series c", "series-c"] },
+  { rank: 5, aliases: ["series d", "series-d", "series e", "series f", "growth", "late stage", "late-stage"] },
+  { rank: 6, aliases: ["public", "ipo", "publicly traded", "nasdaq", "nyse", "post-ipo"] },
+];
+
+/** Rank a stage phrase, or null when it names no stage we know. */
+export function rankCompanyStage(stage: string | null | undefined): number | null {
+  const s = lc(stage);
+  if (!s.trim()) return null;
+  // Longest alias first so "series a" is not shadowed by "seed" inside "seed a".
+  const all = STAGE_LADDER.flatMap((e) => e.aliases.map((a) => ({ a, rank: e.rank })))
+    .sort((x, y) => y.a.length - x.a.length);
+  for (const { a, rank } of all) if (s.includes(a)) return rank;
+  return null;
+}
+
+/**
+ * Evaluate one company against the Company Brain's HARD constraints.
+ *
+ * Every constraint answers pass / fail / unknown independently, and the overall
+ * outcome is the worst of them: any fail is a fail; otherwise any unknown is
+ * unknown; otherwise pass. Missing evidence never silently becomes a pass.
+ */
+export function evaluateCompanyBrainEvidence(
+  cand: CompanyBrainEvidence,
+  c: CompanyBrainHardConstraints,
+): CompanyBrainEvaluation {
+  const results: BrainConstraintResult[] = [];
+  const add = (constraint: BrainConstraintResult["constraint"], outcome: ConstraintOutcome, reason: string) =>
+    results.push({ constraint, outcome, reason });
+
+  const text = hay(cand);
+
+  // ---- EMPLOYEE COUNT ------------------------------------------------------
+  const declaredSize = cand.employee_count ?? cand.team_size;
+  const n = parseEmployeeCount(declaredSize);
+  const capped = c.max_employees != null || c.min_employees != null;
+  if (!capped || c.allow_enterprise) {
+    add("employee_count", "pass", "no headcount constraint in effect");
+  } else if (n == null) {
+    // A known megacorp needs no headcount field to be disqualifying.
+    if (MEGACORP_NAMES.some((m) => lc(cand.company).includes(m.trim()))) {
+      add("employee_count", "fail", "known mega-cap enterprise under a size-capped ICP");
+    } else {
+      add("employee_count", "unknown", "no employee-count evidence");
+    }
+  } else if (c.max_employees != null && n > c.max_employees) {
+    add("employee_count", "fail", `${n} employees exceeds the maximum of ${c.max_employees}`);
+  } else if (c.min_employees != null && n < c.min_employees) {
+    add("employee_count", "fail", `${n} employees is below the minimum of ${c.min_employees}`);
+  } else {
+    add("employee_count", "pass", `${n} employees is within ${c.min_employees ?? 0}–${c.max_employees ?? "∞"}`);
+  }
+
+  // ---- INDUSTRY ------------------------------------------------------------
+  const positives = (c.positive_industries ?? []).filter(Boolean);
+  const negatives = (c.negative_industries ?? []).filter(Boolean);
+  if (negatives.length && hasAny(text, negatives)) {
+    add("industry", "fail", "matches a Brain-avoided industry");
+  } else if (!positives.length) {
+    add("industry", "pass", "no industry constraint in effect");
+  } else if (hasAny(text, positives)) {
+    add("industry", "pass", `matches an ICP industry`);
+  } else if (!lc(cand.industry).trim() && !lc(cand.company_category).trim() && !lc(cand.company_type).trim()) {
+    add("industry", "unknown", "no industry evidence");
+  } else {
+    add("industry", "fail", "industry evidence does not match the ICP");
+  }
+
+  // ---- BUSINESS MODEL ------------------------------------------------------
+  const models = (c.business_models ?? []).filter(Boolean);
+  if (!models.length) {
+    add("business_model", "pass", "no business-model constraint in effect");
+  } else {
+    const observed = `${lc(cand.business_model)} ${text}`;
+    if (hasAny(observed, models)) add("business_model", "pass", "matches the required business model");
+    else if (!lc(cand.business_model).trim() && !text.trim()) add("business_model", "unknown", "no business-model evidence");
+    else add("business_model", "fail", "business model does not match the ICP");
+  }
+
+  // ---- COMPANY STAGE -------------------------------------------------------
+  const allowed = (c.allowed_stages ?? []).filter(Boolean);
+  if (!allowed.length) {
+    add("company_stage", "pass", "no stage constraint in effect");
+  } else {
+    const ranks = allowed.map((s) => rankCompanyStage(s)).filter((r): r is number => r != null);
+    const maxAllowed = ranks.length ? Math.max(...ranks) : null;
+    const minAllowed = ranks.length ? Math.min(...ranks) : null;
+    const observedRank = rankCompanyStage(cand.company_stage) ?? rankCompanyStage(text);
+    if (maxAllowed == null) add("company_stage", "unknown", "stage policy could not be interpreted");
+    else if (observedRank == null) add("company_stage", "unknown", "no company-stage evidence");
+    else if (observedRank > maxAllowed) add("company_stage", "fail", `stage is beyond the allowed range`);
+    else if (minAllowed != null && observedRank < minAllowed) add("company_stage", "fail", `stage is earlier than the allowed range`);
+    else add("company_stage", "pass", "stage is within the allowed range");
+  }
+
+  // ---- FOUNDER-LED ---------------------------------------------------------
+  //
+  // This is a COMPANY property — is this still a founder-run business? It is NOT
+  // the later mission requirement to return a Founder/CEO CONTACT. A company may
+  // be founder-led with no specific person resolved yet; that person is verified
+  // in the decision-maker stage, against the same company.
+  if (c.require_founder_led !== true) {
+    add("founder_led", "pass", "no founder-led constraint in effect");
+  } else if (cand.founder_led === true) {
+    add("founder_led", "pass", "founder-led evidence present");
+  } else if (cand.founder_led === false) {
+    add("founder_led", "fail", "company is not founder-led");
+  } else {
+    add("founder_led", "unknown", "no founder-led evidence");
+  }
+
+  const failedConstraints = results.filter((r) => r.outcome === "fail").map((r) => r.constraint);
+  const unknownConstraints = results.filter((r) => r.outcome === "unknown").map((r) => r.constraint);
+  const outcome: ConstraintOutcome =
+    failedConstraints.length > 0 ? "fail" : unknownConstraints.length > 0 ? "unknown" : "pass";
+
+  return {
+    outcome, results, failedConstraints, unknownConstraints,
+    reasons: results.filter((r) => r.outcome !== "pass").map((r) => `${r.constraint}: ${r.reason}`),
+  };
+}
+
+/**
+ * Apply the Brain's unknown-evidence policy to a tri-state outcome.
+ *
+ * `reject` is available for workspaces that would rather miss a company than
+ * research one; the default is `research`, which keeps it out of the accepted
+ * set without discarding it.
+ */
+export function resolveUnknownEvidence(
+  outcome: ConstraintOutcome,
+  policy: UnknownEvidencePolicy = "research",
+): "pass" | "fail" | "unknown" {
+  if (outcome !== "unknown") return outcome;
+  return policy === "reject" ? "fail" : "unknown";
+}

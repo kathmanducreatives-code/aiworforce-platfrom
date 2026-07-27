@@ -125,7 +125,12 @@ export interface QuotaControllerResult {
   idempotency: Array<{ round: number; key: string; kind: DurableLookupKind; reason: string }>;
 }
 
+import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
+
 export interface QuotaControllerOpts {
+  /** Company Brain HARD constraints. Absent => not enforced (legacy callers). */
+  brainConstraints?: CompanyBrainHardConstraints | null;
+  brainPolicyHash?: string | null;
   requestedLeadCount: number;
   quotaPolicy?: QuotaPolicy;
   bounds?: Partial<QuotaControllerBounds>;

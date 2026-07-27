@@ -6,6 +6,7 @@
 
 import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runCompoundSourcing, type CompoundLimits, type CompoundRunResult } from "./compoundSourcingPipeline.ts";
+import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
 import { compoundJobsFromRawRows } from "./runAgentCompoundJobAdapter.ts";
 import { buildScopedPeopleInput, compoundPeopleFromRows } from "./runAgentCompoundPeopleAdapter.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
@@ -63,6 +64,9 @@ export async function runAgentCompoundExecution(
     peopleIdempotencyKey?: (companyKey: string) => string;
     /** Skip a people call whose durable key already completed. */
     peopleCallCompleted?: (key: string) => boolean;
+    /** Company Brain HARD constraints. Absent => not enforced (legacy callers). */
+    brainConstraints?: CompanyBrainHardConstraints | null;
+    brainPolicyHash?: string | null;
   } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
@@ -137,7 +141,11 @@ export async function runAgentCompoundExecution(
     },
   };
 
-  const run = await runCompoundSourcing(intent, pipelineDeps, { limits: opts.limits, vertical: opts.vertical, now: opts.now });
+  const run = await runCompoundSourcing(intent, pipelineDeps, {
+    limits: opts.limits, vertical: opts.vertical, now: opts.now,
+    // Company Brain hard gate. Threaded, never re-derived here.
+    brainConstraints: opts.brainConstraints ?? null, brainPolicyHash: opts.brainPolicyHash ?? null,
+  });
 
   writeBoundary.verifiedCompanies = run.diagnostics.verifiedCompanies;
 
