@@ -16,9 +16,7 @@ import {
   compileHiringSourceInput, indeedDatePostedBucket, linkedinTimePostedRange, ycRoleFilter,
 } from "./actorInputPlanner.ts";
 import {
-  deterministicSourcePlan, validateSourcePlan, sourcePlanHash,
   isDynamicSourcePlanningEnabled, DYNAMIC_SOURCE_WORKSPACES_ENV,
-  type SourcePlanMission,
 } from "./hiringSourcePlan.ts";
 import { ACTOR_REGISTRY, getActorByKey } from "./actorRegistry.ts";
 import { SOURCE_TYPE_TO_ACTOR } from "./actorInputSchemas.ts";
@@ -269,102 +267,11 @@ Deno.test("S24 no compiled input carries a credential or an actor id", async () 
   }
 });
 
-// ============================================== mission-aware deterministic ===
-
-const mission = (o: Partial<SourcePlanMission> = {}): SourcePlanMission => ({
-  hiringSignalRequired: true, industries: ["b2b saas"], companyStages: ["seed"],
-  geography: "United States", requestedContactReady: 5, ...o,
-});
-
-Deno.test("S25 early-stage B2B SaaS selects YC, Indeed and LinkedIn", () => {
-  const p = deterministicSourcePlan(mission());
-  assertEquals(p.lanes.map((l) => l.capability),
-    ["yc_job_discovery", "indeed_job_discovery", "linkedin_job_discovery"]);
-  assertEquals(p.fallbackLanes.map((l) => l.capability), ["glassdoor_job_discovery"]);
-  assertEquals(p.verification?.capability, "ats_job_verification");
-});
-
-Deno.test("S26 manufacturing EXCLUDES YC by default", () => {
-  const p = deterministicSourcePlan(mission({ industries: ["manufacturing"], companyStages: [] }));
-  const caps = p.lanes.map((l) => l.capability);
-  assert(!caps.includes("yc_job_discovery"), `YC must not be selected: ${caps.join(", ")}`);
-  assertEquals(caps, ["indeed_job_discovery", "linkedin_job_discovery"]);
-});
-
-Deno.test("S27 a local-business mission selects no YC lane", () => {
-  const p = deterministicSourcePlan(mission({ industries: ["dental clinics"], companyStages: [] }));
-  assert(!p.lanes.some((l) => l.capability === "yc_job_discovery"));
-});
-
-Deno.test("S28 a mission with NO hiring requirement selects no job scraper at all", () => {
-  const p = deterministicSourcePlan(mission({ hiringSignalRequired: false }));
-  assertEquals(p.lanes, []);
-  assertEquals(p.fallbackLanes, []);
-  assertEquals(p.verification, null);
-});
-
-Deno.test("S29 different verticals produce different plans; the same mission is stable", async () => {
-  const saas = deterministicSourcePlan(mission());
-  const mfg = deterministicSourcePlan(mission({ industries: ["manufacturing"], companyStages: [] }));
-  assert(await sourcePlanHash(saas) !== await sourcePlanHash(mfg));
-  assertEquals(await sourcePlanHash(saas), await sourcePlanHash(deterministicSourcePlan(mission())));
-});
-
-// ============================================================== validation ===
-
-Deno.test("S30 an unknown or disabled capability lane is rejected", () => {
-  enableProviders();
-  const v = validateSourcePlan({
-    version: "dynamic-hiring-source-plan-v1",
-    lanes: [{ capability: "made_up_source" as never, priority: 1, purpose: "discovery", candidateTarget: 10, rationale: "x" }],
-    fallbackLanes: [], verification: null,
-    joinStrategy: "canonical_company_identity", stopCondition: "contact_ready_quota_or_valid_exhaustion",
-  }, mission());
-  assertEquals(v.approvedLanes.length, 0);
-  assert(v.rejectedLanes[0].reason.startsWith("unknown_capability"));
-  assertEquals(v.ok, false, "a hiring mission with no surviving lane must block");
-});
-
-Deno.test("S31 a job scraper on a non-hiring mission is rejected", () => {
-  enableProviders();
-  const v = validateSourcePlan(deterministicSourcePlan(mission()), mission({ hiringSignalRequired: false }));
-  assertEquals(v.approvedLanes.length, 0);
-  for (const r of v.rejectedLanes) assertEquals(r.reason, "mission_does_not_require_hiring_evidence");
-});
-
-Deno.test("S32 ATS cannot be used as a discovery lane", () => {
-  enableProviders();
-  const v = validateSourcePlan({
-    version: "dynamic-hiring-source-plan-v1",
-    lanes: [{ capability: "ats_job_verification", priority: 1, purpose: "discovery", candidateTarget: 50, rationale: "x" }],
-    fallbackLanes: [], verification: null,
-    joinStrategy: "canonical_company_identity", stopCondition: "contact_ready_quota_or_valid_exhaustion",
-  }, mission());
-  assertEquals(v.rejectedLanes[0]?.reason, "requires_known_company_not_a_discovery_lane");
-});
-
-Deno.test("S33 duplicate lanes are deduplicated and excessive targets capped", () => {
-  enableProviders();
-  const l = (t: number) => ({ capability: "indeed_job_discovery" as const, priority: 1, purpose: "discovery" as const, candidateTarget: t, rationale: "x" });
-  const v = validateSourcePlan({
-    version: "dynamic-hiring-source-plan-v1", lanes: [l(99999), l(20)],
-    fallbackLanes: [], verification: null,
-    joinStrategy: "canonical_company_identity", stopCondition: "contact_ready_quota_or_valid_exhaustion",
-  }, mission());
-  assert(v.repairs.some((r) => r.includes("deduplicated_lane")));
-  assert(v.repairs.some((r) => r.includes("lane_target_capped")));
-  assert(v.approvedLanes.every((a) => a.candidateTarget <= 200));
-});
-
-Deno.test("S34 the join strategy and stop condition are fixed by Agentory", () => {
-  const v = validateSourcePlan({
-    version: "dynamic-hiring-source-plan-v1", lanes: [],
-    fallbackLanes: [], verification: null,
-    joinStrategy: "fuzzy_name" as never, stopCondition: "whenever" as never,
-  }, mission({ hiringSignalRequired: false }));
-  assertEquals(v.plan.joinStrategy, "canonical_company_identity");
-  assertEquals(v.plan.stopCondition, "contact_ready_quota_or_valid_exhaustion");
-});
+// NOTE: the mission-ordering and plan-validation tests that lived here covered the
+// earlier UNORDERED lane contract. That contract was replaced by the ordered
+// decision graph, and its coverage now lives — expanded — in
+// `orderedSourcePlanning.test.ts`. This file keeps the catalog, compilation,
+// coexistence and flag coverage.
 
 // ================================================================== flags ===
 
