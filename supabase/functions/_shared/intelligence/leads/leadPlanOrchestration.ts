@@ -35,6 +35,17 @@ import {
 import type { EnvReader } from "../intelligenceFlags.ts";
 import type { GenerateJsonFn } from "../plannerWrapper.ts";
 
+// THE SEAM IS THE ONLY DOOR. orchestrate imports exactly one kernel module — this
+// one — which is the blast-radius contract asserted by
+// _shared/intelligence/intelligenceFlags.test.ts (32.E). Rendering the response
+// plan is a plan-shape concern owned by leadPlanAuthority, so it is re-exported
+// here rather than reached for directly.
+export {
+  buildOrchestrateResponsePlan,
+  type OrchestrateResponsePlan,
+  type ResponsePlanStep,
+} from "./leadPlanAuthority.ts";
+
 export interface QualifiedLeadPlanOutcome {
   summary: string;
   steps: QualifiedLeadPlanStep[];

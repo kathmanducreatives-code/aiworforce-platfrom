@@ -5,7 +5,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
-import { planQualifiedLeadBeforePersistence } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
+import {
+  planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
+} from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -1151,6 +1153,16 @@ Return ONLY valid JSON, no prose, no markdown:
       fallbackSummary: parsed!.plan_summary,
     });
 
+    // WHAT THE USER IS TOLD MUST BE WHAT WAS PLANNED.
+    //
+    // `qlPlan` is already authoritative for `task_plans` and for the run-agent
+    // kickoff below. It was NOT authoritative for this function's response, which
+    // pilot-chat announces the plan from — so a qualified-Lead mission persisted a
+    // four-step plan and simultaneously told the user it had made the generic
+    // two-step one. Persistence is untouched; only what we hand back changes.
+    // With no qualified-Lead plan this IS `parsed`, so nothing else moves.
+    const responsePlan = buildOrchestrateResponsePlan(qlPlan, parsed!);
+
     // Persist task_plan.
     const { data: taskPlan, error: planError } = await admin
       .from("task_plans")
@@ -1195,17 +1207,17 @@ Return ONLY valid JSON, no prose, no markdown:
       plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
-      body: parsed!.plan_summary,
+      body: responsePlan.plan_summary,
       metadata: {
-        total_steps: parsed!.steps.length,
+        total_steps: responsePlan.steps.length,
         conversation_id,
         planner: plannerSource,
         provider: ai?.provider ?? "staged",
         model: ai?.model ?? "n/a",
         intent,
         execution_mode: executionMode,
-        agents: parsed!.steps.map((s) => s.agent_slug),
-        tools_required: parsed!.steps.map((s) => s.tool_needed).filter(Boolean),
+        agents: responsePlan.steps.map((s) => s.agent_slug),
+        tools_required: responsePlan.steps.map((s) => s.tool_needed).filter(Boolean),
         connectors_missing: connectorsMissing,
         tool_input: tool_input ?? null,
         lead_routing: leadRouting,
@@ -1266,15 +1278,15 @@ Return ONLY valid JSON, no prose, no markdown:
       success: true,
       plan_id: taskPlan.id,
       task_plan_id: taskPlan.id,
-      plan_summary: parsed!.plan_summary,
-      total_steps: parsed!.steps.length,
-      steps_count: parsed!.steps.length,
+      plan_summary: responsePlan.plan_summary,
+      total_steps: responsePlan.steps.length,
+      steps_count: responsePlan.steps.length,
       planner: plannerSource,
       intent,
       execution_mode: executionMode,
-      agents: parsed!.steps.map((s) => s.agent_slug),
+      agents: responsePlan.steps.map((s) => s.agent_slug),
       connectors_missing: connectorsMissing,
-      plan: parsed,
+      plan: responsePlan,
     });
   } catch (err) {
     console.error("[orchestrate] unexpected:", err);
