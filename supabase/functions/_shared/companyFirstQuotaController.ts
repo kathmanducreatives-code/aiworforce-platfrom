@@ -43,6 +43,12 @@ import type { Vertical } from "./verticalQualification.ts";
 export type CompanyFirstTerminalStatus =
   | "completed" | "quota_not_met" | "search_exhausted" | "budget_exhausted"
   | "round_limit_reached" | "provider_failure" | "invalid_request"
+  /**
+   * The provider round succeeded but its outcome could not be folded into source
+   * state. NOT `provider_failure`: the paid call worked, and blaming the provider
+   * would point an operator at the wrong system.
+   */
+  | "source_transition_failed"
   /** NOT terminal: the safe time boundary was reached; the task can be resumed. */
   | "continuation_required";
 
@@ -123,6 +129,14 @@ export interface QuotaControllerResult {
   };
   /** Per-round durable-idempotency decision. */
   idempotency: Array<{ round: number; key: string; kind: DurableLookupKind; reason: string }>;
+  /**
+   * Set ONLY when a round's outcome could not be folded into source state.
+   *
+   * Its presence is what distinguishes "the run finished" from "the run stopped
+   * because it no longer knew what it was doing" — a distinction the terminal
+   * status alone used to hide.
+   */
+  source_transition_failure: (RoundObservationOutcome["halt"] & { round: number }) | null;
 }
 
 import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
@@ -146,7 +160,65 @@ export interface QuotaControllerOpts {
   log?: (msg: string, meta?: unknown) => void;
 }
 
+/**
+ * What one completed round actually produced, in full-funnel terms.
+ *
+ * Handed to `onRoundComplete` so a caller can build a source observation from
+ * MEASURED outcomes rather than from raw provider rows. Raw volume is the one
+ * number that reliably lies: four hundred jobs that collapse into three companies
+ * and zero contactable founders is not a good round, and a strategy decision made
+ * from `raw_rows` alone would read it as one.
+ *
+ * Scalars and the existing `FunnelSummary` only — no candidate objects, so the
+ * controller stays free of any dependency on what a caller does with them.
+ */
+export interface RoundObservationInput {
+  round: number;
+  /** The round's measured funnel — the same one the checkpoint records. */
+  funnel: FunnelSummary;
+  rawRows: number;
+  newUniqueJobs: number;
+  newUniqueCompanies: number;
+  newEligibleLeads: number;
+  /** CONTACT-ready leads across the whole task, not just this round. */
+  totalEligibleLeads: number;
+  remainingQuota: number;
+  remainingBudgetUsd: number;
+  providerCalls: number;
+  duplicatesRemoved: number;
+  /** True when this round could not expand any further. */
+  sourceExhausted: boolean;
+}
+
+/** What a round-completion hook may contribute back to the checkpoint. */
+export interface RoundObservationOutcome {
+  /** Slices to store alongside the quota state, keyed by their owner's constant. */
+  checkpointSlices?: Record<string, unknown>;
+  /**
+   * STOP. The observer could not establish what happens next.
+   *
+   * The hook owns source progression — broadening, advancement, stopping — so a
+   * failure there is not missing telemetry, it is a runtime that no longer knows
+   * its own state. Continuing would run the next round against stale state, hit
+   * the duplicate-input guard, and return empty batches while the diagnostics
+   * claimed everything was fine.
+   *
+   * Safe codes only. No exception payloads, prompts, provider records or contacts.
+   */
+  halt?: { code: string; reason: string; diagnostics?: Record<string, unknown> };
+}
+
 export interface QuotaControllerDeps extends CompoundExecutionDeps {
+  /**
+   * Called ONCE after each round is finalized and before the checkpoint is
+   * written, so anything the hook records is saved with the round it describes.
+   *
+   * The smallest possible seam. The controller remains the sole quota authority
+   * and the sole round loop; this only lets another authority observe a completed
+   * round and hand back state to persist. It cannot change the quota, the terminal
+   * status, or whether another round runs.
+   */
+  onRoundComplete?: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
   /** INJECTED planner. Never called by this module in tests or offline runs. */
   proposeBroadening?: BroadeningPlannerFn;
   /** Safe provenance for the most recent planner call. */
@@ -191,6 +263,8 @@ export async function runCompanyFirstQuotaController(
   const ledger = newIdempotencyLedger();
   let lastFunnel: FunnelSummary | null = null;
   let lastBottleneck: BottleneckKind | null = null;
+  /** Set only when the round observer could not establish the next action. */
+  let transitionFailure: (RoundObservationOutcome["halt"] & { round: number }) | null = null;
 
   const deadline: ExecutionDeadline = createExecutionDeadline(opts.executionBudget, opts.clock);
   const nowIso = () => opts.now ?? new Date().toISOString();
@@ -476,9 +550,69 @@ export async function runCompanyFirstQuotaController(
     };
     state.completed_rounds.push(checkpoint);
     state.planner_metadata = plannerMetadata as unknown as Array<Record<string, unknown>>;
+
+    // ---- ROUND OBSERVED --------------------------------------------------
+    //
+    // Before the save, so whatever the observer records is checkpointed with the
+    // round it describes. A hook failure is contained: sourcing is the point of
+    // this loop, and losing an observation must never lose a round's real work.
+    let observerHalt: RoundObservationOutcome["halt"] | null = null;
+    if (deps.onRoundComplete) {
+      try {
+        const outcome = await deps.onRoundComplete({
+          round,
+          funnel,
+          rawRows: exec.writeBoundary.rawProviderItems,
+          newUniqueJobs: newJobs,
+          newUniqueCompanies: newCompanies,
+          newEligibleLeads: newEligible,
+          totalEligibleLeads: eligibleAfter,
+          remainingQuota: remainingLeadCount(requested, eligibleAfter),
+          remainingBudgetUsd: Math.max(0, bounds.hardBudget - budget),
+          providerCalls: roundJobsCalls + roundPeopleCalls,
+          duplicatesRemoved: dupes,
+          // No further expansion exists, so this source has nothing left to try.
+          sourceExhausted: !expansionAvailable,
+        });
+        if (outcome?.checkpointSlices) {
+          state.slices = { ...(state.slices ?? {}), ...outcome.checkpointSlices };
+        }
+        if (outcome?.halt) observerHalt = outcome.halt;
+      } catch (e) {
+        // A THROW IS A HALT, not a shrug. The observer is the only thing that
+        // advances the source plan; if it failed we do not know what the next
+        // action is, and inventing one is how a run spends money on the wrong
+        // source. Only a safe category is kept — never the exception payload.
+        observerHalt = {
+          code: "source_observation_transition_failed",
+          reason: safeObserverFailure(e),
+          diagnostics: { phase: "unhandled", round },
+        };
+      }
+    }
+
+    // The checkpoint is written EITHER WAY, and before the halt is acted on. The
+    // completed provider call is already recorded in `completed_calls`, so a
+    // resumed run must never re-pay for it — losing that record to an observer
+    // failure would turn a control-plane bug into a billing one.
+    if (observerHalt) {
+      state.terminal_status = "source_transition_failed";
+      state.terminal_reason = observerHalt.code;
+      state.next_action = "stopped";
+    }
     if (deps.stateStore && taskId) {
       // `partial` — never leave the task at `running`.
       await deps.stateStore.save(taskId, state, "partial");
+    }
+
+    if (observerHalt) {
+      log("company-first round observation failed; stopping", {
+        round, code: observerHalt.code, reason: observerHalt.reason,
+      });
+      terminal = "source_transition_failed";
+      terminalReason = observerHalt.reason;
+      transitionFailure = { round, ...observerHalt };
+      break;
     }
 
     log("company-first round finished", { round, eligibleAfter, remaining: remainingLeadCount(requested, eligibleAfter) });
@@ -536,6 +670,7 @@ export async function runCompanyFirstQuotaController(
       rounds, candidates: dedupedCandidates, persisted, writeBoundary,
       plan, plan_sources: planSources, bottlenecks, cost_forecasts: forecasts, plan_validations: planValidations,
       planner_metadata: plannerMetadata, idempotency,
+      source_transition_failure: transitionFailure,
       continuation: {
         required: status === "continuation_required",
         next_action: status === "continuation_required" ? "start_round" : "finalize",
@@ -546,4 +681,21 @@ export async function runCompanyFirstQuotaController(
       },
     };
   }
+}
+
+/**
+ * A short, safe category for an observer failure.
+ *
+ * The exception's own text is deliberately NOT kept: it can carry a provider
+ * payload, a prompt fragment or a credential that happened to be in scope. A
+ * category is enough to route an operator to the right subsystem.
+ */
+export function safeObserverFailure(e: unknown): string {
+  const msg = String((e as { message?: unknown })?.message ?? "").toLowerCase();
+  if (/observation|funnel/.test(msg)) return "observation_construction_failed";
+  if (/fusion|evidence/.test(msg)) return "evidence_read_failed";
+  if (/hash/.test(msg)) return "hash_generation_failed";
+  if (/feedback|planner|model/.test(msg)) return "feedback_resolution_failed";
+  if (/state|checkpoint|persist/.test(msg)) return "state_transition_failed";
+  return "observer_unhandled_error";
 }

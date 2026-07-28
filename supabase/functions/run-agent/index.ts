@@ -50,6 +50,9 @@ import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../_shared/inte
 // function object, so the default path is not merely equivalent to today's
 // behavior, it is today's behavior.
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
+import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
+import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
+import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
@@ -827,10 +830,22 @@ Deno.serve(async (req) => {
         // calls follow the validated plan one step at a time. Everything after the
         // call — normalization, Company Brain, decision-maker workflow, employer
         // verification, CONTACT quota, persistence — is untouched.
+        // RESTORE the sequential slices from the SAME checkpoint that carries the
+        // quota state, so a resumed run continues on the step it reached rather
+        // than starting the plan again. Each slice is validated by its own
+        // authority on the way in, so a stale one is discarded, not trusted.
+        const cfStateStore = supabaseSourcingStateStore(supabase as never);
+        const priorSourcingState = await cfStateStore.load(task.id);
+        const priorSlices = (priorSourcingState?.slices ?? {}) as Record<string, unknown>;
+
         const sequentialSources = await applySequentialSourceExecution({
           workspaceId: workspace_id,
           taskId: task.id,
           invokeJobs,
+          restoredState: (priorSlices[SOURCE_EXECUTION_KEY] ?? null) as never,
+          restoredFusion: (priorSlices[FUSION_STATE_KEY] ?? null) as never,
+          restoredFeedback: (priorSlices[SOURCE_FEEDBACK_KEY] ?? null) as never,
+          companyBrainPolicyHash: brainEnforced ? effectivePolicy.policyHash : null,
           profile: {
             industries: cfIntent.job_search_spec.company_vertical ? [String(cfIntent.job_search_spec.company_vertical)] : [],
             stages: [],
@@ -858,8 +873,12 @@ Deno.serve(async (req) => {
           proposeBroadening: broadeningPlanner.plan,
           plannerMetadata: broadeningPlanner.lastMetadata,
           durableIdempotency: supabaseToolCallReader(supabase as never),
-          stateStore: supabaseSourcingStateStore(supabase as never),
+          stateStore: cfStateStore,
           invokeJobs: sequentialSources.invokeJobs, invokePeople, persist: persistPlan,
+          // CLOSES THE SOURCE LOOP. After each round the bridge builds one
+          // observation, decides the one next action and folds it into the state
+          // the next round reads. Inert when the workspace has not opted in.
+          onRoundComplete: sequentialSources.onObservation,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
@@ -907,6 +926,12 @@ Deno.serve(async (req) => {
             // not exist, so the task result, the run context the Workbench reads
             // back, and every export are unchanged from before Phase 2.
             ...(claudeFirstDiagnostics ? { claude_first_planning: claudeFirstDiagnostics } : {}),
+            // Ordered-source execution, evidence fusion and bounded feedback.
+            // Present ONLY for a workspace that opted in, so a task result is
+            // unchanged for everyone else.
+            ...(sequentialSources.enabled
+              ? { sequential_source_execution: sequentialSourceDiagnostics(sequentialSources) }
+              : {}),
             // Which Company Brain policy actually gated this run. Safe metadata
             // only: versions, a hash and constraint NAMES — never Brain prose.
             company_brain_policy: {
