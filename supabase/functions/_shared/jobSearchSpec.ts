@@ -123,16 +123,124 @@ function singularizeHead(phrase: string): string {
   return words.join(" ");
 }
 
-/** Pull the requested HIRING role phrase out of the sentence (deterministic). */
-export function extractHiringRolePhrase(text: string): string | null {
+// ------------------------------------------------------- bounded role lists --
+//
+// A hiring requirement is frequently a LIST: "hiring for Sales Operations,
+// Revenue Operations, or GTM Operations roles". The tail used to be measured as
+// one blob against a six-word ceiling, so that perfectly ordinary sentence — 7
+// words once the conjunction is counted — was rejected outright and the whole
+// request compiled to `no_hiring_role_phrase` with an EMPTY keyword list. One
+// conjunction was the difference between a working search and no search at all.
+//
+// The ceiling was the wrong instrument. A list is not long prose, and prose is
+// not made safe by being short. So the tail is SPLIT on the separators a list
+// actually uses, and each segment is judged on its own merits against the shared
+// job-family classifier. Narrative text fails because none of its segments name a
+// recognised role — not because someone counted its words.
+
+/**
+ * Is this phrase a role either registry recognises?
+ *
+ * `classifyJobFamily` falls back to `"other"` rather than refusing, so its
+ * verdict alone cannot distinguish "a role we do not model" from "not a role at
+ * all". `inferFamilyKey` is the second opinion, and a phrase both decline is
+ * treated as prose.
+ */
+function isRecognisedRolePhrase(phrase: string): boolean {
+  if (classifyJobFamily(phrase, null).family !== "other") return true;
+  if (inferFamilyKey([], [phrase], null) != null) return true;
+  // Neither registry models every legitimate title ("Business Development
+  // Manager" is a real hiring role both decline), so a phrase ENDING in a job
+  // head-noun is accepted as well. This stays structural and bounded: it is the
+  // head noun that must qualify, which is what separates "Business Development
+  // Manager" from "Because They Are Growing Fast".
+  return ROLE_HEAD_NOUN_RE.test(phrase);
+}
+
+/** Head nouns that make a phrase a job title rather than prose. */
+const ROLE_HEAD_NOUN_RE =
+  /\b(?:manager|managers|engineer|engineers|developer|developers|representative|representatives|director|directors|specialist|specialists|analyst|analysts|lead|leads|officer|officers|coordinator|coordinators|administrator|administrators|architect|architects|consultant|consultants|designer|designers|scientist|scientists|technician|technicians|operations|ops|associate|associates|partner|partners|recruiter|recruiters|controller|controllers|accountant|accountants|planner|planners|strategist|strategists|executives?)\s*$/i;
+
+/** Separators a bounded role list uses. Oxford comma and "/" included. */
+const ROLE_LIST_SPLIT_RE = /\s*(?:,|;|\/|\bor\b|\band\b)\s*/i;
+
+/** At most this many roles. A request naming more is not a bounded list. */
+export const MAX_HIRING_ROLES = 4;
+
+/** Words per single role. "Senior Revenue Operations Manager" is four. */
+const MAX_ROLE_WORDS = 5;
+
+/** Strip the trailing role noun and punctuation a list ends with. */
+function trimRoleTail(s: string): string {
+  return s
+    .replace(/[.,;:!?]+$/g, "")
+    .replace(/\b(roles?|positions?|jobs?|openings?|hires?)\b\s*$/i, "")
+    .trim();
+}
+
+/**
+ * Every requested HIRING role in the sentence, in order, deduplicated.
+ *
+ * Each candidate segment must be recognised by `classifyJobFamily` — the SAME
+ * classifier the downstream gate uses to accept or reject a posting. That is the
+ * property worth having: we can only search for something the gate would also
+ * recognise, so a widened parse can never produce keywords the funnel will throw
+ * away. An unrecognised segment is dropped silently; if none survive, the caller
+ * gets `null` exactly as before.
+ *
+ * Returns HIRING roles only. Decision-maker roles ("founders", "CEOs") are parsed
+ * elsewhere and never enter this list — they sit before the hiring verb, and this
+ * only ever reads the text after it.
+ */
+export function extractHiringRolePhrases(text: string): string[] {
   const t = (text ?? "").trim();
   const m = HIRING_LEAD_RE.exec(t);
-  if (!m) return null;
+  if (!m) return [];
+
   let tail = t.slice(m.index + m[0].length);
   tail = tail.replace(ROLE_TAIL_RE, "").trim();
-  tail = tail.replace(/[.,;:!?]+$/g, "").replace(/\b(roles?|positions?|jobs?|openings?)\b\s*$/i, "").trim();
-  if (!tail || tail.split(/\s+/).length > 6) return null;
-  return singularizeHead(titleCasePhrase(tail));
+  tail = trimRoleTail(tail);
+  if (!tail) return [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of tail.split(ROLE_LIST_SPLIT_RE)) {
+    const segment = trimRoleTail(raw.trim());
+    if (!segment) continue;
+    // A segment longer than a title is prose, not a role.
+    if (segment.split(/\s+/).length > MAX_ROLE_WORDS) continue;
+
+    const phrase = singularizeHead(titleCasePhrase(segment));
+    if (!phrase) continue;
+
+    // THE REGISTRIES DECIDE, not a word count. Two are consulted because they
+    // cover different ground: `classifyJobFamily` owns the operations families
+    // the Sales-Ops gate is built on, and `inferFamilyKey` owns the broader
+    // job-family registry (engineering, sales, marketing, …). A phrase neither
+    // recognises is prose, however short it is — which is what keeps "because
+    // they are growing fast" out of the keyword list.
+    if (!isRecognisedRolePhrase(phrase)) continue;
+
+    const key = phrase.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(phrase);
+    if (out.length >= MAX_HIRING_ROLES) break;
+  }
+
+  return out;
+}
+
+/**
+ * The FIRST requested hiring role, or null.
+ *
+ * Signature and meaning unchanged for existing callers; it is now the head of
+ * `extractHiringRolePhrases` rather than a separate parse, so the two can never
+ * disagree about what the sentence asked for.
+ */
+export function extractHiringRolePhrase(text: string): string | null {
+  return extractHiringRolePhrases(text)[0] ?? null;
 }
 
 /** A pure job-keyword ask ("Sales Operations jobs in the US") — role phrase sits
@@ -175,7 +283,11 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
   // company-only search) has no jobs search to compile.
   if (!input.hiringSignalRequired && !input.jobFirst) return base;
 
-  const rolePhrase = extractHiringRolePhrase(text) ?? (input.jobFirst ? extractJobNounRolePhrase(text) : null);
+  const listedRoles = extractHiringRolePhrases(text);
+  const rolePhrases = listedRoles.length
+    ? listedRoles
+    : (input.jobFirst ? [extractJobNounRolePhrase(text)].filter(Boolean) as string[] : []);
+  const rolePhrase = rolePhrases[0] ?? null;
   const { location, country } = extractJobLocation(text);
   const company_vertical = inferRequestedVertical(text);
 
@@ -191,11 +303,23 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
     };
   }
 
-  const family = classifyJobFamily(rolePhrase, null);
-  const keyword_queries = family.qualifiesAsSalesOps ? [...SALES_OPS_VARIANTS] : [rolePhrase];
-  const job_families = family.qualifiesAsSalesOps
+  // Classify EVERY requested role, not just the first. A request naming three
+  // operations disciplines is one hiring requirement with three acceptable
+  // shapes, and dropping two of them narrows the search the user actually asked
+  // for.
+  const families = rolePhrases.map((p) => classifyJobFamily(p, null));
+  const anySalesOps = families.some((f) => f.qualifiesAsSalesOps);
+
+  // The curated Sales/Revenue-Ops set already IS the union of these three
+  // families and every entry is gate-approved, so it stays the canonical answer
+  // whenever any listed role qualifies — the same behavior as before, now
+  // reached from a list rather than only from a single phrase.
+  const keyword_queries = anySalesOps
+    ? [...SALES_OPS_VARIANTS]
+    : [...new Set(rolePhrases)];
+  const job_families = anySalesOps
     ? (["sales_ops", "rev_ops", "gtm_ops"] as JobFamily[])
-    : [family.family];
+    : ([...new Set(families.map((f) => f.family))] as JobFamily[]);
 
   return {
     job_families, keyword_queries, location, country, company_vertical,
