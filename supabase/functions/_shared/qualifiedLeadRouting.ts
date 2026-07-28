@@ -139,12 +139,62 @@ export interface QualifiedLeadContract {
   original_instruction: string;
 }
 
-/** The final-lead quota when the request states one ("Return 5 qualified leads"). */
-export function extractRequestedLeadCount(instruction: string | null | undefined): number | null {
-  const m = LEAD_QUOTA_RE.exec(String(instruction ?? ""));
-  if (!m) return null;
-  const n = Number(m[1]);
+// ------------------------------------------------------- requested count -----
+//
+// The quota has to be tied to the ENTITY the user asked for, not to whichever
+// number appears first. "Find founders at companies with 10-100 employees.
+// Return 5 leads." states one quota — 5 — and three other numbers that are not
+// quotas at all. A first-number rule reads it as 10.
+//
+// So a number only becomes the quota when the words around it say it counts the
+// requested output: a person/lead noun directly after it, or an explicit
+// delivery verb before it.
+
+/** Number words worth supporting. Beyond twenty, people write digits. */
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, fifteen: 15, twenty: 20, twentyfive: 25, thirty: 30, fifty: 50,
+};
+const NUM_SRC = `(\\d{1,3}|${Object.keys(NUMBER_WORDS).join("|")})`;
+
+/** Nouns naming the FINAL requested output — a person we could contact. */
+const CONTACT_ENTITY_NOUN_SRC =
+  "(?:qualified\\s+|contact[-\\s]?ready\\s+|verified\\s+|new\\s+){0,2}"
+  + "(?:leads?|contacts?|founders?|co-?founders?|ceos?|executives?|decision[-\\s]?makers?"
+  + "|people|persons?|prospects?|buyers?|owners?|presidents?)";
+
+/**
+ * Ordered most-specific first. The number must be ATTACHED to the requested
+ * output, either by the noun that follows it or by the verb that introduces it.
+ */
+const REQUESTED_COUNT_PATTERNS: RegExp[] = [
+  new RegExp(`\\b${NUM_SRC}\\s+${CONTACT_ENTITY_NOUN_SRC}\\b`, "i"),
+  new RegExp(`\\b(?:return|give\\s+me|send\\s+me|get\\s+me|i\\s+need|i\\s+want|deliver|find\\s+me)\\s+${NUM_SRC}\\b`, "i"),
+];
+
+function toCount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const key = raw.toLowerCase().replace(/[-\s]/g, "");
+  const n = /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS[key];
   return Number.isInteger(n) && n >= 1 && n <= 100 ? n : null;
+}
+
+/**
+ * The final-lead quota when the request states one.
+ *
+ * Recognises "Return 5 qualified leads", "Find 5 founders", "Find five CEOs",
+ * "I need 5 decision-makers" and "…and return 5". Returns null when the request
+ * never states a quota for the requested output — the caller keeps its own safe
+ * default rather than being handed a number that meant something else.
+ */
+export function extractRequestedLeadCount(instruction: string | null | undefined): number | null {
+  const text = String(instruction ?? "");
+  for (const re of REQUESTED_COUNT_PATTERNS) {
+    const m = re.exec(text);
+    const n = toCount(m?.[1]);
+    if (n != null) return n;
+  }
+  return null;
 }
 
 function firstMatch(re: RegExp, s: string): string {
