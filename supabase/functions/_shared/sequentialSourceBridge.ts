@@ -5,7 +5,15 @@
 //
 // WHAT IT DOES: when dynamic source planning is permitted for THIS workspace, it
 // wraps the caller's existing `invokeJobs` so provider calls follow the validated
-// ordered plan, one step at a time. Nothing else.
+// ordered plan, one step at a time — and it CLOSES THE LOOP by observing each
+// completed round, deciding the one next action, and folding it into the state the
+// next round reads.
+//
+// The loop matters as much as the wrapping. Until now `applyObservation` had no
+// production caller at all, so `current_step_id` was set on the first call and
+// never advanced: round 1 executed source 1, and every later round recompiled the
+// identical input, hit the duplicate guard, and returned an empty batch. The plan
+// looked ordered and behaved like a single source that had stopped working.
 //
 // WHAT IT DOES NOT TOUCH: the company-first executor, the quota controller, the
 // Company Brain gate, the decision-maker workflow, employer verification,
@@ -16,16 +24,30 @@
 // PURE. No network, model or database access. The provider function is injected.
 
 import { isDynamicSourcePlanningEnabled, deterministicOrderedPlan, validateOrderedPlan,
-  type LeadMissionSourceProfile, type OrderedHiringSourcePlan } from "./hiringSourcePlan.ts";
-import { newSourceExecutionState, stateMatchesPlan, type SourceExecutionState } from "./sourceExecutionState.ts";
+  type LeadMissionSourceProfile, type OrderedHiringSourcePlan, type SourceStepObservation } from "./hiringSourcePlan.ts";
+import {
+  newSourceExecutionState, SOURCE_EXECUTION_KEY, stateMatchesPlan, stepOf,
+  type SourceExecutionState,
+} from "./sourceExecutionState.ts";
 import { sequentialJobsInvoker, actorKeyForCapability, sourceExecutionDiagnostics,
   type ActivationContext, type SequentialCallOutcome } from "./sequentialSourceRuntime.ts";
 import type { EnvReader } from "./intelligence/intelligenceFlags.ts";
-import { newFusionState, fusionDiagnostics, type HiringEvidenceFusionState } from "./hiringEvidenceFusion.ts";
 import {
-  newFeedbackLedger, SOURCE_FEEDBACK_VERSION, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK,
+  newFusionState, fusionDiagnostics, FUSION_STATE_KEY,
+  type HiringEvidenceFusionState,
+} from "./hiringEvidenceFusion.ts";
+import {
+  fusedEvidenceHash, fusedMetricsFrom, newFeedbackLedger,
+  MAX_SOURCE_FEEDBACK_CALLS_PER_TASK, SOURCE_FEEDBACK_KEY, SOURCE_FEEDBACK_VERSION,
   type SourceFeedbackLedger,
 } from "./sourceFeedbackContract.ts";
+import {
+  applyObservationWithFeedback, sourceFeedbackDiagnostics,
+  type FeedbackDecisionResult,
+} from "./sourceFeedbackRuntime.ts";
+import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
+import { canonicalJson, sha256Hex } from "./planHash.ts";
+import type { RoundObservationInput, RoundObservationOutcome } from "./companyFirstQuotaController.ts";
 
 export type InvokeJobsFn = (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
 
@@ -44,6 +66,17 @@ export interface SequentialSourceBridgeInput {
   costPerCall?: number;
   activationContext?: () => ActivationContext;
   readEnv?: EnvReader;
+  /**
+   * Which Company Brain policy gated this run. Hashed already by the caller — the
+   * feedback request carries the hash, never the Brain itself.
+   */
+  companyBrainPolicyHash?: string | null;
+  /**
+   * The model call, injected ONLY by tests. Production omits it, so the existing
+   * `generateJson` gateway is used — there is no second client and no wrapper
+   * around the wrapper.
+   */
+  generate?: GenerateJsonFn;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -65,6 +98,16 @@ export interface SequentialSourceBridgeResult {
    */
   feedback: SourceFeedbackLedger | null;
   lastOutcome: () => SequentialCallOutcome | null;
+  /**
+   * Observe ONE completed round: build the observation, decide the one next
+   * action, fold it in, and hand back the slices to checkpoint.
+   *
+   * Wired to the controller's `onRoundComplete`. When the bridge is disabled this
+   * is a no-op that returns nothing, so the default path does no work at all.
+   */
+  onObservation: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
+  /** The last feedback decision, for diagnostics. Null until a round completes. */
+  lastFeedback: () => FeedbackDecisionResult | null;
 }
 
 /**
@@ -80,6 +123,9 @@ export async function applySequentialSourceExecution(
   const inert = (reason: string): SequentialSourceBridgeResult => ({
     invokeJobs: input.invokeJobs, enabled: false, reason,
     plan: null, state: null, fusion: null, feedback: null, lastOutcome: () => null,
+    // A no-op, not an absent function: the controller can call it unconditionally.
+    onObservation: () => Promise.resolve(),
+    lastFeedback: () => null,
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
@@ -133,6 +179,68 @@ export async function applySequentialSourceExecution(
     log: input.log,
   });
 
+  let lastFeedback: FeedbackDecisionResult | null = null;
+  const log = input.log ?? (() => {});
+
+  /**
+   * One completed round becomes exactly ONE observation and exactly ONE applied
+   * action.
+   *
+   * Everything upstream has already happened by the time this runs: the provider
+   * call, normalization, SignalEvent fusion (performed inside the invoker, so the
+   * evidence is canonical before any decision reads it), the Company Brain gate and
+   * the decision-maker funnel. That ordering is why the observation can report
+   * FUSED yield rather than raw rows.
+   */
+  const onObservation = async (round: RoundObservationInput): Promise<RoundObservationOutcome | void> => {
+    const stepId = state.current_step_id ?? approved.steps[0]?.stepId ?? null;
+    if (!stepId) return;
+    const record = stepOf(state, stepId);
+    const step = approved.steps.find((x) => x.stepId === stepId);
+    if (!record || !step) return;
+
+    const observation = buildObservation({ round, stepId, step: step.capability, record, fusion });
+
+    // Fused metrics and the evidence hash come from PR #109's state, never
+    // recomputed here.
+    const fused = fusedMetricsFrom(fusion, handle.lastOutcome()?.fusion ?? null);
+    const evidenceHash = await fusedEvidenceHash(fusion);
+
+    const applied = await applyObservationWithFeedback({
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      plan: approved,
+      state,
+      observation,
+      fused,
+      evidenceHash,
+      ledger: feedback,
+      companyBrainPolicyHash: input.companyBrainPolicyHash ?? "",
+      taskIdHash: await shortId(input.taskId),
+      workspaceIdHash: await shortId(input.workspaceId),
+      // OMITTED in production on purpose: the feedback runtime falls through to
+      // the existing `generateJson` gateway. Injected only by tests.
+      ...(input.generate ? { generate: input.generate } : {}),
+      readEnv: input.readEnv,
+    });
+
+    lastFeedback = applied.feedback;
+    log("[sequential-source] round observed", {
+      round: round.round, step: stepId,
+      action: applied.action.action, source: applied.feedback.source,
+      skipped: applied.feedback.skippedReason, stopped: applied.stopped,
+    });
+
+    // Every slice that a resumed run must restore together.
+    return {
+      checkpointSlices: {
+        [SOURCE_EXECUTION_KEY]: state,
+        [FUSION_STATE_KEY]: fusion,
+        [SOURCE_FEEDBACK_KEY]: feedback,
+      },
+    };
+  };
+
   return {
     invokeJobs: handle.invokeJobs,
     enabled: true,
@@ -142,6 +250,72 @@ export async function applySequentialSourceExecution(
     fusion,
     feedback,
     lastOutcome: handle.lastOutcome,
+    onObservation,
+    lastFeedback: () => lastFeedback,
+  };
+}
+
+/** A short, non-reversible id for the feedback prompt. Never the raw identifier. */
+async function shortId(value: string): Promise<string> {
+  return (await sha256Hex(canonicalJson({ v: value }))).slice(0, 16);
+}
+
+/**
+ * Build the observation from MEASURED round outcomes plus fused evidence.
+ *
+ * The two sources are deliberate. The round supplies what the funnel did — Company
+ * Brain passes, people searched, employers verified, CONTACT-ready. Fusion supplies
+ * what the evidence actually amounts to once duplicates across sources collapse.
+ * Using the round's raw row count for both would let twenty-five copies of one
+ * posting read as twenty-five findings.
+ */
+export function buildObservation(args: {
+  round: RoundObservationInput;
+  stepId: string;
+  step: string;
+  record: { attempts: number; broadening_used: string[] };
+  fusion: HiringEvidenceFusionState | null;
+}): SourceStepObservation {
+  const { round, fusion } = args;
+  const f = round.funnel as unknown as Record<string, number>;
+  const n = (k: string) => Number(f[k] ?? 0) || 0;
+  const companies = Object.values(fusion?.companies ?? {});
+
+  return {
+    stepId: args.stepId,
+    capability: args.step,
+    attempt: Math.max(1, args.record.attempts),
+    funnel: {
+      rawResults: round.rawRows,
+      normalizedJobs: n("unique_jobs") || round.newUniqueJobs,
+      // FUSED companies when fusion has them; the round's own count otherwise.
+      uniqueCompanies: companies.length > 0 ? companies.length : round.newUniqueCompanies,
+      companyBrainPass: n("companies_qualified"),
+      companyBrainFail: n("companies_rejected"),
+      evidencePending: companies.filter((c) =>
+        c.latestTimingDecision === undefined || c.latestTimingDecision === "missing_timing_evidence").length,
+      strongIdentity: companies.filter((c) => c.strongIdentity).length,
+      peopleSearched: n("people_calls"),
+      employerVerified: n("employer_verified"),
+      contactReady: n("contact"),
+    },
+    rejectionSummary: {
+      wrongRole: n("job_family_fail"),
+      wrongGeography: 0,
+      companyBrainMismatch: n("companies_rejected"),
+      missingIdentity: n("companies_missing_identity"),
+      missingDecisionMaker: Math.max(0, n("profiles_returned") - n("person_role_pass")),
+      employerMismatch: n("employer_ambiguous"),
+      missingContactMethod: Math.max(0, n("person_role_pass") - n("contact")),
+    },
+    // CONTACT-READY ONLY. Jobs, signals and companies never count, whatever their
+    // volume — `newEligibleLeads` is already the quota-eligible delta.
+    incrementalContactReady: round.newEligibleLeads,
+    totalContactReady: round.totalEligibleLeads,
+    remainingQuota: round.remainingQuota,
+    remainingBudgetUsd: round.remainingBudgetUsd,
+    sourceExhausted: round.sourceExhausted,
+    broadeningActionsUsed: [...args.record.broadening_used],
   };
 }
 
@@ -150,6 +324,7 @@ export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Re
   if (!r.enabled || !r.plan || !r.state) {
     return { sequential_source_execution: false, enablement_reason: r.reason };
   }
+  const lastFeedback = r.lastFeedback();
   return {
     sequential_source_execution: true,
     enablement_reason: r.reason,
@@ -163,6 +338,18 @@ export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Re
         calls_remaining: Math.max(0, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK - r.feedback.callsUsed),
         checkpoints: r.feedback.checkpoints.length,
         statuses: r.feedback.checkpoints.map((c) => c.status),
+        // Per-checkpoint provenance. Truncated hashes and codes only — never a
+        // prompt, a response body, hidden reasoning or a credential.
+        history: r.feedback.checkpoints.map((c) => ({
+          request_key: c.requestKey.slice(0, 16),
+          observation_hash: c.observationHash.slice(0, 16),
+          status: c.status,
+          reason_code: c.reasonCode ?? null,
+          recommended_action: c.recommendedAction?.action ?? null,
+          accepted_action: c.acceptedAction?.action ?? null,
+          validation_reason_codes: c.validationReasonCodes ?? [],
+        })),
+        ...(lastFeedback ? { last_decision: sourceFeedbackDiagnostics(lastFeedback, r.feedback) } : {}),
       },
     } : {}),
   };
