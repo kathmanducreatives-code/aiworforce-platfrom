@@ -76,6 +76,7 @@ const STATUS_HEADLINE: Record<TerminalStatus, string> = {
   provider_failure: 'Sourcing failed',
   invalid_request: 'Request could not be executed',
   continuation_required: 'Round complete',
+  source_transition_failed: 'Source transition failed',
 };
 
 export function isTerminal(status: string | null | undefined): boolean {
