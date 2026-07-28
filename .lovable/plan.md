@@ -1,107 +1,98 @@
 
-# PR #112 patch artifact (Option B)
+# Fix: route qualified Lead requests into company-first sourcing
 
-Produce two files under `/mnt/documents/` without touching the Lovable working tree, so you can apply them to your `remix/main` checkout locally, push `fix/wire-bounded-source-feedback-runtime`, and open the PR yourself.
+Scope is narrow. Two proven defects only:
 
-## Preconditions I will check first (read-only)
+1. **Routing precedence** — the generic `workflowClassifier` decision (`fast` / `account_first` / `company_hiring_sourcing`) survives into `orchestrate` / `run-agent` even when `routeQualifiedLead()` says the request is a qualified-Lead mission, because the authoritative router is not always invoked against the **original** user instruction and its result is not preserved end-to-end.
+2. **Quota presentation** — when the workflow contract is `count_entity: contact_ready_lead` / `quota_policy: contact_only`, the Workbench header still falls back to account rows for the numerator ("Found 2 of 5") instead of using the backend CONTACT-ready count.
 
-1. Confirm `origin/main` HEAD is `3dd53ff8` (or a descendant containing PR #111). If not, stop and report the SHA gap in the report artifact.
-2. Confirm production call graph is still orphaned: `sourceFeedbackRuntime.ts` has no non-test caller. If a real caller already exists on main, stop and report.
-3. Confirm `supabase/functions/mcp/index.ts` is present but untouched by my work.
+No new router. No new classifier. No Company Brain, people-search or sourcing rewrite. All intelligence flags remain OFF.
 
-## Read-only exploration I still need to do before writing code
+Branch: `fix/qualified-lead-routing-precedence` off latest `remix/main` (after PR #112). Never touch `supabase/functions/mcp/index.ts`.
 
-- `supabase/functions/_shared/sourceFeedbackRuntime.ts` — exact signature of `decideNextActionWithFeedback` and its `generate` closure contract.
-- `supabase/functions/_shared/sourceFeedbackContract.ts` — `SourceFeedbackLedger` shape, request-key computation, `MAX_SOURCE_FEEDBACK_CALLS_PER_TASK`, checkpoint entry shape.
-- `supabase/functions/_shared/companyFirstQuotaController.ts` — the round loop, `RoundRecord`, and the exact point after a round is finalized but before the next round starts.
-- `supabase/functions/_shared/plannerWrapper.ts` + `promptAssembly.ts` — the existing model gateway to use for the `generate` closure (repair disabled).
-- `supabase/functions/run-agent/index.ts` around lines 770/830/853 — how `sequentialSources` and `executeRunAgentCompanyFirstSourcing` are stitched together today.
-- `supabase/functions/_shared/sourceFeedback.test.ts` — the exact mock model / harness pattern to copy for the new tests.
+---
 
-## Patch contents
+## Fix 1 — Routing precedence (backend)
 
-### Files modified (5)
+Reuse the existing authority: `supabase/functions/_shared/qualifiedLeadRouting.ts` (`routeQualifiedLead`, `extractRequestedLeadCount`, `QualifiedLeadContract`). Preserve its verdict through every hop.
 
-1. **`supabase/functions/_shared/sequentialSourceBridge.ts`**
-   - Adds `onObservation(observation): Promise<void>` to `SequentialSourceBridgeResult`.
-   - Disabled path returns a no-op `onObservation` and identical function-object identity for `invokeJobs`.
-   - Enabled path:
-     - Runs mandatory deterministic short-circuits via `decideNextAction(plan, obs, runtimeStateFor(state))`.
-     - If quota met / valid exhaustion / budget exhausted / one executable action → applies it directly (`applyObservation` with the deterministic action), skipping the model.
-     - Otherwise calls `decideNextActionWithFeedback` from `sourceFeedbackRuntime.ts` with the shared plan/state/fusion/feedback ledger and a `generate` closure that invokes the existing `plannerWrapper` model gateway with repair disabled and `maxCalls = 1` per observation.
-     - Validates via the runtime's existing path; falls back to deterministic on any failure.
-     - Calls `applyObservation(plan, state, obs, acceptedAction)` **exactly once** per observation.
-     - Mutates the ledger in place (already the runtime's contract), so `bridgeResult.feedback` carries the updated ledger for checkpoint.
-   - `sequentialSourceDiagnostics` extended with safe per-checkpoint fields (`request_key`, `status`, `available_action_count`, `recommended_action`, `accepted_action`, `deterministic_fallback`, `continuation_reuse`) sourced from `ledger.checkpoints[]`. No prompt, no response body, no keys.
+- **pilot-chat** (`supabase/functions/pilot-chat/index.ts`)
+  - Run `routeQualifiedLead(originalPrompt)` **before** `classifyWorkflow` gets to finalize an `execution_mode`. When it returns `qualified_lead_sourcing`:
+    - Force `decision.workflow_category`, `decision.execution_mode = "company_first"`, `decision.source_type` / `selected_actor_key` to the qualified-Lead contract values.
+    - Attach the full `qualified_lead_contract` (already built for the workflow card) to the tool_input threaded into `orchestrate`, alongside `workflow_kind`, `execution_mode`, `count_entity`, `quota_policy`, `requested_lead_count`, and `route_reason_codes` for provenance.
+    - Do not override the classifier for non-qualified requests — the generic path stays intact.
+  - When a confirmed workflow card is re-issued (`"Run workflow: …"`), keep using the **original prompt** stored in `actionMetadata.lead_intent.original_instruction` / `qualified_lead_contract.original_instruction` as the input to `routeQualifiedLead`, not the command string.
 
-2. **`supabase/functions/_shared/companyFirstQuotaController.ts`**
-   - Adds optional `onRoundComplete?: (obs: SourceStepObservation) => Promise<void>` to the controller deps.
-   - After a round is finalized (round record pushed, running `eligible_leads` and stop signals computed) and before the next round is scheduled, if present, builds a `SourceStepObservation { stepId, attempt, incrementalContactReady, totalContactReady, sourceExhausted, providerCalls }` from the round record + running totals and awaits the hook.
-   - No decision logic change. Controller remains the sole quota authority.
+- **orchestrate** (`supabase/functions/orchestrate/index.ts`)
+  - Already calls `routeQualifiedLead(user_instruction)` at line ~1199. Harden it:
+    - Prefer `tool_input.qualified_lead_contract.original_instruction` over `user_instruction` when present, so a re-issued Start card cannot mask the route.
+    - When the router says `qualified_lead_sourcing`, ignore the planner's `executionMode` / `source_strategy` / `selected_actor_key` entirely for the run-agent kickoff; thread the full `qualified_lead_contract` through, plus `lead_routing = null` (do NOT thread a stale `source_strategy: "account_first"` into run-agent, that is the field run-agent later pins on).
+    - Emit a `route_provenance` block (`{source: "qualifiedLeadRouting", reason_codes, chose_over: "workflowClassifier"}`) on the task record for observability.
 
-3. **`supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts`**
-   - Adds optional `onRoundComplete` on `CompanyFirstRuntimeDeps` and forwards it to `runCompanyFirstQuotaController`.
+- **run-agent** (`supabase/functions/run-agent/index.ts`)
+  - When the request body carries `workflow_kind: "qualified_lead_sourcing"` or `execution_mode: "company_first"`, treat the qualified-Lead contract as authoritative:
+    - Skip the `threadedRouting.source_strategy` / `separatedIntent.source_strategy` override that currently pins `account_first` (~line 1167).
+    - Enter the existing company-first branch (`isCompanyFirstRequest` path, ~line 686) unconditionally for a contract-tagged request; do not require `compileLeadEntityIntent(input)` to independently detect the person target.
+    - Preserve the contract across a continuation: write it into `tasks.result.company_first_state.contract` and re-load it on resume.
+  - Do **not** gate any of this on `CLAUDE_FIRST_LEAD_PLANNING`, `INTELLIGENCE_DYNAMIC_SOURCE_PLANNING`, or `CLAUDE_SOURCE_FEEDBACK`. The deterministic company-first workflow (Company Brain gate → Founder/CEO search → employer verification → CONTACT quota → sequential source execution) is already reachable with all flags OFF; keep it that way.
 
-4. **`supabase/functions/run-agent/index.ts`**
-   - Single edit at the existing `executeRunAgentCompanyFirstSourcing({...})` call: passes `onRoundComplete: sequentialSources.onObservation`.
-   - No other lines changed. `sequentialSources.feedback` is already carried into the persisted checkpoint via the existing sequential-state slot; no persistence-surface change required.
+## Fix 2 — Quota presentation (frontend)
 
-5. **`supabase/functions/_shared/sequentialSourceRuntime.ts`** — **NO EDIT**. `applyObservation` is used from the bridge via existing exports.
+The authority is already there: `src/lib/qualifiedLead/workbenchCounts.ts` uses `QuotaProgress` and only falls back to row-shaped counts when `progress` is missing. The regression is in **how `QuotaProgress` is constructed** for a contact-ready mission (account rows are being counted into `eligible`).
 
-### Files created (2 tests)
+- Locate the `QuotaProgress` builder / hook (`src/lib/qualifiedLead/quotaProgress.ts` + call sites in Workbench). Fix it so that when the run's contract says `count_entity === "contact_ready_lead"` / `quota_policy === "contact_only"`:
+  - `eligible` / `verifiedDecisionMakers` come strictly from backend CONTACT-ready fields (`cf.result.contact_ready_count`, `runContext.contact_ready`, etc. — reuse the field already carried by `buildQualifiedLeadRunContext`).
+  - Never fall back to `accounts`, `companies`, `candidates`, `jobs`, `signals`, or visible row count. When the backend field is missing, `eligible` is `0` and `remaining = requested`.
+- Header labels already exist in `buildWorkbenchCounts`; adjust the Workbench header to render **two separate groups**:
+  - Account group: `ACCOUNTS FOUND`, `QUALIFIED COMPANIES` (unchanged).
+  - Lead group: `CONTACT-READY: 0 of 5`, `REMAINING: 5`, with a subline "2 qualified account opportunities found" so the account signal is not lost.
+- Account-search missions (`count_entity: "account_opportunity"`) keep account counts as the numerator — unchanged.
 
-6. **`supabase/functions/_shared/sequentialSourceBridge.feedback.test.ts`**
-   Covers requirements 1–4, 7–18 (import-graph guard; feature OFF; workspace not allow-listed; dynamic sequential sourcing OFF; quota reached; valid exhaustion; single-action skip; multi-action model invocation; fusion-before-feedback; fused-unique counts; ≤1 HTTP; invalid → fallback; action passed into `applyObservation`; `applyObservation`-runs-once via spy; completed/exhausted steps unavailable; no-op broadening unavailable; ledger persistence; continuation no-repeat).
+Do not add UI keyword guessing; use the contract already threaded via `run_context` / task `result`.
 
-7. **`supabase/functions/_shared/companyFirstQuotaController.onRoundComplete.test.ts`**
-   Covers requirements 5, 6, 19, 20 (quota completion skips feedback; valid exhaustion skips feedback; only CONTACT-ready people count — jobs/signals/companies don't; and asserts no live provider/model call — mocked `generate` throws on unexpected input; controller behaviour byte-identical when hook is omitted).
+## Tests (offline, no live provider or model)
 
-Import-graph guard implementation: read `sequentialSourceBridge.ts` source text at test time and assert it contains `from "./sourceFeedbackRuntime.ts"`. Structural, not brittle grep on symbols.
+Add / extend under `supabase/functions/_shared/` and `src/lib/qualifiedLead/`:
 
-## Artifact 1 — `/mnt/documents/pr112-wire-source-feedback.patch`
+- `qualifiedLeadRouting.test.ts` — canonical query (founders/CEOs, SaaS, Sales-Ops hiring, 5 leads) returns `qualified_lead_sourcing` / `company_first` / `contact_ready_lead` / `contact_only`, requested count 5, hiring roles (`Sales Operations`, `Revenue Operations`, `GTM Operations`) stay separate from decision-maker roles (`Founder`, `Co-Founder`, `CEO`).
+- New `qualifiedLeadRoutingPrecedence.test.ts` — a mocked `workflowClassifier` verdict of `fast/account_first/company_hiring_sourcing` cannot override `routeQualifiedLead`; a "Run workflow: …" re-issue routes off the original instruction from `qualified_lead_contract`.
+- New `qualifiedLeadFlagIndependence.test.ts` — with `CLAUDE_FIRST_LEAD_PLANNING`, `INTELLIGENCE_DYNAMIC_SOURCE_PLANNING`, `CLAUDE_SOURCE_FEEDBACK` all OFF, the canonical query still reaches the company-first branch and the CONTACT-only quota controller.
+- Extend `executeRunAgentCompanyFirstSourcing.test.ts` — a 584-employee company with no early-stage evidence is rejected by the Company Brain gate before people search when the ICP requires 5–200 employees. No name-based patching.
+- New `runAgentQualifiedLeadFixture.test.ts` — offline fixture reproducing task `3445fe83-4fed-4e5e-876e-93799a051811`'s intake; asserts the fixed path does NOT produce `execution_mode: fast` / `source_strategy: account_first` / `workflow_type: company_hiring_sourcing`, and DOES produce the canonical qualified-Lead contract. Assert continuation preserves the route.
+- New `workbenchCounts.contactReady.test.tsx` — given `{ accounts: 2, contact_ready: 0, requested: 5, count_entity: "contact_ready_lead" }`, header shows `0 of 5 CONTACT-ready`, not `2 of 5`; account/lead groups stay separate; account-search mission still uses account numerator.
+- Negative cases stay generic: "Show companies hiring Sales Operations", "Find recent Sales Operations jobs", "Research five SaaS companies" — remain `account_opportunity_sourcing` / `fast`.
 
-- Standard unified diff (git-format `diff --git` headers with `a/` and `b/` prefixes) so `git apply` accepts it.
-- Includes only the seven paths above. No `supabase/functions/mcp/index.ts`. No `.env`. No lockfile. No config.
-- Pre-flight scan before writing:
-  - grep the assembled diff for `mcp/index.ts` → must be empty.
-  - grep for `sk-ant`, `ANTHROPIC_API_KEY=`, `Bearer sk-`, hex-64 secret-looking tokens → must be empty.
-  - grep for `CLAUDE_SOURCE_FEEDBACK=true` or similar flag flips → must be empty.
-- Post-write sanity: dry-run `git apply --check` in a scratch clone of the working tree (`/tmp/pr112-apply-check`) so the patch is proven to apply cleanly against `3dd53ff8`.
+## Validation (no deploys, no live calls)
 
-## Artifact 2 — `/mnt/documents/pr112-wire-source-feedback-report.md`
+1. Record `remix/main` baseline: capture failing tests on the base SHA.
+2. Run focused suites on the branch:
+   - `deno test supabase/functions/_shared/qualifiedLead*.test.ts`
+   - `deno test supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.test.ts`
+   - `deno test supabase/functions/_shared/workflowClassifier.test.ts`
+   - `bunx vitest run src/lib/qualifiedLead`
+3. Full backend `_shared` suite + relevant frontend tests. Only pre-existing baseline failures are acceptable.
+4. `deno check` modified modules and affected Edge Functions (`pilot-chat`, `orchestrate`, `run-agent`).
+5. `./node_modules/.bin/tsc --noEmit` and `npm run build`.
+6. Grep the full diff for secrets. Verify `supabase/functions/mcp/index.ts` is neither staged nor committed.
 
-Contains, verbatim per your spec:
+## Commits and PR
 
-- Base SHA (`3dd53ff8` or actual mirror tip + gap note).
-- Files modified / created.
-- Production call graph before → after.
-- Exact runtime seam (`runCompanyFirstQuotaController` end-of-round hook → `sequentialSourceBridge.onObservation`).
-- Confirmations: feedback occurs after fusion; `applyObservation` runs once; ledger persisted in existing sequential-state checkpoint slot; continuation short-circuits via existing request-key idempotency.
-- Tests included, mapped to your 20 requirements.
-- Handoff commands for the receiving session:
+Commits:
+- `fix(leads): prioritize qualified lead routing`
+- `fix(leads): preserve contact-ready route across execution`
+- `fix(ui): separate account and contact quota progress`
+- `test(leads): cover qualified routing precedence`
 
-  ```bash
-  git checkout main && git pull remix main
-  git checkout -b fix/wire-bounded-source-feedback-runtime
-  git apply --check pr112-wire-source-feedback.patch
-  git apply pr112-wire-source-feedback.patch
-  deno test --allow-env --allow-read supabase/functions/_shared/
-  ./node_modules/.bin/tsc --noEmit
-  npm run build
-  git add -A && git commit -m "fix(leads): wire bounded source feedback into sequential sourcing"
-  git push -u remix fix/wire-bounded-source-feedback-runtime
-  # then open PR against remix/main
-  ```
+Push to `remix`; open PR against `main` titled `fix(leads): route qualified lead requests into company-first sourcing`. Do not merge, deploy, migrate, or invoke live providers.
 
-- Negative confirmations: MCP file absent from patch; no secrets in diff; no deployment; no flag change; no migration; no live model/Actor/Firecrawl call from this task.
+## Explicit non-goals
 
-## What this plan does not do
+- No new router / classifier / route taxonomy.
+- No Company Brain policy change (only a test proving the existing gate rejects a 584-employee company under a 5–200 ICP).
+- No new people-search implementation.
+- No Claude-flag enablement.
+- No changes to `supabase/functions/mcp/index.ts`.
 
-- Does not modify any file inside the Lovable-managed working tree.
-- Does not push, merge, deploy, migrate, or flip any flag.
-- Does not touch `supabase/functions/mcp/index.ts`.
-- Does not call any real model, Apify actor, or Firecrawl endpoint.
+## Final report will include
 
-## Stop condition
-
-After both files exist under `/mnt/documents/`, I emit `<presentation-artifact>` tags for both and stop.
+Base SHA, branch, defect repro, precedence defect, routers reused, new order, generic classifier behaviour, contract, flag independence, run-agent integration, company-first / Brain / decision-maker reachability, CONTACT quota behaviour, UI fix, Malwarebytes fixture result, tests added, baseline vs branch results, deno/tsc/build results, files changed, commits, remote SHA, PR number/URL, and all required confirmations (no duplicate router, no rewrites, no deploy/migration/live call, all flags OFF, no secrets, MCP file untouched).
