@@ -29,6 +29,7 @@ import { compileLeadEntityIntent } from "./leadEntityIntent.ts";
 import type { LeadMissionSourceProfile } from "./hiringSourcePlan.ts";
 import type { EnvReader } from "./intelligence/intelligenceFlags.ts";
 import type { GenerateOpts, GenerateResult } from "./aiProvider.ts";
+import { isContinuable, projectStatus } from "./taskStatusContract.ts";
 
 // ================================================================ fixtures ===
 
@@ -610,4 +611,262 @@ Deno.test("30. no live provider or model call is reachable from this path", asyn
     globalThis.fetch = originalFetch;
   }
   assertEquals(attempted, 0, "something on this path tried to reach the network");
+});
+
+// =========================================== THE ERROR BOUNDARY ==============
+//
+// The observer owns source progression — broadening, advancement, quota stopping,
+// exhaustion, ledger and accepted-action persistence. A swallowed failure there is
+// not a missing log line: it leaves the run pointed at a source it already
+// exhausted, where duplicate-input protection returns empty batches while the
+// diagnostics claim everything is fine.
+//
+// Two categories, deliberately different. A MODEL failure resolves to the
+// deterministic action and the round continues. A CONTROL-PLANE failure stops the
+// task visibly.
+
+/** A bridge whose fold is forced to throw, without touching production code. */
+async function brokenFold(phase: "observation" | "state") {
+  const b = await bridge({ readEnv: feedbackOn });
+  if (phase === "observation") {
+    // No resolvable step: the plan is running and we cannot say where.
+    b.state!.current_step_id = "s99-not-in-this-plan";
+    b.state!.steps.length = 0;
+  } else {
+    // A step record the fold cannot use.
+    b.state!.steps[0].step_id = "renamed-out-from-under-the-plan";
+    b.state!.current_step_id = null;
+  }
+  return b;
+}
+
+Deno.test("1./2. model failures fall back deterministically and the round continues", async () => {
+  for (const [label, gen] of [
+    ["unavailable", () => Promise.resolve({ ok: false, content: "", provider: "none" as const, model: "", error: "x", errorCode: "provider_exception", latencyMs: 1 })],
+    ["timeout", () => Promise.resolve({ ok: false, content: "", provider: "none" as const, model: "", error: "t", errorCode: "timeout", latencyMs: 1 })],
+    ["invalid output", () => Promise.resolve({ ok: true, content: "", json: "not an object", provider: "anthropic" as const, model: "m", latencyMs: 1 })],
+  ] as const) {
+    const b = await bridge({ readEnv: feedbackOn, generate: gen as never });
+    const outcome = await b.onObservation(round());
+
+    assertEquals((outcome as { halt?: unknown } | void as { halt?: unknown })?.halt, undefined,
+      `${label} must not halt the run`);
+    assertEquals(b.lastTransitionFailure(), null, label);
+    assertEquals(b.lastFeedback()?.source, "deterministic", label);
+    // The round still progressed.
+    assert(b.state?.pending_next_action, label);
+  }
+});
+
+Deno.test("3./5. an observation-construction failure is NOT swallowed", async () => {
+  const b = await brokenFold("observation");
+  const outcome = await b.onObservation(round());
+  const halt = (outcome as { halt?: { code: string; reason: string; diagnostics?: Record<string, unknown> } })?.halt;
+
+  assert(halt, "the failure was swallowed");
+  assertEquals(halt.code, "source_observation_transition_failed");
+
+  const d = b.lastTransitionFailure()!;
+  assertEquals(d.phase, "observation_construction");
+  assertEquals(d.planHash, b.plan!.planHash);
+  assertEquals(d.providerCallCompleted, true);
+  assert("attempt" in d && "stepId" in d && "evidenceFusionCompleted" in d);
+});
+
+Deno.test("4./6./7./8. a transition failure stops the run without inventing an outcome", async () => {
+  const halts: unknown[] = [];
+  const rounds: number[] = [];
+
+  const res = await runCompanyFirstQuotaController(controllerIntent, {
+    invokeJobs: () => Promise.resolve([]),
+    invokePeople: () => Promise.resolve([]),
+    persist: () => Promise.resolve({ ok: true, accountId: null, leadCandidateId: null }),
+    onRoundComplete: (input: RoundObservationInput) => {
+      rounds.push(input.round);
+      const halt = { code: "source_observation_transition_failed", reason: "state_transition_failed", diagnostics: { phase: "state_transition" } };
+      halts.push(halt);
+      return Promise.resolve({ halt });
+    },
+  } as never, { requestedLeadCount: 5, workspaceId: "ws-1", taskId: "task-1", bounds: { maxRounds: 3 } });
+
+  // 6. no further source rounds.
+  assertEquals(rounds, [1], "a halted run started another round");
+  assertEquals(res.rounds_attempted, 1);
+
+  // 4./5. the failure is terminal and named.
+  assertEquals(res.terminal_status, "source_transition_failed");
+  assertEquals(res.terminal_reason, "state_transition_failed");
+  assertEquals(res.source_transition_failure?.code, "source_observation_transition_failed");
+  assertEquals(res.source_transition_failure?.round, 1);
+
+  // 7./8. neither exhaustion nor quota completion is claimed.
+  assert(res.terminal_status !== "search_exhausted");
+  assert(res.terminal_status !== "completed");
+  assertEquals(res.eligible_leads, 0);
+  assertFalse(res.continuation.required, "a run that lost its state must not advertise continuation");
+});
+
+Deno.test("4.B a THROWN observer error is a halt, not a shrug", async () => {
+  const res = await runCompanyFirstQuotaController(controllerIntent, {
+    invokeJobs: () => Promise.resolve([]),
+    invokePeople: () => Promise.resolve([]),
+    persist: () => Promise.resolve({ ok: true, accountId: null, leadCandidateId: null }),
+    onRoundComplete: () => { throw new Error("observation could not be built"); },
+  } as never, { requestedLeadCount: 5, workspaceId: "ws-1", taskId: "task-1", bounds: { maxRounds: 3 } });
+
+  assertEquals(res.terminal_status, "source_transition_failed");
+  assertEquals(res.rounds_attempted, 1);
+  assertEquals(res.source_transition_failure?.reason, "observation_construction_failed");
+  // The raw message never survives.
+  assertFalse(JSON.stringify(res.source_transition_failure).includes("could not be built"));
+});
+
+Deno.test("5.B the failure projects onto a truthful FAILED task status", () => {
+  const p = projectStatus("source_transition_failed");
+  assertEquals(p, { rowStatus: "failed", taskStatus: "failed", terminalStatus: "source_transition_failed" });
+  // Not a provider fault: the paid call worked.
+  assert(p.terminalStatus !== "provider_failure");
+  // And no automatic continuation is offered for it.
+  assertFalse(isContinuable("source_transition_failed"));
+});
+
+Deno.test("9./10. a completed paid provider call survives an observer failure", async () => {
+  const saved: Array<{ completed_calls: unknown[]; terminal_status: string | null }> = [];
+
+  await runCompanyFirstQuotaController(controllerIntent, {
+    invokeJobs: () => Promise.resolve([]),
+    invokePeople: () => Promise.resolve([]),
+    persist: () => Promise.resolve({ ok: true, accountId: null, leadCandidateId: null }),
+    onRoundComplete: () => Promise.resolve({
+      halt: { code: "source_observation_transition_failed", reason: "state_transition_failed" },
+    }),
+    stateStore: {
+      load: () => Promise.resolve(null),
+      save: (_id: string, state: { completed_calls: unknown[]; terminal_status: string | null }) => {
+        saved.push({ completed_calls: [...state.completed_calls], terminal_status: state.terminal_status });
+        return Promise.resolve();
+      },
+    },
+  } as never, { requestedLeadCount: 5, workspaceId: "ws-1", taskId: "task-1", bounds: { maxRounds: 1 } });
+
+  assert(saved.length > 0, "the checkpoint must still be written on a halt");
+  const last = saved[saved.length - 1];
+  assert(last.completed_calls.length > 0,
+    "the completed provider call must be preserved so continuation cannot re-pay for it");
+  assertEquals(last.terminal_status, "source_transition_failed");
+});
+
+Deno.test("11./12./13. continuation replays a recorded action and never guesses without one", async () => {
+  const m = mockModel(feedbackResponse({ action: "advance_to_next_source", currentStepId: "x", nextStepId: "y" }));
+  const healthy = await bridge({ readEnv: feedbackOn, generate: m.fn });
+  const preFold = JSON.parse(JSON.stringify(healthy.state));
+  const out = await healthy.onObservation(round());
+  const slices = (out as { checkpointSlices: Record<string, unknown> }).checkpointSlices;
+  const ledger = slices[SOURCE_FEEDBACK_KEY] as SourceFeedbackLedger;
+
+  // 11./12. an already-recorded answer is replayed, not re-bought.
+  const resumed = await bridge({
+    readEnv: feedbackOn, generate: m.fn,
+    restoredState: preFold,
+    restoredFeedback: JSON.parse(JSON.stringify(ledger)),
+  });
+  await resumed.onObservation(round());
+  assertEquals(m.calls.length, 1, "the resumed run bought the same answer twice");
+  assertEquals(resumed.lastFeedback()?.skippedReason, "continuation_reuse");
+  assertEquals(resumed.state?.pending_next_action, ledger.checkpoints[0].acceptedAction?.action);
+
+  // 13. with NO recorded action, a resumed run does not invent one — and it does
+  // not silently restart at step 1 either.
+  const empty = await bridge({ readEnv: feedbackOn, generate: m.fn, restoredState: preFold });
+  assertEquals(empty.feedback?.checkpoints.length, 0);
+  assertEquals(empty.state?.current_step_id, preFold.current_step_id);
+  assertEquals(empty.state?.pending_next_action, preFold.pending_next_action);
+});
+
+Deno.test("14. a failed observer cannot produce repeated empty rounds", async () => {
+  const providerCalls: string[] = [];
+  let observations = 0;
+
+  const res = await runCompanyFirstQuotaController(controllerIntent, {
+    invokeJobs: () => { providerCalls.push("jobs"); return Promise.resolve([]); },
+    invokePeople: () => Promise.resolve([]),
+    persist: () => Promise.resolve({ ok: true, accountId: null, leadCandidateId: null }),
+    onRoundComplete: () => {
+      observations += 1;
+      return Promise.resolve({ halt: { code: "source_observation_transition_failed", reason: "state_transition_failed" } });
+    },
+  } as never, { requestedLeadCount: 5, workspaceId: "ws-1", taskId: "task-1", bounds: { maxRounds: 3 } });
+
+  // The old behaviour would have run all three rounds, each returning nothing.
+  assertEquals(observations, 1);
+  assertEquals(res.rounds_attempted, 1);
+  assertEquals(providerCalls.length, 1, "a broken run kept paying for rounds it could not use");
+});
+
+Deno.test("15./16./17. healthy behaviour is unchanged", async () => {
+  // 15./16. one successful observation, one fold, no halt.
+  const b = await bridge({ readEnv: feedbackOn, generate: mockModel(feedbackResponse({ action: "advance_to_next_source", currentStepId: "x", nextStepId: "y" })).fn });
+  const out = await b.onObservation(round({ sourceExhausted: true }));
+  assertEquals((out as { halt?: unknown })?.halt, undefined);
+  assertEquals(b.lastTransitionFailure(), null);
+  assertEquals(b.state?.current_step_id, b.plan!.steps[1].stepId);
+  assertEquals(b.state!.exhausted_step_ids.length + b.state!.completed_step_ids.length, 1);
+
+  // 17. feature OFF: no observer work at all, and no halt.
+  const off = await bridge({ readEnv: allOff });
+  assertFalse(off.enabled);
+  assertEquals(await off.onObservation(round()), undefined);
+  assertEquals(off.lastTransitionFailure(), null);
+});
+
+Deno.test("18./20. quota policy and the single authorities are untouched", async () => {
+  // 18. a halted round still counts only CONTACT-ready people — nothing about the
+  // failure path invents quota progress.
+  const res = await runCompanyFirstQuotaController(controllerIntent, {
+    invokeJobs: () => Promise.resolve([]),
+    invokePeople: () => Promise.resolve([]),
+    persist: () => Promise.resolve({ ok: true, accountId: null, leadCandidateId: null }),
+    onRoundComplete: () => Promise.resolve({ halt: { code: "source_observation_transition_failed", reason: "state_transition_failed" } }),
+  } as never, { requestedLeadCount: 5, workspaceId: "ws-1", taskId: "task-1", bounds: { maxRounds: 2 } });
+  assertEquals(res.eligible_leads, 0);
+  assertEquals(res.remaining_leads, 5);
+
+  // 20. the halt uses the EXISTING status vocabulary and the EXISTING checkpoint;
+  // no parallel status list, ledger or continuation store was introduced.
+  const contractSrc = await Deno.readTextFile(new URL("./taskStatusContract.ts", import.meta.url));
+  assert(contractSrc.includes('"source_transition_failed"'),
+    "the new outcome must live in the one status vocabulary");
+  const controllerSrc = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  assertFalse(/newIdempotencyLedger\s*\(\s*\)[\s\S]{0,80}halt/.test(controllerSrc),
+    "the halt path must not create a second idempotency ledger");
+  assert(controllerSrc.includes("recordCompletedCall("), "provider idempotency stays the existing ledger");
+});
+
+Deno.test("19.B no live provider or model call occurs on the failure path", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempted = 0;
+  globalThis.fetch = ((..._a: unknown[]) => {
+    attempted += 1;
+    return Promise.reject(new Error("no network is permitted in this test"));
+  }) as typeof fetch;
+  try {
+    const b = await brokenFold("observation");
+    await b.onObservation(round());
+    assert(b.lastTransitionFailure());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assertEquals(attempted, 0);
+});
+
+Deno.test("safe diagnostics never carry an exception payload or a secret", async () => {
+  const b = await brokenFold("observation");
+  await b.onObservation(round());
+  const d = sequentialSourceDiagnostics(b) as Record<string, unknown>;
+  const blob = JSON.stringify(d).toLowerCase();
+
+  assert(d.source_transition_failure, "the failure must be visible in diagnostics");
+  for (const forbidden of ["anthropic_api_key", "bearer", "stack", "at object", "<mission>", "http://", "https://"]) {
+    assertFalse(blob.includes(forbidden), `"${forbidden}" leaked into diagnostics`);
+  }
 });
