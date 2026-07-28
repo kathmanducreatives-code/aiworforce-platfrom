@@ -635,7 +635,20 @@ Deno.serve(async (req) => {
       // person-search request into a jobs-search request. Ambiguous asks keep the
       // normalized default (jobs) — behavior unchanged, never fabricated.
       let derivedActorKey: string | null = null;
-      if (!raw_source_type && !planned_actor_key) {
+      // Enter the deterministic entity-intent router when either (a) the caller
+      // did not pin an actor/source (the original condition), OR (b) the top-
+      // level body explicitly declares a qualified-Lead / company-first
+      // contract. This closes the seam where an upstream classifier (e.g.
+      // pilot-chat's `company_hiring_sourcing` branch) pins `apify_jobs` /
+      // `jobs` before the qualified-Lead route is evaluated: without this
+      // widening, `routingEntityIntent` stays null and the company-first
+      // branch at line 686 is unreachable regardless of `body.workflow_kind`.
+      const bodyDeclaresCompanyFirst =
+        body.workflow_kind === "qualified_lead_sourcing" ||
+        execution_mode_body === "company_first" ||
+        tool_input_body?.workflow_kind === "qualified_lead_sourcing" ||
+        tool_input_body?.execution_mode === "company_first";
+      if (bodyDeclaresCompanyFirst || (!raw_source_type && !planned_actor_key)) {
         // ROUTE FROM THE ORIGINAL USER INSTRUCTION, not the planner-rewritten Scout
         // prose. Compile the immutable entity intent (person/company/job) and select
         // the primary identity actor from it — "hiring signals" the planner injects
