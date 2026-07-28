@@ -137,6 +137,8 @@ export interface QuotaControllerResult {
    * status alone used to hide.
    */
   source_transition_failure: (RoundObservationOutcome["halt"] & { round: number }) | null;
+  /** Checkpoints the database rejected. Empty is the healthy state. */
+  checkpoint_failures: Array<{ round: number; reason: string }>;
 }
 
 import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
@@ -265,6 +267,30 @@ export async function runCompanyFirstQuotaController(
   let lastBottleneck: BottleneckKind | null = null;
   /** Set only when the round observer could not establish the next action. */
   let transitionFailure: (RoundObservationOutcome["halt"] & { round: number }) | null = null;
+  /** Checkpoints the database refused. Surfaced on the result, never swallowed. */
+  const checkpointFailures: Array<{ round: number; reason: string }> = [];
+
+  /**
+   * One checkpoint write, with the outcome REPORTED.
+   *
+   * A rejected checkpoint used to be invisible: the store swallowed it and the
+   * run carried on spending with nothing to resume from. Recording it on the
+   * result is what makes "continuation will restart from round one" something an
+   * operator can see instead of discover from an invoice.
+   */
+  const saveCheckpoint = async (status: string, patch?: Record<string, unknown>): Promise<void> => {
+    if (!deps.stateStore || !taskId || !state) return;
+    // A store that reports nothing is treated as success: older implementations
+    // (and every injected test fake) return void, and inventing a failure from an
+    // absent signal would be worse than having no signal.
+    const saved = await deps.stateStore.save(taskId, state, status, patch);
+    if (saved && saved.ok === false) {
+      checkpointFailures.push({ round: state.current_round, reason: saved.reason ?? "unknown" });
+      log("checkpoint rejected — continuation will not resume from here", {
+        round: state.current_round, reason: saved.reason,
+      });
+    }
+  };
 
   const deadline: ExecutionDeadline = createExecutionDeadline(opts.executionBudget, opts.clock);
   const nowIso = () => opts.now ?? new Date().toISOString();
@@ -602,7 +628,7 @@ export async function runCompanyFirstQuotaController(
     }
     if (deps.stateStore && taskId) {
       // `partial` — never leave the task at `running`.
-      await deps.stateStore.save(taskId, state, "partial");
+      await saveCheckpoint("partial");
     }
 
     if (observerHalt) {
@@ -635,12 +661,12 @@ export async function runCompanyFirstQuotaController(
     if (deps.stateStore && taskId) {
       state.next_action = "start_round";
       state.checkpoint_at = nowIso();
-      await deps.stateStore.save(taskId, state, "partial");
+      await saveCheckpoint("partial");
     }
     return finish("continuation_required", terminalReason);
   }
   if (!deadline.canAfford("persistence")) {
-    if (deps.stateStore && taskId) { state.next_action = "finalize"; state.checkpoint_at = nowIso(); await deps.stateStore.save(taskId, state, "partial"); }
+    if (deps.stateStore && taskId) { state.next_action = "finalize"; state.checkpoint_at = nowIso(); await saveCheckpoint("partial"); }
     return finish("continuation_required", "insufficient time remaining to finalize safely");
   }
 
@@ -651,7 +677,7 @@ export async function runCompanyFirstQuotaController(
     state.terminal_reason = terminalReason;
     state.next_action = "stopped";
     state.checkpoint_at = nowIso();
-    await deps.stateStore.save(taskId, state, terminal === "completed" ? "completed" : "partial");
+    await saveCheckpoint(terminal === "completed" ? "completed" : "partial");
   }
   return finish(terminal, terminalReason);
 
@@ -671,6 +697,7 @@ export async function runCompanyFirstQuotaController(
       plan, plan_sources: planSources, bottlenecks, cost_forecasts: forecasts, plan_validations: planValidations,
       planner_metadata: plannerMetadata, idempotency,
       source_transition_failure: transitionFailure,
+      checkpoint_failures: checkpointFailures,
       continuation: {
         required: status === "continuation_required",
         next_action: status === "continuation_required" ? "start_round" : "finalize",
