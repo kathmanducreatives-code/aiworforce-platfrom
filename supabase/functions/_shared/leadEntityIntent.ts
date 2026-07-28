@@ -12,6 +12,7 @@
 import { parsePersonRoles, parseMarketTerms } from "./peopleSearchQueryBuilder.ts";
 import type { ExplicitTimingWindow } from "./timingFreshnessPolicy.ts";
 import { compileJobSearchSpec, type CompiledJobSearchSpec } from "./jobSearchSpec.ts";
+import { extractRequestedLeadCount } from "./qualifiedLeadRouting.ts";
 
 export type TargetEntity = "person" | "company" | "job";
 export type OutputType = "qualified_people" | "qualified_companies" | "job_postings";
@@ -138,6 +139,60 @@ const WINDOW_PATTERNS: Array<[ExplicitTimingWindow, RegExp]> = [
 ];
 
 const COUNT_RE = /\b(\d{1,3})\b/;
+
+// ------------------------------------------------------- requested count ------
+//
+// The generic "first number in the sentence" rule is right often enough to have
+// survived, and wrong in exactly the cases that cost money: "founders at
+// companies with 10-100 employees" asked for no particular number of founders,
+// and reading 10 as the quota silently reshapes the request.
+//
+// Precedence is therefore: the entity-aware quota parser first (it only accepts a
+// number the sentence attaches to the requested OUTPUT), then the generic rule,
+// but skipping numbers that plainly measure something else.
+
+/** Units that are never a requested output count. */
+const NON_COUNT_UNIT_RE =
+  /^(?:employees?|staff|headcount|people\s+companies|days?|weeks?|months?|years?|hours?|minutes?|%|percent|k|m|b|million|billion|dollars?|usd|eur|arr|mrr|employees)\b/i;
+
+/** Words that make the following number an identifier, not a quantity. */
+const NON_COUNT_PREFIX_RE = /(?:series|round|tier|version|v|q|quarter|top)\s*$/i;
+
+/** Nouns that are not the requested output when a PERSON was asked for. */
+const NON_PERSON_OUTPUT_RE =
+  /^(?:compan(?:y|ies)|accounts?|startups?|firms?|orgs?|organi[sz]ations?|businesses|business|vendors?|employers?|jobs?|roles?|positions?|openings?|vacanc(?:y|ies))\b/i;
+
+/**
+ * The requested output count, or null when the request never stated one.
+ *
+ * Null is a real answer: callers already resolve their own safe default, and a
+ * default is far better than a confidently wrong number lifted from an employee
+ * range or a funding round.
+ */
+export function resolveRequestedCount(text: string, targetEntity: TargetEntity): number | null {
+  // 1. ENTITY-AWARE. A number the sentence ties to the requested output.
+  const stated = extractRequestedLeadCount(text);
+  if (stated != null) return stated;
+
+  // 2. GENERIC, with the obvious non-quantities skipped.
+  const re = /\b(\d{1,3})\b/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const before = text.slice(0, m.index);
+    const after = text.slice(m.index + m[0].length);
+
+    // "10-100 employees" — the low end of a range is not a quota.
+    if (/^\s*[-–—]\s*\d/.test(after)) continue;
+    if (NON_COUNT_PREFIX_RE.test(before)) continue;
+
+    const trailing = after.replace(/^\s+/, "");
+    if (NON_COUNT_UNIT_RE.test(trailing)) continue;
+    // "founders at 20 companies" asked for founders, not for twenty of them.
+    if (targetEntity === "person" && NON_PERSON_OUTPUT_RE.test(trailing)) continue;
+
+    return Math.max(1, Math.min(1000, Number(m[1])));
+  }
+  return null;
+}
 const GEO_PATTERNS: Array<[RegExp, string]> = [
   [/\bunited states\b|\bu\.?s\.?a?\.?\b|\bamerica\b/i, "United States"],
   [/\bunited kingdom\b|\bu\.?k\.?\b|\bbritain\b/i, "United Kingdom"],
@@ -245,8 +300,7 @@ export function compileLeadEntityIntent(
   for (const [re, g] of GEO_PATTERNS) if (re.test(text) && !geographies.includes(g)) geographies.push(g);
   for (const g of opts?.brainGeographies ?? []) if (!geographies.includes(g)) geographies.push(g);
 
-  const countM = text.match(COUNT_RE);
-  const requested_count = countM ? Math.max(1, Math.min(1000, Number(countM[1]))) : null;
+  const requested_count = resolveRequestedCount(text, target_entity!);
   for (const s of signals) evidence_spans.push({ field: "signal", value: s.type, evidence: s.evidence });
 
   // ---- Compound execution model ------------------------------------------------
