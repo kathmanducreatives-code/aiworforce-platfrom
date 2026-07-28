@@ -1974,25 +1974,61 @@ Deno.serve(async (req) => {
     const li = leadIntent as Record<string, unknown> | null;
     const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
     const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
+
+    // ROUTING PRECEDENCE — deterministic qualified-Lead detection wins over the
+    // legacy jobs-actor pin. When `routeQualifiedLead` classifies the ORIGINAL
+    // user message as a person/CONTACT-ready mission (e.g. "find 5 founders of
+    // SaaS startups hiring Sales Operations"), we MUST NOT hardcode
+    // `selected_actor_key: "apify_jobs"` / `source_type: "jobs"` here: doing so
+    // pins the request to the legacy fast/account_first branch in run-agent
+    // (index.ts:638 gate `!raw_source_type && !planned_actor_key`) and the
+    // whole company-first sourcing stack (Company Brain gate → founder/CEO
+    // search → CONTACT-only quota) becomes unreachable. Instead we leave both
+    // fields unset so run-agent's deterministic entity-intent router picks the
+    // correct actor from the original instruction, and we flip execution_mode
+    // to "company_first" so orchestrate + run-agent both recognise the
+    // contract. Non-qualified account/job-only requests keep the previous
+    // deterministic apify_jobs behavior.
+    const qlRoute = routeQualifiedLead(message);
+    const isQualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
+    const requestedLeadCount = isQualifiedLead
+      ? (extractRequestedLeadCount(message) ?? Math.max(1, Math.min(50, decision.max_results ?? 5)))
+      : undefined;
+
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
-        intent: "source_companies_hiring",
+        intent: isQualifiedLead ? "source_qualified_leads" : "source_companies_hiring",
         tool_name: "source_with_apify",
-        selected_actor_key: "apify_jobs",
-        source_type: "jobs",
+        // Only pin the actor/source when this is NOT a qualified-Lead mission.
+        // See comment above.
+        ...(isQualifiedLead ? {} : { selected_actor_key: "apify_jobs", source_type: "jobs" }),
         query: liQuery,
         role_keywords: liRoleKeywords,
         location: decision.location ?? null,
         max_results: Math.max(1, Math.min(50, decision.max_results ?? 5)),
         needs_enrichment: false,
         needs_outreach: !!decision.needs_outreach,
-        execution_mode: decision.needs_outreach ? "outreach" : "fast",
+        execution_mode: isQualifiedLead
+          ? "company_first"
+          : (decision.needs_outreach ? "outreach" : "fast"),
+        // Qualified-Lead contract fields. Orchestrate ALSO calls
+        // routeQualifiedLead and stamps these on the top-level body, but we
+        // thread them here as well so the tool_input carries provenance
+        // downstream (run-agent inspects tool_input for requested_lead_count).
+        ...(isQualifiedLead ? {
+          workflow_kind: "qualified_lead_sourcing",
+          quota_policy: "contact_only",
+          count_entity: "contact_ready_lead",
+          requested_lead_count: requestedLeadCount,
+        } : {}),
         confidence: decision.confidence,
         missing_fields: [],
         lead_intent: leadIntent,
-        reason: "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
+        reason: isQualifiedLead
+          ? `classifier: company_hiring_sourcing → qualified_lead_sourcing (routeQualifiedLead reasons: ${qlRoute.reasonCodes.join(",")})`
+          : "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
       workflowInputs: actionMetadata?.workflow_inputs,
