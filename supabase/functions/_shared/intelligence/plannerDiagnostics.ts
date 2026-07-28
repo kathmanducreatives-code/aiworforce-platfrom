@@ -43,6 +43,8 @@ export interface PlannerDiagnosticsRecord {
   status: PlannerStatus;
   latency_ms: number;
   token_usage: { input?: number; output?: number } | null;
+  /** HTTP requests this planner call actually issued (2 when a repair was sent). */
+  model_requests: number;
 
   strategy_hash: string | null;
   validation: {
@@ -128,6 +130,7 @@ export function buildPlannerDiagnostics(input: BuildDiagnosticsInput): PlannerDi
     status: input.call.status,
     latency_ms: input.call.latency_ms,
     token_usage: extractTokenUsage(input.call.token_usage),
+    model_requests: input.call.model_requests ?? 1,
 
     strategy_hash: input.strategyHash ?? null,
     validation: input.validation

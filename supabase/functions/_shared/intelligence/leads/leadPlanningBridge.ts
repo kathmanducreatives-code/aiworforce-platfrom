@@ -251,6 +251,16 @@ export function bridgeDiagnostics(result: LeadPlanningBridgeResult): Record<stri
     planner_version: d.planner_version,
     model: d.model,
     latency_ms: d.latency_ms,
+    // PROVENANCE OF THE CALL ITSELF. These were computed by
+    // `buildPlannerDiagnostics` and then dropped here, which is why answering
+    // "did this run reach Anthropic directly or go through the gateway?" needed a
+    // source read instead of a query. `requested_provider` is constant because
+    // `runPlanner` always asks for Anthropic; `provider` is what actually served
+    // the request, and the two differing IS the finding.
+    requested_provider: "anthropic",
+    provider: d.provider,
+    model_requests: d.model_requests ?? 1,
+    token_usage: d.token_usage ?? null,
     input_hash: d.input_hash,
     output_hash: d.output_hash,
     strategy_hash: d.strategy_hash,
@@ -262,5 +272,54 @@ export function bridgeDiagnostics(result: LeadPlanningBridgeResult): Record<stri
     rejected_titles: d.rejected_titles,
     approval_required: d.approval_required,
     approval_requests: d.approval_requests,
+  };
+}
+
+/**
+ * Reconstruct a bridge result from a plan artifact orchestrate already persisted.
+ *
+ * NOT a second planner: nothing here contacts a model. It restates a decision
+ * already made and validated, in the shape run-agent's existing call site and
+ * `bridgeDiagnostics` consume, so that consuming a persisted strategy and
+ * planning one look identical to everything downstream.
+ *
+ * This is what makes "exactly one initial planner request per run" true.
+ */
+export function claudeFirstFromPersistedPlan(
+  artifact: {
+    plan_source: string;
+    approved_titles: string[];
+    strategy_hash: string | null;
+    fallback_reason: string | null;
+    planner: Record<string, unknown> | null;
+  },
+  spec: Record<string, unknown>,
+): LeadPlanningBridgeResult {
+  const usedClaude = artifact.plan_source === "claude_validated";
+  const p = artifact.planner ?? {};
+
+  return {
+    spec: (usedClaude
+      ? { ...spec, keyword_queries: [...artifact.approved_titles] }
+      : spec) as unknown as JobSearchSpecSlice,
+    specRewritten: usedClaude,
+    mission: null,
+    enablement: { enabled: true, reason: "enabled" },
+    environment: null,
+    outcome: {
+      plan: null as never,
+      source: usedClaude ? "claude" : "deterministic_registry",
+      strategy: null,
+      fallbackReason: artifact.fallback_reason,
+      diagnostics: {
+        ...(p as Record<string, unknown>),
+        // The planner ran ONCE, in orchestrate. Recording zero requests here is
+        // what distinguishes "reused a persisted plan" from "planned again".
+        model_requests: 0,
+        planner_source: usedClaude ? "claude" : "deterministic_registry",
+        strategy_hash: artifact.strategy_hash,
+        reused_persisted_plan: true,
+      } as never,
+    } as never,
   };
 }
