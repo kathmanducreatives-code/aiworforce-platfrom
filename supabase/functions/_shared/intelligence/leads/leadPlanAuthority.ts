@@ -190,6 +190,58 @@ export function buildQualifiedLeadPlanSteps(args: {
   ];
 }
 
+// ------------------------------------------- the plan orchestrate RETURNS ---
+
+/**
+ * A step in the shape orchestrate's HTTP response uses.
+ *
+ * pilot-chat announces the plan from `task_title`. The qualified-Lead steps above
+ * do not carry one — they name the stage in `description` — so the mapping happens
+ * here. Doing it here rather than in pilot-chat keeps that renderer generic and
+ * leaves every other workflow's announcement untouched.
+ */
+export interface ResponsePlanStep {
+  agent_slug: string;
+  task_title: string;
+  [key: string]: unknown;
+}
+
+export interface OrchestrateResponsePlan {
+  plan_summary: string;
+  steps: ResponsePlanStep[];
+}
+
+/**
+ * The plan orchestrate RETURNS, as distinct from the one it persists.
+ *
+ * PR #116 made the validated qualified-Lead plan authoritative for `task_plans`
+ * and for the run-agent kickoff, but orchestrate kept RETURNING the generic
+ * template it had built beforehand. pilot-chat announces from the response, so the
+ * user was told "Scout will source signals via apify, Aria will rank signals"
+ * while a different — correct — four-step plan sat in the database. Production run
+ * `4ec43c1d-f2fc-4131-9b01-a60b608abca9` is exactly that split.
+ *
+ * The authoritative plan wins whenever there is one, INCLUDING when it is the
+ * labelled deterministic fallback: a plan Claude was not allowed to author is
+ * still the plan that will execute, and saying so is the honest thing to show.
+ *
+ * With no qualified-Lead plan — every non-Lead workflow, and every workspace not
+ * opted in — the caller's own plan is returned BY REFERENCE, so legacy behaviour
+ * is literally unchanged rather than merely equivalent.
+ *
+ * PURE. No network, model, database or environment access.
+ */
+export function buildOrchestrateResponsePlan(
+  qlPlan: { summary: string; steps: QualifiedLeadPlanStep[] } | null | undefined,
+  parsed: OrchestrateResponsePlan,
+): OrchestrateResponsePlan {
+  if (!qlPlan) return parsed;
+  return {
+    plan_summary: qlPlan.summary,
+    steps: qlPlan.steps.map((step) => ({ ...step, task_title: step.description })),
+  };
+}
+
 /** Read the persisted artifact back off a plan's steps. Null when absent. */
 export function readPlanArtifact(steps: unknown): QualifiedLeadPlanArtifact | null {
   if (!Array.isArray(steps)) return null;
