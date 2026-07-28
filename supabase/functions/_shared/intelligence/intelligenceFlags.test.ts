@@ -158,18 +158,29 @@ Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-
 Deno.test("32.E only run-agent imports the kernel, and only through the gated bridge", async () => {
   const root = new URL("../../", import.meta.url);   // supabase/functions/
 
-  // Phase 2 deliberately wires ONE entry point into the Lead path. Orchestrate and
-  // pilot-chat remain untouched, so the blast radius stays a single function.
-  for (const fn of ["orchestrate", "pilot-chat"]) {
-    const src = await Deno.readTextFile(new URL(`${fn}/index.ts`, root));
-    assertFalse(src.includes("intelligence/"), `${fn} must not import the kernel`);
-  }
+  // pilot-chat still never touches the kernel — it classifies and delegates.
+  const pilot = await Deno.readTextFile(new URL("pilot-chat/index.ts", root));
+  assertFalse(pilot.includes("intelligence/"), "pilot-chat must not import the kernel");
+
+  // ORCHESTRATE IS NOW A SEAM, deliberately. The visible plan has to be the
+  // validated strategy, and the plan is persisted here — so planning must happen
+  // here too. The blast radius is still named and small: exactly one gated module,
+  // which owns the route check and the flag/allow-list gate before anything runs.
+  const orchestrate = await Deno.readTextFile(new URL("orchestrate/index.ts", root));
+  const orchImports = [...orchestrate.matchAll(/from "\.\.\/_shared\/intelligence\/[^"]+"/g)].map((m) => m[0]);
+  assertEquals(orchImports.length, 1,
+    `orchestrate must import exactly one kernel module, got: ${orchImports.join(", ")}`);
+  assert(orchImports[0].includes("leads/leadPlanOrchestration.ts"),
+    "orchestrate must reach the kernel only through the gated planning seam");
 
   const runAgent = await Deno.readTextFile(new URL("run-agent/index.ts", root));
   const kernelImports = [...runAgent.matchAll(/from "\.\.\/_shared\/intelligence\/[^"]+"/g)].map((m) => m[0]);
-  assertEquals(kernelImports.length, 1, `run-agent must import exactly one kernel module, got: ${kernelImports.join(", ")}`);
-  assert(kernelImports[0].includes("leads/leadPlanningBridge.ts"),
-    "run-agent must reach the kernel only through the gated bridge");
+  assertEquals(kernelImports.length, 2,
+    `run-agent must import exactly two kernel modules, got: ${kernelImports.join(", ")}`);
+  assert(kernelImports.some((i) => i.includes("leads/leadPlanningBridge.ts")),
+    "run-agent must reach the planner only through the gated bridge");
+  assert(kernelImports.some((i) => i.includes("leads/leadPlanAuthority.ts")),
+    "run-agent reads the persisted plan artifact through the plan-authority module");
 
   // The planner itself is never called directly from the edge function.
   assertFalse(runAgent.includes("planInitialLeadSourcing("),
