@@ -28,11 +28,11 @@ Deno.test("canonical query routes qualified_lead_sourcing / company_first / cont
   assertEquals(r.executionMode, "company_first");
   assertEquals(r.countEntity, "contact_ready_lead");
   assertEquals(r.quotaPolicy, "contact_only");
-  // NB: canonical prod query says "Find 5 founders" (no literal "leads" token),
-  // so extractRequestedLeadCount returns null; the count falls back to
-  // decision.max_results in pilot-chat. This is intentional — the routing
-  // decision itself is driven by the PERSON_TARGET_RE match on "founders".
-  assertEquals(extractRequestedLeadCount(CANONICAL), null);
+  // The canonical query says "Find 5 founders" — no literal "leads" token. That
+  // used to return null and leave the quota to `decision.max_results`, which is a
+  // provider batch size and not a lead quota. The count parser is entity-aware
+  // now, so the stated quota is read from the sentence that states it.
+  assertEquals(extractRequestedLeadCount(CANONICAL), 5);
 });
 
 Deno.test("canonical query — compileLeadEntityIntent agrees: company-first person mission", () => {
