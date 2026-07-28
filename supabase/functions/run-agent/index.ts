@@ -121,6 +121,83 @@ function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean 
 
 
 
+/**
+ * Project a finished company-first task onto its parent plan row.
+ *
+ * WHY THIS EXISTS. The company-first branch has its own exit, so it never reaches
+ * the finalization at the bottom of this file — the only place that writes
+ * `task_plans.status`. Every company-first run therefore left the plan on the
+ * `executing` it was created with, and the UI, which reads the plan, waited on a
+ * transition that was never going to be written.
+ *
+ * NO SECOND STATUS AUTHORITY. The mapping consumes the `StatusProjection` the
+ * caller already computed from `projectStatus`. `task_plans` has no CHECK
+ * constraint and its live vocabulary is complete / partial / failed /
+ * awaiting_approval / executing, so the three outcomes below are all legal values
+ * already in use.
+ *
+ * `continuation_required` maps to `partial`, never `complete`: the run is
+ * resumable and saying otherwise would claim work that has not happened.
+ *
+ * IDEMPOTENT. Writing the same projection twice is a no-op at the row level, and
+ * the guard below stops a second write from resurrecting a plan a later step has
+ * already moved on from.
+ */
+async function finalizeCompanyFirstPlan(
+  db: { from: (t: string) => any },
+  planId: string | null | undefined,
+  taskId: string,
+  agentId: string | null | undefined,
+  workspaceId: string,
+  statuses: { rowStatus: string; taskStatus: string; terminalStatus: string },
+  terminalReason: string,
+): Promise<void> {
+  if (!planId) return;
+
+  const planStatus = statuses.taskStatus === "completed"
+    ? "complete"
+    : statuses.taskStatus === "failed"
+      ? "failed"
+      : "partial";
+
+  try {
+    // Only advance a plan that is still running. A plan another step already
+    // finalized is left alone, which is what makes a repeated call harmless.
+    const { data: current } = await db.from("task_plans")
+      .select("status").eq("id", planId).maybeSingle();
+    const currentStatus = (current as { status?: string } | null)?.status ?? null;
+    if (currentStatus && currentStatus !== "executing" && currentStatus !== planStatus) return;
+    if (currentStatus === planStatus) return;
+
+    await db.from("task_plans").update({
+      status: planStatus,
+      // Only a genuinely finished plan gets a completion time. A resumable one has
+      // not completed, and stamping it would make the row lie to every reader.
+      ...(planStatus === "complete" || planStatus === "failed"
+        ? { completed_at: new Date().toISOString() }
+        : {}),
+    }).eq("id", planId);
+
+    await db.from("activity_feed").insert({
+      workspace_id: workspaceId, plan_id: planId, agent_id: agentId ?? null,
+      event_type: planStatus === "partial" ? "plan_checkpointed" : "plan_complete",
+      title: planStatus === "partial" ? "Round complete — more rounds available" : `Plan ${planStatus}`,
+      body: terminalReason,
+      metadata: {
+        task_id: taskId, workflow_status: planStatus,
+        terminal_status: statuses.terminalStatus, task_status: statuses.taskStatus,
+      },
+    });
+  } catch (e) {
+    // The task outcome is already committed; a plan-row write failure must not
+    // turn a finished run into a failed one. It is logged, not swallowed silently.
+    console.error("[run-agent][company-first] plan finalization failed", {
+      plan_id: planId, task_id: taskId, target_status: planStatus,
+      message: (e as Error)?.message ?? "unknown",
+    });
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
@@ -981,6 +1058,19 @@ Deno.serve(async (req) => {
             });
           }
         }
+
+        // FINALIZE THE PLAN. The company-first branch returns here, far above the
+        // ordinary finalization near the end of this function, so without this the
+        // `task_plans` row keeps the `executing` it was created with — forever.
+        // That is exactly what production run dc41c9f2 showed: the task finished
+        // correctly at 10:40:51 as partial/continuation_required while the plan row
+        // still said `executing` with `updated_at` equal to `created_at`, so the UI
+        // sat on "Plan is being created" for nine minutes after the work had stopped.
+        //
+        // The projection is the one already computed above — no second status
+        // authority, and `continuation_required` becomes `partial` (resumable),
+        // never `complete`.
+        await finalizeCompanyFirstPlan(supabase, plan_id, task.id, agent.id, workspace_id, statuses, cf.terminal_reason);
 
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({
