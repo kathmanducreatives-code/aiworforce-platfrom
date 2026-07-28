@@ -47,7 +47,10 @@ import {
 } from "./sourceFeedbackRuntime.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { canonicalJson, sha256Hex } from "./planHash.ts";
-import type { RoundObservationInput, RoundObservationOutcome } from "./companyFirstQuotaController.ts";
+import {
+  safeObserverFailure,
+  type RoundObservationInput, type RoundObservationOutcome,
+} from "./companyFirstQuotaController.ts";
 
 export type InvokeJobsFn = (envelope: Record<string, unknown>, max: number) => Promise<unknown[]>;
 
@@ -108,7 +111,21 @@ export interface SequentialSourceBridgeResult {
   onObservation: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
   /** The last feedback decision, for diagnostics. Null until a round completes. */
   lastFeedback: () => FeedbackDecisionResult | null;
+  /**
+   * Safe diagnostics for a failed state transition. Null while healthy.
+   *
+   * Codes, hashes and booleans only — never an exception payload, a prompt, a
+   * provider record or a contact.
+   */
+  lastTransitionFailure: () => Record<string, unknown> | null;
 }
+
+/** Where in the fold a transition failed. */
+export type TransitionPhase =
+  | "observation_construction"
+  | "feedback_resolution"
+  | "state_transition"
+  | "checkpoint_persistence";
 
 /**
  * Wrap the jobs invoker when sequential source execution is permitted.
@@ -126,6 +143,7 @@ export async function applySequentialSourceExecution(
     // A no-op, not an absent function: the controller can call it unconditionally.
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
+    lastTransitionFailure: () => null,
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
@@ -180,6 +198,7 @@ export async function applySequentialSourceExecution(
   });
 
   let lastFeedback: FeedbackDecisionResult | null = null;
+  let lastTransitionFailure: Record<string, unknown> | null = null;
   const log = input.log ?? (() => {});
 
   /**
@@ -193,52 +212,97 @@ export async function applySequentialSourceExecution(
    * FUSED yield rather than raw rows.
    */
   const onObservation = async (round: RoundObservationInput): Promise<RoundObservationOutcome | void> => {
+    // The slices are returned on EVERY path, success or halt, so a stopped run
+    // still checkpoints the evidence and the ledger it already paid for.
+    const slices = () => ({
+      [SOURCE_EXECUTION_KEY]: state,
+      [FUSION_STATE_KEY]: fusion,
+      [SOURCE_FEEDBACK_KEY]: feedback,
+    });
+
+    let phase: TransitionPhase = "observation_construction";
     const stepId = state.current_step_id ?? approved.steps[0]?.stepId ?? null;
-    if (!stepId) return;
-    const record = stepOf(state, stepId);
-    const step = approved.steps.find((x) => x.stepId === stepId);
-    if (!record || !step) return;
+    const record = stepId ? stepOf(state, stepId) : null;
+    const step = stepId ? approved.steps.find((x) => x.stepId === stepId) : undefined;
 
-    const observation = buildObservation({ round, stepId, step: step.capability, record, fusion });
-
-    // Fused metrics and the evidence hash come from PR #109's state, never
-    // recomputed here.
-    const fused = fusedMetricsFrom(fusion, handle.lastOutcome()?.fusion ?? null);
-    const evidenceHash = await fusedEvidenceHash(fusion);
-
-    const applied = await applyObservationWithFeedback({
-      workspaceId: input.workspaceId,
-      taskId: input.taskId,
-      plan: approved,
-      state,
-      observation,
-      fused,
-      evidenceHash,
-      ledger: feedback,
-      companyBrainPolicyHash: input.companyBrainPolicyHash ?? "",
-      taskIdHash: await shortId(input.taskId),
-      workspaceIdHash: await shortId(input.workspaceId),
-      // OMITTED in production on purpose: the feedback runtime falls through to
-      // the existing `generateJson` gateway. Injected only by tests.
-      ...(input.generate ? { generate: input.generate } : {}),
-      readEnv: input.readEnv,
-    });
-
-    lastFeedback = applied.feedback;
-    log("[sequential-source] round observed", {
-      round: round.round, step: stepId,
-      action: applied.action.action, source: applied.feedback.source,
-      skipped: applied.feedback.skippedReason, stopped: applied.stopped,
-    });
-
-    // Every slice that a resumed run must restore together.
-    return {
-      checkpointSlices: {
-        [SOURCE_EXECUTION_KEY]: state,
-        [FUSION_STATE_KEY]: fusion,
-        [SOURCE_FEEDBACK_KEY]: feedback,
-      },
+    const halt = (reason: string, extra: Record<string, unknown> = {}): RoundObservationOutcome => {
+      lastTransitionFailure = {
+        phase, reason,
+        stepId: stepId ?? null,
+        attempt: record?.attempts ?? null,
+        planHash: approved.planHash,
+        providerCallCompleted: round.providerCalls > 0,
+        evidenceFusionCompleted: handle.lastOutcome()?.fusion != null,
+        ...extra,
+      };
+      log("[sequential-source] transition failed", lastTransitionFailure);
+      return {
+        checkpointSlices: slices(),
+        halt: {
+          code: "source_observation_transition_failed",
+          reason,
+          diagnostics: { ...lastTransitionFailure },
+        },
+      };
     };
+
+    // A round that cannot be attributed to a step is a control-plane failure, not
+    // a quiet no-op: the plan is running and we cannot say where.
+    if (!stepId || !record || !step) return halt("current_step_unresolvable");
+
+    try {
+      const observation = buildObservation({ round, stepId, step: step.capability, record, fusion });
+
+      // Fused metrics and the evidence hash come from PR #109's state, never
+      // recomputed here.
+      const fused = fusedMetricsFrom(fusion, handle.lastOutcome()?.fusion ?? null);
+      const evidenceHash = await fusedEvidenceHash(fusion);
+      const taskIdHash = await shortId(input.taskId);
+      const workspaceIdHash = await shortId(input.workspaceId);
+
+      // FEEDBACK FAILURES ARE NOT CONTROL-PLANE FAILURES. Everything the model can
+      // do wrong — unavailable, no credential, timeout, malformed, rejected, budget
+      // spent — is already resolved to the deterministic action inside this call,
+      // which is why it sits under `feedback_resolution` and is expected to return
+      // normally rather than throw.
+      phase = "feedback_resolution";
+      const applied = await applyObservationWithFeedback({
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        plan: approved,
+        state,
+        observation,
+        fused,
+        evidenceHash,
+        ledger: feedback,
+        companyBrainPolicyHash: input.companyBrainPolicyHash ?? "",
+        taskIdHash,
+        workspaceIdHash,
+        // OMITTED in production on purpose: the feedback runtime falls through to
+        // the existing `generateJson` gateway. Injected only by tests.
+        ...(input.generate ? { generate: input.generate } : {}),
+        readEnv: input.readEnv,
+      });
+
+      // `applyObservationWithFeedback` folds the action itself, so reaching here
+      // means the transition happened.
+      phase = "state_transition";
+      if (!applied.action) return halt("accepted_action_unresolved");
+
+      lastFeedback = applied.feedback;
+      log("[sequential-source] round observed", {
+        round: round.round, step: stepId,
+        action: applied.action.action, source: applied.feedback.source,
+        skipped: applied.feedback.skippedReason, stopped: applied.stopped,
+      });
+
+      phase = "checkpoint_persistence";
+      return { checkpointSlices: slices() };
+    } catch (e) {
+      // Whatever threw, the safe category is all that is kept — an exception
+      // message can carry a provider payload or a prompt fragment.
+      return halt(safeObserverFailure(e));
+    }
   };
 
   return {
@@ -252,6 +316,7 @@ export async function applySequentialSourceExecution(
     lastOutcome: handle.lastOutcome,
     onObservation,
     lastFeedback: () => lastFeedback,
+    lastTransitionFailure: () => lastTransitionFailure,
   };
 }
 
@@ -332,6 +397,8 @@ export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Re
     ...(r.fusion ? { evidence_fusion: fusionDiagnostics(r.fusion, r.lastOutcome()?.fusion ?? null) } : {}),
     // Ledger-level only. The per-checkpoint record is reported by the feedback
     // runtime itself, which is the only thing that has one.
+    // Present ONLY when a fold failed. Its absence is the healthy signal.
+    ...(r.lastTransitionFailure() ? { source_transition_failure: r.lastTransitionFailure() } : {}),
     ...(r.feedback ? {
       source_feedback: {
         calls_used: r.feedback.callsUsed,
