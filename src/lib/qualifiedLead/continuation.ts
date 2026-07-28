@@ -18,12 +18,16 @@ export type TerminalStatus =
   | 'round_limit_reached'
   | 'provider_failure'
   | 'invalid_request'
+  | 'source_transition_failed'
   | 'continuation_required';
 
 /** Statuses after which no further sourcing may be offered. */
 export const TRUE_TERMINAL_STATUSES: readonly TerminalStatus[] = [
   'completed', 'search_exhausted', 'budget_exhausted',
   'round_limit_reached', 'provider_failure', 'invalid_request',
+  // The round's outcome could not be folded into source state. No Continue button:
+  // the runtime cannot say what the next action is, so it must not offer one.
+  'source_transition_failed',
 ];
 
 /** Row states from which a checkpoint may still be continued. */

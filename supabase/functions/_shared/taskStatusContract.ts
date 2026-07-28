@@ -77,6 +77,12 @@ export type TaskResultStatus = typeof TASK_RESULT_STATUSES[number];
 export const TERMINAL_STATUSES = [
   "continuation_required", "completed", "quota_not_met", "search_exhausted",
   "budget_exhausted", "round_limit_reached", "provider_failure", "invalid_request",
+  /**
+   * The provider round succeeded but its outcome could not be folded into source
+   * state. Distinct from `provider_failure` on purpose: the paid call WORKED, and
+   * reporting a provider fault would send an operator to the wrong system.
+   */
+  "source_transition_failed",
 ] as const;
 export type TerminalStatus = typeof TERMINAL_STATUSES[number];
 
@@ -84,6 +90,10 @@ export type TerminalStatus = typeof TERMINAL_STATUSES[number];
 const NON_RESUMABLE: ReadonlySet<string> = new Set([
   "completed", "search_exhausted", "budget_exhausted",
   "round_limit_reached", "provider_failure", "invalid_request",
+  // No AUTOMATIC continuation: the control plane could not establish what happens
+  // next, so offering to carry on would be guessing. The checkpoint is intact, so
+  // a deliberate re-run still resumes from the recorded state.
+  "source_transition_failed",
 ]);
 
 export interface StatusProjection {
@@ -108,7 +118,8 @@ export function projectStatus(terminal: string, invariantViolation?: string | nu
     ? (terminal as TerminalStatus)
     : "invalid_request";
 
-  if (invariantViolation || t === "provider_failure" || t === "invalid_request") {
+  if (invariantViolation || t === "provider_failure" || t === "invalid_request"
+    || t === "source_transition_failed") {
     return { rowStatus: "failed", taskStatus: "failed", terminalStatus: t };
   }
 
