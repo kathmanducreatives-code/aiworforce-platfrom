@@ -1,3 +1,5 @@
+import { RESUMABLE_ROW_STATUS, TASK_ROW_STATUSES } from "./taskStatusContract.ts";
+
 // PERSISTED COMPANY-FIRST SOURCING STATE.
 //
 // The 2026-07-26 run (task 71db3ced) returned 504 after 152.2s: round 1 took
@@ -138,10 +140,51 @@ export function recordCompletedCall(state: CompanyFirstSourcingState, call: Comp
 
 // ------------------------------------------------------------ persistence ----
 
+/**
+ * The outcome of one checkpoint write.
+ *
+ * Returned rather than swallowed. A checkpoint that fails silently is the worst
+ * of both worlds: the run keeps spending, and the record that would let it resume
+ * without spending again never exists. The caller decides what to do; it is told.
+ */
+export interface CheckpointSaveResult {
+  ok: boolean;
+  /** Safe category. Never a raw driver payload. */
+  reason: string | null;
+}
+
 /** Minimal write surface so tests inject a fake instead of a live client. */
 export interface SourcingStateStore {
   load(taskId: string): Promise<CompanyFirstSourcingState | null>;
-  save(taskId: string, state: CompanyFirstSourcingState, taskStatus: string, resultPatch?: Record<string, unknown>): Promise<void>;
+  save(
+    taskId: string,
+    state: CompanyFirstSourcingState,
+    taskStatus: string,
+    resultPatch?: Record<string, unknown>,
+  ): Promise<CheckpointSaveResult>;
+}
+
+/**
+ * The ROW status a checkpoint may write.
+ *
+ * THE DEFECT THIS EXISTS TO PREVENT. `tasks.status` is constrained to database
+ * execution state — `pending, ready, running, awaiting_approval, complete,
+ * failed`. This store used to pass its caller's SOURCING vocabulary straight
+ * into that column, and every caller passes "partial". Postgres rejected the
+ * whole statement, the `catch` below swallowed it, and so `company_first_state`
+ * was never written — not once, in any task, ever. Continuation had no
+ * checkpoint to load, so "Continue sourcing" silently restarted at round one and
+ * re-paid for every provider call.
+ *
+ * `ready` is what a checkpoint means: work is durably recorded and the task can
+ * be resumed. `taskStatusContract` already declares it as the resumable row
+ * status and already lists "partial" as legacy. The sourcing vocabulary still
+ * travels — in `result.task_status`, where the contract puts it.
+ */
+export function checkpointRowStatus(taskStatus: string): string {
+  return (TASK_ROW_STATUSES as readonly string[]).includes(taskStatus)
+    ? taskStatus
+    : RESUMABLE_ROW_STATUS;
 }
 
 /**
@@ -167,13 +210,49 @@ export function supabaseSourcingStateStore(db: {
       try {
         const { data } = await db.from("tasks").select("result").eq("id", taskId).maybeSingle();
         const prior = ((data as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>;
-        await db.from("tasks").update({
-          status: taskStatus,
-          result: { ...prior, ...(resultPatch ?? {}), [SOURCING_STATE_KEY]: state },
+        const res = await db.from("tasks").update({
+          // A LEGAL COLUMN VALUE. The sourcing status travels in the result.
+          status: checkpointRowStatus(taskStatus),
+          result: {
+            ...prior,
+            ...(resultPatch ?? {}),
+            task_status: taskStatus,
+            [SOURCING_STATE_KEY]: state,
+          },
         }).eq("id", taskId);
+
+        // PostgREST reports a rejected write in the response, not by throwing, so
+        // a constraint violation would otherwise look exactly like success.
+        const err = (res as { error?: { message?: string; code?: string } } | null)?.error ?? null;
+        if (err) {
+          console.error("[company-first] checkpoint REJECTED", {
+            task_id: taskId, code: err.code ?? null, category: safeCheckpointFailure(err.message),
+          });
+          return { ok: false, reason: safeCheckpointFailure(err.message) };
+        }
+        return { ok: true, reason: null };
       } catch (e) {
-        console.error("[company-first] checkpoint save failed:", (e as Error)?.message);
+        const reason = safeCheckpointFailure((e as Error)?.message);
+        console.error("[company-first] checkpoint save failed", { task_id: taskId, category: reason });
+        return { ok: false, reason };
       }
     },
   };
+}
+
+/**
+ * A short, safe category for a checkpoint failure.
+ *
+ * The driver's own message can carry row contents. A category is enough to route
+ * an operator to the right cause — and `constraint_violation` is specifically
+ * the one that hid this defect for so long.
+ */
+export function safeCheckpointFailure(message: unknown): string {
+  const m = String(message ?? "").toLowerCase();
+  if (/violates check constraint|check constraint|invalid input value/.test(m)) return "constraint_violation";
+  if (/row-level security|permission denied|rls/.test(m)) return "permission_denied";
+  if (/timeout|timed out/.test(m)) return "timeout";
+  if (/network|econn|socket|fetch/.test(m)) return "network_error";
+  if (/not found|no rows/.test(m)) return "task_not_found";
+  return "checkpoint_write_failed";
 }
