@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
+import { planQualifiedLeadBeforePersistence } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -1129,6 +1130,27 @@ Return ONLY valid JSON, no prose, no markdown:
       connectors_missing: connectorsMissing,
     });
 
+    // ---- QUALIFIED-LEAD PLANNING, BEFORE PERSISTENCE ------------------------
+    //
+    // The plan the user sees used to be the generic "Scout sources signals, Aria
+    // ranks signals" template, persisted here, with Claude called LATER inside
+    // run-agent where it could only rewrite an internal keyword list. So the plan
+    // on screen never described the actual mission and never reflected anything
+    // Claude decided.
+    //
+    // Planning now happens BEFORE the insert, and what is persisted is what was
+    // validated. TIGHTLY GATED: only a qualified-Lead route, only when the
+    // existing Claude-first flag AND the workspace allow-list both pass. Every
+    // other workflow reaches the unchanged insert below.
+    const qlPlan = await planQualifiedLeadBeforePersistence({
+      // The Supabase client's generic type is deeper than the brain loader's
+      // structural contract; the loader only ever reads one table.
+      admin: admin as never, workspaceId: workspace_id, userInstruction: user_instruction ?? "",
+      toolInput: (tool_input as Record<string, unknown> | null) ?? null,
+      fallbackSteps: parsed!.steps as unknown as Array<Record<string, unknown>>,
+      fallbackSummary: parsed!.plan_summary,
+    });
+
     // Persist task_plan.
     const { data: taskPlan, error: planError } = await admin
       .from("task_plans")
@@ -1138,8 +1160,8 @@ Return ONLY valid JSON, no prose, no markdown:
         created_by: userId,
         goal: user_instruction,
         user_instruction,
-        plan_summary: parsed!.plan_summary,
-        steps: parsed!.steps,
+        plan_summary: qlPlan?.summary ?? parsed!.plan_summary,
+        steps: qlPlan?.steps ?? parsed!.steps,
         status: "executing",
       })
       .select("id")
@@ -1233,6 +1255,10 @@ Return ONLY valid JSON, no prose, no markdown:
               count_entity: "contact_ready_lead",
             }
           : {}),
+        // THE PLAN IS ALREADY MADE. Passing the validated artifact is what stops
+        // run-agent planning the same mission a second time — one initial planner
+        // request per run, and the strategy that executes is the one on screen.
+        ...(qlPlan ? { qualified_lead_plan: qlPlan.artifact } : {}),
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 
