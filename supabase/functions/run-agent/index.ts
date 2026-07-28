@@ -43,7 +43,8 @@ import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectiveP
 // enable it globally. With either absent this is inert: no mission is built, no
 // prompt assembled, no model contacted, and the spec below is passed through by
 // reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
-import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+import { applyClaudeFirstLeadPlanning, bridgeDiagnostics, claudeFirstFromPersistedPlan } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
 // Gated by DYNAMIC_HIRING_SOURCE_PLANNING *and* an explicit workspace allow-list.
 // When either is absent the bridge returns `invokeJobs` UNCHANGED — the same
@@ -860,7 +861,23 @@ Deno.serve(async (req) => {
         // carried through untouched, so the planner cannot redefine who we contact
         // or where. Any failure, timeout, policy violation or approval requirement
         // returns the deterministic spec, which is exactly today's behavior.
-        const claudeFirst = await applyClaudeFirstLeadPlanning({
+        // EXACTLY ONE INITIAL PLANNER REQUEST PER RUN.
+        //
+        // When orchestrate planned this mission before persisting the plan, the
+        // validated strategy travels with the request. Planning it again here
+        // would be a second paid Anthropic call for a question already answered —
+        // and could answer it differently, so the plan on screen and the plan
+        // executing would diverge. The persisted artifact wins.
+        // Orchestrate threads the artifact on the request body. That is the
+        // authoritative copy at this point in the handler — the plan row is read
+        // later, and re-reading it here would only re-derive the same value.
+        const persistedPlan = body.qualified_lead_plan
+          ? readPlanArtifact([{ metadata: { qualified_lead_plan: body.qualified_lead_plan } }])
+          : null;
+
+        const claudeFirst = persistedPlan
+          ? claudeFirstFromPersistedPlan(persistedPlan, cfIntent.job_search_spec as unknown as Record<string, unknown>)
+          : await applyClaudeFirstLeadPlanning({
           workspaceId: workspace_id,
           originalInstruction: cfIntent.job_search_spec.original_query,
           spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
