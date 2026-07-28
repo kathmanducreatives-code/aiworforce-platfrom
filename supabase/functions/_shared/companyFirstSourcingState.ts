@@ -72,6 +72,26 @@ export interface CompanyFirstSourcingState {
   terminal_status: string | null;
   terminal_reason: string | null;
   checkpoint_at: string;
+
+  /**
+   * Slices owned by OTHER authorities, carried in this same record.
+   *
+   * PR #108 and #109 both describe their state as living "inside the existing
+   * company-first checkpoint" — which was the right design and was never actually
+   * written anywhere. They belong here rather than in a parallel store because a
+   * resumed run must restore step progress, fused evidence and the feedback ledger
+   * at the SAME instant as the quota and dedupe state they were derived from. A
+   * separate store could be restored out of step, and then a resumed task would
+   * disagree with itself about what it had already paid for.
+   *
+   * Untyped on purpose: this module is the envelope, not the owner. Each slice is
+   * validated by its own authority on the way back in — `stateMatchesPlan` for
+   * source execution, the version check for fusion and feedback — so a slice from
+   * an older contract is discarded rather than trusted.
+   *
+   * No migration: `tasks.result.company_first_state` is already jsonb.
+   */
+  slices?: Record<string, unknown>;
 }
 
 export function newSourcingState(args: {

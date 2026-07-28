@@ -7,7 +7,10 @@
 // results; that inversion is fixed here.
 
 import type { LeadEntityIntent } from "./leadEntityIntent.ts";
-import { runCompanyFirstQuotaController, type CompanyFirstTerminalStatus, type QuotaControllerBounds, type RoundRecord } from "./companyFirstQuotaController.ts";
+import {
+  runCompanyFirstQuotaController,
+  type CompanyFirstTerminalStatus, type QuotaControllerBounds, type QuotaControllerDeps, type RoundRecord,
+} from "./companyFirstQuotaController.ts";
 import type { BroadeningPlannerFn } from "./broadeningPlan.ts";
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import type { ToolCallReader } from "./durableIdempotency.ts";
@@ -50,6 +53,11 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
   durableIdempotency?: ToolCallReader;
   /** Checkpoint store over tasks.result (no migration). */
   stateStore?: SourcingStateStore;
+  /**
+   * Observer for each completed round. Forwarded verbatim to the controller —
+   * this wrapper adapts run-agent's context, it does not interpret rounds.
+   */
+  onRoundComplete?: QuotaControllerDeps["onRoundComplete"];
   executionBudget?: Partial<ExecutionBudget>;
   clock?: () => number;
   log?: (msg: string, meta?: unknown) => void;
@@ -105,6 +113,7 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     invokeJobs: deps.invokeJobs, invokePeople: deps.invokePeople, persist: deps.persist, budgetProceed: deps.budgetProceed,
     proposeBroadening: deps.proposeBroadening, plannerMetadata: deps.plannerMetadata,
     durableIdempotency: deps.durableIdempotency, stateStore: deps.stateStore,
+    onRoundComplete: deps.onRoundComplete,
   }, {
     requestedLeadCount: deps.requestedLeadCount,
     quotaPolicy: deps.quotaPolicy, bounds: deps.bounds, limits: deps.limits,

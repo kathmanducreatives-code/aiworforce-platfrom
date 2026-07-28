@@ -146,7 +146,53 @@ export interface QuotaControllerOpts {
   log?: (msg: string, meta?: unknown) => void;
 }
 
+/**
+ * What one completed round actually produced, in full-funnel terms.
+ *
+ * Handed to `onRoundComplete` so a caller can build a source observation from
+ * MEASURED outcomes rather than from raw provider rows. Raw volume is the one
+ * number that reliably lies: four hundred jobs that collapse into three companies
+ * and zero contactable founders is not a good round, and a strategy decision made
+ * from `raw_rows` alone would read it as one.
+ *
+ * Scalars and the existing `FunnelSummary` only — no candidate objects, so the
+ * controller stays free of any dependency on what a caller does with them.
+ */
+export interface RoundObservationInput {
+  round: number;
+  /** The round's measured funnel — the same one the checkpoint records. */
+  funnel: FunnelSummary;
+  rawRows: number;
+  newUniqueJobs: number;
+  newUniqueCompanies: number;
+  newEligibleLeads: number;
+  /** CONTACT-ready leads across the whole task, not just this round. */
+  totalEligibleLeads: number;
+  remainingQuota: number;
+  remainingBudgetUsd: number;
+  providerCalls: number;
+  duplicatesRemoved: number;
+  /** True when this round could not expand any further. */
+  sourceExhausted: boolean;
+}
+
+/** What a round-completion hook may contribute back to the checkpoint. */
+export interface RoundObservationOutcome {
+  /** Slices to store alongside the quota state, keyed by their owner's constant. */
+  checkpointSlices?: Record<string, unknown>;
+}
+
 export interface QuotaControllerDeps extends CompoundExecutionDeps {
+  /**
+   * Called ONCE after each round is finalized and before the checkpoint is
+   * written, so anything the hook records is saved with the round it describes.
+   *
+   * The smallest possible seam. The controller remains the sole quota authority
+   * and the sole round loop; this only lets another authority observe a completed
+   * round and hand back state to persist. It cannot change the quota, the terminal
+   * status, or whether another round runs.
+   */
+  onRoundComplete?: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
   /** INJECTED planner. Never called by this module in tests or offline runs. */
   proposeBroadening?: BroadeningPlannerFn;
   /** Safe provenance for the most recent planner call. */
@@ -476,6 +522,37 @@ export async function runCompanyFirstQuotaController(
     };
     state.completed_rounds.push(checkpoint);
     state.planner_metadata = plannerMetadata as unknown as Array<Record<string, unknown>>;
+
+    // ---- ROUND OBSERVED --------------------------------------------------
+    //
+    // Before the save, so whatever the observer records is checkpointed with the
+    // round it describes. A hook failure is contained: sourcing is the point of
+    // this loop, and losing an observation must never lose a round's real work.
+    if (deps.onRoundComplete) {
+      try {
+        const outcome = await deps.onRoundComplete({
+          round,
+          funnel,
+          rawRows: exec.writeBoundary.rawProviderItems,
+          newUniqueJobs: newJobs,
+          newUniqueCompanies: newCompanies,
+          newEligibleLeads: newEligible,
+          totalEligibleLeads: eligibleAfter,
+          remainingQuota: remainingLeadCount(requested, eligibleAfter),
+          remainingBudgetUsd: Math.max(0, bounds.hardBudget - budget),
+          providerCalls: roundJobsCalls + roundPeopleCalls,
+          duplicatesRemoved: dupes,
+          // No further expansion exists, so this source has nothing left to try.
+          sourceExhausted: !expansionAvailable,
+        });
+        if (outcome?.checkpointSlices) {
+          state.slices = { ...(state.slices ?? {}), ...outcome.checkpointSlices };
+        }
+      } catch (e) {
+        log("round observation failed", { round, error: (e as Error)?.message });
+      }
+    }
+
     if (deps.stateStore && taskId) {
       // `partial` — never leave the task at `running`.
       await deps.stateStore.save(taskId, state, "partial");
