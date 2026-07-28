@@ -255,8 +255,50 @@ export function parseLeadStrategy(
   };
 }
 
+/**
+ * The ONE rule the planner keeps getting wrong, stated where it will be read.
+ *
+ * Two production runs had otherwise-usable strategies rejected because Claude put
+ * CEO / Chief Executive Officer / President into the HIRING titles. Those are the
+ * people we contact, not the roles the company is hiring for; searching job
+ * boards for "CEO" finds nothing this mission wants. The validator caught it both
+ * times — correctly — and the whole plan was discarded for it.
+ *
+ * Rendered verbatim into `<output_schema>`, which is the only lead-specific
+ * instruction surface the planner wrapper exposes.
+ */
+export const LEAD_ROLE_SEPARATION_RULE =
+  "TWO DIFFERENT ROLE SETS. `role_ontology` describes the role the COMPANY IS "
+  + "HIRING FOR — the hiring signal to search job boards for (e.g. Sales "
+  + "Operations, Revenue Operations, GTM Operations). The people to RETURN are "
+  + "the decision-makers named in the mission (e.g. Founder, Co-Founder, CEO) and "
+  + "they are supplied by Agentory — never put them here. "
+  + "NEVER place Founder, Co-Founder, CEO, Chief Executive Officer, President, "
+  + "Owner or any executive title in exact_titles, safe_synonyms, adjacent_titles "
+  + "or seniority. NEVER place Sales/Revenue/GTM Operations in a decision-maker "
+  + "field. A strategy that mixes them is rejected in full.";
+
+/**
+ * What the planner may NOT do. Each line corresponds to a validator rule that
+ * already rejects the plan — stating them here is what lets a good plan pass.
+ */
+export const LEAD_PLANNER_PROHIBITIONS = [
+  "Do NOT return Actor IDs, provider names, vendor names or any `user~actor` identifier.",
+  "Do NOT return provider-specific JSON, request bodies, URLs, endpoints or credentials.",
+  "Do NOT change the requested company vertical — use the canonical vertical given.",
+  "Do NOT change any Company Brain constraint: employee range, stage, industry, business model, geography.",
+  "Do NOT change the requested count, the final entity, or what counts toward the quota.",
+  "Select SEMANTIC CAPABILITIES by key only (startup job discovery, broad hiring discovery, "
+    + "professional hiring cross-check, ATS verification). Agentory maps a capability to the "
+    + "Actor and the exact provider input; you never do.",
+] as const;
+
 /** The schema rendered into the prompt's `<output_schema>` section. */
 export const LEAD_STRATEGY_OUTPUT_SCHEMA: Record<string, unknown> = {
+  // Read first by the model: the rule and the prohibitions sit at the top of the
+  // rendered schema rather than buried beside a leaf property.
+  "//_role_separation": LEAD_ROLE_SEPARATION_RULE,
+  "//_prohibitions": LEAD_PLANNER_PROHIBITIONS,
   type: "object",
   required: ["interpretation", "strategy", "constraints_preserved", "requested_approvals", "risks"],
   properties: {
@@ -276,6 +318,10 @@ export const LEAD_STRATEGY_OUTPUT_SCHEMA: Record<string, unknown> = {
       properties: {
         role_ontology: {
           type: "object",
+          description:
+            "The role the COMPANY IS HIRING FOR — the hiring signal only. Never the "
+            + "person to contact. Founder / Co-Founder / CEO / President / Owner and "
+            + "other executive titles are FORBIDDEN in every field below.",
           required: ["canonical_concept", "seniority", "exact_titles", "safe_synonyms", "adjacent_titles", "excluded_titles"],
           properties: {
             canonical_concept: { type: "string" },
