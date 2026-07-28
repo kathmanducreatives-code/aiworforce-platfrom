@@ -99,7 +99,7 @@ Deno.test("pilot-chat: qualified-Lead mission omits selected_actor_key and sourc
   assertEquals(ti.workflow_kind, "qualified_lead_sourcing");
   assertEquals(ti.quota_policy, "contact_only");
   assertEquals(ti.count_entity, "contact_ready_lead");
-  assertEquals(ti.requested_lead_count, 5);
+  assertEquals(ti.requested_lead_count, 5); // extractRequestedLeadCount null → fallback to 5
 });
 
 Deno.test("pilot-chat: non-qualified company-hiring request keeps legacy apify_jobs pin", () => {
