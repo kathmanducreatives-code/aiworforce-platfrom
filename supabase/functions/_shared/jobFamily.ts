@@ -23,7 +23,13 @@ export type JobFamily =
 
 const SALES_OPS_RE = /\b(sales operations|sales ops|sales strategy (?:and|&) operations|sales (?:strategy|planning) (?:and|&) operations|deal desk)\b/i;
 const REV_OPS_RE = /\b(revenue operations|rev ops|revops|revenue strategy (?:and|&) operations)\b/i;
-const GTM_OPS_RE = /\b(gtm operations|go[- ]to[- ]market operations|gtm ops|growth operations)\b/i;
+const GTM_OPS_RE = /\b(gtm operations|go[- ]to[- ]market operations|gtm ops)\b/i;
+// "Growth Operations" is NOT an unconditional GTM-operations alias. It was one,
+// and that is how a broadening round into "Growth Operations" filled the funnel
+// with growth-marketing, user-growth and general strategy roles that carry no
+// revenue remit at all. It follows the same rule as commercial/business ops:
+// admissible only with explicit revenue, sales or GTM scope.
+const GROWTH_OPS_RE = /\b(growth operations|growth ops)\b/i;
 const COMMERCIAL_OPS_RE = /\b(commercial operations|commercial ops)\b/i;
 const SALES_ENABLEMENT_OPS_RE = /\b(sales enablement operations|sales enablement (?:and|&) operations|revenue enablement operations)\b/i;
 const BUSINESS_OPS_RE = /\b(business operations|biz ops|business ops)\b/i;
@@ -60,6 +66,13 @@ export function classifyJobFamily(title: string | null, description: string | nu
   if ((m = first(SALES_OPS_RE))) return { family: "sales_ops", matchedPhrase: m, qualifiesAsSalesOps: true, confidence: 1 };
   if ((m = first(REV_OPS_RE))) return { family: "rev_ops", matchedPhrase: m, qualifiesAsSalesOps: true, confidence: 1 };
   if ((m = first(GTM_OPS_RE))) return { family: "gtm_ops", matchedPhrase: m, qualifiesAsSalesOps: true, confidence: 0.95 };
+  if ((m = first(GROWTH_OPS_RE))) {
+    // With revenue scope it is a GTM-operations role by another name; without it
+    // this is a growth/marketing role and must not enter a RevOps funnel.
+    return hasRevenueScope
+      ? { family: "gtm_ops", matchedPhrase: m, qualifiesAsSalesOps: true, confidence: 0.75 }
+      : { family: "other", matchedPhrase: m, qualifiesAsSalesOps: false, confidence: 0.3 };
+  }
   if ((m = first(SALES_ENABLEMENT_OPS_RE))) return { family: "sales_enablement_ops", matchedPhrase: m, qualifiesAsSalesOps: true, confidence: 0.9 };
   if ((m = first(COMMERCIAL_OPS_RE))) {
     // Commercial ops qualifies only with explicit revenue/sales scope.

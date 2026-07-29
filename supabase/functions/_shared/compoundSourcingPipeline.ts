@@ -132,6 +132,18 @@ export interface CompoundRunResult {
     rawJobs: number; acceptedJobs: number; verifiedCompanies: number;
     scopedLookups: number; peopleReturned: number;
     droppedJobs: number; droppedCompanies: number; offCompanyPeople: number;
+    /**
+     * WHY a job was dropped, split apart.
+     *
+     * `droppedJobs` is the total and stays the total. It conflated two entirely
+     * different failures — a title that is not the requested family, and a
+     * location outside the requested geography — so nothing downstream could
+     * tell "we searched for the wrong titles" from "we searched the wrong
+     * country". The bottleneck classifier has to distinguish them: one calls for
+     * broadening titles, the other for nothing of the sort.
+     */
+    droppedByFamily: number;
+    droppedByLocation: number;
     verdicts: Record<CompoundVerdict, number>;
     /** Company Brain hard-gate funnel. Safe counts + reasons, no payloads. */
     companyBrain: {
@@ -244,6 +256,7 @@ export async function runCompoundSourcing(
   const diagnostics: CompoundRunResult["diagnostics"] = {
     rawJobs: 0, acceptedJobs: 0, verifiedCompanies: 0, scopedLookups: 0, peopleReturned: 0,
     droppedJobs: 0, droppedCompanies: 0, offCompanyPeople: 0,
+    droppedByFamily: 0, droppedByLocation: 0,
     verdicts: { CONTACT: 0, WATCH: 0, NEEDS_REVIEW: 0, REJECT: 0 },
     companyBrain: {
       evaluated: 0, hardPass: 0, hardFail: 0, evidencePending: 0,
@@ -265,8 +278,8 @@ export async function runCompoundSourcing(
   const byCompany = new Map<string, { identity: CompanyIdentity; jobs: Array<{ job: CompoundJob; fam: JobFamilyResult }> }>();
   for (const job of jobs) {
     const fam = classifyJobFamily(job.title, job.descriptionExcerpt ?? null);
-    if (!acceptJob(fam, job)) { diagnostics.droppedJobs++; continue; }
-    if (usRelevance(job, requireUS) === "fail") { diagnostics.droppedJobs++; continue; }
+    if (!acceptJob(fam, job)) { diagnostics.droppedJobs++; diagnostics.droppedByFamily++; continue; }
+    if (usRelevance(job, requireUS) === "fail") { diagnostics.droppedJobs++; diagnostics.droppedByLocation++; continue; }
     const identity = resolveCompanyIdentity({ name: job.company, domain: job.companyDomain, website_url: job.companyWebsite, linkedin_url: job.companyLinkedinUrl, location: job.location });
     const key = identity.dedupeKey ?? `job:${job.url ?? job.company}`;
     if (!byCompany.has(key)) byCompany.set(key, { identity, jobs: [] });

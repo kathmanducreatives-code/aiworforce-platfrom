@@ -502,8 +502,25 @@ export async function runCompanyFirstQuotaController(
       ...emptyFunnelSummary(),
       raw_jobs: exec.writeBoundary.rawProviderItems,
       unique_jobs: newJobs,
-      job_family_pass: exec.run?.diagnostics.verifiedCompanies ? roundCandidates.length : 0,
-      job_family_fail: Math.max(0, exec.writeBoundary.normalizedJobs - (exec.run?.diagnostics.verifiedCompanies ?? 0)),
+      // TITLE-FAMILY IS A TITLE QUESTION. These two were derived from
+      // `verifiedCompanies` — a COMPANY metric two stages downstream — so a run
+      // whose titles matched perfectly reported `job_family_pass: 0` whenever no
+      // company survived verification.
+      //
+      // Production run c34c0cad did exactly that: 50 raw jobs, of which
+      // `classifyJobFamily` accepts 23 (18 sales_ops, 4 gtm_ops, 1 rev_ops), were
+      // reported as 0 passing and 50 failing. `sourcingBottleneck` keys
+      // `title_coverage` off this number, so the runtime concluded "title coverage
+      // is too narrow" and drove a broadening round into Growth Operations and
+      // Deal Desk — chasing a bottleneck that did not exist, while the real
+      // failure (zero companies verified) went unreported.
+      //
+      // The pipeline already counted this correctly. `acceptedJobs` is the
+      // title-family (and location) survivor count; the split below distinguishes
+      // a title failure from a geography failure, because only one of them is an
+      // argument for broadening titles.
+      job_family_pass: exec.run?.diagnostics.acceptedJobs ?? 0,
+      job_family_fail: exec.run?.diagnostics.droppedByFamily ?? 0,
       companies_qualified: exec.run?.diagnostics.verifiedCompanies ?? 0,
       companies_rejected: Math.max(0, exec.writeBoundary.normalizedJobs - (exec.run?.diagnostics.verifiedCompanies ?? 0)),
       companies_missing_identity: roundCandidates.filter((c) => !c.account.dedupeKey).length,

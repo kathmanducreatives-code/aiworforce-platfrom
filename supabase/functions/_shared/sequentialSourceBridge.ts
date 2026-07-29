@@ -88,6 +88,8 @@ export interface SequentialSourceBridgeResult {
   invokeJobs: InvokeJobsFn;
   enabled: boolean;
   reason: string;
+  /** What was attempted before going inert. Absent once enabled. */
+  disabledDetail?: SequentialSourceDisabledDetail;
   plan: OrderedHiringSourcePlan | null;
   state: SourceExecutionState | null;
   /** Canonical fused evidence for this task. Null when disabled. */
@@ -120,6 +122,20 @@ export interface SequentialSourceBridgeResult {
   lastTransitionFailure: () => Record<string, unknown> | null;
 }
 
+/**
+ * What was attempted before the bridge went inert.
+ *
+ * Safe metadata only: capability keys, rejection CODES and booleans. Never an
+ * Actor id, a credential, a prompt or a provider payload.
+ */
+export interface SequentialSourceDisabledDetail {
+  workspaceMatch: boolean;
+  orderedPlanCreated: boolean;
+  capabilitiesRequested: string[];
+  capabilitiesAccepted: string[];
+  stepRejections: Array<{ capability: string; reason: string }>;
+}
+
 /** Where in the fold a transition failed. */
 export type TransitionPhase =
   | "observation_construction"
@@ -137,8 +153,23 @@ export type TransitionPhase =
 export async function applySequentialSourceExecution(
   input: SequentialSourceBridgeInput,
 ): Promise<SequentialSourceBridgeResult> {
-  const inert = (reason: string): SequentialSourceBridgeResult => ({
+  // WHY IT WAS INERT HAS TO SURVIVE THE RUN.
+  //
+  // Every branch below returns the caller's function unchanged, which is correct
+  // — but the reason used to be dropped on the floor by run-agent, so a task
+  // result could not tell "the flag is off" from "every approved Actor is
+  // disabled". Auditing production run c34c0cad required re-deriving the answer
+  // offline against a reconstructed profile. That is one run too many.
+  const inert = (
+    reason: string,
+    detail: Partial<SequentialSourceDisabledDetail> = {},
+  ): SequentialSourceBridgeResult => ({
     invokeJobs: input.invokeJobs, enabled: false, reason,
+    disabledDetail: {
+      workspaceMatch: false, orderedPlanCreated: false,
+      capabilitiesRequested: [], capabilitiesAccepted: [], stepRejections: [],
+      ...detail,
+    },
     plan: null, state: null, fusion: null, feedback: null, lastOutcome: () => null,
     // A no-op, not an absent function: the controller can call it unconditionally.
     onObservation: () => Promise.resolve(),
@@ -147,14 +178,34 @@ export async function applySequentialSourceExecution(
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
-  if (!enablement.enabled) return inert(enablement.reason);
+  if (!enablement.enabled) {
+    // `workspace_not_allowed` already proves the flag was on and a list existed.
+    return inert(enablement.reason, { workspaceMatch: false });
+  }
 
   const plan = await deterministicOrderedPlan(input.profile);
-  if (plan.capabilityGap) return inert(`capability_gap:${plan.capabilityGap.code}`);
+  if (plan.capabilityGap) {
+    return inert(`capability_gap:${plan.capabilityGap.code}`, { workspaceMatch: true });
+  }
 
   const validation = await validateOrderedPlan(plan, input.profile);
   if (!validation.ok || validation.plan.steps.length === 0) {
-    return inert(`plan_invalid:${validation.violations.find((v) => v.severity === "block")?.code ?? "empty"}`);
+    // THE CASE THAT ACTUALLY FIRED IN PRODUCTION. The ordered plan built four
+    // steps and validation rejected all four, each with
+    // `provider_disabled:<actorKey>` — the capability→Actor mappings resolve to
+    // Actors whose `required_env` is unprovisioned. Recording the requested
+    // capabilities and per-step rejection reasons is what makes that readable
+    // from the task result instead of reproducible only offline.
+    return inert(`plan_invalid:${validation.violations.find((v) => v.severity === "block")?.code ?? "empty"}`, {
+      workspaceMatch: true,
+      orderedPlanCreated: true,
+      capabilitiesRequested: plan.steps.map((s) => s.capability),
+      capabilitiesAccepted: validation.plan.steps.map((s) => s.capability),
+      stepRejections: (validation.rejectedSteps ?? []).map((r) => ({
+        capability: String((r.step as { capability?: unknown }).capability ?? "unknown"),
+        reason: r.reason,
+      })),
+    });
   }
   const approved = validation.plan;
 
@@ -387,7 +438,26 @@ export function buildObservation(args: {
 /** Safe diagnostics for the task result. Absent-by-default when disabled. */
 export function sequentialSourceDiagnostics(r: SequentialSourceBridgeResult): Record<string, unknown> {
   if (!r.enabled || !r.plan || !r.state) {
-    return { sequential_source_execution: false, enablement_reason: r.reason };
+    const d = r.disabledDetail;
+    // A future audit must be answerable from ONE task result. `enablement_reason`
+    // alone could not distinguish a flag from five unprovisioned Actors.
+    return {
+      sequential_source_execution: false,
+      enabled: false,
+      enablement_reason: r.reason,
+      reason: r.reason,
+      workspace_match: d?.workspaceMatch ?? false,
+      ordered_plan_created: d?.orderedPlanCreated ?? false,
+      capabilities_requested: d?.capabilitiesRequested ?? [],
+      capabilities_accepted: d?.capabilitiesAccepted ?? [],
+      // Per-step CODES only — the difference between "we planned nothing" and
+      // "we planned four steps and every Actor was disabled".
+      step_rejections: d?.stepRejections ?? [],
+      current_step: null,
+      completed_steps: [],
+      observation_count: 0,
+      feedback_eligible: false,
+    };
   }
   const lastFeedback = r.lastFeedback();
   return {

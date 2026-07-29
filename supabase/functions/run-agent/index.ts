@@ -1036,9 +1036,12 @@ Deno.serve(async (req) => {
             // Ordered-source execution, evidence fusion and bounded feedback.
             // Present ONLY for a workspace that opted in, so a task result is
             // unchanged for everyone else.
-            ...(sequentialSources.enabled
-              ? { sequential_source_execution: sequentialSourceDiagnostics(sequentialSources) }
-              : {}),
+            // ALWAYS persisted, enabled or not. Gating this on `enabled` is what
+            // made production run c34c0cad unauditable: the runtime was inert and
+            // the result recorded nothing about why, so the reason had to be
+            // re-derived offline. The disabled payload is safe metadata only —
+            // capability keys, rejection codes and booleans.
+            sequential_source_execution: sequentialSourceDiagnostics(sequentialSources),
             // Which Company Brain policy actually gated this run. Safe metadata
             // only: versions, a hash and constraint NAMES — never Brain prose.
             company_brain_policy: {
