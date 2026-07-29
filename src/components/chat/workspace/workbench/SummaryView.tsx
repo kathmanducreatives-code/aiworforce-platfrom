@@ -9,6 +9,7 @@ import { dispatchNextStepAction } from '@/lib/chatActions';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import QualifiedLeadProgressCard from './QualifiedLeadProgressCard';
 import { continueQualifiedLeadSourcing } from '@/lib/qualifiedLead/continueSourcing';
+import { companyFirstResponseFromTask, companyFirstCandidatesFromTask } from '@/lib/qualifiedLead/taskCompanyFirst';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface Props {
@@ -82,38 +83,11 @@ export default function SummaryView({ task, toolCall, agentName, planTitle, work
   // COMPANY-FIRST QUALIFIED-LEAD RUN. Its quota, funnel and continuation state
   // come from the runtime's own contract — never from `total`, which counts tool
   // output items and would report a satisfied run with zero CONTACT-ready leads.
-  const companyFirst = (task?.result as { company_first?: Record<string, any> } | null)?.company_first ?? null;
-  const qualifiedLeadRun = companyFirst
-    ? {
-        // Prefer the separated result field; fall back to the company-first
-        // block for tasks written before the status split.
-        terminal_status: (task?.result as { terminal_status?: string } | null)?.terminal_status ?? companyFirst.status ?? null,
-        task_status: (task?.result as { task_status?: string } | null)?.task_status ?? task?.status ?? null,
-        // The database lifecycle state, kept distinct from workflow progress.
-        row_status: task?.status ?? null,
-        task_id: task?.id ?? null,
-        continuation_token: companyFirst.continuation?.continuation_token ?? null,
-        next_round: companyFirst.continuation?.next_round ?? null,
-        checkpoint_at: companyFirst.continuation?.checkpoint_at ?? null,
-        rounds_completed: companyFirst.rounds_attempted ?? null,
-        requested_leads: companyFirst.quota?.requested_leads ?? null,
-        eligible_leads: companyFirst.quota?.eligible_leads ?? null,
-        remaining_leads: companyFirst.quota?.remaining_leads ?? null,
-        quota_policy: companyFirst.quota?.quota_policy ?? null,
-        counts: companyFirst.counts ?? null,
-      }
-    : null;
-  const qualifiedLeadCandidates = Array.isArray(companyFirst?.items)
-    ? companyFirst!.items.map((it: Record<string, any>) => ({
-        company: it.company ?? null,
-        person: it.person ?? null,
-        quota_eligible: it.quotaEligible ?? null,
-        disposition: it.verdict ?? null,
-        employer_match_status: it.employerMatch ?? null,
-        decision_maker_status: it.person ? 'verified' : 'missing',
-        persistence_reason: it.persistenceReason ?? null,
-      }))
-    : [];
+  // The mapping lives in `taskCompanyFirst` so it can be tested directly: it
+  // decides whether "Continue sourcing" appears and whether a run that delivered
+  // nothing says so. Behaviour is unchanged from the inline version.
+  const qualifiedLeadRun = companyFirstResponseFromTask(task);
+  const qualifiedLeadCandidates = companyFirstCandidatesFromTask(task);
 
   return (
     <div className="space-y-4">

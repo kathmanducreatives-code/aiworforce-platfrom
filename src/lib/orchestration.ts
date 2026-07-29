@@ -159,7 +159,12 @@ export interface DBPlan {
   workspace_id: string;
   user_instruction: string;
   plan_summary: string | null;
-  status: 'planning' | 'executing' | 'awaiting_approval' | 'complete' | 'failed';
+  /**
+   * `partial` is written by run-agent when a checkpoint is taken — the plan did
+   * real work and still owes the user leads. It was missing from this union
+   * while production was already writing it.
+   */
+  status: 'planning' | 'executing' | 'awaiting_approval' | 'complete' | 'failed' | 'partial';
   created_by: string | null;
   created_at: string;
   completed_at: string | null;

@@ -34,7 +34,7 @@ export type WorkflowRunUiState =
 
 export interface DeriveWorkflowInput {
   plan: Pick<DBPlan, 'status' | 'created_at' | 'completed_at'> | null;
-  tasks: Pick<DBTask, 'status' | 'started_at' | 'finished_at'>[];
+  tasks: (Pick<DBTask, 'status' | 'started_at' | 'finished_at'> & { result?: unknown })[];
   approvals: Pick<DBApproval, 'status'>[];
   /** Most recent backend event timestamp (activity, tool call, task transition). */
   lastActivityAt?: string | null;
@@ -44,6 +44,60 @@ export interface DeriveWorkflowInput {
 
 const STALE_MS = 24 * 60 * 60 * 1000; // 24h
 const LONG_RUNNING_MS = 90 * 1000;    // 90s
+
+// ------------------------------------------------ checkpointed partial runs ---
+//
+// PR #115 separated three things that used to share one column:
+//
+//   tasks.status           DATABASE LIFECYCLE  — `ready` means CHECKPOINTED and
+//                                                available for continuation
+//   result.task_status     WORKFLOW PROGRESS   — partial / completed / failed
+//   result.terminal_status SOURCING OUTCOME    — why sourcing stopped
+//
+// `ready` is not a lifecycle state this function knew about, and `partial` is
+// not a plan status it knew about, so a checkpointed run matched no branch and
+// fell through to `preparing` — "Pilot is preparing the workflow", forever,
+// after the work was already done. Production run
+// 3d54e4fe-b6b6-47a6-9dca-ee032785ea59 sat there for six minutes.
+//
+// `ready` is explicitly NOT completed: the run still owes the user leads.
+
+/** The row status a checkpointed, resumable task carries. */
+const CHECKPOINTED_ROW_STATUS = 'ready';
+
+/** `result.task_status` values that mean "work happened, more is owed". */
+const PARTIAL_RESULT_STATUSES: readonly string[] = ['partial'];
+
+/** `result.terminal_status` values that mean "checkpointed, resumable". */
+const RESUMABLE_TERMINAL_STATUSES: readonly string[] = ['continuation_required'];
+
+/**
+ * Does this task's RESULT describe a checkpointed partial run?
+ *
+ * Reads the two separated result fields and nothing else — never the row status,
+ * which is the lifecycle question answered by the caller.
+ */
+export function taskResultIsPartial(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const r = result as { task_status?: unknown; terminal_status?: unknown };
+  return PARTIAL_RESULT_STATUSES.includes(String(r.task_status ?? ''))
+    || RESUMABLE_TERMINAL_STATUSES.includes(String(r.terminal_status ?? ''));
+}
+
+/**
+ * Has the backend checkpointed a partial run?
+ *
+ * Requires BOTH a lifecycle signal — the plan says `partial`, or a task row says
+ * `ready` — AND a result that actually describes partial work. The result is
+ * what makes this truthful: a bare `ready` row with no result has not proven it
+ * did anything, and is left to the existing branches.
+ */
+export function isCheckpointedPartial(input: Pick<DeriveWorkflowInput, 'plan' | 'tasks'>): boolean {
+  const planPartial = String(input.plan?.status ?? '') === 'partial';
+  const anyCheckpointedRow = input.tasks.some((t) => String(t.status) === CHECKPOINTED_ROW_STATUS);
+  if (!planPartial && !anyCheckpointedRow) return false;
+  return input.tasks.some((t) => taskResultIsPartial(t.result));
+}
 
 export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUiState {
   const { plan, tasks, approvals } = input;
@@ -73,6 +127,11 @@ export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUi
     if (Number.isFinite(lastTs) && now - lastTs > STALE_MS) return 'stale';
     return 'running';
   }
+
+  // A CHECKPOINTED PARTIAL IS NOT PREPARATION. Deliberately below `anyRunning`:
+  // a plan with one checkpointed task and another still executing is still
+  // running. Only once nothing is in flight does a checkpoint become the state.
+  if (isCheckpointedPartial({ plan, tasks })) return 'partial';
 
   if (plan.status === 'planning') return 'preparing';
   return 'preparing';
