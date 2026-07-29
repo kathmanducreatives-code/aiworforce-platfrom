@@ -3,7 +3,8 @@ import {
   fetchPlan, fetchTasksForPlan, fetchActivityForPlan, fetchApprovalsForPlan, fetchToolCallsForPlan,
   subscribePlan, type DBPlan, type DBTask, type DBActivity, type DBApproval, type DBToolCall,
 } from '@/lib/orchestration';
-import { deriveWorkflowUiState, isWorkflowActive, type WorkflowRunUiState } from '@/lib/chat/state';
+import { deriveWorkflowUiState, type WorkflowRunUiState } from '@/lib/chat/state';
+import { decidePlanRefetch } from '@/lib/chat/planRefetch';
 
 function latestActivityTs(plan: DBPlan | null, tasks: DBTask[], activity: DBActivity[], toolCalls: DBToolCall[]): string | null {
   const candidates: (string | null)[] = [
@@ -35,10 +36,22 @@ export function usePlanDetail(planId: string | null) {
   const lastChangeAtRef = useRef<number>(Date.now());
   const [, forceTick] = useState(0);
 
+  // CURRENT STATE, READABLE FROM A LONG-LIVED CALLBACK.
+  //
+  // The heartbeat and the focus handler are created once per `planId` and must
+  // judge whether to re-read using what we hold NOW. Reading the state variables
+  // directly captures them at effect-creation time — `plan: null`, `tasks: []` —
+  // which is precisely the bug that made the old heartbeat inert for the whole
+  // life of the component. Refs are the state; the setters below keep them so.
+  const planRef = useRef<DBPlan | null>(null);
+  const tasksRef = useRef<DBTask[]>([]);
+  const approvalsRef = useRef<DBApproval[]>([]);
+
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   useEffect(() => {
     if (!planId) {
+      planRef.current = null; tasksRef.current = []; approvalsRef.current = [];
       setPlan(null); setTasks([]); setActivity([]); setApprovals([]); setToolCalls([]); setLoading(false);
       return;
     }
@@ -59,24 +72,52 @@ export function usePlanDetail(planId: string | null) {
         lastActivityRef.current = newLatest;
         lastChangeAtRef.current = Date.now();
       }
+      planRef.current = p; tasksRef.current = t; approvalsRef.current = ap;
       setPlan(p); setTasks(t); setActivity(a); setApprovals(ap); setToolCalls(tc); setLoading(false);
     };
     load();
+
+    // PRIMARY PATH. Realtime pushes plan, task, activity, approval and tool-call
+    // changes; the migration in this PR is what makes those events reach us.
     const unsub = subscribePlan(planId, load);
 
-    // Heartbeat: poll while the workflow is still active so a dropped
-    // realtime socket can never strand the UI in a frozen "Executing" state.
+    // Heartbeat: a safety net for a dropped socket, a missed event, or the ~2s
+    // race where the plan exists and run-agent has not inserted its task yet.
+    // It reads the REFS, so it sees what we hold now rather than what we held at
+    // mount — the distinction that made the previous heartbeat never fire.
     const interval = window.setInterval(() => {
-      const uiState = deriveWorkflowUiState({
-        plan, tasks, approvals,
+      const decision = decidePlanRefetch({
+        plan: planRef.current, tasks: tasksRef.current, approvals: approvalsRef.current,
         lastActivityAt: lastActivityRef.current,
       });
-      if (isWorkflowActive(uiState)) load();
+      if (decision.should) load();
       // Force a re-render so consumers can re-evaluate "still working" labels.
       forceTick((x) => x + 1);
     }, 4000);
 
-    return () => { cancelled = true; unsub(); window.clearInterval(interval); };
+    // Realtime does not replay what was missed while the tab was hidden, and a
+    // socket dropped in the background reconnects with a gap. One read on
+    // refocus closes it. Not polling: it fires on a user action, never on a timer.
+    const onFocus = () => {
+      // `visibilitychange` also fires on HIDE. Reading then is pointless work
+      // against a tab nobody is looking at.
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const decision = decidePlanRefetch({
+        plan: planRef.current, tasks: tasksRef.current, approvals: approvalsRef.current,
+        lastActivityAt: lastActivityRef.current, regainedFocus: true,
+      });
+      if (decision.should) load();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+
+    return () => {
+      cancelled = true;
+      unsub();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [planId, refreshTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const uiState: WorkflowRunUiState = deriveWorkflowUiState({
