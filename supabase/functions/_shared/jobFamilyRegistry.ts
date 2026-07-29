@@ -26,7 +26,13 @@ export const JOB_FAMILY_REGISTRY: Record<string, JobFamilyDefinition> = {
   sales_operations: {
     key: "sales_operations", label: "Sales / Revenue Operations",
     exact: ["Sales Operations", "Revenue Operations", "GTM Operations"],
-    synonyms: ["Revenue Strategy and Operations", "Sales Strategy and Operations", "Growth Operations"],
+    // "Growth Operations" was a synonym here, so broadening proposed it as an
+    // approved query while `classifyJobFamily` now admits it only with explicit
+    // revenue/sales/GTM scope. A title the ladder can search but the gate then
+    // rejects is a round that spends budget and returns nothing usable — which is
+    // what round 2 of production run c34c0cad did. Searchable and admissible have
+    // to be the same set.
+    synonyms: ["Revenue Strategy and Operations", "Sales Strategy and Operations"],
     adjacent: ["Deal Desk", "Sales Planning and Operations"],
     excluded: ["Account Executive", "Account Manager", "SDR", "BDR", "Sales Development Representative",
       "Business Development Representative", "Sales Representative", "Customer Success", "Sales Manager"],
