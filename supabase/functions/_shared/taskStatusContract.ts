@@ -113,7 +113,28 @@ export interface StatusProjection {
  * Leaving it `running` makes a checkpoint look like a live run; marking it
  * `complete` makes it look finished. Neither is true, and `ready` is.
  */
-export function projectStatus(terminal: string, invariantViolation?: string | null): StatusProjection {
+/**
+ * The delivered-versus-requested outcome, when the caller knows it.
+ *
+ * CONTACT-ready people only. Jobs, companies, hiring signals, WATCH and
+ * NEEDS_REVIEW candidates are not leads and never count here.
+ */
+export interface QuotaOutcome {
+  contactReady: number;
+  requested: number;
+}
+
+/** Was the thing the user actually asked for delivered? */
+export function quotaMet(q: QuotaOutcome | null | undefined): boolean {
+  if (!q || !Number.isFinite(q.requested) || q.requested <= 0) return false;
+  return q.contactReady >= q.requested;
+}
+
+export function projectStatus(
+  terminal: string,
+  invariantViolation?: string | null,
+  quota?: QuotaOutcome | null,
+): StatusProjection {
   const t = (TERMINAL_STATUSES as readonly string[]).includes(terminal)
     ? (terminal as TerminalStatus)
     : "invalid_request";
@@ -129,9 +150,25 @@ export function projectStatus(terminal: string, invariantViolation?: string | nu
     return { rowStatus: "ready", taskStatus: "partial", terminalStatus: t };
   }
 
-  // Everything else is a genuine terminal outcome: the WORKFLOW is finished, even
-  // when the quota was not filled. `terminal_status` carries the honest reason —
-  // `task_status: completed` means "no further rounds", never "quota met".
+  // A TERMINAL WORKFLOW IS NOT A SATISFIED ONE.
+  //
+  // This used to return `completed` for every remaining outcome, on the reading
+  // that `task_status: completed` means "no further rounds" rather than "quota
+  // met". Nothing downstream reads it that way: `tasks.status: complete` plus
+  // `task_status: completed` renders as a finished, successful run.
+  //
+  // Production plan 43fb7313-138e-4496-83de-92c3e0b7392f ended `search_exhausted`
+  // having delivered 0 of 5 CONTACT-ready leads, and the UI reported "Complete".
+  // Search exhaustion is a reason to STOP, not evidence of delivery.
+  //
+  // The lifecycle really is over — the row stays `complete`, and no continuation
+  // is offered for a non-resumable outcome — but the WORKFLOW is partial, and
+  // that is what the user is shown. When the caller cannot supply a quota the
+  // previous behaviour is preserved exactly.
+  if (quota && !quotaMet(quota)) {
+    return { rowStatus: "complete", taskStatus: "partial", terminalStatus: t };
+  }
+
   return { rowStatus: "complete", taskStatus: "completed", terminalStatus: t };
 }
 

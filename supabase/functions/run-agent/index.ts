@@ -144,6 +144,74 @@ function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean 
  * the guard below stops a second write from resurrecting a plan a later step has
  * already moved on from.
  */
+/**
+ * Persist the Pilot message that opens the Workbench on the qualified-lead table.
+ *
+ * ChatView's auto-open hook watches for a MESSAGE carrying
+ * `metadata.ui_panel.kind === "lead_results"`, and WorkbenchPanel renders the
+ * qualified-lead table only when that panel is present. The company-first path
+ * returned the panel on an HTTP response that orchestrate never reads, so neither
+ * ever happened.
+ *
+ * IDEMPOTENT. A continuation or a retried invocation re-finalises the same plan;
+ * the guard means the user gets one panel message, not one per attempt.
+ *
+ * Best-effort: a failure here must never fail the run, which has already done its
+ * paid work and written its result.
+ */
+async function persistLeadResultsPanel(
+  db: { from: (t: string) => any },
+  planId: string | null | undefined,
+  uiPanel: Record<string, unknown>,
+  summary: { eligible: number; requested: number; rawJobs: number; terminalStatus: string },
+): Promise<void> {
+  if (!planId) return;
+  try {
+    const { data: planMsg } = await db.from("messages")
+      .select("conversation_id").filter("metadata->>plan_id", "eq", planId).limit(1).maybeSingle();
+    const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+    if (!conversationId) return;
+
+    // One panel per plan. `metadata->ui_panel->>kind` is the same key ChatView
+    // keys its auto-open on, so this asks exactly the question that matters.
+    const { data: existing } = await db.from("messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .filter("metadata->>plan_id", "eq", planId)
+      .filter("metadata->ui_panel->>kind", "eq", "lead_results")
+      .limit(1).maybeSingle();
+    if (existing) return;
+
+    // COUNTS STAY SEPARATE. Raw jobs are sourcing evidence; the quota is
+    // CONTACT-ready people. Collapsing them is what produced "25 results" for a
+    // run that delivered nothing.
+    const delivered = `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
+    const content = summary.eligible > 0
+      ? `I opened the results in Workbench — ${delivered}. Reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"} to get there. Nothing was sent.`
+      : `I opened the results in Workbench — ${delivered}. I reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"} and none produced a contact-ready lead yet. Nothing was sent.`;
+
+    await db.from("messages").insert({
+      conversation_id: conversationId,
+      role: "assistant",
+      content,
+      agent_slug: "pilot",
+      metadata: {
+        ui_panel: uiPanel,
+        plan_id: planId,
+        agent_id: "pilot",
+        workflow_kind: "qualified_lead_sourcing",
+        terminal_status: summary.terminalStatus,
+        // Evidence counts, kept distinct from the quota on purpose.
+        raw_jobs_reviewed: summary.rawJobs,
+        contact_ready_leads: summary.eligible,
+        requested_leads: summary.requested,
+      },
+    });
+  } catch (e) {
+    console.warn("[run-agent] lead_results panel persistence failed:", e);
+  }
+}
+
 async function finalizeCompanyFirstPlan(
   db: { from: (t: string) => any },
   planId: string | null | undefined,
@@ -1010,7 +1078,14 @@ Deno.serve(async (req) => {
         // and the quota outcome live in `result`. Overloading the column made it
         // mean two things at once and would break the moment the constraint
         // declared in migration 20260519104244 is actually applied.
-        const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation);
+        // The CONTACT-only quota is the completion authority. Passing it is what
+        // stops a terminal-but-unfilled run (`search_exhausted` with 0 of 5)
+        // reporting itself as Complete. `cf.quota` is the existing authority —
+        // no second quota controller is introduced.
+        const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation, {
+          contactReady: cf.quota.eligible_leads,
+          requested: cf.quota.requested_leads,
+        });
         const taskStatus = statuses.taskStatus;
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
@@ -1092,6 +1167,45 @@ Deno.serve(async (req) => {
         // never `complete`.
         await finalizeCompanyFirstPlan(supabase, plan_id, task.id, agent.id, workspace_id, statuses, cf.terminal_reason);
 
+        // THE PANEL HAS TO BE PERSISTED, NOT JUST RETURNED.
+        //
+        // This object used to exist only inside the JSON below. orchestrate calls
+        // run-agent fire-and-forget, so nothing ever read that response and no
+        // message carrying `ui_panel` was ever written. Two visible failures came
+        // from that one omission:
+        //
+        //   * ChatView auto-opens the Workbench off a persisted message with
+        //     `metadata.ui_panel.kind === "lead_results"`, so it never opened.
+        //   * WorkbenchPanel.renderTable() renders <LeadResultsView> only when it
+        //     HAS that panel; without one it falls through to AgentOutputViewer —
+        //     which is why the Workbench showed raw Indeed job cards with Save
+        //     Lead / Enrich / Draft Outreach instead of the qualified-lead table.
+        //
+        // The spreadsheet Workbench was never lost and needs no restoring. It was
+        // starved of its panel.
+        const uiPanel = {
+          kind: "lead_results",
+          title: "Qualified lead sourcing",
+          subtitle: `${cf.quota.eligible_leads} of ${cf.quota.requested_leads} CONTACT-ready leads`,
+          source_type: "hiring_signal",
+          plan_id: plan_id ?? null,
+          lead_count: cf.quota.eligible_leads,
+          enrichable_count: 0,
+          lead_candidate_ids: cf.items.map((i) => i.leadCandidateId).filter(Boolean),
+          actions: [],
+          qualified_lead_run: runContext,
+        };
+
+        // Opens for completed, partial, continuation-required and zero-lead
+        // outcomes alike — a run that found nothing still owes the user the
+        // honest empty table, the bottleneck and the Continue action.
+        await persistLeadResultsPanel(supabase, plan_id, uiPanel, {
+          eligible: cf.quota.eligible_leads,
+          requested: cf.quota.requested_leads,
+          rawJobs: cf.counts.rawJobs,
+          terminalStatus: cf.status,
+        });
+
         // Conclusively SKIP the ordinary people-first branch for this request.
         return json({
           success: cf.status === "completed", task_id: task.id,
@@ -1114,18 +1228,8 @@ Deno.serve(async (req) => {
           run_context: runContext,
           // The Workbench reads its panel from here; the run context travels with
           // it so the CSV export can populate every diagnostic column.
-          ui_panel: {
-            kind: "lead_results",
-            title: "Qualified lead sourcing",
-            subtitle: `${cf.quota.eligible_leads} of ${cf.quota.requested_leads} CONTACT-ready leads`,
-            source_type: "hiring_signal",
-            plan_id: plan_id ?? null,
-            lead_count: cf.quota.eligible_leads,
-            enrichable_count: 0,
-            lead_candidate_ids: cf.items.map((i) => i.leadCandidateId).filter(Boolean),
-            actions: [],
-            qualified_lead_run: runContext,
-          },
+          // The SAME object that was persisted above — one payload, not two.
+          ui_panel: uiPanel,
           requested_leads: cf.quota.requested_leads, eligible_leads: cf.quota.eligible_leads,
           remaining_leads: cf.quota.remaining_leads, requested_count_source: cf.quota.requested_count_source,
           rounds_attempted: cf.rounds_attempted, expansions_attempted: cf.expansions_attempted,

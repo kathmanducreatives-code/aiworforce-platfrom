@@ -227,8 +227,13 @@ Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is abse
   assertStringIncludes(src, "if (rpc.available && !rpc.claimed)");
   assertStringIncludes(src, "const cas = rpc.available");
   assertStringIncludes(src, 'claim_path: rpc.available ? "rpc" : "compatibility_fallback"');
-  // Status separation is applied on the finishing write.
-  assertStringIncludes(src, "const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation);");
+  // Status separation is applied on the finishing write, and the CONTACT-only
+  // quota travels with it — without that argument a terminal-but-unfilled run
+  // (`search_exhausted` with 0 of 5) projects as `completed`, which is what
+  // production plan 43fb7313 reported to the user.
+  assertStringIncludes(src, "const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation, {");
+  assertStringIncludes(src, "contactReady: cf.quota.eligible_leads,");
+  assertStringIncludes(src, "requested: cf.quota.requested_leads,");
   assertStringIncludes(src, "status: statuses.rowStatus,");
   assertStringIncludes(src, "task_status: statuses.taskStatus,");
   assertStringIncludes(src, "terminal_status: statuses.terminalStatus,");
