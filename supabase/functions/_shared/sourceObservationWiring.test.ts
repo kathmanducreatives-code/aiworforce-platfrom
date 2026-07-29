@@ -585,11 +585,34 @@ Deno.test("21.B diagnostics report the loop without leaking anything", async () 
   assertEquals(fb.calls_remaining, MAX_SOURCE_FEEDBACK_CALLS_PER_TASK - 1);
   assertEquals((fb.history as unknown[]).length, 1);
 
-  // Disabled stays absent-shaped.
+  // DISABLED IS NOW FULLY REPORTED, not merely flagged.
+  //
+  // This previously asserted `{ sequential_source_execution: false,
+  // enablement_reason }` and nothing else. That minimal shape is what made
+  // production run c34c0cad unauditable — the runtime was inert and the task
+  // result could not say whether the flag was off, the workspace unlisted, or a
+  // plan built and rejected. The contract is deliberately wider now.
   const off = await bridge({ readEnv: allOff });
-  assertEquals(sequentialSourceDiagnostics(off), {
-    sequential_source_execution: false, enablement_reason: "flag_off",
-  });
+  const offD = sequentialSourceDiagnostics(off) as Record<string, unknown>;
+  assertEquals(offD.sequential_source_execution, false);
+  assertEquals(offD.enabled, false);
+  assertEquals(offD.enablement_reason, "flag_off");
+  assertEquals(offD.reason, "flag_off");
+  assertEquals(offD.workspace_match, false);
+  assertEquals(offD.ordered_plan_created, false);
+  assertEquals(offD.capabilities_requested, []);
+  assertEquals(offD.capabilities_accepted, []);
+  assertEquals(offD.step_rejections, []);
+  assertEquals(offD.current_step, null);
+  assertEquals(offD.completed_steps, []);
+  assertEquals(offD.observation_count, 0);
+  assertEquals(offD.feedback_eligible, false);
+
+  // The disabled payload is metadata only — same leak bar as the enabled one.
+  const offBlob = JSON.stringify(offD).toLowerCase();
+  for (const forbidden of ["anthropic_api_key", "bearer", "apify_api_token", "http://", "https://"]) {
+    assertFalse(offBlob.includes(forbidden), `"${forbidden}" leaked into disabled diagnostics`);
+  }
 });
 
 Deno.test("30. no live provider or model call is reachable from this path", async () => {
