@@ -333,6 +333,16 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       selected_actor_key: call.actorKey,
       idempotency_key: call.idempotencyKey,
       input: call.input,
+      // THIS PAYLOAD IS ALREADY THE ACTOR'S OWN SHAPE.
+      //
+      // `compileHiringSourceInput` produced it for THIS capability and it has been
+      // validated and hashed. Marking it is what stops the provider layer treating
+      // it as generic hints and rebuilding it with another vendor's serializer —
+      // the defect that sent Curious-Coder keys to Crawlworks and drew
+      // "Field input.jobsToFetch is required" from Apify.
+      compiled_actor_input: true,
+      capability_key: call.capability,
+      compiled_input_hash: call.inputHash,
     };
 
     let raw: unknown[] = [];
