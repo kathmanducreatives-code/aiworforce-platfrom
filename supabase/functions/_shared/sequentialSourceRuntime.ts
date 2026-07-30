@@ -40,7 +40,8 @@ import {
   type OrderedHiringSourcePlan, type OrderedSourceStep, type SourceRuntimeState,
   type SourceStepObservation, type ApprovedSourceNextAction,
 } from "./hiringSourcePlan.ts";
-import { resolveHiringSourceActor } from "./hiringSourceCatalog.ts";
+import { resolveHiringSourceActor, HIRING_SOURCE_CATALOG } from "./hiringSourceCatalog.ts";
+import { decideDiscoveryBatchSize, batchDecisionDiagnostics, type DiscoveryBatchDecision } from "./discoveryBatchSize.ts";
 import {
   dedupeAgainstState, hasSentInput, isStepFinished, jobDedupeKey, stepOf,
   type SourceExecutionState, type SourceStepRecord,
@@ -138,6 +139,8 @@ export interface PreparedCall {
   idempotencyKey: string;
   repairs: string[];
   summary: Record<string, unknown>;
+  /** The quota-aware batch decision, when one was made. Null for ATS. */
+  batchDecision?: Record<string, unknown> | null;
 }
 
 export type PrepareResult =
@@ -157,14 +160,99 @@ export function sourceIdempotencyKey(taskId: string, stepId: string, attempt: nu
  * produce the same bounded input as the previous attempt would otherwise pay for
  * an identical call and record it as progress.
  */
+/** Capabilities whose result limit is a DISCOVERY batch. ATS is not one of them. */
+const DISCOVERY_CAPABILITIES: ReadonlySet<string> = new Set([
+  "indeed_job_discovery", "linkedin_job_discovery",
+  "glassdoor_job_discovery", "yc_job_discovery",
+]);
+
+/**
+ * Which provider field carries the batch, per capability.
+ *
+ * Four different names for the same idea, verified in PR #123. Recorded rather
+ * than inferred so a trace states the field that actually carried the number, and
+ * so `jobsToFetch` is never read as if it bounded the run.
+ */
+export const PROVIDER_LIMIT_FIELD: Readonly<Record<string, string>> = {
+  indeed_job_discovery: "maxItems",
+  linkedin_job_discovery: "jobsToFetch",
+  glassdoor_job_discovery: "limit",
+  yc_job_discovery: "maxResults",
+  // Per-company verification cap, NOT a discovery batch.
+  ats_job_verification: "maxJobsPerCompany",
+};
+
+/** What each provider's limit actually bounds. Crawlworks applies it per URL. */
+export const PROVIDER_LIMIT_SCOPE: Readonly<Record<string, "per_run" | "per_query">> = {
+  indeed_job_discovery: "per_run",
+  linkedin_job_discovery: "per_query",
+  glassdoor_job_discovery: "per_run",
+  yc_job_discovery: "per_run",
+  ats_job_verification: "per_query",
+};
+
 export async function prepareStepCall(args: {
   taskId: string;
   step: OrderedSourceStep;
   state: SourceExecutionState;
   broadening?: BroadeningIntentChange | null;
+  /**
+   * What the batch authority needs that step state does not carry.
+   *
+   * Absent ⇒ the step's planned `candidateTarget` is used unchanged, which is the
+   * pre-existing behaviour every current caller relies on.
+   */
+  batchContext?: {
+    /** The capability's own ceiling, from its operating policy. */
+    providerMaximum: number;
+    /** Estimated cost of one provider call, in USD. */
+    costPerCallUsd: number;
+    /** Hard spend ceiling for this task, in USD. */
+    budgetCapUsd: number;
+    /** Raw rows per CONTACT-ready lead observed so far on this run. */
+    observedRowsPerLead?: number | null;
+  } | null;
 }): Promise<PrepareResult> {
   const { step, state } = args;
   const intent = step.semanticIntent;
+
+  // ---- QUOTA-AWARE DISCOVERY BATCH ---------------------------------------
+  //
+  // `decideDiscoveryBatchSize` shipped in PR #121 with tests and no caller: a grep
+  // for it across `supabase/functions` matched only its own test file. The value
+  // that actually reached providers came from `validateOrderedPlan`, which defaults
+  // `candidateTarget` to a literal 25 (`step_target_defaulted`) and only ever
+  // clamps it upward-bounded by the capability ceiling. Remaining quota never
+  // entered the calculation, so a run owing 1 lead asked for exactly as many rows
+  // as one owing 5.
+  //
+  // The batch is decided HERE, immediately before compilation, because this is the
+  // first point that can see BOTH the plan's ceiling and the live quota. ATS is
+  // excluded on purpose: its `maxJobsPerCompany` is a per-company cap on
+  // verification, not a discovery batch, and driving it from remaining quota would
+  // conflate two different quantities.
+  let effectiveTarget = intent.candidateTarget;
+  let batchDecision: DiscoveryBatchDecision | null = null;
+  if (args.batchContext && DISCOVERY_CAPABILITIES.has(step.capability)) {
+    const remaining = Math.max(0, state.remaining_quota);
+    batchDecision = decideDiscoveryBatchSize({
+      requestedLeads: remaining + Math.max(0, state.total_contact_ready),
+      remainingLeads: remaining,
+      sourceMaximum: args.batchContext.providerMaximum,
+      remainingBudgetUsd: Math.max(0, args.batchContext.budgetCapUsd - state.cumulative_cost),
+      costPerCallUsd: args.batchContext.costPerCallUsd,
+      observedRowsPerLead: args.batchContext.observedRowsPerLead ?? null,
+      completedSources: state.completed_step_ids.length,
+    });
+    // A met quota yields 0 — the caller must not issue a call at all.
+    if (batchDecision.count === 0) {
+      return {
+        ok: false, status: "rejected", stepId: step.stepId,
+        reason: `discovery_batch_zero:${batchDecision.reason}`,
+      };
+    }
+    effectiveTarget = batchDecision.count;
+  }
 
   // ONE application authority. `applyBroadeningToIntent` is the same function the
   // plan used to decide this rung was worth offering, so the rung that was judged
@@ -178,7 +266,12 @@ export async function prepareStepCall(args: {
       postingWindowDays: intent.postingWindowDays,
       remotePolicy: (intent.remotePolicy ?? null) as HiringSourceIntent["remotePolicy"],
       employmentTypes: intent.employmentTypes,
-      candidateTarget: intent.candidateTarget,
+      candidateTarget: effectiveTarget,
+      // NOTE: `companies` is deliberately NOT forwarded. `OrderedSourceStep`'s
+      // semanticIntent carries no such field, so ATS verification always compiles
+      // to `deferred:ats_verification_requires_resolved_company_slug`. Resolving
+      // where company identities should enter this call is a design question, not a
+      // one-line forward, and is left to the ATS work rather than guessed at here.
     }, args.broadening),
   );
 
@@ -204,6 +297,15 @@ export async function prepareStepCall(args: {
       idempotencyKey: sourceIdempotencyKey(args.taskId, step.stepId, attempt, compiled.inputHash),
       repairs: compiled.repairs,
       summary: compiled.summary,
+      // The batch decision travels with the call so the trace can show WHY this
+      // many rows were requested, and which provider field carried the number.
+      batchDecision: batchDecision
+        ? {
+            ...batchDecisionDiagnostics(batchDecision),
+            provider_limit_field: PROVIDER_LIMIT_FIELD[compiled.capability] ?? null,
+            provider_limit_scope: PROVIDER_LIMIT_SCOPE[compiled.capability] ?? null,
+          }
+        : null,
     },
   };
 }
@@ -292,7 +394,25 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
     deps.state.current_step_id = step.stepId;
     record.status = "active";
 
-    const prepared = await prepareStepCall({ taskId: deps.taskId, step, state: deps.state });
+    // THE BATCH IS DECIDED FROM LIVE QUOTA, not from the plan's default of 25.
+    // The capability's own ceiling and the plan's spend cap are the bounds; the
+    // remaining CONTACT-ready quota is the driver.
+    const prepared = await prepareStepCall({
+      taskId: deps.taskId, step, state: deps.state,
+      batchContext: {
+        // The capability's own verified ceiling — the same value the compiler
+        // clamps to, so the batch authority and the compiler cannot disagree.
+        providerMaximum: HIRING_SOURCE_CATALOG[step.capability]?.operatingPolicy.maximumResultsPerCall
+          ?? step.semanticIntent.candidateTarget,
+        costPerCallUsd: deps.costPerCall ?? 0,
+        budgetCapUsd: deps.plan.maximumEstimatedCostUsd,
+        // NOT YET AVAILABLE. `SourceExecutionState` records contact-ready totals
+        // and provider calls, but not raw rows returned, so a real rows-per-lead
+        // ratio cannot be derived here. Passing null uses the conservative default
+        // rather than inventing a multiplier from numbers that do not measure it.
+        observedRowsPerLead: null,
+      },
+    });
     if (!prepared.ok) {
       // A deferred verification step is not a failure — it simply cannot run yet.
       record.status = prepared.status === "deferred" ? "deferred" : record.status;
