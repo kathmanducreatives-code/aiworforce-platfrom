@@ -235,3 +235,58 @@ Deno.test("Part5: a real company website is preserved (not treated as shortener)
   assertEquals(n.domain, "justai.com");
   assertEquals(n.raw.website_shortener_dropped, false);
 });
+
+// ---------------------------------------------------------------------------
+// crawlworks/linkedin-jobs-scraper posting date (`postedDate`).
+//
+// Field names verified official:2026-07-30 against
+// apify.com/crawlworks/linkedin-jobs-scraper. The row below is the shape this
+// actor actually returned in production task c30fbc6d.
+// ---------------------------------------------------------------------------
+
+// Trimmed from the real crawlworks payload for that task (SolarWinds row).
+const crawlworksRow = {
+  jobUrl: "https://www.linkedin.com/jobs/view/4429558301",
+  jobTitle: "Director, Revenue Operations",
+  companyName: "SolarWinds",
+  companyUrl: "https://www.linkedin.com/company/solarwinds",
+  companyWebsite: "http://www.solarwinds.com",
+  companyIndustry: "Software Development",
+  companyEmployeeCount: 2856,
+  location: "Austin, TX, US",
+  employmentType: "Full-time",
+  seniorityLevel: "Director",
+  postedDate: "2026-07-29",
+  postedTime: "20 hours ago",
+  validThrough: "2027-02-11",
+};
+
+Deno.test("crawlworks `postedDate` becomes posted_at (was dropped → missing_occurred_at)", () => {
+  const n = normalizeApifyJobRow(crawlworksRow);
+  assertEquals(n.postedAt, "2026-07-29");
+  assertEquals(n.raw.posted_at, "2026-07-29");
+  // The value must be a real instant, since jobRecordToSignalEvent gates on Date.parse.
+  assert(isFinite(Date.parse(n.postedAt as string)));
+});
+
+Deno.test("`postedTime` alone never yields a posting date (localized text, unparseable)", () => {
+  // apify.com serves this field localized — the published sample reads "Vor 2 Tagen".
+  const n = normalizeApifyJobRow({ ...crawlworksRow, postedDate: undefined, postedTime: "Vor 2 Tagen" });
+  assertEquals(n.postedAt, null);
+});
+
+Deno.test("`validThrough` alone never yields a posting date (deadline, not a posting)", () => {
+  // Accepting this would fabricate freshness for a long-expired listing.
+  const n = normalizeApifyJobRow({ ...crawlworksRow, postedDate: undefined, postedTime: undefined });
+  assertEquals(n.postedAt, null);
+});
+
+Deno.test("explicit posting keys still outrank `postedDate`", () => {
+  assertEquals(normalizeApifyJobRow({ ...crawlworksRow, postedAt: "2026-07-01" }).postedAt, "2026-07-01");
+  assertEquals(normalizeApifyJobRow({ ...crawlworksRow, datePosted: "2026-07-02" }).postedAt, "2026-07-02");
+});
+
+Deno.test("a row with no date at all still normalizes to null (no fabrication)", () => {
+  const n = normalizeApifyJobRow({ companyName: "Acme", title: "RevOps Lead" });
+  assertEquals(n.postedAt, null);
+});

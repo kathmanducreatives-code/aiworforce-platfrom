@@ -645,3 +645,58 @@ Deno.test("F43b the bridge carries fused evidence and stays inert when disabled"
   assertEquals(ev.canonical_signals, 1);
   assertEquals(ev.canonical_companies, 1);
 });
+
+// ---------------------------------------------------------------------------
+// REGRESSION — production task c30fbc6d, round 3.
+//
+// 25 crawlworks rows entered fusion; 21 were rejected `missing_occurred_at` and
+// 0 signals were produced, because `postedDate` was absent from the accepted
+// date aliases while `datePosted` (Indeed's key) was present. The rejected rows
+// were on-target GTM roles at real companies — they never reached a company
+// judgment at all. Field names verified official:2026-07-30 against
+// apify.com/crawlworks/linkedin-jobs-scraper.
+// ---------------------------------------------------------------------------
+
+Deno.test("fusion: crawlworks `postedDate` survives into postedAt", () => {
+  const j = toNormalizedJob("linkedin_job_discovery", {
+    companyName: "SolarWinds",
+    jobTitle: "Director, Revenue Operations",
+    jobUrl: "https://www.linkedin.com/jobs/view/4429558301",
+    postedDate: "2026-07-26",
+    postedTime: "20 hours ago",
+    validThrough: "2027-02-11",
+  });
+  assertEquals(j.postedAt, "2026-07-26");
+});
+
+Deno.test("fusion: a crawlworks row now yields a signal instead of missing_occurred_at", () => {
+  const j = toNormalizedJob("linkedin_job_discovery", {
+    companyName: "SolarWinds",
+    jobTitle: "Director, Revenue Operations",
+    jobUrl: "https://www.linkedin.com/jobs/view/4429558301",
+    postedDate: "2026-07-26",
+  });
+  const res = jobRecordToSignalEvent({
+    job: j, workspace_id: "ws-1", company_ref: "solarwinds.com", observedAt: NOW,
+  });
+  assertFalse(res.rejected);
+  assert(res.signal);
+  // occurred_at is the SOURCE posting date, never the observation clock.
+  assertEquals(res.signal!.occurred_at, new Date(Date.parse("2026-07-26")).toISOString());
+  assert(res.signal!.occurred_at !== NOW);
+});
+
+Deno.test("fusion: a dateless crawlworks row is still rejected missing_occurred_at", () => {
+  const j = toNormalizedJob("linkedin_job_discovery", {
+    companyName: "SolarWinds",
+    jobTitle: "Director, Revenue Operations",
+    jobUrl: "https://www.linkedin.com/jobs/view/4429558301",
+    postedTime: "20 hours ago",   // localized text is not a date
+    validThrough: "2027-02-11",   // a deadline is not a posting date
+  });
+  const res = jobRecordToSignalEvent({
+    job: j, workspace_id: "ws-1", company_ref: "solarwinds.com", observedAt: NOW,
+  });
+  assert(res.rejected);
+  assertEquals(res.reason, "missing_occurred_at");
+});
