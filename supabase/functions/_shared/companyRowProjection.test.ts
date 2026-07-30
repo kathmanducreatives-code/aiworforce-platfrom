@@ -2,11 +2,11 @@
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { buildCompanyRowPersistencePlan, companyRowStage, companyRowKey } from "./companyRowProjection.ts";
-import { buildCompanyIdentity } from "./companyIdentity.ts";
+import { resolveCompanyIdentity } from "./companyIdentity.ts";
 import type { PendingDecisionMaker } from "./compoundSourcingPipeline.ts";
 
-const strong = buildCompanyIdentity({ name: "Vanta", domain: "vanta.com", location: "San Francisco, United States" });
-const weak = buildCompanyIdentity({ name: "Mystery Co" });
+const strong = resolveCompanyIdentity({ name: "Vanta", domain: "vanta.com", location: "San Francisco, United States" });
+const weak = resolveCompanyIdentity({ name: "Mystery Co" });
 
 const job = {
   title: "Sales Operations Manager", company: "Vanta", companyDomain: "vanta.com",
