@@ -446,6 +446,12 @@ export async function runCompoundSourcing(
     diagnostics.peopleReturned += people.length;
     diagnostics.decisionMaker.peopleReturned += people.length;
     const primaryJob = c.jobs[0].job;
+    // A searched company that yields no CONTACT-able person is still a real
+    // opportunity and must reach the Workbench as a company row. Tracked here
+    // and pushed after the person loop so the reason reflects what happened.
+    let producedContact = false;
+
+
 
     for (const person of people) {
       const employer = verifyCurrentEmployer(person, c.identity, { now: opts.now });
