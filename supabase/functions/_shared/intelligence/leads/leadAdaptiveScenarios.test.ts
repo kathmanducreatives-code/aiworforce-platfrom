@@ -429,9 +429,14 @@ Deno.test("Scenario C — a limited first source advances to the next with exact
 });
 
 Deno.test("Scenario D — exact packs exhausted activates adjacent, gated stays gated", () => {
+  // The people stage is deliberately already spent here. Otherwise qualified
+  // companies with no verified decision maker would — correctly — make people
+  // search the next action, and this scenario would not be testing pack tiers.
   const o = buildSourceStepObservation(obsInput({
     unused_query_packs: [], remaining_sources: [],
     companies_resolved: 8, companies_qualified: 3,
+    decision_makers_verified: 2, contact_ready_leads: 1,
+    people_search_completed_for_qualified: true, people_needing_contact: 0,
     direct_adjacent_packs_available: 2, evidence_gated_packs_available: 1,
   }));
   assert(o.valid_next_actions.includes("activate_direct_adjacent_pack"));

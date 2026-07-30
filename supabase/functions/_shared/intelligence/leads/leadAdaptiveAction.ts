@@ -346,6 +346,17 @@ export function deterministicNextAction(ctx: FallbackContext): AdaptiveNextActio
     };
   }
 
+  // THE PEOPLE STAGE PREEMPTS MORE DISCOVERY. Once qualified companies exist and
+  // the people stage has not converted them, another job call cannot produce a
+  // lead — only a person can. Ordering discovery first here would spend the
+  // budget collecting companies that already outnumber the quota.
+  if (quality.recommended === "begin_people_search" && allow("begin_people_search")) {
+    return { action: "begin_people_search", reason: quality.reason };
+  }
+  if (quality.recommended === "run_contact_enrichment" && allow("run_contact_enrichment")) {
+    return { action: "run_contact_enrichment", reason: quality.reason };
+  }
+
   if (o.unused_query_packs.length > 0 && allow("run_unused_query_pack")) {
     return {
       action: "run_unused_query_pack",

@@ -205,6 +205,45 @@ export interface RoundObservationInput {
   duplicatesRemoved: number;
   /** True when this round could not expand any further. */
   sourceExhausted: boolean;
+
+  /**
+   * THE FUNNEL STAGES, KEPT APART.
+   *
+   * Every count below is a measurement of one stage, in that stage's own units.
+   * They exist because a summary that collapses them cannot distinguish failures
+   * with opposite remedies — most importantly "no company was ever resolved" from
+   * "companies were resolved and the Brain rejected them". An observer that only
+   * saw `companies_rejected` reported the first as the second for a whole
+   * production run, and drove a title-broadening round at a bottleneck that was
+   * never about titles.
+   *
+   * Optional so every existing caller and test stays valid unchanged.
+   */
+  stages?: {
+    /** Rows the provider returned, before any normalization. */
+    providerRows: number;
+    /** Rows that normalized into a usable job record. */
+    normalizedJobs: number;
+    /** Jobs whose title matched the requested role family. */
+    titleMatches: number;
+    /** Jobs dropped because the title was not the requested family. */
+    titleRejections: number;
+    /** Jobs dropped because the location was outside the requested geography. */
+    geographyRejections: number;
+    /** Companies whose identity resolved from an accepted job. */
+    companiesResolved: number;
+    /** Companies the Company Brain actually evaluated. */
+    companiesEvaluated: number;
+    /** Companies that passed the Company Brain. */
+    companiesQualified: number;
+    /** Companies the Company Brain evaluated and rejected. */
+    companiesRejectedByBrain: number;
+    /** Safe reason codes only, never payloads. */
+    companyRejectionReasons: Record<string, number>;
+    peopleSearched: number;
+    employerVerified: number;
+    contactReady: number;
+  };
 }
 
 /** What a round-completion hook may contribute back to the checkpoint. */
@@ -677,7 +716,20 @@ export async function runCompanyFirstQuotaController(
       job_family_pass: exec.run?.diagnostics.acceptedJobs ?? 0,
       job_family_fail: exec.run?.diagnostics.droppedByFamily ?? 0,
       companies_qualified: exec.run?.diagnostics.verifiedCompanies ?? 0,
-      companies_rejected: Math.max(0, exec.writeBoundary.normalizedJobs - (exec.run?.diagnostics.verifiedCompanies ?? 0)),
+      // COMPANIES REJECTED IS A COMPANY COUNT. This was
+      // `normalizedJobs - verifiedCompanies` — jobs minus companies, two
+      // different units — so a round that resolved no company at all still
+      // reported one "rejection" per normalized job. Production task c30fbc6d
+      // reported 25 rejections having resolved zero companies, because 21 of its
+      // 25 rows were dropped upstream at `missing_occurred_at` and the Company
+      // Brain never saw them.
+      //
+      // `resolvedCompanies` is the identity stage; anything that resolved and did
+      // not qualify is a real rejection. Both are company counts.
+      companies_rejected: Math.max(
+        0,
+        (exec.run?.diagnostics.resolvedCompanies ?? 0) - (exec.run?.diagnostics.verifiedCompanies ?? 0),
+      ),
       companies_missing_identity: roundCandidates.filter((c) => !c.account.dedupeKey).length,
       people_calls: roundPeopleCalls,
       profiles_returned: exec.writeBoundary.peopleResults,
@@ -800,6 +852,24 @@ export async function runCompanyFirstQuotaController(
           duplicatesRemoved: dupes,
           // No further expansion exists, so this source has nothing left to try.
           sourceExhausted: !expansionAvailable,
+          // Each stage reported in its own units, straight from the pipeline's
+          // own counters — nothing here is derived by subtracting one stage's
+          // count from another stage's.
+          stages: {
+            providerRows: exec.writeBoundary.rawProviderItems,
+            normalizedJobs: exec.writeBoundary.normalizedJobs,
+            titleMatches: exec.run?.diagnostics.acceptedJobs ?? 0,
+            titleRejections: exec.run?.diagnostics.droppedByFamily ?? 0,
+            geographyRejections: exec.run?.diagnostics.droppedByLocation ?? 0,
+            companiesResolved: exec.run?.diagnostics.resolvedCompanies ?? 0,
+            companiesEvaluated: exec.run?.diagnostics.companyBrain.evaluated ?? 0,
+            companiesQualified: exec.run?.diagnostics.verifiedCompanies ?? 0,
+            companiesRejectedByBrain: exec.run?.diagnostics.companyBrain.hardFail ?? 0,
+            companyRejectionReasons: exec.run?.diagnostics.companyBrain.rejectReasons ?? {},
+            peopleSearched: exec.run?.diagnostics.decisionMaker.searchesExecuted ?? 0,
+            employerVerified: exec.run?.diagnostics.decisionMaker.employerVerified ?? 0,
+            contactReady: exec.run?.diagnostics.decisionMaker.contactReady ?? 0,
+          },
         });
         if (outcome?.checkpointSlices) {
           state.slices = { ...(state.slices ?? {}), ...outcome.checkpointSlices };
