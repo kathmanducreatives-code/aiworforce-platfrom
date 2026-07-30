@@ -152,7 +152,22 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   const seniorityLevel = firstStr(r.seniorityLevel, r.seniority_level, r.seniority);
   const jobFunction = firstStr(r.jobFunction, r.job_function, r.function);
   const salary = firstStr(r.salary, r.salaryRange, r.compensation);
-  const postedAt = firstStr(r.postedAt, r.posted_at, r.datePosted, r.listedAt);
+  // `postedDate` is the crawlworks/linkedin-jobs-scraper posting date (YYYY-MM-DD)
+  // — verified official:2026-07-30 against
+  // apify.com/crawlworks/linkedin-jobs-scraper. It was absent from this alias list,
+  // which reads `datePosted` (Indeed's key) but not `postedDate` (LinkedIn's), so
+  // every crawlworks row normalized to `posted_at: null`. `jobRecordToSignalEvent`
+  // then correctly refused to fabricate freshness and rejected the row
+  // `missing_occurred_at`, upstream of any company judgment. Production task
+  // c30fbc6d round 3: 25 crawlworks rows in, 21 rejected `missing_occurred_at`,
+  // 0 signals produced — including a SolarWinds "Director, Revenue Operations"
+  // posted 20 hours earlier.
+  //
+  // The actor's two other date fields are deliberately NOT accepted:
+  //   postedTime   — localized human text ("Vor 2 Tagen"), not parseable
+  //   validThrough — application deadline, not a posting date; using it would
+  //                  fabricate freshness for an expired listing.
+  const postedAt = firstStr(r.postedAt, r.posted_at, r.datePosted, r.postedDate, r.listedAt);
   const applicantsCount = toInt(r.applicantsCount ?? r.applicants ?? r.numApplicants);
   const posterContactHint: PosterContactHint = {
     name: firstStr(r.jobPosterName, r.posterName, r.hiringManagerName),

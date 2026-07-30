@@ -142,7 +142,14 @@ export function toNormalizedJob(source: FusionSourceId, row: Record<string, unkn
     linkedinUrl: first(row.companyLinkedinUrl, row.company_linkedin_url, row.linkedinUrl, row.linkedin_url),
     website: first(row.companyWebsite, row.company_website, row.website, row.website_url),
     domain: first(row.companyDomain, row.company_domain, row.domain),
-    postedAt: first(row.postedAt, row.posted_at, row.datePosted, row.date_posted, row.publishedAt, row.created_at),
+    // `postedDate` — crawlworks/linkedin-jobs-scraper (official:2026-07-30). This
+    // builder deliberately accepts raw-ish provider shapes, and it had the same
+    // `datePosted`/`postedDate` transposition the normalizer did. The live path
+    // feeds it already-normalized rows, so the normalizer fix is what unblocks
+    // production; this keeps a directly-supplied crawlworks row from failing
+    // `missing_occurred_at` the same way. `postedTime` (localized text) and
+    // `validThrough` (deadline) remain excluded.
+    postedAt: first(row.postedAt, row.posted_at, row.datePosted, row.date_posted, row.postedDate, row.publishedAt, row.created_at),
     seniorityLevel: first(row.seniority, row.seniorityLevel, row.seniority_level),
     jobFunction: first(row.jobFunction, row.job_function, row.category),
   };
