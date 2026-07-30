@@ -66,11 +66,35 @@ export interface CompoundDeps {
   fetchPeopleForCompany: (scope: PeopleSearchScope, max: number) => CompoundPerson[] | Promise<CompoundPerson[]>;
 }
 
-/** A qualified company that could not reach a scoped decision-maker search. */
+/**
+ * A qualified company that has NOT (yet) produced a verified decision-maker.
+ *
+ * These are real opportunities: the hiring signal passed the title/geography
+ * gates, the company identity resolved and Company Brain did not reject it.
+ * They were previously returned and dropped, which is why a run could show raw
+ * job posts while the canonical Workbench stayed empty. They carry their bound
+ * hiring evidence so the company row can be projected without re-deriving it.
+ * NEVER quota-eligible — only a CONTACT-ready person counts.
+ */
+export type PendingDecisionMakerReason =
+  /** Weak (name-only) identity: a scoped people search would return the wrong people. */
+  | "company_identity_insufficient_for_scoped_search"
+  /** The scoped search ran and returned nobody. */
+  | "no_decision_maker_returned"
+  /** People were returned but none cleared role + current-employer verification. */
+  | "decision_maker_unverified";
+
 export interface PendingDecisionMaker {
   company: CompanyIdentity;
-  reason: "company_identity_insufficient_for_scoped_search";
+  reason: PendingDecisionMakerReason;
+  /** The hiring signal that made this company an opportunity. */
+  jobEvidence?: CompoundJob | null;
+  /** Company Brain hard-gate outcome carried from stage 3. */
+  brainGate?: G;
+  /** Vertical/company-type qualification outcome carried from stage 3. */
+  verticalOutcome?: string | null;
 }
+
 
 /** Titles that describe the role being HIRED, never the person to contact. */
 const HIRING_ROLE_TITLE_RE =
