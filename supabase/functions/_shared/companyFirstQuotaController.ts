@@ -17,6 +17,8 @@ import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runAgentCompoundExecution, type CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundCandidate, CompoundLimits } from "./compoundSourcingPipeline.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
+import { buildCompanyRowPersistencePlan, companyRowKey } from "./companyRowProjection.ts";
+
 import { buildSourcingConstraints, type SourcingConstraints } from "./sourcingConstraints.ts";
 import {
   buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput,
