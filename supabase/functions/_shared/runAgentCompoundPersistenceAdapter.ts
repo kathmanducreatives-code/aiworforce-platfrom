@@ -16,7 +16,7 @@ export interface CompoundPersistencePlan {
   contact: { name: string | null; title: string | null; linkedinUrl: string | null } | null;
   /** The lead_candidate row payload (person lead), evidence carried in raw. */
   leadCandidate: {
-    lead_type: "person";
+    lead_type: "person" | "account";
     reason: string | null;      // grounded why-now
     next_action: string;
     raw: Record<string, unknown>;
