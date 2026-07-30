@@ -66,11 +66,35 @@ export interface CompoundDeps {
   fetchPeopleForCompany: (scope: PeopleSearchScope, max: number) => CompoundPerson[] | Promise<CompoundPerson[]>;
 }
 
-/** A qualified company that could not reach a scoped decision-maker search. */
+/**
+ * A qualified company that has NOT (yet) produced a verified decision-maker.
+ *
+ * These are real opportunities: the hiring signal passed the title/geography
+ * gates, the company identity resolved and Company Brain did not reject it.
+ * They were previously returned and dropped, which is why a run could show raw
+ * job posts while the canonical Workbench stayed empty. They carry their bound
+ * hiring evidence so the company row can be projected without re-deriving it.
+ * NEVER quota-eligible — only a CONTACT-ready person counts.
+ */
+export type PendingDecisionMakerReason =
+  /** Weak (name-only) identity: a scoped people search would return the wrong people. */
+  | "company_identity_insufficient_for_scoped_search"
+  /** The scoped search ran and returned nobody. */
+  | "no_decision_maker_returned"
+  /** People were returned but none cleared role + current-employer verification. */
+  | "decision_maker_unverified";
+
 export interface PendingDecisionMaker {
   company: CompanyIdentity;
-  reason: "company_identity_insufficient_for_scoped_search";
+  reason: PendingDecisionMakerReason;
+  /** The hiring signal that made this company an opportunity. */
+  jobEvidence?: CompoundJob | null;
+  /** Company Brain hard-gate outcome carried from stage 3. */
+  brainGate?: G;
+  /** Vertical/company-type qualification outcome carried from stage 3. */
+  verticalOutcome?: string | null;
 }
+
 
 /** Titles that describe the role being HIRED, never the person to contact. */
 const HIRING_ROLE_TITLE_RE =
@@ -386,8 +410,12 @@ export async function runCompoundSourcing(
     pendingDecisionMakers.push({
       company: c.identity,
       reason: "company_identity_insufficient_for_scoped_search",
+      jobEvidence: c.jobs[0]?.job ?? null,
+      brainGate: c.brainGate,
+      verticalOutcome: c.vq.outcome,
     });
   }
+
 
   const scoped = withScope
     .filter((x): x is { c: typeof selected[number]; scope: NonNullable<ReturnType<typeof buildPeopleScope>> } => x.scope !== null);
@@ -418,6 +446,12 @@ export async function runCompoundSourcing(
     diagnostics.peopleReturned += people.length;
     diagnostics.decisionMaker.peopleReturned += people.length;
     const primaryJob = c.jobs[0].job;
+    // A searched company that yields no CONTACT-able person is still a real
+    // opportunity and must reach the Workbench as a company row. Tracked here
+    // and pushed after the person loop so the reason reflects what happened.
+    let producedContact = false;
+
+
 
     for (const person of people) {
       const employer = verifyCurrentEmployer(person, c.identity, { now: opts.now });
@@ -448,6 +482,7 @@ export async function runCompoundSourcing(
       if (seenPeople.has(personKey)) continue; // person dedupe
       seenPeople.add(personKey);
 
+      if (verdict === "CONTACT") producedContact = true;
       candidates.push({
         account: c.identity, person, jobEvidence: primaryJob, jobFamily: c.jobs[0].fam, vertical: c.vq, employer, evidence, gates, verdict,
         reasons: Object.entries(gates).filter(([, g]) => g !== "pass").map(([k, g]) => `${k}:${g}`),
@@ -456,7 +491,18 @@ export async function runCompoundSourcing(
         personKey, rank: 0,
       });
     }
+
+    if (!producedContact) {
+      pendingDecisionMakers.push({
+        company: c.identity,
+        reason: people.length === 0 ? "no_decision_maker_returned" : "decision_maker_unverified",
+        jobEvidence: primaryJob,
+        brainGate: c.brainGate,
+        verticalOutcome: c.vq.outcome,
+      });
+    }
   }
+
 
   // 5) rank: verdict class → then company key → person key (deterministic; order-free).
   const order: Record<CompoundVerdict, number> = { CONTACT: 0, WATCH: 1, NEEDS_REVIEW: 2, REJECT: 3 };

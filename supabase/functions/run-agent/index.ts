@@ -887,7 +887,7 @@ Deno.serve(async (req) => {
             // INVARIANT: a CONTACT lead must have a real account_id.
             const contactEligible = plan.verdict === "CONTACT" && !!accountId;
             const { data: lc } = await supabase.from("lead_candidates").insert({
-              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: "person", status: "new",
+              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: plan.leadCandidate.lead_type, status: "new",
               reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
               raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
             }).select("id").maybeSingle();

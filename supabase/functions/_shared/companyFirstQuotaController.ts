@@ -17,6 +17,8 @@ import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runAgentCompoundExecution, type CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundCandidate, CompoundLimits } from "./compoundSourcingPipeline.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
+import { buildCompanyRowPersistencePlan, companyRowKey } from "./companyRowProjection.ts";
+
 import { buildSourcingConstraints, type SourcingConstraints } from "./sourcingConstraints.ts";
 import {
   buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput,
@@ -717,7 +719,32 @@ export async function runCompanyFirstQuotaController(
       carriedPersisted.add(lk);
       persisted.push({ ok: pr.ok, accountId: pr.accountId, leadCandidateId: pr.leadCandidateId, reason: pr.reason });
     }
+
+    // ---- COMPANY ROWS: the qualified-but-pending companies reach the canonical
+    // Workbench through the SAME writer. Before this, a company that cleared the
+    // job gates, identity resolution and Company Brain but produced no verified
+    // decision-maker was dropped entirely — the run showed raw job posts and an
+    // empty Opportunities tab. These rows are account-stage and, by construction,
+    // never quota-eligible: only a CONTACT person counts (see countEligible).
+    for (const pending of exec.run?.pendingDecisionMakers ?? []) {
+      const key = companyRowKey(pending);
+      if (!key) continue;
+      const ck = `company:${key}`;
+      if (carriedPersisted.has(ck)) continue;
+      const plan = buildCompanyRowPersistencePlan(pending, wsId);
+      if (!plan.persistable) {
+        persisted.push({ ok: false, accountId: null, leadCandidateId: null, reason: plan.persistenceReason });
+        carriedPersisted.add(ck);
+        continue;
+      }
+      writeBoundary.persistenceAttempts += 1;
+      const pr = await deps.persist(plan);
+      if (pr.ok) writeBoundary.persistedRecords += 1;
+      carriedPersisted.add(ck);
+      persisted.push({ ok: pr.ok, accountId: pr.accountId, leadCandidateId: pr.leadCandidateId, reason: pr.reason });
+    }
     state.persisted_lead_keys = [...carriedPersisted];
+
 
     // ---- CHECKPOINT: a platform kill after this point loses nothing --------
     state.current_round = round + 1;
