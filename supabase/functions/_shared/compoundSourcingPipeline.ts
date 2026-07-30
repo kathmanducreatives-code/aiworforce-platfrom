@@ -410,8 +410,12 @@ export async function runCompoundSourcing(
     pendingDecisionMakers.push({
       company: c.identity,
       reason: "company_identity_insufficient_for_scoped_search",
+      jobEvidence: c.jobs[0]?.job ?? null,
+      brainGate: c.brainGate,
+      verticalOutcome: c.vq.outcome,
     });
   }
+
 
   const scoped = withScope
     .filter((x): x is { c: typeof selected[number]; scope: NonNullable<ReturnType<typeof buildPeopleScope>> } => x.scope !== null);
