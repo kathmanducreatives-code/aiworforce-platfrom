@@ -9,6 +9,7 @@
 //   import { runTool } from "../_shared/toolRegistry.ts";
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateFinalActorPayload, finalPayloadDiagnostics } from "./finalActorPayload.ts";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
@@ -735,6 +736,10 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   const i = (input ?? {}) as {
     actor_id?: string;
     selected_actor_key?: string;
+    /** Set when `input` is already this capability's own compiled Actor payload. */
+    compiled_actor_input?: boolean;
+    capability_key?: string;
+    compiled_input_hash?: string;
     source_type?: string;
     search_goal?: string;
     query?: string;
@@ -877,21 +882,62 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   const actorPath = encodeURIComponent(actor_id.replace("/", "~"));
 
   const userInput = (i.input && typeof i.input === "object") ? (i.input as Record<string, unknown>) : {};
-  const actorInput: Record<string, unknown> = actorCfg?.input_adapter
-    ? actorCfg.input_adapter({
-        query: i.query ?? search_goal ?? null,
-        location: i.location ?? null,
-        role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
-        max_results,
-        user_input: userInput,
-      })
-    : {
-        query: i.query ?? search_goal ?? null,
-        location: i.location ?? null,
-        role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
-        max_results,
-        ...userInput,
-      };
+
+  // ---- CAPABILITY-COMPILED PAYLOADS ARE AUTHORITATIVE --------------------
+  //
+  // The actor id resolves from ACTOR_REGISTRY; the adapter below resolves from
+  // APIFY_ACTORS keyed by `source_type`. For a dynamic-source actor with no
+  // matching APIFY_ACTORS entry those two disagree, and the adapter silently
+  // rewrites a correct payload into another vendor's shape. Production task
+  // 2425ec4f: Crawlworks was resolved correctly and then handed
+  // `{urls, count, scrapeCompany, useIncognitoMode, splitByLocation}`.
+  //
+  // When the caller has already compiled this capability's own payload, it is sent
+  // verbatim. No legacy adapter, no merge, no re-derivation.
+  const compiledPassthrough = (i as { compiled_actor_input?: unknown }).compiled_actor_input === true;
+  const compiledCapability = (i as { capability_key?: unknown }).capability_key;
+
+  let actorInput: Record<string, unknown>;
+  if (compiledPassthrough) {
+    actorInput = userInput;
+  } else {
+    actorInput = actorCfg?.input_adapter
+      ? actorCfg.input_adapter({
+          query: i.query ?? search_goal ?? null,
+          location: i.location ?? null,
+          role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
+          max_results,
+          user_input: userInput,
+        })
+      : {
+          query: i.query ?? search_goal ?? null,
+          location: i.location ?? null,
+          role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
+          max_results,
+          ...userInput,
+        };
+  }
+
+  // ---- FINAL GATE: validate the object that is ACTUALLY about to be sent ----
+  //
+  // Validating the compiled input and then invoking a different object is the
+  // defect. This runs on `actorInput` itself, after every transformation, and
+  // fails LOCALLY — a known-bad payload never reaches Apify and never costs money.
+  const finalVerdict = validateFinalActorPayload(
+    typeof compiledCapability === "string" ? compiledCapability : null,
+    actorInput,
+  );
+  if (!finalVerdict.ok) {
+    return {
+      ok: false,
+      error: "final_payload_schema_invalid",
+      data: {
+        ...finalPayloadDiagnostics(finalVerdict),
+        actor_key: registry_actor_key,
+        reason: "the compiled payload failed final validation; no provider call was made",
+      },
+    };
+  }
 
   const startRes = await apifyFetch(`/acts/${actorPath}/runs?token=${APIFY_API_TOKEN}`, {
     method: "POST",
