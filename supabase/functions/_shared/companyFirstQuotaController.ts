@@ -29,7 +29,7 @@ import { shortHash } from "./planHash.ts";
 import { stampIdempotencyKey, lookupDurableCall, type ToolCallReader, type DurableLookupKind } from "./durableIdempotency.ts";
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import {
-  newSourcingState, stateBelongsTo, isResumable, deltaTitles, hasCompletedCall, recordCompletedCall,
+  newSourcingState, stateBelongsTo, isResumable, deltaTitles, recordAttemptedTitles, hasCompletedCall, recordCompletedCall,
   type CompanyFirstSourcingState, type SourcingStateStore, type RoundCheckpoint,
 } from "./companyFirstSourcingState.ts";
 import { createExecutionDeadline, type ExecutionBudget, type ExecutionDeadline } from "./executionDeadline.ts";
@@ -139,6 +139,19 @@ export interface QuotaControllerResult {
   source_transition_failure: (RoundObservationOutcome["halt"] & { round: number }) | null;
   /** Checkpoints the database rejected. Empty is the healthy state. */
   checkpoint_failures: Array<{ round: number; reason: string }>;
+  /**
+   * Ordered-source progression: which sources were finished and where the run
+   * moved next. Empty under single-source execution.
+   *
+   * This is what makes "the search is exhausted" auditable. Production plan
+   * 43fb7313 reported `search_exhausted` with three sources still pending and no
+   * record of the distinction anywhere on the result.
+   */
+  source_progression: {
+    active_source: string | null;
+    exhausted_sources: Array<{ source: string | null; reason: string; round: number }>;
+    advances: Array<{ from: string | null; to: string | null; reason: string; round: number }>;
+  };
 }
 
 import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
@@ -221,6 +234,26 @@ export interface QuotaControllerDeps extends CompoundExecutionDeps {
    * status, or whether another round runs.
    */
   onRoundComplete?: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
+  /**
+   * READ-ONLY: does another approved discovery source remain runnable?
+   *
+   * Title exhaustion and SEARCH exhaustion are different facts, and this module
+   * could only observe the first. Every `search_exhausted` branch below is really
+   * "this source's title strategies are spent" — so production plan 43fb7313
+   * ended the entire mission with LinkedIn, Glassdoor and ATS still `pending` and
+   * the ordered state explicitly reading `pending_next_action:
+   * advance_to_next_source`.
+   *
+   * This asks the ordered-source authority a question; it does not let that
+   * authority answer for this one. The controller still decides the terminal
+   * status, still owns the round loop, and still owns the quota.
+   */
+  pendingDiscoverySource?: () => {
+    pending: boolean;
+    stepId?: string | null;
+    capability?: string | null;
+    actorKey?: string | null;
+  };
   /** INJECTED planner. Never called by this module in tests or offline runs. */
   proposeBroadening?: BroadeningPlannerFn;
   /** Safe provenance for the most recent planner call. */
@@ -265,6 +298,66 @@ export async function runCompanyFirstQuotaController(
   const ledger = newIdempotencyLedger();
   let lastFunnel: FunnelSummary | null = null;
   let lastBottleneck: BottleneckKind | null = null;
+
+  // ---- ORDERED-SOURCE PROGRESSION ----------------------------------------
+  //
+  // The round loop below broadens TITLES. Under ordered multi-source execution it
+  // also has to be able to move to the next SOURCE, because a title strategy
+  // being spent on Indeed says nothing about LinkedIn. Three things become
+  // per-source rather than global:
+  //
+  //   sourceRound          the round number the planner sees, so a new source
+  //                        starts from the exact-title strategy again
+  //   attemptedStrategies  a strategy hash is "already attempted" per source
+  //   the title ledger     via deltaTitles(state, titles, activeSourceKey)
+  //
+  // Without all three, advancing would immediately re-derive "already searched"
+  // and end the mission anyway.
+  const initialSource = deps.pendingDiscoverySource?.();
+  let activeSourceKey: string | null = initialSource?.actorKey ?? initialSource?.capability ?? null;
+  let sourceRound = 1;
+  const exhaustedSources: Array<{ source: string | null; reason: string; round: number }> = [];
+  const sourceAdvances: Array<{ from: string | null; to: string | null; reason: string; round: number }> = [];
+  /**
+   * Sources this run has already activated.
+   *
+   * Advancing re-runs the same global round number, so this is what guarantees
+   * termination: a source is entered at most once, and an oracle that kept
+   * reporting the same step as pending would stop being able to advance rather
+   * than spinning the loop.
+   */
+  const activatedSources = new Set<string>([activeSourceKey ?? "__initial__"]);
+
+  /**
+   * The current source's strategies are spent. Advance, checkpoint, or exhaust.
+   *
+   * Returns what the caller must do. The controller keeps the decision — this
+   * only distinguishes "this source is finished" from "the search is finished".
+   */
+  const onSourceStrategiesSpent = (
+    round: number,
+    why: string,
+    canRunAnother: boolean,
+  ): "advance" | "checkpoint" | "exhaust" => {
+    const next = deps.pendingDiscoverySource?.();
+    if (!next?.pending) return "exhaust";
+    const to = next.actorKey ?? next.capability ?? null;
+    // Never re-enter a source. Without this an oracle that keeps naming the same
+    // step would spin, because advancing replays the same global round.
+    if (to === null || activatedSources.has(to)) return "exhaust";
+    exhaustedSources.push({ source: activeSourceKey, reason: why, round });
+    if (!canRunAnother) {
+      // Truthful checkpoint: the next source is named, nothing is claimed done.
+      sourceAdvances.push({ from: activeSourceKey, to, reason: `${why}; deferred to continuation`, round });
+      return "checkpoint";
+    }
+    sourceAdvances.push({ from: activeSourceKey, to, reason: why, round });
+    activeSourceKey = to;
+    activatedSources.add(to);
+    sourceRound = 1;
+    attemptedStrategies.length = 0;
+    return "advance";
+  };
   /** Set only when the round observer could not establish the next action. */
   let transitionFailure: (RoundObservationOutcome["halt"] & { round: number }) | null = null;
   /** Checkpoints the database refused. Surfaced on the result, never swallowed. */
@@ -372,11 +465,33 @@ export async function runCompanyFirstQuotaController(
     }
 
     // Deterministic fallback whenever the AI path did not yield an approved round.
-    if (!roundPlan) roundPlan = deterministicRoundPlan(constraints, round, lastBottleneck);
-    if (!roundPlan) { terminal = "search_exhausted"; terminalReason = "no approved expansion remains for this job family"; break; }
+    if (!roundPlan) roundPlan = deterministicRoundPlan(constraints, sourceRound, lastBottleneck);
+    if (!roundPlan) {
+      // TITLE exhaustion for THIS source, not the search.
+      const move = onSourceStrategiesSpent(round, "no approved expansion remains for this job family", deadline.canAfford("jobs"));
+      if (move === "advance") { round -= 1; continue; }
+      if (move === "checkpoint") {
+        continuationRequired = true;
+        terminal = "continuation_required";
+        terminalReason = "current source exhausted; next approved source deferred to continuation";
+        break;
+      }
+      terminal = "search_exhausted"; terminalReason = "no approved expansion remains for this job family"; break;
+    }
 
-    roundPlan.strategy_hash = await shortHash({ titles: roundPlan.title_queries.slice().sort(), round });
+    // Scoped to the source: the same titles are a NEW strategy for a new provider.
+    roundPlan.strategy_hash = await shortHash({
+      titles: roundPlan.title_queries.slice().sort(), round: sourceRound, source: activeSourceKey ?? "default",
+    });
     if (attemptedStrategies.includes(roundPlan.strategy_hash)) {
+      const move = onSourceStrategiesSpent(round, "the only remaining strategy was already attempted", deadline.canAfford("jobs"));
+      if (move === "advance") { round -= 1; continue; }
+      if (move === "checkpoint") {
+        continuationRequired = true;
+        terminal = "continuation_required";
+        terminalReason = "current source exhausted; next approved source deferred to continuation";
+        break;
+      }
       terminal = "search_exhausted"; terminalReason = "the only remaining strategy was already attempted"; break;
     }
 
@@ -386,15 +501,42 @@ export async function runCompanyFirstQuotaController(
     if (!forecast.approved) { terminal = "budget_exhausted"; terminalReason = `round refused before execution: ${forecast.refusal_reason}`; break; }
 
     // Idempotency: the same paid round is never charged twice on a retry.
-    const idemKey = roundIdempotencyKey({ taskId: opts.taskId ?? null, workspaceId: opts.workspaceId ?? "", round, strategyHash: roundPlan.strategy_hash, actorKey: "apify_jobs" });
-    if (!ledger.claim(idemKey)) { terminal = "search_exhausted"; terminalReason = "identical paid round already executed (in-process)"; break; }
+    // The ACTIVE source's key, not a constant. With `apify_jobs` hardcoded, the
+    // same titles on a different provider produced the same key, so source 2
+    // would have been refused as a duplicate of source 1's paid call.
+    const idemKey = roundIdempotencyKey({
+      taskId: opts.taskId ?? null, workspaceId: opts.workspaceId ?? "", round,
+      strategyHash: roundPlan.strategy_hash, actorKey: activeSourceKey ?? "apify_jobs",
+    });
+    if (!ledger.claim(idemKey)) {
+      // DUPLICATE INPUT IS NOT SEARCH EXHAUSTION. The strategy is unavailable;
+      // nothing was invoked and nothing was charged. Advance if a source remains.
+      const move = onSourceStrategiesSpent(round, "identical paid round already executed (in-process)", deadline.canAfford("jobs"));
+      if (move === "advance") { round -= 1; continue; }
+      if (move === "checkpoint") {
+        continuationRequired = true;
+        terminal = "continuation_required";
+        terminalReason = "duplicate input blocked; next approved source deferred to continuation";
+        break;
+      }
+      terminal = "search_exhausted"; terminalReason = "identical paid round already executed (in-process)"; break;
+    }
     // RESTART-SAFE: an identical completed paid call in tool_calls is never repeated.
     if (deps.durableIdempotency) {
       const dur = await lookupDurableCall(deps.durableIdempotency, { workspaceId: opts.workspaceId ?? "", key: idemKey, now: opts.now });
       idempotency.push({ round, key: idemKey, kind: dur.kind, reason: dur.reason });
       if (dur.kind === "cached") {
         // The prior result already counted toward this run; do not re-charge and
-        // do not count it twice.
+        // do not count it twice. Still not search exhaustion — advance if another
+        // approved source is pending.
+        const move = onSourceStrategiesSpent(round, "an identical paid round already completed and was reused", deadline.canAfford("jobs"));
+        if (move === "advance") { round -= 1; continue; }
+        if (move === "checkpoint") {
+          continuationRequired = true;
+          terminal = "continuation_required";
+          terminalReason = "duplicate input reused; next approved source deferred to continuation";
+          break;
+        }
         terminal = "search_exhausted";
         terminalReason = "an identical paid round already completed and was reused";
         break;
@@ -408,9 +550,20 @@ export async function runCompanyFirstQuotaController(
     attemptedStrategies.push(roundPlan.strategy_hash);
     state.attempted_strategy_hashes.push(roundPlan.strategy_hash);
     planSources.push(planSource);
-    // DELTA-ONLY: never re-send a title an earlier round already searched.
-    const newTitles = deltaTitles(state, roundPlan.title_queries);
+    // DELTA-ONLY, PER SOURCE: never re-send a title THIS source already searched.
+    // Scoping matters — the global ledger meant Indeed's titles were treated as
+    // spent for LinkedIn too, which is the branch that ended production plan
+    // 43fb7313 with three sources still pending.
+    const newTitles = deltaTitles(state, roundPlan.title_queries, activeSourceKey);
     if (newTitles.length === 0) {
+      const move = onSourceStrategiesSpent(round, "every approved title for this family has already been searched", deadline.canAfford("jobs"));
+      if (move === "advance") { round -= 1; continue; }
+      if (move === "checkpoint") {
+        continuationRequired = true;
+        terminal = "continuation_required";
+        terminalReason = "current source exhausted; next approved source deferred to continuation";
+        break;
+      }
       terminal = "search_exhausted";
       terminalReason = "every approved title for this family has already been searched";
       break;
@@ -570,7 +723,11 @@ export async function runCompanyFirstQuotaController(
     state.current_round = round + 1;
     state.eligible_leads = eligibleAfter;
     state.remaining_leads = remainingLeadCount(requested, eligibleAfter);
-    state.attempted_titles = [...new Set([...state.attempted_titles, ...keywords])];
+    // Recorded globally (audit trail) AND against the active source (delta gate).
+    recordAttemptedTitles(state, keywords, activeSourceKey);
+    // Rounds within the current source, so a later source re-plans from its own
+    // exact-title strategy instead of inheriting this one's expansion depth.
+    sourceRound += 1;
     state.seen_job_urls = [...seenJobUrls];
     state.seen_company_keys = [...seenCompanyKeys];
     state.seen_lead_keys = [...seenLeadKeys];
@@ -579,7 +736,7 @@ export async function runCompanyFirstQuotaController(
     state.next_action = "start_round";
     state.checkpoint_at = nowIso();
     recordCompletedCall(state, {
-      idempotency_key: idemKey, round, actor_key: "apify_jobs", company_key: null,
+      idempotency_key: idemKey, round, actor_key: activeSourceKey ?? "apify_jobs", company_key: null,
       item_count: exec.writeBoundary.rawProviderItems, completed_at: nowIso(),
     });
     const checkpoint: RoundCheckpoint = {
@@ -715,6 +872,11 @@ export async function runCompanyFirstQuotaController(
       planner_metadata: plannerMetadata, idempotency,
       source_transition_failure: transitionFailure,
       checkpoint_failures: checkpointFailures,
+      source_progression: {
+        active_source: activeSourceKey,
+        exhausted_sources: exhaustedSources,
+        advances: sourceAdvances,
+      },
       continuation: {
         required: status === "continuation_required",
         next_action: status === "continuation_required" ? "start_round" : "finalize",

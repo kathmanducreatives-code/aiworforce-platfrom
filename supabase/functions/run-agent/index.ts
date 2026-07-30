@@ -1054,6 +1054,11 @@ Deno.serve(async (req) => {
           // observation, decides the one next action and folds it into the state
           // the next round reads. Inert when the workspace has not opted in.
           onRoundComplete: sequentialSources.onObservation,
+          // TITLE EXHAUSTION IS NOT SEARCH EXHAUSTION. Read-only: it lets the
+          // controller ask whether another approved discovery source is still
+          // pending before it ends the whole mission. Without it, plan 43fb7313
+          // returned `search_exhausted` with LinkedIn, Glassdoor and ATS pending.
+          pendingDiscoverySource: sequentialSources.nextPendingDiscoverySource,
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 

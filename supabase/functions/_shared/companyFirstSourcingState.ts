@@ -56,6 +56,20 @@ export interface CompanyFirstSourcingState {
   completed_rounds: RoundCheckpoint[];
   /** Every title already searched — the source of delta-only expansion. */
   attempted_titles: string[];
+  /**
+   * Titles already searched PER DISCOVERY SOURCE.
+   *
+   * `attempted_titles` is global, and under ordered multi-source execution that
+   * is wrong: once Indeed had searched "Sales Operations", no later source could
+   * ever search it, so LinkedIn's first round found zero delta titles and the
+   * controller declared the whole search exhausted. A title is "already
+   * searched" only for the source that searched it — different providers index
+   * different corpora, which is the entire reason for having more than one.
+   *
+   * Optional so restored pre-multi-source checkpoints keep working; absent means
+   * fall back to the global ledger.
+   */
+  attempted_titles_by_source?: Record<string, string[]>;
   attempted_strategy_hashes: string[];
   /** Cross-round dedupe identities. */
   seen_job_urls: string[];
@@ -125,9 +139,47 @@ export function isResumable(s: CompanyFirstSourcingState | null): boolean {
 }
 
 /** Titles that have never been searched — the ONLY ones a new round may send. */
-export function deltaTitles(state: CompanyFirstSourcingState, plannedTitles: string[]): string[] {
-  const seen = new Set(state.attempted_titles.map((t) => t.toLowerCase()));
+/**
+ * Titles this source has not searched yet.
+ *
+ * With `sourceKey`, the ledger is that SOURCE's history — a title Indeed already
+ * searched is still new to LinkedIn. Without it the global ledger is used, which
+ * is the single-source behaviour every existing caller relies on.
+ */
+export function deltaTitles(
+  state: CompanyFirstSourcingState,
+  plannedTitles: string[],
+  sourceKey?: string | null,
+): string[] {
+  const ledger = sourceKey
+    ? (state.attempted_titles_by_source?.[sourceKey] ?? [])
+    : state.attempted_titles;
+  const seen = new Set(ledger.map((t) => t.toLowerCase()));
   return plannedTitles.filter((t) => !seen.has(t.toLowerCase()));
+}
+
+/**
+ * Record searched titles against the global ledger and, when known, the source.
+ *
+ * Both are kept: the global list remains the cross-round audit trail and the
+ * per-source map is what gates delta expansion.
+ */
+export function recordAttemptedTitles(
+  state: CompanyFirstSourcingState,
+  titles: string[],
+  sourceKey?: string | null,
+): void {
+  for (const t of titles) {
+    if (!state.attempted_titles.some((x) => x.toLowerCase() === t.toLowerCase())) {
+      state.attempted_titles.push(t);
+    }
+  }
+  if (!sourceKey) return;
+  const map = state.attempted_titles_by_source ?? (state.attempted_titles_by_source = {});
+  const list = map[sourceKey] ?? (map[sourceKey] = []);
+  for (const t of titles) {
+    if (!list.some((x) => x.toLowerCase() === t.toLowerCase())) list.push(t);
+  }
 }
 
 export function hasCompletedCall(state: CompanyFirstSourcingState, key: string): CompletedProviderCall | null {
