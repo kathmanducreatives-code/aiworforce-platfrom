@@ -141,7 +141,7 @@ Deno.test("3. YC CAN increase a bounded maxResults", async () => {
 // ================================================================ Indeed =====
 
 Deno.test("4. Indeed recency broadening changes only across the 1/3/7/14 buckets", async () => {
-  const crossing: Array<[number, number, string]> = [[1, 3, "3"], [3, 7, "7"], [7, 14, "14"]];
+  const crossing: Array<[number, number, string]> = [[1, 3, "3 days"], [3, 7, "7 days"], [7, 14, "14 days"]];
   for (const [from, to, bucket] of crossing) {
     const r = await supported("indeed_job_discovery",
       { action: "extend_recency_window", postingWindowDays: to }, { postingWindowDays: from });
@@ -162,7 +162,7 @@ Deno.test("5. Indeed does NOT offer a recency rung that stays in the same bucket
   assertFalse(r.supported);
   assertEquals(r.reason, "unsupported_by_source_schema");
 
-  // Within-bucket moves are refused too (4 and 7 both compile to "7").
+  // Within-bucket moves are refused too (4 and 7 both compile to "7 days").
   const within = await supported("indeed_job_discovery",
     { action: "extend_recency_window", postingWindowDays: 7 }, { postingWindowDays: 4 });
   assertFalse(within.supported);

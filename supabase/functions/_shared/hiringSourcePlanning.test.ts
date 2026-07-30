@@ -123,12 +123,13 @@ Deno.test("S11 only ONE semantic capability serves Indeed", () => {
 
 Deno.test("S12 a 45-day Indeed window is repaired to 14 and diagnosed", () => {
   const r = indeedDatePostedBucket(45);
-  assertEquals(r.value, "14");
+  // Verified 2026-07-30: the actor documents literal strings, not numbers.
+  assertEquals(r.value, "14 days");
   assert(r.repair?.includes("posting_window_clamped"), r.repair ?? "no repair recorded");
 });
 
 Deno.test("S13 Indeed datePosted is ALWAYS a supported bucket", () => {
-  const allowed = new Set(["", "1", "3", "7", "14"]);
+  const allowed = new Set(["", "last 24 hours", "3 days", "7 days", "14 days"]);
   for (const d of [null, 0, 1, 2, 3, 4, 7, 8, 14, 15, 30, 45, 365, 10000]) {
     const v = indeedDatePostedBucket(d as number).value;
     assert(allowed.has(v), `datePosted=${v} for ${d} is not in the verified enum`);
@@ -171,7 +172,7 @@ Deno.test("S16 Indeed compiles to its verified schema only", async () => {
   assert(r.ok, JSON.stringify(r));
   assertEquals(Object.keys(r.input).sort(),
     ["country", "datePosted", "includeDescription", "jobType", "location", "maxItems", "query"]);
-  assertEquals(r.input.datePosted, "14");
+  assertEquals(r.input.datePosted, "14 days");
   assertEquals(r.input.country, "US");
   assertEquals(r.actorKey, "apify_indeed_jobs_automation_lab");
   assert(r.repairs.some((x) => x.includes("posting_window_clamped")));
