@@ -482,6 +482,7 @@ export async function runCompoundSourcing(
       if (seenPeople.has(personKey)) continue; // person dedupe
       seenPeople.add(personKey);
 
+      if (verdict === "CONTACT") producedContact = true;
       candidates.push({
         account: c.identity, person, jobEvidence: primaryJob, jobFamily: c.jobs[0].fam, vertical: c.vq, employer, evidence, gates, verdict,
         reasons: Object.entries(gates).filter(([, g]) => g !== "pass").map(([k, g]) => `${k}:${g}`),
@@ -490,7 +491,18 @@ export async function runCompoundSourcing(
         personKey, rank: 0,
       });
     }
+
+    if (!producedContact) {
+      pendingDecisionMakers.push({
+        company: c.identity,
+        reason: people.length === 0 ? "no_decision_maker_returned" : "decision_maker_unverified",
+        jobEvidence: primaryJob,
+        brainGate: c.brainGate,
+        verticalOutcome: c.vq.outcome,
+      });
+    }
   }
+
 
   // 5) rank: verdict class → then company key → person key (deterministic; order-free).
   const order: Record<CompoundVerdict, number> = { CONTACT: 0, WATCH: 1, NEEDS_REVIEW: 2, REJECT: 3 };
