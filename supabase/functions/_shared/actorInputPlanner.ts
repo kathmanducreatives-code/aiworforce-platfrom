@@ -427,14 +427,38 @@ export const INDEED_DATE_POSTED_BUCKETS = [1, 3, 7, 14] as const;
  * direction: it under-reports recency rather than claiming a 45-day search the
  * source never performed.
  */
+/**
+ * Indeed's `datePosted`, using the values the actor actually documents.
+ *
+ * These are FOUR LITERAL STRINGS, verified 2026-07-30 against
+ * apify.com/automation-lab/indeed-scraper/input-schema:
+ *
+ *   "last 24 hours" | "3 days" | "7 days" | "14 days"
+ *
+ * This previously emitted "1" / "3" / "7" / "14" — numeric strings that are not
+ * members of that enum. The bug was latent only because the compiler had never
+ * been given a posting window in production: the audited run sent
+ * `datePosted: ""`. The first request carrying a recency policy would have sent an
+ * undocumented value, which is exactly the "never fabricate an unsupported
+ * provider value" rule.
+ *
+ * FOURTEEN DAYS IS THE CEILING. Indeed cannot express 30, 45 or 60 days. A longer
+ * semantic window is clamped to the strictest supported bucket and the
+ * approximation is recorded — the existing broadening ladder and its tests depend
+ * on that behaviour, and the 60-day bound is enforced after normalization
+ * regardless. Only the emitted VALUE was wrong; the policy was not.
+ */
 export function indeedDatePostedBucket(days: number | null | undefined): { value: string; repair: string | null } {
   if (days == null || !Number.isFinite(days) || days <= 0) return { value: "", repair: null };
   const d = Math.floor(days);
-  if (d <= 1) return { value: "1", repair: null };
-  if (d <= 3) return { value: "3", repair: null };
-  if (d <= 7) return { value: "7", repair: null };
-  if (d <= 14) return { value: "14", repair: null };
-  return { value: "14", repair: `posting_window_clamped:${d}d->14d (indeed supports 1/3/7/14 only)` };
+  if (d <= 1) return { value: "last 24 hours", repair: null };
+  if (d <= 3) return { value: "3 days", repair: null };
+  if (d <= 7) return { value: "7 days", repair: null };
+  if (d <= 14) return { value: "14 days", repair: null };
+  return {
+    value: "14 days",
+    repair: `posting_window_clamped:${d}d->14d (indeed datePosted supports only "last 24 hours"/"3 days"/"7 days"/"14 days")`,
+  };
 }
 
 /** LinkedIn expresses recency in SECONDS, from a fixed set. */

@@ -83,31 +83,41 @@ const RULES: Record<ValidatedCapability, CapabilityPayloadRule> = {
   },
   indeed_job_discovery: {
     actorId: "automation-lab/indeed-scraper",
-    schemaVerifiedOn: "compiler:actorInputPlanner",
+    schemaVerifiedOn: "official:2026-07-30",
     requiredAnyOf: [["query", "urls"]],
+    // POLICY, not schema: `maxItems` defaults to 50 and is optional, but an
+    // unbounded discovery round is never something we want to pay for.
     requiredAll: ["maxItems"],
-    forbidden: ["jobsToFetch", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation"],
+    forbidden: ["jobsToFetch", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation", "limit", "maxResults", "keywords"],
   },
   glassdoor_job_discovery: {
     actorId: "valig/glassdoor-jobs-scraper",
-    schemaVerifiedOn: "compiler:actorInputPlanner",
-    requiredAnyOf: [["keywords", "query"]],
-    requiredAll: [],
-    forbidden: ["urls", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation", "jobsToFetch"],
+    schemaVerifiedOn: "official:2026-07-30",
+    requiredAnyOf: [],
+    // BOTH REQUIRED by the actor. The previous inferred rule required neither and
+    // accepted `query` as an alias for `keywords`, which this actor does not know.
+    requiredAll: ["keywords", "location"],
+    forbidden: ["urls", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation", "jobsToFetch", "maxItems", "query", "maxResults"],
   },
   yc_job_discovery: {
     actorId: "parsebird/yc-jobs-scraper",
-    schemaVerifiedOn: "compiler:actorInputPlanner",
-    requiredAnyOf: [["searchQuery", "query"]],
+    schemaVerifiedOn: "official:2026-07-30",
+    // `query` is NOT a field on this actor — only `searchQuery`.
+    requiredAnyOf: [],
     requiredAll: [],
-    forbidden: ["urls", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation", "jobsToFetch", "maxItems"],
+    forbidden: ["urls", "count", "scrapeCompany", "useIncognitoMode", "splitByLocation", "jobsToFetch", "maxItems", "limit", "query", "keywords", "location"],
   },
   ats_job_verification: {
     actorId: "bovi/greenhouse-lever-ashby-job-scraper",
-    schemaVerifiedOn: "compiler:actorInputPlanner",
+    schemaVerifiedOn: "official:2026-07-30",
+    // `companies` ONLY. The actor also accepts `presetLists`, but a preset bundle
+    // turns this into unrestricted market discovery — which the product contract
+    // forbids for a verification capability. Requiring `companies` is what makes
+    // "ATS never runs without a known company identity" a local, testable rule
+    // rather than a convention.
+    requiredAll: ["companies"],
     requiredAnyOf: [],
-    requiredAll: [],
-    forbidden: ["useIncognitoMode", "splitByLocation"],
+    forbidden: ["useIncognitoMode", "splitByLocation", "presetLists", "urls", "count", "jobsToFetch", "maxItems", "limit"],
   },
 };
 
