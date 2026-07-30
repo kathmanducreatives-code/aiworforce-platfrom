@@ -99,6 +99,37 @@ export function isCheckpointedPartial(input: Pick<DeriveWorkflowInput, 'plan' | 
   return input.tasks.some((t) => taskResultIsPartial(t.result));
 }
 
+// ------------------------------------------------- mission vs. row lifecycle -
+//
+// A TERMINAL TASK ROW IS NOT MISSION SUCCESS.
+//
+// Production showed "Execution Plan: Complete" beside "CONTACT-ready: 0 of 5,
+// Remaining: 5". Both came from the same plan: the rows finished, so every
+// branch below reported `complete`, while the quota contract said the mission
+// delivered nothing. The canonical mission result is the quota, not the row.
+
+/**
+ * Does this task's result carry a company-first quota that was NOT met?
+ *
+ * Reads only the persisted quota contract (`requested_leads` / `eligible_leads`).
+ * Returns false when no quota is present, so non-Lead workflows are untouched.
+ */
+export function taskQuotaUnmet(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const r = result as Record<string, any>;
+  const quota = r.company_first?.quota ?? r.quota ?? null;
+  if (!quota || typeof quota !== 'object') return false;
+  const requested = Number(quota.requested_leads);
+  if (!Number.isFinite(requested) || requested <= 0) return false;
+  const eligible = Number(quota.eligible_leads ?? 0);
+  return !Number.isFinite(eligible) || eligible < requested;
+}
+
+/** Any task in this plan whose delivered quota falls short of what was asked. */
+export function isQuotaShortfall(tasks: Pick<DeriveWorkflowInput, 'tasks'>['tasks']): boolean {
+  return tasks.some((t) => taskQuotaUnmet(t.result));
+}
+
 export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUiState {
   const { plan, tasks, approvals } = input;
   const now = input.now ?? Date.now();
@@ -115,8 +146,12 @@ export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUi
   const allDone = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
 
   if (allTerminal && anyFailed) return 'partial';
+  // Quota beats lifecycle: rows may be terminal while the mission is unmet.
+  if ((allDone || plan.status === 'complete') && isQuotaShortfall(tasks)) return 'partial';
   if (allDone) return 'complete';
   if (plan.status === 'complete') return 'complete';
+
+
 
 
 
