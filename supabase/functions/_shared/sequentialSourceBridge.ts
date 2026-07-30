@@ -26,7 +26,7 @@
 import { isDynamicSourcePlanningEnabled, deterministicOrderedPlan, validateOrderedPlan,
   type LeadMissionSourceProfile, type OrderedHiringSourcePlan, type SourceStepObservation } from "./hiringSourcePlan.ts";
 import {
-  newSourceExecutionState, SOURCE_EXECUTION_KEY, stateMatchesPlan, stepOf,
+  newSourceExecutionState, SOURCE_EXECUTION_KEY, stateMatchesPlan, stepOf, isStepFinished,
   type SourceExecutionState,
 } from "./sourceExecutionState.ts";
 import { sequentialJobsInvoker, actorKeyForCapability, sourceExecutionDiagnostics,
@@ -114,6 +114,20 @@ export interface SequentialSourceBridgeResult {
   /** The last feedback decision, for diagnostics. Null until a round completes. */
   lastFeedback: () => FeedbackDecisionResult | null;
   /**
+   * READ-ONLY: the next approved DISCOVERY source that has not finished.
+   *
+   * Handed to the quota controller so it can tell "this source's titles are
+   * spent" from "the search is over". Verification-role steps (ATS) are excluded:
+   * they need a known company identity and are not a discovery lane, so a pending
+   * ATS step is not a reason to keep the search alive.
+   */
+  nextPendingDiscoverySource: () => {
+    pending: boolean;
+    stepId: string | null;
+    capability: string | null;
+    actorKey: string | null;
+  };
+  /**
    * Safe diagnostics for a failed state transition. Null while healthy.
    *
    * Codes, hashes and booleans only — never an exception payload, a prompt, a
@@ -175,6 +189,9 @@ export async function applySequentialSourceExecution(
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
     lastTransitionFailure: () => null,
+    // Disabled: there is no ordered plan, so no source is pending. The controller
+    // then behaves exactly as it did before ordered execution existed.
+    nextPendingDiscoverySource: () => ({ pending: false, stepId: null, capability: null, actorKey: null }),
   });
 
   const enablement = isDynamicSourcePlanningEnabled(input.workspaceId, input.readEnv);
@@ -368,6 +385,23 @@ export async function applySequentialSourceExecution(
     onObservation,
     lastFeedback: () => lastFeedback,
     lastTransitionFailure: () => lastTransitionFailure,
+    nextPendingDiscoverySource: () => {
+      // Verification steps are excluded on purpose: ATS needs a known company
+      // identity, so a pending ATS step is not a reason to keep discovery alive.
+      const discoveryRoles = new Set(
+        approved.steps.filter((s) => s.role !== "verification").map((s) => s.stepId),
+      );
+      const next = [...state.steps]
+        .sort((a, b) => a.order - b.order)
+        .find((s) => discoveryRoles.has(s.step_id) && !isStepFinished(s));
+      if (!next) return { pending: false, stepId: null, capability: null, actorKey: null };
+      return {
+        pending: true,
+        stepId: next.step_id,
+        capability: next.capability,
+        actorKey: next.actor_key,
+      };
+    },
   };
 }
 
