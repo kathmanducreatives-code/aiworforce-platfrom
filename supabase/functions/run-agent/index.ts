@@ -57,6 +57,7 @@ import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
+import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
@@ -917,11 +918,42 @@ Deno.serve(async (req) => {
           isLeadSourcingWorkflow: true,
         });
 
-        // REAL AI planner over Agentory's existing approved model infrastructure
-        // (_shared/aiProvider.ts). It only PROPOSES titles; every proposal is
+        // SOURCING STRATEGY OWNER.
+        //
+        // On the gated path — workflow = qualified_lead_sourcing AND
+        // execution_mode = company_first — strategy belongs to ONE model family:
+        // OpenAI GPT-5.6 Luna (primary) escalating once to Terra, through
+        // Lovable's built-in AI gateway. Gemini is not reachable from that path.
+        // Every other workflow keeps the existing planner untouched.
+        //
+        // Either way the planner only PROPOSES titles: each proposal is
         // re-validated deterministically and cost-approved before any paid call,
-        // and any failure falls back to the deterministic plan.
-        const broadeningPlanner = createBroadeningPlanner({ workspaceId: workspace_id, agentSlug: agent_slug });
+        // and any failure falls back to the deterministic ladder.
+        const useLeadStrategyOwner = leadStrategyOwnerApplies({
+          workflow: (body.workflow_kind as string) ?? "qualified_lead_sourcing",
+          executionMode: "company_first",
+        });
+        const broadeningPlanner = useLeadStrategyOwner
+          ? createLeadStrategyPlanner({
+            workspaceId: workspace_id,
+            agentSlug: agent_slug,
+            mission: {
+              original_query: String(cfIntent.job_search_spec.original_query ?? ""),
+              requested_lead_count: quota.requestedLeadCount,
+              requested_titles: cfIntent.job_search_spec.keyword_queries ?? [],
+              decision_maker_roles: cfIntent.job_search_spec.requested_person_roles ?? [],
+              geography: cfIntent.job_search_spec.location ?? null,
+              company_vertical: cfIntent.job_search_spec.company_vertical
+                ? String(cfIntent.job_search_spec.company_vertical)
+                : null,
+            },
+          })
+          : createBroadeningPlanner({ workspaceId: workspace_id, agentSlug: agent_slug });
+        console.log("[run-agent][strategy-owner]", {
+          task_id: task.id,
+          owner: useLeadStrategyOwner ? "openai_lead_strategy" : "legacy_broadening_planner",
+        });
+
 
         // CLAUDE-FIRST INITIAL PLANNING. Proposes the role keywords for round one;
         // everything downstream is unchanged. A validated Claude strategy replaces
