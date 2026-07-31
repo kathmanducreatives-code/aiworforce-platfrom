@@ -2195,3 +2195,32 @@ body {
     opacity: 0.8;
   }
 }
+/* ============================================================
+   Global scrollbar suppression (visuals only — scrolling stays
+   fully functional via wheel, trackpad, keyboard, touch).
+   ============================================================ */
+html,
+body,
+#root {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* legacy Edge / IE */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;                  /* Chrome, Safari, Edge */
+  width: 0;
+  height: 0;
+}
+
+/* Inner scroll areas (modals, drawers, tables, chat panels, Workbench) */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+body {
+  overflow-x: hidden;             /* prevent accidental horizontal overflow */
+}
