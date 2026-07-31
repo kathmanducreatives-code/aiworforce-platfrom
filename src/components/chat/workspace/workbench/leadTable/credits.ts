@@ -27,16 +27,46 @@ export function estimateCredits(action: LeadResultPanelAction, rows: LeadTableRo
   }
 }
 
+/** Why a recommended action cannot be dispatched yet. */
+export type UnmetPrerequisite =
+  | 'no_qualified_companies'
+  | 'no_verified_person';
+
 export interface Recommendation {
   action: LeadResultPanelAction;
   label: string;
   reason: string;
   estimated_credits: number;
+  /**
+   * False when the action's prerequisite does not exist yet.
+   *
+   * Optional so every existing caller and test stays valid; absent means enabled,
+   * which is the pre-existing behaviour for every recommendation that had one.
+   */
+  enabled?: boolean;
+  unmet_prerequisite?: UnmetPrerequisite;
+}
+
+/** A recommendation may be dispatched only when its prerequisite exists. */
+export function isRecommendationDispatchable(r: Recommendation): boolean {
+  return r.enabled !== false;
 }
 
 export function recommendNextAction(rows: LeadTableRow[], partial = false): Recommendation {
+  // NO ROWS MEANS NO PREREQUISITE. "Find decision-makers" searches people AT
+  // qualified companies; with no qualified company there is nothing to search,
+  // and offering it invites a paid call that cannot produce a lead. The honest
+  // recommendation at this point is more company sourcing, and the action is
+  // returned DISABLED so the panel cannot dispatch it.
   if (rows.length === 0) {
-    return { action: 'find_contacts', label: 'Find decision-makers', reason: 'No rows yet.', estimated_credits: 0 };
+    return {
+      action: 'find_contacts',
+      label: 'Find decision-makers',
+      reason: 'No companies have passed the Company Brain yet, so there is nobody to search for. Continue sourcing companies first.',
+      estimated_credits: 0,
+      enabled: false,
+      unmet_prerequisite: 'no_qualified_companies',
+    };
   }
   const missingWebsite = rows.filter((r) => r.domain_status === 'missing').length;
   const noContact = rows.filter((r) => r.contact_status === 'needs_contact').length;
