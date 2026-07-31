@@ -5,13 +5,13 @@
 // An adapter only supplies its endpoint, credential and provider id — which is
 // exactly what keeps the canonical result byte-identical across providers.
 
-import { extractJson } from "../aiProvider.ts";
+import { extractJson } from "../../aiProvider.ts";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_TIMEOUT_MS,
-} from "./config.ts";
+} from "../config.ts";
 import type {
   StrategistCall, StrategistProviderId, StrategistResult,
-} from "./provider.ts";
+} from "../provider.ts";
 
 /** Fetch seam so contract tests never touch the network. */
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
