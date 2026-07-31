@@ -111,7 +111,10 @@ export async function runLeadStrategy(opts: RunLeadStrategyOpts): Promise<LeadSt
     return fallback();
   }
 
-  const call = opts.callModel ?? callLeadStrategyModel;
+  const call = opts.callModel
+    ?? (opts.provider ? providerToCallFn(opts.provider) : callLeadStrategyModel);
+  const providerId = opts.provider?.id ?? LEAD_STRATEGY_PROVIDER;
+
   const userMessage = buildLeadStrategyUserMessage(mission, context, fam);
   const tiers: Array<"primary" | "escalation"> = opts.allowEscalation === false
     ? ["primary"]
@@ -136,9 +139,11 @@ export async function runLeadStrategy(opts: RunLeadStrategyOpts): Promise<LeadSt
     }
     prov.model_requests += 1;
     prov.model = model;
+    prov.provider = result.provider ?? providerId;
     prov.latency_ms += result.latencyMs ?? 0;
     prov.usage = result.usage ?? prov.usage;
     if (tier === "escalation") prov.escalated = true;
+
 
     if (!result.ok) {
       lastReason = result.errorCode ?? result.error ?? "model_call_failed";
