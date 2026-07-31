@@ -176,3 +176,62 @@ Deno.test("an unknown status from the wire degrades safely instead of throwing",
   assertEquals(d.qualification_status, "company_resolved");
   assertEquals(d.company_brain_status, "not_enforced");
 });
+
+// ============================== 1. THE REAL WORKBENCH CONSUMES THIS ==========
+//
+// The repo has NO component-test infrastructure — no @testing-library, no vitest
+// binary, and no .test.tsx anywhere. Rather than add three devDependencies to
+// satisfy one assertion, these use the source-assertion pattern the backend suite
+// already uses (see `sourceObservationWiring.test.ts`, "both authorities have a
+// real non-test production caller"). They prove the wiring exists in the real
+// component, not in a fixture.
+
+const viewSrc = () => Deno.readTextFile(
+  new URL("../../components/chat/workspace/workbench/LeadResultsView.tsx", import.meta.url),
+);
+const panelSrc = () => Deno.readTextFile(
+  new URL("../../components/chat/workspace/workbench/leadTable/QualificationInsightsPanel.tsx", import.meta.url),
+);
+
+Deno.test("1. the real Workbench view imports and renders the insights panel", async () => {
+  const src = await viewSrc();
+  assert(src.includes("insightsFromResult"), "the view must derive insights from the persisted run");
+  assert(src.includes("processingState"), "the view must derive the processing state");
+  assert(src.includes("<QualificationInsightsPanel"), "the panel must actually be rendered");
+  assert(/insights=\{insights\}/.test(src), "the derived insights must be passed to the panel");
+});
+
+Deno.test("2/3. the panel renders company, signal, Brain status and exact failed gates", async () => {
+  const src = await panelSrc();
+  assert(src.includes("company_name"), "company name must render");
+  assert(src.includes("hiring_signal_title"), "the hiring signal must render");
+  assert(src.includes("company_brain_status"), "Company Brain status must render");
+  assert(src.includes("failed_gates.map(gateLabel)"), "exact failed gates must render, humanised");
+  assert(src.includes("rejection_summary"), "the rejection summary must render");
+  assert(src.includes("companies_evaluated") && src.includes("companies_rejected"),
+    "evaluated and rejected counts must render");
+});
+
+Deno.test("4. the panel is separate from the lead table and renders no opportunity row", async () => {
+  const src = await panelSrc();
+  // It renders `insights.rejected` only — never the lead rows.
+  assert(src.includes("insights.rejected.map"));
+  assertFalse(src.includes("LeadTableRow"), "the insights panel must not render lead rows");
+  assertFalse(src.includes("quota_eligible: true"));
+});
+
+Deno.test("6. the panel renders the processing state while work continues", async () => {
+  const src = await panelSrc();
+  assert(src.includes("insights-processing"), "a processing line must exist");
+  assert(src.includes("{processing}"), "the processing state must be rendered");
+  // And an empty terminal state is only reachable when nothing is in flight.
+  assert(/companies_evaluated === 0 && !processing/.test(src),
+    "the empty state must require BOTH no diagnostics and no in-flight work");
+});
+
+Deno.test("no raw provider payload or debug JSON is rendered", async () => {
+  const src = await panelSrc();
+  for (const banned of ["JSON.stringify", "provider_payload", "raw"]) {
+    assertFalse(src.includes(banned), `the panel must not render ${banned}`);
+  }
+});
