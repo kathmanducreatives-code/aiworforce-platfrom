@@ -59,8 +59,11 @@ export interface LeadStrategyResolution {
 export interface RunLeadStrategyOpts {
   mission: LeadStrategyMission;
   context: LeadStrategyRoundContext;
-  /** Injected in tests; defaults to the real gateway call. */
+  /** Injected in tests; defaults to the configured provider adapter. */
   callModel?: LeadStrategyModelFn;
+  /** Explicit provider adapter. Overrides configuration; ignored if callModel is set. */
+  provider?: QualifiedLeadStrategistProvider;
+
   /** FALSE keeps the run fully deterministic and makes zero model requests. */
   enabled?: boolean;
   timeoutMs?: number;
@@ -76,6 +79,8 @@ function provenance(round: number): LeadStrategyProvenance {
     round,
     model: null,
     escalated: false,
+    provider: null,
+
     source: "deterministic_fallback",
     status: "deterministic_only",
     failure_reason: null,
