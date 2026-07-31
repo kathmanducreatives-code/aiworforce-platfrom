@@ -5,6 +5,8 @@ import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import LeadTable from './leadTable/LeadTable';
 import LockedCell from './leadTable/LockedCell';
 import RecommendationBanner from './leadTable/RecommendationBanner';
+import QualificationInsightsPanel from './leadTable/QualificationInsightsPanel';
+import { insightsFromResult, processingState } from '@/lib/qualifiedLead/insights';
 import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
@@ -153,6 +155,23 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     }, items.map(qualificationFromRow));
     return buildWorkbenchCounts({ rows: items.map(qualificationFromRow), progress });
   }, [meta.qualified_lead_run, items]);
+
+  // WORKBENCH INSIGHTS. The qualification diagnostics the backend already
+  // persists — one per company the Company Brain evaluated, including the ones
+  // its filter drops. Nothing rendered them before this.
+  const insights = useMemo(
+    () => insightsFromResult(meta.qualified_lead_run ?? null),
+    [meta.qualified_lead_run],
+  );
+  const insightsProcessing = useMemo(() => {
+    const run = meta.qualified_lead_run;
+    if (!run) return null;
+    const requested = Number(run.requested_lead_count ?? 0);
+    const contactReady = items.filter((r) => qualificationFromRow(r).contact_status === 'ok').length;
+    // A terminal run has no work left; anything else may still progress.
+    const workRemains = run.terminal_status !== 'completed' && run.terminal_status !== 'search_exhausted';
+    return processingState({ insights, contactReady, requested, workRemains });
+  }, [meta.qualified_lead_run, items, insights]);
 
   const recommendation = useMemo(() => meta.recommended_next_action
     ? {
@@ -390,6 +409,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
       )}
 
       <RecommendationBanner rec={recommendation} onRun={onRunRecommendation} />
+      <QualificationInsightsPanel insights={insights} processing={insightsProcessing} />
       <BulkActionToolbar
         selectedCount={selectedRows.length}
         onClear={() => setSelected(new Set())}
