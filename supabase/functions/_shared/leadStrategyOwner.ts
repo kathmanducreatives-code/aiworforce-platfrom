@@ -13,9 +13,13 @@ import type { BroadeningPlannerFn, PlannerInput, PlannerProposal } from "./broad
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import {
   callLeadStrategyModel, modelForTier, LEAD_STRATEGY_PRIMARY_MODEL,
-  LEAD_STRATEGY_ESCALATION_MODEL, LEAD_STRATEGY_TIMEOUT_MS,
+  LEAD_STRATEGY_ESCALATION_MODEL, LEAD_STRATEGY_TIMEOUT_MS, LEAD_STRATEGY_PROVIDER,
   type LeadStrategyModelFn,
 } from "./leadStrategyModels.ts";
+import {
+  providerToCallFn, type QualifiedLeadStrategistProvider,
+} from "./leadStrategy/provider.ts";
+
 import {
   LEAD_STRATEGY_EXECUTION_MODE, LEAD_STRATEGY_PROMPT_VERSION, LEAD_STRATEGY_SCHEMA_VERSION,
   LEAD_STRATEGY_SYSTEM_PROMPT, LEAD_STRATEGY_WORKFLOW, buildLeadStrategyUserMessage,
