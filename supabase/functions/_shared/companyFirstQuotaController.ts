@@ -157,6 +157,9 @@ export interface QuotaControllerResult {
 }
 
 import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
+import {
+  mergeCompanyDiagnostics, type CompanyQualificationDiagnostic,
+} from "./companyQualificationDiagnostics.ts";
 
 export interface QuotaControllerOpts {
   /** Company Brain HARD constraints. Absent => not enforced (legacy callers). */
@@ -318,6 +321,8 @@ export async function runCompanyFirstQuotaController(
   const rounds: RoundRecord[] = [];
   const expansions: string[] = [];
   const dedupedCandidates: CompoundCandidate[] = [];
+  /** Carried across rounds and continuation; written to the checkpoint below. */
+  let companyDiagnostics: CompanyQualificationDiagnostic[] = [];
   const seenLeadKeys = new Set<string>();
   const seenCompanyKeys = new Set<string>();
   const seenJobUrls = new Set<string>();
@@ -443,6 +448,9 @@ export async function runCompanyFirstQuotaController(
   } else {
     // Rehydrate dedupe + accounting so a continuation never re-pays or double-counts.
     for (const u of state.seen_job_urls) seenJobUrls.add(u);
+    // Restore the qualification diagnostics with the rest of the checkpoint, so a
+    // resumed run keeps every company it already evaluated.
+    companyDiagnostics = (state.candidate_diagnostics as unknown as CompanyQualificationDiagnostic[] | undefined) ?? [];
     for (const c of state.seen_company_keys) seenCompanyKeys.add(c);
     for (const k of state.seen_lead_keys) seenLeadKeys.add(k);
     for (const h of state.attempted_strategy_hashes) { attemptedStrategies.push(h); ledger.claim(h); }
@@ -691,6 +699,17 @@ export async function runCompanyFirstQuotaController(
       terminal_reason: null,
     });
 
+    // ---- QUALIFICATION DIAGNOSTICS ----------------------------------------
+    // Every company the Brain evaluated this round, merged into the carried set.
+    // `candidate_diagnostics` has existed as a declared field with no writer since
+    // it was introduced, which is why a run could report "25 evaluated, 0
+    // qualified" and show nothing at all. These rows are diagnostics: none is an
+    // account, none is quota-eligible.
+    companyDiagnostics = mergeCompanyDiagnostics(
+      companyDiagnostics,
+      exec.run?.companyDiagnostics ?? [],
+    );
+
     // ---- MEASURED funnel → deterministic bottleneck → next round's goal ----
     const funnel: FunnelSummary = {
       ...emptyFunnelSummary(),
@@ -808,6 +827,7 @@ export async function runCompanyFirstQuotaController(
     // exact-title strategy instead of inheriting this one's expansion depth.
     sourceRound += 1;
     state.seen_job_urls = [...seenJobUrls];
+    state.candidate_diagnostics = companyDiagnostics as unknown as Array<Record<string, unknown>>;
     state.seen_company_keys = [...seenCompanyKeys];
     state.seen_lead_keys = [...seenLeadKeys];
     state.estimated_cost = Number((state.estimated_cost + (forecast.estimated_provider_cost ?? 0)).toFixed(4));
