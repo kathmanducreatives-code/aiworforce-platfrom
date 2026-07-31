@@ -57,6 +57,7 @@ import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
+import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
