@@ -13,9 +13,13 @@ import type { BroadeningPlannerFn, PlannerInput, PlannerProposal } from "./broad
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
 import {
   callLeadStrategyModel, modelForTier, LEAD_STRATEGY_PRIMARY_MODEL,
-  LEAD_STRATEGY_ESCALATION_MODEL, LEAD_STRATEGY_TIMEOUT_MS,
+  LEAD_STRATEGY_ESCALATION_MODEL, LEAD_STRATEGY_TIMEOUT_MS, LEAD_STRATEGY_PROVIDER,
   type LeadStrategyModelFn,
 } from "./leadStrategyModels.ts";
+import {
+  providerToCallFn, type QualifiedLeadStrategistProvider,
+} from "./leadStrategy/provider.ts";
+
 import {
   LEAD_STRATEGY_EXECUTION_MODE, LEAD_STRATEGY_PROMPT_VERSION, LEAD_STRATEGY_SCHEMA_VERSION,
   LEAD_STRATEGY_SYSTEM_PROMPT, LEAD_STRATEGY_WORKFLOW, buildLeadStrategyUserMessage,
@@ -55,8 +59,11 @@ export interface LeadStrategyResolution {
 export interface RunLeadStrategyOpts {
   mission: LeadStrategyMission;
   context: LeadStrategyRoundContext;
-  /** Injected in tests; defaults to the real gateway call. */
+  /** Injected in tests; defaults to the configured provider adapter. */
   callModel?: LeadStrategyModelFn;
+  /** Explicit provider adapter. Overrides configuration; ignored if callModel is set. */
+  provider?: QualifiedLeadStrategistProvider;
+
   /** FALSE keeps the run fully deterministic and makes zero model requests. */
   enabled?: boolean;
   timeoutMs?: number;
@@ -72,6 +79,8 @@ function provenance(round: number): LeadStrategyProvenance {
     round,
     model: null,
     escalated: false,
+    provider: null,
+
     source: "deterministic_fallback",
     status: "deterministic_only",
     failure_reason: null,
@@ -102,7 +111,10 @@ export async function runLeadStrategy(opts: RunLeadStrategyOpts): Promise<LeadSt
     return fallback();
   }
 
-  const call = opts.callModel ?? callLeadStrategyModel;
+  const call = opts.callModel
+    ?? (opts.provider ? providerToCallFn(opts.provider) : callLeadStrategyModel);
+  const providerId = opts.provider?.id ?? LEAD_STRATEGY_PROVIDER;
+
   const userMessage = buildLeadStrategyUserMessage(mission, context, fam);
   const tiers: Array<"primary" | "escalation"> = opts.allowEscalation === false
     ? ["primary"]
@@ -127,9 +139,11 @@ export async function runLeadStrategy(opts: RunLeadStrategyOpts): Promise<LeadSt
     }
     prov.model_requests += 1;
     prov.model = model;
+    prov.provider = result.provider ?? providerId;
     prov.latency_ms += result.latencyMs ?? 0;
     prov.usage = result.usage ?? prov.usage;
     if (tier === "escalation") prov.escalated = true;
+
 
     if (!result.ok) {
       lastReason = result.errorCode ?? result.error ?? "model_call_failed";
@@ -169,6 +183,9 @@ export interface LeadStrategyPlannerOpts {
   agentSlug?: string;
   mission?: Partial<LeadStrategyMission>;
   callModel?: LeadStrategyModelFn;
+  /** Explicit provider adapter; defaults to the configured one. */
+  provider?: QualifiedLeadStrategistProvider;
+
   enabled?: boolean;
   allowEscalation?: boolean;
   timeoutMs?: number;
@@ -218,7 +235,7 @@ function contextFromPlannerInput(input: PlannerInput, round: number): LeadStrate
 export function plannerMetadataFrom(p: LeadStrategyProvenance): PlannerMetadata {
   const approved = p.source !== "deterministic_fallback";
   return {
-    provider: "lovable-ai",
+    provider: p.provider ?? LEAD_STRATEGY_PROVIDER,
     model: p.model ?? "",
     prompt_version: p.prompt_version,
     schema_version: p.schema_version,
@@ -246,6 +263,8 @@ export function createLeadStrategyPlanner(opts: LeadStrategyPlannerOpts = {}): {
       mission: missionFromPlannerInput(input, opts.mission),
       context: contextFromPlannerInput(input, round),
       callModel: opts.callModel,
+      provider: opts.provider,
+
       enabled: opts.enabled,
       allowEscalation: opts.allowEscalation,
       timeoutMs: opts.timeoutMs,

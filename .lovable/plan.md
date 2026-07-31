@@ -1,81 +1,74 @@
+## Goal
 
-# Unified OpenAI strategy owner for qualified-lead sourcing
+Make the qualified-lead strategist provider-independent. The strategy brain becomes an interface with two interchangeable adapters (Lovable AI gateway now, direct OpenAI later), selected purely by environment configuration. Everything else — policy, prompts, schemas, validation, fallback, qualification, quota, persistence — stays provider-agnostic and untouched when the provider changes.
 
-Scope is gated strictly to `workflow = qualified_lead_sourcing` + `execution_mode = company_first`. Every other Agentory feature (Pilot chat, orchestration, Scribe/Penn Anthropic writing routing, radar, screening) keeps its current model routing untouched. `supabase/functions/mcp/index.ts` is never staged.
+## Current state (already built, needs restructuring)
 
-## Current (mixed) call graph — verified in the codebase
+`supabase/functions/_shared/` currently has:
+- `leadStrategyModels.ts` — hardcodes Lovable gateway URL + `openai/gpt-5.6-luna` / `openai/gpt-5.6-terra` model IDs, and is imported directly by the owner.
+- `leadStrategyOwner.ts` — imports the Lovable-specific call function as its default. This is the one provider leak to remove.
+- `leadRoleTaxonomy.ts`, `leadStrategyContract.ts`, `leadStrategyValidator.ts` — already pure and provider-independent; they keep their shapes.
+- `run-agent/index.ts` — constructs the planner behind the `qualified_lead_sourcing` + `company_first` gate.
 
-```text
-orchestrate ──► leadPlanOrchestration ──► leadPlanningBridge
-                                            └─ Claude-first flag → plannerWrapper → aiProvider (Anthropic or Gemini)
-run-agent ──► companyFirstQuotaController
-                ├─ broadeningPlannerAdapter ──► aiProvider.generateJson → google/gemini-3-flash-preview
-                ├─ deterministicRoundPlan (broadeningPlan.ts) for round 1
-                └─ sourceFeedbackRuntime ──► plannerWrapper → Claude (advance_source only)
-actorInputPlanner ──► aiProvider (tool_input_planning → Gemini)
-```
-
-Three different authorities decide strategy; none owns the whole thing.
-
-## Target (unified) call graph
+## Target structure
 
 ```text
-qualified-lead mission
-  └─ leadStrategyOwner (NEW)
-       ├─ buildStrategyRequest (user query + Company Brain + ICP + quota + capability cards)
-       ├─ openaiStrategyClient → Lovable gateway → openai/gpt-5.6-luna
-       ├─ validateLeadStrategy (deterministic)
-       │     └─ invalid → ONE escalation → openai/gpt-5.6-terra → revalidate
-       │           └─ invalid → deterministicLeadStrategy fallback
-       └─ persists authoritative_source + fallback_reason + cost provenance
-
-per source round:
-  Agentory computes observations (deterministic counters)
-    └─ leadStrategyOwner.nextAction() → gpt-5.6-luna → one bounded action → deterministic validation
+_shared/leadStrategy/
+  provider.ts        QualifiedLeadStrategistProvider interface + request/response types
+  config.ts          env resolution + logical model config (no provider names inlined)
+  factory.ts         provider selection: lovable_ai | openai
+  adapters/
+    lovableAi.ts     LovableAIStrategistProvider  (gateway URL, Lovable-Api-Key)
+    openai.ts        OpenAIStrategistProvider     (api.openai.com, OPENAI_API_KEY)
+    shared.ts        OpenAI-compatible chat body builder + response→canonical mapper
 ```
+Existing pure modules stay where they are; `leadStrategyModels.ts` collapses into the adapters.
 
-## Work items
+### 1. The interface (provider.ts)
 
-### 1. Model binding (`_shared/leadStrategyModels.ts`, new)
-- `LEAD_STRATEGY_PRIMARY = "openai/gpt-5.6-luna"`, `LEAD_STRATEGY_ESCALATION = "openai/gpt-5.6-terra"`.
-- Calls go through the existing Lovable gateway path in `aiProvider.ts` with `reasoning_effort: "none"` (required for GPT-5.6), `max_completion_tokens` (never `max_tokens`), default temperature only.
-- Add a new `TaskType` `"lead_strategy"` to `aiProvider.ts` whose default model is Luna, so no existing `DEFAULT_MODELS` entry changes. Add an assertion that this task type can never resolve to a `google/*` or Anthropic model.
+```ts
+interface QualifiedLeadStrategistProvider {
+  readonly id: string;                    // "lovable_ai" | "openai"
+  validateModelId(modelId: string): { ok: true } | { ok: false; reason: string };
+  createInitialStrategy(req: QualifiedLeadStrategyRequest): Promise<QualifiedLeadStrategyResponse>;
+  chooseNextAction(req: SourceFeedbackRequest): Promise<SourceFeedbackResponse>;
+}
+```
+Requests carry only canonical data: mission, round context, role family, approved title universe, eligible query packs, approved sources, Company Brain constraints, actor capability cards, plus `{ modelId, timeoutMs }`. Responses are the canonical `{ ok, rawJson, modelId, latencyMs, usage, errorCode }` envelope — never a provider SDK type. No provider type, header, URL or model string appears in any signature.
 
-### 2. Strategy contract (`_shared/leadStrategyContract.ts`, new)
-Typed request/response for `mission`, `role_taxonomy{families,negative_patterns}`, `query_packs[]`, `source_plan[]`, `broadening_ladder[]`, `company_evidence_policy`, `people_search_condition`, `stop_conditions`. Request carries the exact user query, compiled Company Brain, saved ICP, requested count, hiring-role seed, decision-maker roles, constraints, recency policy, budget, action limit and approved capability cards (keys only). Versioned prompt + schema constants.
+### 2. Configuration (config.ts)
 
-### 3. Validator (`_shared/leadStrategyValidator.ts`, new)
-Rejects: raw actor IDs, unknown capability keys, mutated Company Brain constraints/quota, recency > 60 days, generic operations families (warehouse/retail/people/clinical/logistics/generic ops or sales manager), missing exact title families, ATS in the source plan, and the "one broad OR query to every source" collapse. Prompt-injection scan reuses `broadeningValidator.detectInjection`.
+Read once, server-side:
+- `LEAD_STRATEGIST_PROVIDER` = `lovable_ai` (default) | `openai`
+- `LEAD_STRATEGIST_PRIMARY_MODEL`, `LEAD_STRATEGIST_ESCALATION_MODEL` — logical slots; IDs come from config and are validated by the selected adapter's `validateModelId`, not by a global allow-list.
+- Sensible per-provider defaults so nothing breaks if the model vars are unset.
+- An unknown provider value, or a model ID the adapter rejects, resolves to the deterministic fallback and logs the reason — it never throws and never silently calls a different provider.
 
-### 4. Strategy owner (`_shared/leadStrategyOwner.ts`, new)
-Luna → (one) Terra escalation with validation errors → deterministic fallback. Persists `authoritative_source ∈ {gpt_5_6_luna, gpt_5_6_terra_escalation, deterministic_fallback}` plus a precise `fallback_reason`. Deterministic fallback preserves Company Brain, exact role intent, capability keys, budget and quota.
+### 3. Adapters
 
-### 5. Deterministic role taxonomy + packs (`_shared/leadRoleTaxonomy.ts`, new)
-Exact/adjacent/evidence-gated families as specified, negative patterns, and the seven bounded query packs (pack id, titles, aliases, exclusions, evidence requirements, eligible sources, priority, broadening level, max attempts). Used both as the fallback and as the validation universe for model output.
+Both build the same OpenAI-compatible chat body from `adapters/shared.ts` (`reasoning_effort: "none"`, `max_completion_tokens`, `response_format: json_object`, no `max_tokens`/`temperature`) and map the reply into the canonical envelope. They differ only in endpoint, auth header, key name, and `validateModelId`:
+- **Lovable**: `https://ai.gateway.lovable.dev/v1/chat/completions`, `Authorization: Bearer LOVABLE_API_KEY`, accepts gateway-catalog `openai/*` ids.
+- **OpenAI**: `https://api.openai.com/v1/chat/completions`, `Authorization: Bearer OPENAI_API_KEY`, accepts bare OpenAI ids (no `openai/` prefix). Missing key → clean `no_provider` error, deterministic fallback, no crash. Edge-function-only; the key is never referenced in `src/` and never prefixed `VITE_`.
 
-### 6. Wiring (edits, no rewrites)
-- `intelligence/leads/leadPlanningBridge.ts` + `leadPlanOrchestration.ts`: route qualified-lead planning to the strategy owner instead of the Claude/Gemini planner.
-- `companyFirstQuotaController.ts`: replace the `broadeningPlannerAdapter` (Gemini) call with the strategy owner for qualified-lead/company-first only; other callers of the adapter unchanged.
-- `sourceFeedbackRuntime.ts`: keep the bounded action union, checkpointing and deterministic mandatory-action logic; swap the injected planner from Claude to the strategy owner. Mandatory deterministic decisions still bypass the model.
-- Source order becomes plan-driven (YC → LinkedIn → Indeed → Glassdoor for the startup fixture, not a hardcoded global), and the universal three-round cap is replaced with a bounded plan-aware action limit derived from remaining quota/budget/unused packs/source quality.
+### 4. Owner becomes provider-agnostic
 
-### 7. Provider compilation (edits)
-`actorInputPlanner.ts` / `actorInputSchemas.ts` / `actorInputValidator.ts` keep sole ownership of Actor JSON. Fixes: no blank `datePosted` (Indeed) or `timePostedRange` (LinkedIn) when the verified schema supports a recent literal; Glassdoor keeps bounded `daysOld`; LinkedIn workplace filter not forced to on-site; unsupported SaaS/stage/employee filters are recorded as `unapplied_constraints` rather than invented. Immutable compiled-payload protection stays.
+`leadStrategyOwner.ts` drops its Lovable import and takes a `QualifiedLeadStrategistProvider` (defaulting to `factory.resolveStrategistProvider()`). The Luna→Terra escalation generalizes to primary-model → escalation-model → deterministic fallback, with identical validation and provenance. Provenance records `provider_id` and the resolved model IDs alongside the existing fields. `chooseNextAction` is wired for source feedback using the same closed action union and validator.
 
-### 8. Company evidence (edits)
-Trace provider → `apifyJobsNormalizer` → `companyIdentity` → company evidence → `companyBrainGate`. Map source-backed enriched fields (employee count, industry, description, website, LinkedIn URL, company type, founding/stage) into the existing evidence contract; no fabrication. Introduce `company_evidence_pending` so missing evidence routes through the approved enrichment path and is re-evaluated before qualify/reject/Needs Review. Company Brain stays deterministic and authoritative.
+### 5. Call sites
 
-### 9. Observability
-Persist per AI call: task id, model, purpose, request/response timestamps, input/output tokens, cost/credits, validation result, authoritative source, fallback reason, prompt/schema version — plus which pack produced each source call, so Workbench can explain strategy provenance. No credentials, no hidden reasoning.
+`run-agent/index.ts` keeps the same gate and the same `createLeadStrategyPlanner(...)` call — only the internals change, so no controller, Actor, Company Brain, Workbench or qualification code is touched. Zero references to Lovable APIs remain outside `adapters/lovableAi.ts`.
 
-### 10. Tests (all mocked; no live AI or provider calls)
-New suites covering the 30 listed assertions: model routing (Luna used, Terra once, no Gemini/Claude in this workflow, unrelated routing preserved), strategy input fidelity, pack separation and no broad-OR, YC-first fixture, hiring vs decision-maker title separation, validation/escalation/fallback chain, compiler behaviour (recency non-blank, no on-site force, unapplied constraints recorded), company-evidence mapping and pending re-evaluation, adaptive source-switch on high Brain rejection, people-search trigger, contact-quota stop, cost provenance, and regression guards on payload validation, Brain authority, employer verification, CONTACT-only quota and Workbench Insights.
+### 6. Tests
 
-Run: full backend Deno suite, affected frontend tests, `deno check`, TypeScript check, production build. Only pre-existing baseline failures accepted.
+- **Contract tests** (`leadStrategyProviderContract.test.ts`): the same fixture set is run through both adapters with mocked HTTP, asserting byte-identical canonical strategy output, identical validation verdicts, and identical deterministic fallbacks. Includes a body-shape test proving both send the same GPT-5-family-safe payload.
+- **Config tests**: provider selection, model-slot resolution, unknown-provider and rejected-model behaviour.
+- **Leak guard**: a source-scan test asserting no file outside `adapters/lovableAi.ts` mentions the Lovable gateway URL or `LOVABLE_API_KEY`, and that no `src/` file mentions `OPENAI_API_KEY`.
+- Existing 25 strategy tests keep passing, re-pointed at the injected provider.
 
-### Delivery
-One focused PR against `main`, not merged, not deployed, no production flag enabled, no live sourcing run, TEST untouched, `supabase/functions/mcp/index.ts` restored and unstaged before commit. Final report answers all 25 requested items.
+## Switching providers afterwards
 
-## Technical notes
-- GPT-5.6 models require `reasoning_effort: "none"`; `max_tokens` and non-default `temperature` are rejected by the GPT-5 family — the new client sends `max_completion_tokens` only.
-- Structured output uses strict `json_schema` with a small, flat, bounds-free schema; length/count limits are stated in the prompt and clamped in code, with a fallback parse on non-conforming output.
+Add `OPENAI_API_KEY`, set `LEAD_STRATEGIST_PROVIDER=openai` plus the two model IDs, redeploy `run-agent`. No code, prompt, schema or policy change.
+
+## Scope
+
+Backend `supabase/functions/` only. No deployment, no migrations, no secret changes, no live sourcing run in this work.

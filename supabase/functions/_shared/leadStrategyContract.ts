@@ -154,7 +154,10 @@ export interface LeadStrategyProvenance {
   round: number;
   model: string | null;
   escalated: boolean;
+  /** Which strategist adapter served this resolution (provider-independent). */
+  provider?: string | null;
   source: "openai_primary" | "openai_escalation" | "deterministic_fallback";
+
   status: string;
   failure_reason: string | null;
   latency_ms: number;
