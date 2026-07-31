@@ -154,6 +154,19 @@ export interface CompoundRunResult {
   pendingDecisionMakers: PendingDecisionMaker[];
   diagnostics: {
     rawJobs: number; acceptedJobs: number; verifiedCompanies: number;
+    /**
+     * Companies whose IDENTITY was resolved from an accepted job, before any
+     * qualification ran. The stage between "a title matched" and "the Company
+     * Brain had an opinion".
+     *
+     * Recorded because its absence made two opposite failures indistinguishable.
+     * A round where titles matched but no company identity could be resolved
+     * looks, from `verifiedCompanies` alone, exactly like a round where every
+     * resolved company was rejected by the Brain — and the remedies are
+     * opposite. Production task c30fbc6d was the first kind and was reported as
+     * the second.
+     */
+    resolvedCompanies: number;
     scopedLookups: number; peopleReturned: number;
     droppedJobs: number; droppedCompanies: number; offCompanyPeople: number;
     /**
@@ -278,7 +291,8 @@ export async function runCompoundSourcing(
   const requireUS = intent.geographies.includes("United States");
   const acceptJob = opts.acceptJob ?? ((f: JobFamilyResult) => (intent.hiring_signal_required ? f.qualifiesAsSalesOps : true));
   const diagnostics: CompoundRunResult["diagnostics"] = {
-    rawJobs: 0, acceptedJobs: 0, verifiedCompanies: 0, scopedLookups: 0, peopleReturned: 0,
+    rawJobs: 0, acceptedJobs: 0, verifiedCompanies: 0, resolvedCompanies: 0,
+    scopedLookups: 0, peopleReturned: 0,
     droppedJobs: 0, droppedCompanies: 0, offCompanyPeople: 0,
     droppedByFamily: 0, droppedByLocation: 0,
     verdicts: { CONTACT: 0, WATCH: 0, NEEDS_REVIEW: 0, REJECT: 0 },
@@ -310,6 +324,8 @@ export async function runCompoundSourcing(
     byCompany.get(key)!.jobs.push({ job, fam });
   }
   diagnostics.acceptedJobs = [...byCompany.values()].reduce((n, c) => n + c.jobs.length, 0);
+  // The identity-resolution stage, captured before qualification narrows it.
+  diagnostics.resolvedCompanies = byCompany.size;
 
   // 3) qualify + dedupe companies (already keyed).
   //

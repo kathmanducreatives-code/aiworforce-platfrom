@@ -323,3 +323,59 @@ export function claudeFirstFromPersistedPlan(
     } as never,
   };
 }
+
+// ------------------------------------------- adaptive-strategy binding ----
+//
+// The gated seam also owns the ADAPTIVE binding, for the same reason it owns
+// enablement: run-agent is capped at two kernel imports precisely so the blast
+// radius stays named and small (asserted by intelligenceFlags test 32.E). Adding
+// a direct adapter import there would widen it, so the two dependencies the
+// sequential-source bridge needs are constructed here instead.
+//
+// NO SECOND MODEL CALL. `planAdaptiveStrategy` returns the strategy this bridge
+// ALREADY accepted from `planInitialLeadSourcing`. When planning was disabled or
+// fell back, it is null and the caller keeps its deterministic plan.
+
+import { adaptiveStrategyFromLeadStrategy } from "./leadStrategyAdapter.ts";
+import { adaptiveCapabilityCards } from "./leadCapabilityCards.ts";
+import type { AdaptiveStrategy, MissionTruth } from "./leadSourceStrategy.ts";
+import type { QueryPack } from "./leadQueryPacks.ts";
+
+export interface AdaptiveStrategyBinding {
+  planAdaptiveStrategy: () => Promise<unknown>;
+  validateAdaptiveStrategy: (raw: unknown) => {
+    ok: boolean;
+    reason: string | null;
+    strategy: AdaptiveStrategy | null;
+    source: "claude" | "claude_repaired";
+    packs: QueryPack[];
+    diagnostics: Record<string, unknown>;
+  };
+}
+
+/**
+ * Build the two dependencies `applySequentialSourceExecution` needs.
+ *
+ * `truth` is mission truth as the caller already knows it — the requested quota,
+ * the Company Brain band, the geography. The validator refuses any strategy that
+ * widens it, so passing it here is what makes the invariants enforceable.
+ */
+export function adaptiveStrategyBinding(
+  result: LeadPlanningBridgeResult,
+  truth: MissionTruth,
+): AdaptiveStrategyBinding {
+  return {
+    planAdaptiveStrategy: () => Promise.resolve(result.outcome?.strategy ?? null),
+    validateAdaptiveStrategy: (raw: unknown) => {
+      const r = adaptiveStrategyFromLeadStrategy({
+        strategy: raw as Parameters<typeof adaptiveStrategyFromLeadStrategy>[0]["strategy"],
+        cards: adaptiveCapabilityCards(),
+        truth,
+      });
+      return {
+        ok: r.ok, reason: r.reason, source: r.source,
+        strategy: r.strategy, packs: r.packs, diagnostics: r.diagnostics,
+      };
+    },
+  };
+}

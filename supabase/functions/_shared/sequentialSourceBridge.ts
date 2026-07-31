@@ -23,8 +23,15 @@
 //
 // PURE. No network, model or database access. The provider function is injected.
 
-import { isDynamicSourcePlanningEnabled, deterministicOrderedPlan, validateOrderedPlan,
+import { isDynamicSourcePlanningEnabled, deterministicOrderedPlan, validateOrderedPlan, orderedPlanHash,
   type LeadMissionSourceProfile, type OrderedHiringSourcePlan, type SourceStepObservation } from "./hiringSourcePlan.ts";
+import { routeAdaptiveLeadDecision } from "./intelligence/leads/leadAdaptiveRoute.ts";
+import {
+  resolveAdaptiveOrderedPlan, runAdaptiveRound, bindFeedbackAskClaude,
+  adaptiveRuntimeDiagnostics, readAdaptivePackState, ADAPTIVE_PACK_STATE_KEY,
+  type AdaptivePackState, type ResolveStrategyInput,
+} from "./intelligence/leads/leadAdaptiveRuntime.ts";
+import type { QueryPack } from "./intelligence/leads/leadQueryPacks.ts";
 import {
   newSourceExecutionState, SOURCE_EXECUTION_KEY, stateMatchesPlan, stepOf, isStepFinished,
   type SourceExecutionState,
@@ -42,9 +49,10 @@ import {
   type SourceFeedbackLedger,
 } from "./sourceFeedbackContract.ts";
 import {
-  applyObservationWithFeedback, sourceFeedbackDiagnostics,
+  applyObservationWithFeedback, decideNextActionWithFeedback, sourceFeedbackDiagnostics,
   type FeedbackDecisionResult,
 } from "./sourceFeedbackRuntime.ts";
+import { applyObservation } from "./sequentialSourceRuntime.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import {
@@ -80,6 +88,21 @@ export interface SequentialSourceBridgeInput {
    * around the wrapper.
    */
   generate?: GenerateJsonFn;
+  /**
+   * The ADAPTIVE STRATEGY gateway (Claude-first qualified-lead planning).
+   *
+   * Injected by the caller that owns the model client, exactly like `generate`.
+   * Omitted ⇒ the deterministic ordered plan is used and NO model call is made,
+   * which is the shipping state while `CLAUDE_FIRST_LEAD_PLANNING` is off.
+   *
+   * It returns the raw strategy; parsing, validation and conversion happen here
+   * so the gateway cannot smuggle an unvalidated plan into the runtime.
+   */
+  planAdaptiveStrategy?: () => Promise<unknown>;
+  /** Parse + validate the raw strategy. Injected so this file holds no contract. */
+  validateAdaptiveStrategy?: ResolveStrategyInput["validate"];
+  /** Validated query packs for this mission, when the adaptive path is enabled. */
+  adaptivePacks?: readonly QueryPack[];
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -113,6 +136,19 @@ export interface SequentialSourceBridgeResult {
   onObservation: (input: RoundObservationInput) => Promise<RoundObservationOutcome | void>;
   /** The last feedback decision, for diagnostics. Null until a round completes. */
   lastFeedback: () => FeedbackDecisionResult | null;
+  /**
+   * Safe diagnostics for the last ADAPTIVE decision. Null until the adaptive
+   * path decides a round — which requires validated packs and the flags on.
+   *
+   * Codes, counts and the chosen action only; never a prompt or provider record.
+   */
+  lastAdaptiveDecision: () => Record<string, unknown> | null;
+  /**
+   * Provenance of the INITIAL strategy: `claude`, `claude_repaired` or
+   * `deterministic_fallback`, with the exact fallback reason, the generated pack
+   * ids, the selected capability order and the plan hash.
+   */
+  strategyProvenance: () => Record<string, unknown> | null;
   /**
    * READ-ONLY: the next approved DISCOVERY source that has not finished.
    *
@@ -188,6 +224,8 @@ export async function applySequentialSourceExecution(
     // A no-op, not an absent function: the controller can call it unconditionally.
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
+    lastAdaptiveDecision: () => null,
+    strategyProvenance: () => null,
     lastTransitionFailure: () => null,
     // Disabled: there is no ordered plan, so no source is pending. The controller
     // then behaves exactly as it did before ordered execution existed.
@@ -204,6 +242,51 @@ export async function applySequentialSourceExecution(
   if (plan.capabilityGap) {
     return inert(`capability_gap:${plan.capabilityGap.code}`, { workspaceMatch: true });
   }
+
+  // ---- INITIAL STRATEGY BINDING -------------------------------------------
+  //
+  // The deterministic plan above is built FIRST and unconditionally, so it is
+  // always the thing that runs when the adaptive route is off, the gateway is
+  // absent, the call fails, or the strategy does not validate. Claude can only
+  // ever REPLACE its steps, never be required for a plan to exist.
+  //
+  // The gateway itself is injected (production supplies it; tests stub it), and
+  // whatever it returns is parsed, validated and converted here before the
+  // EXISTING `validateOrderedPlan` below passes final judgment on it.
+  const adaptiveRoute = routeAdaptiveLeadDecision({
+    workflow: "qualified_lead_sourcing",
+    executionMode: "company_first",
+    workspaceId: input.workspaceId,
+    decision: "sourcing_strategy",
+    strategyContractAvailable: !!input.validateAdaptiveStrategy,
+    read: input.readEnv,
+  });
+  const strategyOutcome = await resolveAdaptiveOrderedPlan({
+    routeEnabled: adaptiveRoute.useClaude,
+    routeReason: adaptiveRoute.reason,
+    planStrategy: input.planAdaptiveStrategy,
+    validate: input.validateAdaptiveStrategy ??
+      (() => ({ ok: false, reason: "no_strategy_validator", strategy: null, source: "claude" as const })),
+    candidateTarget: plan.steps[0]?.semanticIntent.candidateTarget ?? 25,
+  });
+  if (strategyOutcome.steps.length > 0) {
+    plan.steps = strategyOutcome.steps;
+    plan.planHash = await orderedPlanHash({ ...plan, planHash: undefined } as never);
+  }
+  // The packs the strategy GENERATED are what the feedback loop uses. Production
+  // never supplies them as a fixture; `input.adaptivePacks` exists only so a test
+  // can drive the loop without running the planner.
+  const activePacks: readonly QueryPack[] = strategyOutcome.packs.length > 0
+    ? strategyOutcome.packs
+    : (input.adaptivePacks ?? []);
+  const strategyProvenance = {
+    strategy_source: strategyOutcome.strategySource,
+    fallback_reason: strategyOutcome.fallbackReason,
+    model_called: strategyOutcome.modelCalled,
+    pack_ids: activePacks.map((p) => p.pack_id),
+    capability_order: strategyOutcome.steps.map((x) => x.capability),
+    ...strategyOutcome.diagnostics,
+  };
 
   const validation = await validateOrderedPlan(plan, input.profile);
   if (!validation.ok || validation.plan.steps.length === 0) {
@@ -267,6 +350,18 @@ export async function applySequentialSourceExecution(
 
   let lastFeedback: FeedbackDecisionResult | null = null;
   let lastTransitionFailure: Record<string, unknown> | null = null;
+  // The adaptive pack ledger, restored with the rest of the checkpoint.
+  let adaptivePackState: AdaptivePackState = readAdaptivePackState(
+    (input.restoredState as unknown as { slices?: Record<string, unknown> })?.slices,
+  );
+  let lastAdaptive: Record<string, unknown> | null = null;
+  /** True once the adaptive path has decided a round for this task. */
+  let adaptiveEngaged = false;
+  /** A step is finished when the existing state authority says so. */
+  const stepFinished = (id: string): boolean => {
+    const rec = stepOf(state, id);
+    return rec ? isStepFinished(rec) : false;
+  };
   const log = input.log ?? (() => {});
 
   /**
@@ -286,6 +381,13 @@ export async function applySequentialSourceExecution(
       [SOURCE_EXECUTION_KEY]: state,
       [FUSION_STATE_KEY]: fusion,
       [SOURCE_FEEDBACK_KEY]: feedback,
+      // The pack ledger travels with the state it describes, so a resumed run
+      // cannot re-run a consumed pack or buy a second feedback request.
+      //
+      // ONLY once the adaptive path has actually run. A checkpoint written on the
+      // pre-existing path must carry exactly the keys it carried before — a new
+      // key there would change persisted shape for every run whose flags are off.
+      ...(adaptiveEngaged ? { [ADAPTIVE_PACK_STATE_KEY]: adaptivePackState } : {}),
     });
 
     let phase: TransitionPhase = "observation_construction";
@@ -334,7 +436,7 @@ export async function applySequentialSourceExecution(
       // which is why it sits under `feedback_resolution` and is expected to return
       // normally rather than throw.
       phase = "feedback_resolution";
-      const applied = await applyObservationWithFeedback({
+      const feedbackInput = {
         workspaceId: input.workspaceId,
         taskId: input.taskId,
         plan: approved,
@@ -350,7 +452,86 @@ export async function applySequentialSourceExecution(
         // the existing `generateJson` gateway. Injected only by tests.
         ...(input.generate ? { generate: input.generate } : {}),
         readEnv: input.readEnv,
+      };
+
+      // ---- SOURCE-FEEDBACK BINDING ---------------------------------------
+      //
+      // When validated packs exist, the adaptive layer decides — but the MODEL
+      // CALL is still `decideNextActionWithFeedback`, wrapped by
+      // `bindFeedbackAskClaude`. There is exactly one request, made by the
+      // existing implementation, under the existing flags and the existing
+      // per-task ledger. This adds validation and an honest bottleneck on top of
+      // that answer; it does not add a second caller.
+      //
+      // Without packs the pre-existing path runs verbatim.
+      // THE ROUTE GATE, NOT JUST THE PACKS. With the feedback flags off this
+      // branch must not run at all — not merely reach a deterministic answer —
+      // otherwise a disabled run would still take a different code path and
+      // write an extra checkpoint key.
+      const feedbackRoute = routeAdaptiveLeadDecision({
+        workflow: "qualified_lead_sourcing",
+        executionMode: "company_first",
+        workspaceId: input.workspaceId,
+        decision: "source_observation_feedback",
+        strategyContractAvailable: true,
+        read: input.readEnv,
       });
+      const packs = activePacks;
+      if (feedbackRoute.useClaude && packs && packs.length > 0 && round.stages) {
+        const nextStep = approved.steps.find((s) => s.stepId !== stepId && !stepFinished(s.stepId));
+        const binding = bindFeedbackAskClaude(
+          async () => {
+            const r = await decideNextActionWithFeedback(feedbackInput);
+            lastFeedback = r;
+            return {
+              action: r.action, source: r.source,
+              modelCalled: r.modelCalled, skippedReason: r.skippedReason,
+            };
+          },
+          { nextCapability: nextStep?.capability ?? null },
+        );
+
+        const adaptive = await runAdaptiveRound({
+          stepId, capability: step.capability,
+          stages: round.stages,
+          packs, packState: adaptivePackState,
+          packIdsUsed: [], titlesUsed: step.semanticIntent.approvedTitleAliases ?? [],
+          requestedLeads: approved.completionCondition.target,
+          totalContactReady: round.totalEligibleLeads,
+          remainingBudgetUsd: round.remainingBudgetUsd,
+          providerCallsRemaining: Math.max(0, approved.maximumProviderCalls - state.provider_calls),
+          completedSources: state.completed_step_ids,
+          remainingSources: approved.steps.filter((s) => !stepFinished(s.stepId) && s.stepId !== stepId).map((s) => s.capability),
+          peopleSearchCompletedForQualified: state.people_searched_company_keys.length > 0,
+          peopleNeedingContact: 0,
+          seniorityBroadeningAvailable: false,
+          recencyBroadeningAvailable: false,
+          approvedCapabilities: approved.steps.map((s) => s.capability),
+          maximumAgeDays: step.semanticIntent.postingWindowDays ?? 60,
+          nextStepId: nextStep?.stepId ?? null,
+          nextCapability: nextStep?.capability ?? null,
+          peopleNeedingContactIds: [], companiesNeedingIdentityIds: [],
+          askClaude: binding.askClaude,
+        });
+        adaptiveEngaged = true;
+        adaptivePackState = adaptive.packState;
+        lastAdaptive = { ...adaptiveRuntimeDiagnostics(adaptive), gateway: binding.lastCall() };
+
+        // The EXISTING mutator applies it. Same function, same union, same rules.
+        const appliedAdaptive = applyObservation(approved, state, observation, adaptive.approved ?? undefined);
+        phase = "state_transition";
+        if (!appliedAdaptive.action) return halt("accepted_action_unresolved");
+        log("[sequential-source] round observed (adaptive)", {
+          round: round.round, step: stepId,
+          action: appliedAdaptive.action.action,
+          chosen: adaptive.chosen.action, source: adaptive.chosenSource,
+          fallback: adaptive.fallbackReason, stopped: appliedAdaptive.stopped,
+        });
+        phase = "checkpoint_persistence";
+        return { checkpointSlices: slices() };
+      }
+
+      const applied = await applyObservationWithFeedback(feedbackInput);
 
       // `applyObservationWithFeedback` folds the action itself, so reaching here
       // means the transition happened.
@@ -384,6 +565,8 @@ export async function applySequentialSourceExecution(
     lastOutcome: handle.lastOutcome,
     onObservation,
     lastFeedback: () => lastFeedback,
+    lastAdaptiveDecision: () => lastAdaptive,
+    strategyProvenance: () => ({ ...strategyProvenance, plan_hash: approved.planHash }),
     lastTransitionFailure: () => lastTransitionFailure,
     nextPendingDiscoverySource: () => {
       // Verification steps are excluded on purpose: ATS needs a known company

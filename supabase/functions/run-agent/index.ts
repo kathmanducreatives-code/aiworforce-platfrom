@@ -43,7 +43,7 @@ import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectiveP
 // enable it globally. With either absent this is inert: no mission is built, no
 // prompt assembled, no model contacted, and the spec below is passed through by
 // reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
-import { applyClaudeFirstLeadPlanning, bridgeDiagnostics, claudeFirstFromPersistedPlan } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+import { applyClaudeFirstLeadPlanning, adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPlan } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
 import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
 // Gated by DYNAMIC_HIRING_SOURCE_PLANNING *and* an explicit workspace allow-list.
@@ -1037,6 +1037,38 @@ Deno.serve(async (req) => {
             quotaPolicy: "contact_only",
             requiredEvidence: [],
           },
+          // ---- INITIAL ADAPTIVE STRATEGY -------------------------------------
+          //
+          // NO SECOND MODEL CALL. `applyClaudeFirstLeadPlanning` above already made
+          // the one Claude-first planning request for this task, through its own
+          // gateway, prompt and parser, behind CLAUDE_FIRST_LEAD_PLANNING and the
+          // workspace allow-list. `adaptiveStrategyBinding` hands the strategy it
+          // ALREADY accepted to the adaptive adapter; when planning was disabled or
+          // fell back, the strategy is null and the sequential bridge keeps
+          // `deterministicOrderedPlan` with the exact reason.
+          //
+          // Built by the gated seam rather than assembled here, so run-agent's
+          // kernel surface stays the two modules test 32.E permits.
+          ...adaptiveStrategyBinding(claudeFirst, {
+            final_entity: "contact_ready_lead",
+            requested_count: quota.requestedLeadCount,
+            hiring_role_seed: String(cfIntent.job_search_spec.original_query ?? ""),
+            decision_maker_roles: cfIntent.job_search_spec.requested_person_roles ?? [],
+            company_constraints: {
+              business_model: cfIntent.job_search_spec.company_vertical
+                ? String(cfIntent.job_search_spec.company_vertical)
+                : undefined,
+              country: cfIntent.job_search_spec.location ?? undefined,
+              // The Brain's own size band, so the validator can refuse a widening.
+              employee_count: brainEnforced
+                ? {
+                  min: effectivePolicy.constraints?.min_employees ?? undefined,
+                  max: effectivePolicy.constraints?.max_employees ?? undefined,
+                }
+                : undefined,
+            },
+            maximum_age_days: 60,
+          }),
           log: (m, meta) => console.log("[run-agent][sequential-source]", m, meta),
         });
 
