@@ -584,3 +584,175 @@ export function titlesForStep(
   const byId = new Map(packs.map((p) => [p.pack_id, p]));
   return [...new Set(packIds.flatMap((id) => byId.get(id)?.titles ?? []))];
 }
+
+// ============================== GATEWAY BINDINGS ==============================
+//
+// Both bindings reuse an EXISTING model caller. Neither creates a second one, and
+// neither reads a credential: enablement, the call ledger, the prompt, the gateway
+// and the deterministic fallback all remain inside the implementation being wrapped.
+
+/**
+ * Inverse of `mapAdaptiveActionToApproved`.
+ *
+ * The existing source-feedback runtime answers in the approved vocabulary. To let
+ * ONE model call serve both layers, its answer is translated back into the
+ * adaptive vocabulary and then re-validated against the adaptive observation —
+ * so the richer layer adds checks rather than a second request.
+ *
+ * `verify_selected_jobs` has no adaptive equivalent (ATS is excluded), so it maps
+ * to null and the adaptive layer falls back deterministically.
+ */
+export function approvedToAdaptive(
+  action: ApprovedSourceNextAction,
+  ctx: { nextCapability?: string | null; packIdsForBroadening?: readonly string[] },
+): AdaptiveNextAction | null {
+  switch (action.action) {
+    case "stop_quota_reached":
+      return { action: "stop_success", reason: "the CONTACT-ready quota is satisfied" };
+    case "stop_valid_exhaustion":
+      return { action: "stop_partial", reason: action.reason || "valid exhaustion" };
+    case "advance_to_next_source":
+      return {
+        action: "advance_source",
+        reason: "the approved plan advances to the next source",
+        target_capability_key: ctx.nextCapability ?? undefined,
+      };
+    case "enrich_company_identity":
+      return { action: "begin_people_search", reason: "qualified companies need decision-maker identity" };
+    case "enrich_contacts":
+      return { action: "run_contact_enrichment", reason: "verified people lack a contact method" };
+    case "broaden_current_source": {
+      const b = action.broadeningAction;
+      if (b.action === "extend_recency_window") {
+        return { action: "broaden_recency", reason: "widen the posting window within the ceiling" };
+      }
+      if (b.action === "add_approved_role_aliases") {
+        return {
+          action: "run_unused_query_pack",
+          reason: "search further approved titles on this source",
+          query_pack_ids: ctx.packIdsForBroadening ? [...ctx.packIdsForBroadening] : undefined,
+        };
+      }
+      // Other safe rungs (result target, remote variants, wording) have no
+      // semantic equivalent — they are provider-shaped, not pack-shaped.
+      return null;
+    }
+    case "verify_selected_jobs":
+      return null;                       // ATS is deliberately outside this vocabulary
+  }
+}
+
+/** What the binding needs from the existing feedback runtime, and nothing more. */
+export type FeedbackDecideFn = () => Promise<{
+  action: ApprovedSourceNextAction;
+  source: "deterministic" | "claude";
+  modelCalled: boolean;
+  skippedReason: string | null;
+}>;
+
+export interface FeedbackBindingResult {
+  askClaude: (o: AdaptiveObservation) => Promise<AdaptiveNextAction | null>;
+  /** Read after the round to record provenance. */
+  lastCall: () => { modelCalled: boolean; source: string; skippedReason: string | null } | null;
+}
+
+/**
+ * Bind `askClaude` to the EXISTING Claude source-feedback implementation.
+ *
+ * `decide` is the real `decideNextActionWithFeedback` in production and a stub in
+ * tests. It already owns flag checks, the per-task call ledger, the bounded
+ * request and its own deterministic fallback, so this wrapper adds none of that.
+ *
+ * Returning null — because the feature was disabled, the model was skipped, or the
+ * answer has no adaptive equivalent — is a normal outcome that resolves to the
+ * adaptive deterministic action. A THROW is caught here too: a gateway error must
+ * not become a control-plane failure.
+ */
+export function bindFeedbackAskClaude(
+  decide: FeedbackDecideFn,
+  ctx: { nextCapability?: string | null; packIdsForBroadening?: readonly string[] },
+): FeedbackBindingResult {
+  let last: { modelCalled: boolean; source: string; skippedReason: string | null } | null = null;
+  return {
+    lastCall: () => last,
+    askClaude: async (_o: AdaptiveObservation) => {
+      try {
+        const r = await decide();
+        last = { modelCalled: r.modelCalled, source: r.source, skippedReason: r.skippedReason };
+        // Only a genuine Claude answer becomes a proposal. A deterministic answer
+        // from the inner runtime is NOT laundered into "Claude chose this".
+        if (r.source !== "claude") return null;
+        return approvedToAdaptive(r.action, ctx);
+      } catch {
+        last = { modelCalled: false, source: "deterministic", skippedReason: "gateway_error" };
+        return null;
+      }
+    },
+  };
+}
+
+// ------------------------------------------------ initial strategy binding ----
+
+export type AdaptiveStrategyPlanFn = () => Promise<unknown>;
+
+export interface ResolvedOrderedPlan {
+  steps: OrderedHiringSourcePlan["steps"];
+  strategySource: "claude" | "claude_repaired" | "deterministic_fallback";
+  /** Exact reason the deterministic plan was used. Null when Claude's was taken. */
+  fallbackReason: string | null;
+  modelCalled: boolean;
+}
+
+export interface ResolveStrategyInput {
+  /** Route gate result. False ⇒ no model call may happen at all. */
+  routeEnabled: boolean;
+  /** Why the route was off, preserved verbatim for diagnostics. */
+  routeReason: string;
+  /** The real Claude strategy gateway. Omitted ⇒ deterministic, no call. */
+  planStrategy?: AdaptiveStrategyPlanFn;
+  /** Parse + validate, injected so this module holds no contract logic. */
+  validate: (raw: unknown) => {
+    ok: boolean;
+    reason: string | null;
+    strategy: Parameters<typeof strategyToOrderedPlanSteps>[0] | null;
+    source: "claude" | "claude_repaired";
+  };
+  candidateTarget: number;
+}
+
+/**
+ * Resolve the ordered-plan STEPS for this mission.
+ *
+ * Gate → call → validate → convert. Every failure short-circuits to the
+ * deterministic plan carrying its exact reason, and no model call is even
+ * attempted unless the route said yes and a gateway was supplied.
+ *
+ * The caller runs the returned steps through the existing `validateOrderedPlan`,
+ * which stays the final authority.
+ */
+export async function resolveAdaptiveOrderedPlan(
+  input: ResolveStrategyInput,
+): Promise<ResolvedOrderedPlan> {
+  const fallback = (reason: string, modelCalled = false): ResolvedOrderedPlan =>
+    ({ steps: [], strategySource: "deterministic_fallback", fallbackReason: reason, modelCalled });
+
+  if (!input.routeEnabled) return fallback(input.routeReason);
+  if (!input.planStrategy) return fallback("strategy_gateway_unavailable");
+
+  let raw: unknown;
+  try {
+    raw = await input.planStrategy();
+  } catch {
+    // Timeout, provider error, anything: the deterministic plan runs.
+    return fallback("strategy_gateway_error", true);
+  }
+  if (raw == null) return fallback("strategy_gateway_empty", true);
+
+  const v = input.validate(raw);
+  if (!v.ok || !v.strategy) return fallback(v.reason ?? "strategy_invalid", true);
+
+  const steps = strategyToOrderedPlanSteps(v.strategy, { candidateTarget: input.candidateTarget });
+  if (steps.length === 0) return fallback("strategy_produced_no_steps", true);
+
+  return { steps, strategySource: v.source, fallbackReason: null, modelCalled: true };
+}
