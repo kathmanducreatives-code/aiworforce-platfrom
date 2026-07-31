@@ -137,7 +137,9 @@ export default function ChatWorkspace() {
 
               </div>
               <div className="flex items-center gap-1">
+                <WorkbenchToggleButton />
                 <NewChatButton />
+
                 <button
                   onClick={close}
                   className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
@@ -248,7 +250,40 @@ function NewChatButton() {
   );
 }
 
+function WorkbenchToggleButton() {
+  const { workbenchOpen, openWorkbench, closeWorkbench, selectedOutput, view } = useChatWorkspace();
+  const disabled = !selectedOutput && view.kind !== 'conversation' && view.kind !== 'chat';
+  const onClick = () => {
+    if (workbenchOpen) { closeWorkbench(); return; }
+    if (selectedOutput) { openWorkbench(selectedOutput); return; }
+    if (view.kind === 'conversation') openWorkbench({ planId: view.planId });
+  };
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={cn(
+            'h-7 px-2 inline-flex items-center gap-1.5 rounded text-[12px] transition-colors',
+            workbenchOpen
+              ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30'
+              : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5',
+            disabled ? 'opacity-40 cursor-not-allowed' : '',
+          )}
+          aria-label={workbenchOpen ? 'Hide Workbench' : 'Open Workbench'}
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Workbench</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{workbenchOpen ? 'Hide Workbench' : 'Open Workbench'}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function MobileNav() {
+
   const { setView } = useChatWorkspace();
   const tabs: { id: string; label: string; onClick: () => void }[] = [
     { id: 'home', label: 'Home', onClick: () => setView({ kind: 'empty' }) },
