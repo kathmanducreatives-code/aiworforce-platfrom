@@ -7,7 +7,7 @@ import LockedCell from './leadTable/LockedCell';
 import RecommendationBanner from './leadTable/RecommendationBanner';
 import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
-import { estimateCredits, recommendNextAction, ACTION_LABEL } from './leadTable/credits';
+import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
 import { Loader2, Filter, Sparkles, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
@@ -288,7 +288,13 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     runAction(a, [row]);
   }, [runAction, items]);
 
-  const onRunRecommendation = useCallback(() => runAction(recommendation.action, selectedRows), [runAction, recommendation.action, selectedRows]);
+  // A recommendation whose prerequisite does not exist must not be dispatchable:
+  // "Find decision-makers" with no qualified company would spend a paid call
+  // searching people at nothing.
+  const onRunRecommendation = useCallback(() => {
+    if (!isRecommendationDispatchable(recommendation)) return;
+    runAction(recommendation.action, selectedRows);
+  }, [runAction, recommendation, selectedRows]);
 
   const confirmAndDispatch = useCallback(() => {
     if (!confirmAction) return;

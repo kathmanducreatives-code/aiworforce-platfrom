@@ -1,5 +1,5 @@
 import { Sparkles, ArrowRight } from 'lucide-react';
-import type { Recommendation } from './credits';
+import { isRecommendationDispatchable, type Recommendation } from './credits';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 
 interface Props {
@@ -10,7 +10,12 @@ interface Props {
 export default function RecommendationBanner({ rec, onRun }: Props) {
   const tools = useToolAvailability();
   const isApifyPeopleReady = tools.apify_people?.configured && tools.apify_people?.enabled;
-  const isBlocked = rec.action === 'find_contacts' && !isApifyPeopleReady;
+  const providerMissing = rec.action === 'find_contacts' && !isApifyPeopleReady;
+  // A missing PREREQUISITE is different from a missing PROVIDER: the provider can
+  // be configured, but there is genuinely nothing to act on yet. Both suppress the
+  // button; only the provider case is a setup problem.
+  const prerequisiteMissing = !isRecommendationDispatchable(rec);
+  const isBlocked = providerMissing || prerequisiteMissing;
 
   return (
     <div className="mx-3 mt-3 rounded-lg border border-emerald-500/25 bg-gradient-to-r from-emerald-500/[0.08] to-emerald-500/[0.02] p-2.5 flex items-center gap-3">
@@ -19,7 +24,7 @@ export default function RecommendationBanner({ rec, onRun }: Props) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[11px] uppercase tracking-wider text-emerald-300/80">
-          Recommended next step: {rec.label}
+          {prerequisiteMissing ? 'Next step' : 'Recommended next step'}: {rec.label}
         </div>
         <div className="text-[12px] text-[#9aa4af] leading-relaxed mt-0.5">
           {rec.reason}
@@ -27,7 +32,7 @@ export default function RecommendationBanner({ rec, onRun }: Props) {
       </div>
       {isBlocked ? (
         <div className="shrink-0 text-[11.5px] font-semibold text-amber-400 border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 rounded-md">
-          Setup needed: People/company employee provider
+          {prerequisiteMissing ? 'Not available yet' : 'Setup needed: People/company employee provider'}
         </div>
       ) : (
         <button
