@@ -183,6 +183,9 @@ export interface LeadStrategyPlannerOpts {
   agentSlug?: string;
   mission?: Partial<LeadStrategyMission>;
   callModel?: LeadStrategyModelFn;
+  /** Explicit provider adapter; defaults to the configured one. */
+  provider?: QualifiedLeadStrategistProvider;
+
   enabled?: boolean;
   allowEscalation?: boolean;
   timeoutMs?: number;
@@ -232,7 +235,7 @@ function contextFromPlannerInput(input: PlannerInput, round: number): LeadStrate
 export function plannerMetadataFrom(p: LeadStrategyProvenance): PlannerMetadata {
   const approved = p.source !== "deterministic_fallback";
   return {
-    provider: "lovable-ai",
+    provider: p.provider ?? LEAD_STRATEGY_PROVIDER,
     model: p.model ?? "",
     prompt_version: p.prompt_version,
     schema_version: p.schema_version,
@@ -260,6 +263,8 @@ export function createLeadStrategyPlanner(opts: LeadStrategyPlannerOpts = {}): {
       mission: missionFromPlannerInput(input, opts.mission),
       context: contextFromPlannerInput(input, round),
       callModel: opts.callModel,
+      provider: opts.provider,
+
       enabled: opts.enabled,
       allowEscalation: opts.allowEscalation,
       timeoutMs: opts.timeoutMs,
