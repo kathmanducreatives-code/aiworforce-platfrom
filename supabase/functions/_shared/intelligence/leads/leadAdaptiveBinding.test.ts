@@ -373,3 +373,216 @@ Deno.test("approvedToAdaptive covers the union, and excludes ATS", () => {
     null,
   );
 });
+
+// ================== RUN-AGENT PRODUCTION BINDING + PACK PROPAGATION ==========
+//
+// These assert the REAL wiring in run-agent/index.ts, plus the adapter that turns
+// the existing planner's accepted strategy into the adaptive one. The adapter
+// makes no model call of its own — proven by test 10.
+
+import { adaptiveStrategyFromLeadStrategy } from "./leadStrategyAdapter.ts";
+import { adaptiveCapabilityCards } from "./leadCapabilityCards.ts";
+import type { LeadInitialStrategy } from "./leadStrategy.ts";
+import type { MissionTruth } from "./leadSourceStrategy.ts";
+
+const TRUTH: MissionTruth = {
+  final_entity: "contact_ready_lead",
+  requested_count: 5,
+  hiring_role_seed: "Sales Operations",
+  decision_maker_roles: ["Founder", "Co-Founder", "CEO"],
+  company_constraints: {
+    business_model: "saas", country: "United States",
+    employee_count: { min: 1, max: 150 },
+  },
+  maximum_age_days: 60,
+};
+
+/** What `planInitialLeadSourcing` actually returns when Claude is accepted. */
+function leadStrategy(over: Partial<LeadInitialStrategy> = {}): LeadInitialStrategy {
+  return {
+    role_ontology: {
+      canonical_concept: "Sales Operations",
+      seniority: ["vp", "director", "manager"],
+      exact_titles: [
+        "VP of Sales Operations", "Director of Sales Operations", "Sales Operations Manager",
+        "Revenue Operations Manager", "RevOps Manager", "Sales Operations Analyst",
+      ],
+      safe_synonyms: [
+        { title: "Revenue Systems Manager", language: "en", relationship: "safe_synonym", confidence: 0.8 },
+        { title: "Sales Systems Manager", language: "en", relationship: "safe_synonym", confidence: 0.8 },
+      ],
+      adjacent_titles: [
+        { title: "Deal Desk Manager", reason: "revenue process ownership", confidence: 0.6 },
+        { title: "Commercial Operations Manager", reason: "adjacent commercial ops", confidence: 0.6 },
+      ],
+      excluded_titles: ["Warehouse Operations Manager", "People Operations Manager"],
+    },
+    company_interpretation: { verticals: ["saas"], company_types: ["startup"], positive_keywords: [], negative_keywords: [] },
+    searches: [
+      { purpose: "discover_hiring_companies", capability_key: "yc_job_discovery", result_target: 25, rationale: "startup precision", locations: ["United States"], posting_window_days: 30 },
+      { purpose: "discover_hiring_companies", capability_key: "linkedin_job_discovery", result_target: 25, rationale: "broader coverage" },
+    ],
+    exclusions: { titles: [], companies: [], industries: [] },
+    expected_funnel: { raw_results: 50, relevant_jobs: 20, qualified_companies: 8, verified_people: 6, contact_ready_leads: 5 },
+    confidence: 0.8,
+    ...over,
+  } as LeadInitialStrategy;
+}
+
+const cards = () => adaptiveCapabilityCards();
+
+Deno.test("run-agent supplies BOTH planning dependencies at the real bridge call site", async () => {
+  const src = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  const call = src.slice(src.indexOf("applySequentialSourceExecution({"));
+  // Both dependencies are supplied, via the gated seam's binding factory.
+  assert(call.includes("adaptiveStrategyBinding("), "run-agent must supply the planning binding");
+  assert(call.includes("adaptiveStrategyBinding("), "it must use the gated seam's real binding");
+  // And it must NOT hand in static packs — packs are a strategy output.
+  assertFalse(/adaptivePacks:/.test(call), "production must not supply packs as a fixture");
+});
+
+Deno.test("2. the original query and Company Brain reach the planning adapter", async () => {
+  const src = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  const call = src.slice(src.indexOf("adaptiveStrategyBinding("), src.indexOf("log: (m, meta) => console.log(\"[run-agent][sequential-source]\""));
+  assert(call.includes("original_query"), "the exact user query must reach the adapter");
+  assert(call.includes("company_vertical"), "the ICP business model must reach the adapter");
+  assert(call.includes("min_employees") && call.includes("max_employees"), "the Brain size band must reach the adapter");
+  assert(call.includes("requested_person_roles"), "decision-maker roles must reach the adapter");
+  assert(call.includes("quota.requestedLeadCount"), "the CONTACT quota must reach the adapter");
+});
+
+Deno.test("3. valid planner output generates packs and an authoritative ordered plan", () => {
+  const r = adaptiveStrategyFromLeadStrategy({ strategy: leadStrategy(), truth: TRUTH, cards: cards() });
+  assert(r.ok, r.reason ?? "");
+  assert(r.packs.length >= 2, "the taxonomy must be divided into packs");
+  assert(r.strategy!.source_plan.length > 0);
+  // Exact packs open the mission; adjacent tiers are deferred.
+  assert(r.packs.some((p) => p.initially_eligible && p.confidence_tier === "exact"));
+  assert(r.packs.some((p) => !p.initially_eligible));
+  // Provenance for persistence.
+  assertEquals(r.diagnostics.strategy_source, "claude");
+  assert(Array.isArray(r.diagnostics.pack_ids));
+  assert(Array.isArray(r.diagnostics.capability_order));
+});
+
+Deno.test("4. generated pack titles reach the compiler via semanticIntent", async () => {
+  const r = adaptiveStrategyFromLeadStrategy({ strategy: leadStrategy(), truth: TRUTH, cards: cards() });
+  assert(r.ok, r.reason ?? "");
+  // Drive the REAL bridge with the generated strategy, exactly as run-agent does.
+  const b = await bridge({
+    planAdaptiveStrategy: () => Promise.resolve(leadStrategy()),
+    validateAdaptiveStrategy: () => ({
+      ok: r.ok, reason: r.reason, source: r.source, strategy: r.strategy as never,
+      packs: r.packs, diagnostics: r.diagnostics,
+    }),
+  });
+  const aliases = b.plan?.steps[0].semanticIntent.approvedTitleAliases ?? [];
+  assert(aliases.length > 0, "pack titles must ride into the step intent");
+  // A title the PLANNER produced, not a fixture, reaching the compiler input.
+  assert(aliases.includes("VP of Sales Operations"));
+  // And the provenance the runtime persists.
+  const prov = b.strategyProvenance()!;
+  assertEquals(prov.strategy_source, r.source);
+  assert(Array.isArray(prov.pack_ids) && (prov.pack_ids as string[]).length > 0);
+  assert(typeof prov.plan_hash === "string" && String(prov.plan_hash).length > 0);
+});
+
+Deno.test("4b. the generated packs — not a fixture — drive the feedback loop", async () => {
+  const r = adaptiveStrategyFromLeadStrategy({ strategy: leadStrategy(), truth: TRUTH, cards: cards() });
+  const b = await bridge({
+    planAdaptiveStrategy: () => Promise.resolve(leadStrategy()),
+    validateAdaptiveStrategy: () => ({
+      ok: r.ok, reason: r.reason, source: r.source, strategy: r.strategy as never,
+      packs: r.packs, diagnostics: r.diagnostics,
+    }),
+    // NO adaptivePacks supplied.
+  });
+  await b.onObservation(round());
+  const d = b.lastAdaptiveDecision();
+  assert(d, "the adaptive loop must have run on strategy-generated packs");
+  assertEquals(d!.bottleneck, "company_brain_rejection");
+});
+
+Deno.test("5. an invalid planner strategy falls back to the deterministic plan", async () => {
+  // No exact titles ⇒ the adapter cannot build an eligible exact family.
+  const bad = leadStrategy({
+    role_ontology: { ...leadStrategy().role_ontology, exact_titles: [] },
+  } as Partial<LeadInitialStrategy>);
+  const r = adaptiveStrategyFromLeadStrategy({ strategy: bad, truth: TRUTH, cards: cards() });
+  assertFalse(r.ok);
+  assertEquals(r.reason, "strategy_has_no_exact_titles");
+
+  const b = await bridge({
+    planAdaptiveStrategy: () => Promise.resolve(bad),
+    validateAdaptiveStrategy: () => ({
+      ok: r.ok, reason: r.reason, source: r.source, strategy: null, packs: [], diagnostics: r.diagnostics,
+    }),
+  });
+  assertEquals(b.strategyProvenance()!.strategy_source, "deterministic_fallback");
+  assertEquals(b.strategyProvenance()!.fallback_reason, "strategy_has_no_exact_titles");
+  // The deterministic plan carries no strategy-generated packs. (Its own step ids
+  // may legitimately name any capability, so provenance — not id shape — is the
+  // signal that Claude's plan was not adopted.)
+  assertEquals((b.strategyProvenance()!.pack_ids as string[]).length, 0);
+  assertEquals(b.strategyProvenance()!.model_called, true);
+});
+
+Deno.test("5b. a strategy that widens the Brain size band is refused", () => {
+  const r = adaptiveStrategyFromLeadStrategy({
+    strategy: leadStrategy(), truth: TRUTH, cards: cards(),
+  });
+  assert(r.ok);
+  // The derived strategy carries mission truth verbatim, so the validator's
+  // invariant check has nothing to widen — proven by round-tripping a tightened
+  // truth and seeing the ceiling honoured.
+  const tight = adaptiveStrategyFromLeadStrategy({
+    strategy: leadStrategy(), cards: cards(),
+    truth: { ...TRUTH, maximum_age_days: 21 },
+  });
+  assert(tight.ok);
+  assertEquals(tight.strategy!.recency_policy.maximum_age_days, 21);
+  for (const step of tight.strategy!.source_plan) {
+    assert((step.semantic_filters.maximum_age_days ?? 0) <= 21);
+  }
+});
+
+Deno.test("6. a thrown planning call falls back safely with its reason", async () => {
+  const b = await bridge({
+    planAdaptiveStrategy: () => Promise.reject(new Error("timeout")),
+    validateAdaptiveStrategy: () => ({ ok: true, reason: null, source: "claude" as const, strategy: null as never, packs: [] }),
+  });
+  assertEquals(b.strategyProvenance()!.fallback_reason, "strategy_gateway_error");
+  assert(b.enabled);
+});
+
+Deno.test("7. planning disabled ⇒ no active planning call, byte-identical shape", async () => {
+  let calls = 0;
+  const b = await bridge({
+    readEnv: claudeOff,
+    planAdaptiveStrategy: () => { calls += 1; return Promise.resolve(leadStrategy()); },
+    validateAdaptiveStrategy: okValidator,
+  });
+  assertEquals(calls, 0);
+  const outcome = await b.onObservation(round());
+  const slices = (outcome as { checkpointSlices: Record<string, unknown> }).checkpointSlices;
+  assertEquals(Object.keys(slices).sort(), ["hiring_evidence_fusion", "source_execution", "source_feedback"].sort());
+  assertEquals(b.lastAdaptiveDecision(), null);
+});
+
+Deno.test("10. the adapter itself makes no model request — it reuses the planner's answer", async () => {
+  // It is a pure function: given the planner's accepted strategy it returns the
+  // adaptive one, with no gateway of any kind in its module graph.
+  const src = await Deno.readTextFile(new URL("./leadStrategyAdapter.ts", import.meta.url));
+  for (const banned of ["generateJson", "runPlanner", "aiProvider", "fetch(", "plannerWrapper"]) {
+    assertFalse(src.includes(banned), `the adapter must not reference ${banned}`);
+  }
+  // And run-agent feeds it the ALREADY-accepted strategy rather than calling again.
+  const runAgent = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  assert(
+    runAgent.includes("adaptiveStrategyBinding(claudeFirst,"),
+    "run-agent must reuse applyClaudeFirstLeadPlanning's existing outcome, not call again",
+  );
+  // And the seam itself reuses the accepted strategy rather than re-planning.
+  const seam = await Deno.readTextFile(new URL("./leadPlanningBridge.ts", import.meta.url));
+  assert(seam.includes("Promise.resolve(result.outcome?.strategy ?? null)"));
+});

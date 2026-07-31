@@ -144,6 +144,12 @@ export interface SequentialSourceBridgeResult {
    */
   lastAdaptiveDecision: () => Record<string, unknown> | null;
   /**
+   * Provenance of the INITIAL strategy: `claude`, `claude_repaired` or
+   * `deterministic_fallback`, with the exact fallback reason, the generated pack
+   * ids, the selected capability order and the plan hash.
+   */
+  strategyProvenance: () => Record<string, unknown> | null;
+  /**
    * READ-ONLY: the next approved DISCOVERY source that has not finished.
    *
    * Handed to the quota controller so it can tell "this source's titles are
@@ -219,6 +225,7 @@ export async function applySequentialSourceExecution(
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
     lastAdaptiveDecision: () => null,
+    strategyProvenance: () => null,
     lastTransitionFailure: () => null,
     // Disabled: there is no ordered plan, so no source is pending. The controller
     // then behaves exactly as it did before ordered execution existed.
@@ -266,6 +273,20 @@ export async function applySequentialSourceExecution(
     plan.steps = strategyOutcome.steps;
     plan.planHash = await orderedPlanHash({ ...plan, planHash: undefined } as never);
   }
+  // The packs the strategy GENERATED are what the feedback loop uses. Production
+  // never supplies them as a fixture; `input.adaptivePacks` exists only so a test
+  // can drive the loop without running the planner.
+  const activePacks: readonly QueryPack[] = strategyOutcome.packs.length > 0
+    ? strategyOutcome.packs
+    : (input.adaptivePacks ?? []);
+  const strategyProvenance = {
+    strategy_source: strategyOutcome.strategySource,
+    fallback_reason: strategyOutcome.fallbackReason,
+    model_called: strategyOutcome.modelCalled,
+    pack_ids: activePacks.map((p) => p.pack_id),
+    capability_order: strategyOutcome.steps.map((x) => x.capability),
+    ...strategyOutcome.diagnostics,
+  };
 
   const validation = await validateOrderedPlan(plan, input.profile);
   if (!validation.ok || validation.plan.steps.length === 0) {
@@ -455,7 +476,7 @@ export async function applySequentialSourceExecution(
         strategyContractAvailable: true,
         read: input.readEnv,
       });
-      const packs = input.adaptivePacks;
+      const packs = activePacks;
       if (feedbackRoute.useClaude && packs && packs.length > 0 && round.stages) {
         const nextStep = approved.steps.find((s) => s.stepId !== stepId && !stepFinished(s.stepId));
         const binding = bindFeedbackAskClaude(
@@ -545,6 +566,7 @@ export async function applySequentialSourceExecution(
     onObservation,
     lastFeedback: () => lastFeedback,
     lastAdaptiveDecision: () => lastAdaptive,
+    strategyProvenance: () => ({ ...strategyProvenance, plan_hash: approved.planHash }),
     lastTransitionFailure: () => lastTransitionFailure,
     nextPendingDiscoverySource: () => {
       // Verification steps are excluded on purpose: ATS needs a known company
