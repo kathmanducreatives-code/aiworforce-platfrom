@@ -20,6 +20,9 @@ import {
 import { verifyCurrentEmployer, type EmployerVerifyResult } from "./employerVerification.ts";
 import { buildPeopleScope, type PeopleSearchScope } from "./scopedPeopleSearch.ts";
 import { normalizeCountry, detectCountryInText, detectCountryFromRegionText } from "./locationMatch.ts";
+import {
+  buildCompanyDiagnostic, type CompanyQualificationDiagnostic,
+} from "./companyQualificationDiagnostics.ts";
 
 export interface CompoundJob {
   title: string | null;
@@ -152,6 +155,12 @@ export interface CompoundRunResult {
    * quietly presenting them as finished leads. Never quota-eligible.
    */
   pendingDecisionMakers: PendingDecisionMaker[];
+  /**
+   * One bounded record per company the qualification stage EVALUATED, including
+   * the ones the filter then dropped. Diagnostics only — never an account row,
+   * never quota-eligible.
+   */
+  companyDiagnostics: CompanyQualificationDiagnostic[];
   diagnostics: {
     rawJobs: number; acceptedJobs: number; verifiedCompanies: number;
     /**
@@ -338,12 +347,42 @@ export async function runCompoundSourcing(
   //
   // A hiring signal cannot buy its way past this. The job is why NOW; the Brain
   // decides whether the company belongs in the pipeline at all.
+  // EVERY EVALUATED COMPANY IS RECORDED HERE, before the qualification filter
+  // below removes the failures. Without this the funnel could report "25
+  // evaluated, 0 qualified" while nothing said which 25 or why each failed.
+  const companyDiagnostics: CompanyQualificationDiagnostic[] = [];
+  const recordDiagnostic = (
+    c: { identity: CompanyIdentity; jobs: Array<{ job: CompoundJob; fam: JobFamilyResult }> },
+    brainStatus: Parameters<typeof buildCompanyDiagnostic>[0]["brainStatus"],
+    failedGates: string[],
+  ) => {
+    const j = c.jobs[0]?.job;
+    const fam = c.jobs[0]?.fam;
+    companyDiagnostics.push(buildCompanyDiagnostic({
+      companyKey: c.identity.dedupeKey ?? c.identity.normalizedName ?? c.identity.name ?? "",
+      name: c.identity.name,
+      domain: c.identity.canonicalDomain ?? j?.companyDomain ?? null,
+      linkedinUrl: c.identity.linkedinUrl ?? j?.companyLinkedinUrl ?? null,
+      signalTitle: j?.title ?? null,
+      signalUrl: j?.url ?? null,
+      signalDate: j?.postedDate ?? null,
+      sourceCapabilities: [],
+      titleFamily: fam?.family ?? null,
+      titleConfidence: fam?.confidence != null ? String(fam.confidence) : null,
+      brainStatus,
+      failedGates,
+    }));
+  };
+
   const companies = [...byCompany.values()].slice(0, limits.verifiedCompanies).map((c) => {
     const j0 = c.jobs[0].job;
     const vq = qualifyCompanyVertical({ name: c.identity.name, description: j0.companyDescription, industries: j0.industries, job_title: j0.title, job_description: j0.descriptionExcerpt }, vertical);
 
     // Not enforced (no Brain supplied) => unchanged legacy behavior.
-    if (!opts.brainConstraints) return { ...c, vq, brainGate: "pass" as G, brainEval: null as CompanyBrainEvaluation | null };
+    if (!opts.brainConstraints) {
+      recordDiagnostic(c, "not_enforced", vq.outcome === "fail" ? ["company_vertical"] : []);
+      return { ...c, vq, brainGate: "pass" as G, brainEval: null as CompanyBrainEvaluation | null };
+    }
 
     diagnostics.companyBrain.evaluated++;
     const brainEval = evaluateCompanyBrainEvidence({
@@ -368,6 +407,17 @@ export async function runCompoundSourcing(
       const key = `${r.constraint}:${r.outcome}`;
       diagnostics.companyBrain.rejectReasons[key] = (diagnostics.companyBrain.rejectReasons[key] ?? 0) + 1;
     }
+    // The vertical gate is a drop path too, so it is recorded as a failed gate
+    // rather than silently removing the company a line later.
+    const failedGates = [
+      ...(vq.outcome === "fail" ? ["company_vertical"] : []),
+      ...brainEval.results.filter((r) => r.outcome !== "pass").map((r) => r.constraint),
+    ];
+    recordDiagnostic(
+      c,
+      vq.outcome === "fail" ? "fail" : resolved === "pass" ? "pass" : resolved === "fail" ? "fail" : "evidence_pending",
+      failedGates,
+    );
     return { ...c, vq, brainGate: resolved as G, brainEval };
   })
     .filter((c) => c.vq.outcome !== "fail")
@@ -527,5 +577,5 @@ export async function runCompoundSourcing(
   for (const c of ranked) diagnostics.verdicts[c.verdict]++;
 
   diagnostics.decisionMaker.contactReady = ranked.filter((c) => c.verdict === "CONTACT").length;
-  return { candidates: ranked, pendingDecisionMakers, diagnostics };
+  return { candidates: ranked, pendingDecisionMakers, companyDiagnostics, diagnostics };
 }
