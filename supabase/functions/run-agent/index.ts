@@ -1097,6 +1097,18 @@ Deno.serve(async (req) => {
               required: true,
               approvedAliases: cfIntentPlanned.job_search_spec.keyword_queries ?? [],
               geography: cfIntent.job_search_spec.location ?? undefined,
+              // THE RECENCY POLICY HAS TO BE STATED HERE OR IT IS NEVER APPLIED.
+              //
+              // `deterministicOrderedPlan` sets `semanticIntent.postingWindowDays`
+              // only when this field is present, and the compiler correctly emits
+              // NOTHING when the intent carries no window. Production task
+              // 9cb98f67 therefore sent no `datePosted` and no `timePostedRange`
+              // at all — not empty strings, absent keys. The compiler was right;
+              // nobody had told it the mission wanted fresh postings.
+              //
+              // 30 days is the mission default; the 60-day ceiling stays the
+              // hard bound enforced downstream.
+              maximumPostingAgeDays: 30,
             },
             decisionMakerRoles: cfIntent.job_search_spec.requested_person_roles ?? [],
             currentEmployerRequired: true,

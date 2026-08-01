@@ -340,6 +340,9 @@ export async function applySequentialSourceExecution(
     : newFeedbackLedger();
 
   const handle = sequentialJobsInvoker({
+    // ONE PAID CALL PER PACK. `prepareStepPackCalls` shipped tested with no
+    // production caller, so every Actor received the merged alias list.
+    queryPacks: activePacks.map((p) => ({ packId: p.pack_id, titleAliases: p.titles })),
     taskId: input.taskId,
     plan: approved,
     state,
