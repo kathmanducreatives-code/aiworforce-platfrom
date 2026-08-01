@@ -355,6 +355,7 @@ export async function runCompoundSourcing(
     c: { identity: CompanyIdentity; jobs: Array<{ job: CompoundJob; fam: JobFamilyResult }> },
     brainStatus: Parameters<typeof buildCompanyDiagnostic>[0]["brainStatus"],
     failedGates: string[],
+    missingEvidence: string[] = [],
   ) => {
     const j = c.jobs[0]?.job;
     const fam = c.jobs[0]?.fam;
@@ -371,6 +372,7 @@ export async function runCompoundSourcing(
       titleConfidence: fam?.confidence != null ? String(fam.confidence) : null,
       brainStatus,
       failedGates,
+      missingEvidence,
     }));
   };
 
@@ -380,7 +382,7 @@ export async function runCompoundSourcing(
 
     // Not enforced (no Brain supplied) => unchanged legacy behavior.
     if (!opts.brainConstraints) {
-      recordDiagnostic(c, "not_enforced", vq.outcome === "fail" ? ["company_vertical"] : []);
+      recordDiagnostic(c, "not_enforced", vq.outcome === "fail" ? ["company_vertical"] : [], []);
       return { ...c, vq, brainGate: "pass" as G, brainEval: null as CompanyBrainEvaluation | null };
     }
 
@@ -407,16 +409,29 @@ export async function runCompoundSourcing(
       const key = `${r.constraint}:${r.outcome}`;
       diagnostics.companyBrain.rejectReasons[key] = (diagnostics.companyBrain.rejectReasons[key] ?? 0) + 1;
     }
-    // The vertical gate is a drop path too, so it is recorded as a failed gate
-    // rather than silently removing the company a line later.
+    // MISSING EVIDENCE IS NOT A FAILED GATE.
+    //
+    // This previously recorded every non-pass constraint as a "failed gate",
+    // which conflated "the Brain evaluated this and said no" with "nobody ever
+    // supplied the evidence". Production task 15c31f55 shows the damage: all ten
+    // companies reported `employee_count, industry, business_model, company_stage`
+    // as failed, when only `industry` was an actual mismatch — the other three had
+    // no evidence at all, because the adapter dropped it.
+    //
+    // `resolveUnknownEvidence` already keeps the two apart (unknown stays unknown
+    // under the default "research" policy); only this projection collapsed them.
+    // The vertical gate is a real drop path, so it IS a failure when it fails.
     const failedGates = [
       ...(vq.outcome === "fail" ? ["company_vertical"] : []),
-      ...brainEval.results.filter((r) => r.outcome !== "pass").map((r) => r.constraint),
+      ...brainEval.results.filter((r) => r.outcome === "fail").map((r) => r.constraint),
     ];
+    const missingEvidence = brainEval.results
+      .filter((r) => r.outcome === "unknown").map((r) => r.constraint);
     recordDiagnostic(
       c,
       vq.outcome === "fail" ? "fail" : resolved === "pass" ? "pass" : resolved === "fail" ? "fail" : "evidence_pending",
       failedGates,
+      missingEvidence,
     );
     return { ...c, vq, brainGate: resolved as G, brainEval };
   })

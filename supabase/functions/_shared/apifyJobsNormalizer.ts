@@ -138,12 +138,34 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   const rawWebsite = firstStr(r.companyWebsite, r.company_website, r.website, r.companyUrl, r.companyLink);
   const websiteIsShortener = isShortenerUrl(rawWebsite);
   const website = websiteIsShortener ? null : rawWebsite;
-  const linkedinUrl = firstStr(r.companyLinkedinUrl, r.company_linkedin_url, r.companyLinkedin, r.companyPageUrl);
+  // `companyUrl` is crawlworks/linkedin-jobs-scraper's company LinkedIn URL
+  // (e.g. "https://ca.linkedin.com/company/gumloop") — verified against the stored
+  // provider payload of production task 15c31f55. It is accepted LAST and only
+  // when it is actually a linkedin.com/company URL, so a non-LinkedIn `companyUrl`
+  // from another actor cannot be mistaken for a LinkedIn company identity.
+  const companyUrlIsLinkedIn = /^https?:\/\/([a-z]{2}\.)?linkedin\.com\/company\//i
+    .test(String(r.companyUrl ?? "").trim());
+  const linkedinUrl = firstStr(
+    r.companyLinkedinUrl, r.company_linkedin_url, r.companyLinkedin, r.companyPageUrl,
+    companyUrlIsLinkedIn ? r.companyUrl : null,
+  );
   const jobUrl = firstStr(r.link, r.jobUrl, r.url, r.applyUrl, r.jobPostingUrl);
   const jobDescription = firstStr(r.descriptionText, r.description, r.jobDescription, r.snippet);
   const companyDescription = firstStr(r.companyDescription, r.company_description, r.aboutCompany);
   const industries = toArray(r.industries ?? r.industry ?? r.companyIndustry);
-  const employeeCount = toInt(r.companyEmployeesCount ?? r.employeeCount ?? r.companySize ?? r.employees);
+  // `companyEmployeeCount` (SINGULAR "Employee") is what
+  // crawlworks/linkedin-jobs-scraper emits — verified against the stored provider
+  // payload of production task 15c31f55. This list previously held only
+  // `companyEmployeesCount` (PLURAL), so every crawlworks row normalized to
+  // `employeeCount: null`: Gumloop's payload carries `"companyEmployeeCount":50`
+  // and still produced null. The Company Brain then failed `employee_count` on a
+  // 50-person company against a 1–150 band, because it was handed nothing.
+  //
+  // Same transposition class as the `postedDate`/`datePosted` gap fixed in #125.
+  const employeeCount = toInt(
+    r.companyEmployeeCount ?? r.companyEmployeesCount ?? r.employeeCount ??
+      r.companySize ?? r.employees,
+  );
   const location = firstStr(r.location, r.formattedLocation, r.jobLocation, r.city, r.address, r.companyLocation);
   const applyUrl = firstStr(r.applyUrl, r.apply_url, r.applicationUrl);
   const companyLogo = firstStr(r.companyLogo, r.company_logo, r.logo);

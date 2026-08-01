@@ -59,8 +59,17 @@ export interface CompanyQualificationDiagnostic {
   title_confidence: string;
   company_identity_status: IdentityStatus;
   company_brain_status: BrainStatus;
-  /** Exact constraint codes that did not pass. Never free text. */
+  /** Constraints the Brain EVALUATED and rejected. Never free text. */
   failed_gates: string[];
+  /**
+   * Constraints with no evidence either way.
+   *
+   * Kept apart from `failed_gates` because the remedies are opposite: a failed
+   * gate means this company is wrong for the ICP, while missing evidence means
+   * nobody has looked yet. Collapsing them reported ten companies as rejected on
+   * four gates when only one was a real mismatch.
+   */
+  missing_evidence: string[];
   qualification_status: QualificationStatus;
   decision_maker_eligibility: boolean;
   quota_eligible: boolean;
@@ -106,8 +115,10 @@ export interface EvaluatedCompanyInput {
   titleFamily?: string | null;
   titleConfidence?: string | null;
   brainStatus: BrainStatus;
-  /** Constraint codes that did not pass, e.g. "employee_count", "business_model". */
+  /** Constraints the Brain evaluated and rejected. */
   failedGates?: readonly string[];
+  /** Constraints with no evidence either way. Not failures. */
+  missingEvidence?: readonly string[];
 }
 
 /**
@@ -137,6 +148,7 @@ export function buildCompanyDiagnostic(
 ): CompanyQualificationDiagnostic {
   const identity = identityStatusFor(input);
   const failed = strList(input.failedGates, DIAGNOSTIC_BOUNDS.maxGates, 60);
+  const missing = strList(input.missingEvidence, DIAGNOSTIC_BOUNDS.maxGates, 60);
 
   // Status follows the furthest stage actually reached, not the best case.
   let status: QualificationStatus;
@@ -162,6 +174,7 @@ export function buildCompanyDiagnostic(
     company_identity_status: identity,
     company_brain_status: input.brainStatus,
     failed_gates: failed,
+    missing_evidence: missing,
     qualification_status: status,
     decision_maker_eligibility: dmEligible,
     quota_eligible: false,       // ALWAYS. Only a CONTACT-ready person counts.
@@ -218,6 +231,8 @@ export function mergeCompanyDiagnostics(
         source_capabilities: [...new Set([...prior.source_capabilities, ...d.source_capabilities])]
           .slice(0, DIAGNOSTIC_BOUNDS.maxCapabilities),
         failed_gates: [...new Set([...prior.failed_gates, ...d.failed_gates])]
+          .slice(0, DIAGNOSTIC_BOUNDS.maxGates),
+        missing_evidence: [...new Set([...prior.missing_evidence, ...d.missing_evidence])]
           .slice(0, DIAGNOSTIC_BOUNDS.maxGates),
       });
     }
