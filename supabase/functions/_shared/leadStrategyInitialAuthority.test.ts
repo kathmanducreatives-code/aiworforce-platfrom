@@ -27,9 +27,8 @@ function goodPlan() {
     title_queries: ["Sales Operations Manager", "Revenue Operations Manager", "GTM Operations Manager"],
     excluded_titles: ["Warehouse Operations", "Retail Operations"],
     query_packs: [
-      { pack_id: "sales_ops_core", queries: ["Sales Operations Manager"], rationale: "exact" },
-      { pack_id: "rev_ops_core", queries: ["Revenue Operations Manager"], rationale: "exact" },
-      { pack_id: "gtm_ops_core", queries: ["GTM Operations Manager"], rationale: "exact" },
+      { pack_id: "exact_titles", queries: ["Sales Operations Manager"], rationale: "exact" },
+      { pack_id: "yc_early_stage", queries: ["Revenue Operations Manager"], rationale: "startup employers" },
     ],
     source_plan: [
       { source_key: "yc_jobs", priority: 1, rationale: "startup-heavy" },
