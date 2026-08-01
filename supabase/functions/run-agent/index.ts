@@ -1220,6 +1220,10 @@ Deno.serve(async (req) => {
             // not exist, so the task result, the run context the Workbench reads
             // back, and every export are unchanged from before Phase 2.
             ...(claudeFirstDiagnostics ? { claude_first_planning: claudeFirstDiagnostics } : {}),
+            // AUTHORITATIVE INITIAL STRATEGY provenance: model, authority, validation,
+            // fallback reason, role family, pack ids, source order and plan hash.
+            // Present ONLY for a workspace the GPT strategy owner is enabled for.
+            ...(gptStrategy?.diagnostics ? { lead_strategy_initial: gptStrategy.diagnostics } : {}),
             // Ordered-source execution, evidence fusion and bounded feedback.
             // Present ONLY for a workspace that opted in, so a task result is
             // unchanged for everyone else.
