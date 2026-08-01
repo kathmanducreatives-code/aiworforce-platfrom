@@ -451,3 +451,73 @@ export function classificationIsSafe(record: ClassificationRecord): boolean {
   const banned = ["api_key", "apikey", "secret", "bearer ", "password", "@gmail", "@outlook", "sk-"];
   return !banned.some((b) => blob.includes(b));
 }
+
+// ---------------------------------------------------- when to classify ----
+
+/** Provider labels too broad to decide an ICP on by themselves. */
+export const BROAD_INDUSTRY_LABELS: readonly string[] = [
+  "software development", "information technology", "it services",
+  "computer software", "technology", "internet", "software",
+  "information technology & services", "computer & network security",
+];
+
+/** Evidence that already settles the question without a model. */
+export const EXPLICIT_SERVICE_MARKERS: readonly string[] = [
+  "consultancy", "consulting firm", "staffing", "recruiting agency",
+  "implementation partner", "systems integrator", "outsourcing",
+  "digital agency", "development agency", "marketing agency",
+];
+
+export type ClassificationSkipReason =
+  | "identity_unresolved"
+  | "no_evidence_to_interpret"
+  | "explicit_evidence_sufficient"
+  | "budget_exhausted"
+  | "already_classified";
+
+export interface ClassificationGateInput {
+  identityResolved: boolean;
+  providerIndustry: string | null;
+  companyDescription: string | null;
+  /** Already-classified keys, so a repeat is a skip rather than a cache hit. */
+  alreadyClassified: boolean;
+  modelCallsRemaining: number;
+}
+
+export interface ClassificationGate {
+  classify: boolean;
+  reason: "broad_or_missing_industry" | "ambiguous_evidence" | ClassificationSkipReason;
+}
+
+/**
+ * Should this company be sent to the semantic classifier?
+ *
+ * The gate is deliberately narrow. A model call is only worth paying for when a
+ * literal comparison CANNOT settle the question — a broad label like "Software
+ * Development", or no industry at all. Explicit evidence in either direction
+ * already decides it, and interpretation could only muddy a clear answer.
+ */
+export function shouldClassify(input: ClassificationGateInput): ClassificationGate {
+  if (!input.identityResolved) return { classify: false, reason: "identity_unresolved" };
+  if (input.alreadyClassified) return { classify: false, reason: "already_classified" };
+  if (input.modelCallsRemaining <= 0) return { classify: false, reason: "budget_exhausted" };
+
+  const industry = lower(input.providerIndustry);
+  const description = lower(input.companyDescription);
+  if (!industry && !description) return { classify: false, reason: "no_evidence_to_interpret" };
+
+  // Explicit services evidence settles it deterministically — no model needed.
+  if (EXPLICIT_SERVICE_MARKERS.some((m) => description.includes(m) || industry.includes(m))) {
+    return { classify: false, reason: "explicit_evidence_sufficient" };
+  }
+
+  // A broad or absent industry label is exactly the case a literal comparison
+  // gets wrong: "Software Development" is neither a pass nor a rejection.
+  if (!industry || BROAD_INDUSTRY_LABELS.includes(industry)) {
+    return { classify: true, reason: "broad_or_missing_industry" };
+  }
+  // A specific label with a description that may contradict it.
+  if (description) return { classify: true, reason: "ambiguous_evidence" };
+
+  return { classify: false, reason: "explicit_evidence_sufficient" };
+}

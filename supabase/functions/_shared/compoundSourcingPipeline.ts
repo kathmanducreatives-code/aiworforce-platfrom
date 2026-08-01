@@ -23,6 +23,10 @@ import { normalizeCountry, detectCountryInText, detectCountryFromRegionText } fr
 import {
   buildCompanyDiagnostic, type CompanyQualificationDiagnostic,
 } from "./companyQualificationDiagnostics.ts";
+import {
+  classifyCompany, shouldClassify, brainEvidenceFrom,
+  type BrainVocabulary, type ClassificationCache, type ClassificationRecord,
+} from "./companySemanticClassification.ts";
 
 export interface CompoundJob {
   title: string | null;
@@ -191,6 +195,15 @@ export interface CompoundRunResult {
     droppedByFamily: number;
     droppedByLocation: number;
     verdicts: Record<CompoundVerdict, number>;
+    /**
+     * Semantic classification funnel. Counts and skip reasons only — never a
+     * model payload. Absent classification is not a failure.
+     */
+    semanticClassification?: {
+      classified: number;
+      skipped: Record<string, number>;
+      budget_remaining: number;
+    };
     /** Company Brain hard-gate funnel. Safe counts + reasons, no payloads. */
     companyBrain: {
       evaluated: number;
@@ -292,6 +305,21 @@ export async function runCompoundSourcing(
      */
     brainConstraints?: CompanyBrainHardConstraints | null;
     brainPolicyHash?: string | null;
+    /**
+     * SEMANTIC CLASSIFICATION, injected.
+     *
+     * The Brain compares literal labels, so "Software Development" never matches
+     * a "B2B SaaS" ICP. When supplied, companies whose evidence a literal
+     * comparison CANNOT settle are interpreted onto a canonical vocabulary first.
+     * The Brain still decides; this only changes what it is told.
+     *
+     * Omitted ⇒ no classification and no model call, exactly as before.
+     */
+    classifyCompanyEvidence?: (payload: Record<string, unknown>) => Promise<unknown>;
+    classificationCache?: ClassificationCache;
+    brainVocabulary?: BrainVocabulary | null;
+    /** Charged against the task's real model budget. 0 ⇒ classify nothing. */
+    classificationCallsRemaining?: number;
   } = {},
 ): Promise<CompoundRunResult> {
   if (!intent.company_gate_required) throw new Error("runCompoundSourcing requires a company_gate_required intent");
@@ -351,6 +379,71 @@ export async function runCompoundSourcing(
   // below removes the failures. Without this the funnel could report "25
   // evaluated, 0 qualified" while nothing said which 25 or why each failed.
   const companyDiagnostics: CompanyQualificationDiagnostic[] = [];
+
+  // ---- SEMANTIC CLASSIFICATION PASS ---------------------------------------
+  //
+  // Runs BEFORE qualification so the Brain receives canonical evidence instead of
+  // a raw provider label. Bounded and gated: only companies whose evidence a
+  // LITERAL comparison cannot settle are sent, each at most once, and only while
+  // the task's model budget lasts. A failure yields `unknown`, never a rejection.
+  const classifications = new Map<string, ClassificationRecord>();
+  const classificationSkips: Record<string, number> = {};
+  let classifyBudget = Math.max(0, opts.classificationCallsRemaining ?? 0);
+
+  if (opts.classifyCompanyEvidence && opts.brainConstraints && classifyBudget > 0) {
+    const vocabulary: BrainVocabulary = opts.brainVocabulary ?? {
+      positive_industries: opts.brainConstraints.positive_industries ?? [],
+      excluded_industries: opts.brainConstraints.negative_industries ?? [],
+      business_models: opts.brainConstraints.business_models ?? [],
+      customer_types: [],
+    };
+
+    for (const [key, c] of byCompany.entries()) {
+      const j = c.jobs[0]?.job;
+      const gate = shouldClassify({
+        identityResolved: !!(c.identity.canonicalDomain || c.identity.linkedinUrl),
+        providerIndustry: (j?.industries ?? []).join(" ") || null,
+        companyDescription: j?.companyDescription ?? null,
+        alreadyClassified: classifications.has(key),
+        modelCallsRemaining: classifyBudget,
+      });
+      if (!gate.classify) {
+        classificationSkips[gate.reason] = (classificationSkips[gate.reason] ?? 0) + 1;
+        continue;
+      }
+
+      const record = await classifyCompany({
+        evidence: {
+          company_key: key,
+          company_name: c.identity.name,
+          provider_industry: (j?.industries ?? []).join(" ") || null,
+          company_description: j?.companyDescription ?? null,
+          product_description: j?.descriptionExcerpt ?? null,
+          website: c.identity.canonicalDomain ? `https://${c.identity.canonicalDomain}` : null,
+          customer_type_evidence: null,
+          company_type: null,
+          business_model_evidence: null,
+          software_evidence: null,
+          pricing_evidence: null,
+          // Refs a claim may cite. Anything else is dropped by the validator.
+          source_refs: ["company_industry", "company_description", "job_description"],
+          missing_fields: [],
+        },
+        vocabulary,
+        cache: opts.classificationCache,
+        classify: opts.classifyCompanyEvidence,
+      });
+      classifications.set(key, record);
+      // A cache hit costs nothing; only a real call is charged.
+      if (record.provenance.latency_ms !== null) classifyBudget -= 1;
+      if (classifyBudget <= 0) break;
+    }
+  }
+  diagnostics.semanticClassification = {
+    classified: classifications.size,
+    skipped: classificationSkips,
+    budget_remaining: classifyBudget,
+  };
   const recordDiagnostic = (
     c: { identity: CompanyIdentity; jobs: Array<{ job: CompoundJob; fam: JobFamilyResult }> },
     brainStatus: Parameters<typeof buildCompanyDiagnostic>[0]["brainStatus"],
@@ -387,14 +480,24 @@ export async function runCompoundSourcing(
     }
 
     diagnostics.companyBrain.evaluated++;
+    // CANONICAL EVIDENCE, WHEN THE CLASSIFIER SUPPORTED ONE.
+    //
+    // `brainEvidenceFrom` returns nulls for every non-`supported` status, so an
+    // uncertain or contradicted reading contributes NOTHING and the Brain sees
+    // exactly the literal evidence it would have seen without this step.
+    const classified = classifications.get(c.identity.dedupeKey ?? `job:${j0.url ?? j0.company}`);
+    const semantic = classified
+      ? brainEvidenceFrom(classified.classification)
+      : { industry: null, business_model: null, customer_type: null };
+
     const brainEval = evaluateCompanyBrainEvidence({
       company: c.identity.name,
-      industry: (j0.industries ?? []).join(" ") || null,
+      industry: semantic.industry ?? ((j0.industries ?? []).join(" ") || null),
       company_category: j0.companyDescription ?? null,
       team_size: j0.companyEmployeeCount ?? null,
       employee_count: j0.companyEmployeeCount ?? null,
       company_stage: j0.companyStage ?? null,
-      business_model: j0.companyBusinessModel ?? null,
+      business_model: semantic.business_model ?? j0.companyBusinessModel ?? null,
       founder_led: j0.companyFounderLed ?? null,
       location: j0.location,
     }, opts.brainConstraints);
