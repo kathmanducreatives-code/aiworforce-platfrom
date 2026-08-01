@@ -43,6 +43,10 @@ import {
 import { resolveHiringSourceActor, HIRING_SOURCE_CATALOG } from "./hiringSourceCatalog.ts";
 import { decideDiscoveryBatchSize, batchDecisionDiagnostics, type DiscoveryBatchDecision } from "./discoveryBatchSize.ts";
 import {
+  allocateBatchAcrossPacks, packAllocationDiagnostics,
+  type PackAllocationDecision, type ProviderLimitScope,
+} from "./discoveryBatchAllocation.ts";
+import {
   dedupeAgainstState, hasSentInput, isStepFinished, jobDedupeKey, stepOf,
   type SourceExecutionState, type SourceStepRecord,
 } from "./sourceExecutionState.ts";
@@ -141,16 +145,48 @@ export interface PreparedCall {
   summary: Record<string, unknown>;
   /** The quota-aware batch decision, when one was made. Null for ATS. */
   batchDecision?: Record<string, unknown> | null;
+  /**
+   * Which query pack this call executes, when the step was split into packs.
+   * Null for an unsplit step. Packs are NEVER merged into one query.
+   */
+  queryPackId?: string | null;
+  /** How the step's batch was split across packs. Present on split calls only. */
+  packAllocation?: Record<string, unknown> | null;
 }
 
 export type PrepareResult =
   | { ok: true; call: PreparedCall }
   | { ok: false; status: "deferred" | "rejected" | "duplicate_input"; reason: string; stepId: string };
 
-/** Deterministic identity for one paid call. Same step + attempt + input ⇒ same key. */
-export function sourceIdempotencyKey(taskId: string, stepId: string, attempt: number, inputHash: string): string {
-  return `${taskId}:${stepId}:a${attempt}:${inputHash.slice(0, 16)}`;
+/**
+ * Deterministic identity for one paid call.
+ *
+ * SOURCE IDENTITY IS PART OF THE KEY. The key previously named only the step, so
+ * two calls that differed by the ACTOR finally selected (a capability re-resolved
+ * to a different provider between attempts) or by the QUERY PACK being executed
+ * could not be told apart in `completed_calls`, and a legitimately distinct paid
+ * call could be suppressed as "already paid". The final actor key and the pack id
+ * are therefore named explicitly rather than left implicit in the input hash.
+ */
+export function sourceIdempotencyKey(
+  taskId: string,
+  stepId: string,
+  attempt: number,
+  inputHash: string,
+  identity?: { actorKey?: string | null; queryPackId?: string | null },
+): string {
+  const actor = String(identity?.actorKey ?? "").trim();
+  const pack = String(identity?.queryPackId ?? "").trim();
+  return [
+    taskId,
+    stepId,
+    actor ? `actor=${actor}` : null,
+    pack ? `pack=${pack}` : null,
+    `a${attempt}`,
+    inputHash.slice(0, 16),
+  ].filter(Boolean).join(":");
 }
+
 
 /**
  * Compile the active step's semantic intent through the EXISTING Actor input
@@ -294,9 +330,13 @@ export async function prepareStepCall(args: {
       actorKey: compiled.actorKey,
       input: compiled.input,
       inputHash: compiled.inputHash,
-      idempotencyKey: sourceIdempotencyKey(args.taskId, step.stepId, attempt, compiled.inputHash),
+      idempotencyKey: sourceIdempotencyKey(args.taskId, step.stepId, attempt, compiled.inputHash, {
+        actorKey: compiled.actorKey,
+      }),
       repairs: compiled.repairs,
       summary: compiled.summary,
+      queryPackId: null,
+      packAllocation: null,
       // The batch decision travels with the call so the trace can show WHY this
       // many rows were requested, and which provider field carried the number.
       batchDecision: batchDecision
@@ -309,6 +349,126 @@ export async function prepareStepCall(args: {
     },
   };
 }
+
+// ------------------------------------------------------- separate packs -----
+//
+// PRESERVING QUERY PACKS THROUGH EXECUTION.
+//
+// The strategy owner emits several bounded query packs, each ONE coherent search
+// intent. `prepareStepCall` compiles a single merged `titleAliases` list, which
+// collapses those intents into one `A OR B OR C` query — precisely the merge the
+// strategy contract forbids, because the provider then ranks whatever it likes
+// highest and the early-stage packs never surface.
+//
+// This function keeps them separate: one compiled call PER PACK, each with its own
+// share of the approved batch (`allocateBatchAcrossPacks` owns that arithmetic,
+// including the per-query multiplication hazard), its own input hash and its own
+// idempotency key. A pack whose input was already sent is skipped, not merged.
+
+export interface StepQueryPack {
+  packId: string;
+  /** Titles for THIS pack only. Never the union of every pack. */
+  titleAliases: string[];
+}
+
+export interface PreparePackResult {
+  calls: PreparedCall[];
+  /** Packs that were not funded or not issued, with the reason. */
+  skipped: Array<{ packId: string; status: "deferred" | "rejected" | "duplicate_input" | "unfunded"; reason: string }>;
+  allocation: Record<string, unknown> | null;
+}
+
+export async function prepareStepPackCalls(args: {
+  taskId: string;
+  step: OrderedSourceStep;
+  state: SourceExecutionState;
+  queryPacks: StepQueryPack[];
+  /** Total rows the batch authority approved for this step. */
+  totalBatch: number;
+  providerMaximum: number;
+  maximumQueries?: number | null;
+  broadening?: BroadeningIntentChange | null;
+}): Promise<PreparePackResult> {
+  const { step, state } = args;
+  const intent = step.semanticIntent;
+  const packs = args.queryPacks.filter((p) => p && p.packId && (p.titleAliases ?? []).length > 0);
+  const skipped: PreparePackResult["skipped"] = [];
+
+  if (packs.length === 0) return { calls: [], skipped, allocation: null };
+
+  const scope = (PROVIDER_LIMIT_SCOPE[step.capability] ?? "per_run") as ProviderLimitScope;
+  const decision: PackAllocationDecision = allocateBatchAcrossPacks({
+    totalBatch: args.totalBatch,
+    packIds: packs.map((p) => p.packId),
+    scope,
+    providerMaximum: args.providerMaximum,
+    maximumQueries: args.maximumQueries ?? null,
+  });
+  const allocation = packAllocationDiagnostics(decision);
+
+  for (const packId of decision.droppedPackIds) {
+    skipped.push({ packId, status: "unfunded", reason: `pack_not_funded:${decision.reason}` });
+  }
+
+  const calls: PreparedCall[] = [];
+  const attemptBase = (stepOf(state, step.stepId)?.attempts ?? 0) + 1;
+
+  for (const alloc of decision.allocations) {
+    const pack = packs.find((p) => p.packId === alloc.packId);
+    if (!pack) continue;
+
+    const compiled: HiringSourceCompileResult = await compileHiringSourceInput(
+      applyBroadeningToIntent({
+        capability: step.capability,
+        roleFamily: intent.roleFamily,
+        // THIS pack's titles only.
+        titleAliases: [...pack.titleAliases],
+        geography: intent.geography,
+        postingWindowDays: intent.postingWindowDays,
+        remotePolicy: (intent.remotePolicy ?? null) as HiringSourceIntent["remotePolicy"],
+        employmentTypes: intent.employmentTypes,
+        candidateTarget: alloc.allocatedResults,
+      }, args.broadening),
+    );
+
+    if (!compiled.ok) {
+      skipped.push({ packId: pack.packId, status: compiled.status, reason: compiled.reason });
+      continue;
+    }
+    if (hasSentInput(state, step.stepId, compiled.inputHash)) {
+      skipped.push({
+        packId: pack.packId, status: "duplicate_input",
+        reason: `input ${compiled.inputHash.slice(0, 12)} was already sent for this step`,
+      });
+      continue;
+    }
+
+    calls.push({
+      stepId: step.stepId,
+      capability: compiled.capability,
+      actorKey: compiled.actorKey,
+      input: compiled.input,
+      inputHash: compiled.inputHash,
+      idempotencyKey: sourceIdempotencyKey(args.taskId, step.stepId, attemptBase, compiled.inputHash, {
+        actorKey: compiled.actorKey,
+        queryPackId: pack.packId,
+      }),
+      repairs: compiled.repairs,
+      summary: compiled.summary,
+      queryPackId: pack.packId,
+      packAllocation: {
+        ...allocation,
+        pack_id: pack.packId,
+        allocated_results: alloc.allocatedResults,
+        provider_limit_field: PROVIDER_LIMIT_FIELD[compiled.capability] ?? null,
+      },
+      batchDecision: null,
+    });
+  }
+
+  return { calls, skipped, allocation };
+}
+
 
 // ------------------------------------------------------------- the invoker --
 
