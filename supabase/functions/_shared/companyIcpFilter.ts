@@ -46,6 +46,14 @@ export interface IcpResult {
 
 function lc(s: unknown): string { return String(s ?? "").toLowerCase(); }
 function hay(c: IcpCandidate): string { return lc(`${c.company ?? ""} ${c.industry ?? ""} ${c.company_category ?? ""} ${c.company_type ?? ""}`); }
+/** Observable business-model vocabulary. Presence of one of these is EVIDENCE;
+ * absence is unknown, never a proven mismatch. */
+const KNOWN_BUSINESS_MODEL_TERMS = [
+  "saas", "software as a service", "marketplace", "ecommerce", "e-commerce", "d2c",
+  "dtc", "consumer", "b2b", "b2c", "agency", "consultancy", "consulting", "services",
+  "hardware", "fintech lending", "subscription", "platform", "open source", "paas", "iaas",
+];
+
 function hasAny(text: string, terms: string[]): boolean {
   const t = lc(text);
   return terms.some((n) => { const q = lc(n).trim(); return !!q && t.includes(q); });
