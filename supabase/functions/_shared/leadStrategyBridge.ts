@@ -161,13 +161,17 @@ export async function applyLeadStrategyInitialPlanning(
   }
 
   const mission = missionFromSpec(input);
-  const resolution = await runLeadStrategy({
+  // The runtime talks to the FACADE, never to an adapter. Which provider serves
+  // this call is configuration (LEAD_STRATEGIST_PROVIDER), not code.
+  const strategist = createQualifiedLeadStrategist({
+    provider: input.provider,
+    callModel: input.callModel,
+    timeoutMs: input.timeoutMs,
+  });
+  const resolution = await strategist.createInitialStrategy({
     mission,
     context: initialContext(input),
-    callModel: input.callModel,
-    provider: input.provider,
     workspaceId: input.workspaceId,
-    timeoutMs: input.timeoutMs,
   });
 
   const p = resolution.provenance;
