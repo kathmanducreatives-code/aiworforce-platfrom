@@ -17,35 +17,46 @@ const runAgentSrc = () => Deno.readTextFile(new URL("../run-agent/index.ts", imp
 Deno.test("8. run-agent supplies actionBudget to the company-first controller", async () => {
   const src = await runAgentSrc();
   const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing({"));
-  assert(call.includes("actionBudget: () =>"), "the real call site must supply a budget");
-  assert(call.includes("planAwareActionBudget({"), "it must use the existing budget authority");
+  assert(call.includes("actionBudget: createPlanAwareActionBudget("),
+    "the real call site must supply a budget through the binding");
+  assert(call.includes("sequentialSources.planBudgetSnapshot"),
+    "and feed it the live measured snapshot");
+  // ONE budget authority. A second hand-rolled computation at the call site is
+  // exactly how the inputs drift apart from the ones the binding measures.
+  assertFalse(call.includes("actionBudget: () =>"),
+    "the call site must not build its own budget alongside the binding");
 });
 
-Deno.test("8b. every budget input is read from REAL runtime state, not a constant", async () => {
+Deno.test("8a. the budget is supplied only when the bridge is actually enabled", async () => {
   const src = await runAgentSrc();
-  const block = src.slice(src.indexOf("actionBudget: () =>"), src.indexOf('log: (m, meta) => console.log("[run-agent][company-first]"'));
-  // Packs and sources are counted by the bridge from the live ledger and plan.
-  // run-agent asks rather than reading kernel state itself, because it is capped
-  // at two kernel imports by intelligenceFlags test 32.E.
-  assert(block.includes("sequentialSources.unusedWork()"),
-    "unused packs and sources must come from live bridge state");
-  // Quota and budget come from live counters.
-  assert(block.includes("state.total_contact_ready"), "remaining quota must be live");
-  assert(block.includes("state.cumulative_cost"), "remaining budget must be live");
-  assert(block.includes("state.provider_calls"), "actions spent must be live");
-  // Source quality is MEASURED from the last outcome, not assumed.
-  assert(block.includes("sequentialSources.lastOutcome()"), "source quality must be measured");
-  assert(block.includes("freshCount") && block.includes("rawCount"),
-    "quality must derive from the observed duplicate/fresh rate");
+  const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing({"));
+  assert(call.includes("sequentialSources.enabled"),
+    "a disabled bridge must leave the pre-existing fixed limits in force");
 });
 
-Deno.test("8b1. the bridge counts unused work from the LIVE ledger and plan", async () => {
+Deno.test("8b. every budget input is MEASURED, not assumed", async () => {
+  const bind = await Deno.readTextFile(new URL("./planAwareBudgetBinding.ts", import.meta.url));
+  // The binding is the single place that turns live state into budget inputs.
+  assert(bind.includes("planAwareActionBudget("), "it must use the existing budget authority");
+  assert(bind.includes("export function unusedPackCounts("), "unused packs are counted, not guessed");
+  assert(bind.includes("export function sourceQualityScore("), "quality is scored from the round");
+
   const bridge = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
-  const block = bridge.slice(bridge.indexOf("unusedWork: () => {"));
-  assert(block.includes("adaptivePackState.completed_by_capability"), "consumed packs from the ledger");
-  assert(block.includes("adaptivePackState.activated_pack_ids"), "activated packs from the ledger");
-  assert(block.includes("state.completed_step_ids") && block.includes("state.exhausted_step_ids"),
-    "unused sources from live execution state");
+  const snap = bridge.slice(bridge.indexOf("const recordBudgetSnapshot"));
+  assert(snap.includes("unusedPackCounts("), "the snapshot must reuse the canonical pack counter");
+  assert(snap.includes("remainingQuota: round.remainingQuota"), "remaining quota must be live");
+  assert(snap.includes("remainingBudgetUsd: round.remainingBudgetUsd"), "remaining budget must be live");
+  assert(snap.includes("state.provider_calls"), "actions spent must be live");
+});
+
+Deno.test("8b1. there is exactly ONE unused-work counter in the runtime", async () => {
+  // A second counter on the bridge would drift from the one the binding uses,
+  // and the budget would then be computed from two different truths.
+  const bridge = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
+  assertFalse(bridge.includes("unusedWork:"), "the bridge must not hand-roll a rival counter");
+
+  const src = await runAgentSrc();
+  assertFalse(src.includes("unusedWork()"), "run-agent must not read a rival counter");
 });
 
 Deno.test("8b2. the executor forwards the budget verbatim — it does not decide one", async () => {
@@ -120,12 +131,14 @@ Deno.test("9. the stop decision records its exact inputs", async () => {
   assert(ctrl.includes("plan_aware_stop: planAwareStop"), "and reach the result");
   assert(ctrl.includes("actions_spent: jobsCalls"), "with the actions actually spent");
 
-  const src = await runAgentSrc();
-  assert(src.includes('console.log("[run-agent][plan-aware-budget]"'), "and be observable");
-  const block = src.slice(src.indexOf('"[run-agent][plan-aware-budget]"'));
-  for (const field of ["unused_exact_packs", "unused_adjacent_packs", "unused_sources", "actions_spent"]) {
-    assert(block.includes(field), `the diagnostic must carry ${field}`);
+  // The inputs the decision was made from are carried by the snapshot itself,
+  // so the record stays complete without a second log line at the call site.
+  const bind = await Deno.readTextFile(new URL("./planAwareBudgetBinding.ts", import.meta.url));
+  for (const field of ["unusedExactPacks", "unusedAdjacentPacks", "unusedSources", "actionsSpent"]) {
+    assert(bind.includes(field), `the budget input must carry ${field}`);
   }
+  assert(bind.includes("PLAN_BUDGET_PENDING_REASON"),
+    "a run with no completed round yet must say so rather than invent a budget");
 });
 
 Deno.test("9b. WITHOUT a budget the pre-existing fixed limits still decide", async () => {

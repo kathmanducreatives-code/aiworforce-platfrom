@@ -56,6 +56,10 @@ import { applyObservation } from "./sequentialSourceRuntime.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
 
+import {
+  unusedPackCounts, sourceQualityScore,
+  type PlanBudgetSnapshot,
+} from "./planAwareBudgetBinding.ts";
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import {
   safeObserverFailure,
@@ -168,7 +172,6 @@ export interface SequentialSourceBridgeResult {
    * is capped at two kernel imports (intelligenceFlags test 32.E), and the bridge
    * already owns this state. One reader, one place.
    */
-  unusedWork: () => { unusedExactPacks: number; unusedAdjacentPacks: number; unusedSources: number };
   /**
    * Provenance of the INITIAL strategy: `claude`, `claude_repaired` or
    * `deterministic_fallback`, with the exact fallback reason, the generated pack
@@ -196,6 +199,15 @@ export interface SequentialSourceBridgeResult {
    * provider record or a contact.
    */
   lastTransitionFailure: () => Record<string, unknown> | null;
+  /**
+   * PLAN-AWARE BUDGET SNAPSHOT for the quota controller's `actionBudget` seam.
+   *
+   * Null until a round has been observed — before that there is nothing measured
+   * to budget against and the first action is always allowed. Null forever when
+   * the bridge is disabled, which is what keeps the pre-existing fixed limits in
+   * force on the default path.
+   */
+  planBudgetSnapshot: () => PlanBudgetSnapshot | null;
 }
 
 /**
@@ -252,9 +264,11 @@ export async function applySequentialSourceExecution(
     lastFeedback: () => null,
     lastAdaptiveDecision: () => null,
     activePacks: () => [],
-    unusedWork: () => ({ unusedExactPacks: 0, unusedAdjacentPacks: 0, unusedSources: 0 }),
     strategyProvenance: () => null,
     lastTransitionFailure: () => null,
+    // Disabled: no plan, so no plan-aware budget. The controller keeps its own
+    // fixed limits, exactly as before this seam existed.
+    planBudgetSnapshot: () => null,
     // Disabled: there is no ordered plan, so no source is pending. The controller
     // then behaves exactly as it did before ordered execution existed.
     nextPendingDiscoverySource: () => ({ pending: false, stepId: null, capability: null, actorKey: null }),
@@ -601,6 +615,49 @@ export async function applySequentialSourceExecution(
     }
   };
 
+  /** The most recent measured budget snapshot. Null until a round completes. */
+  let budgetSnapshot: PlanBudgetSnapshot | null = null;
+
+  const recordBudgetSnapshot = (round: RoundObservationInput): void => {
+    const packs = unusedPackCounts(activePacks, adaptivePackState);
+    const discovery = approved.steps.filter((s) => s.role !== "verification");
+    const unusedSources = discovery.filter((s) => !stepFinished(s.stepId)).length;
+    const capability = state.current_step_id
+      ? (stepOf(state, state.current_step_id)?.capability ?? "unknown")
+      : "unknown";
+    const funnel = round.funnel as unknown as Record<string, number>;
+    const quality = { ...(budgetSnapshot?.sourceQuality ?? {}) };
+    quality[capability] = sourceQualityScore({
+      rawRows: round.rawRows,
+      newUniqueCompanies: round.newUniqueCompanies,
+      companiesQualified: Number(funnel?.companies_qualified ?? 0) || 0,
+      newEligibleLeads: round.newEligibleLeads,
+    });
+    budgetSnapshot = {
+      ...packs,
+      unusedSources,
+      remainingQuota: round.remainingQuota,
+      remainingBudgetUsd: round.remainingBudgetUsd,
+      actionsSpent: Math.max(round.round, state.provider_calls),
+      sourceQuality: quality,
+    };
+  };
+
+  /**
+   * The observation the controller actually calls. It records the budget
+   * snapshot on EVERY path — including a halt — because a run that failed to
+   * fold a transition has still spent the action it paid for.
+   */
+  const onObservationWithBudget = async (
+    round: RoundObservationInput,
+  ): Promise<RoundObservationOutcome | void> => {
+    try {
+      return await onObservation(round);
+    } finally {
+      recordBudgetSnapshot(round);
+    }
+  };
+
   return {
     invokeJobs: handle.invokeJobs,
     enabled: true,
@@ -610,20 +667,11 @@ export async function applySequentialSourceExecution(
     fusion,
     feedback,
     lastOutcome: handle.lastOutcome,
-    onObservation,
+    onObservation: onObservationWithBudget,
+    planBudgetSnapshot: () => budgetSnapshot,
     lastFeedback: () => lastFeedback,
     lastAdaptiveDecision: () => lastAdaptive,
     activePacks: () => activePacks,
-    unusedWork: () => {
-      const consumed = new Set(Object.values(adaptivePackState.completed_by_capability).flat());
-      const finished = new Set([...state.completed_step_ids, ...state.exhausted_step_ids]);
-      return {
-        unusedExactPacks: activePacks.filter((p) => p.initially_eligible && !consumed.has(p.pack_id)).length,
-        unusedAdjacentPacks: activePacks.filter((p) =>
-          !p.initially_eligible && !adaptivePackState.activated_pack_ids.includes(p.pack_id)).length,
-        unusedSources: approved.steps.filter((st) => !finished.has(st.stepId)).length,
-      };
-    },
     strategyProvenance: () => ({ ...strategyProvenance, plan_hash: approved.planHash }),
     lastTransitionFailure: () => lastTransitionFailure,
     nextPendingDiscoverySource: () => {

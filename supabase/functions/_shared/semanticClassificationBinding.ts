@@ -9,7 +9,7 @@
 // `run-agent` is capped at TWO kernel imports by `intelligenceFlags` test 32.E,
 // and this binding needs the strategist facade, the flag pair, the model id and
 // the allowance. Assembling it here keeps run-agent's kernel surface unchanged —
-// the same reason `unusedWork()` lives on the bridge.
+// the same reason the plan-aware budget is assembled behind its own binding.
 //
 // ── SAFETY ───────────────────────────────────────────────────────────────────
 //   * OFF by default. BOTH the flag AND the workspace allow-list must pass; an

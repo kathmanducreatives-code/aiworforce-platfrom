@@ -60,12 +60,6 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
    */
   onRoundComplete?: QuotaControllerDeps["onRoundComplete"];
   /**
-   * PLAN-AWARE ACTION BUDGET. Forwarded verbatim to the controller — this
-   * wrapper adapts run-agent's context, it does not decide budgets. Omitted ⇒
-   * the controller's pre-existing fixed limits apply unchanged.
-   */
-  actionBudget?: QuotaControllerDeps["actionBudget"];
-  /**
    * SEMANTIC CLASSIFICATION, forwarded to the sourcing pipeline.
    *
    * Absent ⇒ no classification and no model call, exactly as before. This
@@ -75,6 +69,11 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
   classificationCallsRemaining?: number;
   /** Read-only ordered-source oracle. Threaded straight to the controller. */
   pendingDiscoverySource?: QuotaControllerDeps["pendingDiscoverySource"];
+  /**
+   * PLAN-AWARE ACTION BUDGET. Forwarded verbatim; omitted means the controller's
+   * pre-existing fixed round/call limits decide, exactly as before.
+   */
+  actionBudget?: QuotaControllerDeps["actionBudget"];
   executionBudget?: Partial<ExecutionBudget>;
   clock?: () => number;
   log?: (msg: string, meta?: unknown) => void;
@@ -133,8 +132,8 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     proposeBroadening: deps.proposeBroadening, plannerMetadata: deps.plannerMetadata,
     durableIdempotency: deps.durableIdempotency, stateStore: deps.stateStore,
     onRoundComplete: deps.onRoundComplete,
-    actionBudget: deps.actionBudget,
     pendingDiscoverySource: deps.pendingDiscoverySource,
+    actionBudget: deps.actionBudget,
   }, {
     requestedLeadCount: deps.requestedLeadCount,
     quotaPolicy: deps.quotaPolicy, bounds: deps.bounds, limits: deps.limits,
