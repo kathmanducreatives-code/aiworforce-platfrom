@@ -478,13 +478,13 @@ export const INDEED_DATE_POSTED_BUCKETS = [1, 3, 7, 14] as const;
 export function indeedDatePostedBucket(days: number | null | undefined): { value: string; repair: string | null } {
   if (days == null || !Number.isFinite(days) || days <= 0) return { value: "", repair: null };
   const d = Math.floor(days);
-  if (d <= 1) return { value: "last 24 hours", repair: null };
-  if (d <= 3) return { value: "3 days", repair: null };
-  if (d <= 7) return { value: "7 days", repair: null };
-  if (d <= 14) return { value: "14 days", repair: null };
+  if (d <= 1) return { value: "1", repair: null };
+  if (d <= 3) return { value: "3", repair: null };
+  if (d <= 7) return { value: "7", repair: null };
+  if (d <= 14) return { value: "14", repair: null };
   return {
-    value: "14 days",
-    repair: `posting_window_clamped:${d}d->14d (indeed datePosted supports only "last 24 hours"/"3 days"/"7 days"/"14 days")`,
+    value: "14",
+    repair: `posting_window_clamped:${d}d->14d (indeed datePosted supports only ""/"1"/"3"/"7"/"14")`,
   };
 }
 

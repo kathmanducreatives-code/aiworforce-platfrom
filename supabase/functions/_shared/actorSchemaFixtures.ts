@@ -13,8 +13,9 @@
 //     validation and run as unrestricted market discovery, which the product
 //     contract forbids.
 //   * YC — exposes `searchQuery`, not `query`, and has NO recency filter at all.
-//   * Indeed — `datePosted` accepts FOUR literal strings, none of them numeric.
-//     Our compiler emits "1"/"3"/"7"/"14". See `indeedDatePostedBucket`.
+//   * Indeed — `datePosted` accepts ONLY "" | "1" | "3" | "7" | "14". The prose
+//     enum ("last 24 hours", "3 days"...) shipped in PR #123 was rejected by the
+//     live actor in production run b59b422b. See `indeedDatePostedBucket`.
 //
 // This module is the versioned record of what was actually verified, so the rules
 // in `finalActorPayload.ts` and the compilers in `actorInputPlanner.ts` can be
@@ -63,14 +64,17 @@ export const ACTOR_SCHEMA_FIXTURES: Record<string, ActorSchemaFixture> = {
     supported: ["query", "location", "country", "maxItems", "jobType", "datePosted", "includeDescription", "urls", "maxRequestRetries"],
     enums: {
       jobType: ["fulltime", "parttime", "contract", "temporary", "internship"],
-      // FOUR LITERAL STRINGS. Not numbers, and nothing beyond 14 days.
-      datePosted: ["last 24 hours", "3 days", "7 days", "14 days"],
+      // FOUR NUMERIC-STRING DAY BUCKETS, plus "" for no filter. Verified against
+      // the LIVE actor on 2026-08-01: production run b59b422b was rejected with
+      // `apify_input_schema_error` listing exactly "", "1", "3", "7", "14".
+      datePosted: ["1", "3", "7", "14"],
       country: ["US", "UK", "CA", "AU", "IN", "DE", "FR", "NL", "BE", "CH", "AT", "IT", "ES", "BR", "MX", "JP", "SG", "HK"],
     },
     resultLimit: { field: "maxItems", max: null, default: 50 },
     recency: { field: "datePosted", maxDays: 14, kind: "enum" },
     notes: [
       "maxItems: 0 means unlimited — never send 0 for a bounded run.",
+      "datePosted values are numeric day strings; \"\" means no recency filter.",
       "datePosted cannot express 30, 45 or 60 days. The 60-day policy is unenforceable provider-side here and must be applied after normalization.",
     ],
   },
