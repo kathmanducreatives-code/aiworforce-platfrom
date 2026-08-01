@@ -455,19 +455,15 @@ export const INDEED_DATE_POSTED_BUCKETS = [1, 3, 7, 14] as const;
  * source never performed.
  */
 /**
- * Indeed's `datePosted`, using the values the actor actually documents.
+ * Indeed's `datePosted`, using the values the LIVE actor accepts.
  *
- * These are FOUR LITERAL STRINGS, verified 2026-07-30 against
- * apify.com/automation-lab/indeed-scraper/input-schema:
+ *   "" | "1" | "3" | "7" | "14"
  *
- *   "last 24 hours" | "3 days" | "7 days" | "14 days"
- *
- * This previously emitted "1" / "3" / "7" / "14" — numeric strings that are not
- * members of that enum. The bug was latent only because the compiler had never
- * been given a posting window in production: the audited run sent
- * `datePosted: ""`. The first request carrying a recency policy would have sent an
- * undocumented value, which is exactly the "never fabricate an unsupported
- * provider value" rule.
+ * PR #123 changed this to the prose form ("last 24 hours" / "3 days" / ...) after
+ * reading the published input-schema page. The live actor REJECTED that form:
+ * production run b59b422b failed with `apify_input_schema_error` naming exactly
+ * the five values above. Runtime truth beats the documentation page, so the
+ * numeric-day strings are restored and pinned by fixture tests.
  *
  * FOURTEEN DAYS IS THE CEILING. Indeed cannot express 30, 45 or 60 days. A longer
  * semantic window is clamped to the strictest supported bucket and the
