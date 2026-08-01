@@ -52,7 +52,7 @@ async function runInvoker(packs: Array<{ packId: string; titleAliases: string[] 
   const sent: Array<Record<string, unknown>> = [];
   const handle = sequentialJobsInvoker({
     taskId: "t1", plan: approved, state,
-    invokeJobs: (env) => { sent.push(env); return Promise.resolve([]); },
+    invokeJobs: (env: Record<string, unknown>) => { sent.push(env); return Promise.resolve([]); },
     ...(packs ? { queryPacks: packs } : {}),
   } as never);
   await handle.invokeJobs({}, 25);
