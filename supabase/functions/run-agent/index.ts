@@ -56,6 +56,8 @@ import {
   actorLimitationBriefing, inferRouteFromRequest, newRouteExecutionRecord,
   routeDrift, validateHiringRoute,
 } from "../_shared/hiringRouteContract.ts";
+import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
+import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
 import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
 } from "../_shared/semanticClassificationBinding.ts";
@@ -1084,6 +1086,73 @@ Deno.serve(async (req) => {
           });
         }
 
+        // ══ COMPANY-FIRST EXECUTION ══════════════════════════════════════════
+        // The validated route now DRIVES execution. For a tight ICP this reaches
+        // memo23 first; broad job boards are only reachable through the
+        // fallback route, which requires a recorded structured reason.
+        let companyFirstRoute: Awaited<ReturnType<typeof executeCompanyFirstRoute>> | null = null;
+        if (routeResolution.ok && routeRecord &&
+            routeResolution.validated_route !== "broad_job_fallback") {
+          try {
+            companyFirstRoute = await executeCompanyFirstRoute({
+              // The SAME provider entry point the rest of run-agent uses. The
+              // executor holds no provider import of its own.
+              invoke: async (call) => {
+                const rows = await invokeJobs({
+                  selected_actor_key: call.actorKey,
+                  actor_id: call.actorId,
+                  ...(call.input as Record<string, unknown>),
+                });
+                return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
+              },
+              // THE EXISTING canonical verifier — never re-implemented here.
+              verifyEmployer: (person, companyUrl) => {
+                const v = verifyCurrentEmployer(
+                  {
+                    title: person.title,
+                    currentCompany: person.current_employer,
+                    currentCompanyLinkedinUrl: person.current_employer_linkedin_url,
+                    isCurrent: person.current_employer_is_current ?? null,
+                  },
+                  { name: null, normalizedName: null, canonicalDomain: null,
+                    linkedinUrl: companyUrl, linkedinCompanyId: null, location: null,
+                    dedupeKey: companyUrl, dedupeKeyKind: "linkedin_url" } as never,
+                );
+                // The existing gate decides; this never re-defines "verified".
+                return { verified: employerGatePasses(v.outcome), outcome: String(v.outcome) };
+              },
+              log: (m, meta) => console.log("[run-agent][company-first-route]", m, meta),
+            }, {
+              route: routeResolution,
+              routeRecord,
+              requestedLeadCount: quota.requestedLeadCount,
+              taskId: task.id,
+              workspaceId: workspace_id,
+              // The SAME compiled Brain policy the legacy path enforces, so the
+              // company-fit gate and the existing hard gate cannot disagree.
+              brain: brainEnforced
+                ? {
+                  employee_min: effectivePolicy.constraints.min_employees ?? null,
+                  employee_max: effectivePolicy.constraints.max_employees ?? null,
+                  positive_industries: effectivePolicy.constraints.positive_industries ?? [],
+                  excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
+                  required_geography: null,
+                }
+                : undefined,
+            });
+            console.log("[run-agent][company-first-route][done]", {
+              task_id: task.id,
+              executed_source_order: companyFirstRoute.executed_source_order,
+              funnel: companyFirstRoute.funnel,
+              diagnostics: companyFirstRoute.diagnostics,
+            });
+          } catch (e) {
+            // A route failure must not lose the task; the legacy path still runs
+            // and the failure is recorded rather than swallowed.
+            console.log("[run-agent][company-first-route][error]", String(e));
+          }
+        }
+
         const claudeFirst = persistedPlan
           ? claudeFirstFromPersistedPlan(persistedPlan, cfIntent.job_search_spec as unknown as Record<string, unknown>)
           : gptStrategy?.specRewritten
@@ -1496,6 +1565,15 @@ Deno.serve(async (req) => {
           // only — never a prompt, a credential or a claim. Present even when the
           // feature is off, so "no classification" is a recorded fact rather than
           // an absent key the reader has to interpret.
+          // COMPANY-FIRST ROUTE EXECUTION — the real funnel, stage by stage,
+          // with the diagnostics that prove which Actor ran in what order.
+          company_first_route: companyFirstRoute
+            ? {
+              executed_source_order: companyFirstRoute.executed_source_order,
+              funnel: companyFirstRoute.funnel,
+              ...companyFirstRoute.diagnostics,
+            }
+            : null,
           // FUNNEL, stage by stage. Qualified companies stay visible while
           // founder enrichment is still pending — hiding them is how a run that
           // did real work reports as a failure.

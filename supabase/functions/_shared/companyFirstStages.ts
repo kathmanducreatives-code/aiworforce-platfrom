@@ -97,6 +97,12 @@ export function advance(
 
 export interface CompanyFitInput {
   company_key: string;
+  /**
+   * The DISPLAY name. Distinct from `company_key`, which is an internal
+   * namespaced id — passing the key here made the aggregator detector see a
+   * name/domain mismatch on every company and hold real ones as pending.
+   */
+  company_name?: string | null;
   identity_status: "verified_match" | "ambiguous" | "mismatch" | "unresolved";
   enrichment_complete: boolean;
   /** Enriched exact headcount. The ONLY value the size gate may read. */
@@ -139,7 +145,7 @@ export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
   const missing: string[] = [];
 
   const aggregator = extractAggregatorEvidence({
-    company_name: i.company_key, industry_ids: i.industry_ids,
+    company_name: i.company_name ?? null, industry_ids: i.industry_ids,
     provider_industry: i.provider_industry, description: i.description,
     canonical_domain: i.canonical_domain, postings: i.postings,
   });
