@@ -98,7 +98,7 @@ Deno.test("validator rejects a repeated strategy and a hard-constraint change", 
 Deno.test("bottleneck is measured, not round-number based", () => {
   const ctx = { remainingQuota: 5, budgetRemaining: 5, expansionAvailable: true };
   assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 0 }, ctx).kind, "insufficient_raw_jobs");
-  assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 25, unique_jobs: 25, job_family_pass: 0 }, ctx).kind, "title_coverage");
+  assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 25, unique_jobs: 25, job_family_pass: 0 }, ctx).kind, "insufficient_title_coverage");
   assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 25, unique_jobs: 25, job_family_pass: 5, companies_qualified: 0 }, ctx).kind, "company_qualification");
   assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 25, unique_jobs: 25, job_family_pass: 5, companies_qualified: 9, people_calls: 0 }, ctx).kind, "people_coverage");
   assertEquals(classifyBottleneck({ ...emptyFunnelSummary(), raw_jobs: 25, unique_jobs: 25, job_family_pass: 5, companies_qualified: 9, people_calls: 8, profiles_returned: 6, person_role_pass: 0 }, ctx).kind, "person_role_precision");

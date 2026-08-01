@@ -115,7 +115,7 @@ Deno.test("59./bottleneck: with a truthful funnel the diagnosis is company quali
 
   // What production actually recorded — a falsified title-family count.
   const falsified = { ...emptyFunnelSummary(), raw_jobs: 50, unique_jobs: 0, job_family_pass: 0, job_family_fail: 50, companies_qualified: 0 };
-  assertEquals(classifyBottleneck(falsified, ctx).kind, "title_coverage");
+  assertEquals(classifyBottleneck(falsified, ctx).kind, "insufficient_title_coverage");
 
   // What the same round looks like once title-family is measured from the
   // classifier: 23 titles matched and NO company survived. Company
