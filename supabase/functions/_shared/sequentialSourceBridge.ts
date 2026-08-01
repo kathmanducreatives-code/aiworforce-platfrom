@@ -153,6 +153,23 @@ export interface SequentialSourceBridgeResult {
    */
   lastAdaptiveDecision: () => Record<string, unknown> | null;
   /**
+   * The validated query packs this mission is executing.
+   *
+   * Read-only, exposed so the plan-aware action budget can count what is still
+   * UNUSED from real state instead of guessing. Empty when no strategy produced
+   * packs.
+   */
+  activePacks: () => readonly QueryPack[];
+  /**
+   * What the plan-aware budget needs, counted from the LIVE pack ledger and
+   * execution state.
+   *
+   * Exposed here rather than letting run-agent read the ledger itself: run-agent
+   * is capped at two kernel imports (intelligenceFlags test 32.E), and the bridge
+   * already owns this state. One reader, one place.
+   */
+  unusedWork: () => { unusedExactPacks: number; unusedAdjacentPacks: number; unusedSources: number };
+  /**
    * Provenance of the INITIAL strategy: `claude`, `claude_repaired` or
    * `deterministic_fallback`, with the exact fallback reason, the generated pack
    * ids, the selected capability order and the plan hash.
@@ -234,6 +251,8 @@ export async function applySequentialSourceExecution(
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
     lastAdaptiveDecision: () => null,
+    activePacks: () => [],
+    unusedWork: () => ({ unusedExactPacks: 0, unusedAdjacentPacks: 0, unusedSources: 0 }),
     strategyProvenance: () => null,
     lastTransitionFailure: () => null,
     // Disabled: there is no ordered plan, so no source is pending. The controller
@@ -594,6 +613,17 @@ export async function applySequentialSourceExecution(
     onObservation,
     lastFeedback: () => lastFeedback,
     lastAdaptiveDecision: () => lastAdaptive,
+    activePacks: () => activePacks,
+    unusedWork: () => {
+      const consumed = new Set(Object.values(adaptivePackState.completed_by_capability).flat());
+      const finished = new Set([...state.completed_step_ids, ...state.exhausted_step_ids]);
+      return {
+        unusedExactPacks: activePacks.filter((p) => p.initially_eligible && !consumed.has(p.pack_id)).length,
+        unusedAdjacentPacks: activePacks.filter((p) =>
+          !p.initially_eligible && !adaptivePackState.activated_pack_ids.includes(p.pack_id)).length,
+        unusedSources: approved.steps.filter((st) => !finished.has(st.stepId)).length,
+      };
+    },
     strategyProvenance: () => ({ ...strategyProvenance, plan_hash: approved.planHash }),
     lastTransitionFailure: () => lastTransitionFailure,
     nextPendingDiscoverySource: () => {

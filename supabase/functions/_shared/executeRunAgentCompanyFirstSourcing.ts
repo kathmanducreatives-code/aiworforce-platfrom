@@ -58,6 +58,12 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
    * this wrapper adapts run-agent's context, it does not interpret rounds.
    */
   onRoundComplete?: QuotaControllerDeps["onRoundComplete"];
+  /**
+   * PLAN-AWARE ACTION BUDGET. Forwarded verbatim to the controller — this
+   * wrapper adapts run-agent's context, it does not decide budgets. Omitted ⇒
+   * the controller's pre-existing fixed limits apply unchanged.
+   */
+  actionBudget?: QuotaControllerDeps["actionBudget"];
   /** Read-only ordered-source oracle. Threaded straight to the controller. */
   pendingDiscoverySource?: QuotaControllerDeps["pendingDiscoverySource"];
   executionBudget?: Partial<ExecutionBudget>;
@@ -116,6 +122,7 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     proposeBroadening: deps.proposeBroadening, plannerMetadata: deps.plannerMetadata,
     durableIdempotency: deps.durableIdempotency, stateStore: deps.stateStore,
     onRoundComplete: deps.onRoundComplete,
+    actionBudget: deps.actionBudget,
     pendingDiscoverySource: deps.pendingDiscoverySource,
   }, {
     requestedLeadCount: deps.requestedLeadCount,

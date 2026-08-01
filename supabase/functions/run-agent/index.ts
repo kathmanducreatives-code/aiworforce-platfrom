@@ -51,6 +51,7 @@ import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthorit
 // function object, so the default path is not merely equivalent to today's
 // behavior, it is today's behavior.
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
+import { planAwareActionBudget } from "../_shared/leadStrategyFeedbackOwner.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
@@ -1228,6 +1229,46 @@ Deno.serve(async (req) => {
           // pending before it ends the whole mission. Without it, plan 43fb7313
           // returned `search_exhausted` with LinkedIn, Glassdoor and ATS pending.
           pendingDiscoverySource: sequentialSources.nextPendingDiscoverySource,
+          // PLAN-AWARE STOP, supplied from REAL runtime state.
+          //
+          // `planAwareActionBudget` shipped tested with no production caller, so
+          // the blind `maxRounds: 3 / maxJobsCalls: 3` ended every run regardless
+          // of how much useful work remained. Every input below is read from the
+          // live ordered plan, the live execution state and the live pack ledger —
+          // none is a constant.
+          actionBudget: () => {
+            const plan = sequentialSources.plan;
+            const state = sequentialSources.state;
+            if (!plan || !state) return { exhausted: false, remaining: 1, allowed: 1, reason: "no_ordered_plan" };
+
+            // Counted by the bridge, which owns the pack ledger and step state.
+            // run-agent is capped at two kernel imports (test 32.E), so it asks
+            // rather than reading that state itself.
+            const { unusedExactPacks, unusedAdjacentPacks, unusedSources } = sequentialSources.unusedWork();
+
+            // Source quality from the MEASURED last outcome: a source whose rows
+            // were nearly all duplicates or off-family scores as noise.
+            const last = sequentialSources.lastOutcome();
+            const sourceQuality: Record<string, number> = {};
+            if (last?.actorKey && last.rawCount > 0) {
+              const freshRate = last.freshCount / Math.max(1, last.rawCount);
+              sourceQuality[last.actorKey] = freshRate < 0.2 ? -0.9 : freshRate < 0.5 ? -0.5 : 0.5;
+            }
+
+            const budget = planAwareActionBudget({
+              unusedExactPacks, unusedAdjacentPacks, unusedSources,
+              remainingQuota: Math.max(0, quota.requestedLeadCount - state.total_contact_ready),
+              remainingBudgetUsd: Math.max(0, plan.maximumEstimatedCostUsd - state.cumulative_cost),
+              sourceQuality,
+              actionsSpent: state.provider_calls,
+            });
+            console.log("[run-agent][plan-aware-budget]", {
+              task_id: task.id, ...budget,
+              unused_exact_packs: unusedExactPacks, unused_adjacent_packs: unusedAdjacentPacks,
+              unused_sources: unusedSources, actions_spent: state.provider_calls,
+            });
+            return budget;
+          },
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
