@@ -495,6 +495,21 @@ export interface SequentialInvokerDeps {
   fusion?: { state: HiringEvidenceFusionState; workspaceId: string };
   log?: (msg: string, meta?: unknown) => void;
   now?: () => string;
+  /**
+   * The validated query packs for this mission, when the strategy produced any.
+   *
+   * Supplying them makes the step execute ONE PAID CALL PER PACK through
+   * `prepareStepPackCalls` — each with its own titles, batch allocation, input
+   * hash and idempotency identity. Omitting them keeps the pre-existing single
+   * merged-alias call exactly as it was.
+   *
+   * `prepareStepPackCalls` shipped tested but with NO production caller, which is
+   * why production task 9cb98f67 sent
+   * `"Sales Operations OR Revenue Operations OR GTM Operations"` to all three
+   * Actors: the merge happened in `prepareStepCall`, which passes
+   * `intent.approvedTitleAliases` as one list.
+   */
+  queryPacks?: StepQueryPack[];
 }
 
 export interface SequentialCallOutcome {
@@ -586,102 +601,135 @@ export function sequentialJobsInvoker(deps: SequentialInvokerDeps): SequentialIn
       return [];
     }
 
-    const call = prepared.call;
-
-    // The EXISTING durable ledger decides whether this was already paid for.
-    if (deps.alreadyPaid && await deps.alreadyPaid(call.idempotencyKey)) {
-      last = {
-        ran: false, stepId: step.stepId, actorKey: call.actorKey,
-        rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: "already_paid", idempotencyKey: call.idempotencyKey, fusion: null,
-      };
-      log("[sequential-source] call already completed", { step: step.stepId, key: call.idempotencyKey });
-      return [];
+    // ONE CALL PER QUERY PACK.
+    //
+    // With packs supplied, `prepareStepPackCalls` splits this step into separate
+    // paid calls — each carrying its own titles, batch allocation, input hash and
+    // idempotency key, and recording unfunded packs as SKIPPED rather than folding
+    // them into a neighbour. Without packs the single prepared call runs exactly as
+    // before, so every existing caller is unchanged.
+    const packs = deps.queryPacks ?? [];
+    let calls: PreparedCall[] = [prepared.call];
+    if (packs.length > 0) {
+      const split = await prepareStepPackCalls({
+        taskId: deps.taskId, step, state: deps.state, queryPacks: packs,
+        totalBatch: Number(prepared.call.batchDecision?.count ?? step.semanticIntent.candidateTarget),
+        providerMaximum: HIRING_SOURCE_CATALOG[step.capability]?.operatingPolicy.maximumResultsPerCall
+          ?? step.semanticIntent.candidateTarget,
+      });
+      if (split.calls.length > 0) {
+        calls = split.calls;
+        for (const sk of split.skipped) {
+          log("[sequential-source] pack skipped", { step: step.stepId, pack: sk.packId, reason: sk.reason });
+        }
+      }
     }
 
-    record.attempts += 1;
-    record.input_hashes.push(call.inputHash);
-    record.idempotency_keys.push(call.idempotencyKey);
-    deps.state.current_attempt = record.attempts;
-    deps.state.provider_calls += 1;
+    const allRows: unknown[] = [];
+    const allFresh: unknown[] = [];
+    let rawTotal = 0, freshTotal = 0, dupTotal = 0;
+    let lastKey: string | null = null;
+    let lastFusion: FuseSourceOutcome | null = null;
 
-    // Carry the wrapper's own controls through, and put the compiled Actor-native
-    // input where the existing provider path expects it. The caller's envelope is
-    // preserved so nothing downstream loses context it already depends on.
-    const merged: Record<string, unknown> = {
-      ...envelope,
-      selected_actor_key: call.actorKey,
-      idempotency_key: call.idempotencyKey,
-      input: call.input,
-      // THIS PAYLOAD IS ALREADY THE ACTOR'S OWN SHAPE.
-      //
-      // `compileHiringSourceInput` produced it for THIS capability and it has been
-      // validated and hashed. Marking it is what stops the provider layer treating
-      // it as generic hints and rebuilding it with another vendor's serializer —
-      // the defect that sent Curious-Coder keys to Crawlworks and drew
-      // "Field input.jobsToFetch is required" from Apify.
-      compiled_actor_input: true,
-      capability_key: call.capability,
-      compiled_input_hash: call.inputHash,
-    };
+    for (const call of calls) {
+      // The EXISTING durable ledger decides whether THIS pack was already paid for.
+      if (deps.alreadyPaid && await deps.alreadyPaid(call.idempotencyKey)) {
+        log("[sequential-source] call already completed", { step: step.stepId, key: call.idempotencyKey });
+        continue;
+      }
 
-    let raw: unknown[] = [];
-    try {
-      raw = await deps.invokeJobs(merged, max);
-    } catch (e) {
-      // A provider failure ends THIS step, not the task: the ordered plan may
-      // still have an approved fallback, and failing everything would throw away
-      // work already paid for.
-      record.status = "failed";
-      record.failure_category = safeFailureCategory(e);
+      record.attempts += 1;
+      record.input_hashes.push(call.inputHash);
+      record.idempotency_keys.push(call.idempotencyKey);
+      deps.state.current_attempt = record.attempts;
+      deps.state.provider_calls += 1;
+      lastKey = call.idempotencyKey;
+
+      const merged: Record<string, unknown> = {
+        ...envelope,
+        selected_actor_key: call.actorKey,
+        idempotency_key: call.idempotencyKey,
+        input: call.input,
+        // THIS PAYLOAD IS ALREADY THE ACTOR'S OWN SHAPE — see compileHiringSourceInput.
+        compiled_actor_input: true,
+        capability_key: call.capability,
+        compiled_input_hash: call.inputHash,
+        ...(call.queryPackId ? { query_pack_id: call.queryPackId } : {}),
+      };
+
+      let raw: unknown[] = [];
+      try {
+        raw = await deps.invokeJobs(merged, max);
+      } catch (e) {
+        // A provider failure ends THIS step, not the task.
+        record.status = "failed";
+        record.failure_category = safeFailureCategory(e);
+        deps.state.cumulative_cost += deps.costPerCall ?? 0;
+        deps.state.checkpoint_at = now();
+        last = {
+          ran: true, stepId: step.stepId, actorKey: call.actorKey,
+          rawCount: rawTotal, freshCount: freshTotal, duplicateCount: dupTotal,
+          reason: `provider_failed:${record.failure_category}`, idempotencyKey: call.idempotencyKey, fusion: lastFusion,
+        };
+        log("[sequential-source] provider failed", { step: step.stepId, category: record.failure_category });
+        return allFresh;
+      }
+
+      const rows = Array.isArray(raw) ? raw : [];
+      // TASK-LOCAL dedupe runs PER CALL against the shared ledger, so two packs
+      // returning the same posting produce one company decision, not two.
+      const dedupe = dedupeAgainstState(deps.state.seen_job_keys, rows, (r) => jobDedupeKey(asJob(r)));
+
+      record.cost += deps.costPerCall ?? 0;
       deps.state.cumulative_cost += deps.costPerCall ?? 0;
       deps.state.checkpoint_at = now();
-      last = {
-        ran: true, stepId: step.stepId, actorKey: call.actorKey,
-        rawCount: 0, freshCount: 0, duplicateCount: 0,
-        reason: `provider_failed:${record.failure_category}`, idempotencyKey: call.idempotencyKey, fusion: null,
-      };
-      log("[sequential-source] provider failed", { step: step.stepId, category: record.failure_category });
-      return [];
-    }
 
-    const rows = Array.isArray(raw) ? raw : [];
-    // TASK-LOCAL dedupe before anything downstream sees these rows, so one opening
-    // seen through two sources produces one company decision, not two.
-    const dedupe = dedupeAgainstState(deps.state.seen_job_keys, rows, (r) => jobDedupeKey(asJob(r)));
+      const fusionSource = fusionSourceFor(step.capability);
+      if (deps.fusion && fusionSource) {
+        lastFusion = await fuseSourceResults({
+          state: deps.fusion.state,
+          source: fusionSource,
+          actorKey: call.actorKey,
+          rows: [...dedupe.fresh, ...dedupe.unidentified] as Array<Record<string, unknown>>,
+          workspaceId: deps.fusion.workspaceId,
+          observedAt: now(),
+        });
+      }
 
-    record.cost += deps.costPerCall ?? 0;
-    deps.state.cumulative_cost += deps.costPerCall ?? 0;
-    deps.state.checkpoint_at = now();
+      rawTotal += rows.length;
+      freshTotal += dedupe.fresh.length;
+      dupTotal += dedupe.duplicates.length;
+      allRows.push(...rows);
+      allFresh.push(...dedupe.fresh, ...dedupe.unidentified);
 
-    // FUSE NOW, not at task completion: the plan's next decision depends on what
-    // this source actually ADDED, and that is only knowable after reconciliation.
-    let fusion: FuseSourceOutcome | null = null;
-    const fusionSource = fusionSourceFor(step.capability);
-    if (deps.fusion && fusionSource) {
-      fusion = await fuseSourceResults({
-        state: deps.fusion.state,
-        source: fusionSource,
-        actorKey: call.actorKey,
-        rows: [...dedupe.fresh, ...dedupe.unidentified] as Array<Record<string, unknown>>,
-        workspaceId: deps.fusion.workspaceId,
-        observedAt: now(),
+      log("[sequential-source] pack executed", {
+        step: step.stepId, actor: call.actorKey, pack: call.queryPackId ?? null,
+        raw: rows.length, fresh: dedupe.fresh.length, duplicates: dedupe.duplicates.length,
       });
     }
 
+    if (lastKey === null) {
+      last = {
+        ran: false, stepId: step.stepId, actorKey: calls[0]?.actorKey ?? null,
+        rawCount: 0, freshCount: 0, duplicateCount: 0,
+        reason: "already_paid", idempotencyKey: null, fusion: null,
+      };
+      return [];
+    }
+
     last = {
-      ran: true, stepId: step.stepId, actorKey: call.actorKey,
-      rawCount: rows.length, freshCount: dedupe.fresh.length, duplicateCount: dedupe.duplicates.length,
-      reason: null, idempotencyKey: call.idempotencyKey, fusion,
+      ran: true, stepId: step.stepId, actorKey: calls[0].actorKey,
+      rawCount: rawTotal, freshCount: freshTotal, duplicateCount: dupTotal,
+      reason: null, idempotencyKey: lastKey, fusion: lastFusion,
     };
     log("[sequential-source] step executed", {
-      step: step.stepId, actor: call.actorKey,
-      raw: rows.length, fresh: dedupe.fresh.length, duplicates: dedupe.duplicates.length,
+      step: step.stepId, actor: calls[0].actorKey, packCalls: calls.length,
+      raw: rawTotal, fresh: freshTotal, duplicates: dupTotal,
     });
 
     // Unidentified rows are passed through: they cannot be deduplicated, and
     // dropping them would silently lose real jobs.
-    return [...dedupe.fresh, ...dedupe.unidentified];
+    return allFresh;
   };
 
   return { invokeJobs, lastOutcome: () => last };
