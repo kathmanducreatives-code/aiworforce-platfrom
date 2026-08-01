@@ -359,9 +359,15 @@ export function evaluateCompanyBrainEvidence(
     add("business_model", "pass", "no business-model constraint in effect");
   } else {
     const observed = `${lc(cand.business_model)} ${text}`;
+    // "No evidence" is NOT "the wrong model". A company name alone makes `text`
+    // non-empty, which previously turned every evidence-free company into a
+    // proven negative. A FAIL now requires an observed model that contradicts
+    // the Brain; absence of any model signal stays UNKNOWN so the enrichment
+    // path can resolve it.
     if (hasAny(observed, models)) add("business_model", "pass", "matches the required business model");
-    else if (!lc(cand.business_model).trim() && !text.trim()) add("business_model", "unknown", "no business-model evidence");
-    else add("business_model", "fail", "business model does not match the ICP");
+    else if (hasAny(observed, KNOWN_BUSINESS_MODEL_TERMS)) {
+      add("business_model", "fail", "business model does not match the ICP");
+    } else add("business_model", "unknown", "no business-model evidence");
   }
 
   // ---- COMPANY STAGE -------------------------------------------------------
