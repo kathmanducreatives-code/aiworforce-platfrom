@@ -113,8 +113,39 @@ export function validateLeadStrategy(
   if (packs.length === 0) return { ok: false, problem: "no_valid_query_packs" };
 
   // A pack must not be a copy of another pack — separation is the whole point.
-  const signatures = packs.map((p) => p.queries.map((q) => q.toLowerCase()).sort().join("|"));
-  if (new Set(signatures).size !== signatures.length) return { ok: false, problem: "query_packs_not_separated" };
+  //
+  // DETERMINISTIC REPAIR BEFORE ESCALATION. This used to reject the ENTIRE
+  // strategy the moment two packs shared a title signature, discarding a plan
+  // whose sources, titles and order were otherwise valid and forcing an
+  // escalation (or the deterministic fallback) over a duplicate. Collapsing an
+  // exact duplicate is safe and invents nothing: the surviving pack is the
+  // NARROWER one (fewer queries), or on a tie the earlier one, which is the
+  // higher-priority position the strategist itself chose.
+  //
+  // Only EXACT signature duplicates collapse. Packs that merely overlap keep
+  // their own identity, because a narrower pack is still a separate experiment.
+  const bySignature = new Map<string, number>();
+  const collapsed: typeof packs = [];
+  for (const pack of packs) {
+    const sig = pack.queries.map((q) => q.toLowerCase()).sort().join("|");
+    const priorIndex = bySignature.get(sig);
+    if (priorIndex === undefined) {
+      bySignature.set(sig, collapsed.length);
+      collapsed.push(pack);
+      continue;
+    }
+    const prior = collapsed[priorIndex];
+    // Keep the narrower pack; on a tie keep the earlier (higher-priority) one.
+    if (pack.queries.length < prior.queries.length) {
+      dropped.push(`pack_duplicate_signature_repaired:${prior.pack_id}`);
+      collapsed[priorIndex] = pack;
+    } else {
+      dropped.push(`pack_duplicate_signature_repaired:${pack.pack_id}`);
+    }
+  }
+  packs.length = 0;
+  packs.push(...collapsed);
+  if (packs.length === 0) return { ok: false, problem: "no_valid_query_packs" };
 
   // ---- sources -------------------------------------------------------------
   const rawSources = Array.isArray(o.source_plan) ? o.source_plan : [];

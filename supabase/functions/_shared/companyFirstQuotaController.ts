@@ -94,6 +94,8 @@ export const DEFAULT_QUOTA_BOUNDS: QuotaControllerBounds = {
 export interface QuotaControllerResult {
   terminal_status: CompanyFirstTerminalStatus;
   terminal_reason: string;
+  /** The plan-aware stop decision. Null when the fixed limits decided the run. */
+  plan_aware_stop?: Record<string, unknown> | null;
   requested_leads: number;
   eligible_leads: number;
   remaining_leads: number;
@@ -306,7 +308,25 @@ export interface QuotaControllerDeps extends CompoundExecutionDeps {
   durableIdempotency?: ToolCallReader;
   /** Checkpoint store over tasks.result (no migration). */
   stateStore?: SourcingStateStore;
+  /**
+   * PLAN-AWARE ACTION BUDGET for qualified_lead_sourcing + company_first.
+   *
+   * Supplying it replaces the blind `maxRounds`/`maxJobsCalls` stop with one that
+   * can count: a run with unused exact packs and untried sources is not finished
+   * at round three, and a run whose every source produced noise is finished at
+   * round one. `planAwareActionBudget` shipped tested with NO production caller —
+   * this is the seam that gives it one.
+   *
+   * Omitted ⇒ the pre-existing fixed limits apply unchanged.
+   */
+  actionBudget?: () => { exhausted: boolean; remaining: number; allowed: number; reason: string };
 }
+
+/**
+ * The ceiling no budget may exceed, whatever the plan claims it still needs.
+ * Larger than the fixed limit it supersedes, small enough to bound spend.
+ */
+export const HARD_PROVIDER_CALL_CEILING = 12;
 
 export async function runCompanyFirstQuotaController(
   intent: LeadEntityIntent,
@@ -321,6 +341,8 @@ export async function runCompanyFirstQuotaController(
   const rounds: RoundRecord[] = [];
   const expansions: string[] = [];
   const dedupedCandidates: CompoundCandidate[] = [];
+  /** The exact plan-aware stop decision, persisted for observability. */
+  let planAwareStop: Record<string, unknown> | null = null;
   /** Carried across rounds and continuation; written to the checkpoint below. */
   let companyDiagnostics: CompanyQualificationDiagnostic[] = [];
   const seenLeadKeys = new Set<string>();
@@ -471,7 +493,10 @@ export async function runCompanyFirstQuotaController(
     return finish("invalid_request", `requested_lead_count must be a positive integer (got ${requested})`);
   }
 
-  for (let round = resumedFromRound; round <= bounds.maxRounds; round++) {
+  // When a plan-aware budget is supplied it owns the stop; the loop bound becomes
+  // the hard ceiling so a legitimate fourth action is reachable.
+  const loopBound = deps.actionBudget ? HARD_PROVIDER_CALL_CEILING : bounds.maxRounds;
+  for (let round = resumedFromRound; round <= loopBound; round++) {
     // TIME BOUNDARY — never begin a round that cannot finish safely.
     if (deadline.softExpired() || !deadline.canAfford("jobs")) {
       continuationRequired = true;
@@ -482,7 +507,27 @@ export async function runCompanyFirstQuotaController(
     const eligibleBefore = carriedEligible + countEligible(dedupedCandidates, policy);
     const remainingBefore = remainingLeadCount(requested, eligibleBefore);
     if (remainingBefore === 0) { terminal = "completed"; terminalReason = "quota reached"; break; }
-    if (jobsCalls >= bounds.maxJobsCalls) { terminal = "search_exhausted"; terminalReason = "jobs-actor call budget reached"; break; }
+    // PLAN-AWARE STOP takes precedence over the blind call ceiling when supplied.
+    // It may allow MORE rounds (unused packs/sources remain) or FEWER (every
+    // source has produced noise) — the fixed ceiling could express neither.
+    const planBudget = deps.actionBudget?.();
+    if (planBudget) {
+      if (planBudget.exhausted) {
+        terminal = planBudget.reason === "quota_reached" ? "completed" : "search_exhausted";
+        terminalReason = `plan-aware action budget: ${planBudget.reason}`;
+        planAwareStop = { ...planBudget, actions_spent: jobsCalls };
+        break;
+      }
+    } else if (jobsCalls >= bounds.maxJobsCalls) {
+      terminal = "search_exhausted"; terminalReason = "jobs-actor call budget reached"; break;
+    }
+    // HARD SAFETY CEILING regardless of which authority is in force.
+    if (jobsCalls >= HARD_PROVIDER_CALL_CEILING) {
+      terminal = "search_exhausted";
+      terminalReason = `hard safety ceiling of ${HARD_PROVIDER_CALL_CEILING} provider calls reached`;
+      planAwareStop = { exhausted: true, remaining: 0, allowed: HARD_PROVIDER_CALL_CEILING, reason: "hard_ceiling", actions_spent: jobsCalls };
+      break;
+    }
     if (budget + bounds.costPerJobsCall > bounds.hardBudget) { terminal = "budget_exhausted"; terminalReason = "next round would exceed the hard budget"; break; }
 
     // ---- PLAN → VALIDATE → FORECAST, all before any provider call ---------
@@ -976,6 +1021,9 @@ export async function runCompanyFirstQuotaController(
     const eligible = carriedEligible + countEligible(dedupedCandidates, policy);
     return {
       terminal_status: status, terminal_reason: reason,
+      // The exact plan-aware stop decision, when that authority was in force.
+      // Null means the pre-existing fixed limits decided this run.
+      plan_aware_stop: planAwareStop,
       requested_leads: requested, eligible_leads: eligible,
       remaining_leads: remainingLeadCount(requested, eligible),
       rounds_attempted: rounds.length, expansions_attempted: expansions,
