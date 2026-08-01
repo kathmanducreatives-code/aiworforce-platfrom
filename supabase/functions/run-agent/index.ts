@@ -1116,7 +1116,14 @@ Deno.serve(async (req) => {
           //
           // Built by the gated seam rather than assembled here, so run-agent's
           // kernel surface stays the two modules test 32.E permits.
-          ...adaptiveStrategyBinding(claudeFirst, {
+          // When the GPT owner produced the strategy, the Claude bridge never ran;
+          // the binding then carries no Claude strategy and the sequential bridge
+          // keeps its deterministic ordered plan. There is exactly one authority.
+          ...adaptiveStrategyBinding(claudeFirst ?? {
+            spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
+            specRewritten: false, outcome: null, mission: null,
+            enablement: { enabled: false, reason: "flag_off" }, environment: null,
+          }, {
             final_entity: "contact_ready_lead",
             requested_count: quota.requestedLeadCount,
             hiring_role_seed: String(cfIntent.job_search_spec.original_query ?? ""),
