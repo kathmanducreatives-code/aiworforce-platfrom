@@ -29,7 +29,7 @@ function enableProviders() {
   Deno.env.set("DYNAMIC_HIRING_SOURCE_PLANNING_WORKSPACES", "ws-1");
 }
 
-const GPT_PLAN: LeadStrategyPlan = {
+const GPT_PLAN = {
   schema_version: "lead-strategy-1",
   role_family: "revenue_operations",
   title_queries: [
@@ -52,7 +52,7 @@ const GPT_PLAN: LeadStrategyPlan = {
   stop_conditions: ["quota_reached"],
   rationale: "openai lead strategy",
   confidence: 0.8,
-};
+} as unknown as LeadStrategyPlan;
 
 const TRUTH: MissionTruth = {
   final_entity: "contact_ready_lead",
@@ -86,7 +86,7 @@ async function runProductionPath() {
   const bridge = await applySequentialSourceExecution({
     workspaceId: "ws-1",
     taskId: "task-1",
-    invokeJobs: (env) => { sent.push(env); return Promise.resolve([]); },
+    invokeJobs: (env: Record<string, unknown>) => { sent.push(env); return Promise.resolve([]); },
     profile: PROFILE,
     ...gptAdaptiveStrategyBinding(GPT_PLAN, TRUTH),
     strategyRouteOverride: { enabled: true, reason: "gpt_lead_strategy" },
