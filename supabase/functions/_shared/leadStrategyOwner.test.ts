@@ -170,7 +170,11 @@ Deno.test("ATS sources and unknown sources are stripped", () => {
   }
 });
 
-Deno.test("duplicate packs are rejected as unseparated", () => {
+Deno.test("duplicate packs are REPAIRED, not fatal (was: rejected as unseparated)", () => {
+  // CONTRACT CHANGE. This previously asserted `ok === false`: one duplicated
+  // title signature discarded a strategy whose sources, titles and order were
+  // otherwise valid, forcing an escalation or the deterministic fallback over a
+  // duplicate. Deterministic repair now collapses the duplicate and records it.
   const r = validateLeadStrategy(
     {
       ...goodPlan,
@@ -181,7 +185,15 @@ Deno.test("duplicate packs are rejected as unseparated", () => {
     },
     mission, ctx(), REVENUE_OPS_FAMILY,
   );
-  assertFalse(r.ok);
+  assert(r.ok, "an otherwise-valid strategy must survive a duplicate signature");
+  if (!r.ok) return;
+  // Exactly one of the two identical packs survives…
+  assertEquals(r.plan.query_packs.length, 1);
+  // …and the collapse is recorded rather than silent.
+  assert(
+    r.dropped.some((d) => d.startsWith("pack_duplicate_signature_repaired:")),
+    `the repair must be persisted, got: ${r.dropped.join(", ")}`,
+  );
 });
 
 Deno.test("round-1 adjacent pack is refused", () => {
