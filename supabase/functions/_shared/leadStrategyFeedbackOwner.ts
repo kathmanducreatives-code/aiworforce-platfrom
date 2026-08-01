@@ -216,6 +216,14 @@ export interface StrategistGenerateOpts {
   timeoutMs?: number;
   /** One escalation attempt after INVALID output. Default true. */
   allowEscalation?: boolean;
+  /**
+   * Pin a specific model instead of the configured primary tier.
+   *
+   * Used by per-company semantic classification, which is a cheap interpretive
+   * call and must not silently inherit the strategist's planning model.
+   * Absent ⇒ unchanged behaviour: `modelForTier("primary")`.
+   */
+  model?: string;
 }
 
 /**
@@ -241,7 +249,7 @@ export function createStrategistGenerateJson(opts: StrategistGenerateOpts = {}):
       .map((m) => m.content)
       .join("\n\n");
 
-    const model = modelForTier("primary");
+    const model = opts.model ?? modelForTier("primary");
     const result = await call({
       model,
       systemPrompt,

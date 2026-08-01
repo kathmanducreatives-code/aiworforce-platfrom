@@ -16,6 +16,7 @@
 import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runAgentCompoundExecution, type CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundCandidate, CompoundLimits } from "./compoundSourcingPipeline.ts";
+import type { ClassificationCache } from "./companySemanticClassification.ts";
 import { buildCompoundPersistencePlan, type CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
 import { buildCompanyRowPersistencePlan, companyRowKey } from "./companyRowProjection.ts";
 
@@ -96,6 +97,7 @@ export interface QuotaControllerResult {
   terminal_reason: string;
   /** The plan-aware stop decision. Null when the fixed limits decided the run. */
   plan_aware_stop?: Record<string, unknown> | null;
+  semantic_classification?: Record<string, unknown> | null;
   requested_leads: number;
   eligible_leads: number;
   remaining_leads: number;
@@ -167,6 +169,15 @@ export interface QuotaControllerOpts {
   /** Company Brain HARD constraints. Absent => not enforced (legacy callers). */
   brainConstraints?: CompanyBrainHardConstraints | null;
   brainPolicyHash?: string | null;
+  /**
+   * SEMANTIC CLASSIFICATION. Absent ⇒ the pipeline makes no model call.
+   *
+   * The controller owns the allowance and the cache for the WHOLE task: ten
+   * unique company/evidence combinations across every round, with a company
+   * interpreted in round 1 free forever after.
+   */
+  classifyCompanyEvidence?: (payload: Record<string, unknown>) => Promise<unknown>;
+  classificationCallsRemaining?: number;
   requestedLeadCount: number;
   quotaPolicy?: QuotaPolicy;
   bounds?: Partial<QuotaControllerBounds>;
@@ -454,6 +465,14 @@ export async function runCompanyFirstQuotaController(
   };
 
   const deadline: ExecutionDeadline = createExecutionDeadline(opts.executionBudget, opts.clock);
+
+  // TASK-SCOPED classification budget and cache. Per-task, never per-round —
+  // rebuilding either each round would silently multiply the allowance.
+  const classificationCache: ClassificationCache = new Map();
+  const classificationAllowed = Math.max(0, Math.trunc(opts.classificationCallsRemaining ?? 0));
+  let classificationRemaining = classificationAllowed;
+  const classificationSkips: Record<string, number> = {};
+  let classifiedCompanies = 0;
   const nowIso = () => opts.now ?? new Date().toISOString();
   const taskId = opts.taskId ?? null;
   const wsId = opts.workspaceId ?? "";
@@ -699,9 +718,29 @@ export async function runCompanyFirstQuotaController(
         return false;
       },
       persistCandidates: false,          // the controller owns persistence
+      // SUFFICIENT COVERAGE STOPS CLASSIFICATION: once enough eligible leads
+      // exist for the requested quota, interpreting more companies cannot
+      // produce a lead the mission still needs, so it is not worth paying for.
+      classifyCompanyEvidence: remainingLeadCount(requested, state.eligible_leads) > 0
+        ? opts.classifyCompanyEvidence
+        : undefined,
+      classificationCache,
+      classificationCallsRemaining: classificationRemaining,
     });
 
     jobsCalls += roundJobsCalls; peopleCalls += roundPeopleCalls;
+
+    // Carry the round's classification spend forward. `budget_remaining` is
+    // authoritative: the pipeline charges only REAL model requests, so cache
+    // hits and skips leave it unchanged.
+    const sc = exec.run?.diagnostics?.semanticClassification;
+    if (sc) {
+      classificationRemaining = Math.max(0, Math.min(classificationRemaining, sc.budget_remaining ?? classificationRemaining));
+      classifiedCompanies += sc.classified ?? 0;
+      for (const [k, v] of Object.entries(sc.skipped ?? {})) {
+        classificationSkips[k] = (classificationSkips[k] ?? 0) + Number(v ?? 0);
+      }
+    }
     budget += roundJobsCalls * bounds.costPerJobsCall + roundPeopleCalls * bounds.costPerPeopleCall;
     writeBoundary.providerSideWrites += exec.writeBoundary.providerSideWrites;
     if (exec.writeBoundary.invariantViolation) writeBoundary.invariantViolation = exec.writeBoundary.invariantViolation;
@@ -1024,6 +1063,16 @@ export async function runCompanyFirstQuotaController(
       // The exact plan-aware stop decision, when that authority was in force.
       // Null means the pre-existing fixed limits decided this run.
       plan_aware_stop: planAwareStop,
+      // Safe classification diagnostics: counts and reasons only — never a
+      // prompt, a credential or a claim.
+      semantic_classification: {
+        calls_allowed: classificationAllowed,
+        calls_made: classificationAllowed - classificationRemaining,
+        calls_remaining: classificationRemaining,
+        budget_exhausted: classificationAllowed > 0 && classificationRemaining <= 0,
+        companies_classified: classifiedCompanies,
+        skipped: { ...classificationSkips },
+      },
       requested_leads: requested, eligible_leads: eligible,
       remaining_leads: remainingLeadCount(requested, eligible),
       rounds_attempted: rounds.length, expansions_attempted: expansions,

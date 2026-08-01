@@ -52,6 +52,9 @@ import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthorit
 // behavior, it is today's behavior.
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
 import { planAwareActionBudget } from "../_shared/leadStrategyFeedbackOwner.ts";
+import {
+  buildSemanticClassificationBinding, classificationTaskDiagnostics,
+} from "../_shared/semanticClassificationBinding.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
@@ -1210,6 +1213,20 @@ Deno.serve(async (req) => {
           log: (m, meta) => console.log("[run-agent][sequential-source]", m, meta),
         });
 
+        // SEMANTIC COMPANY CLASSIFICATION — the final production edge.
+        //
+        // OFF by default: both SEMANTIC_COMPANY_CLASSIFICATION and the workspace
+        // allow-list must pass, so a merge cannot switch paid classification on.
+        // The classifier reaches the model through the SAME provider-independent
+        // strategist facade as the strategy and feedback calls, with escalation
+        // disabled — a per-company classification never justifies the escalation
+        // tier. Ten unique company/evidence combinations per task; cache hits,
+        // skips and unresolved identities all cost zero.
+        const classificationBinding = buildSemanticClassificationBinding({
+          workspaceId: workspace_id,
+          requestedLeadCount: quota.requestedLeadCount,
+        });
+
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
@@ -1220,6 +1237,9 @@ Deno.serve(async (req) => {
           durableIdempotency: supabaseToolCallReader(supabase as never),
           stateStore: cfStateStore,
           invokeJobs: sequentialSources.invokeJobs, invokePeople, persist: persistPlan,
+          // Null when disabled ⇒ the pipeline makes no model call at all.
+          classifyCompanyEvidence: classificationBinding.classifyCompanyEvidence ?? undefined,
+          classificationCallsRemaining: classificationBinding.classificationCallsRemaining,
           // CLOSES THE SOURCE LOOP. After each round the bridge builds one
           // observation, decides the one next action and folds it into the state
           // the next round reads. Inert when the workspace has not opted in.
@@ -1468,6 +1488,15 @@ Deno.serve(async (req) => {
           counts: cf.counts, job_search: cf.routing.job_search_spec, write_boundary: cf.writeBoundary,
           plan_sources: cf.plan_sources, planner_metadata: cf.planner_metadata,
           bottlenecks: cf.bottlenecks, idempotency: cf.idempotency, continuation: cf.continuation,
+          // SEMANTIC CLASSIFICATION AUDIT. Counts, reasons, provider and model
+          // only — never a prompt, a credential or a claim. Present even when the
+          // feature is off, so "no classification" is a recorded fact rather than
+          // an absent key the reader has to interpret.
+          semantic_classification: {
+            provider: "lead_strategist_facade",
+            escalation_used: false,
+            ...classificationTaskDiagnostics(classificationBinding, cf.semantic_classification),
+          },
         });
       }
 

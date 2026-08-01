@@ -18,6 +18,7 @@ import type { SourcingStateStore } from "./companyFirstSourcingState.ts";
 import type { ExecutionBudget } from "./executionDeadline.ts";
 import type { CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundLimits } from "./compoundSourcingPipeline.ts";
+import type { ControllerClassificationCounters } from "./semanticClassificationBinding.ts";
 import type { Vertical } from "./verticalQualification.ts";
 import { isQuotaEligibleCandidate, leadIdentityKey, type QuotaPolicy, type RequestedCountSource } from "./leadQuotaPolicy.ts";
 import type { CompanyFirstWriteBoundary } from "./providerEvidenceMode.ts";
@@ -64,6 +65,14 @@ export interface CompanyFirstRuntimeDeps extends CompoundExecutionDeps {
    * the controller's pre-existing fixed limits apply unchanged.
    */
   actionBudget?: QuotaControllerDeps["actionBudget"];
+  /**
+   * SEMANTIC CLASSIFICATION, forwarded to the sourcing pipeline.
+   *
+   * Absent ⇒ no classification and no model call, exactly as before. This
+   * wrapper adapts context; it never decides whether classification runs.
+   */
+  classifyCompanyEvidence?: (payload: Record<string, unknown>) => Promise<unknown>;
+  classificationCallsRemaining?: number;
   /** Read-only ordered-source oracle. Threaded straight to the controller. */
   pendingDiscoverySource?: QuotaControllerDeps["pendingDiscoverySource"];
   executionBudget?: Partial<ExecutionBudget>;
@@ -87,6 +96,8 @@ export interface CompanyFirstResult {
     rawJobs: number; verifiedCompanies: number; candidates: number;
     contact: number; watch: number; needsReview: number; reject: number; persisted: number;
   };
+  /** Safe classification counters; null when the feature never ran. */
+  semantic_classification?: ControllerClassificationCounters | null;
   rounds_attempted: number;
   expansions_attempted: string[];
   rounds: RoundRecord[];
@@ -130,6 +141,8 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     vertical: deps.vertical, now: deps.now, workspaceId: deps.workspaceId, taskId: deps.taskId ?? null,
     brainConstraints: deps.brainConstraints ?? null, brainPolicyHash: deps.brainPolicyHash ?? null,
     executionBudget: deps.executionBudget, clock: deps.clock, log,
+    classifyCompanyEvidence: deps.classifyCompanyEvidence,
+    classificationCallsRemaining: deps.classificationCallsRemaining,
   });
 
   const countVerdict = (v: string) => res.candidates.filter((c) => c.verdict === v).length;
@@ -163,6 +176,9 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
       needsReview: countVerdict("NEEDS_REVIEW"), reject: countVerdict("REJECT"),
       persisted: res.persisted.filter((p) => p.ok).length,
     },
+    // Safe counts and reasons only; surfaced so a task can be audited without
+    // rerunning it.
+    semantic_classification: res.semantic_classification ?? null,
     rounds_attempted: res.rounds_attempted,
     expansions_attempted: res.expansions_attempted,
     rounds: res.rounds,

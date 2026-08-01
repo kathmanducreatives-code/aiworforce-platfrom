@@ -6,6 +6,7 @@
 
 import type { LeadEntityIntent } from "./leadEntityIntent.ts";
 import { runCompoundSourcing, type CompoundLimits, type CompoundRunResult } from "./compoundSourcingPipeline.ts";
+import type { ClassificationCache } from "./companySemanticClassification.ts";
 import type { CompanyBrainHardConstraints } from "./companyIcpFilter.ts";
 import { compoundJobsFromRawRows } from "./runAgentCompoundJobAdapter.ts";
 import { buildScopedPeopleInput, compoundPeopleFromRows } from "./runAgentCompoundPeopleAdapter.ts";
@@ -67,6 +68,17 @@ export async function runAgentCompoundExecution(
     /** Company Brain HARD constraints. Absent => not enforced (legacy callers). */
     brainConstraints?: CompanyBrainHardConstraints | null;
     brainPolicyHash?: string | null;
+    /**
+     * SEMANTIC CLASSIFICATION, threaded straight through to the pipeline.
+     *
+     * Absent ⇒ no classification and no model call. The cache and the remaining
+     * allowance are owned by the CONTROLLER, not by this round: a company
+     * interpreted in round 1 must stay free in round 2, and ten calls is a
+     * per-TASK allowance, not a per-round one.
+     */
+    classifyCompanyEvidence?: (payload: Record<string, unknown>) => Promise<unknown>;
+    classificationCache?: ClassificationCache;
+    classificationCallsRemaining?: number;
   } = {},
 ): Promise<CompoundExecutionResult> {
   const diagnostics: CompoundExecutionResult["diagnostics"] =
@@ -145,6 +157,9 @@ export async function runAgentCompoundExecution(
     limits: opts.limits, vertical: opts.vertical, now: opts.now,
     // Company Brain hard gate. Threaded, never re-derived here.
     brainConstraints: opts.brainConstraints ?? null, brainPolicyHash: opts.brainPolicyHash ?? null,
+    classifyCompanyEvidence: opts.classifyCompanyEvidence,
+    classificationCache: opts.classificationCache,
+    classificationCallsRemaining: opts.classificationCallsRemaining,
   });
 
   writeBoundary.verifiedCompanies = run.diagnostics.verifiedCompanies;
