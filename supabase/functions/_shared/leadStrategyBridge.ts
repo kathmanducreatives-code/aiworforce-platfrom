@@ -22,7 +22,8 @@
 // own surface, and adding a GPT-owner flag to it would widen a module this path
 // must stay independent of. Same semantics — strict allow-list, default OFF.
 import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge.ts";
-import { runLeadStrategy, type LeadStrategyResolution } from "./leadStrategyOwner.ts";
+import type { LeadStrategyResolution } from "./leadStrategyOwner.ts";
+import { createQualifiedLeadStrategist } from "./leadStrategy/strategist.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
 import type { LeadStrategyModelFn } from "./leadStrategyModels.ts";
 import type { QualifiedLeadStrategistProvider } from "./leadStrategy/provider.ts";
@@ -161,13 +162,17 @@ export async function applyLeadStrategyInitialPlanning(
   }
 
   const mission = missionFromSpec(input);
-  const resolution = await runLeadStrategy({
+  // The runtime talks to the FACADE, never to an adapter. Which provider serves
+  // this call is configuration (LEAD_STRATEGIST_PROVIDER), not code.
+  const strategist = createQualifiedLeadStrategist({
+    provider: input.provider,
+    callModel: input.callModel,
+    timeoutMs: input.timeoutMs,
+  });
+  const resolution = await strategist.createInitialStrategy({
     mission,
     context: initialContext(input),
-    callModel: input.callModel,
-    provider: input.provider,
     workspaceId: input.workspaceId,
-    timeoutMs: input.timeoutMs,
   });
 
   const p = resolution.provenance;
@@ -195,6 +200,7 @@ export async function applyLeadStrategyInitialPlanning(
       .map((s) => s.source_key),
     next_action: plan.next_action,
     dropped: resolution.dropped,
+    observability: resolution.observability,
     plan_hash: planHash({
       role_family: plan.role_family,
       titles: plan.title_queries,
