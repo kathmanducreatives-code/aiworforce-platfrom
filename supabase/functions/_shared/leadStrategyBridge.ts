@@ -17,18 +17,29 @@
 // Gemini and Claude are unreachable from here. Unrelated workflows never call
 // this module, so their routing is untouched.
 
-import { isIntelligenceFlagEnabled, type EnvReader } from "./intelligence/intelligenceFlags.ts";
+// This gate is deliberately SELF-CONTAINED rather than another entry in the
+// intelligence-kernel flag registry: that registry is the Gemini/Claude kernel's
+// own surface, and adding a GPT-owner flag to it would widen a module this path
+// must stay independent of. Same semantics — strict allow-list, default OFF.
 import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge.ts";
 import { runLeadStrategy, type LeadStrategyResolution } from "./leadStrategyOwner.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
 import type { LeadStrategyModelFn } from "./leadStrategyModels.ts";
 import type { QualifiedLeadStrategistProvider } from "./leadStrategy/provider.ts";
 
+export type EnvReader = (key: string) => string | undefined;
+
 export const GPT_LEAD_STRATEGY_FLAG = "GPT_LEAD_STRATEGY";
 export const GPT_LEAD_STRATEGY_WORKSPACES_ENV = "GPT_LEAD_STRATEGY_WORKSPACES";
 
 function parseAllowlist(raw: string | undefined): string[] {
   return String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/** STRICT truthiness — only these exact values enable a flag. */
+function flagOn(raw: string | undefined): boolean {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes" || v === "on";
 }
 
 /**
@@ -41,7 +52,16 @@ export function isGptLeadStrategyEnabled(
   workspaceId: string,
   read?: EnvReader,
 ): EnablementDecision {
-  if (!isIntelligenceFlagEnabled(GPT_LEAD_STRATEGY_FLAG, read)) {
+  const get: EnvReader = read ?? ((k) => {
+    try {
+      return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
+        .Deno?.env.get(k);
+    } catch {
+      return undefined;
+    }
+  });
+
+  if (!flagOn(get(GPT_LEAD_STRATEGY_FLAG))) {
     return { enabled: false, reason: "flag_off" };
   }
   let allow: string[] = [];
