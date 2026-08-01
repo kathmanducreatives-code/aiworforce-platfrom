@@ -103,7 +103,14 @@ export interface SequentialSourceBridgeInput {
   planAdaptiveStrategy?: () => Promise<unknown>;
   /** Parse + validate the raw strategy. Injected so this file holds no contract. */
   validateAdaptiveStrategy?: ResolveStrategyInput["validate"];
+  /**
+   * Explicit route decision for the strategy above. Supplied by the GPT strategy
+   * path, whose eligibility is decided by GPT_LEAD_STRATEGY, not by the Claude
+   * route flags. Omitted ⇒ the existing Claude route decides, unchanged.
+   */
+  strategyRouteOverride?: { enabled: boolean; reason: string };
   /** Validated query packs for this mission, when the adaptive path is enabled. */
+
   adaptivePacks?: readonly QueryPack[];
   log?: (msg: string, meta?: unknown) => void;
 }
