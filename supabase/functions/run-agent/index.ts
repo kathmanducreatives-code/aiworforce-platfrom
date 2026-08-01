@@ -53,6 +53,10 @@ import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthorit
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
 import { createPlanAwareActionBudget } from "../_shared/planAwareBudgetBinding.ts";
 import {
+  actorLimitationBriefing, inferRouteFromRequest, newRouteExecutionRecord,
+  routeDrift, validateHiringRoute,
+} from "../_shared/hiringRouteContract.ts";
+import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
 } from "../_shared/semanticClassificationBinding.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
@@ -1038,6 +1042,36 @@ Deno.serve(async (req) => {
               : null,
           })
           : null;
+        // ── VALIDATED HIRING ROUTE ──────────────────────────────────────────
+        // GPT chooses the route and the source order; this validates that
+        // choice deterministically before anything executes. A broad job board
+        // now requires a structured reason, which is what stops the old
+        // broad-job-first default reasserting itself for a tight ICP.
+        const requestedSourceOrder: string[] =
+          (gptStrategy?.diagnostics?.source_order as string[] | undefined) ?? [];
+        const routeResolution = validateHiringRoute({
+          route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
+            ?? inferRouteFromRequest(tool_input_body?.user_request ?? null),
+          source_order: requestedSourceOrder,
+          fallback_reason:
+            (gptStrategy?.diagnostics?.fallback_reason as string | undefined) ?? null,
+        }, { userRequest: tool_input_body?.user_request ?? null });
+        const routeRecord = routeResolution.ok
+          ? newRouteExecutionRecord(routeResolution, requestedSourceOrder)
+          : null;
+        console.log("[run-agent][hiring-route]", {
+          task_id: task.id,
+          ok: routeResolution.ok,
+          requested: routeResolution.requested_route,
+          validated: routeResolution.ok ? routeResolution.validated_route : null,
+          source_order: routeResolution.ok ? routeResolution.validated_source_order : null,
+          fallback_reason: routeResolution.ok ? routeResolution.fallback_reason : null,
+          repairs: routeResolution.ok ? routeResolution.repairs : routeResolution.errors,
+          // The limitation briefing GPT was given, by count — the content itself
+          // travels in the strategist context, not only in a prompt hash.
+          actor_limitation_briefing_size: actorLimitationBriefing().length,
+        });
+
         if (gptStrategy?.diagnostics) {
           console.log("[run-agent][lead-strategy-initial]", {
             task_id: task.id,
@@ -1462,6 +1496,15 @@ Deno.serve(async (req) => {
           // only — never a prompt, a credential or a claim. Present even when the
           // feature is off, so "no classification" is a recorded fact rather than
           // an absent key the reader has to interpret.
+          // FUNNEL, stage by stage. Qualified companies stay visible while
+          // founder enrichment is still pending — hiding them is how a run that
+          // did real work reports as a failure.
+          stage_funnel: cf.stage_funnel ?? null,
+          // VALIDATED ROUTE, persisted whole: requested vs validated vs executed
+          // are three different facts and are never merged into one field.
+          hiring_route: routeRecord
+            ? { ...routeRecord, drift: routeDrift(routeRecord) }
+            : { error: routeResolution.ok ? null : routeResolution.errors },
           semantic_classification: {
             provider: "lead_strategist_facade",
             escalation_used: false,

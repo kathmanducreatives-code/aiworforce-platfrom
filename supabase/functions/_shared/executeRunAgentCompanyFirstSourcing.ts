@@ -19,6 +19,13 @@ import type { ExecutionBudget } from "./executionDeadline.ts";
 import type { CompoundExecutionDeps } from "./runAgentCompoundExecution.ts";
 import type { CompoundLimits } from "./compoundSourcingPipeline.ts";
 import type { ControllerClassificationCounters } from "./semanticClassificationBinding.ts";
+import {
+  advance, countsTowardQuota, newCompanyRecord, projectFunnel,
+  type CompanyRecordState, type FunnelCounts,
+} from "./companyFirstStages.ts";
+import {
+  identityIsActionable, resolveIdentityAgainstLookups,
+} from "./companyIdentityResolution.ts";
 import type { Vertical } from "./verticalQualification.ts";
 import { isQuotaEligibleCandidate, leadIdentityKey, type QuotaPolicy, type RequestedCountSource } from "./leadQuotaPolicy.ts";
 import type { CompanyFirstWriteBoundary } from "./providerEvidenceMode.ts";
@@ -95,6 +102,11 @@ export interface CompanyFirstResult {
     rawJobs: number; verifiedCompanies: number; candidates: number;
     contact: number; watch: number; needsReview: number; reject: number; persisted: number;
   };
+  /**
+   * STAGE FUNNEL. Every stage separately, so a run that qualified 9 companies
+   * and produced 0 contacts reads as exactly that instead of as "0 leads".
+   */
+  stage_funnel?: FunnelCounts;
   /** Safe classification counters; null when the feature never ran. */
   semantic_classification?: ControllerClassificationCounters | null;
   rounds_attempted: number;
@@ -158,9 +170,53 @@ export async function executeRunAgentCompanyFirstSourcing(deps: CompanyFirstRunt
     };
   });
 
+  // Project each candidate through the explicit stage model. Built from the
+  // controller's own per-candidate results, so the funnel reports what actually
+  // happened rather than a second count kept in parallel.
+  const stageRecords: CompanyRecordState[] = res.candidates.map((c, i) => {
+    const p = res.persisted[i];
+    let rec = newCompanyRecord(leadIdentityKey(c));
+
+    // IDENTITY FIRST. A company with no canonical LinkedIn identity cannot be
+    // enriched, job-verified or founder-searched against the right employer, so
+    // it is held as identity_pending rather than quietly carried forward. This
+    // is the gap memo23 creates: it supplies no LinkedIn URL at all.
+    const identity = resolveIdentityAgainstLookups(
+      {
+        company_key: leadIdentityKey(c),
+        name: c.account.name ?? null,
+        website: c.account.canonicalDomain ? `https://${c.account.canonicalDomain}` : null,
+        canonical_domain: c.account.canonicalDomain ?? null,
+        linkedin_company_url: c.account.linkedinUrl ?? null,
+      },
+      [],
+    );
+    if (!identityIsActionable(identity)) {
+      rec = advance(rec, "identity_pending", identity.status);
+      rec.missing_evidence.push(...identity.evidence);
+    }
+    rec = advance(rec, "enrichment_complete", "provider_evidence_collected");
+    const failed = Object.entries(c.gates).filter(([, v]) => v === "fail").map(([k]) => k);
+    if (failed.length > 0) {
+      rec = advance(rec, "company_fit_reject", failed[0]);
+      rec.failed_gates = failed;
+    } else {
+      rec = advance(rec, "company_fit_pass", "all_gates_passed");
+      rec = advance(rec, "hiring_verified", "job_evidence_present");
+      rec = advance(rec, "qualified_company", "hiring_signal_verified");
+      if (c.person?.name) rec = advance(rec, "founder_verified", c.employer.outcome);
+    }
+    rec.verdict = c.verdict as CompanyRecordState["verdict"];
+    rec.quota_eligible = isQuotaEligibleCandidate(c, deps.quotaPolicy);
+    if (!p?.ok && p?.reason) rec.missing_evidence.push(`persistence:${p.reason}`);
+    return rec;
+  });
+  const stageFunnel = projectFunnel(stageRecords);
+
   return {
     status: res.terminal_status,
     terminal_reason: res.terminal_reason,
+    stage_funnel: stageFunnel,
     executed_sourcing_mode: "company_first",
     quota: {
       requested_leads: res.requested_leads, eligible_leads: res.eligible_leads,
