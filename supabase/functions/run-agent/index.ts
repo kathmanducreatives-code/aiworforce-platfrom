@@ -975,8 +975,41 @@ Deno.serve(async (req) => {
           ? readPlanArtifact([{ metadata: { qualified_lead_plan: body.qualified_lead_plan } }])
           : null;
 
+        // AUTHORITATIVE INITIAL STRATEGY (gated path only).
+        //
+        // On workflow = qualified_lead_sourcing + execution_mode = company_first,
+        // the OpenAI strategy owner — Luna, escalating once to Terra, then the
+        // deterministic plan — owns round-one titles. It runs BEFORE the legacy
+        // Claude-first bridge and, when it produces a validated strategy, that
+        // bridge is not consulted at all: one workflow, one strategy authority.
+        // Everything else (person roles, geography, vertical, quota, gates)
+        // is carried through untouched.
+        const gptStrategy = (useLeadStrategyOwner && !persistedPlan)
+          ? await applyLeadStrategyInitialPlanning({
+            workspaceId: workspace_id,
+            spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyLeadStrategyInitialPlanning>[0]["spec"],
+            requestedLeadCount: quota.requestedLeadCount,
+            companyVertical: cfIntent.job_search_spec.company_vertical
+              ? String(cfIntent.job_search_spec.company_vertical)
+              : null,
+          })
+          : null;
+        if (gptStrategy?.diagnostics) {
+          console.log("[run-agent][lead-strategy-initial]", {
+            task_id: task.id,
+            authority: gptStrategy.diagnostics.authority,
+            model: gptStrategy.diagnostics.model,
+            packs: gptStrategy.diagnostics.query_pack_ids,
+            sources: gptStrategy.diagnostics.source_order,
+            plan_hash: gptStrategy.diagnostics.plan_hash,
+            fallback_reason: gptStrategy.diagnostics.fallback_reason,
+          });
+        }
+
         const claudeFirst = persistedPlan
           ? claudeFirstFromPersistedPlan(persistedPlan, cfIntent.job_search_spec as unknown as Record<string, unknown>)
+          : gptStrategy?.specRewritten
+          ? null
           : await applyClaudeFirstLeadPlanning({
           workspaceId: workspace_id,
           originalInstruction: cfIntent.job_search_spec.original_query,
@@ -985,12 +1018,14 @@ Deno.serve(async (req) => {
           taskId: task.id,
           requestedLeadCount: quota.requestedLeadCount,
         });
-        const cfIntentPlanned = claudeFirst.specRewritten
+        const cfIntentPlanned = gptStrategy?.specRewritten
+          ? { ...cfIntent, job_search_spec: gptStrategy.spec as unknown as typeof cfIntent.job_search_spec }
+          : claudeFirst?.specRewritten
           ? { ...cfIntent, job_search_spec: claudeFirst.spec as unknown as typeof cfIntent.job_search_spec }
           : cfIntent;
         // NULL whenever this workspace never opted in. The key is then omitted
         // entirely below, so a task result is byte-identical to pre-Phase-2.
-        const claudeFirstDiagnostics = bridgeDiagnostics(claudeFirst);
+        const claudeFirstDiagnostics = claudeFirst ? bridgeDiagnostics(claudeFirst) : null;
         if (claudeFirstDiagnostics) {
           console.log("[run-agent][claude-first]", {
             task_id: task.id,
