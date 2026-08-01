@@ -157,6 +157,22 @@ export interface SequentialSourceBridgeResult {
    */
   lastAdaptiveDecision: () => Record<string, unknown> | null;
   /**
+   * The validated query packs this mission is executing.
+   *
+   * Read-only, exposed so the plan-aware action budget can count what is still
+   * UNUSED from real state instead of guessing. Empty when no strategy produced
+   * packs.
+   */
+  activePacks: () => readonly QueryPack[];
+  /**
+   * What the plan-aware budget needs, counted from the LIVE pack ledger and
+   * execution state.
+   *
+   * Exposed here rather than letting run-agent read the ledger itself: run-agent
+   * is capped at two kernel imports (intelligenceFlags test 32.E), and the bridge
+   * already owns this state. One reader, one place.
+   */
+  /**
    * Provenance of the INITIAL strategy: `claude`, `claude_repaired` or
    * `deterministic_fallback`, with the exact fallback reason, the generated pack
    * ids, the selected capability order and the plan hash.
@@ -247,6 +263,7 @@ export async function applySequentialSourceExecution(
     onObservation: () => Promise.resolve(),
     lastFeedback: () => null,
     lastAdaptiveDecision: () => null,
+    activePacks: () => [],
     strategyProvenance: () => null,
     lastTransitionFailure: () => null,
     // Disabled: no plan, so no plan-aware budget. The controller keeps its own
@@ -654,6 +671,7 @@ export async function applySequentialSourceExecution(
     planBudgetSnapshot: () => budgetSnapshot,
     lastFeedback: () => lastFeedback,
     lastAdaptiveDecision: () => lastAdaptive,
+    activePacks: () => activePacks,
     strategyProvenance: () => ({ ...strategyProvenance, plan_hash: approved.planHash }),
     lastTransitionFailure: () => lastTransitionFailure,
     nextPendingDiscoverySource: () => {
