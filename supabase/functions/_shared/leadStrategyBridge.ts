@@ -22,7 +22,8 @@
 // own surface, and adding a GPT-owner flag to it would widen a module this path
 // must stay independent of. Same semantics — strict allow-list, default OFF.
 import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge.ts";
-import { runLeadStrategy, type LeadStrategyResolution } from "./leadStrategyOwner.ts";
+import type { LeadStrategyResolution } from "./leadStrategyOwner.ts";
+import { createQualifiedLeadStrategist } from "./leadStrategy/strategist.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
 import type { LeadStrategyModelFn } from "./leadStrategyModels.ts";
 import type { QualifiedLeadStrategistProvider } from "./leadStrategy/provider.ts";
@@ -199,6 +200,7 @@ export async function applyLeadStrategyInitialPlanning(
       .map((s) => s.source_key),
     next_action: plan.next_action,
     dropped: resolution.dropped,
+    observability: resolution.observability,
     plan_hash: planHash({
       role_family: plan.role_family,
       titles: plan.title_queries,
