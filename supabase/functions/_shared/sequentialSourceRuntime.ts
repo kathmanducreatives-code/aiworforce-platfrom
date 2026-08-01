@@ -145,16 +145,48 @@ export interface PreparedCall {
   summary: Record<string, unknown>;
   /** The quota-aware batch decision, when one was made. Null for ATS. */
   batchDecision?: Record<string, unknown> | null;
+  /**
+   * Which query pack this call executes, when the step was split into packs.
+   * Null for an unsplit step. Packs are NEVER merged into one query.
+   */
+  queryPackId?: string | null;
+  /** How the step's batch was split across packs. Present on split calls only. */
+  packAllocation?: Record<string, unknown> | null;
 }
 
 export type PrepareResult =
   | { ok: true; call: PreparedCall }
   | { ok: false; status: "deferred" | "rejected" | "duplicate_input"; reason: string; stepId: string };
 
-/** Deterministic identity for one paid call. Same step + attempt + input ⇒ same key. */
-export function sourceIdempotencyKey(taskId: string, stepId: string, attempt: number, inputHash: string): string {
-  return `${taskId}:${stepId}:a${attempt}:${inputHash.slice(0, 16)}`;
+/**
+ * Deterministic identity for one paid call.
+ *
+ * SOURCE IDENTITY IS PART OF THE KEY. The key previously named only the step, so
+ * two calls that differed by the ACTOR finally selected (a capability re-resolved
+ * to a different provider between attempts) or by the QUERY PACK being executed
+ * could not be told apart in `completed_calls`, and a legitimately distinct paid
+ * call could be suppressed as "already paid". The final actor key and the pack id
+ * are therefore named explicitly rather than left implicit in the input hash.
+ */
+export function sourceIdempotencyKey(
+  taskId: string,
+  stepId: string,
+  attempt: number,
+  inputHash: string,
+  identity?: { actorKey?: string | null; queryPackId?: string | null },
+): string {
+  const actor = String(identity?.actorKey ?? "").trim();
+  const pack = String(identity?.queryPackId ?? "").trim();
+  return [
+    taskId,
+    stepId,
+    actor ? `actor=${actor}` : null,
+    pack ? `pack=${pack}` : null,
+    `a${attempt}`,
+    inputHash.slice(0, 16),
+  ].filter(Boolean).join(":");
 }
+
 
 /**
  * Compile the active step's semantic intent through the EXISTING Actor input
