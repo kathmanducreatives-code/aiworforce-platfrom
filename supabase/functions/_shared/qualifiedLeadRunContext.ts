@@ -22,6 +22,15 @@ export const RUN_CONTEXT_VERSION = "qualified-lead-run-context-1.0.0";
 /** Every field the product surfaces are contractually required to show. */
 export interface QualifiedLeadRunContext {
   version: string;
+  /**
+   * Per-company qualification diagnostics, in the shape the Workbench Insights
+   * projection reads (`company_first_state.candidate_diagnostics`).
+   *
+   * Nested under `company_first_state` so the ONE reader
+   * (`insightsFromResult`) works against the panel meta and the persisted task
+   * result identically — there is no second shape and no second reader.
+   */
+  company_first_state?: { candidate_diagnostics: Array<Record<string, unknown>> };
   original_user_query: string | null;
   parsed_intent_summary: string | null;
   workflow_kind: string | null;
@@ -78,6 +87,17 @@ export interface RunContextInput {
   requestedPersonRoles?: string[] | null;
   workflowKind?: string;
   countEntity?: string;
+  /**
+   * The per-company qualification diagnostics the pipeline already recorded.
+   *
+   * Carried onto the run context because the Workbench panel is built from THIS
+   * object, not from the persisted task result. Production task 15c31f55 stored
+   * ten diagnostics in `company_first_state.candidate_diagnostics` and the panel
+   * still rendered "0 evaluated", because nothing copied them across this seam.
+   *
+   * Bounded and projected — never the raw provider payload.
+   */
+  candidateDiagnostics?: ReadonlyArray<Record<string, unknown>> | null;
 }
 
 const firstNonEmpty = (...xs: Array<string | null | undefined>): string | null =>
@@ -101,7 +121,14 @@ export function buildQualifiedLeadRunContext(input: RunContextInput): QualifiedL
     ?? null;
   const planSources = r.plan_sources ?? [];
 
+  // Bounded: the pipeline already caps the diagnostic set, and each record is a
+  // projection of codes and counts. Absent stays absent rather than becoming [].
+  const diagnostics = Array.isArray(input.candidateDiagnostics) && input.candidateDiagnostics.length > 0
+    ? { company_first_state: { candidate_diagnostics: [...input.candidateDiagnostics] } }
+    : {};
+
   return {
+    ...diagnostics,
     version: RUN_CONTEXT_VERSION,
     original_user_query: firstNonEmpty(r.routing.original_user_query, intent?.original_query),
     // The taxonomy's own summary is the richest honest description of what we

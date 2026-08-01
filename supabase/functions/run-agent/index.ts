@@ -1173,7 +1173,17 @@ Deno.serve(async (req) => {
         // response, the UI panel, the task result and the CSV export. Surfaces
         // used to rebuild their own subset from different places, which is why
         // fields the runtime had produced still rendered blank downstream.
+        // The controller persists per-company diagnostics into the sourcing state
+        // checkpoint. Re-read it here so the run context — and therefore the
+        // Workbench panel built from it — carries what the backend evaluated.
+        // Task 15c31f55 stored ten of these and the panel still showed zero,
+        // because nothing copied them across this seam.
+        const finalSourcingState = await cfStateStore.load(task.id).catch(() => null);
+        const finalDiagnostics =
+          (finalSourcingState?.candidate_diagnostics as Array<Record<string, unknown>> | undefined) ?? null;
+
         const runContext = buildQualifiedLeadRunContext({
+          candidateDiagnostics: finalDiagnostics,
           result: cf,
           jobIntent: compileJobIntent(cf.routing.original_user_query),
           requestedPersonRoles: cfIntent.job_search_spec.requested_person_roles ?? null,

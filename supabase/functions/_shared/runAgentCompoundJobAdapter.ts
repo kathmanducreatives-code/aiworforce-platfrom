@@ -29,6 +29,23 @@ export function normalizedJobToCompoundJob(n: NormalizedJob): CompoundJob | null
     postedDate: n.postedAt,
     descriptionExcerpt: (n.jobDescription ?? n.signalSummary ?? "").slice(0, 800) || null,
     open: true,
+
+    // COMPANY EVIDENCE FOR THE BRAIN GATE.
+    //
+    // `CompoundJob` declares these four fields specifically so the Company Brain
+    // can evaluate a company, and this mapping omitted ALL of them. The pipeline
+    // reads `j0.companyEmployeeCount`, which was therefore `undefined` for every
+    // company from every source, and the Brain failed `employee_count` on all ten
+    // companies of production task 15c31f55 — including Gumloop, whose provider
+    // payload carries `companyEmployeeCount: 50` against a 1–150 band.
+    //
+    // Only `employeeCount` is carried, because it is the only one of the four the
+    // normalizer actually has. Stage, business model and founder-led are NOT
+    // synthesised: the LinkedIn actor supplies `companyType` ("Privately Held"),
+    // which is an ownership type and not a business model, and inferring one from
+    // the other would be fabricated evidence. They stay absent, which the Brain
+    // reads as UNKNOWN rather than as a negative.
+    companyEmployeeCount: n.employeeCount,
   };
 }
 

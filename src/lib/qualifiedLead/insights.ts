@@ -39,6 +39,8 @@ export interface CompanyDiagnosticView {
   title_family: string;
   company_brain_status: BrainStatus;
   failed_gates: string[];
+  /** Constraints with no evidence either way. NOT failures. */
+  missing_evidence: string[];
   qualification_status: QualificationStatus;
   /** Always false for anything this module returns. */
   quota_eligible: false;
@@ -98,6 +100,7 @@ export function readCompanyDiagnostic(raw: unknown): CompanyDiagnosticView | nul
     title_family: str(r.title_family),
     company_brain_status: BRAIN_STATUSES.includes(brain) ? brain : 'not_enforced',
     failed_gates: strList(r.failed_gates),
+    missing_evidence: strList(r.missing_evidence),
     qualification_status: STATUSES.includes(status) ? status : 'company_resolved',
     // Hard-coded, never read from the wire: a diagnostic can never count.
     quota_eligible: false,
@@ -177,6 +180,7 @@ export function buildQualificationInsightsView(
   }
 
   return {
+    evidence_pending: pending,
     companies_evaluated: diagnostics.length,
     companies_qualified: qualified.length,
     companies_rejected: rejected.length,
