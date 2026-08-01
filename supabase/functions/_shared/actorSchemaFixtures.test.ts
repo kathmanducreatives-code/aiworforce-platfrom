@@ -141,10 +141,10 @@ Deno.test("34. Indeed datePosted only ever emits a documented enum value", () =>
 Deno.test("32./33. a window beyond 14 days is clamped and the approximation recorded", () => {
   for (const days of [30, 45, 60]) {
     const r = indeedDatePostedBucket(days);
-    assertEquals(r.value, "14 days");
+    assertEquals(r.value, "14");
     assert(r.repair && r.repair.startsWith("posting_window_clamped:"), String(r.repair));
     // The repair names the real supported set so an operator can see why.
-    assert(r.repair!.includes("14 days"));
+    assert(r.repair!.includes("14"));
   }
   // Inside the supported range there is nothing to approximate.
   assertEquals(indeedDatePostedBucket(7).repair, null);

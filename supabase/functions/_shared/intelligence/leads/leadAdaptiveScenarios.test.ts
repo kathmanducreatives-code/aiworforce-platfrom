@@ -333,9 +333,9 @@ Deno.test("37. the final provider-payload validator is untouched and still bindi
 Deno.test("38. verified Actor schema fixtures remain intact", () => {
   const indeed = schemaFixtureFor("indeed_job_discovery");
   assert(indeed, "the Indeed fixture must still exist");
-  // PR #123's correction: the enum is "14 days", never "14".
-  assert(isDocumentedEnumValue("indeed_job_discovery", "datePosted", "14 days"));
-  assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", "14"));
+  // Live-actor truth (run b59b422b): the enum is "14", never "14 days".
+  assert(isDocumentedEnumValue("indeed_job_discovery", "datePosted", "14"));
+  assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", "14 days"));
 });
 
 Deno.test("39. existing batch sizing remains the authority for how many rows to fetch", () => {
