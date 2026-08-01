@@ -39,7 +39,7 @@ export interface StrategistObservabilityRecord {
   usage?: unknown;
 }
 
-const SECRET_HINTS = [/api[_-]?key/i, /authorization/i, /bearer\s/i, /sk-[A-Za-z0-9]/];
+const SECRET_HINTS = [/api[_-]?key/i, /authorization/i, /bearer\s/i, /(^|[^a-z0-9])sk-[A-Za-z0-9]{16,}/i];
 
 /** Defensive: no field of a record may ever look like a credential. */
 export function recordLooksSafe(record: StrategistObservabilityRecord): boolean {
