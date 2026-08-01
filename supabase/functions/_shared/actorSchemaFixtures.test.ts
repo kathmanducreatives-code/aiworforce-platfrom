@@ -131,11 +131,12 @@ Deno.test("34. Indeed datePosted only ever emits a documented enum value", () =>
     assert(allowed.has(r.value), `days=${days} produced undocumented datePosted "${r.value}"`);
     assert(isDocumentedEnumValue("indeed_job_discovery", "datePosted", r.value));
   }
-  // The values it used to emit are NOT members of the enum.
-  for (const old of ["1", "3", "7", "14"]) {
-    assertFalse(allowed.has(old), `"${old}" must not be treated as valid`);
-    assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", old));
+  // The prose form PR #123 introduced is what the LIVE actor rejected.
+  for (const bad of ["last 24 hours", "3 days", "7 days", "14 days"]) {
+    assertFalse(allowed.has(bad), `"${bad}" must not be treated as valid`);
+    assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", bad));
   }
+
 });
 
 Deno.test("32./33. a window beyond 14 days is clamped and the approximation recorded", () => {
