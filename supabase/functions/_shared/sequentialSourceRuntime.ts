@@ -43,6 +43,10 @@ import {
 import { resolveHiringSourceActor, HIRING_SOURCE_CATALOG } from "./hiringSourceCatalog.ts";
 import { decideDiscoveryBatchSize, batchDecisionDiagnostics, type DiscoveryBatchDecision } from "./discoveryBatchSize.ts";
 import {
+  allocateBatchAcrossPacks, packAllocationDiagnostics,
+  type PackAllocationDecision, type ProviderLimitScope,
+} from "./discoveryBatchAllocation.ts";
+import {
   dedupeAgainstState, hasSentInput, isStepFinished, jobDedupeKey, stepOf,
   type SourceExecutionState, type SourceStepRecord,
 } from "./sourceExecutionState.ts";
