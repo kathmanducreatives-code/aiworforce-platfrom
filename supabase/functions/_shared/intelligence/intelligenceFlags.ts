@@ -46,8 +46,6 @@ export const INTELLIGENCE_FLAGS = [
   "DYNAMIC_HIRING_SOURCE_PLANNING",
   /** PR #110. Claude recommends ONE approved next action after a source attempt. */
   "CLAUDE_SOURCE_FEEDBACK",
-  // Unified GPT qualified-lead strategy owner (initial planning authority).
-  "GPT_LEAD_STRATEGY",
 ] as const;
 
 export type IntelligenceFlag = typeof INTELLIGENCE_FLAGS[number];
