@@ -1129,10 +1129,35 @@ Deno.serve(async (req) => {
           //
           // Built by the gated seam rather than assembled here, so run-agent's
           // kernel surface stays the two modules test 32.E permits.
-          // When the GPT owner produced the strategy, the Claude bridge never ran;
-          // the binding then carries no Claude strategy and the sequential bridge
-          // keeps its deterministic ordered plan. There is exactly one authority.
-          ...adaptiveStrategyBinding(claudeFirst ?? {
+          // When the GPT owner produced the strategy, the Claude bridge never ran.
+          // Its packs are bound HERE — production tasks 4851efb0 / b59b422b proved
+          // that without this edge `activePacks` stays empty, `prepareStepPackCalls`
+          // is never selected, and every round collapses back into ONE merged
+          // Boolean call. There is still exactly one strategy authority.
+          ...(gptStrategy?.resolution
+            ? {
+              ...gptAdaptiveStrategyBinding(gptStrategy.resolution.plan, {
+                final_entity: "contact_ready_lead",
+                requested_count: quota.requestedLeadCount,
+                hiring_role_seed: String(cfIntent.job_search_spec.original_query ?? ""),
+                decision_maker_roles: cfIntent.job_search_spec.requested_person_roles ?? [],
+                company_constraints: {
+                  business_model: cfIntent.job_search_spec.company_vertical
+                    ? String(cfIntent.job_search_spec.company_vertical)
+                    : undefined,
+                  country: cfIntent.job_search_spec.location ?? undefined,
+                  employee_count: brainEnforced
+                    ? {
+                      min: effectivePolicy.constraints?.min_employees ?? undefined,
+                      max: effectivePolicy.constraints?.max_employees ?? undefined,
+                    }
+                    : undefined,
+                },
+                maximum_age_days: 60,
+              }),
+              strategyRouteOverride: { enabled: true, reason: "gpt_lead_strategy" },
+            }
+            : adaptiveStrategyBinding(claudeFirst ?? {
             spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
             specRewritten: false, outcome: null, mission: null,
             enablement: { enabled: false, reason: "flag_off" }, environment: null,
@@ -1155,7 +1180,8 @@ Deno.serve(async (req) => {
                 : undefined,
             },
             maximum_age_days: 60,
-          }),
+          })),
+
           log: (m, meta) => console.log("[run-agent][sequential-source]", m, meta),
         });
 
