@@ -174,7 +174,7 @@ Deno.test("an employer mismatch cannot progress", async () => {
   assertEquals(plan.contactBlocked, true);
 });
 
-Deno.test("a verified founder with missing contact evidence stays pending, never CONTACT", async () => {
+Deno.test("a verified founder with missing contact evidence carries an unresolved contact reference", async () => {
   const { candidates } = await run(
     [job({ company: "Linear", domain: "linear.app", companyEmployeeCount: 90, companyBusinessModel: "saas" })],
     {
@@ -185,14 +185,16 @@ Deno.test("a verified founder with missing contact evidence stays pending, never
       }],
     },
   );
-  for (const c of candidates) {
-    if (c.verdict !== "CONTACT") continue;
-    assert(
-      c.person.linkedinUrl || c.person.email,
-      "a person with no contact evidence was declared CONTACT-ready",
-    );
-  }
+  const c = candidates[0];
+  assert(c, "a qualified company produced no decision-maker row");
+  assertEquals(c.employer.outcome, "verified_match");
+  // The employer evidence reference has no URL: contact enrichment is still owed.
+  const employerRef = c.evidence.find((e) => e.kind === "employer");
+  assertEquals(employerRef?.url, null, "contact evidence was fabricated");
+  // Identity falls back to a deterministic name key rather than a fake profile.
+  assert(c.personKey.startsWith("name:"), "a missing profile produced an invented identity");
 });
+
 
 Deno.test("sufficient contact evidence becomes CONTACT-ready and counts exactly once", async () => {
   const { candidates } = await run(
