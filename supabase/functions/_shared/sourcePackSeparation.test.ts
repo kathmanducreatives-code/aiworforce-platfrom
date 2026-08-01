@@ -8,7 +8,7 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { prepareStepPackCalls, sourceIdempotencyKey } from "./sequentialSourceRuntime.ts";
-import { createSourceExecutionState } from "./sourceExecutionState.ts";
+import { newSourceExecutionState } from "./sourceExecutionState.ts";
 import type { OrderedSourceStep } from "./hiringSourcePlan.ts";
 
 const step = {
@@ -37,11 +37,12 @@ const packs = [
 ];
 
 function state() {
-  return createSourceExecutionState({
-    taskId: "t1",
-    plan: { steps: [step] } as never,
-    remainingQuota: 5,
-  } as never);
+  return newSourceExecutionState({
+    planHash: "h1",
+    steps: [{ stepId: step.stepId, capability: step.capability, order: 1 }],
+    requestedCount: 5,
+    now: new Date().toISOString(),
+  });
 }
 
 Deno.test("packs compile into separate calls with their own titles", async () => {
