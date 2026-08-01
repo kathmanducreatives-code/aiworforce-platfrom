@@ -59,6 +59,7 @@ import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
 import { applyLeadStrategyInitialPlanning } from "../_shared/leadStrategyBridge.ts";
+import { constraintsFromBrain } from "../_shared/leadStrategistContext.ts";
 // The missing edge between the GPT strategy and the sequential runtime: without
 // it the strategist's separate query packs never reach the Actor calls.
 import { gptAdaptiveStrategyBinding } from "../_shared/leadStrategyAdaptiveBinding.ts";
@@ -987,6 +988,30 @@ Deno.serve(async (req) => {
         // deterministic plan — owns round-one titles. It runs BEFORE the legacy
         // Claude-first bridge and, when it produces a validated strategy, that
         // bridge is not consulted at all: one workflow, one strategy authority.
+        // THE COMPANY BRAIN IS COMPILED BEFORE THE STRATEGIST RUNS.
+        //
+        // It used to be compiled ~60 lines BELOW this point, which is the
+        // structural reason the strategist envelope was thin: at the moment GPT
+        // was asked to plan sourcing, the workspace's ICP did not yet exist in
+        // this scope, so `missionFromSpec` could only send `company_size: null`.
+        // `brain`/`brainRow` are loaded at the top of the handler, so nothing in
+        // this block depends on the code it moved above.
+        const brainIcpCtx = compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> });
+        const effectivePolicy = await compileEffectiveCompanyPolicy({
+          industries: brainIcpCtx.icp.industries,
+          categories: brainIcpCtx.icp.categories,
+          business_models: brainIcpCtx.icp.business_models,
+          company_size_min: brainIcpCtx.icp.company_size_min ?? null,
+          company_size_max: brainIcpCtx.icp.company_size_max ?? null,
+          maturity_stage: brainIcpCtx.icp.maturity_stage,
+          target_customer_segments: brainIcpCtx.icp.target_customer_segments,
+          disqualifier_industries: brainIcpCtx.disqualifiers?.industries ?? [],
+          disqualifier_company_types: brainIcpCtx.disqualifiers?.company_types ?? [],
+          disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
+          brainVersion: (brainRow as { updated_at?: string } | null)?.updated_at ?? null,
+        });
+        const brainEnforced = effectivePolicy.provenance.hard_constraints.length > 0;
+
         // Everything else (person roles, geography, vertical, quota, gates)
         // is carried through untouched.
         const gptStrategy = (useLeadStrategyOwner && !persistedPlan)
@@ -996,6 +1021,16 @@ Deno.serve(async (req) => {
             requestedLeadCount: quota.requestedLeadCount,
             companyVertical: cfIntent.job_search_spec.company_vertical
               ? String(cfIntent.job_search_spec.company_vertical)
+              : null,
+            // The workspace's real ICP, so the strategist plans against it rather
+            // than guessing. Absent when the Brain is not enforced.
+            companyConstraints: brainEnforced
+              ? constraintsFromBrain(effectivePolicy.constraints as never, {
+                country: cfIntent.job_search_spec.location ?? null,
+                vertical: cfIntent.job_search_spec.company_vertical
+                  ? String(cfIntent.job_search_spec.company_vertical)
+                  : null,
+              })
               : null,
           })
           : null;
@@ -1051,21 +1086,6 @@ Deno.serve(async (req) => {
         // The policy is compiled once per run and threaded down; the pipeline
         // enforces it before any people call, so a rejected company costs
         // nothing. A missing Brain leaves it unenforced — the previous behavior.
-        const brainIcpCtx = compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> });
-        const effectivePolicy = await compileEffectiveCompanyPolicy({
-          industries: brainIcpCtx.icp.industries,
-          categories: brainIcpCtx.icp.categories,
-          business_models: brainIcpCtx.icp.business_models,
-          company_size_min: brainIcpCtx.icp.company_size_min ?? null,
-          company_size_max: brainIcpCtx.icp.company_size_max ?? null,
-          maturity_stage: brainIcpCtx.icp.maturity_stage,
-          target_customer_segments: brainIcpCtx.icp.target_customer_segments,
-          disqualifier_industries: brainIcpCtx.disqualifiers?.industries ?? [],
-          disqualifier_company_types: brainIcpCtx.disqualifiers?.company_types ?? [],
-          disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
-          brainVersion: (brainRow as { updated_at?: string } | null)?.updated_at ?? null,
-        });
-        const brainEnforced = effectivePolicy.provenance.hard_constraints.length > 0;
         console.log("[run-agent][company-brain]", {
           task_id: task.id, enforced: brainEnforced,
           policy_hash: effectivePolicy.policyHash,
