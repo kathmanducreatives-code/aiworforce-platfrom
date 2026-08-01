@@ -27,6 +27,7 @@ import { createQualifiedLeadStrategist } from "./leadStrategy/strategist.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
 import type { LeadStrategyModelFn } from "./leadStrategyModels.ts";
 import type { QualifiedLeadStrategistProvider } from "./leadStrategy/provider.ts";
+import type { StrategistCompanyConstraints } from "./leadStrategistContext.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -90,6 +91,15 @@ export interface LeadStrategyInitialInput {
   companyVertical?: string | null;
   maturityStages?: string[];
   remainingBudgetUsd?: number;
+  /**
+   * Company Brain + saved ICP, in the strategist's own shape.
+   *
+   * WITHOUT THIS THE MODEL IS PLANNING BLIND. `missionFromSpec` hard-coded
+   * `company_size: null` and sent no industries, stages or business model, so the
+   * strategist was asked to choose sources and titles for a workspace whose ICP it
+   * had never been told. Optional so every existing caller stays valid.
+   */
+  companyConstraints?: StrategistCompanyConstraints | null;
   /** Injected in tests. Production uses the configured adapter. */
   callModel?: LeadStrategyModelFn;
   provider?: QualifiedLeadStrategistProvider;
@@ -119,6 +129,8 @@ export function planHash(value: unknown): string {
 }
 
 export function missionFromSpec(input: LeadStrategyInitialInput): LeadStrategyMission {
+  // The Brain's employee band is real mission truth. It was previously dropped.
+  const band = input.companyConstraints?.employee_count ?? null;
   return {
     original_query: String(input.spec.original_query ?? ""),
     requested_lead_count: input.requestedLeadCount,
@@ -126,8 +138,10 @@ export function missionFromSpec(input: LeadStrategyInitialInput): LeadStrategyMi
     decision_maker_roles: [...(input.spec.requested_person_roles ?? [])],
     geography: input.spec.location ?? input.spec.country ?? null,
     company_vertical: input.companyVertical ?? null,
-    company_size: null,
-    maturity_stages: [...(input.maturityStages ?? [])],
+    company_size: band,
+    maturity_stages: input.maturityStages?.length
+      ? [...input.maturityStages]
+      : [...(input.companyConstraints?.company_stages ?? [])],
   };
 }
 
