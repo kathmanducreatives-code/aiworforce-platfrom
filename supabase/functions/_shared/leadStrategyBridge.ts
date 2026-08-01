@@ -17,7 +17,7 @@
 // Gemini and Claude are unreachable from here. Unrelated workflows never call
 // this module, so their routing is untouched.
 
-import { isIntelligenceFlagEnabled, type EnvReader } from "./intelligenceFlags.ts";
+import { isIntelligenceFlagEnabled, type EnvReader } from "./intelligence/intelligenceFlags.ts";
 import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge.ts";
 import { runLeadStrategy, type LeadStrategyResolution } from "./leadStrategyOwner.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
