@@ -64,13 +64,7 @@ export function isGptLeadStrategyEnabled(
   if (!flagOn(get(GPT_LEAD_STRATEGY_FLAG))) {
     return { enabled: false, reason: "flag_off" };
   }
-  let allow: string[] = [];
-  try {
-    const get: EnvReader = read ?? ((k) => Deno.env.get(k));
-    allow = parseAllowlist(get(GPT_LEAD_STRATEGY_WORKSPACES_ENV));
-  } catch {
-    return { enabled: false, reason: "no_workspace_allowlist" };
-  }
+  const allow = parseAllowlist(get(GPT_LEAD_STRATEGY_WORKSPACES_ENV));
   if (allow.length === 0) return { enabled: false, reason: "no_workspace_allowlist" };
   if (!allow.includes(String(workspaceId))) {
     return { enabled: false, reason: "workspace_not_allowed" };
