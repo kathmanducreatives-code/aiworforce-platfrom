@@ -1,0 +1,90 @@
+{
+  "title": "Search LinkedIn Companies",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "scraperMode": {
+      "title": "Company Scraper Mode",
+      "type": "string",
+      "enum": [
+        "short",
+        "full"
+      ],
+      "description": "Choose the mode for scraping LinkedIn companies. The Short mode provides basic information, while the Full mode includes full detailed company data.",
+      "prefill": "full"
+    },
+    "maxItems": {
+      "title": "Maximum number of companies to scrape",
+      "type": "integer",
+      "description": "Maximum number of companies to scrape. The actor will stop scraping when this limit is reached.",
+      "maximum": 1000,
+      "prefill": 20
+    },
+    "searchQuery": {
+      "title": "Search query",
+      "description": "Query to search LinkedIn companies. (e.g., `marketing`). [The query supports search operators](https://www.linkedin.com/help/linkedin/answer/a524335)",
+      "type": "string",
+      "editor": "textfield",
+      "maxLength": 300
+    },
+    "locations": {
+      "title": "Locations Filter",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Filter Companies by these LinkedIn locations. Example: `San Francisco`. LinkedIn does not always understand your text queries. For example for \"UK\" query it will apply \"Ukraine\" location, so you should use \"United Kingdom\" in this case. Try this out first in the location filter input of LinkedIn search at `https://www.linkedin.com/search/results/people/?geoUrn=%5B%22103644278%22%5D` - we will use the first suggestion from the autocomplete popup when you type your location",
+      "maxItems": 20
+    },
+    "industryIds": {
+      "title": "Industry IDs Filter",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Filter Companies by these LinkedIn industry IDs. Example: `4` for 'Software Development'. Full list: `https://github.com/HarvestAPI/linkedin-industry-codes-v2/blob/main/linkedin_industry_code_v2_all_eng_with_header.csv`",
+      "maxItems": 20
+    },
+    "companySize": {
+      "title": "Company Size Filter (filters by the company size specified in the company \"About\" tab)",
+      "type": "array",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "1-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "501-1000",
+          "1001-5000",
+          "5001-10000",
+          "10001+"
+        ],
+        "enumTitles": [
+          "1-10 employees",
+          "11-50 employees",
+          "51-200 employees",
+          "201-500 employees",
+          "501-1000 employees",
+          "1001-5000 employees",
+          "5001-10000 employees",
+          "10001+ employees"
+        ]
+      },
+      "description": "Filter Companies by these company size ranges."
+    },
+    "startPage": {
+      "title": "Start Page",
+      "type": "integer",
+      "description": "The page number to start scraping from. The last page is 20, according to LinkedIn limitations.",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 20,
+      "sectionCaption": "Pagination options"
+    },
+    "takePages": {
+      "title": "Scrape search pages",
+      "type": "integer",
+      "description": "The number of search pages to scrape. Each page contains 50 companies. The last page is 20, according to LinkedIn limitations.",
+      "minimum": 0,
+      "maximum": 20
+    }
+  }
+}

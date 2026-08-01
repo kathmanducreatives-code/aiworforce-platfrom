@@ -1,0 +1,14 @@
+{
+  "industryIds": [
+    "4"
+  ],
+  "companySize": [
+    "11-50",
+    "51-200"
+  ],
+  "locations": [
+    "United States"
+  ],
+  "maxItems": 8,
+  "scraperMode": "full"
+}

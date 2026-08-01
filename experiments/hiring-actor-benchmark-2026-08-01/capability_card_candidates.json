@@ -1,0 +1,498 @@
+{
+  "_meta": {
+    "generated": "2026-08-01",
+    "status": "CANDIDATE \u2014 NOT REGISTERED",
+    "account_tier_prices_resolved_at": "BRONZE",
+    "warning": "Do not register without re-verifying build + pricing; two builds changed on the benchmark date itself."
+  },
+  "cards": [
+    {
+      "actor_key": "apify_yc_companies_memo23",
+      "actor_id": "memo23/y-combinator-scraper",
+      "purposes": [
+        "company_discovery",
+        "hiring_verification_yc_only"
+      ],
+      "supported_filters": {
+        "regions": "enum(19)",
+        "industries": "enum(11 YC verticals)",
+        "batch": "enum(49)",
+        "isHiring": "bool",
+        "minEmployeeSize": "enum(9)",
+        "maxEmployeeSize": "enum(9)",
+        "queries": "array(keyword)",
+        "mode": "jobs|companies"
+      },
+      "verified_enums": {
+        "mode": [
+          "jobs",
+          "companies"
+        ],
+        "industries": [
+          "All industries",
+          "B2B",
+          "Consumer",
+          "Healthcare",
+          "Fintech",
+          "Engineering, Product and Design",
+          "Industrials",
+          "Education",
+          "Real Estate and Construction",
+          "Government",
+          "Unspecified"
+        ],
+        "minEmployeeSize": [
+          "1+",
+          "5+",
+          "10+",
+          "25+",
+          "50+",
+          "100+",
+          "250+",
+          "500+",
+          "1000+"
+        ],
+        "maxEmployeeSize": [
+          "1+",
+          "5",
+          "10",
+          "25",
+          "50",
+          "100",
+          "250",
+          "500",
+          "1000+"
+        ]
+      },
+      "input_limits": {
+        "maxItems": "PER-URL / per-filter-run cap, not a global cap"
+      },
+      "outputs": [
+        "id",
+        "name",
+        "slug",
+        "website",
+        "batch",
+        "teamSize",
+        "industry",
+        "subindustry",
+        "regions",
+        "allLocations",
+        "isHiring",
+        "openJobs[]",
+        "longDescription",
+        "status",
+        "stage",
+        "tags"
+      ],
+      "best_for": [
+        "YC-cohort company discovery",
+        "free open-job list with YC role taxonomy"
+      ],
+      "not_for": [
+        "LinkedIn identity (no LinkedIn URL field)",
+        "employee-size accuracy",
+        "GTM/RevOps hiring signal"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 0.008,
+        "per_result_usd": 0.001,
+        "additional_data_usd": 0.0001
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "yes \u2014 new YC normalizer; no LinkedIn URL to key on",
+      "schema_version_or_build": "0.0.21 (built 2026-08-01)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "medium \u2014 build changed on the day of testing"
+    },
+    {
+      "actor_key": "apify_yc_companies_solidcode",
+      "actor_id": "solidcode/ycombinator-scraper",
+      "purposes": [
+        "company_discovery_fallback"
+      ],
+      "supported_filters": {
+        "searchQuery": "string",
+        "status": "enum(4)",
+        "regions": "enum(11)",
+        "industries": "enum(8)",
+        "teamSize": "enum(6) \u2014 MULTI-VALUE BROKEN",
+        "isHiring": "bool",
+        "includeJobs": "bool",
+        "includeFounders": "bool"
+      },
+      "verified_enums": {
+        "status": [
+          "Active",
+          "Public",
+          "Acquired",
+          "Inactive"
+        ],
+        "teamSize": [
+          "1",
+          "2-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "500+"
+        ],
+        "industries": [
+          "B2B",
+          "Consumer",
+          "Education",
+          "Fintech",
+          "Government",
+          "Healthcare",
+          "Industrials",
+          "Real Estate and Construction"
+        ]
+      },
+      "input_limits": {
+        "maxResults": "0 = uncapped (internal 10k)",
+        "teamSize": "SINGLE VALUE ONLY in practice"
+      },
+      "outputs": [
+        "companyId",
+        "name",
+        "slug",
+        "website",
+        "linkedin",
+        "crunchbase",
+        "twitter",
+        "github",
+        "country",
+        "location",
+        "yearFounded",
+        "teamSize",
+        "industries",
+        "founders[]",
+        "jobs[]",
+        "openJobsCount",
+        "status",
+        "batch"
+      ],
+      "best_for": [
+        "richer company identity than memo23 (linkedin/crunchbase/yearFounded/founders)"
+      ],
+      "not_for": [
+        "any multi-value teamSize filter \u2014 returns zero rows silently"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 5e-05,
+        "per_result_usd": 0.002
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "yes",
+      "schema_version_or_build": "1.0.5 (built 2026-05-02)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "low \u2014 silent-empty filter defect confirmed"
+    },
+    {
+      "actor_key": "apify_linkedin_company_search",
+      "actor_id": "harvestapi/linkedin-company-search",
+      "purposes": [
+        "company_discovery"
+      ],
+      "supported_filters": {
+        "searchQuery": "NAME KEYWORD, not concept",
+        "locations": "array<=20",
+        "industryIds": "array<=20",
+        "companySize": "enum(8)",
+        "scraperMode": "short|full"
+      },
+      "verified_enums": {
+        "scraperMode": [
+          "short",
+          "full"
+        ],
+        "companySize": [
+          "1-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "501-1000",
+          "1001-5000",
+          "5001-10000",
+          "10001+"
+        ]
+      },
+      "input_limits": {
+        "maxItems": 1000,
+        "takePages": "<=20 (50 companies/page)"
+      },
+      "outputs": [
+        "id",
+        "name",
+        "linkedinUrl",
+        "website",
+        "description",
+        "employeeCount(full only)",
+        "employeeCountRange",
+        "industries(full)",
+        "companyType",
+        "locations",
+        "specialities",
+        "tagline"
+      ],
+      "best_for": [
+        "building a broad LinkedIn company list with identity URLs"
+      ],
+      "not_for": [
+        "trustworthy ICP filtering \u2014 industry and size filters both proved unreliable",
+        "semantic/concept search"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 0.001,
+        "short_company_usd": 0.002,
+        "full_company_usd": 0.004
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "yes",
+      "schema_version_or_build": "0.0.17 (built 2026-04-01)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "medium \u2014 stable schema, unreliable filter semantics"
+    },
+    {
+      "actor_key": "apify_linkedin_job_search",
+      "actor_id": "harvestapi/linkedin-job-search",
+      "purposes": [
+        "hiring_verification"
+      ],
+      "supported_filters": {
+        "company": "array<=10 (URLs or names)",
+        "jobTitles": "array (FUZZY match)",
+        "locations": "array",
+        "postedLimit": "enum(4)",
+        "workplaceType": "enum(3)",
+        "employmentType": "enum(5)",
+        "sortBy": "enum(2)",
+        "industryIds": "array<=20"
+      },
+      "verified_enums": {
+        "postedLimit": [
+          "1h",
+          "24h",
+          "week",
+          "month"
+        ],
+        "sortBy": [
+          "date",
+          "relevance"
+        ],
+        "workplaceType": [
+          "remote",
+          "hybrid",
+          "office"
+        ],
+        "employmentType": [
+          "full-time",
+          "part-time",
+          "contract",
+          "internship",
+          "temporary"
+        ]
+      },
+      "input_limits": {
+        "company_max": 10,
+        "maxItems": "PER jobTitle PER location \u2014 multiplies cost"
+      },
+      "outputs": [
+        "id",
+        "title",
+        "linkedinUrl",
+        "company{id,name,linkedinUrl,website}",
+        "location",
+        "workplaceType",
+        "postedDate",
+        "descriptionText",
+        "employmentType",
+        "experienceLevel",
+        "jobFunctions",
+        "applicantTrackingSystem"
+      ],
+      "best_for": [
+        "verifying hiring INSIDE a known company set \u2014 zero cross-company leakage observed"
+      ],
+      "not_for": [
+        "exact title matching",
+        "trusting the posting company as the employer"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 0.001,
+        "per_job_usd": 0.001,
+        "min_total_usd": 0.002
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "yes + deterministic title post-filter + aggregator screen",
+      "schema_version_or_build": "0.0.55 (built 2026-04-07)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "high for scoping, low for title precision"
+    },
+    {
+      "actor_key": "apify_linkedin_company_employees",
+      "actor_id": "harvestapi/linkedin-company-employees",
+      "purposes": [
+        "founder_discovery",
+        "decision_maker_discovery"
+      ],
+      "supported_filters": {
+        "companies": "array<=1000 URLs",
+        "jobTitles": "array<=50 (fuzzy)",
+        "seniorityLevelIds": "array",
+        "profileScraperMode": "enum(3)",
+        "companyBatchMode": "enum(2)",
+        "maxItemsPerCompany": "int"
+      },
+      "verified_enums": {
+        "profileScraperMode": [
+          "Short ($4 per 1k)",
+          "Full ($8 per 1k)",
+          "Full + email search ($12 per 1k)"
+        ],
+        "companyBatchMode": [
+          "all_at_once",
+          "one_by_one"
+        ]
+      },
+      "input_limits": {
+        "companies": 1000,
+        "jobTitles": 50,
+        "note": "enum VALUES contain the price string \u2014 must be sent verbatim"
+      },
+      "outputs": [
+        "id",
+        "firstName",
+        "lastName",
+        "linkedinUrl",
+        "location",
+        "currentPositions[{title,companyName,companyLinkedinUrl,current,tenureAtCompany,startedOn}]",
+        "openProfile",
+        "premium"
+      ],
+      "best_for": [
+        "founder/CEO discovery with per-company caps and current-employer evidence"
+      ],
+      "not_for": [
+        "exact-title precision (2/10 off-target)",
+        "vanity LinkedIn URLs"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 0.02,
+        "short_profile_usd": 0.003,
+        "full_profile_usd": 0.008,
+        "email_usd": 0.012,
+        "min_total_usd": 0.05
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "yes \u2014 already partially integrated",
+      "schema_version_or_build": "0.0.144 (built 2026-08-01)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "high"
+    },
+    {
+      "actor_key": "apify_people_search",
+      "actor_id": "harvestapi/linkedin-profile-search",
+      "purposes": [
+        "founder_discovery_fallback",
+        "people_search"
+      ],
+      "supported_filters": {
+        "currentCompanies": "array<=50",
+        "currentJobTitles": "array<=50",
+        "companyHeadcount": "array",
+        "profileScraperMode": "enum(3)",
+        "searchQuery": "string"
+      },
+      "verified_enums": {
+        "profileScraperMode": [
+          "Short",
+          "Full",
+          "Full + email search"
+        ]
+      },
+      "input_limits": {
+        "currentCompanies": 50,
+        "no per-company cap": "cannot bound results per company"
+      },
+      "outputs": [
+        "id",
+        "firstName",
+        "lastName",
+        "linkedinUrl",
+        "currentPositions[...]",
+        "location",
+        "profileIdInSearch"
+      ],
+      "best_for": [
+        "people search NOT scoped to a company list"
+      ],
+      "not_for": [
+        "per-company founder caps",
+        "cheap small runs \u2014 $0.10 minimum per run"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "search_page_usd": 0.1,
+        "full_profile_usd": 0.004,
+        "min_total_usd": 0.1
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "already integrated as apify_people_search",
+      "schema_version_or_build": "0.0.249 (built 2026-08-01)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "high"
+    },
+    {
+      "actor_key": "apify_linkedin_company_details",
+      "actor_id": "harvestapi/linkedin-company",
+      "purposes": [
+        "company_enrichment"
+      ],
+      "supported_filters": {
+        "companies": "array of LinkedIn URLs",
+        "searches": "array of names"
+      },
+      "verified_enums": {},
+      "input_limits": {},
+      "outputs": [
+        "id",
+        "name",
+        "linkedinUrl",
+        "website",
+        "description",
+        "employeeCount",
+        "employeeCountRange",
+        "industries[{id,name,hierarchy}]",
+        "companyType",
+        "locations",
+        "specialities",
+        "foundedOn",
+        "followerCount",
+        "peopleStats"
+      ],
+      "best_for": [
+        "authoritative industry id + hierarchy and exact employeeCount",
+        "correcting company-search's unreliable industry filter"
+      ],
+      "not_for": [
+        "foundedOn (null on 2 of 3 observed)"
+      ],
+      "cost_model": {
+        "model": "PAY_PER_EVENT",
+        "actor_start_usd": 5e-05,
+        "per_company_usd": 0.004,
+        "min_total_usd": 0.004
+      },
+      "authentication": "APIFY_TOKEN only",
+      "normalizer_required": "already integrated as apify_linkedin_company_details",
+      "schema_version_or_build": "0.0.37 (built 2026-06-24)",
+      "last_verified_at": "2026-08-01",
+      "confidence": "high"
+    }
+  ]
+}

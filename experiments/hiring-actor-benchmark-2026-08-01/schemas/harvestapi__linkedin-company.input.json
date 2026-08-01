@@ -1,0 +1,25 @@
+{
+  "title": "Search LinkedIn Companies",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "companies": {
+      "title": "Company LinkedIn URLs",
+      "type": "array",
+      "editor": "stringList",
+      "description": "List of LinkedIn company URLs",
+      "prefill": [
+        "https://www.linkedin.com/company/google",
+        "https://www.linkedin.com/company/microsoft"
+      ]
+    },
+    "searches": {
+      "title": "Company names (to search)",
+      "type": "array",
+      "editor": "stringList",
+      "description": "List of company names to search on LinkedIn",
+      "sectionCaption": "Search Companies",
+      "sectionDescription": "Find companies by text queries. It will scrape the LinkedIn company search web page: https://www.linkedin.com/search/results/companies/?keywords=example - **please note that the LinkedIn search can be inaccurate.**"
+    }
+  }
+}

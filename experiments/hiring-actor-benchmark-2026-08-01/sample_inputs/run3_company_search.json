@@ -1,0 +1,15 @@
+{
+  "searchQuery": "B2B software platform",
+  "locations": [
+    "United States"
+  ],
+  "industryIds": [
+    "4"
+  ],
+  "companySize": [
+    "11-50",
+    "51-200"
+  ],
+  "scraperMode": "short",
+  "maxItems": 40
+}

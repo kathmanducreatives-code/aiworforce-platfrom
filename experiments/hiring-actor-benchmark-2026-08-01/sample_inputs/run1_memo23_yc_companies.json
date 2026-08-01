@@ -1,0 +1,16 @@
+{
+  "mode": "companies",
+  "regions": [
+    "United States of America"
+  ],
+  "industries": [
+    "B2B"
+  ],
+  "isHiring": true,
+  "minEmployeeSize": "1+",
+  "maxEmployeeSize": "250",
+  "scrapeOpenJobs": true,
+  "scrapeFounderDetails": false,
+  "enrichEmails": false,
+  "maxItems": 50
+}

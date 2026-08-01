@@ -1,0 +1,291 @@
+{
+  "title": "Y Combinator Scraper",
+  "description": "Extract YC-funded companies, founders, and open jobs from ycombinator.com/companies. Use the guided filters below for the most common cases, or paste full directory URLs to use any filter combination YC supports.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "YC Directory or Company URLs",
+      "type": "array",
+      "description": "Paste one or more Y Combinator URLs. Accepts directory pages with filters pre-applied (e.g. https://www.ycombinator.com/companies?batch=W24&industry=B2B), individual company URLs (https://www.ycombinator.com/companies/airbnb), or a mix. Leave empty to use the guided filters below \u2014 or to scrape the full unfiltered directory if no filters are set.",
+      "editor": "stringList",
+      "prefill": [],
+      "sectionCaption": "Sources",
+      "sectionDescription": "Pick any combination of YC URLs and guided filters. Leave everything blank to scrape the entire directory (capped by Max Results)."
+    },
+    "searchQuery": {
+      "title": "Search Query",
+      "type": "string",
+      "description": "Optional free-text search across the YC directory (matches the search box on ycombinator.com/companies). Combines with the filters below.",
+      "editor": "textfield",
+      "nullable": true,
+      "sectionCaption": "Filters",
+      "sectionDescription": "Narrow the directory by batch, status, region, industry, team size, or hiring activity. All filters are optional. Ignored when you paste Start URLs above (the URL already specifies the filters)."
+    },
+    "batches": {
+      "title": "YC Batches",
+      "type": "array",
+      "description": "Funding cohorts to include. Multi-select. Leave empty to include all batches.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "F25",
+          "S25",
+          "W25",
+          "F24",
+          "S24",
+          "W24",
+          "S23",
+          "W23",
+          "S22",
+          "W22",
+          "S21",
+          "W21",
+          "S20",
+          "W20",
+          "S19",
+          "W19",
+          "S18",
+          "W18",
+          "S17",
+          "W17",
+          "S16",
+          "W16",
+          "S15",
+          "W15",
+          "S14",
+          "W14",
+          "S13",
+          "W13",
+          "S12",
+          "W12",
+          "S11",
+          "W11",
+          "S10",
+          "W10",
+          "S09",
+          "W09",
+          "S08",
+          "W08",
+          "S07",
+          "W07",
+          "S06",
+          "W06",
+          "S05",
+          "IK12"
+        ],
+        "enumTitles": [
+          "Fall 2025",
+          "Summer 2025",
+          "Winter 2025",
+          "Fall 2024",
+          "Summer 2024",
+          "Winter 2024",
+          "Summer 2023",
+          "Winter 2023",
+          "Summer 2022",
+          "Winter 2022",
+          "Summer 2021",
+          "Winter 2021",
+          "Summer 2020",
+          "Winter 2020",
+          "Summer 2019",
+          "Winter 2019",
+          "Summer 2018",
+          "Winter 2018",
+          "Summer 2017",
+          "Winter 2017",
+          "Summer 2016",
+          "Winter 2016",
+          "Summer 2015",
+          "Winter 2015",
+          "Summer 2014",
+          "Winter 2014",
+          "Summer 2013",
+          "Winter 2013",
+          "Summer 2012",
+          "Winter 2012",
+          "Summer 2011",
+          "Winter 2011",
+          "Summer 2010",
+          "Winter 2010",
+          "Summer 2009",
+          "Winter 2009",
+          "Summer 2008",
+          "Winter 2008",
+          "Summer 2007",
+          "Winter 2007",
+          "Summer 2006",
+          "Winter 2006",
+          "Summer 2005",
+          "Imagine K12"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "prefill": []
+    },
+    "status": {
+      "title": "Company Status",
+      "type": "array",
+      "description": "Operating status. Multi-select. Leave empty for all statuses.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Active",
+          "Public",
+          "Acquired",
+          "Inactive"
+        ],
+        "enumTitles": [
+          "Active",
+          "Public",
+          "Acquired",
+          "Inactive"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "prefill": []
+    },
+    "regions": {
+      "title": "Regions",
+      "type": "array",
+      "description": "Headquarters region. Multi-select. Leave empty for all regions.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "United States of America",
+          "Canada",
+          "Latin America",
+          "Europe",
+          "United Kingdom",
+          "Asia",
+          "India",
+          "Africa",
+          "Middle East",
+          "Oceania",
+          "Remote"
+        ],
+        "enumTitles": [
+          "United States",
+          "Canada",
+          "Latin America",
+          "Europe",
+          "United Kingdom",
+          "Asia",
+          "India",
+          "Africa",
+          "Middle East",
+          "Oceania",
+          "Remote"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "prefill": []
+    },
+    "industries": {
+      "title": "Industries",
+      "type": "array",
+      "description": "Industry vertical. Multi-select. Leave empty for all industries.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "B2B",
+          "Consumer",
+          "Education",
+          "Fintech",
+          "Government",
+          "Healthcare",
+          "Industrials",
+          "Real Estate and Construction"
+        ],
+        "enumTitles": [
+          "B2B",
+          "Consumer",
+          "Education",
+          "Fintech",
+          "Government",
+          "Healthcare",
+          "Industrials",
+          "Real Estate and Construction"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "prefill": []
+    },
+    "teamSize": {
+      "title": "Team Size",
+      "type": "array",
+      "description": "Self-reported employee count. Multi-select. Leave empty for any size.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "1",
+          "2-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "500+"
+        ],
+        "enumTitles": [
+          "1 (solo founder)",
+          "2 to 10",
+          "11 to 50",
+          "51 to 200",
+          "201 to 500",
+          "500+"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "prefill": []
+    },
+    "isHiring": {
+      "title": "Hiring Only",
+      "type": "boolean",
+      "description": "If on, return only companies with at least one open job listed on YC. Useful for recruiting and lead generation.",
+      "editor": "checkbox",
+      "default": false,
+      "prefill": false,
+      "nullable": true
+    },
+    "includeFounders": {
+      "title": "Include Founders",
+      "type": "boolean",
+      "description": "Embed each company's founders on the result row \u2014 name, title, bio, LinkedIn, and X. Disable for faster, cheaper runs that return only company-level data. (Note: Y Combinator does not publish founder emails publicly \u2014 `email` and `emailStatus` are always null.)",
+      "editor": "checkbox",
+      "default": true,
+      "prefill": true,
+      "sectionCaption": "What to extract",
+      "sectionDescription": "Control how much detail to capture per company. Each result is one company row regardless of these toggles \u2014 founders and jobs ride along as nested arrays."
+    },
+    "includeJobs": {
+      "title": "Include Open Jobs",
+      "type": "boolean",
+      "description": "Embed each company's open job listings on the result row \u2014 title, location, remote, salary, equity, required skills, years of experience, and visa sponsorship. Disable when you only need company and founder data. (Tip: turn off both Founders and Jobs for the fastest, cheapest runs \u2014 only company-level fields are returned.)",
+      "editor": "checkbox",
+      "default": false,
+      "prefill": false
+    },
+    "maxResults": {
+      "title": "Max Results",
+      "type": "integer",
+      "description": "Hard cap on total company rows. Default 100 \u2014 increase for bigger runs, or set to 0 for no cap (an internal upper limit of 10,000 still applies to prevent runaway pagination). The actor stops requesting new pages once this number is reached but keeps the full final page even if it slightly overshoots.",
+      "editor": "number",
+      "default": 100,
+      "prefill": 100,
+      "minimum": 0,
+      "sectionCaption": "Limits",
+      "sectionDescription": "Cap how many companies to collect."
+    }
+  },
+  "required": []
+}

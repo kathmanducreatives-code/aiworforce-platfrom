@@ -1,0 +1,456 @@
+{
+  "title": "Y Combinator scraper",
+  "description": "Scrape Y Combinator **jobs** (Work at a Startup) and **companies** (Startup Directory) from one actor.\n\n**Pick one of two paths \u2014 they're alternatives, not sequential steps:**\n- **Option A \u2014 Search by URL (recommended).** Paste any YC URL into Start URLs. Jobs URLs (`/jobs/...`) and Companies URLs (`/companies...`) are both accepted, mix-and-match in the same run. The actor auto-routes each URL to the right scraper.\n- **Option B \u2014 Configure with Filters.** Leave Start URLs empty, pick a Mode (Jobs or Companies), then fill in the matching filter fields.\n\nOption A wins when both are set: if Start URLs is non-empty, Option B is ignored entirely.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "sectionCaption": "Option A | Search by URL \ud83d\udd17 \u2014 Jobs or Companies (recommended)",
+      "sectionDescription": "Recommended path. Paste any YC URL \u2014 the actor auto-detects whether it's a **Jobs** URL or a **Companies** URL and routes each to the right scraper. You can mix both types in one run. **If this list is non-empty, Option B (filters) is ignored entirely \u2014 the URL itself decides what runs.** Use Option B instead if you don't have a URL handy.",
+      "title": "Start URLs (accepts Jobs and Companies URLs)",
+      "type": "array",
+      "description": "Any YC URL. Auto-routed by path. Mix Jobs and Companies URLs freely. The two URLs prefilled below are sample defaults \u2014 clear them and paste your own when running.\n\n**Jobs URLs:**\n- `https://www.ycombinator.com/jobs` (curated index)\n- `https://www.ycombinator.com/jobs/role/{role}` (e.g. `\u2026/jobs/role/software-engineer`)\n- `https://www.ycombinator.com/jobs/role/{role}/{location}` (e.g. `\u2026/jobs/role/software-engineer/san-francisco`)\n- `https://www.ycombinator.com/jobs/location/{location}` (e.g. `\u2026/jobs/location/new-york`)\n- `https://www.ycombinator.com/companies/{co}/jobs/{job}` (single job detail)\n\n**Companies URLs:**\n- `https://www.ycombinator.com/companies` (all companies)\n- `https://www.ycombinator.com/companies?batch=Spring%202026&industry=B2B&query=fintech` (filtered search)\n- `https://www.ycombinator.com/companies/{slug}` (e.g. `\u2026/companies/airbnb` \u2014 single-company lookup)",
+      "editor": "stringList",
+      "prefill": [
+        "https://www.ycombinator.com/jobs/role/software-engineer/san-francisco",
+        "https://www.ycombinator.com/companies?batch=Spring%202026&industry=B2B"
+      ],
+      "default": []
+    },
+    "mode": {
+      "sectionCaption": "Option B | Configure with Filters \ud83c\udf9b\ufe0f",
+      "sectionDescription": "Use this path when Option A (Start URLs) is empty. Everything is in one panel: Mode picks the target surface, then fill in either the \ud83d\udcbc Jobs fields (role/location) or the \ud83c\udfe2 Companies fields (queries, batch, industries, regions, employee size, toggles). The \ud83d\ude4c Enrich toggles add per-company HTTP fetches. The \u2699\ufe0f General block at the bottom (max items, concurrency, retries, proxy, monitoring) applies to both modes. Every field here is ignored when Option A has any URLs.",
+      "title": "Mode",
+      "type": "string",
+      "description": "Pick a target surface; the matching filter fields below will be used. Jobs uses the role/location selectors; Companies uses the keyword/batch/industry/region/size block.",
+      "editor": "select",
+      "enum": [
+        "jobs",
+        "companies"
+      ],
+      "enumTitles": [
+        "\ud83d\udcbc Jobs (Work at a Startup)",
+        "\ud83c\udfe2 Companies (Startup Directory)"
+      ],
+      "default": "jobs"
+    },
+    "role": {
+      "title": "\ud83d\udcbc Jobs \u00b7 Role",
+      "type": "string",
+      "description": "Used when Mode = Jobs and Start URLs is empty. YC role category.",
+      "editor": "select",
+      "enum": [
+        "",
+        "software-engineer",
+        "designer",
+        "product-manager",
+        "operations",
+        "marketing",
+        "sales-manager",
+        "recruiting-hr",
+        "support",
+        "science"
+      ],
+      "enumTitles": [
+        "\ud83c\udf10 All roles (no filter)",
+        "\ud83d\udcbb Software Engineer",
+        "\ud83c\udfa8 Design & UI/UX",
+        "\ud83d\udce6 Product Manager",
+        "\u2699\ufe0f Operations",
+        "\ud83d\udce3 Marketing",
+        "\ud83d\udcbc Sales",
+        "\ud83e\uddd1\u200d\ud83d\udcbc Recruiting & HR",
+        "\ud83d\udedf Support & Success",
+        "\ud83d\udd2c Science"
+      ],
+      "default": ""
+    },
+    "location": {
+      "title": "\ud83d\udcbc Jobs \u00b7 Location",
+      "type": "string",
+      "description": "Used when Mode = Jobs. City slugs match the city name in each job's location string; `remote` matches anything containing 'Remote'; `india` matches the country.",
+      "editor": "select",
+      "enum": [
+        "",
+        "san-francisco",
+        "new-york",
+        "los-angeles",
+        "seattle",
+        "austin",
+        "chicago",
+        "india",
+        "remote"
+      ],
+      "enumTitles": [
+        "\ud83c\udf10 All locations (no filter)",
+        "\ud83c\udf09 San Francisco",
+        "\ud83d\uddfd New York",
+        "\ud83c\udf34 Los Angeles",
+        "\ud83c\udf32 Seattle",
+        "\ud83c\udf35 Austin",
+        "\ud83c\udfd9\ufe0f Chicago",
+        "\ud83c\uddee\ud83c\uddf3 India",
+        "\ud83d\udef0\ufe0f Remote"
+      ],
+      "default": ""
+    },
+    "queries": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Search Keywords",
+      "type": "array",
+      "description": "Used when Mode = Companies. One or more keywords (product category, market, technology, location, \u2026). Multiple keywords run as separate Algolia searches and are merged by company id with dedupe. Empty = no keyword filter.",
+      "editor": "stringList",
+      "default": []
+    },
+    "topCompany": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Include Top Companies Only",
+      "type": "boolean",
+      "description": "Limit results to companies marked as Top by Y Combinator. Use when you want a smaller, more selective set.",
+      "default": false
+    },
+    "isHiring": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Include Hiring Companies Only",
+      "type": "boolean",
+      "description": "Limit results to companies currently marked as hiring. Useful for recruiting and active-growth research.",
+      "default": false
+    },
+    "nonprofit": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Include Nonprofit Companies Only",
+      "type": "boolean",
+      "description": "Limit results to companies marked as nonprofits. Leave disabled to include both commercial and nonprofit organizations.",
+      "default": false
+    },
+    "batch": {
+      "title": "\ud83c\udfe2 Companies \u00b7 YC Batches",
+      "type": "array",
+      "description": "Select one or more batches to narrow results by cohort.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "All Batches",
+          "Fall 2026",
+          "Summer 2026",
+          "Spring 2026",
+          "Winter 2026",
+          "Fall 2025",
+          "Summer 2025",
+          "Spring 2025",
+          "Winter 2025",
+          "Fall 2024",
+          "Summer 2024",
+          "Winter 2024",
+          "Summer 2023",
+          "Winter 2023",
+          "Summer 2022",
+          "Winter 2022",
+          "Summer 2021",
+          "Winter 2021",
+          "Summer 2020",
+          "Winter 2020",
+          "Summer 2019",
+          "Winter 2019",
+          "Summer 2018",
+          "Winter 2018",
+          "Summer 2017",
+          "Winter 2017",
+          "Summer 2016",
+          "Winter 2016",
+          "Summer 2015",
+          "Winter 2015",
+          "Summer 2014",
+          "Winter 2014",
+          "Summer 2013",
+          "Winter 2013",
+          "Summer 2012",
+          "Winter 2012",
+          "Summer 2011",
+          "Winter 2011",
+          "Summer 2010",
+          "Winter 2010",
+          "Summer 2009",
+          "Winter 2009",
+          "Summer 2008",
+          "Winter 2008",
+          "Summer 2007",
+          "Winter 2007",
+          "Summer 2006",
+          "Winter 2006",
+          "Summer 2005"
+        ],
+        "enumTitles": [
+          "\ud83d\udcc6 All batches (no filter)",
+          "\ud83d\udcc6 Fall 2026 batch",
+          "\ud83d\udcc6 Summer 2026 batch",
+          "\ud83d\udcc6 Spring 2026 batch",
+          "\ud83d\udcc6 Winter 2026 batch",
+          "\ud83d\udcc6 Fall 2025 batch",
+          "\ud83d\udcc6 Summer 2025 batch",
+          "\ud83d\udcc6 Spring 2025 batch",
+          "\ud83d\udcc6 Winter 2025 batch",
+          "\ud83d\udcc6 Fall 2024 batch",
+          "\ud83d\udcc6 Summer 2024 batch",
+          "\ud83d\udcc6 Winter 2024 batch",
+          "\ud83d\udcc6 Summer 2023 batch",
+          "\ud83d\udcc6 Winter 2023 batch",
+          "\ud83d\udcc6 Summer 2022 batch",
+          "\ud83d\udcc6 Winter 2022 batch",
+          "\ud83d\udcc6 Summer 2021 batch",
+          "\ud83d\udcc6 Winter 2021 batch",
+          "\ud83d\udcc6 Summer 2020 batch",
+          "\ud83d\udcc6 Winter 2020 batch",
+          "\ud83d\udcc6 Summer 2019 batch",
+          "\ud83d\udcc6 Winter 2019 batch",
+          "\ud83d\udcc6 Summer 2018 batch",
+          "\ud83d\udcc6 Winter 2018 batch",
+          "\ud83d\udcc6 Summer 2017 batch",
+          "\ud83d\udcc6 Winter 2017 batch",
+          "\ud83d\udcc6 Summer 2016 batch",
+          "\ud83d\udcc6 Winter 2016 batch",
+          "\ud83d\udcc6 Summer 2015 batch",
+          "\ud83d\udcc6 Winter 2015 batch",
+          "\ud83d\udcc6 Summer 2014 batch",
+          "\ud83d\udcc6 Winter 2014 batch",
+          "\ud83d\udcc6 Summer 2013 batch",
+          "\ud83d\udcc6 Winter 2013 batch",
+          "\ud83d\udcc6 Summer 2012 batch",
+          "\ud83d\udcc6 Winter 2012 batch",
+          "\ud83d\udcc6 Summer 2011 batch",
+          "\ud83d\udcc6 Winter 2011 batch",
+          "\ud83d\udcc6 Summer 2010 batch",
+          "\ud83d\udcc6 Winter 2010 batch",
+          "\ud83d\udcc6 Summer 2009 batch",
+          "\ud83d\udcc6 Winter 2009 batch",
+          "\ud83d\udcc6 Summer 2008 batch",
+          "\ud83d\udcc6 Winter 2008 batch",
+          "\ud83d\udcc6 Summer 2007 batch",
+          "\ud83d\udcc6 Winter 2007 batch",
+          "\ud83d\udcc6 Summer 2006 batch",
+          "\ud83d\udcc6 Winter 2006 batch",
+          "\ud83d\udcc6 Summer 2005 batch"
+        ]
+      },
+      "default": [
+        "All Batches"
+      ],
+      "uniqueItems": true
+    },
+    "industries": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Industries",
+      "type": "array",
+      "description": "Select one or more industries to focus the run.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "All industries",
+          "B2B",
+          "Consumer",
+          "Healthcare",
+          "Fintech",
+          "Engineering, Product and Design",
+          "Industrials",
+          "Education",
+          "Real Estate and Construction",
+          "Government",
+          "Unspecified"
+        ],
+        "enumTitles": [
+          "\ud83c\udf10 All industries (no filter)",
+          "\ud83e\udd1d B2B (enterprise and business tools)",
+          "\ud83d\udecd\ufe0f Consumer (consumer products and services)",
+          "\ud83e\ude7a Healthcare (health and life sciences)",
+          "\ud83d\udcb3 Fintech (financial technology)",
+          "\ud83d\udee0\ufe0f Engineering, Product and Design",
+          "\ud83c\udfed Industrials (manufacturing and logistics)",
+          "\ud83c\udf93 Education (edtech and learning)",
+          "\ud83c\udfd7\ufe0f Real Estate and Construction",
+          "\ud83c\udfdb\ufe0f Government (public sector)",
+          "\u2753 Unspecified (not categorized)"
+        ]
+      },
+      "default": [
+        "All industries"
+      ],
+      "uniqueItems": true
+    },
+    "regions": {
+      "title": "\ud83c\udfe2 Companies \u00b7 HQ Regions",
+      "type": "array",
+      "description": "Select one or more regions to narrow geographically.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Anywhere",
+          "United States of America",
+          "America / Canada",
+          "Canada",
+          "Mexico",
+          "Latin America",
+          "Europe",
+          "United Kingdom",
+          "Africa",
+          "Middle East and North Africa",
+          "South Asia",
+          "India",
+          "Southeast Asia",
+          "East Asia",
+          "Oceania",
+          "Remote",
+          "Fully Remote",
+          "Partly Remote",
+          "Unspecified"
+        ],
+        "enumTitles": [
+          "\ud83c\udf10 Anywhere (no region filter)",
+          "\ud83c\uddfa\ud83c\uddf8 United States of America",
+          "\ud83c\udf0e America / Canada",
+          "\ud83c\udde8\ud83c\udde6 Canada",
+          "\ud83c\uddf2\ud83c\uddfd Mexico",
+          "\ud83c\udf0e Latin America",
+          "\ud83c\udf0d Europe",
+          "\ud83c\uddec\ud83c\udde7 United Kingdom",
+          "\ud83c\udf0d Africa",
+          "\ud83c\udf0d Middle East and North Africa",
+          "\ud83c\udf0f South Asia",
+          "\ud83c\uddee\ud83c\uddf3 India",
+          "\ud83c\udf0f Southeast Asia",
+          "\ud83c\udf0f East Asia",
+          "\ud83c\udf0a Oceania",
+          "\ud83d\udef0\ufe0f Remote",
+          "\ud83d\udef0\ufe0f Fully Remote",
+          "\ud83d\udef0\ufe0f Partly Remote",
+          "\u2753 Unspecified"
+        ]
+      },
+      "default": [
+        "Anywhere"
+      ],
+      "uniqueItems": true
+    },
+    "minEmployeeSize": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Minimum Employee Size",
+      "type": "string",
+      "description": "Smallest team size to include. Select '1+' for no minimum.",
+      "editor": "select",
+      "enum": [
+        "1+",
+        "5+",
+        "10+",
+        "25+",
+        "50+",
+        "100+",
+        "250+",
+        "500+",
+        "1000+"
+      ],
+      "enumTitles": [
+        "\ud83d\udc65 1+ (no minimum)",
+        "\ud83d\udc65 5+ employees",
+        "\ud83d\udc65 10+ employees",
+        "\ud83d\udc65 25+ employees",
+        "\ud83d\udc65 50+ employees",
+        "\ud83d\udc65 100+ employees",
+        "\ud83d\udc65 250+ employees",
+        "\ud83d\udc65 500+ employees",
+        "\ud83d\udc65 1000+ employees"
+      ],
+      "default": "1+"
+    },
+    "maxEmployeeSize": {
+      "title": "\ud83c\udfe2 Companies \u00b7 Maximum Employee Size",
+      "type": "string",
+      "description": "Largest team size to include. Select '1000+' for no maximum.",
+      "editor": "select",
+      "enum": [
+        "1+",
+        "5",
+        "10",
+        "25",
+        "50",
+        "100",
+        "250",
+        "500",
+        "1000+"
+      ],
+      "enumTitles": [
+        "\ud83d\udc65 1+ employees",
+        "\ud83d\udc65 Up to 5 employees",
+        "\ud83d\udc65 Up to 10 employees",
+        "\ud83d\udc65 Up to 25 employees",
+        "\ud83d\udc65 Up to 50 employees",
+        "\ud83d\udc65 Up to 100 employees",
+        "\ud83d\udc65 Up to 250 employees",
+        "\ud83d\udc65 Up to 500 employees",
+        "\ud83d\udc65 1000+ (no maximum)"
+      ],
+      "default": "1000+"
+    },
+    "scrapeFounderDetails": {
+      "title": "\ud83d\ude4c Companies Enrich \u00b7 Scrape Founder Details",
+      "type": "boolean",
+      "description": "Companies mode only. Adds an extra HTTP per company (concurrency = 5) \u2014 slows runs. Fetches `/companies/{slug}` and adds `founders[]` (name, title, bio, linkedinUrl, twitterUrl, avatarUrl, isActive, hasEmail) plus `socials` (linkedin, twitter, facebook, crunchbase, github), `appVideoUrl`, `demoDayVideoUrl`.",
+      "default": false
+    },
+    "scrapeOpenJobs": {
+      "title": "\ud83d\ude4c Companies Enrich \u00b7 Scrape Open Job Postings",
+      "type": "boolean",
+      "description": "Companies mode only. Adds an extra HTTP per company (concurrency = 5) \u2014 slows runs. Fetches `/companies/{slug}/jobs` and adds `openJobs[]` (title, role, location, salary, equity, experience, applyUrl, posted-ago).",
+      "default": false
+    },
+    "enrichEmails": {
+      "title": "Enrich with contact emails (experimental)",
+      "type": "boolean",
+      "description": "If enabled, finds a contact email for each result from its own website (or by discovering it from the name). Adds contactEmail + contactWebsite columns plus a detailed emailEnrichment object. Best-effort.",
+      "default": false
+    },
+    "maxItems": {
+      "sectionCaption": "Run options \u2699\ufe0f \u2014 applies to both Option A and Option B",
+      "sectionDescription": "Run-time settings shared by Option A (URL mode) and Option B (Filter mode). The Max items cap is **per URL / per filter run** \u2014 see the field description below. The rest are Jobs-scraper-only controls (Companies mode hits YC's Algolia API directly and ignores them).",
+      "title": "Max items per URL",
+      "type": "integer",
+      "description": "**Per-URL cap.** Each entry in Start URLs (Option A) and each filter run (Option B) gets its own quota of this many records. Pasting 3 URLs with `maxItems=100` returns up to 300 rows total (100 per URL). Free-tier accounts are capped at 100 per URL regardless.",
+      "default": 100,
+      "minimum": 1
+    },
+    "monitoringMode": {
+      "title": "Monitoring mode (jobs only)",
+      "type": "boolean",
+      "description": "Jobs scraper only: only jobs whose numeric id has not been stored in your Key-Value store yet are enqueued (per Apify user id). Useful for scheduled runs that should only emit new postings.",
+      "default": false
+    },
+    "maxConcurrency": {
+      "title": "Max concurrency (jobs only)",
+      "type": "integer",
+      "description": "Jobs scraper only: max parallel HTTP requests.",
+      "default": 10,
+      "minimum": 1
+    },
+    "minConcurrency": {
+      "title": "Min concurrency (jobs only)",
+      "type": "integer",
+      "description": "Jobs scraper only: min parallel HTTP requests to keep active.",
+      "default": 1,
+      "minimum": 1
+    },
+    "maxRequestRetries": {
+      "title": "Max request retries (jobs only)",
+      "type": "integer",
+      "description": "Jobs scraper only: retries before a request is marked failed.",
+      "default": 3,
+      "minimum": 0
+    },
+    "proxy": {
+      "title": "Proxy configuration (jobs only)",
+      "type": "object",
+      "description": "Proxy for the Jobs scraper. Companies mode hits YC's Algolia API directly and does not use a proxy regardless of what's configured here.",
+      "prefill": {
+        "useApifyProxy": true
+      },
+      "default": {
+        "useApifyProxy": true
+      },
+      "editor": "proxy"
+    }
+  }
+}

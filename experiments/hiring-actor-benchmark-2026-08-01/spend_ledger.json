@@ -1,0 +1,621 @@
+{
+  "ceiling_usd": 5.0,
+  "runs": [
+    {
+      "label": "run1_memo23_yc",
+      "actor": "memo23~y-combinator-scraper",
+      "run_id": "gRjd7tCDugS6VBhc5",
+      "status": "SUCCEEDED",
+      "latency_s": 28.5,
+      "estimated_max_usd": 0.07,
+      "actual_cost_usd": 0.008,
+      "rows": 50,
+      "usage": null,
+      "input": {
+        "mode": "companies",
+        "regions": [
+          "United States of America"
+        ],
+        "industries": [
+          "B2B"
+        ],
+        "isHiring": true,
+        "minEmployeeSize": "1+",
+        "maxEmployeeSize": "250",
+        "scrapeOpenJobs": true,
+        "scrapeFounderDetails": false,
+        "enrichEmails": false,
+        "maxItems": 50
+      },
+      "startedAt": "2026-08-01T16:01:22.877Z",
+      "finishedAt": "2026-08-01T16:01:44.966Z"
+    },
+    {
+      "label": "run2_solidcode_yc",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "rX2cAhvOIKbSsjaZk",
+      "status": "SUCCEEDED",
+      "latency_s": 9.4,
+      "estimated_max_usd": 0.101,
+      "actual_cost_usd": 5e-05,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "regions": [
+          "United States of America"
+        ],
+        "industries": [
+          "B2B"
+        ],
+        "status": [
+          "Active"
+        ],
+        "teamSize": [
+          "1",
+          "2-10",
+          "11-50",
+          "51-200"
+        ],
+        "isHiring": true,
+        "includeJobs": true,
+        "includeFounders": false,
+        "maxResults": 50
+      },
+      "startedAt": "2026-08-01T16:01:51.456Z",
+      "finishedAt": "2026-08-01T16:01:55.987Z"
+    },
+    {
+      "label": "probeA_solidcode_geo_hiring",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "1xO1UUideP18OdI0d",
+      "status": "SUCCEEDED",
+      "latency_s": 15.7,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "regions": [
+          "United States of America"
+        ],
+        "isHiring": true,
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:02:34.427Z",
+      "finishedAt": "2026-08-01T16:02:41.379Z"
+    },
+    {
+      "label": "probeB_solidcode_industry",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "iZuZaQcB9JotWVn6W",
+      "status": "SUCCEEDED",
+      "latency_s": 10.2,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "industries": [
+          "B2B"
+        ],
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:02:50.228Z",
+      "finishedAt": "2026-08-01T16:02:53.771Z"
+    },
+    {
+      "label": "probeC_solidcode_ind_geo_hiring",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "qoIHjF8IahWmp2M89",
+      "status": "SUCCEEDED",
+      "latency_s": 15.4,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "industries": [
+          "B2B"
+        ],
+        "regions": [
+          "United States of America"
+        ],
+        "isHiring": true,
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:03:19.907Z",
+      "finishedAt": "2026-08-01T16:03:28.476Z"
+    },
+    {
+      "label": "probeD_solidcode_plus_teamsize",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "rrkngi0Ha3RBF9RCG",
+      "status": "SUCCEEDED",
+      "latency_s": 15.3,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "industries": [
+          "B2B"
+        ],
+        "regions": [
+          "United States of America"
+        ],
+        "isHiring": true,
+        "teamSize": [
+          "11-50"
+        ],
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:03:35.386Z",
+      "finishedAt": "2026-08-01T16:03:42.911Z"
+    },
+    {
+      "label": "probeE_solidcode_plus_status",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "BcdZtwgOSFNdmXLak",
+      "status": "SUCCEEDED",
+      "latency_s": 9.1,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "industries": [
+          "B2B"
+        ],
+        "regions": [
+          "United States of America"
+        ],
+        "isHiring": true,
+        "status": [
+          "Active"
+        ],
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:04:00.654Z",
+      "finishedAt": "2026-08-01T16:04:06.498Z"
+    },
+    {
+      "label": "probeF_solidcode_multi_teamsize",
+      "actor": "solidcode~ycombinator-scraper",
+      "run_id": "WlbeTeVqohmAKZmUm",
+      "status": "SUCCEEDED",
+      "latency_s": 8.8,
+      "estimated_max_usd": 0.021,
+      "actual_cost_usd": 5e-05,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "industries": [
+          "B2B"
+        ],
+        "regions": [
+          "United States of America"
+        ],
+        "isHiring": true,
+        "teamSize": [
+          "1",
+          "2-10",
+          "11-50",
+          "51-200"
+        ],
+        "includeJobs": false,
+        "includeFounders": false,
+        "maxResults": 10
+      },
+      "startedAt": "2026-08-01T16:04:09.732Z",
+      "finishedAt": "2026-08-01T16:04:12.138Z"
+    },
+    {
+      "label": "run3_company_search",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "jWWsuUdfGxE7jDR2C",
+      "status": "SUCCEEDED",
+      "latency_s": 9.0,
+      "estimated_max_usd": 0.081,
+      "actual_cost_usd": 0.001,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "searchQuery": "B2B software platform",
+        "locations": [
+          "United States"
+        ],
+        "industryIds": [
+          "4"
+        ],
+        "companySize": [
+          "11-50",
+          "51-200"
+        ],
+        "scraperMode": "short",
+        "maxItems": 40
+      },
+      "startedAt": "2026-08-01T16:05:46.540Z",
+      "finishedAt": "2026-08-01T16:05:49.679Z"
+    },
+    {
+      "label": "csP1_search_only",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "4vdL8gixUTwEZj4VT",
+      "status": "SUCCEEDED",
+      "latency_s": 8.7,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.003,
+      "rows": 1,
+      "usage": null,
+      "input": {
+        "searchQuery": "B2B software platform",
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:06:16.350Z",
+      "finishedAt": "2026-08-01T16:06:19.772Z"
+    },
+    {
+      "label": "csP2_search_loc",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "f2Qu7KQhIwLdYEdfx",
+      "status": "SUCCEEDED",
+      "latency_s": 8.8,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.001,
+      "rows": 1,
+      "usage": null,
+      "input": {
+        "searchQuery": "B2B software platform",
+        "locations": [
+          "United States"
+        ],
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:06:25.051Z",
+      "finishedAt": "2026-08-01T16:06:29.098Z"
+    },
+    {
+      "label": "csP3_search_size",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "Gky91nCgrdpql4sLx",
+      "status": "SUCCEEDED",
+      "latency_s": 8.6,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.001,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "searchQuery": "B2B software platform",
+        "companySize": [
+          "11-50",
+          "51-200"
+        ],
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:06:33.818Z",
+      "finishedAt": "2026-08-01T16:06:39.679Z"
+    },
+    {
+      "label": "csP4_search_ind",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "7mfbPenVHEbQ3wF3u",
+      "status": "SUCCEEDED",
+      "latency_s": 8.9,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.001,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "searchQuery": "B2B software platform",
+        "industryIds": [
+          "4"
+        ],
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:06:42.604Z",
+      "finishedAt": "2026-08-01T16:06:46.597Z"
+    },
+    {
+      "label": "csP5_filters_only",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "JAMzSDe0C1DFSNAK5",
+      "status": "SUCCEEDED",
+      "latency_s": 8.7,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.001,
+      "rows": 5,
+      "usage": null,
+      "input": {
+        "industryIds": [
+          "4"
+        ],
+        "companySize": [
+          "11-50",
+          "51-200"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:07:07.438Z",
+      "finishedAt": "2026-08-01T16:07:11.507Z"
+    },
+    {
+      "label": "csP6_ind_only",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "EZYgabaUXmfiX2dNr",
+      "status": "SUCCEEDED",
+      "latency_s": 15.0,
+      "estimated_max_usd": 0.011,
+      "actual_cost_usd": 0.011,
+      "rows": 5,
+      "usage": null,
+      "input": {
+        "industryIds": [
+          "4"
+        ],
+        "maxItems": 5,
+        "scraperMode": "short"
+      },
+      "startedAt": "2026-08-01T16:07:16.259Z",
+      "finishedAt": "2026-08-01T16:07:22.507Z"
+    },
+    {
+      "label": "run3b_company_search_full",
+      "actor": "harvestapi~linkedin-company-search",
+      "run_id": "Xj6pS5aTdtSXYKsjE",
+      "status": "SUCCEEDED",
+      "latency_s": 9.9,
+      "estimated_max_usd": 0.033,
+      "actual_cost_usd": 0.001,
+      "rows": 8,
+      "usage": null,
+      "input": {
+        "industryIds": [
+          "4"
+        ],
+        "companySize": [
+          "11-50",
+          "51-200"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "maxItems": 8,
+        "scraperMode": "full"
+      },
+      "startedAt": "2026-08-01T16:07:49.588Z",
+      "finishedAt": "2026-08-01T16:07:54.665Z"
+    },
+    {
+      "label": "run4_ctrl_packA_unrestricted",
+      "actor": "harvestapi~linkedin-job-search",
+      "run_id": "YHaGlZD9pl9qKOjsm",
+      "status": "SUCCEEDED",
+      "latency_s": 16.1,
+      "estimated_max_usd": 0.014,
+      "actual_cost_usd": 0.001,
+      "rows": 12,
+      "usage": null,
+      "input": {
+        "jobTitles": [
+          "sales operations manager",
+          "sales operations lead",
+          "head of sales operations",
+          "director of sales operations"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "postedLimit": "month",
+        "sortBy": "date",
+        "maxItems": 3
+      },
+      "startedAt": "2026-08-01T16:08:24.326Z",
+      "finishedAt": "2026-08-01T16:08:35.039Z"
+    },
+    {
+      "label": "run5_jobsearch_A_sales_ops",
+      "actor": "harvestapi~linkedin-job-search",
+      "run_id": "rybRPfHHlaHGcWtQ7",
+      "status": "SUCCEEDED",
+      "latency_s": 8.6,
+      "estimated_max_usd": 0.025,
+      "actual_cost_usd": 0,
+      "rows": 0,
+      "usage": null,
+      "input": {
+        "company": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/school/cisco-networking-academy1/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/techcrunch/",
+          "https://www.linkedin.com/company/triomics/",
+          "https://www.linkedin.com/company/sketchup/",
+          "https://www.linkedin.com/company/ignite-tech/",
+          "https://www.linkedin.com/company/bigrio/"
+        ],
+        "jobTitles": [
+          "sales operations manager",
+          "sales operations lead",
+          "head of sales operations",
+          "director of sales operations"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "postedLimit": "month",
+        "sortBy": "date",
+        "maxItems": 6
+      },
+      "startedAt": "2026-08-01T16:08:51.678Z",
+      "finishedAt": "2026-08-01T16:08:55.841Z"
+    },
+    {
+      "label": "run5_jobsearch_B_revenue_ops",
+      "actor": "harvestapi~linkedin-job-search",
+      "run_id": "cePmf9hNQ7DtLoIC1",
+      "status": "SUCCEEDED",
+      "latency_s": 15.8,
+      "estimated_max_usd": 0.025,
+      "actual_cost_usd": 0,
+      "rows": 8,
+      "usage": null,
+      "input": {
+        "company": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/school/cisco-networking-academy1/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/techcrunch/",
+          "https://www.linkedin.com/company/triomics/",
+          "https://www.linkedin.com/company/sketchup/",
+          "https://www.linkedin.com/company/ignite-tech/",
+          "https://www.linkedin.com/company/bigrio/"
+        ],
+        "jobTitles": [
+          "revenue operations manager",
+          "revenue operations lead",
+          "head of revenue operations",
+          "director of revenue operations"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "postedLimit": "month",
+        "sortBy": "date",
+        "maxItems": 6
+      },
+      "startedAt": "2026-08-01T16:09:00.325Z",
+      "finishedAt": "2026-08-01T16:09:08.913Z"
+    },
+    {
+      "label": "run5_jobsearch_C_gtm_ops",
+      "actor": "harvestapi~linkedin-job-search",
+      "run_id": "oNrnAfp2waQAQamAh",
+      "status": "SUCCEEDED",
+      "latency_s": 15.6,
+      "estimated_max_usd": 0.025,
+      "actual_cost_usd": 0.004,
+      "rows": 8,
+      "usage": null,
+      "input": {
+        "company": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/school/cisco-networking-academy1/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/techcrunch/",
+          "https://www.linkedin.com/company/triomics/",
+          "https://www.linkedin.com/company/sketchup/",
+          "https://www.linkedin.com/company/ignite-tech/",
+          "https://www.linkedin.com/company/bigrio/"
+        ],
+        "jobTitles": [
+          "gtm operations manager",
+          "gtm operations lead",
+          "head of gtm operations",
+          "director of gtm operations"
+        ],
+        "locations": [
+          "United States"
+        ],
+        "postedLimit": "month",
+        "sortBy": "date",
+        "maxItems": 6
+      },
+      "startedAt": "2026-08-01T16:09:16.128Z",
+      "finishedAt": "2026-08-01T16:09:25.541Z"
+    },
+    {
+      "label": "run6_company_employees",
+      "actor": "harvestapi~linkedin-company-employees",
+      "run_id": "PGkCe9ib1LweCxqqL",
+      "status": "SUCCEEDED",
+      "latency_s": 10.0,
+      "estimated_max_usd": 0.065,
+      "actual_cost_usd": 0,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "companies": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/triomics/"
+        ],
+        "jobTitles": [
+          "Founder",
+          "Co-Founder",
+          "CEO"
+        ],
+        "profileScraperMode": "Short ($4 per 1k)",
+        "companyBatchMode": "all_at_once",
+        "maxItems": 15,
+        "maxItemsPerCompany": 5
+      },
+      "startedAt": "2026-08-01T16:10:10.230Z",
+      "finishedAt": "2026-08-01T16:10:15.348Z"
+    },
+    {
+      "label": "run7_profile_search",
+      "actor": "harvestapi~linkedin-profile-search",
+      "run_id": "M45HOWdmvESn9ZcqV",
+      "status": "SUCCEEDED",
+      "latency_s": 15.1,
+      "estimated_max_usd": 0.16,
+      "actual_cost_usd": 0,
+      "rows": 10,
+      "usage": null,
+      "input": {
+        "currentCompanies": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/triomics/"
+        ],
+        "currentJobTitles": [
+          "Founder",
+          "Co-Founder",
+          "CEO"
+        ],
+        "profileScraperMode": "Short",
+        "maxItems": 15
+      },
+      "startedAt": "2026-08-01T16:10:47.256Z",
+      "finishedAt": "2026-08-01T16:10:56.235Z"
+    },
+    {
+      "label": "run8_linkedin_company",
+      "actor": "harvestapi~linkedin-company",
+      "run_id": "PIfoWmvhafUo8eI9F",
+      "status": "SUCCEEDED",
+      "latency_s": 15.7,
+      "estimated_max_usd": 0.013,
+      "actual_cost_usd": 5e-05,
+      "rows": 3,
+      "usage": null,
+      "input": {
+        "companies": [
+          "https://www.linkedin.com/company/swoopednetwork/",
+          "https://www.linkedin.com/company/trademo-inc/",
+          "https://www.linkedin.com/company/triomics/"
+        ]
+      },
+      "startedAt": "2026-08-01T16:11:02.254Z",
+      "finishedAt": "2026-08-01T16:11:08.770Z"
+    }
+  ]
+}

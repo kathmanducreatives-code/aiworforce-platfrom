@@ -1,0 +1,16 @@
+{
+  "companies": [
+    "https://www.linkedin.com/company/swoopednetwork/",
+    "https://www.linkedin.com/company/trademo-inc/",
+    "https://www.linkedin.com/company/triomics/"
+  ],
+  "jobTitles": [
+    "Founder",
+    "Co-Founder",
+    "CEO"
+  ],
+  "profileScraperMode": "Short ($4 per 1k)",
+  "companyBatchMode": "all_at_once",
+  "maxItems": 15,
+  "maxItemsPerCompany": 5
+}

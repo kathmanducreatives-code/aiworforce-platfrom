@@ -1,0 +1,24 @@
+{
+  "company": [
+    "https://www.linkedin.com/company/swoopednetwork/",
+    "https://www.linkedin.com/school/cisco-networking-academy1/",
+    "https://www.linkedin.com/company/trademo-inc/",
+    "https://www.linkedin.com/company/techcrunch/",
+    "https://www.linkedin.com/company/triomics/",
+    "https://www.linkedin.com/company/sketchup/",
+    "https://www.linkedin.com/company/ignite-tech/",
+    "https://www.linkedin.com/company/bigrio/"
+  ],
+  "jobTitles": [
+    "revenue operations manager",
+    "revenue operations lead",
+    "head of revenue operations",
+    "director of revenue operations"
+  ],
+  "locations": [
+    "United States"
+  ],
+  "postedLimit": "month",
+  "sortBy": "date",
+  "maxItems": 6
+}
