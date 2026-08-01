@@ -51,6 +51,7 @@ import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthorit
 // function object, so the default path is not merely equivalent to today's
 // behavior, it is today's behavior.
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
+import { createPlanAwareActionBudget } from "../_shared/planAwareBudgetBinding.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
@@ -1228,6 +1229,16 @@ Deno.serve(async (req) => {
           // pending before it ends the whole mission. Without it, plan 43fb7313
           // returned `search_exhausted` with LinkedIn, Glassdoor and ATS pending.
           pendingDiscoverySource: sequentialSources.nextPendingDiscoverySource,
+          // PLAN-AWARE ACTION BUDGET. `planAwareActionBudget` shipped tested with
+          // no production caller, so every run still stopped on the blind
+          // three-round limit — including runs with unused exact packs and
+          // untried sources. Supplying it here lets useful work continue while
+          // quota, money, repeated low-quality sources and the hard provider
+          // ceiling each still end the run. Absent when the sequential bridge is
+          // disabled, which keeps the pre-existing fixed limits in force.
+          ...(sequentialSources.enabled
+            ? { actionBudget: createPlanAwareActionBudget(sequentialSources.planBudgetSnapshot) }
+            : {}),
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
 
