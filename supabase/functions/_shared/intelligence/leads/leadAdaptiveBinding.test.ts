@@ -577,9 +577,12 @@ Deno.test("10. the adapter itself makes no model request — it reuses the plann
     assertFalse(src.includes(banned), `the adapter must not reference ${banned}`);
   }
   // And run-agent feeds it the ALREADY-accepted strategy rather than calling again.
+  // `?? {` is the GPT-owner case: when the GPT strategist owned initial planning
+  // the Claude bridge never ran, so an inert result is passed and the binding
+  // carries no strategy. Either way run-agent never re-plans here.
   const runAgent = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
   assert(
-    runAgent.includes("adaptiveStrategyBinding(claudeFirst,"),
+    /adaptiveStrategyBinding\(claudeFirst(\s*\?\?\s*\{)?/.test(runAgent),
     "run-agent must reuse applyClaudeFirstLeadPlanning's existing outcome, not call again",
   );
   // And the seam itself reuses the accepted strategy rather than re-planning.
