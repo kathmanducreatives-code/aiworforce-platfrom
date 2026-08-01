@@ -130,6 +130,49 @@ export interface ClassificationValidation {
   repairs: string[];
 }
 
+// ------------------------------------------- service-vs-product evidence ----
+//
+// The gate below skips companies whose INDUSTRY or DESCRIPTION already names an
+// agency. These markers cover the other fields — pricing, business-model and
+// software evidence — where "retainer" or "statement of work" appears long after
+// the description has stopped sounding like an agency.
+
+/** An agency / consultancy / dev-shop, in the company's own words. */
+export const SERVICE_BUSINESS_MARKERS: readonly string[] = [
+  "agency", "consultancy", "consulting", "dev shop", "development shop",
+  "software house", "outsourcing", "staff augmentation", "staffing",
+  "retainer", "statement of work", "hourly rate", "we build software for",
+  "custom software for clients", "client projects", "billable",
+];
+
+/** An owned software product sold to customers. */
+export const PRODUCT_BUSINESS_MARKERS: readonly string[] = [
+  "platform", "our product", "subscription", "per seat", "per-seat",
+  "free trial", "pricing plans", "saas", "self-serve", "product docs",
+  "cloud platform",
+];
+
+function evidenceCorpus(e: CompanyEvidenceInput): string {
+  return [
+    e.company_description, e.product_description, e.customer_type_evidence,
+    e.business_model_evidence, e.software_evidence, e.pricing_evidence,
+  ].filter(Boolean).join(" \n ").toLowerCase();
+}
+
+export function hasServiceBusinessMarkers(e: CompanyEvidenceInput): boolean {
+  const corpus = evidenceCorpus(e);
+  return SERVICE_BUSINESS_MARKERS.some((m) => corpus.includes(m));
+}
+
+export function hasProductBusinessMarkers(e: CompanyEvidenceInput): boolean {
+  const corpus = evidenceCorpus(e);
+  return PRODUCT_BUSINESS_MARKERS.some((m) => corpus.includes(m));
+}
+
+/** SaaS readings that agency evidence would contradict. */
+const SAAS_INDUSTRIES: readonly CanonicalIndustry[] = ["b2b_saas", "b2c_saas", "software_platform"];
+const SAAS_MODELS: readonly CanonicalBusinessModel[] = ["subscription_software", "usage_based_software"];
+
 /** Confidence below which a `supported` claim is downgraded to `uncertain`. */
 export const MIN_SUPPORTED_CONFIDENCE = 0.6;
 
@@ -232,6 +275,28 @@ export function validateClassification(
   if (status === "supported" && industry === "unknown") {
     status = "uncertain";
     repairs.push("status_downgraded_unknown_industry");
+  }
+
+  // AGENCY EVIDENCE CONTRADICTS A SAAS READING.
+  //
+  // A fluent model can answer `b2b_saas` with a real citation for a company
+  // whose own pricing evidence says "retainer" — the citation is true, the
+  // reading is not. The gate cannot catch this: it sees only industry and
+  // description, and this evidence lives in the other fields.
+  //
+  // The repair marks the reading CONTRADICTED rather than reclassifying it as an
+  // agency. Asserting a positive `software_agency` from keyword matching would
+  // be the same inference-from-a-word this module exists to stop, and it would
+  // break the invariant that every repair narrows. Contradicted contributes
+  // nothing to the Brain, which is the outcome that matters.
+  if (
+    status === "supported" && !hasProductBusinessMarkers(evidence) &&
+    hasServiceBusinessMarkers(evidence) &&
+    (SAAS_INDUSTRIES.includes(industry) || SAAS_MODELS.includes(model))
+  ) {
+    status = "contradicted";
+    errors.push("service_evidence_contradicts_saas_reading");
+    repairs.push("status_downgraded_service_evidence");
   }
 
   return {
