@@ -1,0 +1,21 @@
+{
+  "regions": [
+    "United States of America"
+  ],
+  "industries": [
+    "B2B"
+  ],
+  "status": [
+    "Active"
+  ],
+  "teamSize": [
+    "1",
+    "2-10",
+    "11-50",
+    "51-200"
+  ],
+  "isHiring": true,
+  "includeJobs": true,
+  "includeFounders": false,
+  "maxResults": 50
+}

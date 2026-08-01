@@ -1,0 +1,14 @@
+{
+  "currentCompanies": [
+    "https://www.linkedin.com/company/swoopednetwork/",
+    "https://www.linkedin.com/company/trademo-inc/",
+    "https://www.linkedin.com/company/triomics/"
+  ],
+  "currentJobTitles": [
+    "Founder",
+    "Co-Founder",
+    "CEO"
+  ],
+  "profileScraperMode": "Short",
+  "maxItems": 15
+}
