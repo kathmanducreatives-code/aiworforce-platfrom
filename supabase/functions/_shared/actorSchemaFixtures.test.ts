@@ -131,20 +131,21 @@ Deno.test("34. Indeed datePosted only ever emits a documented enum value", () =>
     assert(allowed.has(r.value), `days=${days} produced undocumented datePosted "${r.value}"`);
     assert(isDocumentedEnumValue("indeed_job_discovery", "datePosted", r.value));
   }
-  // The values it used to emit are NOT members of the enum.
-  for (const old of ["1", "3", "7", "14"]) {
-    assertFalse(allowed.has(old), `"${old}" must not be treated as valid`);
-    assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", old));
+  // The prose form PR #123 introduced is what the LIVE actor rejected.
+  for (const bad of ["last 24 hours", "3 days", "7 days", "14 days"]) {
+    assertFalse(allowed.has(bad), `"${bad}" must not be treated as valid`);
+    assertFalse(isDocumentedEnumValue("indeed_job_discovery", "datePosted", bad));
   }
+
 });
 
 Deno.test("32./33. a window beyond 14 days is clamped and the approximation recorded", () => {
   for (const days of [30, 45, 60]) {
     const r = indeedDatePostedBucket(days);
-    assertEquals(r.value, "14 days");
+    assertEquals(r.value, "14");
     assert(r.repair && r.repair.startsWith("posting_window_clamped:"), String(r.repair));
     // The repair names the real supported set so an operator can see why.
-    assert(r.repair!.includes("14 days"));
+    assert(r.repair!.includes("14"));
   }
   // Inside the supported range there is nothing to approximate.
   assertEquals(indeedDatePostedBucket(7).repair, null);

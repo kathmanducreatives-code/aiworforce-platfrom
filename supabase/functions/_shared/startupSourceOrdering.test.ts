@@ -138,7 +138,7 @@ Deno.test("Indeed emits a verified non-empty datePosted when recency is requeste
     candidateTarget: 25,
   });
   if (!r.ok) throw new Error(`indeed compile refused: ${r.reason}`);
-  assertEquals(r.input.datePosted, "7 days");
+  assertEquals(r.input.datePosted, "7");
   assert(String(r.input.datePosted).length > 0);
 });
 

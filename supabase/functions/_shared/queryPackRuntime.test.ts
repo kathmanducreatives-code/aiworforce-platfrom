@@ -52,7 +52,7 @@ async function runInvoker(packs: Array<{ packId: string; titleAliases: string[] 
   const sent: Array<Record<string, unknown>> = [];
   const handle = sequentialJobsInvoker({
     taskId: "t1", plan: approved, state,
-    invokeJobs: (env) => { sent.push(env); return Promise.resolve([]); },
+    invokeJobs: (env: Record<string, unknown>) => { sent.push(env); return Promise.resolve([]); },
     ...(packs ? { queryPacks: packs } : {}),
   } as never);
   await handle.invokeJobs({}, 25);
@@ -120,7 +120,7 @@ Deno.test("3. a mission recency policy reaches the Actor input as a supported va
     const input = env.input as Record<string, unknown>;
     const cap = env.capability_key;
     if (cap === "indeed_job_discovery" && "datePosted" in input) {
-      assertEquals(input.datePosted, "14 days", "Indeed must use a documented enum member");
+      assertEquals(input.datePosted, "14", "Indeed must use a live-actor enum member");
     }
     if (cap === "linkedin_job_discovery" && "timePostedRange" in input) {
       assert(String(input.timePostedRange).length > 0, "LinkedIn timePostedRange must be non-empty");

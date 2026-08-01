@@ -55,6 +55,9 @@ export interface QualificationInsightsView {
   failed_gate_counts: Array<{ gate: string; count: number }>;
   /** The rejected companies. NEVER Opportunities. */
   rejected: CompanyDiagnosticView[];
+  /** Companies still awaiting evidence — neither qualified nor rejected. */
+  evidence_pending: CompanyDiagnosticView[];
+
   /** Human-readable summary of why nothing qualified, when nothing did. */
   rejection_summary: string | null;
   /** Present only when there is genuinely nothing to show yet. */
