@@ -1,58 +1,46 @@
-Continue on the current branch (HEAD `ad98778a`, clean tree). No restart, no new branch, no deploys, no live model/provider calls, no TEST/production data writes. `supabase/functions/mcp/index.ts` stays untouched and unstaged.
 
-## Step 0 — Measured baseline (before any code change)
+# Complete the GPT-controlled qualified-lead workflow (base: main @ 49212a22, includes PR #131)
 
-Check out latest `main` into a detached worktree, run the same shared Deno suite there, and record the exact pass/fail list. Only failures reproduced there may later be called pre-existing. The five current failures (`leadActionExecutor`, `sourceCapabilities`, `apifyJobsHiringSource`, plus two related env-dependent specs) get an explicit main-vs-branch table.
+No deploys, no paid runs, no migrations. `supabase/functions/mcp/index.ts` stays untouched. PR #130's company-evidence/Workbench work is not modified. No new planner, controller, runtime, qualification pipeline, persistence or quota system is created.
 
-## Changeset 3 — Startup-aware source order + provider inputs
+## What the code actually shows today (verified by reading the files)
 
-- Extend the strategist source-scoring input (role family, startup intent, business model, employee range, geography, source startup relevance, precision/recall priors, unused packs, prior source quality) and let the ordered-source runtime consume the returned `source_plan` ordering instead of the static default order. ATS stays excluded from discovery.
-- Deterministic fallback ordering becomes signal-driven, not a fixed constant, so the startup fixture can yield YC → LinkedIn → Indeed → Glassdoor while a non-startup fixture does not.
-- Provider compilation fixes in the actor input planner/compilers:
-  - Indeed: emit a verified supported non-empty `datePosted` when recency is requested; never an empty string.
-  - LinkedIn: verified non-empty `timePostedRange`; stop forcing `onSite=true` / `remote=false` / `hybrid=false`; unrestricted workplace when the user gave no restriction.
-  - Glassdoor: `daysOld` bounded by the existing semantic recency policy.
-  - No invented fields for SaaS / stage / employee count — those constraints are recorded as post-fetch qualification requirements on the prepared call.
-- Tests: startup-first vs non-startup fixtures, pack separation preserved, non-empty recency fields, LinkedIn not on-site-only, compiled-payload snapshots validated against the verified Actor schemas.
-- Commit, then continue.
+- Production company-first path is: `run-agent/index.ts` → `applySequentialSourceExecution` (sequentialSourceBridge) → `executeRunAgentCompanyFirstSourcing` → `runCompanyFirstQuotaController`, with `invokeJobs: sequentialSources.invokeJobs`.
+- `sequentialSourceBridge.ts:345` already passes `queryPacks: activePacks.map(...)` into `sequentialJobsInvoker`, and `sequentialSourceRuntime.ts:611-615` selects `prepareStepPackCalls` only when that array is non-empty. So the pack path exists but is reached only if `activePacks` is non-empty (line 281: `strategyOutcome.packs`). In the live run it was empty because the GPT strategy was rejected (`rejected:query_packs_not_separated`) and the deterministic fallback carries no packs. That is the actual reason production still emitted one merged call — not a missing caller.
+- `run-agent` builds the sequential profile with `approvedAliases: keyword_queries` (a flattened list) — GPT's packs are lost before the bridge sees them.
+- Indeed recency in `actorInputPlanner.ts` / `actorSchemaFixtures.ts` compiles to `"last 24 hours" | "3 days" | "7 days" | "14 days"`. The live Actor rejected these; it accepts only `"" | "1" | "3" | "7" | "14"`. This is a real, confirmed defect.
+- `companyFirstQuotaController.ts:90` hard-codes `maxRounds: 3, maxJobsCalls: 3` — the observed stop reason.
+- A resume path does exist (`run-agent` `resume_task_id`/`continuation_token` → `decideResume` → `claim_sourcing_continuation`), and the frontend has `src/lib/qualifiedLead/continueSourcing.ts`. The second paid task in the last audit came from a manual `run-agent` invocation that omitted `resume_task_id`; whether the `next_action: start_round` checkpoint actually surfaces `continuation.required` to the UI is **unverified** and is the first thing this work checks.
+- The canonical strategist policy/envelope (`_shared/leadStrategy/policy.ts`) is built but currently only feeds `promptHash` — the audit's finding stands.
 
-## Changeset 4 — One GPT owner for feedback + plan-aware execution
+## Priority Zero — execution and resume
 
-- Route later-round broadening, source-plan approval and tool-input planning for `qualified_lead_sourcing` + `company_first` through the existing strategy owner (primary GPT → one escalation model → deterministic fallback). Gemini and Claude feedback paths are bypassed for this workflow only; all other workflows keep current routing.
-- Bounded observation action set: `run_unused_query_pack`, `tighten_query_pack`, `advance_source`, `activate_direct_adjacent_pack`, `activate_evidence_gated_pack`, `begin_company_enrichment`, `begin_people_search`, `run_contact_enrichment`, `stop_success`, `stop_partial`.
-- `tighten_query_pack` implemented over the existing source state: narrower unused pack, approved negatives, drop generic titles, keep role family, optionally switch source. No invented titles or provider fields.
-- Bottleneck→action mapping: high off-family rate → tighten/switch; relevant titles + wrong companies → ICP-relevant source switch preserving title intent; missing evidence → `begin_company_enrichment`; qualified companies → `begin_people_search`; verified people without contacts → `run_contact_enrichment`.
-- Replace the blind three-round stop for this workflow with a plan-aware action budget (unused exact packs, unused relevant sources, remaining CONTACT quota, remaining provider/model budget, source-quality history, remaining valid actions) plus a hard safety ceiling.
-- Tests: zero Gemini calls, zero Claude feedback calls, same owner for initial + feedback, noise triggers tightening rather than replaying the same query on another Actor, quota reached stops everything, execution bounded.
-- Commit, then continue.
+1. **Trace + regression harness first.** Add a runtime-level test that drives the exact production composition (`applySequentialSourceExecution` → `executeRunAgentCompanyFirstSourcing`) with mocked providers, reproducing tasks `4851efb0…` and `b59b422b…`. It asserts: one task only, same task resumes, separate pack calls, valid recency enums, no merged universal OR query.
+2. **Resume.** Verify the `next_action: start_round` checkpoint sets `continuation.required` and a token, and that the continuation surface calls `run-agent` with `resume_task_id`. Fix whichever link drops it so continuation resumes the same task/plan and can never insert a second company-first task. Guard: a company-first request that carries a live checkpoint for the same workspace+plan must refuse fresh insertion.
+3. **Pack propagation into the real invoker.** Carry validated GPT `query_packs` from `leadStrategyBridge` into `applySequentialSourceExecution` (via the strategy binding, not via `keyword_queries`), so `activePacks` is non-empty on the production path. Add an assertion-style test proving `prepareStepCall` is NOT selected when validated packs exist.
+4. **Preserve identity end-to-end**: pack ID, that pack's titles only, batch allocation, `compiled_input_hash`, `idempotency_key` through the final `source_with_apify` call.
+5. **Indeed recency.** Change the verified enum in `actorSchemaFixtures.ts` + compiler in `actorInputPlanner.ts` to `"" | "1" | "3" | "7" | "14"` (days-as-string), clamping >14 to `"14"`, and update the fixture/schema tests that encode the old strings.
+6. **LinkedIn `timePostedRange`.** Read the supported values from the existing Actor capability contract and test the final payload against that schema; keep on-site/remote/hybrid unrestricted when nothing was requested.
 
-## Changeset 5 — Company evidence + automatic progression
+## Then — the GPT workflow itself
 
-- Map source-backed company fields when present (employee count/range, industry, description, website, LinkedIn URL, company type, founding info, stage evidence, provider provenance) into the canonical company record. No fabrication.
-- Keep explicit-negative / missing / conflicting evidence distinct. Strong hiring signal + strong identity but missing required evidence → `company_evidence_pending`, which invokes the existing approved enrichment path, attaches evidence to the same canonical company, re-runs Company Brain, and yields qualified / rejected / needs-review. Unknown is never a proven negative unless the workspace Company Brain declares missing evidence a hard blocker. Company Brain stays deterministic and final.
-- Prove — not rebuild — the existing progression: qualified company → account row → founder/CEO search → deterministic employer verification → contact enrichment → same canonical opportunity updated → only CONTACT-ready counts. No new controller, people-search path, enrichment pipeline, persistence writer or quota system.
-- Fixtures: ThisWay-Global-style enrichment reaching Company Brain; strong identity + missing evidence → pending; oversized company → deterministic rejection; employer mismatch → blocked; verified founder without contact evidence → pending; sufficient contact evidence → CONTACT-ready.
-- Commit, then continue.
+7. **Send the real context.** Wire `buildStrategistContextEnvelope` / `strategistSystemPrompt` into both `createInitialStrategy` and `chooseNextAction`, carrying the verbatim request, workflow kind, execution mode, quota, Company Brain, saved ICP, industries/exclusions/size/geography/stage/business-model, hiring-role families, pack taxonomy, decision-maker roles, recency + workplace, Actor capability cards and limitations, completed/unused packs and sources, source-quality history, measured funnel, bottleneck, budgets, allowed actions and the output schema. Prompt hash is computed from the exact payload sent. No workspace's Brain is hardcoded.
+8. **One canonical policy/prompt builder** for initial strategy and next-action feedback (retires the `leadStrategyContract` / `sourceFeedbackRuntime` split), called only through the existing provider-independent strategist facade. No direct Lovable/OpenAI/Gemini/Claude calls in the runtime; unrelated workflow routing untouched.
+9. **Full plan reaches the runtime.** `leadStrategyBridge` forwards query packs, negative patterns, source assignments, ordered source plan, batch hints, recency, workplace intent, stop conditions and next valid actions — not a flat keyword list. `hiringSourcePlan` may not re-derive the order unless deterministic fallback was explicitly selected.
+10. **Startup-aware order.** The validated plan may select YC → LinkedIn → Indeed → Glassdoor for the startup fixture; this is not hardcoded. Persist per-source reason: selected / skipped / unavailable / exhausted / rejected / budget-excluded. ATS stays excluded.
+11. **Deterministic repair before rejection** (duplicate packs, duplicate titles, title normalization, unsupported source IDs/fields, verified default recency, unsupported action) recording original errors, repairs applied, repaired strategy and remaining fatal errors. Authority: GPT primary → repair → GPT escalation once → repair → deterministic fallback.
+12. **Same strategist owns adaptation** across the ten allowed actions, with the real numeric source observation (raw/unique/title-qualified rows, irrelevant-title rate, companies resolved, evidence-pending, Brain rejections, qualified companies, people searched, CONTACT-ready, cost, duplicate rate, remaining quota/budget).
+13. **Plan-aware action budget** replacing `maxRounds/maxJobsCalls = 3`, scoped strictly to `qualified_lead_sourcing` + `company_first`, with a hard safety ceiling and a persisted stop reason plus the inputs used.
+14. **Truthful observability** per resolution (task, purpose, provider, model, tier, policy/prompt-schema version, prompt hash, Brain/ICP/Actor-catalog versions, sanitized input, canonical output, validation errors, repairs, escalation, fallback reason, selected action, latency, token/cost) with no secrets, credentials, chain-of-thought or personal contact data. Observability failure never fails the run.
 
-## Changeset 6 — Provider independence, canonical policy, observability
+## Tests
 
-- Complete `QualifiedLeadStrategistProvider` with `createInitialStrategy` and `chooseNextAction` returning canonical responses; keep the Lovable AI and direct OpenAI adapters as the only provider-specific code. Everything else (policy, prompt builder, Company Brain injection, capability cards, schemas, parsing, validation, fallback, controllers, provider compilation, people search, quota, persistence) stays provider-independent.
-- Selection stays purely configuration: `LEAD_STRATEGIST_PROVIDER`, `LEAD_STRATEGIST_PRIMARY_MODEL`, `LEAD_STRATEGIST_ESCALATION_MODEL`. OpenAI adapter is server-side only, reads `OPENAI_API_KEY` from server secrets, never reaches the browser.
-- One canonical versioned strategist-policy file and one prompt builder; every initial and feedback call receives the full documented input set (query, Company Brain, saved ICP, quota, role intent, decision-maker roles, geography/recency, capability cards, provider limitations, remaining budget, completed packs/sources, current observation, allowed actions, output schema). No hardcoded workspace brain.
-- Observability persisted per call: task id, provider, model, purpose, policy/prompt-schema/Company-Brain/Actor-catalog versions, prompt hash, structured request/response where permitted, validation result, repairs, authoritative source, fallback reason, pack ids, source step, compiled provider input + hash, dedupe counts, bottleneck, selected action, action authority, token/cost metadata, plus Apify run/dataset ids when returned. Never keys, credentials, auth headers or hidden reasoning.
-- Tests: both mocked adapters produce identical canonical output under the same policy/schema; controllers import nothing Lovable-specific; switching is config-only; identical mocked responses give identical task behavior; every model call carries provenance.
-- Commit.
+Baseline measured on main @ 49212a22 first; only failures reproduced there are called pre-existing. Then the 27 offline proofs listed in the request (mocked models and providers only), plus the mocked end-to-end canonical fixture "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads." to `stop_success`, and an honest Partial run with only three CONTACT-ready leads. Suites: strategist policy, prompt builder, provider adapters, validator/repair, strategy bridge, query-pack runtime, source order, provider compilers, feedback/action, action budget, company evidence, Company Brain, people search, CONTACT quota, Workbench projection, full backend suite, affected frontend suite, `deno check`, TypeScript check, production build.
 
-## Final integration + verification
+## Delivery
 
-- One fully mocked end-to-end fixture through the real runtime for the startup/Sales-Ops query expecting five CONTACT-ready leads and `stop_success`, plus an honest Partial fixture yielding three.
-- Run all focused suites listed in the request, the full shared backend suite, affected frontend suite, Deno check, TypeScript check and production build; diff against the Step-0 main baseline.
-- Restore/verify `supabase/functions/mcp/index.ts` unstaged, scan the diff for secrets, open or update one focused PR against `main`. No merge, no deploy.
+One focused PR against main. Not merged, not deployed. Report: old/new GPT call graphs, exact context sent, canonical system prompt and builder path, sanitized input example, canonical output example, validation+repair example, pack-propagation proof, source-order proof, execution-limit proof, observability example, full test/build results, files changed, commit SHA, PR number/URL, remaining gaps, and confirmations that no paid/live calls ran, production and TEST data were untouched, and `mcp/index.ts` stayed unstaged.
 
-## Reporting
+## Note on one of your premises
 
-Final message returns all 19 requested items, including commit SHAs, baseline-vs-branch table, old/new call graphs, source-order proof, exact compiled payload examples, and the confirmations about deployment, live calls, data and `mcp/index.ts`.
-
-## Technical notes
-
-Primary touch points: `_shared/leadStrategy/*` (provider, config, factory, adapters), `leadStrategyOwner.ts`, `leadStrategyContract.ts`, `leadStrategyValidator.ts`, `leadStrategyBridge.ts`, `leadRoleTaxonomy.ts`, `sequentialSourceRuntime.ts`, `discoveryBatchAllocation.ts`, `actorInputPlanner.ts` / `actorInputSchemas.ts` / `actorSchemaFixtures.ts`, `sourcingBottleneck.ts`, `companyFirstQuotaController.ts`, `companyEnrichmentOrchestrator.ts`, `companyBrainGate.ts`, `companyRowProjection.ts`, `compoundSourcingPipeline.ts`, and `run-agent/index.ts`.
+Point 1 ("`prepareStepPackCalls()` is still bypassed") is accurate in effect but not in cause: the caller is wired; it goes unused because no validated packs survive to it. The fix therefore targets pack survival through the bridge plus a test that fails if the single-call path is ever chosen while packs exist.
