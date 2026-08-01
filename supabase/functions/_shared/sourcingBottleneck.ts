@@ -7,7 +7,21 @@
 export type BottleneckKind =
   | "insufficient_raw_jobs" | "title_coverage" | "company_qualification" | "company_identity"
   | "people_coverage" | "person_role_precision" | "employer_verification"
-  | "duplicate_saturation" | "budget" | "quota_reached" | "search_exhausted";
+  | "duplicate_saturation" | "budget" | "quota_reached" | "search_exhausted"
+  // HONEST DIAGNOSIS (added). "No relevant job came back" has several distinct
+  // causes and only one of them is a narrow title list. A source that answers a
+  // Sales-Ops query with warehouse, retail and gas-station postings is not
+  // evidence that our titles were too narrow — it is evidence the source, or the
+  // query we sent it, has poor precision. Calling that `title_coverage` is what
+  // made the runtime respond by widening titles into even more noise.
+  | "poor_source_precision"
+  | "excessive_title_noise"
+  | "insufficient_title_coverage"
+  | "insufficient_company_resolution"
+  | "company_evidence_missing"
+  | "company_brain_rejection"
+  | "insufficient_decision_maker_coverage"
+  | "insufficient_contact_coverage";
 
 export interface FunnelSummary {
   raw_jobs: number;
@@ -27,6 +41,16 @@ export interface FunnelSummary {
   reject: number;
   duplicates_removed: number;
   rejection_reason_counts: Record<string, number>;
+  /**
+   * Jobs the source returned that are not merely a different title in the same
+   * function, but a different function entirely (warehouse, retail, clinical,
+   * driver…). OPTIONAL: absent means "not measured", never "zero".
+   */
+  off_family_jobs?: number;
+  /** Companies the Company Brain genuinely evaluated (identity + evidence present). */
+  companies_evaluated?: number;
+  /** Qualified companies held back solely because required evidence is missing. */
+  companies_evidence_pending?: number;
 }
 
 export function emptyFunnelSummary(): FunnelSummary {
@@ -40,6 +64,14 @@ export function emptyFunnelSummary(): FunnelSummary {
 }
 
 export interface BottleneckResult { kind: BottleneckKind; reason: string; }
+
+/** Share of returned jobs that belong to a different function altogether. */
+export function offFamilyRate(f: FunnelSummary): number | null {
+  if (typeof f.off_family_jobs !== "number") return null;
+  const denom = Math.max(1, f.unique_jobs || f.raw_jobs);
+  return f.off_family_jobs / denom;
+}
+
 
 /**
  * Pick the FIRST constriction in funnel order — fixing a later stage is pointless
