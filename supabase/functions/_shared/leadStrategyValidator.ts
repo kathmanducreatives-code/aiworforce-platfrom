@@ -9,10 +9,12 @@ import {
   NON_DISCOVERY_SOURCES, QUERY_PACK_IDS, eligiblePackIds, buildQueryPack,
   DEFAULT_SOURCE_ORDER, type QueryPackId, type RoleFamilyDef,
 } from "./leadRoleTaxonomy.ts";
+import { buildSourcePlan, deriveSourceOrderingSignals } from "./leadSourceOrdering.ts";
 import {
   LEAD_STRATEGY_SCHEMA_VERSION, type LeadStrategyMission, type LeadStrategyPlan,
   type LeadStrategyRoundContext, type LeadStrategyNextAction,
 } from "./leadStrategyContract.ts";
+
 
 export const MAX_TITLES = 24;
 export const MAX_PACKS = 5;
@@ -134,7 +136,11 @@ export function validateLeadStrategy(
   }
   const finalSources = sources.length > 0
     ? sources.slice().sort((a, b) => a.priority - b.priority)
-    : DEFAULT_SOURCE_ORDER.map((k, i) => ({ source_key: k, priority: i + 1, rationale: "deterministic default order" }));
+    : buildSourcePlan(deriveSourceOrderingSignals(mission, ctx, {
+      unusedQueryPacks: eligiblePackIds(ctx.round, ctx.adjacent_titles_allowed)
+        .filter((id) => !ctx.attempted_query_packs.includes(id)),
+    }));
+
 
   // ---- next action + prose safety -----------------------------------------
   const nextAction = NEXT_ACTIONS.includes(o.next_action as LeadStrategyNextAction)
@@ -186,8 +192,12 @@ export function deterministicLeadStrategy(
     .map((id) => ({ pack_id: id, queries: buildQueryPack(id, fam, ctx.adjacent_titles_allowed), rationale: "deterministic pack" }))
     .filter((p) => p.queries.length > 0);
   const titles = [...new Set(packs.flatMap((p) => p.queries))].slice(0, MAX_TITLES);
-  const remainingSources = DEFAULT_SOURCE_ORDER.filter((s) => !ctx.attempted_sources.includes(s));
-  const order = remainingSources.length > 0 ? remainingSources : DEFAULT_SOURCE_ORDER;
+  const signals = deriveSourceOrderingSignals(mission, ctx, { unusedQueryPacks: packIds });
+  const scoredPlan = buildSourcePlan(signals);
+  const unattempted = scoredPlan.filter((s) => !ctx.attempted_sources.includes(s.source_key));
+  const plan = (unattempted.length > 0 ? unattempted : scoredPlan)
+    .map((s, i) => ({ ...s, priority: i + 1 }));
+
   return {
     schema_version: LEAD_STRATEGY_SCHEMA_VERSION,
     role_family: fam.key,
@@ -196,7 +206,7 @@ export function deterministicLeadStrategy(
     query_packs: packs.length > 0
       ? packs
       : [{ pack_id: "exact_titles" as QueryPackId, queries: [...fam.exact], rationale: "deterministic pack" }],
-    source_plan: order.map((k, i) => ({ source_key: k, priority: i + 1, rationale: "deterministic default order" })),
+    source_plan: plan,
     next_action: ctx.remaining_quota <= 0 ? "stop_quota_reached" : "run_query_packs",
     stop_conditions: ["quota_reached", "budget_exhausted", "sources_exhausted"],
     rationale: `deterministic strategy for ${fam.label} (round ${ctx.round})`,

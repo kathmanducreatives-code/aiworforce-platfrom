@@ -405,9 +405,15 @@ export interface CompiledHiringSourceInput {
   input: Record<string, unknown>;
   inputHash: string;
   repairs: string[];
+  /**
+   * Mission constraints this Actor cannot express. Recorded, never invented as
+   * provider fields; the qualification layer must enforce them post-fetch.
+   */
+  postFetchQualification: string[];
   /** Redacted summary safe for diagnostics. */
   summary: Record<string, unknown>;
 }
+
 export interface DeferredHiringSourceInput {
   ok: false;
   capability: HiringSourceCapabilityId;
@@ -416,8 +422,29 @@ export interface DeferredHiringSourceInput {
 }
 export type HiringSourceCompileResult = CompiledHiringSourceInput | DeferredHiringSourceInput;
 
+/**
+ * The semantic recency policy. Agentory considers a hiring signal "current"
+ * inside this window; a provider that can express a longer one is still bounded
+ * by it, because a 365-day posting is not evidence of current hiring.
+ */
+export const MAX_SEMANTIC_POSTING_WINDOW_DAYS = 60;
+export const DEFAULT_SEMANTIC_POSTING_WINDOW_DAYS = 30;
+
+/**
+ * Constraints NO job-board Actor can express. They are never fabricated as
+ * provider fields; they are recorded here and enforced after the fetch by the
+ * Company Brain / qualification layer.
+ */
+export const UNSUPPORTED_PROVIDER_CONSTRAINTS = [
+  "business_model_saas",
+  "startup_stage",
+  "employee_count_range",
+] as const;
+export type UnsupportedProviderConstraint = typeof UNSUPPORTED_PROVIDER_CONSTRAINTS[number];
+
 /** Indeed exposes exactly these `datePosted` buckets. Nothing else is valid. */
 export const INDEED_DATE_POSTED_BUCKETS = [1, 3, 7, 14] as const;
+
 
 /**
  * Map a requested window onto Indeed's supported buckets.
@@ -529,9 +556,15 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
         country: (intent.countryCode ?? "US").toUpperCase(),
         maxItems: target,
         jobType,
-        datePosted: dp.value,
         includeDescription: true,
       };
+      // NEVER send `datePosted: ""`. Either a verified enum member is emitted,
+      // or the field is omitted entirely and the Actor's own default applies.
+      if (dp.value) {
+        (input as Record<string, unknown>).datePosted = dp.value;
+      } else if (intent.postingWindowDays != null) {
+        repairs.push("posting_window_unmappable:indeed_datePosted_omitted");
+      }
       break;
     }
 
@@ -540,18 +573,27 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
       const tp = linkedinTimePostedRange(intent.postingWindowDays);
       if (tp.repair) repairs.push(tp.repair);
       const remote = intent.remotePolicy;
+      // NO WORKPLACE RESTRICTION unless the mission asked for one. The previous
+      // shape sent onSite:true / remote:false / hybrid:false whenever the policy
+      // was absent, which silently excluded every remote and hybrid posting —
+      // exactly the population a distributed startup mission depends on.
+      const unrestricted = remote == null || remote === "any";
       input = {
         query,
         location: intent.geography ?? "",
-        timePostedRange: tp.value,
         // REQUIRED by the schema (1-1000); Agentory caps far tighter.
         jobsToFetch: target,
-        onSite: remote === "onsite" || remote === "any" || remote == null,
-        remote: remote === "remote" || remote === "any",
-        hybrid: remote === "hybrid" || remote === "any",
+        onSite: unrestricted || remote === "onsite",
+        remote: unrestricted || remote === "remote",
+        hybrid: unrestricted || remote === "hybrid",
         fullTime: true,
         enrichCompanyDetails: true,
       };
+      if (tp.value) {
+        (input as Record<string, unknown>).timePostedRange = tp.value;
+      } else if (intent.postingWindowDays != null) {
+        repairs.push("posting_window_unmappable:linkedin_timePostedRange_omitted");
+      }
       break;
     }
 
@@ -559,7 +601,13 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
       // BOTH are required by the verified schema. Refuse rather than send junk.
       if (!query) return { ok: false, capability: intent.capability, status: "rejected", reason: "glassdoor_requires_keywords" };
       if (!intent.geography) return { ok: false, capability: intent.capability, status: "rejected", reason: "glassdoor_requires_location" };
-      const days = clampInt(intent.postingWindowDays ?? 30, 1, 365, 30);
+      // Bounded by the SEMANTIC recency policy, not by the Actor's own 365-day
+      // ceiling: a 90-day "recent hiring signal" is not a recent hiring signal.
+      const requested = intent.postingWindowDays ?? DEFAULT_SEMANTIC_POSTING_WINDOW_DAYS;
+      const days = clampInt(requested, 1, MAX_SEMANTIC_POSTING_WINDOW_DAYS, DEFAULT_SEMANTIC_POSTING_WINDOW_DAYS);
+      if (Number(requested) > MAX_SEMANTIC_POSTING_WINDOW_DAYS) {
+        repairs.push(`posting_window_clamped:${Math.floor(Number(requested))}d->${MAX_SEMANTIC_POSTING_WINDOW_DAYS}d (semantic recency policy)`);
+      }
       input = {
         keywords: query,
         location: intent.geography,
@@ -569,6 +617,7 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
       };
       break;
     }
+
 
     case "yc_job_discovery": {
       const rf = ycRoleFilter(intent.roleFamily);
@@ -611,6 +660,7 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
   const inputHash = await _sha256Hex(_canonicalJson({ actorKey, input }));
   return {
     ok: true, capability: intent.capability, actorKey, input, inputHash, repairs,
+    postFetchQualification: [...UNSUPPORTED_PROVIDER_CONSTRAINTS],
     summary: {
       capability: intent.capability,
       actor_key: actorKey,
@@ -619,8 +669,10 @@ export async function compileHiringSourceInput(intent: HiringSourceIntent): Prom
       result_target: target,
       posting_window_days: intent.postingWindowDays ?? null,
       repairs,
+      post_fetch_qualification: [...UNSUPPORTED_PROVIDER_CONSTRAINTS],
       input_hash: inputHash,
     },
+
   };
 }
 
