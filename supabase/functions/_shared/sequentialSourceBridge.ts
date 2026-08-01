@@ -54,6 +54,8 @@ import {
 } from "./sourceFeedbackRuntime.ts";
 import { applyObservation } from "./sequentialSourceRuntime.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
+import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
+
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import {
   safeObserverFailure,
@@ -448,10 +450,16 @@ export async function applySequentialSourceExecution(
         companyBrainPolicyHash: input.companyBrainPolicyHash ?? "",
         taskIdHash,
         workspaceIdHash,
-        // OMITTED in production on purpose: the feedback runtime falls through to
-        // the existing `generateJson` gateway. Injected only by tests.
-        ...(input.generate ? { generate: input.generate } : {}),
+        // ONE OWNER. This bridge only ever runs for
+        // workflow = qualified_lead_sourcing + execution_mode = company_first,
+        // and on that workflow the strategist that authored the initial strategy
+        // also interprets the observation. Omitting `generate` here would fall
+        // through to the shared `generateJson` gateway, whose `orchestration_plan`
+        // task type routes to Gemini — a second brain answering the same question.
+        // Tests still inject their own `generate` and take precedence.
+        generate: input.generate ?? createStrategistGenerateJson(),
         readEnv: input.readEnv,
+
       };
 
       // ---- SOURCE-FEEDBACK BINDING ---------------------------------------
