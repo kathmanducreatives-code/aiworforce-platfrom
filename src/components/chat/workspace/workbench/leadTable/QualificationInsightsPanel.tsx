@@ -97,7 +97,7 @@ export default function QualificationInsightsPanel({ insights, processing = null
       )}
 
       {open && (
-        <div data-testid="rejected-companies" className="border-t border-white/10">
+        <div data-testid="rejected-companies" className="border-t border-white/10 max-h-[280px] overflow-y-auto">
           {insights.rejected.map((c) => (
             <div
               key={c.company_key}
