@@ -59,6 +59,10 @@ import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
 import { applyLeadStrategyInitialPlanning } from "../_shared/leadStrategyBridge.ts";
+// The missing edge between the GPT strategy and the sequential runtime: without
+// it the strategist's separate query packs never reach the Actor calls.
+import { gptAdaptiveStrategyBinding } from "../_shared/leadStrategyAdaptiveBinding.ts";
+
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
