@@ -255,17 +255,27 @@ export async function applySequentialSourceExecution(
   // The gateway itself is injected (production supplies it; tests stub it), and
   // whatever it returns is parsed, validated and converted here before the
   // EXISTING `validateOrderedPlan` below passes final judgment on it.
-  const adaptiveRoute = routeAdaptiveLeadDecision({
-    workflow: "qualified_lead_sourcing",
-    executionMode: "company_first",
-    workspaceId: input.workspaceId,
-    decision: "sourcing_strategy",
-    strategyContractAvailable: !!input.validateAdaptiveStrategy,
-    read: input.readEnv,
-  });
+  //
+  // THE ROUTE OVERRIDE exists because the Claude route flags do not describe the
+  // GPT strategy path. When the OpenAI strategy owner already resolved a plan for
+  // this task, that plan IS the strategy: gating it behind CLAUDE_FIRST_* would
+  // discard it and silently restore the merged single-call behaviour that
+  // production tasks 4851efb0 / b59b422b exhibited.
+  const adaptiveRoute = input.strategyRouteOverride ?? (() => {
+    const r = routeAdaptiveLeadDecision({
+      workflow: "qualified_lead_sourcing",
+      executionMode: "company_first",
+      workspaceId: input.workspaceId,
+      decision: "sourcing_strategy",
+      strategyContractAvailable: !!input.validateAdaptiveStrategy,
+      read: input.readEnv,
+    });
+    return { enabled: r.useClaude, reason: r.reason };
+  })();
   const strategyOutcome = await resolveAdaptiveOrderedPlan({
-    routeEnabled: adaptiveRoute.useClaude,
+    routeEnabled: adaptiveRoute.enabled,
     routeReason: adaptiveRoute.reason,
+
     planStrategy: input.planAdaptiveStrategy,
     validate: input.validateAdaptiveStrategy ??
       (() => ({ ok: false, reason: "no_strategy_validator", strategy: null, source: "claude" as const })),
