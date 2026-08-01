@@ -58,6 +58,7 @@ import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersist
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
+import { applyLeadStrategyInitialPlanning } from "../_shared/leadStrategyBridge.ts";
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
 import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
