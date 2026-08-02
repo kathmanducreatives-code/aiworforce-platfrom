@@ -1,12 +1,12 @@
 // Company understanding pass + page classification. Fixtures only, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyPage, isProductDefining, strongPageCount, ignoredUses } from "../../../supabase/functions/_shared/pageClassifier.ts";
-import { buildCompanyUnderstanding } from "../../../supabase/functions/_shared/companyUnderstanding.ts";
+import { classifyPage, isProductDefining, strongPageCount, ignoredUses } from "../../../supabase/functions/_shared/companyBrainResearch/pageClassifier.ts";
+import { buildCompanyUnderstanding } from "../../../supabase/functions/_shared/companyBrainResearch/companyUnderstanding.ts";
 import {
   HOME, FIXTURE_A_CLEAN_SAAS, FIXTURE_B_AMBIGUOUS, FIXTURE_C_RECRUITING_NOISE,
   FIXTURE_D_WEBSITE_ONLY, FIXTURE_E_USER_BEATS_SITE, FIXTURE_E_USER_DESCRIPTION, FIXTURE_F_SPARSE,
-} from "../../../supabase/functions/_shared/testFixtures.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/testFixtures.ts";
 
 const u = (pages: typeof FIXTURE_A_CLEAN_SAAS, desc?: string) =>
   buildCompanyUnderstanding(pages, { websiteUrl: HOME, nameHint: "Cekura", descriptionHint: desc });

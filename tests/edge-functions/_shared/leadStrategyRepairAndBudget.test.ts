@@ -19,7 +19,7 @@ import { HARD_PROVIDER_CALL_CEILING } from "../../../supabase/functions/_shared/
 // ============================ 2. DETERMINISTIC REPAIR =======================
 
 Deno.test("2. an exact duplicate pack signature is REPAIRED, not fatal", async () => {
-  const src = await Deno.readTextFile(new URL("./leadStrategyValidator.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadStrategyValidator.ts", import.meta.url));
   // The fatal return for a duplicate signature is gone…
   assertFalse(
     /return \{ ok: false, problem: "query_packs_not_separated" \}/.test(src),
@@ -30,7 +30,7 @@ Deno.test("2. an exact duplicate pack signature is REPAIRED, not fatal", async (
 });
 
 Deno.test("2b. the repair keeps the NARROWER pack and records which was dropped", async () => {
-  const src = await Deno.readTextFile(new URL("./leadStrategyValidator.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadStrategyValidator.ts", import.meta.url));
   assert(src.includes("pack.queries.length < prior.queries.length"),
     "the narrower pack must win");
   assert(src.includes("dropped.push(`pack_duplicate_signature_repaired:"),
@@ -38,7 +38,7 @@ Deno.test("2b. the repair keeps the NARROWER pack and records which was dropped"
 });
 
 Deno.test("2c. an empty plan is still fatal — repair never invents a pack", async () => {
-  const src = await Deno.readTextFile(new URL("./leadStrategyValidator.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadStrategyValidator.ts", import.meta.url));
   assert(src.includes('return { ok: false, problem: "no_valid_query_packs" }'),
     "a strategy with nothing usable must still fail rather than be fabricated into validity");
 });
@@ -46,14 +46,14 @@ Deno.test("2c. an empty plan is still fatal — repair never invents a pack", as
 // ==================== 4. THE BUDGET IS NO LONGER ORPHANED ===================
 
 Deno.test("4. the controller now HAS a plan-aware budget seam", async () => {
-  const src = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(src.includes("actionBudget?:"), "the controller must accept a plan-aware budget");
   assert(src.includes("planAwareStop"), "the stop decision must be recorded");
   assert(src.includes("plan_aware_stop"), "the decision must reach the result");
 });
 
 Deno.test("4b. WITHOUT a budget the pre-existing fixed limits still decide", async () => {
-  const src = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(
     src.includes("} else if (jobsCalls >= bounds.maxJobsCalls) {"),
     "the fixed ceiling must remain the authority when no budget is supplied",
@@ -117,7 +117,7 @@ Deno.test("4h. the budget never exceeds its own maximum", () => {
 // ============ 5. NO SEPARATE CLAUDE/GEMINI FEEDBACK OWNER FOR THIS PATH =====
 
 Deno.test("5. the GPT strategist owns this workflow's next action", async () => {
-  const runAgent = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const runAgent = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   // The GPT plan is bound into the adaptive seam…
   assert(runAgent.includes("gptAdaptiveStrategyBinding(gptStrategy.resolution.plan"),
     "the validated GPT plan must reach the runtime binding");
@@ -127,7 +127,7 @@ Deno.test("5. the GPT strategist owns this workflow's next action", async () => 
 });
 
 Deno.test("5b. the GPT plan's SOURCE ORDER survives into the adaptive plan", async () => {
-  const binding = await Deno.readTextFile(new URL("./leadStrategyAdaptiveBinding.ts", import.meta.url));
+  const binding = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadStrategyAdaptiveBinding.ts", import.meta.url));
   assert(binding.includes("plan.source_plan"), "the source order must come from the GPT plan");
   assert(binding.includes("capability_key: cap"), "each ordered step keeps its capability");
 });

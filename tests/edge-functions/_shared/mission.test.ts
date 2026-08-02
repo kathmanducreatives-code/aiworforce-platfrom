@@ -6,7 +6,7 @@ import {
   buildMission, resolveGeographyAuthority, normalizeForDisplay, missionHash,
   authorityRank, higherAuthority, mayOverride, AUTHORITY_ORDER,
   MISSION_CONTRACT_VERSION, type BuildMissionInput,
-} from "../../../supabase/functions/_shared/mission.ts";
+} from "../../../supabase/functions/_shared/intelligence/mission.ts";
 
 const PRIMARY = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 

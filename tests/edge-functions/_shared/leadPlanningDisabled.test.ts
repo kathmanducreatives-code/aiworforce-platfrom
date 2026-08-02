@@ -15,9 +15,9 @@ import { assert, assertEquals, assertFalse, assertStrictEquals } from "https://d
 import {
   applyClaudeFirstLeadPlanning, bridgeDiagnostics, isClaudeFirstLeadPlanningEnabled,
   CLAUDE_FIRST_WORKSPACES_ENV, type JobSearchSpecSlice,
-} from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
-import { CANONICAL_PROJECT_REFS } from "../../../supabase/functions/runtimeEnvironment.ts";
-import type { GenerateJsonFn } from "../../../supabase/functions/plannerWrapper.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadPlanningBridge.ts";
+import { CANONICAL_PROJECT_REFS } from "../../../supabase/functions/_shared/intelligence/runtimeEnvironment.ts";
+import type { GenerateJsonFn } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
 
 const PRIMARY =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -219,7 +219,7 @@ Deno.test("OFF8 production cannot be activated by ONE variable", () => {
 
 Deno.test("OFF9 run-agent adds the diagnostics key CONDITIONALLY", async () => {
   const src = await Deno.readTextFile(
-    new URL("../../../run-agent/index.ts", import.meta.url),
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
   assert(
     /\.\.\.\(\s*claudeFirstDiagnostics\s*\?\s*\{\s*claude_first_planning:/.test(src),

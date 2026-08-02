@@ -2,11 +2,11 @@
 // the env-gated adapters, and normalizers. NO provider calls (replay-safe).
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../../supabase/functions/companyBrainCompiler.ts";
-import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntelligenceProfile.ts";
-import { enrichAndGateRows, type EnrichableRow } from "../../../supabase/functions/_shared/radarSignalEnrichment.ts";
-import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, normalizePersonRow } from "../../../supabase/functions/_shared/radarProviderAdapters.ts";
-import { buildSourceDiagnostics } from "../../../supabase/functions/_shared/radarDiagnostics.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntel/radarIntelligenceProfile.ts";
+import { enrichAndGateRows, type EnrichableRow } from "../../../supabase/functions/_shared/radarIntel/radarSignalEnrichment.ts";
+import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, normalizePersonRow } from "../../../supabase/functions/_shared/radarIntel/radarProviderAdapters.ts";
+import { buildSourceDiagnostics } from "../../../supabase/functions/_shared/radarIntel/radarDiagnostics.ts";
 
 function intel() {
   return buildRadarIntelligenceProfile(compileCompanyBrainContext({
@@ -129,9 +129,9 @@ Deno.test("17. a diagnostic can be built per source with honest readiness", () =
 
 // 21. no provider calls in this suite ---------------------------------------
 Deno.test("21. enrichment + adapter-status modules are pure (no fetch on these paths)", async () => {
-  const enrichSrc = await Deno.readTextFile(new URL("./radarSignalEnrichment.ts", import.meta.url));
+  const enrichSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/radarIntel/radarSignalEnrichment.ts", import.meta.url));
   assert(!/\bfetch\s*\(/.test(enrichSrc), "enrichment must not call fetch");
   // adapters has a runApifyActor fetch, but it is only reachable when configured.
-  const adaptersSrc = await Deno.readTextFile(new URL("./radarProviderAdapters.ts", import.meta.url));
+  const adaptersSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/radarIntel/radarProviderAdapters.ts", import.meta.url));
   assert(/adapter not configured/.test(adaptersSrc), "fetch path must guard on configuration");
 });

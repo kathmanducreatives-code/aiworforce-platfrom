@@ -1,11 +1,11 @@
 // Company website (Firecrawl) adapter — fixture tests. No network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { selectPages, extractFromPages, enrichCompanyFromWebsite, MAX_PAGES } from "../../../supabase/functions/_shared/companyWebsite.ts";
+import { selectPages, extractFromPages, enrichCompanyFromWebsite, MAX_PAGES } from "../../../supabase/functions/_shared/companyBrainResearch/companyWebsite.ts";
 import {
   HOME, FIXTURE_A_CLEAN_SAAS, FIXTURE_C_RECRUITING_NOISE, FIXTURE_F_SPARSE,
   FIXTURE_E_USER_BEATS_SITE, FIXTURE_E_USER_DESCRIPTION,
-} from "../../../supabase/functions/_shared/testFixtures.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/testFixtures.ts";
 
 const mapped = [
   `${HOME}/about`, `${HOME}/pricing`, `${HOME}/customers`, `${HOME}/blog`, `${HOME}/careers`,

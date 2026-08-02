@@ -9,12 +9,12 @@
 // (no Apify, no Firecrawl), ZERO database access.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/leadMission.ts";
-import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/leadPlanner.ts";
-import type { LeadInitialStrategy } from "../../../supabase/functions/_shared/leadStrategy.ts";
-import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
-import type { GenerateJsonFn } from "../../../supabase/functions/plannerWrapper.ts";
-import type { GenerateResult } from "../../aiProvider.ts";
+import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/intelligence/leads/leadMission.ts";
+import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanner.ts";
+import type { LeadInitialStrategy } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategy.ts";
+import { applyClaudeFirstLeadPlanning, bridgeDiagnostics } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanningBridge.ts";
+import type { GenerateJsonFn } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
+import type { GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 const PRIMARY =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";

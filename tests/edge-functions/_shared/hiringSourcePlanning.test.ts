@@ -306,7 +306,7 @@ Deno.test("S37 a throwing env reader fails closed", () => {
 Deno.test("S38 no second flag parser was introduced", async () => {
   // The flag must resolve through the shared intelligence resolver, so a value
   // it rejects ("yes") must be rejected here too.
-  const src = await Deno.readTextFile(new URL("./hiringSourcePlan.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/hiringSourcePlan.ts", import.meta.url));
   assert(src.includes("isIntelligenceFlagEnabled"), "must use the existing flag resolver");
   assert(!/INTELLIGENCE_FLAG_ENABLED_VALUES\s*=/.test(src), "must not redefine the allow-list");
 });

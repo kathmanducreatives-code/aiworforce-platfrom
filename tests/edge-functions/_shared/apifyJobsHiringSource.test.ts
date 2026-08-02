@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../../supabase/functions/companyBrainCompiler.ts";
-import { scoreAgainstCompanyBrain } from "../../../supabase/functions/icpSignalScorer.ts";
-import { scoreCandidates } from "../../../supabase/functions/radarCandidatePipeline.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { scoreAgainstCompanyBrain } from "../../../supabase/functions/_shared/icpSignalScorer.ts";
+import { scoreCandidates } from "../../../supabase/functions/_shared/radarCandidatePipeline.ts";
 import {
   normalizeApifyJobToCandidate,
   apifyRowsToScoredItems,
@@ -10,7 +10,7 @@ import {
   describeApifyJobsQueries,
   isShortenerDomain,
   isRecruiterProxy,
-} from "../../../supabase/functions/_shared/apifyJobsHiringSource.ts";
+} from "../../../supabase/functions/_shared/radarSources/apifyJobsHiringSource.ts";
 
 const NOW = Date.parse("2026-07-06T00:00:00Z");
 const recent = "2026-07-04T00:00:00Z";

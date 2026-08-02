@@ -6,13 +6,13 @@
 // No network: every call goes through an injected fetch.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { createQualifiedLeadStrategist } from "../../../supabase/functions/_shared/strategist.ts";
-import { LovableAIStrategistProvider } from "../../../supabase/functions/_shared/adapters/lovableAi.ts";
-import { OpenAIStrategistProvider } from "../../../supabase/functions/_shared/adapters/openai.ts";
-import { allowedModels, resolveLeadStrategistConfig, DEFAULT_PRIMARY_MODEL } from "../../../supabase/functions/_shared/config.ts";
-import { recordLooksSafe, type StrategistObservabilityRecord } from "../../../supabase/functions/_shared/observability.ts";
-import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../../supabase/functions/leadStrategyContract.ts";
-import type { FeedbackObservationSignals } from "../../../supabase/functions/leadStrategyFeedbackOwner.ts";
+import { createQualifiedLeadStrategist } from "../../../supabase/functions/_shared/leadStrategy/strategist.ts";
+import { LovableAIStrategistProvider } from "../../../supabase/functions/_shared/leadStrategy/adapters/lovableAi.ts";
+import { OpenAIStrategistProvider } from "../../../supabase/functions/_shared/leadStrategy/adapters/openai.ts";
+import { allowedModels, resolveLeadStrategistConfig, DEFAULT_PRIMARY_MODEL } from "../../../supabase/functions/_shared/leadStrategy/config.ts";
+import { recordLooksSafe, type StrategistObservabilityRecord } from "../../../supabase/functions/_shared/leadStrategy/observability.ts";
+import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../../supabase/functions/_shared/leadStrategyContract.ts";
+import type { FeedbackObservationSignals } from "../../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
 
 const CONFIG = resolveLeadStrategistConfig(() => undefined);
 const MODELS = allowedModels(CONFIG);

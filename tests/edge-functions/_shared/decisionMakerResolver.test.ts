@@ -8,7 +8,7 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   resolveVerifiedDecisionMakerForOutreach,
   type WorkbenchDecisionMakerStage,
-} from "../../../supabase/functions/_shared/decisionMakerResolver.ts";
+} from "../../../supabase/functions/_shared/workbench/decisionMakerResolver.ts";
 
 // ------------------------------------------------------------------ fixtures --
 

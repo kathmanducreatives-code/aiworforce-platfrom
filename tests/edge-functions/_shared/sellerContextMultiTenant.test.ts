@@ -10,10 +10,10 @@
 // No network, database, provider or model.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildSellerContext, buildSellerClaims, buildIcpContext, selectSellerOutcome } from "../../../supabase/functions/_shared/sellerContext.ts";
-import { buildPersonalizationContext, assessOpenerEligibility } from "../../../supabase/functions/_shared/openerBackend.ts";
-import { buildOpenerPrompt } from "../../../supabase/functions/_shared/openerModel.ts";
-import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/accountState.ts";
+import { buildSellerContext, buildSellerClaims, buildIcpContext, selectSellerOutcome } from "../../../supabase/functions/_shared/workbench/sellerContext.ts";
+import { buildPersonalizationContext, assessOpenerEligibility } from "../../../supabase/functions/_shared/workbench/openerBackend.ts";
+import { buildOpenerPrompt } from "../../../supabase/functions/_shared/workbench/openerModel.ts";
+import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/workbench/accountState.ts";
 
 const T = "2026-07-20T10:00:00.000Z";
 

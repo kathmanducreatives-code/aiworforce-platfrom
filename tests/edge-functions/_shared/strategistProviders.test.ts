@@ -6,14 +6,14 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   allowedModels, modelForTier, normalizeProviderId, resolveLeadStrategistConfig,
   DEFAULT_ESCALATION_MODEL, DEFAULT_PRIMARY_MODEL,
-} from "../../../supabase/functions/_shared/config.ts";
-import { createLeadStrategistProvider } from "../../../supabase/functions/_shared/factory.ts";
-import { LovableAIStrategistProvider, LOVABLE_GATEWAY_URL } from "../../../supabase/functions/_shared/adapters/lovableAi.ts";
-import { OpenAIStrategistProvider, OPENAI_CHAT_URL, toOpenAiWireModel } from "../../../supabase/functions/_shared/adapters/openai.ts";
-import { buildStrategistRequestBody } from "../../../supabase/functions/_shared/adapters/shared.ts";
-import type { StrategistCall, StrategistResult } from "../../../supabase/functions/_shared/provider.ts";
-import { runLeadStrategy } from "../../../supabase/functions/leadStrategyOwner.ts";
-import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../../supabase/functions/leadStrategyContract.ts";
+} from "../../../supabase/functions/_shared/leadStrategy/config.ts";
+import { createLeadStrategistProvider } from "../../../supabase/functions/_shared/leadStrategy/factory.ts";
+import { LovableAIStrategistProvider, LOVABLE_GATEWAY_URL } from "../../../supabase/functions/_shared/leadStrategy/adapters/lovableAi.ts";
+import { OpenAIStrategistProvider, OPENAI_CHAT_URL, toOpenAiWireModel } from "../../../supabase/functions/_shared/leadStrategy/adapters/openai.ts";
+import { buildStrategistRequestBody } from "../../../supabase/functions/_shared/leadStrategy/adapters/shared.ts";
+import type { StrategistCall, StrategistResult } from "../../../supabase/functions/_shared/leadStrategy/provider.ts";
+import { runLeadStrategy } from "../../../supabase/functions/_shared/leadStrategyOwner.ts";
+import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../../supabase/functions/_shared/leadStrategyContract.ts";
 
 const PLAN = {
   role_family: "revenue_operations",

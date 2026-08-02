@@ -222,7 +222,7 @@ Deno.test("3.x error classification never leaks raw database text to the user", 
 // ---- wiring + migration proofs --------------------------------------------
 
 Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is absent", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "claimContinuationViaRpc({");
   assertStringIncludes(src, "if (rpc.available && !rpc.claimed)");
   assertStringIncludes(src, "const cas = rpc.available");
@@ -338,7 +338,7 @@ Deno.test("6.D every row status the projection can produce is accepted by the re
 });
 
 Deno.test("6.E WIRING: run-agent releases the RPC lease on the finishing write", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "releaseContinuationViaRpc({");
   // Released only on the path that actually took a column lease.
   assertStringIncludes(src, "if (heldClaim?.viaRpc)");

@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "verify:deploy-target": "node scripts/verify-deploy-target.mjs",
     "qa:lead-quality": "deno run --allow-read --allow-env --allow-write --allow-net scripts/lead-quality-benchmark/run.ts",
-    "qa:lead-quality:test": "deno test --allow-read --allow-env scripts/lead-quality-benchmark/"
+    "qa:lead-quality:test": "deno test --allow-read --allow-env scripts/lead-quality-benchmark/",
+    "test:edge": "deno test --allow-read --allow-env --no-check tests/edge-functions/"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

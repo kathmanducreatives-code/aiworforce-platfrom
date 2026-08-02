@@ -126,7 +126,7 @@ Deno.test("PART 2: missingRunContextFields actually detects an empty field", () 
 // ---- flow proof -----------------------------------------------------------
 
 Deno.test("PART 2 WIRING: run-agent emits the context to response, panel and task", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "buildQualifiedLeadRunContext({");
   assertStringIncludes(src, "run_context: runContext,");
   assertStringIncludes(src, "qualified_lead_run: runContext,");          // ui_panel

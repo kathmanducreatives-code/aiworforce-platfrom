@@ -9,8 +9,8 @@ import {
   WORKBENCH_STATE_KEY,
   type CompanyResearchState,
   type DecisionMakerState,
-} from "../../../supabase/functions/_shared/accountState.ts";
-import { evaluateDraftGate, buildDraftGateInputFromRaw } from "../../../supabase/functions/draftGate.ts";
+} from "../../../supabase/functions/_shared/workbench/accountState.ts";
+import { evaluateDraftGate, buildDraftGateInputFromRaw } from "../../../supabase/functions/_shared/draftGate.ts";
 
 const LEAD = "00000000-0000-4000-8000-000000000002";
 const T1 = "2026-07-19T09:00:00.000Z";

@@ -6,15 +6,15 @@
 // runs, no Firecrawl call, no real model call, no database access.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { applySequentialSourceExecution } from "../../sequentialSourceBridge.ts";
-import { emptyFunnelSummary } from "../../sourcingBottleneck.ts";
-import type { RoundObservationInput } from "../../companyFirstQuotaController.ts";
-import type { EnvReader } from "../../../supabase/functions/intelligenceFlags.ts";
-import type { LeadMissionSourceProfile } from "../../hiringSourcePlan.ts";
+import { applySequentialSourceExecution } from "../../../supabase/functions/_shared/sequentialSourceBridge.ts";
+import { emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
+import type { RoundObservationInput } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import type { LeadMissionSourceProfile } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
-import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/leadQueryPacks.ts";
-import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/leadAdaptiveContext.ts";
-import { approvedToAdaptive, bindFeedbackAskClaude, resolveAdaptiveOrderedPlan } from "../../../supabase/functions/_shared/leadAdaptiveRuntime.ts";
+import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
+import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
+import { approvedToAdaptive, bindFeedbackAskClaude, resolveAdaptiveOrderedPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveRuntime.ts";
 
 const APPROVED = ["yc_job_discovery", "linkedin_job_discovery", "indeed_job_discovery", "glassdoor_job_discovery"];
 
@@ -380,10 +380,10 @@ Deno.test("approvedToAdaptive covers the union, and excludes ATS", () => {
 // the existing planner's accepted strategy into the adaptive one. The adapter
 // makes no model call of its own — proven by test 10.
 
-import { adaptiveStrategyFromLeadStrategy } from "../../../supabase/functions/_shared/leadStrategyAdapter.ts";
-import { adaptiveCapabilityCards } from "../../../supabase/functions/_shared/leadCapabilityCards.ts";
-import type { LeadInitialStrategy } from "../../../supabase/functions/_shared/leadStrategy.ts";
-import type { MissionTruth } from "../../../supabase/functions/_shared/leadSourceStrategy.ts";
+import { adaptiveStrategyFromLeadStrategy } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategyAdapter.ts";
+import { adaptiveCapabilityCards } from "../../../supabase/functions/_shared/intelligence/leads/leadCapabilityCards.ts";
+import type { LeadInitialStrategy } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategy.ts";
+import type { MissionTruth } from "../../../supabase/functions/_shared/intelligence/leads/leadSourceStrategy.ts";
 
 const TRUTH: MissionTruth = {
   final_entity: "contact_ready_lead",
@@ -432,7 +432,7 @@ function leadStrategy(over: Partial<LeadInitialStrategy> = {}): LeadInitialStrat
 const cards = () => adaptiveCapabilityCards();
 
 Deno.test("run-agent supplies BOTH planning dependencies at the real bridge call site", async () => {
-  const src = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   const call = src.slice(src.indexOf("applySequentialSourceExecution({"));
   // Both dependencies are supplied, via the gated seam's binding factory.
   assert(call.includes("adaptiveStrategyBinding("), "run-agent must supply the planning binding");
@@ -442,7 +442,7 @@ Deno.test("run-agent supplies BOTH planning dependencies at the real bridge call
 });
 
 Deno.test("2. the original query and Company Brain reach the planning adapter", async () => {
-  const src = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   const call = src.slice(src.indexOf("adaptiveStrategyBinding("), src.indexOf("log: (m, meta) => console.log(\"[run-agent][sequential-source]\""));
   assert(call.includes("original_query"), "the exact user query must reach the adapter");
   assert(call.includes("company_vertical"), "the ICP business model must reach the adapter");
@@ -572,7 +572,7 @@ Deno.test("7. planning disabled ⇒ no active planning call, byte-identical shap
 Deno.test("10. the adapter itself makes no model request — it reuses the planner's answer", async () => {
   // It is a pure function: given the planner's accepted strategy it returns the
   // adaptive one, with no gateway of any kind in its module graph.
-  const src = await Deno.readTextFile(new URL("./leadStrategyAdapter.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/intelligence/leads/leadStrategyAdapter.ts", import.meta.url));
   for (const banned of ["generateJson", "runPlanner", "aiProvider", "fetch(", "plannerWrapper"]) {
     assertFalse(src.includes(banned), `the adapter must not reference ${banned}`);
   }
@@ -580,12 +580,12 @@ Deno.test("10. the adapter itself makes no model request — it reuses the plann
   // `?? {` is the GPT-owner case: when the GPT strategist owned initial planning
   // the Claude bridge never ran, so an inert result is passed and the binding
   // carries no strategy. Either way run-agent never re-plans here.
-  const runAgent = await Deno.readTextFile(new URL("../../../run-agent/index.ts", import.meta.url));
+  const runAgent = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assert(
     /adaptiveStrategyBinding\(claudeFirst(\s*\?\?\s*\{)?/.test(runAgent),
     "run-agent must reuse applyClaudeFirstLeadPlanning's existing outcome, not call again",
   );
   // And the seam itself reuses the accepted strategy rather than re-planning.
-  const seam = await Deno.readTextFile(new URL("./leadPlanningBridge.ts", import.meta.url));
+  const seam = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/intelligence/leads/leadPlanningBridge.ts", import.meta.url));
   assert(seam.includes("Promise.resolve(result.outcome?.strategy ?? null)"));
 });

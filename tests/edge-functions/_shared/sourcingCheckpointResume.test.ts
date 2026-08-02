@@ -272,7 +272,7 @@ Deno.test("an orphaned task with a checkpoint is resumable, never auto-completed
 });
 
 Deno.test("no migration is required — state lives in the existing tasks.result column", async () => {
-  const src = await Deno.readTextFile(new URL("./companyFirstSourcingState.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstSourcingState.ts", import.meta.url));
   assert(src.includes('from("tasks")') && src.includes("result"));
   assertFalse(src.toLowerCase().includes("alter table"));
   assertFalse(src.toLowerCase().includes("create table"));

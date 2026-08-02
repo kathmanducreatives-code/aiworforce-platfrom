@@ -13,13 +13,13 @@
 // Firecrawl), ZERO database access, ZERO deployment.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/leadMission.ts";
-import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/leadPlanner.ts";
-import { parseLeadStrategy, type LeadInitialStrategy } from "../../../supabase/functions/_shared/leadStrategy.ts";
-import { compileDeterministicPlan } from "../../../supabase/functions/_shared/leadStrategyCompiler.ts";
-import { registryFallbackTitles } from "../../../supabase/functions/_shared/leadStrategyValidation.ts";
-import type { GenerateJsonFn } from "../../../supabase/functions/plannerWrapper.ts";
-import type { GenerateResult } from "../../aiProvider.ts";
+import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/intelligence/leads/leadMission.ts";
+import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanner.ts";
+import { parseLeadStrategy, type LeadInitialStrategy } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategy.ts";
+import { compileDeterministicPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategyCompiler.ts";
+import { registryFallbackTitles } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategyValidation.ts";
+import type { GenerateJsonFn } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
+import type { GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 function mission(instruction: string): LeadSourcingMission {
   return buildLeadMission({

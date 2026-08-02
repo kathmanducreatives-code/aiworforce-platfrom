@@ -11,14 +11,14 @@ import {
   adaptiveRuntimeDiagnostics, titlesForStep,
   ADAPTIVE_PACK_STATE_KEY, RUNTIME_MAX_RECENCY_DAYS,
   type AdaptivePackState, type BuildObservationInput, type RoundStageMetrics,
-} from "../../../supabase/functions/_shared/leadAdaptiveRuntime.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveRuntime.ts";
 import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
-import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/leadQueryPacks.ts";
-import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/leadAdaptiveContext.ts";
-import { validateOrderedPlan, orderedPlanHash, type OrderedHiringSourcePlan } from "../../hiringSourcePlan.ts";
-import { applyObservation } from "../../sequentialSourceRuntime.ts";
-import { newSourceExecutionState } from "../../sourceExecutionState.ts";
-import type { AdaptiveNextAction } from "../../../supabase/functions/_shared/leadAdaptiveAction.ts";
+import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
+import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
+import { validateOrderedPlan, orderedPlanHash, type OrderedHiringSourcePlan } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { applyObservation } from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { newSourceExecutionState } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import type { AdaptiveNextAction } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveAction.ts";
 
 const APPROVED = ["yc_job_discovery", "linkedin_job_discovery", "indeed_job_discovery", "glassdoor_job_discovery"];
 

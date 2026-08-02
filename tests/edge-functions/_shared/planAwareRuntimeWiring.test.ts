@@ -10,7 +10,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import { planAwareActionBudget, MAX_PLAN_AWARE_ACTIONS } from "../../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
 import { HARD_PROVIDER_CALL_CEILING } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
 
-const runAgentSrc = () => Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+const runAgentSrc = () => Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
 // ================= 8. THE REAL CALL SITE SUPPLIES THE INPUTS ===============
 
@@ -35,13 +35,13 @@ Deno.test("8a. the budget is supplied only when the bridge is actually enabled",
 });
 
 Deno.test("8b. every budget input is MEASURED, not assumed", async () => {
-  const bind = await Deno.readTextFile(new URL("./planAwareBudgetBinding.ts", import.meta.url));
+  const bind = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/planAwareBudgetBinding.ts", import.meta.url));
   // The binding is the single place that turns live state into budget inputs.
   assert(bind.includes("planAwareActionBudget("), "it must use the existing budget authority");
   assert(bind.includes("export function unusedPackCounts("), "unused packs are counted, not guessed");
   assert(bind.includes("export function sourceQualityScore("), "quality is scored from the round");
 
-  const bridge = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
+  const bridge = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sequentialSourceBridge.ts", import.meta.url));
   const snap = bridge.slice(bridge.indexOf("const recordBudgetSnapshot"));
   assert(snap.includes("unusedPackCounts("), "the snapshot must reuse the canonical pack counter");
   assert(snap.includes("remainingQuota: round.remainingQuota"), "remaining quota must be live");
@@ -52,7 +52,7 @@ Deno.test("8b. every budget input is MEASURED, not assumed", async () => {
 Deno.test("8b1. there is exactly ONE unused-work counter in the runtime", async () => {
   // A second counter on the bridge would drift from the one the binding uses,
   // and the budget would then be computed from two different truths.
-  const bridge = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
+  const bridge = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sequentialSourceBridge.ts", import.meta.url));
   assertFalse(bridge.includes("unusedWork:"), "the bridge must not hand-roll a rival counter");
 
   const src = await runAgentSrc();
@@ -60,7 +60,7 @@ Deno.test("8b1. there is exactly ONE unused-work counter in the runtime", async 
 });
 
 Deno.test("8b2. the executor forwards the budget verbatim — it does not decide one", async () => {
-  const exec = await Deno.readTextFile(new URL("./executeRunAgentCompanyFirstSourcing.ts", import.meta.url));
+  const exec = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts", import.meta.url));
   assert(exec.includes("actionBudget: deps.actionBudget"), "the wrapper must forward, not compute");
   assertFalse(exec.includes("planAwareActionBudget("), "the wrapper must not build its own budget");
 });
@@ -118,7 +118,7 @@ Deno.test("7. the hard safety ceiling is always enforced", async () => {
   assertEquals(huge.allowed, MAX_PLAN_AWARE_ACTIONS);
   assert(HARD_PROVIDER_CALL_CEILING <= MAX_PLAN_AWARE_ACTIONS);
 
-  const ctrl = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const ctrl = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(ctrl.includes("jobsCalls >= HARD_PROVIDER_CALL_CEILING"),
     "the ceiling must bind inside the loop regardless of the budget");
 });
@@ -126,14 +126,14 @@ Deno.test("7. the hard safety ceiling is always enforced", async () => {
 // ================ 9. THE STOP DECISION IS PERSISTED IN FULL ================
 
 Deno.test("9. the stop decision records its exact inputs", async () => {
-  const ctrl = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const ctrl = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(ctrl.includes("planAwareStop"), "the decision must be captured");
   assert(ctrl.includes("plan_aware_stop: planAwareStop"), "and reach the result");
   assert(ctrl.includes("actions_spent: jobsCalls"), "with the actions actually spent");
 
   // The inputs the decision was made from are carried by the snapshot itself,
   // so the record stays complete without a second log line at the call site.
-  const bind = await Deno.readTextFile(new URL("./planAwareBudgetBinding.ts", import.meta.url));
+  const bind = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/planAwareBudgetBinding.ts", import.meta.url));
   for (const field of ["unusedExactPacks", "unusedAdjacentPacks", "unusedSources", "actionsSpent"]) {
     assert(bind.includes(field), `the budget input must carry ${field}`);
   }
@@ -142,7 +142,7 @@ Deno.test("9. the stop decision records its exact inputs", async () => {
 });
 
 Deno.test("9b. WITHOUT a budget the pre-existing fixed limits still decide", async () => {
-  const ctrl = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const ctrl = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(ctrl.includes("} else if (jobsCalls >= bounds.maxJobsCalls) {"),
     "the fixed ceiling must remain authoritative when no budget is supplied");
   assert(ctrl.includes("deps.actionBudget ? HARD_PROVIDER_CALL_CEILING : bounds.maxRounds"),

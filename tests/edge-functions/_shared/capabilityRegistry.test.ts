@@ -6,8 +6,8 @@ import {
   AGENTORY_CAPABILITIES, decideCapability, isCapabilitySelectable, selectableCapabilityKeys,
   resolveAdapterKey, clampResultLimit, clampCallsPerRound, toPlannerVisible,
   plannerCapabilityMenu, getCapability, underlyingActor,
-} from "../../../supabase/functions/_shared/capabilityRegistry.ts";
-import { isCallable } from "../../../supabase/functions/actorCapabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/intelligence/capabilityRegistry.ts";
+import { isCallable } from "../../../supabase/functions/_shared/actorCapabilityRegistry.ts";
 
 const LEADS_TEST = { department: "leads" as const, environment: "test" as const };
 

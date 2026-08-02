@@ -8,7 +8,7 @@
 // Synthetic fixtures. No network, database, provider or model.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { canonicalRecipient, recipientMatchesDisplayedContact } from "../../../supabase/functions/_shared/outreachRecipient.ts";
+import { canonicalRecipient, recipientMatchesDisplayedContact } from "../../../supabase/functions/_shared/workbench/outreachRecipient.ts";
 import {
   buildPersonalizationContext,
   assessOpenerEligibility,
@@ -16,9 +16,9 @@ import {
   buildOpenerStagePayload,
   type ModelBoundary,
   type OpenerDecisionMaker,
-} from "../../../supabase/functions/_shared/openerBackend.ts";
-import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/accountState.ts";
-import type { ResolvedPerson } from "../../../supabase/functions/_shared/decisionMakerResolver.ts";
+} from "../../../supabase/functions/_shared/workbench/openerBackend.ts";
+import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/workbench/accountState.ts";
+import type { ResolvedPerson } from "../../../supabase/functions/_shared/workbench/decisionMakerResolver.ts";
 
 const T = "2026-07-20T12:00:00.000Z";
 

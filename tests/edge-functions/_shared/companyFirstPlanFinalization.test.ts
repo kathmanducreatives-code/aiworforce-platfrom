@@ -270,7 +270,7 @@ Deno.test("6.B source_transition_failed is failed and non-resumable", () => {
 });
 
 Deno.test("7./16. the company-first exit finalizes the plan — call-graph guard", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
   // The helper exists and is invoked before the company-first return.
   assert(src.includes("async function finalizeCompanyFirstPlan("), "the finalizer must exist");
