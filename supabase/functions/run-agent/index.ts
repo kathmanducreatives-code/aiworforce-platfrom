@@ -58,8 +58,10 @@ import {
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
 import {
-  projectCompanyFirstPersistence, quotaCreditFromProjection,
-} from "../_shared/companyFirstPersistenceProjection.ts";
+  computeCompanyFirstQuotaProgress, createPersistPlan, nextAdaptiveAction,
+  type PersistedOutcome,
+} from "../_shared/qualifiedLeadPersistence.ts";
+import { projectCompanyFirstPersistence } from "../_shared/companyFirstPersistenceProjection.ts";
 import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
 import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
@@ -888,45 +890,12 @@ Deno.serve(async (req) => {
           const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
           return Array.isArray(items) ? items : [];
         };
-        const persistPlan = async (plan: CompoundPersistencePlan) => {
-          try {
-            // 1) resolve/insert the canonical account (select-then-insert; no upsert
-            //    constraint dependency). Only for a verifiable account.
-            let accountId: string | null = null;
-            if (plan.account && (plan.account.domain || plan.account.linkedinUrl)) {
-              const domain = plan.account.domain;
-              if (domain) {
-                const { data: existing } = await supabase.from("accounts").select("id").eq("workspace_id", workspace_id).eq("domain", domain).maybeSingle();
-                accountId = (existing as { id?: string } | null)?.id ?? null;
-              }
-              if (!accountId) {
-                const { data: ins } = await supabase.from("accounts").insert({ workspace_id, name: plan.account.name, domain: plan.account.domain, linkedin_url: plan.account.linkedinUrl, description: plan.account.description, source: "compound_company_first" }).select("id").maybeSingle();
-                accountId = (ins as { id?: string } | null)?.id ?? null;
-              }
-            }
-            // INVARIANT: a CONTACT lead must have a real account_id.
-            const contactEligible = plan.verdict === "CONTACT" && !!accountId;
-            const { data: lc } = await supabase.from("lead_candidates").insert({
-              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: plan.leadCandidate.lead_type, status: "new",
-              reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
-              raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
-            }).select("id").maybeSingle();
-            const leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
-            // 2) attach the contact through the PR #85 safe writer (verified account only).
-            if (plan.contact && (plan.contact.name || plan.contact.linkedinUrl) && leadCandidateId) {
-              await writeContactWithVerifiedAccount({
-                db: supabase as unknown as ContactPersistenceDb, mode: "insert",
-                identity: { workspace_id, full_name: plan.contact.name, title: plan.contact.title, linkedin_url: plan.contact.linkedinUrl, email: null },
-                rawBase: { source: "compound_company_first", via: "company_first" },
-                resolve: { workspaceId: workspace_id, leadCandidateId, contactLinkedInUrl: plan.contact.linkedinUrl ?? null, provenance: { source: "compound_company_first", company_match: contactEligible }, companyScopedSearch: true },
-                linkLeadCandidateId: leadCandidateId,
-              });
-            }
-            return { ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId };
-          } catch (e) {
-            return { ok: false, accountId: null, contactId: null, leadCandidateId: null, reason: (e as Error).message };
-          }
-        };
+        // CANONICAL PERSISTENCE. Extracted to `qualifiedLeadPersistence.ts` so
+        // the same function this handler runs can be exercised by a test with an
+        // isolated client. Behaviour, SQL and ordering are unchanged.
+        const persistPlan = createPersistPlan({
+          db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,
+        });
 
         // FINAL-LEAD QUOTA — explicit request wins; otherwise the lead-sourcing
         // default. Deliberately NOT DEFAULT_COMPOUND_LIMITS.rawJobs: that is a
@@ -1097,6 +1066,9 @@ Deno.serve(async (req) => {
         let companyFirstPersisted = 0;
         let companyFirstQuotaCredit = 0;
         let companyFirstProjection: Record<string, number> | null = null;
+        let companyFirstQuotaProgress:
+          ReturnType<typeof computeCompanyFirstQuotaProgress> | null = null;
+        let companyFirstAdaptive: ReturnType<typeof nextAdaptiveAction> | null = null;
         if (routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
           try {
@@ -1152,20 +1124,56 @@ Deno.serve(async (req) => {
             // company-first creates no parallel path — it only supplies plans.
             const projection = projectCompanyFirstPersistence(
               companyFirstRoute, workspace_id, task.id);
+            const persistedOutcomes: PersistedOutcome[] = [];
             for (const p of projection.plans) {
               if (!p.plan.persistable) continue;
               try {
-                await persistPlan(p.plan);
-                companyFirstPersisted++;
+                const r = await persistPlan(p.plan);
+                if (r.ok) companyFirstPersisted++;
+                persistedOutcomes.push({
+                  identity: p.idempotencyKey, verdict: String(p.plan.verdict),
+                  quotaEligible: p.quotaEligible, result: r,
+                });
               } catch (pe) {
                 console.log("[run-agent][company-first-persist][error]",
                   { key: p.idempotencyKey, error: String(pe) });
+                persistedOutcomes.push({
+                  identity: p.idempotencyKey, verdict: String(p.plan.verdict),
+                  quotaEligible: p.quotaEligible,
+                  result: { ok: false, accountId: null, contactId: null,
+                    leadCandidateId: null, reason: String(pe) },
+                });
               }
             }
-            // QUOTA: only CONTACT + quota_eligible. A qualified company and a
-            // verified founder are both worth zero here, by construction.
-            companyFirstQuotaCredit = quotaCreditFromProjection(projection);
+
+            // ── QUOTA FROM PERSISTED OUTCOMES, NOT FROM THE PROJECTION ──────
+            // A plan PROJECTED as CONTACT that failed to write, or that lost its
+            // account and therefore its contact eligibility, is not a lead. The
+            // controller reads what persistence actually returned.
+            companyFirstQuotaProgress = computeCompanyFirstQuotaProgress({
+              persisted: persistedOutcomes,
+              legacyContactIdentities: [],
+              requestedQuota: quota.requestedLeadCount,
+              contactPending: companyFirstRoute.funnel.contact_ready -
+                projection.counts.contact_ready >= 0
+                ? projection.counts.contact_ready - persistedOutcomes.filter((o) =>
+                  o.verdict === "CONTACT" && o.result.ok).length
+                : 0,
+              qualifiedCompany: companyFirstRoute.funnel.qualified_companies,
+              founderPending: companyFirstRoute.funnel.founder_searched -
+                companyFirstRoute.funnel.founder_verified,
+            });
+            companyFirstQuotaCredit = companyFirstQuotaProgress.company_first_contact_credit;
+            companyFirstAdaptive = nextAdaptiveAction(companyFirstQuotaProgress);
             companyFirstProjection = projection.counts;
+
+            console.log("[run-agent][company-first-quota]", {
+              task_id: task.id, ...companyFirstQuotaProgress,
+              next_action: companyFirstAdaptive.action, reason: companyFirstAdaptive.reason,
+              // A projected CONTACT that persistence did not confirm is visible
+              // as the gap between these two numbers.
+              projected_contact_ready: projection.counts.contact_ready,
+            });
 
             console.log("[run-agent][company-first-route][done]", {
               task_id: task.id,
@@ -1606,6 +1614,9 @@ Deno.serve(async (req) => {
               persisted_records: companyFirstPersisted,
               projection: companyFirstProjection,
               quota_credit: companyFirstQuotaCredit,
+              // The controller's actual inputs, persisted for audit.
+              quota_progress: companyFirstQuotaProgress,
+              adaptive_action: companyFirstAdaptive,
               ...companyFirstRoute.diagnostics,
             }
             : null,
