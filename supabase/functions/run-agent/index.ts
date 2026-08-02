@@ -60,7 +60,8 @@ import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.t
 import {
   collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
   combineContactIdentities, computeCompanyFirstQuotaProgress, createPersistPlan,
-  nextAdaptiveAction, type PersistedOutcome,
+  loadPriorContactIdentities, nextAdaptiveAction, reconcilePriorIdentities,
+  type PersistedOutcome,
 } from "../_shared/qualifiedLeadPersistence.ts";
 import { projectCompanyFirstPersistence } from "../_shared/companyFirstPersistenceProjection.ts";
 import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
@@ -1075,13 +1076,53 @@ Deno.serve(async (req) => {
         let legacySourcingRan = false;
         let legacySkipReason: string | null = null;
         let legacyBlockedCalls = 0;
-        // Identities of CONTACTs persisted before this execution attempt. On a
-        // fresh run this is empty; on a resume it is what stops an already-paid
-        // lead being counted, or re-sourced, a second time.
-        const priorLegacyContactIdentities: string[] = collectLegacyContactIdentities(
-          ((body.resumed_contact_identities ?? []) as unknown[]) as never,
-        ).identities;
-        if (routeResolution.ok && routeRecord &&
+        // ══ RESUME STATE, FROM CANONICAL PERSISTENCE ═════════════════════════
+        // Loaded BEFORE any paid provider boundary, so a resumed task that has
+        // already met its quota spends nothing. The source of truth is the
+        // lead_candidates rows persistPlan wrote — never the request body, which
+        // no caller populates and which a stale client could otherwise use to
+        // inflate quota and stop a task early.
+        const priorContactState = await loadPriorContactIdentities(
+          supabase as never,
+          { workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id },
+        );
+        const priorReconciled = reconcilePriorIdentities(
+          priorContactState,
+          (body.resumed_contact_identities ?? null) as string[] | null,
+        );
+        const priorLegacyContactIdentities: string[] = priorReconciled.identities;
+        console.log("[run-agent][prior-contact-state]", {
+          task_id: task.id,
+          prior_contact_credit: priorLegacyContactIdentities.length,
+          scanned_rows: priorContactState.scanned_rows,
+          unidentifiable: priorContactState.unidentifiable,
+          ignored_request_identities: priorReconciled.ignored_request_identities,
+          lookup_error: priorContactState.error,
+          // Digests only — never a raw lead or contact identifier.
+          identity_digests: priorContactState.identity_digests,
+          source: priorContactState.source,
+        });
+        // PRE-LOOP RESUME STOP. Prior CONTACT credit is canonical persisted
+        // state, so a resumed task whose quota is already met performs ZERO
+        // discovery, enrichment, job-search, founder and contact calls. This is
+        // checked before the FIRST paid boundary, not after it.
+        const priorQuotaProgress = computeCompanyFirstQuotaProgress({
+          persisted: [],
+          legacyContactIdentities: priorLegacyContactIdentities,
+          requestedQuota: quota.requestedLeadCount,
+        });
+        const priorDecision = nextAdaptiveAction(priorQuotaProgress);
+        const resumeSatisfied = priorDecision.action === "stop_quota_satisfied";
+        console.log("[run-agent][resume-precheck]", {
+          task_id: task.id,
+          prior_contact_credit: priorQuotaProgress.deduplicated_contact_credit,
+          requested_quota: quota.requestedLeadCount,
+          remaining_quota: priorQuotaProgress.remaining_quota,
+          decision: priorDecision.action, reason: priorDecision.reason,
+          company_first_will_run: !resumeSatisfied,
+        });
+
+        if (!resumeSatisfied && routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
           try {
             companyFirstRoute = await executeCompanyFirstRoute({
@@ -1393,8 +1434,10 @@ Deno.serve(async (req) => {
         //
         // Fails CLOSED: an unrecognised decision runs nothing rather than
         // guessing that more spending is safe.
-        const adaptiveDecision = companyFirstAdaptive?.action ?? "continue_sourcing";
-        if (companyFirstAdaptive) {
+        const adaptiveDecision = companyFirstAdaptive?.action ?? priorDecision.action;
+        if (resumeSatisfied) {
+          legacySkipReason = "quota_satisfied_by_persisted_prior_contacts";
+        } else if (companyFirstAdaptive) {
           if (adaptiveDecision === "stop_quota_satisfied") {
             legacySkipReason = "quota_satisfied_by_company_first";
           } else if (adaptiveDecision === "await_pending_work") {
@@ -1473,8 +1516,13 @@ Deno.serve(async (req) => {
         // come from canonical lead-candidate ids first — never a display name or
         // a vanity URL, either of which would silently merge or split leads.
         {
-          const legacyIds = collectLegacyContactIdentities(
-            (cf.items ?? []) as never);
+          const thisRunLegacy = collectLegacyContactIdentities((cf.items ?? []) as never);
+          // Prior persisted CONTACTs join the legacy side, so a resume cannot
+          // re-credit a lead an earlier attempt already produced.
+          const legacyIds = {
+            ...thisRunLegacy,
+            identities: [...new Set([...priorLegacyContactIdentities, ...thisRunLegacy.identities])],
+          };
           combinedQuota = combineContactIdentities(
             legacyIds,
             companyFirstIdentities ??

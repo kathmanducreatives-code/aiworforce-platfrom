@@ -372,3 +372,123 @@ export function combineContactIdentities(
     identity_digests: [...union].map(identityDigest),
   };
 }
+
+
+// ── RESUME: PRIOR CONTACT QUOTA FROM CANONICAL PERSISTED STATE ─────────────
+//
+// A resumed task must know what it already paid for BEFORE it spends again.
+// Previously this came from a request field no caller sent, so a resume could
+// re-source leads it had already produced.
+//
+// The source of truth is the `lead_candidates` table the canonical persistPlan
+// writes. `raw.contact_eligible` is set there ONLY when the verdict is CONTACT
+// AND a real account id exists — which is precisely "CONTACT + quota_eligible +
+// successfully persisted". So the flag already encodes the rule; this reads it
+// rather than restating it.
+//
+// A caller-supplied list is never authoritative. It can only ever narrow.
+
+export interface PriorContactScope {
+  workspaceId: string;
+  planId: string | null;
+  taskId: string;
+}
+
+export interface PriorContactState {
+  identities: string[];
+  /** Rows that matched the scope but could not be identified stably. */
+  unidentifiable: number;
+  /** Digests only — diagnostics never carry a raw lead or contact id. */
+  identity_digests: string[];
+  scanned_rows: number;
+  source: "canonical_persisted_state";
+  error: string | null;
+}
+
+/** A minimal list-query surface. The real Supabase builder satisfies it. */
+export interface PriorContactDb {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (c: string, v: unknown) => {
+        eq: (c: string, v: unknown) => PromiseLike<{ data: unknown; error?: unknown }>;
+      };
+    };
+  };
+}
+
+const EMPTY_PRIOR: PriorContactState = {
+  identities: [], unidentifiable: 0, identity_digests: [],
+  scanned_rows: 0, source: "canonical_persisted_state", error: null,
+};
+
+/**
+ * Load CONTACT identities already persisted for this task.
+ *
+ * Scope is enforced twice: the query filters workspace and plan, and the row
+ * filter re-checks `raw.task_id`. A row from another workspace, plan or task
+ * contributes nothing — quota is per-mission, and a leak across scopes would let
+ * one task's work silently satisfy another's.
+ *
+ * Never throws: a lookup failure yields zero prior credit, which is the SAFE
+ * direction (the task sources again rather than stopping on a phantom quota).
+ */
+export async function loadPriorContactIdentities(
+  db: PriorContactDb, scope: PriorContactScope,
+): Promise<PriorContactState> {
+  try {
+    const res = await db.from("lead_candidates")
+      .select("id, account_id, lead_type, plan_id, raw")
+      .eq("workspace_id", scope.workspaceId)
+      .eq("plan_id", scope.planId);
+    const rows = Array.isArray((res as { data?: unknown }).data)
+      ? (res as { data: Record<string, unknown>[] }).data : [];
+
+    const identities: string[] = [];
+    let unidentifiable = 0;
+    for (const r of rows) {
+      const raw = (r.raw ?? {}) as Record<string, unknown>;
+      // CONTACT + quota_eligible + persisted, all encoded by this one flag.
+      if (raw.contact_eligible !== true) continue;
+      // Scope re-check: the plan filter alone would let a sibling task through.
+      if (String(raw.task_id ?? "") !== scope.taskId) continue;
+      // Person leads only. An account-level record is progress, never a lead.
+      if (r.lead_type !== "person") continue;
+      const id = leadIdentity({
+        verdict: "CONTACT", quotaEligible: true,
+        leadCandidateId: typeof r.id === "string" ? r.id : null,
+        accountId: typeof r.account_id === "string" ? r.account_id : null,
+        person: typeof (raw.person as Record<string, unknown>)?.source_profile_id === "string"
+          ? String((raw.person as Record<string, unknown>).source_profile_id)
+          : null,
+      });
+      if (!id) { unidentifiable++; continue; }
+      if (!identities.includes(id.id)) identities.push(id.id);
+    }
+    return {
+      identities, unidentifiable,
+      identity_digests: identities.map(identityDigest),
+      scanned_rows: rows.length,
+      source: "canonical_persisted_state", error: null,
+    };
+  } catch (e) {
+    // Fail toward sourcing again, never toward a phantom satisfied quota.
+    return { ...EMPTY_PRIOR, error: (e as Error).message };
+  }
+}
+
+/**
+ * Reconcile persisted state with any caller-supplied hint.
+ *
+ * Persisted state WINS. A request list may only narrow the set, never extend it,
+ * so a stale or hostile body cannot inflate quota and stop a task early.
+ */
+export function reconcilePriorIdentities(
+  persisted: PriorContactState, requestHint?: readonly string[] | null,
+): { identities: string[]; ignored_request_identities: number } {
+  if (!requestHint || requestHint.length === 0) {
+    return { identities: persisted.identities, ignored_request_identities: 0 };
+  }
+  const known = new Set(persisted.identities);
+  const ignored = requestHint.filter((x) => !known.has(x)).length;
+  return { identities: persisted.identities, ignored_request_identities: ignored };
+}
