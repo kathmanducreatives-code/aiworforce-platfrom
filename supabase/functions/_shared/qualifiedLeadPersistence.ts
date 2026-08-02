@@ -232,3 +232,143 @@ export function nextAdaptiveAction(
   }
   return { action: "continue_sourcing", reason: "quota_unmet_and_no_pending_work" };
 }
+
+
+// ── LEGACY CONTACT IDENTITIES ──────────────────────────────────────────────
+//
+// The legacy company-first controller returns one item per candidate. Only a
+// PERSISTED, quota-eligible CONTACT with a real lead_candidate row is a lead, so
+// only those contribute an identity.
+//
+// Identity strength order matters: two paths finding the same person must
+// collide, and two different people must not. A display name or a vanity URL
+// does neither reliably, so neither is ever used alone.
+
+export type IdentityStrategy =
+  | "canonical_lead_candidate_id"
+  | "stable_profile_id"
+  | "person_and_company_identity"
+  | "none";
+
+export interface LegacyLeadItem {
+  verdict?: string | null;
+  quotaEligible?: boolean | null;
+  leadCandidateId?: string | null;
+  accountId?: string | null;
+  leadKey?: string | null;
+  personProfileUrl?: string | null;
+  person?: string | null;
+  company?: string | null;
+}
+
+export interface CollectedIdentities {
+  identities: string[];
+  strategy: IdentityStrategy;
+  /** Counted but unusable — a CONTACT we cannot identify safely. */
+  unidentifiable: number;
+}
+
+/**
+ * Strongest available stable identity for one persisted lead.
+ *
+ * Returns null when nothing stable exists. A CONTACT with no stable identity is
+ * NOT given a name-based one: a false collision silently deletes a real lead
+ * from the quota, and a false split silently double-counts one.
+ */
+export function leadIdentity(item: LegacyLeadItem): { id: string; strategy: IdentityStrategy } | null {
+  if (item.leadCandidateId) {
+    return { id: `lc:${item.leadCandidateId}`, strategy: "canonical_lead_candidate_id" };
+  }
+  // `leadKey` is the controller's own stable person+company key.
+  if (item.leadKey) {
+    return { id: `lk:${item.leadKey}`, strategy: "stable_profile_id" };
+  }
+  // Person + CANONICAL COMPANY identity. The account id is canonical; a company
+  // NAME alone would collide across the many companies that share one.
+  if (item.person && item.accountId) {
+    return { id: `pc:${item.accountId}:${item.person}`, strategy: "person_and_company_identity" };
+  }
+  return null;
+}
+
+/** Collect identities from persisted, quota-eligible legacy CONTACT items only. */
+export function collectLegacyContactIdentities(
+  items: readonly LegacyLeadItem[],
+): CollectedIdentities {
+  const identities: string[] = [];
+  let strategy: IdentityStrategy = "none";
+  let unidentifiable = 0;
+  const rank: Record<IdentityStrategy, number> = {
+    canonical_lead_candidate_id: 3, stable_profile_id: 2,
+    person_and_company_identity: 1, none: 0,
+  };
+  for (const it of items) {
+    // WATCH, NEEDS_REVIEW, REJECT, SKIP, contact_pending and anything that did
+    // not persist are excluded here, not filtered downstream.
+    if (it.verdict !== "CONTACT") continue;
+    if (it.quotaEligible !== true) continue;
+    if (!it.leadCandidateId) { unidentifiable++; continue; }
+    const id = leadIdentity(it);
+    if (!id) { unidentifiable++; continue; }
+    if (!identities.includes(id.id)) identities.push(id.id);
+    if (rank[id.strategy] > rank[strategy]) strategy = id.strategy;
+  }
+  return { identities, strategy, unidentifiable };
+}
+
+/** Company-first identities, from the same persisted-outcome rule. */
+export function collectCompanyFirstContactIdentities(
+  outcomes: readonly PersistedOutcome[],
+): CollectedIdentities {
+  const identities: string[] = [];
+  let unidentifiable = 0;
+  for (const o of outcomes) {
+    if (o.verdict !== "CONTACT" || !o.quotaEligible) continue;
+    if (!o.result.ok || !o.result.leadCandidateId) { unidentifiable++; continue; }
+    const id = `lc:${o.result.leadCandidateId}`;
+    if (!identities.includes(id)) identities.push(id);
+  }
+  return { identities, strategy: "canonical_lead_candidate_id", unidentifiable };
+}
+
+/** A bounded, non-reversible reference. Diagnostics never carry raw identities. */
+export function identityDigest(id: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+export interface CombinedQuotaDiagnostics {
+  legacy_contact_count_raw: number;
+  company_first_contact_count_raw: number;
+  duplicate_contact_count: number;
+  deduplicated_contact_count: number;
+  remaining_quota: number;
+  identity_strategy: IdentityStrategy;
+  unidentifiable_contacts: number;
+  /** Digests only — never a raw lead, contact or profile identifier. */
+  identity_digests: string[];
+}
+
+/** Combine both paths' identities into one deduplicated quota view. */
+export function combineContactIdentities(
+  legacy: CollectedIdentities, companyFirst: CollectedIdentities, requestedQuota: number,
+): CombinedQuotaDiagnostics {
+  const union = new Set([...legacy.identities, ...companyFirst.identities]);
+  const dupes = legacy.identities.filter((x) => companyFirst.identities.includes(x)).length;
+  const rank: Record<IdentityStrategy, number> = {
+    canonical_lead_candidate_id: 3, stable_profile_id: 2,
+    person_and_company_identity: 1, none: 0,
+  };
+  return {
+    legacy_contact_count_raw: legacy.identities.length,
+    company_first_contact_count_raw: companyFirst.identities.length,
+    duplicate_contact_count: dupes,
+    deduplicated_contact_count: union.size,
+    remaining_quota: Math.max(0, requestedQuota - union.size),
+    identity_strategy: rank[legacy.strategy] >= rank[companyFirst.strategy]
+      ? legacy.strategy : companyFirst.strategy,
+    unidentifiable_contacts: legacy.unidentifiable + companyFirst.unidentifiable,
+    identity_digests: [...union].map(identityDigest),
+  };
+}

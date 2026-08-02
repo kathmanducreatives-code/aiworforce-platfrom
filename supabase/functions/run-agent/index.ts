@@ -58,8 +58,9 @@ import {
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
 import {
-  computeCompanyFirstQuotaProgress, createPersistPlan, nextAdaptiveAction,
-  type PersistedOutcome,
+  collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
+  combineContactIdentities, computeCompanyFirstQuotaProgress, createPersistPlan,
+  nextAdaptiveAction, type PersistedOutcome,
 } from "../_shared/qualifiedLeadPersistence.ts";
 import { projectCompanyFirstPersistence } from "../_shared/companyFirstPersistenceProjection.ts";
 import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
@@ -1069,6 +1070,17 @@ Deno.serve(async (req) => {
         let companyFirstQuotaProgress:
           ReturnType<typeof computeCompanyFirstQuotaProgress> | null = null;
         let companyFirstAdaptive: ReturnType<typeof nextAdaptiveAction> | null = null;
+        let companyFirstIdentities: ReturnType<typeof collectCompanyFirstContactIdentities> | null = null;
+        let combinedQuota: ReturnType<typeof combineContactIdentities> | null = null;
+        let legacySourcingRan = false;
+        let legacySkipReason: string | null = null;
+        let legacyBlockedCalls = 0;
+        // Identities of CONTACTs persisted before this execution attempt. On a
+        // fresh run this is empty; on a resume it is what stops an already-paid
+        // lead being counted, or re-sourced, a second time.
+        const priorLegacyContactIdentities: string[] = collectLegacyContactIdentities(
+          ((body.resumed_contact_identities ?? []) as unknown[]) as never,
+        ).identities;
         if (routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
           try {
@@ -1152,7 +1164,11 @@ Deno.serve(async (req) => {
             // controller reads what persistence actually returned.
             companyFirstQuotaProgress = computeCompanyFirstQuotaProgress({
               persisted: persistedOutcomes,
-              legacyContactIdentities: [],
+              // Legacy CONTACTs already persisted by an EARLIER round or by the
+              // run this one resumed. The legacy loop has not run yet at this
+              // point, so anything it produces is combined afterwards via
+              // combineContactIdentities — this set covers resume only.
+              legacyContactIdentities: priorLegacyContactIdentities,
               requestedQuota: quota.requestedLeadCount,
               contactPending: companyFirstRoute.funnel.contact_ready -
                 projection.counts.contact_ready >= 0
@@ -1163,6 +1179,7 @@ Deno.serve(async (req) => {
               founderPending: companyFirstRoute.funnel.founder_searched -
                 companyFirstRoute.funnel.founder_verified,
             });
+            companyFirstIdentities = collectCompanyFirstContactIdentities(persistedOutcomes);
             companyFirstQuotaCredit = companyFirstQuotaProgress.company_first_contact_credit;
             companyFirstAdaptive = nextAdaptiveAction(companyFirstQuotaProgress);
             companyFirstProjection = projection.counts;
@@ -1368,6 +1385,43 @@ Deno.serve(async (req) => {
           requestedLeadCount: quota.requestedLeadCount,
         });
 
+        // ══ ENFORCED ADAPTIVE DECISION ═══════════════════════════════════════
+        // The decision computed from PERSISTED outcomes now controls whether the
+        // sourcing loop runs at all. Previously it was logged and ignored, which
+        // meant a satisfied quota still paid for another round, and pending
+        // founder/contact work still looked like a failed source.
+        //
+        // Fails CLOSED: an unrecognised decision runs nothing rather than
+        // guessing that more spending is safe.
+        const adaptiveDecision = companyFirstAdaptive?.action ?? "continue_sourcing";
+        if (companyFirstAdaptive) {
+          if (adaptiveDecision === "stop_quota_satisfied") {
+            legacySkipReason = "quota_satisfied_by_company_first";
+          } else if (adaptiveDecision === "await_pending_work") {
+            // NOT exhausted, NOT failed — work is in flight. Launching another
+            // discovery source here is paying twice for one answer.
+            legacySkipReason = companyFirstAdaptive.reason;
+          } else if (adaptiveDecision !== "continue_sourcing") {
+            legacySkipReason = `unrecognised_adaptive_decision:${adaptiveDecision}`;
+          }
+        }
+        console.log("[run-agent][adaptive-enforcement]", {
+          task_id: task.id,
+          decision: companyFirstAdaptive?.action ?? null,
+          reason: companyFirstAdaptive?.reason ?? null,
+          requested_quota: quota.requestedLeadCount,
+          persisted_contact: companyFirstQuotaProgress?.company_first_contact_credit ?? 0,
+          founder_pending: companyFirstQuotaProgress?.founder_pending ?? 0,
+          contact_pending: companyFirstQuotaProgress?.contact_pending ?? 0,
+          will_run_another_source: legacySkipReason === null,
+          skip_reason: legacySkipReason,
+        });
+
+        // ENFORCEMENT AT THE PROVIDER BOUNDARY. When the decision says stop or
+        // wait, the loop is bounded to zero rounds AND the invokers hard-refuse.
+        // Two independent guards, because a bound is a number someone can change
+        // and a refusal is a fact.
+        const sourcingBlocked = legacySkipReason !== null;
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
@@ -1377,7 +1431,13 @@ Deno.serve(async (req) => {
           plannerMetadata: broadeningPlanner.lastMetadata,
           durableIdempotency: supabaseToolCallReader(supabase as never),
           stateStore: cfStateStore,
-          invokeJobs: sequentialSources.invokeJobs, invokePeople, persist: persistPlan,
+          invokeJobs: sourcingBlocked
+            ? (() => { legacyBlockedCalls++; return Promise.resolve([]); })
+            : sequentialSources.invokeJobs,
+          invokePeople: sourcingBlocked
+            ? (() => { legacyBlockedCalls++; return Promise.resolve([]); })
+            : invokePeople,
+          persist: persistPlan,
           // Null when disabled ⇒ the pipeline makes no model call at all.
           classifyCompanyEvidence: classificationBinding.classifyCompanyEvidence ?? undefined,
           classificationCallsRemaining: classificationBinding.classificationCallsRemaining,
@@ -1397,11 +1457,38 @@ Deno.serve(async (req) => {
           // quota, money, repeated low-quality sources and the hard provider
           // ceiling each still end the run. Absent when the sequential bridge is
           // disabled, which keeps the pre-existing fixed limits in force.
-          ...(sequentialSources.enabled
+          ...(sequentialSources.enabled && !sourcingBlocked
             ? { actionBudget: createPlanAwareActionBudget(sequentialSources.planBudgetSnapshot) }
             : {}),
+          // ZERO ROUNDS when the adaptive decision blocked sourcing. Without
+          // dropping actionBudget above, loopBound would come from the hard
+          // provider ceiling instead of maxRounds and the loop would still run.
+          ...(sourcingBlocked ? { bounds: { maxRounds: 0 } } : {}),
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
+
+        // ══ COMBINED, DEDUPLICATED CONTACT QUOTA ═════════════════════════════
+        // Both paths' PERSISTED CONTACT identities, unioned. The same person
+        // reached twice is one lead; two different people are two. Identities
+        // come from canonical lead-candidate ids first — never a display name or
+        // a vanity URL, either of which would silently merge or split leads.
+        {
+          const legacyIds = collectLegacyContactIdentities(
+            (cf.items ?? []) as never);
+          combinedQuota = combineContactIdentities(
+            legacyIds,
+            companyFirstIdentities ??
+              { identities: [], strategy: "none", unidentifiable: 0 },
+            quota.requestedLeadCount,
+          );
+          legacySourcingRan = !sourcingBlocked;
+          console.log("[run-agent][combined-quota]", {
+            task_id: task.id, ...combinedQuota,
+            legacy_sourcing_ran: legacySourcingRan,
+            legacy_blocked_provider_calls: legacyBlockedCalls,
+            adaptive_decision: companyFirstAdaptive?.action ?? null,
+          });
+        }
 
         // ONE canonical run context, built once and carried unchanged into the
         // response, the UI panel, the task result and the CSV export. Surfaces
@@ -1617,6 +1704,16 @@ Deno.serve(async (req) => {
               // The controller's actual inputs, persisted for audit.
               quota_progress: companyFirstQuotaProgress,
               adaptive_action: companyFirstAdaptive,
+              // The decision and what execution actually did, side by side, so a
+              // disagreement is visible rather than inferred.
+              enforcement: {
+                decision: companyFirstAdaptive?.action ?? null,
+                reason: companyFirstAdaptive?.reason ?? null,
+                legacy_sourcing_ran: legacySourcingRan,
+                legacy_skip_reason: legacySkipReason,
+                blocked_provider_calls: legacyBlockedCalls,
+              },
+              combined_quota: combinedQuota,
               ...companyFirstRoute.diagnostics,
             }
             : null,
