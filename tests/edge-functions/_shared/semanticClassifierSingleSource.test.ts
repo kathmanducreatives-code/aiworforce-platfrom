@@ -23,7 +23,7 @@ import {
   type CompanyEvidenceInput,
 } from "../../../supabase/functions/_shared/companySemanticClassification.ts";
 
-const sharedDir = new URL("./", import.meta.url);
+const sharedDir = new URL("../../../supabase/functions/_shared/", import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, import.meta.url));
 
 /** Every .ts under _shared, recursively. */
@@ -42,7 +42,7 @@ async function sharedFiles(): Promise<string[]> {
 // ================== 1. EXACTLY ONE CANONICAL CLASSIFIER =====================
 
 Deno.test("1. the canonical classifier exists and the orphan is gone", async () => {
-  const canonical = await read("./companySemanticClassification.ts");
+  const canonical = await read("../../../supabase/functions/_shared/companySemanticClassification.ts");
   assert(canonical.includes("export async function classifyCompany("),
     "the canonical module must own the classify entry point");
   assert(canonical.includes("export function validateClassification("),
@@ -51,11 +51,11 @@ Deno.test("1. the canonical classifier exists and the orphan is gone", async () 
     "and the Brain-facing projection");
 
   await assertRejects(
-    () => Deno.stat(new URL("./semanticCompanyClassification.ts", import.meta.url)),
+    () => Deno.stat(new URL("../../../supabase/functions/_shared/semanticCompanyClassification.ts", import.meta.url)),
     "the orphaned classifier module must not exist",
   );
   await assertRejects(
-    () => Deno.stat(new URL("./semanticCompanyClassification.test.ts", import.meta.url)),
+    () => Deno.stat(new URL("../../../supabase/functions/_shared/semanticCompanyClassification.test.ts", import.meta.url)),
     "nor its isolated tests",
   );
 });
@@ -71,7 +71,7 @@ Deno.test("2. no second module declares a rival classify entry point", async () 
   const offenders: string[] = [];
   for (const f of files) {
     if (f === "companySemanticClassification.ts" || f.endsWith(".test.ts")) continue;
-    const src = await read(`./${f}`);
+    const src = await read(`../../../supabase/functions/_shared/${f}`);
     // A rival would export its own company-classification entry point rather
     // than calling the canonical one.
     if (/export\s+(async\s+)?function\s+classifyCompany\s*\(/.test(src)) offenders.push(f);
@@ -87,10 +87,10 @@ Deno.test("3. no file imports or names the deleted module", async () => {
   const self = "semanticClassifierSingleSource.test.ts";
   for (const f of files) {
     if (f === self) continue;   // this guard names the deleted module on purpose
-    const src = await read(`./${f}`);
+    const src = await read(`../../../supabase/functions/_shared/${f}`);
     if (src.includes("semanticCompanyClassification")) offenders.push(`_shared/${f}`);
   }
-  for (const rel of ["../run-agent/index.ts", "../_shared/compoundSourcingPipeline.ts"]) {
+  for (const rel of ["../../../supabase/functions/run-agent/index.ts", "../../../supabase/functions/_shared/compoundSourcingPipeline.ts"]) {
     if ((await read(rel)).includes("semanticCompanyClassification")) offenders.push(rel);
   }
   assertEquals(offenders, [], "the deleted module must not be referenced");
@@ -99,7 +99,7 @@ Deno.test("3. no file imports or names the deleted module", async () => {
 // ================= 4. THE PIPELINE USES THE CANONICAL MODULE ================
 
 Deno.test("4. compoundSourcingPipeline classifies through the canonical module", async () => {
-  const src = await read("./compoundSourcingPipeline.ts");
+  const src = await read("../../../supabase/functions/_shared/compoundSourcingPipeline.ts");
   assert(src.includes('from "../../../supabase/functions/_shared/companySemanticClassification.ts"'),
     "the pipeline must import the canonical classifier");
   for (const symbol of ["classifyCompany", "shouldClassify", "brainEvidenceFrom"]) {
@@ -117,7 +117,7 @@ Deno.test("4. compoundSourcingPipeline classifies through the canonical module",
 // ========= 5. run-agent REACHES IT THROUGH THE BINDING, NOT DIRECTLY ========
 
 Deno.test("5. run-agent reaches the classifier only via semanticClassificationBinding", async () => {
-  const src = await read("../run-agent/index.ts");
+  const src = await read("../../../supabase/functions/run-agent/index.ts");
   assert(src.includes('from "../../../supabase/functions/_shared/semanticClassificationBinding.ts"'),
     "run-agent must import the binding");
   assert(src.includes("buildSemanticClassificationBinding("),
@@ -132,7 +132,7 @@ Deno.test("5. run-agent reaches the classifier only via semanticClassificationBi
 });
 
 Deno.test("6. the binding is the only place that decides whether to classify", async () => {
-  const binding = await read("./semanticClassificationBinding.ts");
+  const binding = await read("../../../supabase/functions/_shared/semanticClassificationBinding.ts");
   for (const gate of [
     "SEMANTIC_COMPANY_CLASSIFICATION",
     "isSemanticClassificationEnabled",

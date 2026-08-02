@@ -11,7 +11,7 @@
 
 import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-const SRC = new URL("./index.ts", import.meta.url);
+const SRC = new URL("../../../supabase/functions/generate-company-brain-draft/index.ts", import.meta.url);
 
 /** Columns that actually exist on public.company_brain. */
 const REAL_COLUMNS = [
