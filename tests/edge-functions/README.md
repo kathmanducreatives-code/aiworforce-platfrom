@@ -1,16 +1,17 @@
 # Edge function tests
 
-These Deno tests live **outside** `supabase/functions/` on purpose.
+These Deno tests live **outside the entire `supabase/` upload root** on purpose.
 
-Supabase uploads every file under `supabase/functions/` with each function, and the
+The publisher uploads the backend source tree when deploying a function, and the
 bundle is capped at ~5 MB. The `_shared` test suite is ~2.5 MB, which pushed
-`run-agent` (and every other function) over that cap and broke publishing.
+`run-agent` over that cap even when the tests were only moved to
+`supabase/functions-tests/`.
 
 Run them with:
 
 ```bash
-deno test supabase/functions-tests/_shared/
+deno test tests/edge-functions/_shared/
 ```
 
-Imports point back at the real source via `../../functions/...` — keep new tests
-here rather than next to the modules they cover.
+Imports point back at the real source via `../../supabase/functions/...` — keep
+new tests here rather than anywhere under `supabase/`.
