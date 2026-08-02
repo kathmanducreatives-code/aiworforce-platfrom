@@ -8,11 +8,11 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   computeCompanyFirstQuotaProgress, createPersistPlan, nextAdaptiveAction,
   type PersistedOutcome,
-} from "../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
-import { executeCompanyFirstRoute } from "../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
-import { projectCompanyFirstPersistence } from "../../supabase/functions/_shared/companyFirstPersistenceProjection.ts";
-import { newRouteExecutionRecord, validateHiringRoute } from "../../supabase/functions/_shared/hiringRouteContract.ts";
-import { SALES_OPS_PACK } from "../../supabase/functions/_shared/hiringRolePackFilter.ts";
+} from "../../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
+import { executeCompanyFirstRoute } from "../../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
+import { projectCompanyFirstPersistence } from "../../../supabase/functions/_shared/companyFirstPersistenceProjection.ts";
+import { newRouteExecutionRecord, validateHiringRoute } from "../../../supabase/functions/_shared/hiringRouteContract.ts";
+import { SALES_OPS_PACK } from "../../../supabase/functions/_shared/hiringRolePackFilter.ts";
 
 const LI = (s: string) => `https://www.linkedin.com/company/${s}`;
 

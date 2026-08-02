@@ -11,9 +11,9 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   getCompiledCompanyBrainForWorkspace, buildCanonicalCompanyBrain, type BrainDbClient,
-} from "../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
-import { renderCompanyBrainBlock } from "../../supabase/functions/_shared/companyBrainContext.ts";
-import { decideWorkspaceAccess } from "../../supabase/functions/_shared/workspaceAccessGuard.ts";
+} from "../../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
+import { renderCompanyBrainBlock } from "../../../supabase/functions/_shared/companyBrainContext.ts";
+import { decideWorkspaceAccess } from "../../../supabase/functions/_shared/workspaceAccessGuard.ts";
 
 // -------------------------------------------------------- fictional brains ---
 

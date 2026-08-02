@@ -14,7 +14,7 @@ import {
   hasNewSourcingIntent,
   isSaveExistingResultsRequest,
   type LeadRequest,
-} from "../../supabase/functions/_shared/leadIntake.ts";
+} from "../../../supabase/functions/_shared/leadIntake.ts";
 
 const BRAIN_STRUCTURED = {
   company_name: "Agentory",
@@ -151,7 +151,7 @@ Deno.test("people-unavailable fallbacks: LinkedIn instruction routes away from p
   assert(!_isLead(co), "companies/hiring fallback routes to jobs, not the lead form");
 });
 
-import { buildLeadSourceSelector, leadRequestToToolInput as _toTI, type ToolAvailability, type LeadSourceType } from "../../supabase/functions/_shared/leadIntake.ts";
+import { buildLeadSourceSelector, leadRequestToToolInput as _toTI, type ToolAvailability, type LeadSourceType } from "../../../supabase/functions/_shared/leadIntake.ts";
 
 const ALL_AVAILABLE: ToolAvailability = { people: true, comments: true, firecrawl: true };
 
@@ -209,7 +209,7 @@ Deno.test("source instructions route correctly + don't re-open the selector", ()
 });
 
 Deno.test("hasNewSourcingIntent: a lead brief beats save/refine handlers", async () => {
-  const { hasNewSourcingIntent } = await import("../../supabase/functions/_shared/leadIntake.ts");
+  const { hasNewSourcingIntent } = await import("../../../supabase/functions/_shared/leadIntake.ts");
   // #1/#2 new sourcing brief (even with "Save them to Signal Feed") → new sourcing.
   assert(hasNewSourcingIntent("Find 5 founder AI Software in healthcare in USA. Save them to Signal Feed. Do not send any outreach."));
   assert(hasNewSourcingIntent("Find 5 companies hiring GTM roles. Save them to Signal Feed."));

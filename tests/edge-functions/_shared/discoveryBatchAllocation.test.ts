@@ -11,7 +11,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   allocateBatchAcrossPacks, packAllocationDiagnostics, MINIMUM_PACK_ALLOCATION,
-} from "../../supabase/functions/_shared/discoveryBatchAllocation.ts";
+} from "../../../supabase/functions/_shared/discoveryBatchAllocation.ts";
 
 const THREE = ["sales_ops_management", "revenue_operations", "sales_ops_ic"];
 

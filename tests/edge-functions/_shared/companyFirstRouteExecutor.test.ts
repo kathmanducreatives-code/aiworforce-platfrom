@@ -6,9 +6,9 @@
 // network, ZERO paid Actor runs.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { executeCompanyFirstRoute } from "../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
-import { newRouteExecutionRecord, validateHiringRoute } from "../../supabase/functions/_shared/hiringRouteContract.ts";
-import { SALES_OPS_PACK } from "../../supabase/functions/_shared/hiringRolePackFilter.ts";
+import { executeCompanyFirstRoute } from "../../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
+import { newRouteExecutionRecord, validateHiringRoute } from "../../../supabase/functions/_shared/hiringRouteContract.ts";
+import { SALES_OPS_PACK } from "../../../supabase/functions/_shared/hiringRolePackFilter.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";

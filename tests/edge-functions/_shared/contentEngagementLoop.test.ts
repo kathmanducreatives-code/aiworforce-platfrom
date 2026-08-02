@@ -7,7 +7,7 @@ import {
   DEFAULT_TONE,
   MAX_ENGAGEMENT_QUERIES,
   MAX_RESULTS_PER_QUERY,
-} from "../../supabase/functions/_shared/contentEngagementLoop.ts";
+} from "../../../supabase/functions/_shared/contentEngagementLoop.ts";
 
 Deno.test("extractContentLoopInput: founder post + engagement", () => {
   const i = extractContentLoopInput(

@@ -4,7 +4,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   getCompiledCompanyBrainForWorkspace, buildCanonicalCompanyBrain, type BrainDbClient,
-} from "../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
+} from "../../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
 
 const WS = "ws-1";
 const USER = "user-1";

@@ -11,12 +11,12 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   compileJobSearchSpec, extractHiringRolePhrase, extractHiringRolePhrases,
   MAX_HIRING_ROLES,
-} from "../../supabase/functions/_shared/jobSearchSpec.ts";
-import { compileLeadEntityIntent, resolveRequestedCount } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { extractRequestedLeadCount, routeQualifiedLead } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
-import { isCompanyFirstRequest } from "../../supabase/functions/_shared/runAgentCompoundBridge.ts";
-import { buildSourcingConstraints } from "../../supabase/functions/_shared/sourcingConstraints.ts";
-import { compileHiringSourceInput } from "../../supabase/functions/_shared/actorInputPlanner.ts";
+} from "../../../supabase/functions/_shared/jobSearchSpec.ts";
+import { compileLeadEntityIntent, resolveRequestedCount } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { extractRequestedLeadCount, routeQualifiedLead } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+import { isCompanyFirstRequest } from "../../../supabase/functions/_shared/runAgentCompoundBridge.ts";
+import { buildSourcingConstraints } from "../../../supabase/functions/_shared/sourcingConstraints.ts";
+import { compileHiringSourceInput } from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 
 const CANONICAL =
   "Find 5 founders or CEOs of early-stage B2B SaaS companies in the United States "

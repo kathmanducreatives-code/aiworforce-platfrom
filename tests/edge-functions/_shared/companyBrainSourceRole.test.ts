@@ -10,8 +10,8 @@ import {
   classifyWebsiteSourceRole,
   stripNonSellerIdentityFields,
   isValidSourceRole,
-} from "../../supabase/functions/_shared/companyBrainSourceRole.ts";
-import { resolveCanonicalSellerIdentity } from "../../supabase/functions/_shared/workbench/sellerIdentity.ts";
+} from "../../../supabase/functions/_shared/companyBrainSourceRole.ts";
+import { resolveCanonicalSellerIdentity } from "../../../supabase/functions/_shared/workbench/sellerIdentity.ts";
 
 const AGENTORY = resolveCanonicalSellerIdentity({
   profile: { company: { name: "Agentory", website_url: "https://agentory.space" } },

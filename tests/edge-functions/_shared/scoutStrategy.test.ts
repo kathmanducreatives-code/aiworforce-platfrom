@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildScoutJobsKeywords, computeQaLimit, applyQaResultLimit, type ScoutIcp } from "../../supabase/functions/_shared/scoutStrategy.ts";
+import { buildScoutJobsKeywords, computeQaLimit, applyQaResultLimit, type ScoutIcp } from "../../../supabase/functions/_shared/scoutStrategy.ts";
 
 // The intended Agentory TEST ICP (Part A). Kept here as the canonical fixture so
 // tests and the TEST-workspace seed stay in sync. Not applied globally.

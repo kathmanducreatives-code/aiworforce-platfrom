@@ -1,9 +1,9 @@
 // Company Brain v2 save + activation gate. Pure — no DB, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { mergeV2Patch, applyBrainSave, deriveSignalPreferences } from "../../supabase/functions/_shared/companyBrainV2Save.ts";
-import { computeCompanyBrainCompleteness, canActivateBrain } from "../../supabase/functions/_shared/companyBrainCompleteness.ts";
-import { normalizeCompanyBrain } from "../../supabase/functions/_shared/normalizeCompanyBrain.ts";
+import { mergeV2Patch, applyBrainSave, deriveSignalPreferences } from "../../../supabase/functions/_shared/companyBrainV2Save.ts";
+import { computeCompanyBrainCompleteness, canActivateBrain } from "../../../supabase/functions/_shared/companyBrainCompleteness.ts";
+import { normalizeCompanyBrain } from "../../../supabase/functions/_shared/normalizeCompanyBrain.ts";
 
 /** A patch that satisfies every activation requirement. */
 const completePatch = () => ({

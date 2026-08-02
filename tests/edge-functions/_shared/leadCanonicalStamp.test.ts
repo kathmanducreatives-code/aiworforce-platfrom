@@ -2,7 +2,7 @@
 // Run: deno test supabase/functions/_shared/leadCanonicalStamp.test.ts
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildCanonicalStamp } from "../../supabase/functions/_shared/leadCanonicalStamp.ts";
+import { buildCanonicalStamp } from "../../../supabase/functions/_shared/leadCanonicalStamp.ts";
 
 Deno.test("fully verified RevOps hiring lead with a decision maker → contact + contact_ready", () => {
   const s = buildCanonicalStamp({

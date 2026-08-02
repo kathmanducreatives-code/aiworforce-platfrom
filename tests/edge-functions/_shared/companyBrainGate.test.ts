@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { shouldGateForOnboarding, GATED_INTENTS } from "../../supabase/functions/_shared/companyBrainGate.ts";
+import { shouldGateForOnboarding, GATED_INTENTS } from "../../../supabase/functions/_shared/companyBrainGate.ts";
 
 Deno.test("gates content_draft when onboarding incomplete", () => {
   assert(shouldGateForOnboarding("content_draft", null));

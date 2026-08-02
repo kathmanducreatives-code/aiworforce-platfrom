@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeTerm, capCount, sanitizeQuery, normalizeLeadInput } from "../../supabase/functions/_shared/inputNormalize.ts";
-import { roleAliases, industrySynonyms, broadenAttempt, broadenCompetitorQueries, dedupeByKey } from "../../supabase/functions/_shared/broaden.ts";
+import { normalizeTerm, capCount, sanitizeQuery, normalizeLeadInput } from "../../../supabase/functions/_shared/inputNormalize.ts";
+import { roleAliases, industrySynonyms, broadenAttempt, broadenCompetitorQueries, dedupeByKey } from "../../../supabase/functions/_shared/broaden.ts";
 
 Deno.test("typo normalization", () => {
   assertEquals(normalizeTerm("GGTM"), "GTM");

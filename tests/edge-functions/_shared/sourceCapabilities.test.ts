@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getSourceCapability, isSourceConfigured, listSourceCapabilities, type CapabilitySourceType } from "../../supabase/functions/_shared/sourceCapabilities.ts";
-import { leadRequestToToolInput } from "../../supabase/functions/_shared/leadIntake.ts";
+import { getSourceCapability, isSourceConfigured, listSourceCapabilities, type CapabilitySourceType } from "../../../supabase/functions/_shared/sourceCapabilities.ts";
+import { leadRequestToToolInput } from "../../../supabase/functions/_shared/leadIntake.ts";
 
 const ALL: CapabilitySourceType[] = [
   "icp_search", "hiring_signal", "linkedin_intent_posts", "linkedin_comments",

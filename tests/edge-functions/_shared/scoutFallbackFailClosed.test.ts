@@ -13,13 +13,13 @@ import {
   buildProviderIndexFromItems,
   parseScoutCandidates,
   guardScoutToAria,
-} from "../../supabase/functions/_shared/leadHandoffGuard.ts";
+} from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
 import {
   FROZEN_ACCEPTED_PROVIDER_ITEMS,
   FROZEN_FABRICATED_COUNT,
   FROZEN_LIVE_FAILURE_FACTS,
   FROZEN_SCOUT_FABRICATED_OUTPUT,
-} from "../../supabase/functions/_shared/scoutFallbackFixture.ts";
+} from "../../../supabase/functions/_shared/scoutFallbackFixture.ts";
 
 Deno.test("repro: frozen Scout output parses to exactly 10 fabricated founders", () => {
   const candidates = parseScoutCandidates(FROZEN_SCOUT_FABRICATED_OUTPUT, null);

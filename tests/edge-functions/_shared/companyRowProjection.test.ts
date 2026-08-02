@@ -1,9 +1,9 @@
 // Unit tests for the company-row projection — pure, no DB.
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildCompanyRowPersistencePlan, companyRowStage, companyRowKey } from "../../supabase/functions/_shared/companyRowProjection.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
-import type { PendingDecisionMaker } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { buildCompanyRowPersistencePlan, companyRowStage, companyRowKey } from "../../../supabase/functions/_shared/companyRowProjection.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import type { PendingDecisionMaker } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
 
 const strong = resolveCompanyIdentity({ name: "Vanta", domain: "vanta.com", location: "San Francisco, United States" });
 const weak = resolveCompanyIdentity({ name: "Mystery Co" });

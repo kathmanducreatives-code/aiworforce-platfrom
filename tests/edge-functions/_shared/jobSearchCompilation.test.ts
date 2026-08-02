@@ -3,10 +3,10 @@
 // ZERO network (run without --allow-net).
 
 import { assertEquals, assert, assertFalse, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { compileJobSearchSpec, findRawQueryLeak, extractHiringRolePhrase, extractJobLocation } from "../../supabase/functions/_shared/jobSearchSpec.ts";
-import { buildJobsProviderInputs, assertCompiledForProvider, plannedResultTotal, JobSearchCompilationError } from "../../supabase/functions/_shared/jobsProviderInput.ts";
-import { LIVE_RUN_REGRESSION } from "../../supabase/functions/_shared/jobSearchLiveFixture.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileJobSearchSpec, findRawQueryLeak, extractHiringRolePhrase, extractJobLocation } from "../../../supabase/functions/_shared/jobSearchSpec.ts";
+import { buildJobsProviderInputs, assertCompiledForProvider, plannedResultTotal, JobSearchCompilationError } from "../../../supabase/functions/_shared/jobsProviderInput.ts";
+import { LIVE_RUN_REGRESSION } from "../../../supabase/functions/_shared/jobSearchLiveFixture.ts";
 
 const SAAS = "Founders of SaaS startups hiring Sales Operations in the United States";
 const AUTO = "Founders of automation integrators hiring Business Development Managers in Texas";
@@ -162,7 +162,7 @@ Deno.test("live-run fixture: compiled inputs match the expected role-focused sea
   assertFalse(inputs.some((i) => i.query === LIVE_RUN_REGRESSION.request));
 });
 Deno.test("live-run fixture: the recorded junk titles still fail the job-family gate", async () => {
-  const { classifyJobFamily } = await import("../../supabase/functions/_shared/jobFamily.ts");
+  const { classifyJobFamily } = await import("../../../supabase/functions/_shared/jobFamily.ts");
   for (const t of LIVE_RUN_REGRESSION.rejected_job_titles) {
     assertFalse(classifyJobFamily(t, null).qualifiesAsSalesOps, `should not qualify: ${t}`);
   }

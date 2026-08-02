@@ -4,9 +4,9 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   applyLeadStrategyInitialPlanning, isGptLeadStrategyEnabled, planHash,
-} from "../../supabase/functions/_shared/leadStrategyBridge.ts";
-import type { LeadStrategyModelFn } from "../../supabase/functions/_shared/leadStrategyModels.ts";
-import { classifyBottleneck, emptyFunnelSummary, remedyFor } from "../../supabase/functions/_shared/sourcingBottleneck.ts";
+} from "../../../supabase/functions/_shared/leadStrategyBridge.ts";
+import type { LeadStrategyModelFn } from "../../../supabase/functions/_shared/leadStrategyModels.ts";
+import { classifyBottleneck, emptyFunnelSummary, remedyFor } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
 
 const WS = "ws-canary";
 const env = (over: Record<string, string> = {}) => (k: string) =>

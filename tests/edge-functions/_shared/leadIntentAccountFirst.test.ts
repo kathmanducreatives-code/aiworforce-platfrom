@@ -2,12 +2,12 @@
 // Covers the 20 required cases from the QA brief. No providers, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { separateIntent } from "../../supabase/functions/_shared/leadIntentModel.ts";
-import { classifyRoleFamily, roleExactness, isExactRoleMatch, requestedRoleFamily } from "../../supabase/functions/_shared/roleFamilyMatcher.ts";
-import { classifyEvidence, checkEvidenceInvariants, provesCompanySignal, isIdentityOnly } from "../../supabase/functions/_shared/evidenceType.ts";
-import { decideCanonical, contactReady, detectContradiction, reconcile, type LeadFacts } from "../../supabase/functions/_shared/leadDecision.ts";
-import { scoreLead, type ScoreInputs } from "../../supabase/functions/_shared/leadScoreBreakdown.ts";
-import { buildCanonicalCompanyBrain } from "../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
+import { separateIntent } from "../../../supabase/functions/_shared/leadIntentModel.ts";
+import { classifyRoleFamily, roleExactness, isExactRoleMatch, requestedRoleFamily } from "../../../supabase/functions/_shared/roleFamilyMatcher.ts";
+import { classifyEvidence, checkEvidenceInvariants, provesCompanySignal, isIdentityOnly } from "../../../supabase/functions/_shared/evidenceType.ts";
+import { decideCanonical, contactReady, detectContradiction, reconcile, type LeadFacts } from "../../../supabase/functions/_shared/leadDecision.ts";
+import { scoreLead, type ScoreInputs } from "../../../supabase/functions/_shared/leadScoreBreakdown.ts";
+import { buildCanonicalCompanyBrain } from "../../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
 
 const facts = (o: Partial<LeadFacts>): LeadFacts => ({
   hard_disqualifier_hit: false, company_identity_verified: true, company_signal_verified: true,

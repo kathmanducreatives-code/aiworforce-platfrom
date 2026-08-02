@@ -9,7 +9,7 @@ import {
   readPath,
   writePath,
   type RefreshDiffMeta,
-} from "../../supabase/functions/_shared/companyBrainRefreshDiff.ts";
+} from "../../../supabase/functions/_shared/companyBrainRefreshDiff.ts";
 
 const META: RefreshDiffMeta = { source: "company_website", source_role: "seller", confidence: 0.8 };
 const PATHS = ["company.name", "company.website_url", "positioning.offer", "content_angles"];

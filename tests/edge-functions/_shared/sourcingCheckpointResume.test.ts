@@ -4,13 +4,13 @@
 // ZERO network, ZERO live-model calls. Time is simulated via an injected clock.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { runCompanyFirstQuotaController } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
 import {
   newSourcingState, isResumable, stateBelongsTo, deltaTitles, hasCompletedCall,
   SOURCING_STATE_VERSION, type CompanyFirstSourcingState, type SourcingStateStore,
-} from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
-import { createExecutionDeadline, DEFAULT_EXECUTION_BUDGET } from "../../supabase/functions/_shared/executionDeadline.ts";
+} from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
+import { createExecutionDeadline, DEFAULT_EXECUTION_BUDGET } from "../../../supabase/functions/_shared/executionDeadline.ts";
 
 const NOW = "2026-07-26T02:00:00Z";
 const SAAS = "Founders of SaaS startups hiring Sales Operations in the United States";

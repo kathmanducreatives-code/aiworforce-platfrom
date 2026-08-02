@@ -7,14 +7,14 @@
 // (never falsely "wrong location"). Uses the production classifier + validator.
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyResults } from "../../supabase/functions/_shared/sourceQuality.ts";
-import { validateSourcingResults } from "../../supabase/functions/_shared/sourcingRetry.ts";
+import { classifyResults } from "../../../supabase/functions/_shared/sourceQuality.ts";
+import { validateSourcingResults } from "../../../supabase/functions/_shared/sourcingRetry.ts";
 import {
   MAPPED_LOCATION_A,
   MAPPED_LOCATION_C,
   REQUIRED_US,
   FROZEN_Q1_LOCATION_FACTS,
-} from "../../supabase/functions/_shared/peopleLocationFixture.ts";
+} from "../../../supabase/functions/_shared/peopleLocationFixture.ts";
 
 const crit = (location: string) => ({ requested: 5, role: null, location, source_type: "people_profiles" });
 const STRICT = { location: true, industry: false, stage: false, count_exact: false };

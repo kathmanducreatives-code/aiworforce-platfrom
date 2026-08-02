@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { extractLeadSearchIntent } from "../../supabase/functions/_shared/leadSearchIntent.ts";
+import { extractLeadSearchIntent } from "../../../supabase/functions/_shared/leadSearchIntent.ts";
 
 Deno.test("Part1 #1/#2/#3/#4: AI SaaS + recently funded + SDR/GTM + outbound parses correctly", () => {
   const i = extractLeadSearchIntent({ message: "Find 5 AI SaaS companies recently funded hiring SDRs or GTM roles for outbound" });

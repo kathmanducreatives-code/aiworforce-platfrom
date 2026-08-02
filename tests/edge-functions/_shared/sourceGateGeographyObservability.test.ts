@@ -3,8 +3,8 @@ import {
   buildQualificationObservability,
   buildQualificationFunnel,
   buildSourceGateDiagnostic,
-} from "../../supabase/functions/_shared/qualificationObservability.ts";
-import { classifyGeography, matchTypedGeography, resolveGeographyConstraint } from "../../supabase/functions/_shared/geographyConstraint.ts";
+} from "../../../supabase/functions/_shared/qualificationObservability.ts";
+import { classifyGeography, matchTypedGeography, resolveGeographyConstraint } from "../../../supabase/functions/_shared/geographyConstraint.ts";
 
 // ---- Section 6: live v81 failure replay (country intent, US profiles) ----
 // Five genuine US people from DIFFERENT cities, structured country present.

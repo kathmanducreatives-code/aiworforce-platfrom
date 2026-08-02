@@ -13,8 +13,8 @@
 // ZERO network, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeApifyJobRow } from "../../supabase/functions/_shared/apifyJobsNormalizer.ts";
-import { normalizedJobToCompoundJob, compoundJobsFromRawRows } from "../../supabase/functions/_shared/runAgentCompoundJobAdapter.ts";
+import { normalizeApifyJobRow } from "../../../supabase/functions/_shared/apifyJobsNormalizer.ts";
+import { normalizedJobToCompoundJob, compoundJobsFromRawRows } from "../../../supabase/functions/_shared/runAgentCompoundJobAdapter.ts";
 
 /** The real crawlworks row shape, trimmed from production task 15c31f55. */
 const gumloop = {

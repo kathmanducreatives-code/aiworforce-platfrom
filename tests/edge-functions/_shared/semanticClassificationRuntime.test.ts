@@ -6,9 +6,9 @@
 // ZERO network, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { runCompoundSourcing, type CompoundDeps, type CompoundJob, type CompoundPerson } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import type { ClassificationCache } from "../../supabase/functions/_shared/companySemanticClassification.ts";
+import { runCompoundSourcing, type CompoundDeps, type CompoundJob, type CompoundPerson } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import type { ClassificationCache } from "../../../supabase/functions/_shared/companySemanticClassification.ts";
 
 const NOW = "2026-08-01T00:00:00Z";
 const intent = compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the United States");

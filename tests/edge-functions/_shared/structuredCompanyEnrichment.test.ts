@@ -4,17 +4,17 @@ import {
   normalizeCompanyLinkedInUrl, normalizeWebsite, normalizeCompanyNameFallback,
   normalizeIndustries, selectHeadquarters, extractProviderCompanyLinkedInUrl,
   COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID,
-} from "../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
+} from "../../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
 import {
   FIXTURE_COMPLETE, FIXTURE_NO_WEBSITE, FIXTURE_NO_INDUSTRY, FIXTURE_MULTI_LOCATION,
   FIXTURE_DIRTY_WEBSITE, FIXTURE_TRACKED_LINKEDIN, FIXTURE_PERSON_URL_AS_COMPANY,
   FIXTURE_BAD_EMPLOYEE_COUNT, FIXTURE_EMPTY, FIXTURE_ERROR, FIXTURE_DUPLICATES,
   FIXTURE_VARIANT_SHAPES,
-} from "../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
-import { DEFAULT_EVIDENCE_BUDGET } from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { getActorCapability, isCallable, getStructuredCompanyEnrichmentCapability, STRUCTURED_COMPANY_ENRICHMENT_ACTOR_KEY } from "../../supabase/functions/_shared/actorCapabilityRegistry.ts";
-import { getActorByKey, ACTOR_REGISTRY } from "../../supabase/functions/_shared/actorRegistry.ts";
-import { satisfiedCategories, appendEvidence, type CandidateEnvelope } from "../../supabase/functions/_shared/candidateEnvelope.ts";
+} from "../../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
+import { DEFAULT_EVIDENCE_BUDGET } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { getActorCapability, isCallable, getStructuredCompanyEnrichmentCapability, STRUCTURED_COMPANY_ENRICHMENT_ACTOR_KEY } from "../../../supabase/functions/_shared/actorCapabilityRegistry.ts";
+import { getActorByKey, ACTOR_REGISTRY } from "../../../supabase/functions/_shared/actorRegistry.ts";
+import { satisfiedCategories, appendEvidence, type CandidateEnvelope } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
 
 const B = DEFAULT_EVIDENCE_BUDGET;
 const NOW = "2026-07-16T12:00:00.000Z";

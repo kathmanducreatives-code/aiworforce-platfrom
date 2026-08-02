@@ -3,7 +3,7 @@ import {
   filterPeopleCandidates, filterCompanyCandidates, filterPostCandidates,
   filterCommentCandidates, filterWorkflowCandidates, tierFor, topRejectReasons,
   resolveGateKind, topicTokens, normalizeSerpCompanyItem,
-} from "../../supabase/functions/_shared/sourceGates.ts";
+} from "../../../supabase/functions/_shared/sourceGates.ts";
 
 // ---- PEOPLE (founders of recruiting agencies) ----
 const peopleOpts = { role_keywords: ["Founder", "Co-Founder", "CEO", "Managing Partner"], company_category: ["Recruiting", "Staffing", "Talent", "Executive search"], requireCompany: true };

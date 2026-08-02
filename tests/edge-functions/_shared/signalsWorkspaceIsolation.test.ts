@@ -6,10 +6,10 @@
 //              businesses (regional expansion) — staffing is ALLOWED, not a reject.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/_shared/companyBrainCompiler.ts";
-import { buildRadarScanPlan, type RadarSource } from "../../supabase/functions/_shared/radarScanPlanner.ts";
-import { scoreAgainstCompanyBrain, type SignalCandidate } from "../../supabase/functions/_shared/icpSignalScorer.ts";
-import { decideWorkspaceAccess } from "../../supabase/functions/_shared/workspaceAccessGuard.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { buildRadarScanPlan, type RadarSource } from "../../../supabase/functions/_shared/radarScanPlanner.ts";
+import { scoreAgainstCompanyBrain, type SignalCandidate } from "../../../supabase/functions/_shared/icpSignalScorer.ts";
+import { decideWorkspaceAccess } from "../../../supabase/functions/_shared/workspaceAccessGuard.ts";
 
 // ---- fixtures --------------------------------------------------------------
 function brainA(extra: Record<string, unknown> = {}) {

@@ -15,7 +15,7 @@
 // OFFLINE ONLY. No provider, no model, no network.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyJobFamily } from "../../supabase/functions/_shared/jobFamily.ts";
+import { classifyJobFamily } from "../../../supabase/functions/_shared/jobFamily.ts";
 
 /** The families a Sales/Revenue/GTM Operations mission accepts. */
 const REQUESTED = ["sales_ops", "rev_ops", "gtm_ops"];

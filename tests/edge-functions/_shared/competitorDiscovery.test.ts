@@ -13,7 +13,7 @@ import {
   hasEnoughCompetitorContext,
   buildCompetitorSearchQueries,
   parseInferredCompetitors,
-} from "../../supabase/functions/_shared/competitorDiscovery.ts";
+} from "../../../supabase/functions/_shared/competitorDiscovery.ts";
 
 Deno.test("extracts website + description from message", () => {
   const c = extractInlineBusinessContext("Find competitors for https://example.com and track LinkedIn conversations");
@@ -123,7 +123,7 @@ Deno.test("hasEnoughCompetitorContext + search queries", () => {
 });
 
 // Phase 4.2 — actor registry for the new optional actors.
-import { getActorByKey, isActorRuntimeEnabled } from "../../supabase/functions/_shared/actorRegistry.ts";
+import { getActorByKey, isActorRuntimeEnabled } from "../../../supabase/functions/_shared/actorRegistry.ts";
 Deno.test("registry: phase 4.2 optional actors exist with caps + honest fallback", () => {
   for (const [key, actorId, cap] of [
     ["apify_linkedin_company_posts", "harvestapi/linkedin-company-posts", 20],

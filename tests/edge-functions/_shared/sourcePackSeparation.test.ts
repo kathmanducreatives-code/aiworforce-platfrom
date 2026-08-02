@@ -7,9 +7,9 @@
 //     genuinely different calls are never suppressed as "already paid".
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { prepareStepPackCalls, sourceIdempotencyKey } from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { newSourceExecutionState } from "../../supabase/functions/_shared/sourceExecutionState.ts";
-import type { OrderedSourceStep } from "../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { prepareStepPackCalls, sourceIdempotencyKey } from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { newSourceExecutionState } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import type { OrderedSourceStep } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 
 const step = {
   stepId: "s1",

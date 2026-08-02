@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   applyLeadQualityGate, toNormalizedCandidate,
   type NormalizedCompanyCandidate, type WorkflowIntent,
-} from "../../supabase/functions/_shared/leadQualityGate.ts";
+} from "../../../supabase/functions/_shared/leadQualityGate.ts";
 
 function cand(p: Partial<NormalizedCompanyCandidate>): NormalizedCompanyCandidate {
   return {

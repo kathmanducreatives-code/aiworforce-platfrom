@@ -3,7 +3,7 @@ import {
   classifyLeadOutcome,
   summarizeDirectAction,
   emptyDirectActionSummary,
-} from "../../supabase/functions/_shared/leadActionOutcome.ts";
+} from "../../../supabase/functions/_shared/leadActionOutcome.ts";
 
 const LEAD = "22222222-2222-4222-8222-222222222222";
 

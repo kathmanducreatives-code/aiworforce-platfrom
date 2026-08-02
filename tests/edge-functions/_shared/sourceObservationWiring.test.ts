@@ -13,23 +13,23 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   applySequentialSourceExecution, buildObservation, sequentialSourceDiagnostics,
-} from "../../supabase/functions/_shared/sequentialSourceBridge.ts";
+} from "../../../supabase/functions/_shared/sequentialSourceBridge.ts";
 import {
   runCompanyFirstQuotaController,
   type RoundObservationInput,
-} from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
-import { SOURCE_EXECUTION_KEY, stepOf } from "../../supabase/functions/_shared/sourceExecutionState.ts";
-import { FUSION_STATE_KEY, newFusionState, type HiringEvidenceFusionState } from "../../supabase/functions/_shared/hiringEvidenceFusion.ts";
+} from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { SOURCE_EXECUTION_KEY, stepOf } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import { FUSION_STATE_KEY, newFusionState, type HiringEvidenceFusionState } from "../../../supabase/functions/_shared/hiringEvidenceFusion.ts";
 import {
   MAX_SOURCE_FEEDBACK_CALLS_PER_TASK, SOURCE_FEEDBACK_KEY, SOURCE_FEEDBACK_VERSION,
   type SourceFeedbackLedger,
-} from "../../supabase/functions/_shared/sourceFeedbackContract.ts";
-import { emptyFunnelSummary, type FunnelSummary } from "../../supabase/functions/_shared/sourcingBottleneck.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import type { LeadMissionSourceProfile } from "../../supabase/functions/_shared/hiringSourcePlan.ts";
-import type { EnvReader } from "../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
-import type { GenerateOpts, GenerateResult } from "../../supabase/functions/_shared/aiProvider.ts";
-import { isContinuable, projectStatus } from "../../supabase/functions/_shared/taskStatusContract.ts";
+} from "../../../supabase/functions/_shared/sourceFeedbackContract.ts";
+import { emptyFunnelSummary, type FunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import type { LeadMissionSourceProfile } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
+import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import type { GenerateOpts, GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
+import { isContinuable, projectStatus } from "../../../supabase/functions/_shared/taskStatusContract.ts";
 
 // ================================================================ fixtures ===
 
@@ -146,7 +146,7 @@ Deno.test("1./2. both authorities have a real non-test production caller", async
 
   // The bridge reaches the feedback runtime, which is the only caller of
   // `applyObservation` outside tests.
-  assert(bridgeSrc.includes('from "../../supabase/functions/_shared/sourceFeedbackRuntime.ts"'),
+  assert(bridgeSrc.includes('from "../../../supabase/functions/_shared/sourceFeedbackRuntime.ts"'),
     "the bridge must import the feedback runtime");
   assert(bridgeSrc.includes("applyObservationWithFeedback("),
     "the bridge must call the composite observation entry point");

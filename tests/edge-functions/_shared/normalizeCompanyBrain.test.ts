@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeCompanyBrain, emptyCompanyBrainV2 } from "../../supabase/functions/_shared/normalizeCompanyBrain.ts";
+import { normalizeCompanyBrain, emptyCompanyBrainV2 } from "../../../supabase/functions/_shared/normalizeCompanyBrain.ts";
 
 Deno.test("empty in → empty out, weak, setup_required", () => {
   const v2 = normalizeCompanyBrain({});

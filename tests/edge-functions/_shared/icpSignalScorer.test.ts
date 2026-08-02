@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/_shared/companyBrainCompiler.ts";
-import { scoreAgainstCompanyBrain, type SignalCandidate } from "../../supabase/functions/_shared/icpSignalScorer.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { scoreAgainstCompanyBrain, type SignalCandidate } from "../../../supabase/functions/_shared/icpSignalScorer.ts";
 
 const NOW = Date.parse("2026-07-06T00:00:00Z");
 const recent = "2026-07-04T00:00:00Z";

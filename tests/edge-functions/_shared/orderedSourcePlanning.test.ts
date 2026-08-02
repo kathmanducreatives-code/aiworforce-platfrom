@@ -14,8 +14,8 @@ import {
   HIRING_SOURCE_PLAN_VERSION,
   type LeadMissionSourceProfile, type OrderedHiringSourcePlan, type OrderedSourceStep,
   type SourceStepObservation,
-} from "../../supabase/functions/_shared/hiringSourcePlan.ts";
-import { ACTOR_REGISTRY, resolveActorForSourceType } from "../../supabase/functions/_shared/actorRegistry.ts";
+} from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { ACTOR_REGISTRY, resolveActorForSourceType } from "../../../supabase/functions/_shared/actorRegistry.ts";
 
 function enableProviders() {
   for (const k of [

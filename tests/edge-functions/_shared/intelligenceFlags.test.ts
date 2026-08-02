@@ -7,16 +7,16 @@ import {
   readIntelligenceFlags, allIntelligenceFlagsOff, GEOGRAPHY_GATED_FLAGS,
   GEOGRAPHY_GATE_NOTE, isGeographyGated, GEOGRAPHY_GATE_CLEARED, geographyGateSatisfied,
   type IntelligenceFlag,
-} from "../../supabase/functions/_shared/intelligenceFlags.ts";
-import { inferGeography } from "../../supabase/functions/jobIntentTaxonomy.ts";
+} from "../../../supabase/functions/_shared/intelligenceFlags.ts";
+import { inferGeography } from "../../../supabase/functions/jobIntentTaxonomy.ts";
 import {
   buildPlannerDiagnostics, auditRedaction, extractTokenUsage, attachDiagnostics,
   diagnosticsHash, PLANNER_DIAGNOSTICS_KEY,
-} from "../../supabase/functions/_shared/plannerDiagnostics.ts";
-import { runPlanner } from "../../supabase/functions/_shared/plannerWrapper.ts";
-import { buildMission } from "../../supabase/functions/_shared/mission.ts";
-import { emptyMissionContext } from "../../supabase/functions/_shared/missionContext.ts";
-import { plannerCapabilityMenu } from "../../supabase/functions/_shared/capabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/plannerDiagnostics.ts";
+import { runPlanner } from "../../../supabase/functions/_shared/plannerWrapper.ts";
+import { buildMission } from "../../../supabase/functions/_shared/mission.ts";
+import { emptyMissionContext } from "../../../supabase/functions/_shared/missionContext.ts";
+import { plannerCapabilityMenu } from "../../../supabase/functions/_shared/capabilityRegistry.ts";
 
 const NO_ENV = () => undefined;
 

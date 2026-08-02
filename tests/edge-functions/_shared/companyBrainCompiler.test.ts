@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
 
 function has(list: string[], needle: string): boolean {
   return list.some((x) => x.toLowerCase() === needle.toLowerCase());

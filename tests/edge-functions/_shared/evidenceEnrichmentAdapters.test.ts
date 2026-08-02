@@ -2,10 +2,10 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   planStructuredCompanyEnrichment, structuredCompanyEvidenceToItems,
   planTargetedFirecrawl, selectFirecrawlPages, planSignalEnrichment,
-} from "../../supabase/functions/_shared/evidenceEnrichmentAdapters.ts";
-import { DEFAULT_EVIDENCE_BUDGET } from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { getActorCapability } from "../../supabase/functions/_shared/actorCapabilityRegistry.ts";
-import { satisfiedCategories, appendEvidence, type CandidateEnvelope } from "../../supabase/functions/_shared/candidateEnvelope.ts";
+} from "../../../supabase/functions/_shared/evidenceEnrichmentAdapters.ts";
+import { DEFAULT_EVIDENCE_BUDGET } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { getActorCapability } from "../../../supabase/functions/_shared/actorCapabilityRegistry.ts";
+import { satisfiedCategories, appendEvidence, type CandidateEnvelope } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
 
 const B = DEFAULT_EVIDENCE_BUDGET;
 

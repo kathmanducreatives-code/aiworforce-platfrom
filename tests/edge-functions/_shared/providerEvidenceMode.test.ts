@@ -6,9 +6,9 @@ import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0
 import {
   isNonPersistingProviderInput, withEvidenceOnlyPersistence, newWriteBoundary,
   recordProviderInvocation, writeBoundaryHolds, DEFER_PERSISTENCE_KEY,
-} from "../../supabase/functions/_shared/providerEvidenceMode.ts";
-import { runAgentCompoundExecution } from "../../supabase/functions/_shared/runAgentCompoundExecution.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+} from "../../../supabase/functions/_shared/providerEvidenceMode.ts";
+import { runAgentCompoundExecution } from "../../../supabase/functions/_shared/runAgentCompoundExecution.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const NOW = "2026-07-25T00:00:00Z";
 const intent = compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the United States");

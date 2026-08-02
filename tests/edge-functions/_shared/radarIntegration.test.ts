@@ -2,11 +2,11 @@
 // the env-gated adapters, and normalizers. NO provider calls (replay-safe).
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/companyBrainCompiler.ts";
-import { buildRadarIntelligenceProfile } from "../../supabase/functions/_shared/radarIntelligenceProfile.ts";
-import { enrichAndGateRows, type EnrichableRow } from "../../supabase/functions/_shared/radarSignalEnrichment.ts";
-import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, normalizePersonRow } from "../../supabase/functions/_shared/radarProviderAdapters.ts";
-import { buildSourceDiagnostics } from "../../supabase/functions/_shared/radarDiagnostics.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/companyBrainCompiler.ts";
+import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntelligenceProfile.ts";
+import { enrichAndGateRows, type EnrichableRow } from "../../../supabase/functions/_shared/radarSignalEnrichment.ts";
+import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, normalizePersonRow } from "../../../supabase/functions/_shared/radarProviderAdapters.ts";
+import { buildSourceDiagnostics } from "../../../supabase/functions/_shared/radarDiagnostics.ts";
 
 function intel() {
   return buildRadarIntelligenceProfile(compileCompanyBrainContext({

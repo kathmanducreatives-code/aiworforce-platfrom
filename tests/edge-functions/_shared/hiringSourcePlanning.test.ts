@@ -11,16 +11,16 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   HIRING_SOURCE_CATALOG, HIRING_SOURCE_CAPABILITY_IDS, plannerHiringSourceMenu,
   resolveHiringSourceActor, hiringSourceCatalogHash, isHiringSourceCapability,
-} from "../../supabase/functions/_shared/hiringSourceCatalog.ts";
+} from "../../../supabase/functions/_shared/hiringSourceCatalog.ts";
 import {
   compileHiringSourceInput, indeedDatePostedBucket, linkedinTimePostedRange, ycRoleFilter,
-} from "../../supabase/functions/_shared/actorInputPlanner.ts";
+} from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 import {
   isDynamicSourcePlanningEnabled, DYNAMIC_SOURCE_WORKSPACES_ENV,
-} from "../../supabase/functions/_shared/hiringSourcePlan.ts";
-import { ACTOR_REGISTRY, getActorByKey } from "../../supabase/functions/_shared/actorRegistry.ts";
-import { SOURCE_TYPE_TO_ACTOR } from "../../supabase/functions/_shared/actorInputSchemas.ts";
-import { readIntelligenceFlags } from "../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+} from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { ACTOR_REGISTRY, getActorByKey } from "../../../supabase/functions/_shared/actorRegistry.ts";
+import { SOURCE_TYPE_TO_ACTOR } from "../../../supabase/functions/_shared/actorInputSchemas.ts";
+import { readIntelligenceFlags } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
 
 /**
  * Enablement is `required_env`, re-read at call time, so flipping it here is

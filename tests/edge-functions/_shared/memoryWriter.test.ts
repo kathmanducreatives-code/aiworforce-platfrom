@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { writeMemoryFromToolCall, writeMemoryFromAgentResult } from "../../supabase/functions/_shared/memoryWriter.ts";
+import { writeMemoryFromToolCall, writeMemoryFromAgentResult } from "../../../supabase/functions/_shared/memoryWriter.ts";
 
 // Lightweight in-memory fake of the supabase-js client surface we use.
 function makeFake() {

@@ -9,7 +9,7 @@
 // PURE. No provider, model, network or database access.
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { reviewedArtifactNoun, reviewedArtifactLabel, buildOutcomeReport, buildProcessNarrative } from "../../supabase/functions/_shared/sourceQuality.ts";
+import { reviewedArtifactNoun, reviewedArtifactLabel, buildOutcomeReport, buildProcessNarrative } from "../../../supabase/functions/_shared/sourceQuality.ts";
 
 const counts = (raw: number, accepted = 0) => ({
   raw_result_count: raw, accepted_count: accepted, rejected_count: raw - accepted,

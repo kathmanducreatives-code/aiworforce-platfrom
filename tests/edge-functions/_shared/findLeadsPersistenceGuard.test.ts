@@ -6,9 +6,9 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   guardProviderLeadInsert, sealProvenance, buildNoResults, newRejectionCounter,
-} from "../../supabase/functions/_shared/leadPersistenceGuard.ts";
-import { buildProvenanceRecord } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { writeMemoryFromToolCall } from "../../supabase/functions/_shared/memoryWriter.ts";
+} from "../../../supabase/functions/_shared/leadPersistenceGuard.ts";
+import { buildProvenanceRecord } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { writeMemoryFromToolCall } from "../../../supabase/functions/_shared/memoryWriter.ts";
 
 const RUN = "run-abc";
 const goodCtx = { provider: "apify", actor_id: "curious_coder/linkedin-jobs-scraper", provider_run_id: RUN, workflow_run_id: RUN, plan_id: "plan-1", trace_id: RUN };

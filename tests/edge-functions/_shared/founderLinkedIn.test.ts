@@ -5,7 +5,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   normalizeFounderProfile, enrichFounderFromLinkedIn, isLinkedInProfileUrl,
   stripContactFields, deriveCredibilitySignals, deriveGtmRelevance,
-} from "../../supabase/functions/_shared/founderLinkedIn.ts";
+} from "../../../supabase/functions/_shared/founderLinkedIn.ts";
 
 const PROFILE_URL = "https://www.linkedin.com/in/jane-doe";
 

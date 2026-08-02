@@ -5,19 +5,19 @@ import {
   normalizeCompanyLinkedInUrl,
   normalizeDomain,
   isJobBoardDomain,
-} from "../../supabase/functions/_shared/companyIdentity.ts";
-import { classifyDecisionMakerRole, isTargetRoleFamily } from "../../supabase/functions/_shared/roleFamily.ts";
+} from "../../../supabase/functions/_shared/companyIdentity.ts";
+import { classifyDecisionMakerRole, isTargetRoleFamily } from "../../../supabase/functions/_shared/roleFamily.ts";
 import {
   normalizeProviderProfile,
   normalizePersonLinkedInUrl,
   dedupeProfiles,
-} from "../../supabase/functions/_shared/personProfile.ts";
-import { verifyCurrentEmployer } from "../../supabase/functions/_shared/employerVerification.ts";
-import { companySizeBand, rankCandidates, scoreCandidate } from "../../supabase/functions/_shared/ranking.ts";
-import { planPeopleSearch, fallbackStages, MAX_RESULTS_PER_LEAD } from "../../supabase/functions/_shared/searchPlanner.ts";
-import { findDecisionMakers, type ProviderResponse } from "../../supabase/functions/_shared/pipeline.ts";
-import { decidePersistence } from "../../supabase/functions/_shared/persistenceGuard.ts";
-import * as F from "../../supabase/functions/_shared/fixtures.ts";
+} from "../../../supabase/functions/_shared/personProfile.ts";
+import { verifyCurrentEmployer } from "../../../supabase/functions/_shared/employerVerification.ts";
+import { companySizeBand, rankCandidates, scoreCandidate } from "../../../supabase/functions/_shared/ranking.ts";
+import { planPeopleSearch, fallbackStages, MAX_RESULTS_PER_LEAD } from "../../../supabase/functions/_shared/searchPlanner.ts";
+import { findDecisionMakers, type ProviderResponse } from "../../../supabase/functions/_shared/pipeline.ts";
+import { decidePersistence } from "../../../supabase/functions/_shared/persistenceGuard.ts";
+import * as F from "../../../supabase/functions/_shared/fixtures.ts";
 
 const WS = "00000000-0000-4000-8000-000000000001";
 const LEAD = "00000000-0000-4000-8000-000000000002";

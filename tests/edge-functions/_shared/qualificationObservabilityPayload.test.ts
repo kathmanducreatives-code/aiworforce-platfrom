@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildQualificationObservability, type CandidateDiagnosticInput } from "../../supabase/functions/_shared/qualificationObservability.ts";
+import { buildQualificationObservability, type CandidateDiagnosticInput } from "../../../supabase/functions/_shared/qualificationObservability.ts";
 
 // A deliberately "hostile" input carrying PII, secrets, control chars, raw payload
 // keys, and malformed URLs — mirroring what run-agent could pass from provider raw.

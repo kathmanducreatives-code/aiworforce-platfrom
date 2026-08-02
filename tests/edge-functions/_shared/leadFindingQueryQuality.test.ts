@@ -10,11 +10,11 @@
 // No providers, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { extractLeadSearchIntent } from "../../supabase/functions/_shared/leadSearchIntent.ts";
-import { buildProviderQueries } from "../../supabase/functions/_shared/leadProviderQueryBuilder.ts";
-import { classifyLeadTier, type CandidateForTier } from "../../supabase/functions/_shared/leadMatchTier.ts";
-import { parseStrictConstraints, buildAttemptStrategy } from "../../supabase/functions/_shared/sourcingRetry.ts";
-import { isShortenerUrl } from "../../supabase/functions/_shared/apifyJobsNormalizer.ts";
+import { extractLeadSearchIntent } from "../../../supabase/functions/_shared/leadSearchIntent.ts";
+import { buildProviderQueries } from "../../../supabase/functions/_shared/leadProviderQueryBuilder.ts";
+import { classifyLeadTier, type CandidateForTier } from "../../../supabase/functions/_shared/leadMatchTier.ts";
+import { parseStrictConstraints, buildAttemptStrategy } from "../../../supabase/functions/_shared/sourcingRetry.ts";
+import { isShortenerUrl } from "../../../supabase/functions/_shared/apifyJobsNormalizer.ts";
 
 const kwText = (qs: ReturnType<typeof buildProviderQueries>) => qs.map((q) => q.keywords).join(" | ").toLowerCase();
 

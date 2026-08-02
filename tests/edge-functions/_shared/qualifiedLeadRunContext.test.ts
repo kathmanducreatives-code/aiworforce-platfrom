@@ -7,12 +7,12 @@ import { assert, assertEquals, assertFalse, assertStringIncludes } from "https:/
 import {
   buildQualifiedLeadRunContext, missingRunContextFields,
   REQUIRED_RUN_CONTEXT_FIELDS, RUN_CONTEXT_VERSION,
-} from "../../supabase/functions/_shared/qualifiedLeadRunContext.ts";
-import { compileJobIntent } from "../../supabase/functions/_shared/jobIntentTaxonomy.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { executeRunAgentCompanyFirstSourcing } from "../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { resolveRequestedLeadCount } from "../../supabase/functions/_shared/leadQuotaPolicy.ts";
-import { extractRequestedLeadCount } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+} from "../../../supabase/functions/_shared/qualifiedLeadRunContext.ts";
+import { compileJobIntent } from "../../../supabase/functions/_shared/jobIntentTaxonomy.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { resolveRequestedLeadCount } from "../../../supabase/functions/_shared/leadQuotaPolicy.ts";
+import { extractRequestedLeadCount } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
 
 const TARGET = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 

@@ -12,10 +12,10 @@
 // OFFLINE ONLY. No provider, no model, no network.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { prepareStepCall, PROVIDER_LIMIT_FIELD, PROVIDER_LIMIT_SCOPE } from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { newSourceExecutionState, type SourceExecutionState } from "../../supabase/functions/_shared/sourceExecutionState.ts";
-import { HIRING_SOURCE_CATALOG } from "../../supabase/functions/_shared/hiringSourceCatalog.ts";
-import type { OrderedSourceStep } from "../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { prepareStepCall, PROVIDER_LIMIT_FIELD, PROVIDER_LIMIT_SCOPE } from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { newSourceExecutionState, type SourceExecutionState } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import { HIRING_SOURCE_CATALOG } from "../../../supabase/functions/_shared/hiringSourceCatalog.ts";
+import type { OrderedSourceStep } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 
 const TASK = "2425ec4f-7d8c-4a05-8c93-597b051db10b";
 

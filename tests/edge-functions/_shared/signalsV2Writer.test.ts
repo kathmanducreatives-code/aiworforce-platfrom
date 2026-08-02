@@ -16,7 +16,7 @@ import {
   writeSignalEventEvidenceV2,
   writeSignalEventV2,
   type SignalsV2AdminClient,
-} from "../../supabase/functions/_shared/signalsV2Writer.ts";
+} from "../../../supabase/functions/_shared/signalsV2Writer.ts";
 
 // ------------------------------------------------------ fake admin ------------
 

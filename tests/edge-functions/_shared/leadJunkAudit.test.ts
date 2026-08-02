@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { auditLeadBatch, classifyLeadForAudit, isHumanProtected, type AuditLeadRow } from "../../supabase/functions/_shared/leadJunkAudit.ts";
+import { auditLeadBatch, classifyLeadForAudit, isHumanProtected, type AuditLeadRow } from "../../../supabase/functions/_shared/leadJunkAudit.ts";
 
 Deno.test("audit: a row with real source proof + domain is kept", () => {
   const row: AuditLeadRow = { id: "1", company_name: "JustAI", website: "https://justai.com", domain: "justai.com", source_url: "https://linkedin.com/jobs/view/justai", raw: { match_tier: "strict" } };

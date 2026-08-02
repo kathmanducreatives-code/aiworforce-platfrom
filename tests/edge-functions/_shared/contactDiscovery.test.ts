@@ -3,7 +3,7 @@ import {
   isFindContactsRequest, personaForAccounts, buildContactSearchQueries,
   normalizeDiscoveredContact, matchContactToAccount, planContactAttachments,
   contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts,
-} from "../../supabase/functions/_shared/contactDiscovery.ts";
+} from "../../../supabase/functions/_shared/contactDiscovery.ts";
 
 const accounts: AccountForContacts[] = [
   { lead_candidate_id: "lc1", company: "HireRight Inc", signal_role: "Account Executive" },

@@ -7,18 +7,18 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   deterministicOrderedPlan, type LeadMissionSourceProfile,
   type OrderedHiringSourcePlan, type SourceStepObservation,
-} from "../../supabase/functions/_shared/hiringSourcePlan.ts";
+} from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 import {
   newSourceExecutionState, stateMatchesPlan, stepOf, jobDedupeKey, companyDedupeKeyFor,
   dedupeAgainstState, peopleSearchAlreadyRan, markPeopleSearched, isStepFinished,
   SOURCE_EXECUTION_KEY, type SourceExecutionState,
-} from "../../supabase/functions/_shared/sourceExecutionState.ts";
+} from "../../../supabase/functions/_shared/sourceExecutionState.ts";
 import {
   sequentialJobsInvoker, selectExecutableStep, applyObservation, prepareStepCall,
   sourceIdempotencyKey, sourceExecutionDiagnostics, safeFailureCategory, actorKeyForCapability,
-} from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { resolveActorForSourceType } from "../../supabase/functions/_shared/actorRegistry.ts";
-import { SOURCING_STATE_KEY } from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
+} from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { resolveActorForSourceType } from "../../../supabase/functions/_shared/actorRegistry.ts";
+import { SOURCING_STATE_KEY } from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
 
 function enableProviders() {
   for (const k of [
@@ -570,7 +570,7 @@ Deno.test("T20c company identity accepts both field spellings and keeps the STRO
 
 Deno.test("T32b DISABLED returns the caller's OWN function, not an equivalent one", async () => {
   const { applySequentialSourceExecution, sequentialSourceDiagnostics } =
-    await import("../../supabase/functions/_shared/sequentialSourceBridge.ts");
+    await import("../../../supabase/functions/_shared/sequentialSourceBridge.ts");
   const original: (e: Record<string, unknown>, m: number) => Promise<unknown[]> = async () => [job(1)];
   const r = await applySequentialSourceExecution({
     workspaceId: "ws-1", taskId: "t", invokeJobs: original,
@@ -584,7 +584,7 @@ Deno.test("T32b DISABLED returns the caller's OWN function, not an equivalent on
 });
 
 Deno.test("T32c the flag ALONE cannot enable it — an allow-list is required", async () => {
-  const { applySequentialSourceExecution } = await import("../../supabase/functions/_shared/sequentialSourceBridge.ts");
+  const { applySequentialSourceExecution } = await import("../../../supabase/functions/_shared/sequentialSourceBridge.ts");
   const original: (e: Record<string, unknown>, m: number) => Promise<unknown[]> = async () => [];
   const r = await applySequentialSourceExecution({
     workspaceId: "ws-1", taskId: "t", invokeJobs: original, profile: profile(),
@@ -597,7 +597,7 @@ Deno.test("T32c the flag ALONE cannot enable it — an allow-list is required", 
 Deno.test("T32d ENABLED for an allow-listed workspace wraps and runs step one only", async () => {
   enableProviders();
   const { applySequentialSourceExecution, sequentialSourceDiagnostics } =
-    await import("../../supabase/functions/_shared/sequentialSourceBridge.ts");
+    await import("../../../supabase/functions/_shared/sequentialSourceBridge.ts");
   const seen: string[] = [];
   const r = await applySequentialSourceExecution({
     workspaceId: "ws-test", taskId: "t-seq",
@@ -618,7 +618,7 @@ Deno.test("T32d ENABLED for an allow-listed workspace wraps and runs step one on
 });
 
 Deno.test("T27b a mission with a capability gap stays on the deterministic path", async () => {
-  const { applySequentialSourceExecution } = await import("../../supabase/functions/_shared/sequentialSourceBridge.ts");
+  const { applySequentialSourceExecution } = await import("../../../supabase/functions/_shared/sequentialSourceBridge.ts");
   const original: (e: Record<string, unknown>, m: number) => Promise<unknown[]> = async () => [];
   const r = await applySequentialSourceExecution({
     workspaceId: "ws-test", taskId: "t", invokeJobs: original,

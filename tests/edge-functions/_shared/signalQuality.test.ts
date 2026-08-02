@@ -5,7 +5,7 @@ import {
   dedupeSignals,
   signalDedupeKey,
   DEFAULT_SIGNAL_MIX,
-} from "../../supabase/functions/_shared/signalQuality.ts";
+} from "../../../supabase/functions/_shared/signalQuality.ts";
 
 const brain = {
   icp: {

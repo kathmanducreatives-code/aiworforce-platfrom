@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getCompetitors, matchCompetitors, buildCompetitorSearchQueries } from "../../supabase/functions/_shared/competitorRegistry.ts";
+import { getCompetitors, matchCompetitors, buildCompetitorSearchQueries } from "../../../supabase/functions/_shared/competitorRegistry.ts";
 
 Deno.test("matches GojiBerry aliases", () => {
   assert(matchCompetitors("people talking about GojiBerry on LinkedIn").some((c) => c.key === "gojiberry"));

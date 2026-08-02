@@ -5,7 +5,7 @@
 // Run with: supabase--test_edge_functions
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyWorkflow, normalizeIntent, type WorkflowCategory } from "../../supabase/functions/_shared/workflowClassifier.ts";
+import { classifyWorkflow, normalizeIntent, type WorkflowCategory } from "../../../supabase/functions/_shared/workflowClassifier.ts";
 
 async function cat(message: string): Promise<WorkflowCategory> {
   const d = await classifyWorkflow(message);

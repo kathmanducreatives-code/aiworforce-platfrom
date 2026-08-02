@@ -7,8 +7,8 @@ import {
   resolveOriginAwareSave,
   isValidChangeOrigin,
   collectLeafPaths,
-} from "../../supabase/functions/_shared/companyBrainOriginSave.ts";
-import { readPath } from "../../supabase/functions/_shared/companyBrainRefreshDiff.ts";
+} from "../../../supabase/functions/_shared/companyBrainOriginSave.ts";
+import { readPath } from "../../../supabase/functions/_shared/companyBrainRefreshDiff.ts";
 
 const CONFIRMED_BRAIN = {
   company: { name: "Agentory", website_url: "https://agentory.space" },

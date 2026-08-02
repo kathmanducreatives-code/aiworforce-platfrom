@@ -3,7 +3,7 @@
 // Deterministic; no provider/LLM/Apify.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildHarvestApiPeopleInput } from "../../supabase/functions/_shared/harvestApiPeople.ts";
+import { buildHarvestApiPeopleInput } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
 import {
   parsePeopleSearchIntent,
   buildPeopleSearchAttempts,
@@ -11,12 +11,12 @@ import {
   parseMarketTerms,
   buildMarketQuery,
   peopleAttemptFingerprint,
-} from "../../supabase/functions/_shared/peopleSearchQueryBuilder.ts";
-import { resolveProviderSource } from "../../supabase/functions/_shared/plannedToolResolver.ts";
-import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, type NormalizedProviderItem } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { classifyProviderSourceOutcome, buildProviderSourceNoResults } from "../../supabase/functions/_shared/leadSourcingGate.ts";
-import { filterPlanForMode, stepAllowedInMode } from "../../supabase/functions/_shared/executionMode.ts";
-import { FROZEN_Q1_GENERIC_INPUT, FROZEN_MALFORMED_PAYLOAD, FROZEN_Q1_SCOUT_INSTRUCTION } from "../../supabase/functions/_shared/peopleSearchInputFixture.ts";
+} from "../../../supabase/functions/_shared/peopleSearchQueryBuilder.ts";
+import { resolveProviderSource } from "../../../supabase/functions/_shared/plannedToolResolver.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, type NormalizedProviderItem } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { classifyProviderSourceOutcome, buildProviderSourceNoResults } from "../../../supabase/functions/_shared/leadSourcingGate.ts";
+import { filterPlanForMode, stepAllowedInMode } from "../../../supabase/functions/_shared/executionMode.ts";
+import { FROZEN_Q1_GENERIC_INPUT, FROZEN_MALFORMED_PAYLOAD, FROZEN_Q1_SCOUT_INSTRUCTION } from "../../../supabase/functions/_shared/peopleSearchInputFixture.ts";
 
 const Q1 = FROZEN_Q1_SCOUT_INSTRUCTION;
 const CAP = 5;

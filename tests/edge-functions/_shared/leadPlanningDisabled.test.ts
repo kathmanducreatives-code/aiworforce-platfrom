@@ -15,9 +15,9 @@ import { assert, assertEquals, assertFalse, assertStrictEquals } from "https://d
 import {
   applyClaudeFirstLeadPlanning, bridgeDiagnostics, isClaudeFirstLeadPlanningEnabled,
   CLAUDE_FIRST_WORKSPACES_ENV, type JobSearchSpecSlice,
-} from "../../supabase/functions/_shared/leadPlanningBridge.ts";
-import { CANONICAL_PROJECT_REFS } from "../../supabase/functions/runtimeEnvironment.ts";
-import type { GenerateJsonFn } from "../../supabase/functions/plannerWrapper.ts";
+} from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
+import { CANONICAL_PROJECT_REFS } from "../../../supabase/functions/runtimeEnvironment.ts";
+import type { GenerateJsonFn } from "../../../supabase/functions/plannerWrapper.ts";
 
 const PRIMARY =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";

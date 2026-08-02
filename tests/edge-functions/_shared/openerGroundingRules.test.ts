@@ -13,8 +13,8 @@ import {
   type ModelOpenerResponse,
   type PersonalizationContext,
   DEFAULT_OPENER_CONSTRAINTS,
-} from "../../supabase/functions/_shared/openerBackend.ts";
-import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../supabase/functions/_shared/accountState.ts";
+} from "../../../supabase/functions/_shared/openerBackend.ts";
+import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/accountState.ts";
 
 const T = "2026-07-20T10:00:00.000Z";
 

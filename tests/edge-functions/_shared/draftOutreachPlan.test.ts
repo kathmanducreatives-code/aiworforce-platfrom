@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildDraftOutreachPlan } from "../../supabase/functions/_shared/draftOutreachPlan.ts";
+import { buildDraftOutreachPlan } from "../../../supabase/functions/_shared/draftOutreachPlan.ts";
 
 Deno.test("memory-driven draft outreach → Penn-only plan, approval-gated", () => {
   const plan = buildDraftOutreachPlan({

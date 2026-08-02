@@ -5,12 +5,12 @@
 // ZERO network, ZERO model calls.
 
 import { assertEquals, assert, assertFalse, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { isCompanyFirstRequest } from "../../supabase/functions/_shared/runAgentCompoundBridge.ts";
-import { routeQualifiedLead, extractRequestedLeadCount } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
-import { executeRunAgentCompanyFirstSourcing } from "../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { resolveRequestedLeadCount } from "../../supabase/functions/_shared/leadQuotaPolicy.ts";
-import { classifyRoleFamily } from "../../supabase/functions/_shared/roleFamilies.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { isCompanyFirstRequest } from "../../../supabase/functions/_shared/runAgentCompoundBridge.ts";
+import { routeQualifiedLead, extractRequestedLeadCount } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { resolveRequestedLeadCount } from "../../../supabase/functions/_shared/leadQuotaPolicy.ts";
+import { classifyRoleFamily } from "../../../supabase/functions/_shared/roleFamilies.ts";
 
 const TARGET = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 const ACCOUNT_ONLY = "Find five SaaS companies with sales hiring signals.";

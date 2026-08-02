@@ -1,6 +1,6 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildPeopleScope, resultBelongsToScope } from "../../supabase/functions/_shared/scopedPeopleSearch.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
+import { buildPeopleScope, resultBelongsToScope } from "../../../supabase/functions/_shared/scopedPeopleSearch.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
 
 const opts = { requestedRole: "founder", queryIntent: "Founders of SaaS startups hiring Sales Operations" };
 

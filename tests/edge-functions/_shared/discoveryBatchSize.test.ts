@@ -10,7 +10,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   decideDiscoveryBatchSize, batchDecisionDiagnostics,
   DEFAULT_ROWS_PER_LEAD, MINIMUM_DISCOVERY_BATCH, LATER_SOURCE_WIDENING,
-} from "../../supabase/functions/_shared/discoveryBatchSize.ts";
+} from "../../../supabase/functions/_shared/discoveryBatchSize.ts";
 
 const SOURCE_MAX = 50;
 const base = {

@@ -5,7 +5,7 @@ import {
   resolveTaskUserId,
   DIRECT_ACTION_AGENT,
   DIRECT_ACTION_INSTRUCTION,
-} from "../../supabase/functions/_shared/leadActionRequestContract.ts";
+} from "../../../supabase/functions/_shared/leadActionRequestContract.ts";
 
 const WS = "11111111-1111-4111-8111-111111111111";
 const LEAD_A = "22222222-2222-4222-8222-222222222222";

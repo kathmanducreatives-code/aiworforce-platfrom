@@ -5,7 +5,7 @@
 // Synthetic payloads only — no network, database, provider or model.
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyLeadOutcome } from "../../supabase/functions/_shared/leadActionOutcome.ts";
+import { classifyLeadOutcome } from "../../../supabase/functions/_shared/leadActionOutcome.ts";
 
 /** A per_lead row exactly as the opener path emits it. */
 function openerRow(status: string, reason_code: string, extra: Record<string, unknown> = {}) {

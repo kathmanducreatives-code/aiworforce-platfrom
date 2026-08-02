@@ -4,12 +4,12 @@
 // `persistPlan`. Only the provider boundary is mocked. ZERO paid Actor runs.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { executeCompanyFirstRoute } from "../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
+import { executeCompanyFirstRoute } from "../../../supabase/functions/_shared/companyFirstRouteExecutor.ts";
 import {
   projectCompanyFirstPersistence, quotaCreditFromProjection,
-} from "../../supabase/functions/_shared/companyFirstPersistenceProjection.ts";
-import { newRouteExecutionRecord, validateHiringRoute } from "../../supabase/functions/_shared/hiringRouteContract.ts";
-import { REVENUE_OPS_PACK, SALES_OPS_PACK } from "../../supabase/functions/_shared/hiringRolePackFilter.ts";
+} from "../../../supabase/functions/_shared/companyFirstPersistenceProjection.ts";
+import { newRouteExecutionRecord, validateHiringRoute } from "../../../supabase/functions/_shared/hiringRouteContract.ts";
+import { REVENUE_OPS_PACK, SALES_OPS_PACK } from "../../../supabase/functions/_shared/hiringRolePackFilter.ts";
 
 const LI = (s: string) => `https://www.linkedin.com/company/${s}`;
 const GENERAL_QUERY =

@@ -1,14 +1,14 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildDeterministicPlan } from "../../supabase/functions/_shared/actorInputPlanner.ts";
+import { buildDeterministicPlan } from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 import {
   validateActorInputAgainstSchema,
   sanitizeActorInput,
   validateStrictConstraints,
-} from "../../supabase/functions/_shared/actorInputValidator.ts";
-import { getActorInputSchema } from "../../supabase/functions/_shared/actorInputSchemas.ts";
-import { planBroadening, guardBroadenedTerms } from "../../supabase/functions/_shared/actorBroadeningPlanner.ts";
-import { classifyResults, summarizeSourceQuality, topRejectReasons } from "../../supabase/functions/_shared/sourceQuality.ts";
-import type { SourcingCriteria, StrictConstraints } from "../../supabase/functions/_shared/sourcingRetry.ts";
+} from "../../../supabase/functions/_shared/actorInputValidator.ts";
+import { getActorInputSchema } from "../../../supabase/functions/_shared/actorInputSchemas.ts";
+import { planBroadening, guardBroadenedTerms } from "../../../supabase/functions/_shared/actorBroadeningPlanner.ts";
+import { classifyResults, summarizeSourceQuality, topRejectReasons } from "../../../supabase/functions/_shared/sourceQuality.ts";
+import type { SourcingCriteria, StrictConstraints } from "../../../supabase/functions/_shared/sourcingRetry.ts";
 
 const STRICT_NONE: StrictConstraints = { location: false, industry: false, stage: false, count_exact: false };
 
@@ -204,8 +204,8 @@ Deno.test("quality: classifyResults rejects junk, removes duplicates, records re
 });
 
 // ============ Provider override + budget (Claude switch) ============
-import { resolveSourcePlannerProvider } from "../../supabase/functions/_shared/providerRouting.ts";
-import { planActorInput, _resetPlannerBudget } from "../../supabase/functions/_shared/actorInputPlanner.ts";
+import { resolveSourcePlannerProvider } from "../../../supabase/functions/_shared/providerRouting.ts";
+import { planActorInput, _resetPlannerBudget } from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 
 Deno.test("provider: SOURCE_PLANNER_PROVIDER=anthropic|claude → anthropic", () => {
   assertEquals(resolveSourcePlannerProvider("anthropic"), "anthropic");
@@ -243,7 +243,7 @@ Deno.test("planner: AI call budget capped at 3 per run", async () => {
 });
 
 // ============ Outcome report + next-action pills (Workbench UX) ============
-import { buildOutcomeReport, acceptanceRate } from "../../supabase/functions/_shared/sourceQuality.ts";
+import { buildOutcomeReport, acceptanceRate } from "../../../supabase/functions/_shared/sourceQuality.ts";
 
 Deno.test("outcome: complete copy + forward actions", () => {
   const r = buildOutcomeReport({ counts: { raw_result_count: 8, accepted_count: 5, rejected_count: 3, duplicate_count: 0, persisted_count: 5, requested_count: 5, reject_reason_counts: {}, status: "complete" }, requested: 5, has_contacts: false });

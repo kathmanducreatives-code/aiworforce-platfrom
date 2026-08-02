@@ -10,10 +10,10 @@
 // ZERO network, ZERO provider calls, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { resolveJobIntent } from "../../supabase/functions/_shared/jobFamilyRegistry.ts";
-import { routeQualifiedLead } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
-import { splitRequestClauses, isIcCompatible } from "../../supabase/functions/_shared/jobIntentTaxonomy.ts";
-import type { Department, JobFunction, SeniorityToken, TeamStage, CompanyVertical } from "../../supabase/functions/_shared/jobIntentTaxonomy.ts";
+import { resolveJobIntent } from "../../../supabase/functions/_shared/jobFamilyRegistry.ts";
+import { routeQualifiedLead } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+import { splitRequestClauses, isIcCompatible } from "../../../supabase/functions/_shared/jobIntentTaxonomy.ts";
+import type { Department, JobFunction, SeniorityToken, TeamStage, CompanyVertical } from "../../../supabase/functions/_shared/jobIntentTaxonomy.ts";
 
 interface Expectation {
   q: string;

@@ -4,15 +4,15 @@
 // + extractLeadDetails. Deterministic; no provider.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { resolveProviderSource } from "../../supabase/functions/_shared/plannedToolResolver.ts";
-import { extractLeadDetails } from "../../supabase/functions/_shared/leadIntake.ts";
+import { resolveProviderSource } from "../../../supabase/functions/_shared/plannedToolResolver.ts";
+import { extractLeadDetails } from "../../../supabase/functions/_shared/leadIntake.ts";
 import {
   ORIGINAL_USER_INSTRUCTION,
   PLANNER_SCOUT_INSTRUCTION,
   CURRENT_WRONG_ROUTE,
   REQUIRED_ROUTE,
   FROZEN_WRONG_PERSISTED_ROWS,
-} from "../../supabase/functions/_shared/intentRoutingFixture.ts";
+} from "../../../supabase/functions/_shared/intentRoutingFixture.ts";
 
 Deno.test("repro: routing the PLANNER Scout prose flips a founder request to apify_jobs", () => {
   // run-agent currently calls resolveProviderSource(instruction ?? input), i.e. the

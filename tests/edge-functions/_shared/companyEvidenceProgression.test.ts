@@ -12,11 +12,11 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   runCompoundSourcing, type CompoundDeps, type CompoundJob, type CompoundPerson,
-} from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { buildCompoundPersistencePlan } from "../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
-import { buildCompanyRowPersistencePlan } from "../../supabase/functions/_shared/companyRowProjection.ts";
-import type { CompanyBrainHardConstraints } from "../../supabase/functions/_shared/companyIcpFilter.ts";
+} from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { buildCompoundPersistencePlan } from "../../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
+import { buildCompanyRowPersistencePlan } from "../../../supabase/functions/_shared/companyRowProjection.ts";
+import type { CompanyBrainHardConstraints } from "../../../supabase/functions/_shared/companyIcpFilter.ts";
 
 const NOW = "2026-07-30T00:00:00Z";
 const SAAS = "B2B SaaS platform for revenue teams";

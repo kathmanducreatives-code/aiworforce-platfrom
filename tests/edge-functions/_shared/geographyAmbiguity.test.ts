@@ -6,7 +6,7 @@
 // ZERO network, ZERO provider calls, ZERO model calls, ZERO database writes.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { inferGeography, mentionsUnitedStates } from "../../supabase/functions/_shared/jobIntentTaxonomy.ts";
+import { inferGeography, mentionsUnitedStates } from "../../../supabase/functions/_shared/jobIntentTaxonomy.ts";
 
 // ---- the pronoun ------------------------------------------------------------
 

@@ -9,12 +9,12 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import { applySequentialSourceExecution } from "../../sequentialSourceBridge.ts";
 import { emptyFunnelSummary } from "../../sourcingBottleneck.ts";
 import type { RoundObservationInput } from "../../companyFirstQuotaController.ts";
-import type { EnvReader } from "../../supabase/functions/intelligenceFlags.ts";
+import type { EnvReader } from "../../../supabase/functions/intelligenceFlags.ts";
 import type { LeadMissionSourceProfile } from "../../hiringSourcePlan.ts";
-import { validateRoleTaxonomy } from "../../supabase/functions/_shared/leadRoleTaxonomy.ts";
-import { validateQueryPacks, type QueryPack } from "../../supabase/functions/_shared/leadQueryPacks.ts";
-import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../supabase/functions/_shared/leadAdaptiveContext.ts";
-import { approvedToAdaptive, bindFeedbackAskClaude, resolveAdaptiveOrderedPlan } from "../../supabase/functions/_shared/leadAdaptiveRuntime.ts";
+import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/leadQueryPacks.ts";
+import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/leadAdaptiveContext.ts";
+import { approvedToAdaptive, bindFeedbackAskClaude, resolveAdaptiveOrderedPlan } from "../../../supabase/functions/_shared/leadAdaptiveRuntime.ts";
 
 const APPROVED = ["yc_job_discovery", "linkedin_job_discovery", "indeed_job_discovery", "glassdoor_job_discovery"];
 
@@ -380,10 +380,10 @@ Deno.test("approvedToAdaptive covers the union, and excludes ATS", () => {
 // the existing planner's accepted strategy into the adaptive one. The adapter
 // makes no model call of its own — proven by test 10.
 
-import { adaptiveStrategyFromLeadStrategy } from "../../supabase/functions/_shared/leadStrategyAdapter.ts";
-import { adaptiveCapabilityCards } from "../../supabase/functions/_shared/leadCapabilityCards.ts";
-import type { LeadInitialStrategy } from "../../supabase/functions/_shared/leadStrategy.ts";
-import type { MissionTruth } from "../../supabase/functions/_shared/leadSourceStrategy.ts";
+import { adaptiveStrategyFromLeadStrategy } from "../../../supabase/functions/_shared/leadStrategyAdapter.ts";
+import { adaptiveCapabilityCards } from "../../../supabase/functions/_shared/leadCapabilityCards.ts";
+import type { LeadInitialStrategy } from "../../../supabase/functions/_shared/leadStrategy.ts";
+import type { MissionTruth } from "../../../supabase/functions/_shared/leadSourceStrategy.ts";
 
 const TRUTH: MissionTruth = {
   final_entity: "contact_ready_lead",

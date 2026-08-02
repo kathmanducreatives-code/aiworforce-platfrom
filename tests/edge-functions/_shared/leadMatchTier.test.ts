@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyLeadTier, detectRecruiterProxy, fillFromRawResults, unionMissingEvidence, type CandidateForTier } from "../../supabase/functions/_shared/leadMatchTier.ts";
-import { extractLeadSearchIntent } from "../../supabase/functions/_shared/leadSearchIntent.ts";
+import { classifyLeadTier, detectRecruiterProxy, fillFromRawResults, unionMissingEvidence, type CandidateForTier } from "../../../supabase/functions/_shared/leadMatchTier.ts";
+import { extractLeadSearchIntent } from "../../../supabase/functions/_shared/leadSearchIntent.ts";
 
 // Follow-up: analyst update must UNION missing-evidence, not clobber it.
 Deno.test("union: funding missing-evidence survives + is unioned with analyst", () => {

@@ -2,8 +2,8 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   extractLeadIntent, planJobsActorInput, filterHiringCandidates, tierFromScore,
   type RawCandidate,
-} from "../../supabase/functions/_shared/leadIntent.ts";
-import { classifyRoleFamily, roleMatchesFamily, isProfileOrEquityTitle } from "../../supabase/functions/_shared/roleFamilies.ts";
+} from "../../../supabase/functions/_shared/leadIntent.ts";
+import { classifyRoleFamily, roleMatchesFamily, isProfileOrEquityTitle } from "../../../supabase/functions/_shared/roleFamilies.ts";
 
 // ---------- Intent extraction (separates product / buyer / role / source) ----------
 
@@ -232,7 +232,7 @@ Deno.test("extractLeadIntent: threads extended Brain ICP (industries/size/negati
 });
 
 Deno.test("icpConstraintsFromIntent: SaaS 5-150 → max 150, not enterprise, SaaS positive", async () => {
-  const { icpConstraintsFromIntent } = await import("../../supabase/functions/_shared/companyIcpFilter.ts");
+  const { icpConstraintsFromIntent } = await import("../../../supabase/functions/_shared/companyIcpFilter.ts");
   const li = extractLeadIntent({
     message: "Find founders hiring executive assistants.",
     brain: { icp: { industries: ["B2B SaaS"], company_size: "5-150 employees" } },

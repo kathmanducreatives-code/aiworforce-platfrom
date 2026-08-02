@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isFollowUpReference, extractTopN } from "../../supabase/functions/_shared/memoryReader.ts";
+import { isFollowUpReference, extractTopN } from "../../../supabase/functions/_shared/memoryReader.ts";
 
 Deno.test("isFollowUpReference: matches common follow-ups", () => {
   for (const m of [

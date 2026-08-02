@@ -5,7 +5,7 @@ import {
   rankCredits,
   buildPostLeadActionsCard,
   DEFAULT_CREDIT_COSTS,
-} from "../../supabase/functions/_shared/creditEstimate.ts";
+} from "../../../supabase/functions/_shared/creditEstimate.ts";
 
 Deno.test("#2 5 leads, 5 websites: enrich=5, draft=10, enrich+draft=15", () => {
   assertEquals(estimateAction("enrich", 5, 5).credits, 5);

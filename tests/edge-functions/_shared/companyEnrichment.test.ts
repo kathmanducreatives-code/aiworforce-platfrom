@@ -9,7 +9,7 @@ import {
   cleanEvidenceText,
   isBadContactEmail,
   type CrawledPage,
-} from "../../supabase/functions/_shared/companyEnrichment.ts";
+} from "../../../supabase/functions/_shared/companyEnrichment.ts";
 
 // ---- Email/contact-quality cleanup (placeholder + malformed rejection) ----
 Deno.test("email #1: company@mail.com placeholder is rejected", () => {

@@ -3,18 +3,18 @@
 // ZERO network (run without --allow-net).
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 import {
   buildCuriousCoderLinkedInJobsInput, buildLinkedInJobsSearchUrls, buildLinkedInJobsSearchUrl,
   describeJobsNativeInput, CURIOUS_CODER_JOBS_ADAPTER_VERSION,
-} from "../../supabase/functions/_shared/curiousCoderJobsInput.ts";
-import { buildProviderEnvelope, nativePayloadIsClean, WRAPPER_ONLY_KEYS } from "../../supabase/functions/_shared/providerEvidenceMode.ts";
-import { buildScopedPeopleInput } from "../../supabase/functions/_shared/runAgentCompoundPeopleAdapter.ts";
-import { buildHarvestApiPeopleInput } from "../../supabase/functions/_shared/harvestApiPeople.ts";
-import { buildPeopleScope } from "../../supabase/functions/_shared/scopedPeopleSearch.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
-import { ACTOR_REGISTRY, getActorByKey } from "../../supabase/functions/_shared/actorRegistry.ts";
-import { runAgentCompoundExecution } from "../../supabase/functions/_shared/runAgentCompoundExecution.ts";
+} from "../../../supabase/functions/_shared/curiousCoderJobsInput.ts";
+import { buildProviderEnvelope, nativePayloadIsClean, WRAPPER_ONLY_KEYS } from "../../../supabase/functions/_shared/providerEvidenceMode.ts";
+import { buildScopedPeopleInput } from "../../../supabase/functions/_shared/runAgentCompoundPeopleAdapter.ts";
+import { buildHarvestApiPeopleInput } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
+import { buildPeopleScope } from "../../../supabase/functions/_shared/scopedPeopleSearch.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import { ACTOR_REGISTRY, getActorByKey } from "../../../supabase/functions/_shared/actorRegistry.ts";
+import { runAgentCompoundExecution } from "../../../supabase/functions/_shared/runAgentCompoundExecution.ts";
 
 const SAAS = "Founders of SaaS startups hiring Sales Operations in the United States";
 const intent = compileLeadEntityIntent(SAAS);

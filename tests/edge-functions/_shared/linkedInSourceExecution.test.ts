@@ -1,8 +1,8 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/companyBrainCompiler.ts";
-import { buildRadarIntelligenceProfile } from "../../supabase/functions/_shared/radarIntelligenceProfile.ts";
-import { postsToSignalRows, commentsToSignalRows, peopleToDecisionMakerRows } from "../../supabase/functions/_shared/linkedInSourceExecution.ts";
-import type { NormalizedPost, NormalizedComment, NormalizedPerson } from "../../supabase/functions/_shared/radarProviderAdapters.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/companyBrainCompiler.ts";
+import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntelligenceProfile.ts";
+import { postsToSignalRows, commentsToSignalRows, peopleToDecisionMakerRows } from "../../../supabase/functions/_shared/linkedInSourceExecution.ts";
+import type { NormalizedPost, NormalizedComment, NormalizedPerson } from "../../../supabase/functions/_shared/radarProviderAdapters.ts";
 
 function intel() {
   return buildRadarIntelligenceProfile(compileCompanyBrainContext({

@@ -16,8 +16,8 @@
 // OFFLINE ONLY. No provider, no model, no database.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyJobFamily } from "../../supabase/functions/_shared/jobFamily.ts";
-import { classifyBottleneck, emptyFunnelSummary } from "../../supabase/functions/_shared/sourcingBottleneck.ts";
+import { classifyJobFamily } from "../../../supabase/functions/_shared/jobFamily.ts";
+import { classifyBottleneck, emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
 
 /** Verbatim from production run c34c0cad. */
 const PRODUCTION_TITLES = [

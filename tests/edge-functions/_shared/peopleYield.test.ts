@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildHarvestApiPeopleInput } from "../../supabase/functions/_shared/harvestApiPeople.ts";
+import { buildHarvestApiPeopleInput } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
 import {
   normalizeDiscoveredContact,
   matchContactToAccountDetailed,
@@ -7,7 +7,7 @@ import {
   buildContactSearchQueries,
   personaForAccounts,
   type AccountForContacts,
-} from "../../supabase/functions/_shared/contactDiscovery.ts";
+} from "../../../supabase/functions/_shared/contactDiscovery.ts";
 
 // ============ People-search actor input (yield fixes) ============
 

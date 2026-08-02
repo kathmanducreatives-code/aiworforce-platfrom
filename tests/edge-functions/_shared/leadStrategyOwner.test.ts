@@ -5,18 +5,18 @@ import {
   buildLeadStrategyRequestBody, LEAD_STRATEGY_ALLOWED_MODELS,
   LEAD_STRATEGY_ESCALATION_MODEL, LEAD_STRATEGY_PRIMARY_MODEL, modelForTier,
   type LeadStrategyModelFn,
-} from "../../supabase/functions/_shared/leadStrategyModels.ts";
+} from "../../../supabase/functions/_shared/leadStrategyModels.ts";
 import {
   createLeadStrategyPlanner, leadStrategyOwnerApplies, runLeadStrategy,
-} from "../../supabase/functions/_shared/leadStrategyOwner.ts";
+} from "../../../supabase/functions/_shared/leadStrategyOwner.ts";
 import {
   deterministicLeadStrategy, resolveMissionFamily, validateLeadStrategy,
-} from "../../supabase/functions/_shared/leadStrategyValidator.ts";
+} from "../../../supabase/functions/_shared/leadStrategyValidator.ts";
 import {
   buildQueryPack, eligiblePackIds, inferRoleFamily, isDiscoverySource,
   REVENUE_OPS_FAMILY, titleIsApproved,
-} from "../../supabase/functions/_shared/leadRoleTaxonomy.ts";
-import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../supabase/functions/_shared/leadStrategyContract.ts";
+} from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import type { LeadStrategyMission, LeadStrategyRoundContext } from "../../../supabase/functions/_shared/leadStrategyContract.ts";
 
 const mission: LeadStrategyMission = {
   original_query: "Find founders of SaaS startups hiring Sales Operations in the United States",

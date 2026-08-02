@@ -7,11 +7,11 @@ import {
   runCompanyEnrichment, mapWithConcurrency,
   COMPANY_ENRICHMENT_CONCURRENCY, EDGE_FUNCTION_WALL_CLOCK_MS, FINALIZATION_RESERVE_MS, enrichmentDeadlineFrom,
   type SourceAcceptedPerson, type CompanyActorExecutor, type EnrichmentClock,
-} from "../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { DEFAULT_EVIDENCE_BUDGET } from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { satisfiedCategories } from "../../supabase/functions/_shared/candidateEnvelope.ts";
-import { FIXTURE_COMPLETE } from "../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
+} from "../../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { DEFAULT_EVIDENCE_BUDGET } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { satisfiedCategories } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
+import { FIXTURE_COMPLETE } from "../../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
 
 const NOW = "2026-07-16T12:00:00.000Z";
 const BRAIN = { industries: ["B2B SaaS"], geography: "United States", company_size: "10-150 employees" };

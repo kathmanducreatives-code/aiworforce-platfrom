@@ -9,8 +9,8 @@ import {
   buildDecisionMakers,
   verifyCompanyMatch,
   type CompanyRef,
-} from "../../supabase/functions/_shared/decisionMakers.ts";
-import type { PersonHint, ContactEvidence } from "../../supabase/functions/_shared/companyEnrichment.ts";
+} from "../../../supabase/functions/_shared/decisionMakers.ts";
+import type { PersonHint, ContactEvidence } from "../../../supabase/functions/_shared/companyEnrichment.ts";
 
 // ---- Bug #1: company verification for people-search results ----
 const cekura: CompanyRef = { name: "Cekura", domain: "cekura.ai", website: "https://www.cekura.ai", companyLinkedinUrl: "https://www.linkedin.com/company/cekuraai?trk=x" };

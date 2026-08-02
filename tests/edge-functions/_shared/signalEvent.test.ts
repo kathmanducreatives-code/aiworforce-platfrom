@@ -6,11 +6,11 @@ import {
   type SignalEvent, type SignalType,
   validateSignalEvent, isTimingCapableSignal, isRiskSignal,
   signalCategoryOf, evidenceCategoryForSignalType, buildSignalDedupeKey,
-} from "../../supabase/functions/_shared/signalEvent.ts";
+} from "../../../supabase/functions/_shared/signalEvent.ts";
 import {
   SIGNAL_FRESHNESS_POLICY, assessSignalStrength, isSignalFresh, signalAgeHours,
   windowHoursFor, strengthAtLeast,
-} from "../../supabase/functions/_shared/signalFreshness.ts";
+} from "../../../supabase/functions/_shared/signalFreshness.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const hoursAgo = (h: number) => new Date(Date.parse(NOW) - h * 3600_000).toISOString();

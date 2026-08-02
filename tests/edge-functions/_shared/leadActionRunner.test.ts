@@ -7,7 +7,7 @@ import {
   DECISION_MAKER_TITLES,
   type LeadRecord,
   type FirecrawlFn,
-} from "../../supabase/functions/_shared/leadActionRunner.ts";
+} from "../../../supabase/functions/_shared/leadActionRunner.ts";
 
 const acceptedLead: LeadRecord = {
   lead_candidate_id: "lead-1",

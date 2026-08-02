@@ -5,7 +5,7 @@ import {
   knownPersonFromLead,
   type IntegrationPorts,
   type LeadRecordLike,
-} from "../../supabase/functions/_shared/integration.ts";
+} from "../../../supabase/functions/_shared/integration.ts";
 import {
   classifyToolFailure,
   extractProfiles,
@@ -14,11 +14,11 @@ import {
   makePeopleSearchProvider,
   runProviderPlan,
   type ToolResultLike,
-} from "../../supabase/functions/_shared/providerAdapter.ts";
-import { planPeopleSearch } from "../../supabase/functions/_shared/searchPlanner.ts";
-import { normalizeProviderProfile } from "../../supabase/functions/_shared/personProfile.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
-import * as F from "../../supabase/functions/_shared/fixtures.ts";
+} from "../../../supabase/functions/_shared/providerAdapter.ts";
+import { planPeopleSearch } from "../../../supabase/functions/_shared/searchPlanner.ts";
+import { normalizeProviderProfile } from "../../../supabase/functions/_shared/personProfile.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import * as F from "../../../supabase/functions/_shared/fixtures.ts";
 
 const WS = "00000000-0000-4000-8000-000000000001";
 const OTHER_WS = "00000000-0000-4000-8000-0000000000ff";

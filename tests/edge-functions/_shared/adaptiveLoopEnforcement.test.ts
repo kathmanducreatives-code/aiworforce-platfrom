@@ -15,9 +15,9 @@ import {
   collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
   combineContactIdentities, computeCompanyFirstQuotaProgress, identityDigest,
   leadIdentity, nextAdaptiveAction, type PersistedOutcome,
-} from "../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
-import { runCompanyFirstQuotaController } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+} from "../../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
+import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const runAgent = () => Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
 

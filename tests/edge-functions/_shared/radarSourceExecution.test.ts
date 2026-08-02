@@ -2,10 +2,10 @@
 // calls — the Firecrawl search function is injected and records every query.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/_shared/companyBrainCompiler.ts";
-import { buildRadarScanPlan, type RadarSource } from "../../supabase/functions/_shared/radarScanPlanner.ts";
-import { buildFirecrawlQuery, runFirecrawlSource, type FirecrawlSearchFn } from "../../supabase/functions/_shared/radarSourceExecution.ts";
-import type { FirecrawlHit } from "../../supabase/functions/_shared/radarCandidatePipeline.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { buildRadarScanPlan, type RadarSource } from "../../../supabase/functions/_shared/radarScanPlanner.ts";
+import { buildFirecrawlQuery, runFirecrawlSource, type FirecrawlSearchFn } from "../../../supabase/functions/_shared/radarSourceExecution.ts";
+import type { FirecrawlHit } from "../../../supabase/functions/_shared/radarCandidatePipeline.ts";
 
 function saasBrain(extra: Record<string, unknown> = {}) {
   return compileCompanyBrainContext({

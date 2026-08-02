@@ -8,20 +8,20 @@ import {
   detectCountryInText,
   matchesRequiredLocation,
   extractCandidateLocationEvidence,
-} from "../../supabase/functions/_shared/locationMatch.ts";
-import { classifyResults } from "../../supabase/functions/_shared/sourceQuality.ts";
-import { validateSourcingResults } from "../../supabase/functions/_shared/sourcingRetry.ts";
-import { filterPeopleCandidates } from "../../supabase/functions/_shared/sourceGates.ts";
-import { resolveProviderSource } from "../../supabase/functions/_shared/plannedToolResolver.ts";
-import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { filterPlanForMode, stepAllowedInMode } from "../../supabase/functions/_shared/executionMode.ts";
+} from "../../../supabase/functions/_shared/locationMatch.ts";
+import { classifyResults } from "../../../supabase/functions/_shared/sourceQuality.ts";
+import { validateSourcingResults } from "../../../supabase/functions/_shared/sourcingRetry.ts";
+import { filterPeopleCandidates } from "../../../supabase/functions/_shared/sourceGates.ts";
+import { resolveProviderSource } from "../../../supabase/functions/_shared/plannedToolResolver.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { filterPlanForMode, stepAllowedInMode } from "../../../supabase/functions/_shared/executionMode.ts";
 import {
   buildPeopleSearchAttempts,
   parsePeopleSearchIntent,
   buildSourcingAttemptAudit,
   sanitizeActorInputForAudit,
-} from "../../supabase/functions/_shared/peopleSearchQueryBuilder.ts";
-import { RAW_LOCATION_A, RAW_LOCATION_C, rawProfile } from "../../supabase/functions/_shared/peopleLocationFixture.ts";
+} from "../../../supabase/functions/_shared/peopleSearchQueryBuilder.ts";
+import { RAW_LOCATION_A, RAW_LOCATION_C, rawProfile } from "../../../supabase/functions/_shared/peopleLocationFixture.ts";
 
 const cand = (country: string | null, code: string | null, text = "") => ({ text, country, country_code: code });
 

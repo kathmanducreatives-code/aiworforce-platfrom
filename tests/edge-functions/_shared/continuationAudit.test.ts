@@ -5,16 +5,16 @@
 // (every DB is an in-memory fake).
 
 import { assert, assertEquals, assertFalse, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { decideResume, RESUME_REFUSAL_MESSAGE } from "../../supabase/functions/_shared/sourcingContinuation.ts";
+import { decideResume, RESUME_REFUSAL_MESSAGE } from "../../../supabase/functions/_shared/sourcingContinuation.ts";
 import {
   decideClaimAttempt, claimContinuation, newClaim, releaseClaim,
   CLAIM_KEY, STALE_CLAIM_MS, type ClaimDb, type ContinuationClaim,
-} from "../../supabase/functions/_shared/continuationClaim.ts";
+} from "../../../supabase/functions/_shared/continuationClaim.ts";
 import {
   SOURCING_STATE_KEY, SOURCING_STATE_VERSION, newSourcingState,
   hasCompletedCall, recordCompletedCall, deltaTitles, isResumable, stateBelongsTo,
   type CompanyFirstSourcingState,
-} from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
+} from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
 
 const TASK = "71db3ced-0000-4000-8000-000000000001";
 const WS = "ws-1";

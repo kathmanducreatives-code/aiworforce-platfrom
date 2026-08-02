@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { Q1_PROVIDER_PEOPLE, Q1_SCOUT_NARRATIVE_NAMES, Q1_INVENTED_NARRATIVE_COUNT } from "../../supabase/functions/_shared/q1PersonReplayFixture.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { Q1_PROVIDER_PEOPLE, Q1_SCOUT_NARRATIVE_NAMES, Q1_INVENTED_NARRATIVE_COUNT } from "../../../supabase/functions/_shared/q1PersonReplayFixture.ts";
 
 // The accepted provider index for the five Q1 people.
 const providerItems = Q1_PROVIDER_PEOPLE.map((p) => ({

@@ -5,16 +5,16 @@
 // capability: company fit is verified, but nothing yet answers "why now?".
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { compileEvidenceContract } from "../../supabase/functions/_shared/evidenceContract.ts";
-import type { SignalEvent, SignalType } from "../../supabase/functions/_shared/signalEvent.ts";
-import { compileTimingRequirement, evaluateTimingSufficiency } from "../../supabase/functions/_shared/timingAssessment.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileEvidenceContract } from "../../../supabase/functions/_shared/evidenceContract.ts";
+import type { SignalEvent, SignalType } from "../../../supabase/functions/_shared/signalEvent.ts";
+import { compileTimingRequirement, evaluateTimingSufficiency } from "../../../supabase/functions/_shared/timingAssessment.ts";
 import {
   planSignalEnrichment, deduplicateSignals, emptySignalLedger,
   DEFAULT_SIGNAL_BUDGET, type SignalEnrichmentBudget,
-} from "../../supabase/functions/_shared/conditionalSignalPlanner.ts";
-import type { EvidenceSufficiencyResult } from "../../supabase/functions/_shared/evidenceSufficiency.ts";
-import { resolveFinalCandidateState } from "../../supabase/functions/_shared/finalCandidateState.ts";
+} from "../../../supabase/functions/_shared/conditionalSignalPlanner.ts";
+import type { EvidenceSufficiencyResult } from "../../../supabase/functions/_shared/evidenceSufficiency.ts";
+import { resolveFinalCandidateState } from "../../../supabase/functions/_shared/finalCandidateState.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const hoursAgo = (h: number) => new Date(Date.parse(NOW) - h * 3600_000).toISOString();

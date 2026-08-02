@@ -22,8 +22,8 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   newSourcingState, deltaTitles, recordAttemptedTitles,
-} from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
-import { isStepFinished, type SourceStepRecord } from "../../supabase/functions/_shared/sourceExecutionState.ts";
+} from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
+import { isStepFinished, type SourceStepRecord } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
 
 const TITLES = ["Sales Operations", "Revenue Operations", "GTM Operations"];
 

@@ -4,9 +4,9 @@ import {
   checkPersonalizationReadiness,
   assertAgentoryVoice,
   type PersonalizationInput,
-} from "../../supabase/functions/_shared/personalization.ts";
-import type { DecisionMaker } from "../../supabase/functions/_shared/decisionMakers.ts";
-import type { CompanyEnrichment } from "../../supabase/functions/_shared/companyEnrichment.ts";
+} from "../../../supabase/functions/_shared/personalization.ts";
+import type { DecisionMaker } from "../../../supabase/functions/_shared/decisionMakers.ts";
+import type { CompanyEnrichment } from "../../../supabase/functions/_shared/companyEnrichment.ts";
 
 const founder: DecisionMaker = {
   name: "Jane Doe", title: "Co-Founder & CEO", linkedinUrl: "https://www.linkedin.com/in/janedoe",

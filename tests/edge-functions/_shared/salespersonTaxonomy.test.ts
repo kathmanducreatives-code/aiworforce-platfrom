@@ -10,8 +10,8 @@
 // ZERO network, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyRoleFamily, roleFamilyAliases } from "../../supabase/functions/_shared/roleFamilies.ts";
-import { inferFamilyKey, getJobFamily } from "../../supabase/functions/_shared/jobFamilyRegistry.ts";
+import { classifyRoleFamily, roleFamilyAliases } from "../../../supabase/functions/_shared/roleFamilies.ts";
+import { inferFamilyKey, getJobFamily } from "../../../supabase/functions/_shared/jobFamilyRegistry.ts";
 
 const EARLY_SALES_PHRASES = [
   "first salesperson",

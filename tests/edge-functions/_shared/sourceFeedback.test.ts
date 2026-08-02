@@ -10,14 +10,14 @@ import {
   decideNextAction, deterministicOrderedPlan, eligibleBroadening, nextExecutableStepId,
   type ApprovedSourceNextAction, type LeadMissionSourceProfile,
   type OrderedHiringSourcePlan, type SourceStepObservation,
-} from "../../supabase/functions/_shared/hiringSourcePlan.ts";
+} from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 import {
   newSourceExecutionState, stepOf, type SourceExecutionState,
-} from "../../supabase/functions/_shared/sourceExecutionState.ts";
+} from "../../../supabase/functions/_shared/sourceExecutionState.ts";
 import {
   actorKeyForCapability, applyObservation, prepareStepCall, runtimeStateFor, withDuplicateBroadening,
-} from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { newFusionState, type HiringEvidenceFusionState } from "../../supabase/functions/_shared/hiringEvidenceFusion.ts";
+} from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { newFusionState, type HiringEvidenceFusionState } from "../../../supabase/functions/_shared/hiringEvidenceFusion.ts";
 import {
   actionIsExecutable,
   boundIds, buildFeedbackRequest, checkpointFor, emptyFusedMetrics, feedbackRequestKey,
@@ -27,18 +27,18 @@ import {
   SOURCE_FEEDBACK_PROMPT_VERSION, SOURCE_FEEDBACK_VERSION,
   type ClaudeSourceFeedbackResponse, type FeedbackProjectionContext, type FusedEvidenceMetrics,
   type SourceFeedbackLedger,
-} from "../../supabase/functions/_shared/sourceFeedbackContract.ts";
+} from "../../../supabase/functions/_shared/sourceFeedbackContract.ts";
 import {
   containsProviderArtifact, parseSourceFeedbackResponse, validateFeedbackRecommendation,
-} from "../../supabase/functions/_shared/sourceFeedbackValidation.ts";
+} from "../../../supabase/functions/_shared/sourceFeedbackValidation.ts";
 import {
   applyObservationWithFeedback, buildSourceFeedbackPrompt, decideNextActionWithFeedback,
   isSourceFeedbackEnabled, modelGatewayAvailable, sourceFeedbackDiagnostics,
-} from "../../supabase/functions/_shared/sourceFeedbackRuntime.ts";
-import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../../supabase/functions/_shared/sequentialSourceBridge.ts";
-import { runPlannerWithPrompt } from "../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
-import type { EnvReader } from "../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
-import type { GenerateOpts, GenerateResult } from "../../supabase/functions/_shared/aiProvider.ts";
+} from "../../../supabase/functions/_shared/sourceFeedbackRuntime.ts";
+import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../../../supabase/functions/_shared/sequentialSourceBridge.ts";
+import { runPlannerWithPrompt } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
+import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import type { GenerateOpts, GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 // ================================================================ fixtures ===
 

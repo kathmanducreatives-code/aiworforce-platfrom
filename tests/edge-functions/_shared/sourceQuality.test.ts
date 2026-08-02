@@ -5,8 +5,8 @@
 // Run with: supabase--test_edge_functions
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyResults } from "../../supabase/functions/_shared/sourceQuality.ts";
-import type { SourcedItem, SourcingCriteria, StrictConstraints } from "../../supabase/functions/_shared/sourcingRetry.ts";
+import { classifyResults } from "../../../supabase/functions/_shared/sourceQuality.ts";
+import type { SourcedItem, SourcingCriteria, StrictConstraints } from "../../../supabase/functions/_shared/sourcingRetry.ts";
 
 const NO_STRICT: StrictConstraints = { location: false, industry: false, stage: false, count_exact: false };
 

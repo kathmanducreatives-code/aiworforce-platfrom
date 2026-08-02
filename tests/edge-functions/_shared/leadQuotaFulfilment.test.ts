@@ -7,17 +7,17 @@ import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0
 import {
   resolveRequestedLeadCount, isQuotaEligibleCandidate, countEligible, remainingLeadCount,
   leadIdentityKey, DEFAULT_REQUESTED_LEAD_COUNT, MAX_REQUESTED_LEAD_COUNT,
-} from "../../supabase/functions/_shared/leadQuotaPolicy.ts";
-import { runCompanyFirstQuotaController } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
-import { executeRunAgentCompanyFirstSourcing } from "../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { keywordQueriesForRound } from "../../supabase/functions/_shared/jobSearchSpec.ts";
-import { buildCompoundPersistencePlan } from "../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
-import { verifyCurrentEmployer } from "../../supabase/functions/_shared/employerVerification.ts";
-import { resolveCompanyIdentity, differsOnlyByCohortLabel } from "../../supabase/functions/_shared/companyIdentity.ts";
-import { qualifyCompanyVertical } from "../../supabase/functions/_shared/verticalQualification.ts";
-import { DEFAULT_COMPOUND_LIMITS } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { runCompoundSourcing } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+} from "../../../supabase/functions/_shared/leadQuotaPolicy.ts";
+import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { keywordQueriesForRound } from "../../../supabase/functions/_shared/jobSearchSpec.ts";
+import { buildCompoundPersistencePlan } from "../../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
+import { verifyCurrentEmployer } from "../../../supabase/functions/_shared/employerVerification.ts";
+import { resolveCompanyIdentity, differsOnlyByCohortLabel } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import { qualifyCompanyVertical } from "../../../supabase/functions/_shared/verticalQualification.ts";
+import { DEFAULT_COMPOUND_LIMITS } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { runCompoundSourcing } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
 
 const NOW = "2026-07-25T16:12:14Z";
 const SAAS = "Founders of SaaS startups hiring Sales Operations in the United States";
@@ -115,7 +115,7 @@ Deno.test("18. broadening never introduces generic AE/SDR/BDR titles", () => {
   assert(keywordQueriesForRound(intent.job_search_spec, 2).keywords.length > keywordQueriesForRound(intent.job_search_spec, 1).keywords.length);
 });
 Deno.test("17. every broadened round-2 title still passes the SHARED job-family gate", async () => {
-  const { classifyJobFamily } = await import("../../supabase/functions/_shared/jobFamily.ts");
+  const { classifyJobFamily } = await import("../../../supabase/functions/_shared/jobFamily.ts");
   for (const kw of keywordQueriesForRound(intent.job_search_spec, 2).keywords) {
     assert(classifyJobFamily(kw, null).qualifiesAsSalesOps, `broadened title would be dropped by the gate: ${kw}`);
   }

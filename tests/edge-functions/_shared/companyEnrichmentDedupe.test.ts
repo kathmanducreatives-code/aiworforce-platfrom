@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { companyKeyFor } from "../../supabase/functions/_shared/candidateEnvelope.ts";
-import { dedupeCompanyEnrichment, DEFAULT_EVIDENCE_BUDGET, type EnrichmentPlan } from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { buildCompanyEnrichmentInput } from "../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
+import { companyKeyFor } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
+import { dedupeCompanyEnrichment, DEFAULT_EVIDENCE_BUDGET, type EnrichmentPlan } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { buildCompanyEnrichmentInput } from "../../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
 
 const B = DEFAULT_EVIDENCE_BUDGET;
 

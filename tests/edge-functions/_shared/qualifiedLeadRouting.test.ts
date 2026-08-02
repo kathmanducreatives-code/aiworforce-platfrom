@@ -3,9 +3,9 @@
 // ZERO network, ZERO model calls.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyRoleFamily, roleFamilyAliases } from "../../supabase/functions/_shared/roleFamilies.ts";
-import { routeQualifiedLead, extractRequestedLeadCount } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
-import { getJobFamily } from "../../supabase/functions/_shared/jobFamilyRegistry.ts";
+import { classifyRoleFamily, roleFamilyAliases } from "../../../supabase/functions/_shared/roleFamilies.ts";
+import { routeQualifiedLead, extractRequestedLeadCount } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+import { getJobFamily } from "../../../supabase/functions/_shared/jobFamilyRegistry.ts";
 
 const TARGET = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 const ACCOUNT_ONLY = "Find five SaaS companies with sales hiring signals.";

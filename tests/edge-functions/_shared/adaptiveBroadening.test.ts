@@ -3,15 +3,15 @@
 // benchmark. ZERO network, ZERO live-model calls (planner is injected/mocked).
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { getJobFamily, validateTitleForFamily, inferFamilyKey } from "../../supabase/functions/_shared/jobFamilyRegistry.ts";
-import { buildSourcingConstraints, hardConstraintsUnchanged } from "../../supabase/functions/_shared/sourcingConstraints.ts";
-import { buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput, type PlannerProposal, type RoundPlan } from "../../supabase/functions/_shared/broadeningPlan.ts";
-import { validateRoundPlan, detectInjection, scanProposalForInjection } from "../../supabase/functions/_shared/broadeningValidator.ts";
-import { classifyBottleneck, emptyFunnelSummary } from "../../supabase/functions/_shared/sourcingBottleneck.ts";
-import { forecastRoundCost, roundIdempotencyKey, newIdempotencyLedger, DEFAULT_COST_POLICY } from "../../supabase/functions/_shared/sourcingCostForecast.ts";
-import { runCompanyFirstQuotaController } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
-import { canonicalJson, shortHash } from "../../supabase/functions/_shared/planHash.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { getJobFamily, validateTitleForFamily, inferFamilyKey } from "../../../supabase/functions/_shared/jobFamilyRegistry.ts";
+import { buildSourcingConstraints, hardConstraintsUnchanged } from "../../../supabase/functions/_shared/sourcingConstraints.ts";
+import { buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput, type PlannerProposal, type RoundPlan } from "../../../supabase/functions/_shared/broadeningPlan.ts";
+import { validateRoundPlan, detectInjection, scanProposalForInjection } from "../../../supabase/functions/_shared/broadeningValidator.ts";
+import { classifyBottleneck, emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
+import { forecastRoundCost, roundIdempotencyKey, newIdempotencyLedger, DEFAULT_COST_POLICY } from "../../../supabase/functions/_shared/sourcingCostForecast.ts";
+import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { canonicalJson, shortHash } from "../../../supabase/functions/_shared/planHash.ts";
 
 const NOW = "2026-07-25T18:00:00Z";
 const c = (q: string) => buildSourcingConstraints(compileLeadEntityIntent(q));
@@ -265,7 +265,7 @@ Deno.test("REGRESSION: the Sales Operations path still behaves after generalizat
   const r1 = deterministicRoundPlan(k, 1, null)!;
   assertEquals(r1.title_queries, ["Sales Operations", "Revenue Operations", "GTM Operations"]);
   assertEquals(inferFamilyKey(["sales_ops"], []), "sales_operations");
-  const { classifyJobFamily } = await import("../../supabase/functions/_shared/jobFamily.ts");
+  const { classifyJobFamily } = await import("../../../supabase/functions/_shared/jobFamily.ts");
   for (const t of deterministicRoundPlan(k, 2, null)!.title_queries) {
     assert(classifyJobFamily(t, null).qualifiesAsSalesOps, `broadened title would be gate-dropped: ${t}`);
   }

@@ -6,9 +6,9 @@
 // whatever isActorRuntimeEnabled() reports.
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { validateAgainstCapabilities } from "../../supabase/functions/_shared/capabilityValidator.ts";
-import { classifyWorkflow, normalizeIntent } from "../../supabase/functions/_shared/workflowClassifier.ts";
-import { getActorByKey, isActorRuntimeEnabled } from "../../supabase/functions/_shared/actorRegistry.ts";
+import { validateAgainstCapabilities } from "../../../supabase/functions/_shared/capabilityValidator.ts";
+import { classifyWorkflow, normalizeIntent } from "../../../supabase/functions/_shared/workflowClassifier.ts";
+import { getActorByKey, isActorRuntimeEnabled } from "../../../supabase/functions/_shared/actorRegistry.ts";
 
 Deno.test("outreach always requires approval", async () => {
   const d = await classifyWorkflow("Draft outreach to the top leads.");

@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { evaluateWorkflowStatus, summarizeAttempts, shouldRetry } from "../../supabase/functions/_shared/adaptiveWorkflow.ts";
+import { evaluateWorkflowStatus, summarizeAttempts, shouldRetry } from "../../../supabase/functions/_shared/adaptiveWorkflow.ts";
 
 Deno.test("tool failure → failed (not complete)", () => {
   assertEquals(evaluateWorkflowStatus({ workflow_type: "lead_sourcing", requested: 5, produced: 0, tool_failed: true }).status, "failed");

@@ -4,8 +4,8 @@ import {
   mapAriaToDecision,
   HARD_EVIDENCE_BLOCKERS,
   isHardEvidenceBlocker,
-} from "../../supabase/functions/_shared/qualificationPersistence.ts";
-import { classifyRejection, buildCandidateDiagnostic } from "../../supabase/functions/_shared/qualificationObservability.ts";
+} from "../../../supabase/functions/_shared/qualificationPersistence.ts";
+import { classifyRejection, buildCandidateDiagnostic } from "../../../supabase/functions/_shared/qualificationObservability.ts";
 
 // ---------------------------------------------------------------------------
 // Phase 0 — the live v82 case (plan a5501b31): five provider-verified US founders,

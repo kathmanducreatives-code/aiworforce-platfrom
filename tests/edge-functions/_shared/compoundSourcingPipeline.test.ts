@@ -1,8 +1,8 @@
 // Orchestration tests for the company-first pipeline — mocked actors, ZERO network.
 
 import { assertEquals, assert, assertFalse, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { runCompoundSourcing, type CompoundJob, type CompoundPerson, type CompoundDeps } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { runCompoundSourcing, type CompoundJob, type CompoundPerson, type CompoundDeps } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const NOW = "2026-07-24T00:00:00Z";
 const intent = compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the United States");

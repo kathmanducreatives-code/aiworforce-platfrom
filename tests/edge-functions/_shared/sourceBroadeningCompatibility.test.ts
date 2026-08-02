@@ -12,17 +12,17 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   applyBroadeningToIntent, assessBroadeningCompatibility, compileHiringSourceInput,
   type BroadeningIntentChange, type HiringSourceIntent,
-} from "../../supabase/functions/_shared/actorInputPlanner.ts";
+} from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 import {
   baseIntentForStep, decideNextAction, deterministicOrderedPlan, eligibleBroadening,
   validateOrderedPlan,
   type LeadMissionSourceProfile, type OrderedHiringSourcePlan, type SafeBroadeningAction,
   type SourceStepObservation,
-} from "../../supabase/functions/_shared/hiringSourcePlan.ts";
-import { newSourceExecutionState, type SourceExecutionState } from "../../supabase/functions/_shared/sourceExecutionState.ts";
-import { actorKeyForCapability, prepareStepCall, runtimeStateFor } from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { projectAvailableActions } from "../../supabase/functions/_shared/sourceFeedbackContract.ts";
-import { HIRING_SOURCE_CATALOG, type HiringSourceCapabilityId } from "../../supabase/functions/_shared/hiringSourceCatalog.ts";
+} from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { newSourceExecutionState, type SourceExecutionState } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import { actorKeyForCapability, prepareStepCall, runtimeStateFor } from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { projectAvailableActions } from "../../../supabase/functions/_shared/sourceFeedbackContract.ts";
+import { HIRING_SOURCE_CATALOG, type HiringSourceCapabilityId } from "../../../supabase/functions/_shared/hiringSourceCatalog.ts";
 
 function enableProviders() {
   for (const k of [
@@ -471,7 +471,7 @@ Deno.test("19. with the source-planning flag OFF nothing here runs at all", asyn
   // Compatibility filtering happens inside plan construction, and plan construction
   // only happens for a workspace that opted in. The flag resolver is untouched by
   // this change, and its default is still OFF.
-  const { isDynamicSourcePlanningEnabled } = await import("../../supabase/functions/_shared/hiringSourcePlan.ts");
+  const { isDynamicSourcePlanningEnabled } = await import("../../../supabase/functions/_shared/hiringSourcePlan.ts");
   assertEquals(isDynamicSourcePlanningEnabled("ws-1", () => undefined),
     { enabled: false, reason: "flag_off" });
   assertEquals(isDynamicSourcePlanningEnabled("ws-1", (k) => (k === "DYNAMIC_HIRING_SOURCE_PLANNING" ? "true" : undefined)),

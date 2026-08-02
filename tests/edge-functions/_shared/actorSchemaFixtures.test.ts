@@ -15,9 +15,9 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   ACTOR_SCHEMA_FIXTURES, schemaFixtureFor, isDocumentedEnumValue, supportedFieldsFor,
   ACTOR_SCHEMA_FIXTURE_VERSION,
-} from "../../supabase/functions/_shared/actorSchemaFixtures.ts";
-import { validateFinalActorPayload } from "../../supabase/functions/_shared/finalActorPayload.ts";
-import { indeedDatePostedBucket } from "../../supabase/functions/_shared/actorInputPlanner.ts";
+} from "../../../supabase/functions/_shared/actorSchemaFixtures.ts";
+import { validateFinalActorPayload } from "../../../supabase/functions/_shared/finalActorPayload.ts";
+import { indeedDatePostedBucket } from "../../../supabase/functions/_shared/actorInputPlanner.ts";
 
 const CAPABILITIES = [
   "indeed_job_discovery", "linkedin_job_discovery", "glassdoor_job_discovery",

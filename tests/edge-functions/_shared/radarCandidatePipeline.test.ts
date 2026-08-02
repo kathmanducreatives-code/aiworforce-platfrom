@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../supabase/functions/_shared/companyBrainCompiler.ts";
-import { firecrawlHitToCandidate, scoreCandidates, buildRadarSignalRow, type FirecrawlHit } from "../../supabase/functions/_shared/radarCandidatePipeline.ts";
-import { scoreAgainstCompanyBrain } from "../../supabase/functions/_shared/icpSignalScorer.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { firecrawlHitToCandidate, scoreCandidates, buildRadarSignalRow, type FirecrawlHit } from "../../../supabase/functions/_shared/radarCandidatePipeline.ts";
+import { scoreAgainstCompanyBrain } from "../../../supabase/functions/_shared/icpSignalScorer.ts";
 
 const NOW = Date.parse("2026-07-06T00:00:00Z");
 const brain = compileCompanyBrainContext({

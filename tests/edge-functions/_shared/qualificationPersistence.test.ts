@@ -4,14 +4,14 @@ import {
   mapAriaToDecision,
   partitionForPersistence,
   type QualificationPersistenceInput,
-} from "../../supabase/functions/_shared/qualificationPersistence.ts";
+} from "../../../supabase/functions/_shared/qualificationPersistence.ts";
 import {
   Q1_PROVIDER_PEOPLE,
   Q1_SUCCESS_REPLAY,
   Q1_TARGET_ENTITY,
   Q1_EXPECTED_ARTIFACT_TYPE,
   type Q1PersonProfile,
-} from "../../supabase/functions/_shared/q1PersonReplayFixture.ts";
+} from "../../../supabase/functions/_shared/q1PersonReplayFixture.ts";
 
 // Map a fixture person → the canonical decision input using ONLY production
 // helpers (mapAriaToDecision). No test-only acceptance logic.

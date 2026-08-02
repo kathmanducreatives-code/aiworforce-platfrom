@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   buildCompanyEnrichmentObservability, buildCompanyDiagnostic, companyKeyFingerprint,
   type CompanyDiagnosticInput,
-} from "../../supabase/functions/_shared/companyEnrichmentObservability.ts";
+} from "../../../supabase/functions/_shared/companyEnrichmentObservability.ts";
 
 const base = (over: Partial<CompanyDiagnosticInput> = {}): CompanyDiagnosticInput => ({
   companyKey: "li:linkedin.com/company/acme",

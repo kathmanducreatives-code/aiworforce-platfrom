@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { planScoutQueries, attemptQuery, tierAndCount, brainToIntent } from "../../supabase/functions/_shared/scoutSourcingPlan.ts";
-import { extractLeadSearchIntent } from "../../supabase/functions/_shared/leadSearchIntent.ts";
-import type { AcceptedItemLite } from "../../supabase/functions/_shared/scoutSourcingPlan.ts";
+import { planScoutQueries, attemptQuery, tierAndCount, brainToIntent } from "../../../supabase/functions/_shared/scoutSourcingPlan.ts";
+import { extractLeadSearchIntent } from "../../../supabase/functions/_shared/leadSearchIntent.ts";
+import type { AcceptedItemLite } from "../../../supabase/functions/_shared/scoutSourcingPlan.ts";
 
 const badQuery = "Find 5 AI SaaS companies recently funded hiring SDRs or GTM roles for outbound in US + EU";
 

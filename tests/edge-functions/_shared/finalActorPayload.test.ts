@@ -15,7 +15,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   validateFinalActorPayload, finalPayloadDiagnostics, isValidatedCapability,
   FINAL_PAYLOAD_VALIDATOR_VERSION,
-} from "../../supabase/functions/_shared/finalActorPayload.ts";
+} from "../../../supabase/functions/_shared/finalActorPayload.ts";
 
 /** Verbatim from production `tool_calls.input_json.input` — the CORRECT payload. */
 const COMPILED_CRAWLWORKS = {

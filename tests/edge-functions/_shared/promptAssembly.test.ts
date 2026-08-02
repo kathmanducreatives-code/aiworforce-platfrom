@@ -5,10 +5,10 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   assemblePlannerPrompt, sanitizeEvidence, neutralizeUntrusted, verifyTrustBoundary,
   detectInjection, SYSTEM_POLICY, MAX_EVIDENCE_CHARS,
-} from "../../supabase/functions/_shared/promptAssembly.ts";
-import { buildMission } from "../../supabase/functions/_shared/mission.ts";
-import { emptyMissionContext } from "../../supabase/functions/_shared/missionContext.ts";
-import { plannerCapabilityMenu } from "../../supabase/functions/_shared/capabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/promptAssembly.ts";
+import { buildMission } from "../../../supabase/functions/_shared/mission.ts";
+import { emptyMissionContext } from "../../../supabase/functions/_shared/missionContext.ts";
+import { plannerCapabilityMenu } from "../../../supabase/functions/_shared/capabilityRegistry.ts";
 
 const mission = buildMission({
   missionId: "m-1", department: "leads", workspaceId: "ws-1",

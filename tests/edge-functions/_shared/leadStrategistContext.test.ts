@@ -7,8 +7,8 @@ import {
   canonicalJson, assertNoSecrets, buildStrategistObservability, constraintsFromBrain,
   STRATEGIST_POLICY_VERSION, STRATEGIST_MAX_RECENCY_DAYS,
   type StrategistCapabilityCard, type StrategistCompanyConstraints,
-} from "../../supabase/functions/_shared/leadStrategistContext.ts";
-import { missionFromSpec } from "../../supabase/functions/_shared/leadStrategyBridge.ts";
+} from "../../../supabase/functions/_shared/leadStrategistContext.ts";
+import { missionFromSpec } from "../../../supabase/functions/_shared/leadStrategyBridge.ts";
 
 const BRAIN = {
   positive_industries: ["b2b saas", "software"],

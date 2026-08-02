@@ -13,7 +13,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   buildQualificationObservability, buildCandidateDiagnostic,
   type CandidateDiagnosticInput,
-} from "../../supabase/functions/_shared/qualificationObservability.ts";
+} from "../../../supabase/functions/_shared/qualificationObservability.ts";
 
 /** The five source-gate-accepted, provider-backed people the runtime screens. */
 const SCREENED_POOL = ["a", "b", "c", "d", "e"];

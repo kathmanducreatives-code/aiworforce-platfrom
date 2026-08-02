@@ -6,11 +6,11 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   runPlanner, parsePlannerResponse, fallbackEnvelope, PLANNER_VERSION, PLANNER_BOUNDS,
   type GenerateJsonFn, type PlannerRunInput,
-} from "../../supabase/functions/_shared/plannerWrapper.ts";
-import type { GenerateResult } from "../../supabase/functions/aiProvider.ts";
-import { buildMission } from "../../supabase/functions/_shared/mission.ts";
-import { emptyMissionContext } from "../../supabase/functions/_shared/missionContext.ts";
-import { plannerCapabilityMenu } from "../../supabase/functions/_shared/capabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/plannerWrapper.ts";
+import type { GenerateResult } from "../../../supabase/functions/aiProvider.ts";
+import { buildMission } from "../../../supabase/functions/_shared/mission.ts";
+import { emptyMissionContext } from "../../../supabase/functions/_shared/missionContext.ts";
+import { plannerCapabilityMenu } from "../../../supabase/functions/_shared/capabilityRegistry.ts";
 
 interface TestStrategy { capabilities: string[]; note?: string }
 

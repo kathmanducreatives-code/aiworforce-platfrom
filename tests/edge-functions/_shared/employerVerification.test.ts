@@ -1,6 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { verifyCurrentEmployer, employerGateDisposition } from "../../supabase/functions/_shared/employerVerification.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
+import { verifyCurrentEmployer, employerGateDisposition } from "../../../supabase/functions/_shared/employerVerification.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
 
 const acme = resolveCompanyIdentity({ name: "Acme", domain: "acme.com", linkedin_url: "https://linkedin.com/company/acme" });
 const NOW = "2026-07-24T00:00:00Z";

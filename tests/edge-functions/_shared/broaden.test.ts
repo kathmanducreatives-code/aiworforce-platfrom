@@ -4,7 +4,7 @@
 // Run with: supabase--test_edge_functions
 
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { roleAliases, SUPPORT_ROLE_ALIASES, SUPPORT_ROLE_RE, isSupportRoleText } from "../../supabase/functions/_shared/broaden.ts";
+import { roleAliases, SUPPORT_ROLE_ALIASES, SUPPORT_ROLE_RE, isSupportRoleText } from "../../../supabase/functions/_shared/broaden.ts";
 
 Deno.test("roleAliases: assistant role expands to the full support alias set", () => {
   for (const role of ["assistant", "Executive Assistant", "executive assistant", "admin", "Chief of Staff"]) {

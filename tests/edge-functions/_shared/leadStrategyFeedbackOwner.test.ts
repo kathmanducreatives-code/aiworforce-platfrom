@@ -5,8 +5,8 @@ import {
   adaptiveActionFor, createStrategistGenerateJson, leadFeedbackOwnerApplies,
   planAwareActionBudget, MAX_PLAN_AWARE_ACTIONS, LEAD_FEEDBACK_ACTIONS,
   type FeedbackObservationSignals,
-} from "../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
-import type { StrategistCall, StrategistResult } from "../../supabase/functions/_shared/leadStrategy/provider.ts";
+} from "../../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
+import type { StrategistCall, StrategistResult } from "../../../supabase/functions/_shared/leadStrategy/provider.ts";
 
 const base: FeedbackObservationSignals = {
   bottleneck: null,

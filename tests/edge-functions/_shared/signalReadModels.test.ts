@@ -2,13 +2,13 @@
 // Contracts only — no UI, no content generation, no provider calls.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import type { SignalEvent } from "../../supabase/functions/_shared/signalEvent.ts";
+import type { SignalEvent } from "../../../supabase/functions/_shared/signalEvent.ts";
 import {
   type EngagementEvent, type TopicInsight, type ContentOpportunity, type AudienceSegment,
   toSignalCard, engagementAdmissibility, canTopicInsightProveCandidateTiming,
   isCohortLevelOpportunity, freshnessBand, MIN_AUDIENCE_FOR_CONTENT,
   SIGNAL_CARD_FORBIDDEN_FIELDS,
-} from "../../supabase/functions/_shared/signalReadModels.ts";
+} from "../../../supabase/functions/_shared/signalReadModels.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const hoursAgo = (h: number) => new Date(Date.parse(NOW) - h * 3600_000).toISOString();

@@ -10,7 +10,7 @@
 // no real company text. No network, database, provider or model.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { brainContextFromProfile } from "../../supabase/functions/_shared/openerBackend.ts";
+import { brainContextFromProfile } from "../../../supabase/functions/_shared/openerBackend.ts";
 
 /**
  * The nested shape onboarding writes. `positioning` also carries char-indexed

@@ -8,7 +8,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   computeCompanyFirstQuotaProgress, loadPriorContactIdentities,
   nextAdaptiveAction, reconcilePriorIdentities,
-} from "../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
+} from "../../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
 
 const WS = "ws-1", PLAN = "plan-1", TASK = "task-1";
 

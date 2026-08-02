@@ -9,8 +9,8 @@ import {
   candidateIdFor,
   MAX_DIAGNOSTICS,
   type CandidateDiagnosticInput,
-} from "../../supabase/functions/_shared/qualificationObservability.ts";
-import { Q1_PROVIDER_PEOPLE, Q1_ACTOR_KEY, Q1_ACTOR_IMPL } from "../../supabase/functions/_shared/q1PersonReplayFixture.ts";
+} from "../../../supabase/functions/_shared/qualificationObservability.ts";
+import { Q1_PROVIDER_PEOPLE, Q1_ACTOR_KEY, Q1_ACTOR_IMPL } from "../../../supabase/functions/_shared/q1PersonReplayFixture.ts";
 
 function personInput(over: Partial<CandidateDiagnosticInput> = {}): CandidateDiagnosticInput {
   return {

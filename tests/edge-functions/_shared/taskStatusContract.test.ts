@@ -6,8 +6,8 @@ import {
   projectStatus, projectApprovalPending, readStatuses, isContinuable, isTerminalOutcome,
   isTerminalRowStatus, isResumableRowStatus,
   TASK_ROW_STATUSES, TASK_RESULT_STATUSES, TERMINAL_STATUSES,
-} from "../../supabase/functions/_shared/taskStatusContract.ts";
-import { claimContinuationViaRpc, releaseContinuationViaRpc, classifyClaimError, CLAIM_REFUSAL_MESSAGE, type ClaimRefusal, type ClaimErrorCategory } from "../../supabase/functions/_shared/continuationClaim.ts";
+} from "../../../supabase/functions/_shared/taskStatusContract.ts";
+import { claimContinuationViaRpc, releaseContinuationViaRpc, classifyClaimError, CLAIM_REFUSAL_MESSAGE, type ClaimRefusal, type ClaimErrorCategory } from "../../../supabase/functions/_shared/continuationClaim.ts";
 
 // ---- PART 3: the three vocabularies stay separate --------------------------
 

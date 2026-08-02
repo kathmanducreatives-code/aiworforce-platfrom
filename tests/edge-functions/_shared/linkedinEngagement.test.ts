@@ -1,7 +1,7 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "../../supabase/functions/_shared/linkedinEngagementInput.ts";
-import { normalizeLinkedinEngagementItem, normalizeLinkedinEngagementItems } from "../../supabase/functions/_shared/linkedinEngagementOutput.ts";
-import { getActorByKey, isActorRuntimeEnabled } from "../../supabase/functions/_shared/actorRegistry.ts";
+import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "../../../supabase/functions/_shared/linkedinEngagementInput.ts";
+import { normalizeLinkedinEngagementItem, normalizeLinkedinEngagementItems } from "../../../supabase/functions/_shared/linkedinEngagementOutput.ts";
+import { getActorByKey, isActorRuntimeEnabled } from "../../../supabase/functions/_shared/actorRegistry.ts";
 
 // ---------- actor registry / capability ----------
 

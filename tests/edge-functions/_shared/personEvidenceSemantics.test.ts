@@ -1,8 +1,8 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLeadAnalystSummary } from "../../supabase/functions/_shared/leadAnalyst.ts";
-import { buildCanonicalStamp } from "../../supabase/functions/_shared/leadCanonicalStamp.ts";
-import { checkEvidenceInvariants, classifyEvidence, evidenceCategory } from "../../supabase/functions/_shared/evidenceType.ts";
-import { deriveCompanyIcp } from "../../supabase/functions/_shared/companyBrainIcp.ts";
+import { buildLeadAnalystSummary } from "../../../supabase/functions/_shared/leadAnalyst.ts";
+import { buildCanonicalStamp } from "../../../supabase/functions/_shared/leadCanonicalStamp.ts";
+import { checkEvidenceInvariants, classifyEvidence, evidenceCategory } from "../../../supabase/functions/_shared/evidenceType.ts";
+import { deriveCompanyIcp } from "../../../supabase/functions/_shared/companyBrainIcp.ts";
 
 const icp = deriveCompanyIcp({ icp: { industries: ["B2B SaaS"], company_size: "10-150 employees", buyer_roles: ["Founder"] } });
 const PERSON_URL = "https://www.linkedin.com/in/veraai";

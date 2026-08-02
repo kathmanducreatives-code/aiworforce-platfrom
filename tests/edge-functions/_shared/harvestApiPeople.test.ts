@@ -3,7 +3,7 @@
 // (pure module, no network / no Deno needed)
 
 import { strict as assert } from "node:assert";
-import { buildHarvestApiPeopleInput, normalizeLocationName } from "../../supabase/functions/_shared/harvestApiPeople.ts";
+import { buildHarvestApiPeopleInput, normalizeLocationName } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
 
 let pass = 0;
 let fail = 0;

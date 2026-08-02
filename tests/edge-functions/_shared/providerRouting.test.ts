@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { preferredProviderForAgent, isPlannerTask, ANTHROPIC_WRITING_AGENTS } from "../../supabase/functions/_shared/providerRouting.ts";
+import { preferredProviderForAgent, isPlannerTask, ANTHROPIC_WRITING_AGENTS } from "../../../supabase/functions/_shared/providerRouting.ts";
 
 Deno.test("Scribe prefers Anthropic (content + comment drafts)", () => {
   assertEquals(preferredProviderForAgent("scribe"), "anthropic");

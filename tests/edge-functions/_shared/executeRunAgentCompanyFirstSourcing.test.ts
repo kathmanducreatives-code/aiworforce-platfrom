@@ -2,10 +2,10 @@
 // actor / persistence / clock. ZERO network (run without --allow-net).
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { executeRunAgentCompanyFirstSourcing, type CompanyFirstRuntimeDeps } from "../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { isCompanyFirstRequest } from "../../supabase/functions/_shared/runAgentCompoundBridge.ts";
-import type { CompoundPersistencePlan } from "../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { executeRunAgentCompanyFirstSourcing, type CompanyFirstRuntimeDeps } from "../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { isCompanyFirstRequest } from "../../../supabase/functions/_shared/runAgentCompoundBridge.ts";
+import type { CompoundPersistencePlan } from "../../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const NOW = "2026-07-24T00:00:00Z";
 const intent = compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the United States");

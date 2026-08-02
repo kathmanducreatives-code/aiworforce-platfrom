@@ -23,8 +23,8 @@ import {
   newSourcingState, SOURCING_STATE_KEY, SOURCING_STATE_VERSION,
   hasCompletedCall, recordCompletedCall, isResumable, stateBelongsTo,
   type CompanyFirstSourcingState,
-} from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
-import { TASK_ROW_STATUSES, projectStatus } from "../../supabase/functions/_shared/taskStatusContract.ts";
+} from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
+import { TASK_ROW_STATUSES, projectStatus } from "../../../supabase/functions/_shared/taskStatusContract.ts";
 
 // The production fixture.
 const PLAN_ID = "dc41c9f2-e528-48fd-a268-74feb9d62d18";

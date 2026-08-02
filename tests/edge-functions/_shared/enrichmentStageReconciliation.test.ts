@@ -9,10 +9,10 @@
 // The stale flag blocked the positive path. The reducer was never the defect.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { stillStagedByEnrichmentAfterTiming } from "../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
-import { resolveFinalCandidateState, type FinalCandidateStateInput } from "../../supabase/functions/_shared/finalCandidateState.ts";
-import type { SufficiencyDecision } from "../../supabase/functions/_shared/evidenceSufficiency.ts";
-import type { TimingDecision } from "../../supabase/functions/_shared/timingAssessment.ts";
+import { stillStagedByEnrichmentAfterTiming } from "../../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
+import { resolveFinalCandidateState, type FinalCandidateStateInput } from "../../../supabase/functions/_shared/finalCandidateState.ts";
+import type { SufficiencyDecision } from "../../../supabase/functions/_shared/evidenceSufficiency.ts";
+import type { TimingDecision } from "../../../supabase/functions/_shared/timingAssessment.ts";
 
 // ---- the pure reconciliation ----
 

@@ -1,7 +1,7 @@
 // Timing-aware final qualification policy (provider-free). Proves a fully verified,
 // timing_sufficient candidate reaches qualify_now WITHOUT weakening any safety gate.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { resolveFinalCandidateState, type FinalCandidateStateInput } from "../../supabase/functions/_shared/finalCandidateState.ts";
+import { resolveFinalCandidateState, type FinalCandidateStateInput } from "../../../supabase/functions/_shared/finalCandidateState.ts";
 
 const base = (over: Partial<FinalCandidateStateInput> = {}): FinalCandidateStateInput => ({
   sourceGateDecision: "accept", providerVerified: true, artifactMatches: true,

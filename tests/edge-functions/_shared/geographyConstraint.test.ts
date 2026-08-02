@@ -3,8 +3,8 @@ import {
   classifyGeography,
   resolveGeographyConstraint,
   matchTypedGeography,
-} from "../../supabase/functions/_shared/geographyConstraint.ts";
-import type { CandidateLocation } from "../../supabase/functions/_shared/locationMatch.ts";
+} from "../../../supabase/functions/_shared/geographyConstraint.ts";
+import type { CandidateLocation } from "../../../supabase/functions/_shared/locationMatch.ts";
 
 const US = (over: Partial<CandidateLocation> = {}): CandidateLocation => ({ text: "Somewhere", country: "United States", country_code: "US", ...over });
 

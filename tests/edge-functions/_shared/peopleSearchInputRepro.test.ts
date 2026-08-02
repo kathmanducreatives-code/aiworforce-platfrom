@@ -5,12 +5,12 @@
 // Uses the real production adapter (buildHarvestApiPeopleInput). Deterministic.
 
 import { assert, assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildHarvestApiPeopleInput } from "../../supabase/functions/_shared/harvestApiPeople.ts";
+import { buildHarvestApiPeopleInput } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
 import {
   FROZEN_Q1_GENERIC_INPUT,
   FROZEN_MALFORMED_PAYLOAD,
   FROZEN_ATTEMPT_FACTS,
-} from "../../supabase/functions/_shared/peopleSearchInputFixture.ts";
+} from "../../../supabase/functions/_shared/peopleSearchInputFixture.ts";
 
 Deno.test("fix: adapter NO LONGER emits the observed malformed payload", () => {
   const out = buildHarvestApiPeopleInput({ ...FROZEN_Q1_GENERIC_INPUT });

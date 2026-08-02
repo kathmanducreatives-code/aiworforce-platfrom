@@ -14,13 +14,13 @@ import {
   labelForCompany, signalsForCompany, companyHasDeadListing, companyHasVerification,
   fusionDiagnostics, FUSION_STATE_KEY, FUSION_STATE_VERSION,
   type HiringEvidenceFusionState, type FusionSourceId,
-} from "../../supabase/functions/_shared/hiringEvidenceFusion.ts";
-import { jobRecordToSignalEvent } from "../../supabase/functions/_shared/jobsSignalAdapter.ts";
-import { evaluateTimingSufficiency, compileTimingRequirement } from "../../supabase/functions/_shared/timingAssessment.ts";
-import { compileEvidenceContract } from "../../supabase/functions/_shared/evidenceContract.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { listingStatusIsDead } from "../../supabase/functions/_shared/timingFreshnessPolicy.ts";
-import { SOURCING_STATE_KEY } from "../../supabase/functions/_shared/companyFirstSourcingState.ts";
+} from "../../../supabase/functions/_shared/hiringEvidenceFusion.ts";
+import { jobRecordToSignalEvent } from "../../../supabase/functions/_shared/jobsSignalAdapter.ts";
+import { evaluateTimingSufficiency, compileTimingRequirement } from "../../../supabase/functions/_shared/timingAssessment.ts";
+import { compileEvidenceContract } from "../../../supabase/functions/_shared/evidenceContract.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { listingStatusIsDead } from "../../../supabase/functions/_shared/timingFreshnessPolicy.ts";
+import { SOURCING_STATE_KEY } from "../../../supabase/functions/_shared/companyFirstSourcingState.ts";
 
 const WS = "ws-1";
 const NOW = "2026-07-27T12:00:00.000Z";
@@ -521,10 +521,10 @@ Deno.test("F9 provider field-name differences translate into the existing input 
 // ============================================ 15. PR #108 runtime integration ==
 
 Deno.test("F38/F40/F42 the sequential runtime fuses after EVERY attempt and reports fused yield", async () => {
-  const { deterministicOrderedPlan } = await import("../../supabase/functions/_shared/hiringSourcePlan.ts");
-  const { newSourceExecutionState, } = await import("../../supabase/functions/_shared/sourceExecutionState.ts");
+  const { deterministicOrderedPlan } = await import("../../../supabase/functions/_shared/hiringSourcePlan.ts");
+  const { newSourceExecutionState, } = await import("../../../supabase/functions/_shared/sourceExecutionState.ts");
   const { sequentialJobsInvoker, actorKeyForCapability, applyObservation } =
-    await import("../../supabase/functions/_shared/sequentialSourceRuntime.ts");
+    await import("../../../supabase/functions/_shared/sequentialSourceRuntime.ts");
 
   for (const k of [
     "APIFY_ENABLE_INDEED_JOBS_AUTOMATION_LAB", "APIFY_ENABLE_LINKEDIN_JOBS_CRAWLWORKS",
@@ -582,9 +582,9 @@ Deno.test("F38/F40/F42 the sequential runtime fuses after EVERY attempt and repo
 });
 
 Deno.test("F43 without a fusion state the runtime behaves exactly as PR #108 shipped", async () => {
-  const { deterministicOrderedPlan } = await import("../../supabase/functions/_shared/hiringSourcePlan.ts");
-  const { newSourceExecutionState } = await import("../../supabase/functions/_shared/sourceExecutionState.ts");
-  const { sequentialJobsInvoker, actorKeyForCapability } = await import("../../supabase/functions/_shared/sequentialSourceRuntime.ts");
+  const { deterministicOrderedPlan } = await import("../../../supabase/functions/_shared/hiringSourcePlan.ts");
+  const { newSourceExecutionState } = await import("../../../supabase/functions/_shared/sourceExecutionState.ts");
+  const { sequentialJobsInvoker, actorKeyForCapability } = await import("../../../supabase/functions/_shared/sequentialSourceRuntime.ts");
 
   const prof = {
     industries: ["b2b saas"], stages: ["seed"], triggerRequirements: ["active_hiring"],
@@ -610,7 +610,7 @@ Deno.test("F43 without a fusion state the runtime behaves exactly as PR #108 shi
 
 Deno.test("F43b the bridge carries fused evidence and stays inert when disabled", async () => {
   const { applySequentialSourceExecution, sequentialSourceDiagnostics } =
-    await import("../../supabase/functions/_shared/sequentialSourceBridge.ts");
+    await import("../../../supabase/functions/_shared/sequentialSourceBridge.ts");
   const prof = {
     industries: ["b2b saas"], stages: ["seed"], triggerRequirements: ["active_hiring"],
     hiring: { required: true, roleFamily: "revenue_operations", geography: "United States" },

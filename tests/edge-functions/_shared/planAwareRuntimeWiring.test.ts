@@ -7,8 +7,8 @@
 // ZERO network, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { planAwareActionBudget, MAX_PLAN_AWARE_ACTIONS } from "../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
-import { HARD_PROVIDER_CALL_CEILING } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { planAwareActionBudget, MAX_PLAN_AWARE_ACTIONS } from "../../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
+import { HARD_PROVIDER_CALL_CEILING } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
 
 const runAgentSrc = () => Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
 

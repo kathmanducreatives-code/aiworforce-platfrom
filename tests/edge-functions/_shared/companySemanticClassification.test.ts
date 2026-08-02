@@ -7,7 +7,7 @@ import {
   unknownClassification, buildClassificationPayload, classificationIsSafe,
   MIN_SUPPORTED_CONFIDENCE,
   type BrainVocabulary, type ClassificationCache, type CompanyEvidenceInput,
-} from "../../supabase/functions/_shared/companySemanticClassification.ts";
+} from "../../../supabase/functions/_shared/companySemanticClassification.ts";
 
 const VOCAB: BrainVocabulary = {
   positive_industries: ["b2b saas"], excluded_industries: ["staffing"],

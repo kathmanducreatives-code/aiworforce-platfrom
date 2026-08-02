@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   inferContactPersona, deriveOpportunityStatus, recommendNextAction,
   buildLeadResultsHeader, canDraftOutreach, guessDomain, enrichmentStatus, isContactReadySource,
-} from "../../supabase/functions/_shared/leadOpportunity.ts";
+} from "../../../supabase/functions/_shared/leadOpportunity.ts";
 
 Deno.test("#1 hiring signal (companies only) → needs_contact", () => {
   assertEquals(deriveOpportunityStatus({ source_type: "hiring_signal", has_contact: false }), "needs_contact");

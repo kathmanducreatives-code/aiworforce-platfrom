@@ -13,9 +13,9 @@
 // ZERO network, ZERO model calls.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { sequentialJobsInvoker } from "../../supabase/functions/_shared/sequentialSourceRuntime.ts";
-import { newSourceExecutionState } from "../../supabase/functions/_shared/sourceExecutionState.ts";
-import { deterministicOrderedPlan, validateOrderedPlan, type LeadMissionSourceProfile } from "../../supabase/functions/_shared/hiringSourcePlan.ts";
+import { sequentialJobsInvoker } from "../../../supabase/functions/_shared/sequentialSourceRuntime.ts";
+import { newSourceExecutionState } from "../../../supabase/functions/_shared/sourceExecutionState.ts";
+import { deterministicOrderedPlan, validateOrderedPlan, type LeadMissionSourceProfile } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
 
 function enableProviders() {
   for (const k of [

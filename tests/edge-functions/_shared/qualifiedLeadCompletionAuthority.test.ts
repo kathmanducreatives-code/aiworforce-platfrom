@@ -13,7 +13,7 @@
 // OFFLINE ONLY. No provider, no model, no database.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { projectStatus, quotaMet, isContinuable } from "../../supabase/functions/_shared/taskStatusContract.ts";
+import { projectStatus, quotaMet, isContinuable } from "../../../supabase/functions/_shared/taskStatusContract.ts";
 
 const REQUESTED = 5;
 

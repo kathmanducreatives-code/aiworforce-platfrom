@@ -19,9 +19,9 @@ import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.
 import {
   runCompoundSourcing, assertDecisionMakerRole, decisionMakerTitlesFor,
   type CompoundJob, type CompoundPerson,
-} from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { isQuotaEligibleCandidate } from "../../supabase/functions/_shared/leadQuotaPolicy.ts";
-import type { CompanyBrainHardConstraints } from "../../supabase/functions/_shared/companyIcpFilter.ts";
+} from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { isQuotaEligibleCandidate } from "../../../supabase/functions/_shared/leadQuotaPolicy.ts";
+import type { CompanyBrainHardConstraints } from "../../../supabase/functions/_shared/companyIcpFilter.ts";
 
 const NOW = "2026-07-27T00:00:00.000Z";
 

@@ -1,7 +1,7 @@
 // Shared job-family classifier — the single source of truth for runtime + benchmark.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyJobFamily } from "../../supabase/functions/_shared/jobFamily.ts";
+import { classifyJobFamily } from "../../../supabase/functions/_shared/jobFamily.ts";
 
 const fam = (t: string, d = "") => classifyJobFamily(t, d);
 

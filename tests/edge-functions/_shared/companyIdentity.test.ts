@@ -1,5 +1,5 @@
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { resolveCompanyIdentity, sameCompany, dedupeCompanies, canonicalLinkedinCompany } from "../../supabase/functions/_shared/companyIdentity.ts";
+import { resolveCompanyIdentity, sameCompany, dedupeCompanies, canonicalLinkedinCompany } from "../../../supabase/functions/_shared/companyIdentity.ts";
 
 Deno.test("domain is canonicalized and drives the dedupe key", () => {
   const id = resolveCompanyIdentity({ name: "BigID Inc.", website_url: "https://www.BigID.com/careers?x=1" });

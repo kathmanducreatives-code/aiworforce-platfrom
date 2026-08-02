@@ -1,7 +1,7 @@
 // Tests for the Agentory capability map injection.
 // Run: node --experimental-strip-types agentorySystemPrompt.test.ts
 import { strict as assert } from "node:assert";
-import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../../supabase/functions/_shared/agentorySystemPrompt.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../../../supabase/functions/_shared/agentorySystemPrompt.ts";
 
 let pass = 0, fail = 0;
 function test(name: string, fn: () => void) {

@@ -4,13 +4,13 @@
 // blank category, and software-seller disqualifiers. Pure — no providers.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { extractFromPages } from "../../supabase/functions/_shared/companyWebsite.ts";
-import { mapDraftToV2, type DraftInput } from "../../supabase/functions/_shared/generateBrainDraft.ts";
+import { extractFromPages } from "../../../supabase/functions/_shared/companyWebsite.ts";
+import { mapDraftToV2, type DraftInput } from "../../../supabase/functions/_shared/generateBrainDraft.ts";
 import {
   detectProductDomain, suggestTargetCustomer, suggestTriggers, suggestVoiceAndAngles, suggestDisqualifiers,
-} from "../../supabase/functions/_shared/draftQuality.ts";
-import { normalizeFounderProfile, isSparseFounderResearch } from "../../supabase/functions/_shared/founderLinkedIn.ts";
-import type { FirecrawlPage } from "../../supabase/functions/_shared/types.ts";
+} from "../../../supabase/functions/_shared/draftQuality.ts";
+import { normalizeFounderProfile, isSparseFounderResearch } from "../../../supabase/functions/_shared/founderLinkedIn.ts";
+import type { FirecrawlPage } from "../../../supabase/functions/_shared/types.ts";
 
 const HOME = "https://www.wearestaffr.com";
 const page = (url: string, title: string, description: string, markdown: string): FirecrawlPage => ({ url, title, description, markdown });

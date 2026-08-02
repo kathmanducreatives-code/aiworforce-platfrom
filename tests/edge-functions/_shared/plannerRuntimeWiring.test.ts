@@ -3,16 +3,16 @@
 // dependency is injected/mocked in every test here).
 
 import { assertEquals, assert, assertFalse, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { runCompanyFirstQuotaController } from "../../supabase/functions/_shared/companyFirstQuotaController.ts";
-import { executeRunAgentCompanyFirstSourcing } from "../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { buildPlannerUserMessage, parsePlannerJson, createBroadeningPlanner, PLANNER_PROMPT_VERSION, PLANNER_SCHEMA_VERSION, PLANNER_TEMPERATURE, PLANNER_MAX_OUTPUT_TOKENS } from "../../supabase/functions/_shared/broadeningPlannerAdapter.ts";
-import { buildSourcingConstraints } from "../../supabase/functions/_shared/sourcingConstraints.ts";
-import { sanitizePlannerInput } from "../../supabase/functions/_shared/broadeningPlan.ts";
-import { emptyFunnelSummary } from "../../supabase/functions/_shared/sourcingBottleneck.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
+import { executeRunAgentCompanyFirstSourcing } from "../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts";
+import { buildPlannerUserMessage, parsePlannerJson, createBroadeningPlanner, PLANNER_PROMPT_VERSION, PLANNER_SCHEMA_VERSION, PLANNER_TEMPERATURE, PLANNER_MAX_OUTPUT_TOKENS } from "../../../supabase/functions/_shared/broadeningPlannerAdapter.ts";
+import { buildSourcingConstraints } from "../../../supabase/functions/_shared/sourcingConstraints.ts";
+import { sanitizePlannerInput } from "../../../supabase/functions/_shared/broadeningPlan.ts";
+import { emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
 import {
   stampIdempotencyKey, readIdempotencyKey, lookupDurableCall, IDEMPOTENCY_KEY_FIELD, type ToolCallReader,
-} from "../../supabase/functions/_shared/durableIdempotency.ts";
+} from "../../../supabase/functions/_shared/durableIdempotency.ts";
 
 const NOW = "2026-07-25T19:00:00Z";
 const SWE = "Find companies hiring software engineers";

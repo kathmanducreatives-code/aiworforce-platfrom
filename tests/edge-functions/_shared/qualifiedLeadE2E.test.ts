@@ -5,13 +5,13 @@
 // person, and that only CONTACT-ready people count toward the quota.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { runCompoundSourcing, type CompoundDeps } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { buildCompoundPersistencePlan } from "../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
-import { buildCompanyRowPersistencePlan, companyRowKey, companyRowStage } from "../../supabase/functions/_shared/companyRowProjection.ts";
+import { runCompoundSourcing, type CompoundDeps } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { buildCompoundPersistencePlan } from "../../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
+import { buildCompanyRowPersistencePlan, companyRowKey, companyRowStage } from "../../../supabase/functions/_shared/companyRowProjection.ts";
 import {
   ALL_PROVIDER_ROWS, LINKEDIN_ROWS, INDEED_ROWS, PEOPLE_BY_KEY, PEOPLE_BY_KEY_PARTIAL, E2E_NOW,
-} from "../../supabase/functions/_shared/qualifiedLeadE2E.fixture.ts";
+} from "../../../supabase/functions/_shared/qualifiedLeadE2E.fixture.ts";
 
 const REQUESTED = 5;
 const intent = compileLeadEntityIntent(

@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   scoreCompany, rankCompanies, competitorSimilarity, starTier, resolveWeights,
   DEFAULT_ARIA_WEIGHTS, type AriaBrain, type AriaCandidate,
-} from "../../supabase/functions/_shared/ariaScoring.ts";
+} from "../../../supabase/functions/_shared/ariaScoring.ts";
 
 // Company Brain: founder-led AI SaaS, 20-100 employees, B2B, avoid banks/universities/enterprise/manufacturing.
 const brain: AriaBrain = {

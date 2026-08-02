@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   parseStrictConstraints, buildAttemptStrategy, validateSourcingResults,
   runAdaptiveSourcing, resolveMaxAttempts, type RunAttempt, type SourcedItem,
-} from "../../supabase/functions/_shared/sourcingRetry.ts";
+} from "../../../supabase/functions/_shared/sourcingRetry.ts";
 
 const crit = (over: Partial<Parameters<typeof buildAttemptStrategy>[1]> = {}) =>
   ({ requested: 5, role: "GTM", industry: "B2B SaaS", location: "USA", ...over });

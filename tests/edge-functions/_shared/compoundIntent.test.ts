@@ -7,7 +7,7 @@
 // Pure people lookups and job-seeker phrasing stay person-first with no company gate.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent, compileActorPlan } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileLeadEntityIntent, compileActorPlan } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const i = (q: string) => compileLeadEntityIntent(q);
 

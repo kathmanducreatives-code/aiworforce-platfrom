@@ -8,14 +8,14 @@ import {
   buildSourceStepObservation, classifyAdaptiveBottleneck, projectValidActions,
   observationIsBounded, ADAPTIVE_ACTIONS,
   type AdaptiveAction, type ObservationInput, type SourceStepObservation,
-} from "../../supabase/functions/_shared/leadAdaptiveObservation.ts";
+} from "../../../supabase/functions/_shared/leadAdaptiveObservation.ts";
 import {
   parseNextAction, validateNextAction, resolveNextAction, deterministicNextAction,
   assessSourceQuality, actionSignature,
-} from "../../supabase/functions/_shared/leadAdaptiveAction.ts";
-import { validateRoleTaxonomy } from "../../supabase/functions/_shared/leadRoleTaxonomy.ts";
-import { validateQueryPacks, type QueryPack } from "../../supabase/functions/_shared/leadQueryPacks.ts";
-import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../supabase/functions/_shared/leadAdaptiveContext.ts";
+} from "../../../supabase/functions/_shared/leadAdaptiveAction.ts";
+import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/leadQueryPacks.ts";
+import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/leadAdaptiveContext.ts";
 import { decideDiscoveryBatchSize } from "../../discoveryBatchSize.ts";
 import { schemaFixtureFor, isDocumentedEnumValue } from "../../actorSchemaFixtures.ts";
 import { validateFinalActorPayload } from "../../finalActorPayload.ts";

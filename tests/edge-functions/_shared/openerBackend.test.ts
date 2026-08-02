@@ -13,9 +13,9 @@ import {
   PROHIBITED_PHRASES,
   type ModelBoundary,
   type PersonalizationContext,
-} from "../../supabase/functions/_shared/openerBackend.ts";
-import { emptyAccountState, applyStageUpdate } from "../../supabase/functions/_shared/accountState.ts";
-import { buildOpenerPrompt } from "../../supabase/functions/_shared/openerModel.ts";
+} from "../../../supabase/functions/_shared/openerBackend.ts";
+import { emptyAccountState, applyStageUpdate } from "../../../supabase/functions/_shared/accountState.ts";
+import { buildOpenerPrompt } from "../../../supabase/functions/_shared/openerModel.ts";
 
 const LEAD = "00000000-0000-4000-8000-000000000002";
 const WS = "00000000-0000-4000-8000-000000000001";

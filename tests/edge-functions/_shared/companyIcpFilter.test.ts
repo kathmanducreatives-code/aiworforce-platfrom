@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   filterByIcp, parseEmployeeCount, sizeBandToBounds, icpTopRejectReasons,
   type IcpCandidate,
-} from "../../supabase/functions/_shared/companyIcpFilter.ts";
+} from "../../../supabase/functions/_shared/companyIcpFilter.ts";
 
 const saasIcp = { positive_industries: ["B2B SaaS", "SaaS", "Software"], max_employees: 150, allow_enterprise: false };
 

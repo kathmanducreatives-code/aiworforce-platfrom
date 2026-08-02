@@ -7,16 +7,16 @@
 // was treated as stale despite being plainly current hiring intent.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { compileEvidenceContract } from "../../supabase/functions/_shared/evidenceContract.ts";
-import { compileTimingRequirement, evaluateTimingSufficiency } from "../../supabase/functions/_shared/timingAssessment.ts";
-import { assessSignalStrength } from "../../supabase/functions/_shared/signalFreshness.ts";
-import type { SignalEvent } from "../../supabase/functions/_shared/signalEvent.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileEvidenceContract } from "../../../supabase/functions/_shared/evidenceContract.ts";
+import { compileTimingRequirement, evaluateTimingSufficiency } from "../../../supabase/functions/_shared/timingAssessment.ts";
+import { assessSignalStrength } from "../../../supabase/functions/_shared/signalFreshness.ts";
+import type { SignalEvent } from "../../../supabase/functions/_shared/signalEvent.ts";
 import {
   jobBandForAgeDays, jobBandSatisfiesAlone, listingStatusIsDead, resolveWindowHours,
   CANONICAL_TIMING_WINDOW_HOURS, JOB_MAX_AGE_DAYS, JOB_DEFAULT_REQUIREMENT_DAYS,
   FUNDING_MAX_AGE_DAYS, DAYS,
-} from "../../supabase/functions/_shared/timingFreshnessPolicy.ts";
+} from "../../../supabase/functions/_shared/timingFreshnessPolicy.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const daysAgo = (d: number) => new Date(Date.parse(NOW) - d * 24 * 3600_000).toISOString();

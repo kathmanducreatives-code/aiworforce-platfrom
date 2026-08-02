@@ -4,11 +4,11 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   makeJobsSignalExecutor, buildSignalCandidates, timingStagesCandidate,
   companyKeyForItem, toNormalizedJob, GTM_ROLE_KEYWORDS,
-} from "../../supabase/functions/_shared/runAgentJobsSignal.ts";
-import { JOBS_ACTOR_KEY } from "../../supabase/functions/_shared/jobsSignalAdapter.ts";
-import { resolveFinalCandidateState } from "../../supabase/functions/_shared/finalCandidateState.ts";
-import type { EvidenceSufficiencyResult } from "../../supabase/functions/_shared/evidenceSufficiency.ts";
-import type { TimingAssessment } from "../../supabase/functions/_shared/timingAssessment.ts";
+} from "../../../supabase/functions/_shared/runAgentJobsSignal.ts";
+import { JOBS_ACTOR_KEY } from "../../../supabase/functions/_shared/jobsSignalAdapter.ts";
+import { resolveFinalCandidateState } from "../../../supabase/functions/_shared/finalCandidateState.ts";
+import type { EvidenceSufficiencyResult } from "../../../supabase/functions/_shared/evidenceSufficiency.ts";
+import type { TimingAssessment } from "../../../supabase/functions/_shared/timingAssessment.ts";
 
 const suff = (identity: boolean, fit: boolean): EvidenceSufficiencyResult =>
   ({ identityComplete: identity, fitComplete: fit, nextDecision: "structured_company_enrichment" } as unknown as EvidenceSufficiencyResult);

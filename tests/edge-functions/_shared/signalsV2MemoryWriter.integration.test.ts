@@ -12,8 +12,8 @@
 // and always restored.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { writeMemoryFromToolCall } from "../../supabase/functions/_shared/memoryWriter.ts";
-import { SIGNALS_V2_FLAG } from "../../supabase/functions/_shared/signalsV2Flag.ts";
+import { writeMemoryFromToolCall } from "../../../supabase/functions/_shared/memoryWriter.ts";
+import { SIGNALS_V2_FLAG } from "../../../supabase/functions/_shared/signalsV2Flag.ts";
 
 const WS = "11111111-1111-4111-8111-111111111111";
 const RUN = "run-int-1";

@@ -15,11 +15,11 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   evaluateCompanyBrainEvidence, resolveUnknownEvidence, rankCompanyStage,
   type CompanyBrainHardConstraints,
-} from "../../supabase/functions/_shared/companyIcpFilter.ts";
-import { compileEffectiveCompanyPolicy } from "../../supabase/functions/_shared/companyBrainEffectivePolicy.ts";
-import { resolveCompanySizeBounds, SIZE_REGISTRY_VERSION } from "../../supabase/functions/_shared/companyBrainSizeRegistry.ts";
-import { runCompoundSourcing, type CompoundJob, type CompoundPerson } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { isQuotaEligibleCandidate } from "../../supabase/functions/_shared/leadQuotaPolicy.ts";
+} from "../../../supabase/functions/_shared/companyIcpFilter.ts";
+import { compileEffectiveCompanyPolicy } from "../../../supabase/functions/_shared/companyBrainEffectivePolicy.ts";
+import { resolveCompanySizeBounds, SIZE_REGISTRY_VERSION } from "../../../supabase/functions/_shared/companyBrainSizeRegistry.ts";
+import { runCompoundSourcing, type CompoundJob, type CompoundPerson } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { isQuotaEligibleCandidate } from "../../../supabase/functions/_shared/leadQuotaPolicy.ts";
 
 // The live Agentory Company Brain, as described in the product.
 const AGENTORY_BRAIN = {

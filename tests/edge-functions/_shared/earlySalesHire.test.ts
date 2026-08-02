@@ -1,5 +1,5 @@
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { assessEarlySalesHire } from "../../supabase/functions/_shared/earlySalesHire.ts";
+import { assessEarlySalesHire } from "../../../supabase/functions/_shared/earlySalesHire.ts";
 
 Deno.test("explicit first-hire language → confirmed", () => {
   const r = assessEarlySalesHire({ jobDescription: "This is our first sales hire; you will build out the sales function from scratch." });

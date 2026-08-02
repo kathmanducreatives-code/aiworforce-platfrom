@@ -15,7 +15,7 @@
 // Deterministic; no provider/LLM/Apify.
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { extractLeadDetails } from "../../supabase/functions/_shared/leadIntake.ts";
+import { extractLeadDetails } from "../../../supabase/functions/_shared/leadIntake.ts";
 
 const Q1 = "Using my ICP, find me 5 hot founders I should contact right now.";
 

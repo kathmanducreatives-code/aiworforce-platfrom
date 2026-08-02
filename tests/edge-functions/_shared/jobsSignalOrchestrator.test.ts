@@ -3,13 +3,13 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   runJobsSignalEnrichment, type SignalActorExecutor, type SignalCandidate,
-} from "../../supabase/functions/_shared/jobsSignalOrchestrator.ts";
-import type { EnrichmentClock } from "../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { compileEvidenceContract, type EvidenceContract } from "../../supabase/functions/_shared/evidenceContract.ts";
-import type { EvidenceSufficiencyResult } from "../../supabase/functions/_shared/evidenceSufficiency.ts";
-import type { NormalizedJobLike } from "../../supabase/functions/_shared/jobsSignalAdapter.ts";
-import type { SignalEvent } from "../../supabase/functions/_shared/signalEvent.ts";
+} from "../../../supabase/functions/_shared/jobsSignalOrchestrator.ts";
+import type { EnrichmentClock } from "../../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileEvidenceContract, type EvidenceContract } from "../../../supabase/functions/_shared/evidenceContract.ts";
+import type { EvidenceSufficiencyResult } from "../../../supabase/functions/_shared/evidenceSufficiency.ts";
+import type { NormalizedJobLike } from "../../../supabase/functions/_shared/jobsSignalAdapter.ts";
+import type { SignalEvent } from "../../../supabase/functions/_shared/signalEvent.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const daysAgo = (d: number) => new Date(Date.parse(NOW) - d * 86400_000).toISOString();

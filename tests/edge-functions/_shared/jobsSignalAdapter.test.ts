@@ -3,9 +3,9 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   classifyGtmRole, normalizeListingStatus, jobRecordToSignalEvent,
   JOBS_ACTOR_KEY, JOBS_ACTOR_ID, type NormalizedJobLike,
-} from "../../supabase/functions/_shared/jobsSignalAdapter.ts";
-import { evidenceCategoryForSignalType, validateSignalEvent } from "../../supabase/functions/_shared/signalEvent.ts";
-import { getActorByKey } from "../../supabase/functions/_shared/actorRegistry.ts";
+} from "../../../supabase/functions/_shared/jobsSignalAdapter.ts";
+import { evidenceCategoryForSignalType, validateSignalEvent } from "../../../supabase/functions/_shared/signalEvent.ts";
+import { getActorByKey } from "../../../supabase/functions/_shared/actorRegistry.ts";
 
 const NOW = "2026-07-17T12:00:00.000Z";
 const daysAgo = (d: number) => new Date(Date.parse(NOW) - d * 86400_000).toISOString();

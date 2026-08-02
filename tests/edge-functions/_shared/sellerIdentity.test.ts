@@ -13,7 +13,7 @@ import {
   isSellerIdentityBlocked,
   sellerIdentityConflictDiagnostics,
   normalizeDomain,
-} from "../../supabase/functions/_shared/sellerIdentity.ts";
+} from "../../../supabase/functions/_shared/sellerIdentity.ts";
 
 // 1. nested company.name outranks flat company_name -----------------------------
 Deno.test("1. nested company.name outranks flat company_name", () => {

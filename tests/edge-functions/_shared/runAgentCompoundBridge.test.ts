@@ -1,6 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isCompanyFirstRequest, compoundContactCeiling, clampToCeiling } from "../../supabase/functions/_shared/runAgentCompoundBridge.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { isCompanyFirstRequest, compoundContactCeiling, clampToCeiling } from "../../../supabase/functions/_shared/runAgentCompoundBridge.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 Deno.test("company-first detection", () => {
   assertEquals(isCompanyFirstRequest(compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the US")), true);

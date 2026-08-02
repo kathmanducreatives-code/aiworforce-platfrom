@@ -5,7 +5,7 @@ import {
   brainCompetitors,
   brainICP,
   brainMissingFields,
-} from "../../supabase/functions/_shared/companyBrainContext.ts";
+} from "../../../supabase/functions/_shared/companyBrainContext.ts";
 
 const FLAT = {
   what_we_do: "AI workforce OS for founders and small teams",

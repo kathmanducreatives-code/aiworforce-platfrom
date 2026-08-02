@@ -2,14 +2,14 @@
 // Real-shaped rows (keys taken from normalizeApifyJobRow + harvestapi). ZERO network.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compoundJobsFromRawRows, normalizedJobToCompoundJob } from "../../supabase/functions/_shared/runAgentCompoundJobAdapter.ts";
-import { peopleRowToCompoundPerson, compoundPeopleFromRows, buildScopedPeopleInput } from "../../supabase/functions/_shared/runAgentCompoundPeopleAdapter.ts";
-import { buildCompoundPersistencePlan } from "../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
-import { runAgentCompoundExecution } from "../../supabase/functions/_shared/runAgentCompoundExecution.ts";
-import { runCompoundSourcing } from "../../supabase/functions/_shared/compoundSourcingPipeline.ts";
-import { buildPeopleScope } from "../../supabase/functions/_shared/scopedPeopleSearch.ts";
-import { resolveCompanyIdentity } from "../../supabase/functions/_shared/companyIdentity.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compoundJobsFromRawRows, normalizedJobToCompoundJob } from "../../../supabase/functions/_shared/runAgentCompoundJobAdapter.ts";
+import { peopleRowToCompoundPerson, compoundPeopleFromRows, buildScopedPeopleInput } from "../../../supabase/functions/_shared/runAgentCompoundPeopleAdapter.ts";
+import { buildCompoundPersistencePlan } from "../../../supabase/functions/_shared/runAgentCompoundPersistenceAdapter.ts";
+import { runAgentCompoundExecution } from "../../../supabase/functions/_shared/runAgentCompoundExecution.ts";
+import { runCompoundSourcing } from "../../../supabase/functions/_shared/compoundSourcingPipeline.ts";
+import { buildPeopleScope } from "../../../supabase/functions/_shared/scopedPeopleSearch.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 const NOW = "2026-07-24T00:00:00Z";
 const intent = compileLeadEntityIntent("Founders of SaaS startups hiring Sales Operations in the United States");

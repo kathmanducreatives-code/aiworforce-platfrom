@@ -7,7 +7,7 @@ import {
   buildCompanyDiagnostic, mergeCompanyDiagnostics, buildQualificationInsights,
   identityStatusFor, diagnosticsAreQuotaInert, DIAGNOSTIC_BOUNDS,
   type CompanyQualificationDiagnostic, type EvaluatedCompanyInput,
-} from "../../supabase/functions/_shared/companyQualificationDiagnostics.ts";
+} from "../../../supabase/functions/_shared/companyQualificationDiagnostics.ts";
 
 function evaluated(o: Partial<EvaluatedCompanyInput> = {}): EvaluatedCompanyInput {
   return {

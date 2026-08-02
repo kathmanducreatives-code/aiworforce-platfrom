@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildProviderQueries, expandLocations } from "../../supabase/functions/_shared/leadProviderQueryBuilder.ts";
-import { extractLeadSearchIntent } from "../../supabase/functions/_shared/leadSearchIntent.ts";
+import { buildProviderQueries, expandLocations } from "../../../supabase/functions/_shared/leadProviderQueryBuilder.ts";
+import { extractLeadSearchIntent } from "../../../supabase/functions/_shared/leadSearchIntent.ts";
 
 const badQuery = "Find 5 AI SaaS companies recently funded hiring SDRs or GTM roles for outbound in US + EU";
 

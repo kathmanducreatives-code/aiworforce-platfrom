@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { shouldSkipBroadResearch } from "../../supabase/functions/_shared/broadResearchPolicy.ts";
+import { shouldSkipBroadResearch } from "../../../supabase/functions/_shared/broadResearchPolicy.ts";
 
 // (24) research_web is NOT attempted after successful people sourcing in
 // source_and_qualify_only mode (the v83 Q1 regression).

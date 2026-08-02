@@ -6,8 +6,8 @@ import {
   resolveContactAccountAssociation,
   type AssociationAccount,
   type AssociationContact,
-} from "../../supabase/functions/_shared/contactAccountAssociation.ts";
-import { planContactBackfill, extractContactSignals } from "../../supabase/functions/_shared/contactAccountBackfillPlanner.ts";
+} from "../../../supabase/functions/_shared/contactAccountAssociation.ts";
+import { planContactBackfill, extractContactSignals } from "../../../supabase/functions/_shared/contactAccountBackfillPlanner.ts";
 
 const WS = "ws-1";
 const ACC = "acc-1";

@@ -17,7 +17,7 @@ import {
   mapHiringSignalToEventInput,
   mapPeopleProfileToLeadEvidence,
   type DualWriteDeps,
-} from "../../supabase/functions/_shared/signalsV2DualWrite.ts";
+} from "../../../supabase/functions/_shared/signalsV2DualWrite.ts";
 import {
   newSignalsV2Observability,
   signalsV2ObservabilityReconciles,
@@ -25,9 +25,9 @@ import {
   type SignalEventEvidenceV2Input,
   type SignalEventV2Input,
   type SignalsV2WriteResult,
-} from "../../supabase/functions/_shared/signalsV2Writer.ts";
-import { jobRecordToSignalEvent } from "../../supabase/functions/_shared/jobsSignalAdapter.ts";
-import type { SignalEvent } from "../../supabase/functions/_shared/signalEvent.ts";
+} from "../../../supabase/functions/_shared/signalsV2Writer.ts";
+import { jobRecordToSignalEvent } from "../../../supabase/functions/_shared/jobsSignalAdapter.ts";
+import type { SignalEvent } from "../../../supabase/functions/_shared/signalEvent.ts";
 
 const WS = "11111111-1111-4111-8111-111111111111";
 const WS2 = "22222222-2222-4222-8222-222222222222";
@@ -271,7 +271,7 @@ Deno.test("observability reconciles across a mixed run (considered = attempted +
   // one people write, one hiring write (+ evidence), one unsupported skip
   const wr = { ...writers } as any;
   // route through the real writer accounting via obs by using dedicated spies that record obs
-  const { writeLeadEvidenceV2, writeSignalEventV2, writeSignalEventEvidenceV2 } = await import("../../supabase/functions/_shared/signalsV2Writer.ts");
+  const { writeLeadEvidenceV2, writeSignalEventV2, writeSignalEventEvidenceV2 } = await import("../../../supabase/functions/_shared/signalsV2Writer.ts");
   const okAdmin = makeOkAdmin();
   await dualWritePeopleProfileV2({ admin: okAdmin, enabled: true, obs }, { workspace_id: WS, contact_id: CONTACT, profile_url: "https://linkedin.com/in/x" });
   await dualWriteHiringSignalV2({ admin: okAdmin, enabled: true, obs }, hiringSignal(), { workspace_id: WS, account_id: ACCOUNT });

@@ -4,7 +4,7 @@
 // Deterministic and pure — no model, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { scoreOpenerCandidate, selectBestCandidate } from "../../supabase/functions/_shared/openerCandidates.ts";
+import { scoreOpenerCandidate, selectBestCandidate } from "../../../supabase/functions/_shared/openerCandidates.ts";
 
 const OPTS = {
   personalization_depth: "specific",

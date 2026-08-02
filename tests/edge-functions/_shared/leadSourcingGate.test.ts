@@ -6,8 +6,8 @@ import {
   isFindLeadsProviderSourcingStep,
   classifyProviderSourceOutcome,
   buildProviderSourceNoResults,
-} from "../../supabase/functions/_shared/leadSourcingGate.ts";
-import { FROZEN_Q1_SIGNALS } from "../../supabase/functions/_shared/scoutFallbackFixture.ts";
+} from "../../../supabase/functions/_shared/leadSourcingGate.ts";
+import { FROZEN_Q1_SIGNALS } from "../../../supabase/functions/_shared/scoutFallbackFixture.ts";
 
 Deno.test("fix: the exact failing Q1 signals ARE recognized as provider sourcing (via body.tool_needed)", () => {
   // The live bug: tool_input has no tool_name/selected_actor_key, only tool_needed.

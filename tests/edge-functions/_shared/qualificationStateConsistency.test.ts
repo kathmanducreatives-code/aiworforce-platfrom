@@ -9,15 +9,15 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   buildQualificationFunnel, buildQualificationObservability,
   type CandidateDiagnosticInput,
-} from "../../supabase/functions/_shared/qualificationObservability.ts";
+} from "../../../supabase/functions/_shared/qualificationObservability.ts";
 import {
   runCompanyEnrichment,
   type SourceAcceptedPerson, type CompanyActorExecutor, type EnrichmentClock,
-} from "../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { DEFAULT_EVIDENCE_BUDGET } from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { FIXTURE_COMPLETE } from "../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
-import { normalizeCompanyOutcome } from "../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
+} from "../../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { DEFAULT_EVIDENCE_BUDGET } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { FIXTURE_COMPLETE } from "../../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
+import { normalizeCompanyOutcome } from "../../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
 
 const cand = (id: string, o: Partial<CandidateDiagnosticInput> = {}): CandidateDiagnosticInput => ({
   normalized_candidate_id: id,

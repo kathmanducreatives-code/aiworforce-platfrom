@@ -4,8 +4,8 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   suggestBuyerPersonas, suggestDisqualifiers, suggestQualificationRules,
   stripUnsupportedClaims, countDisqualifiers, toCleanArray, cleanPersona, draftConfidenceCeiling,
-} from "../../supabase/functions/_shared/draftQuality.ts";
-import { cleanChip, cleanChips, gradeConfidence, capConfidence } from "../../supabase/functions/_shared/types.ts";
+} from "../../../supabase/functions/_shared/draftQuality.ts";
+import { cleanChip, cleanChips, gradeConfidence, capConfidence } from "../../../supabase/functions/_shared/types.ts";
 
 // ------------------------------------------------------------- sanitizing ---
 

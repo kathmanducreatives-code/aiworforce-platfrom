@@ -14,7 +14,7 @@
 // No network, database, provider or model.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "../../supabase/functions/_shared/attachContactAccount.ts";
+import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "../../../supabase/functions/_shared/attachContactAccount.ts";
 
 const WS = "ws-1";
 const ACC_A = "acc-A";

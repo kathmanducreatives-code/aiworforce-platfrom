@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   leadRecordFromRow, mapFirecrawlResult, normalizePeopleSearchRows, peopleSearchQuery,
   executeLeadAction, validateLeadActionRequest, type ExecCtx, type ToolResultLike,
-} from "../../supabase/functions/_shared/leadActionExecutor.ts";
+} from "../../../supabase/functions/_shared/leadActionExecutor.ts";
 
 // Backend guard (Issue 2): a lead action requires lead_candidate_ids and refuses
 // to fall through to Scout sourcing when none are supplied.

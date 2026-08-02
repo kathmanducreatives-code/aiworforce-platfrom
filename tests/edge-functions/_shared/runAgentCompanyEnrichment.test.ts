@@ -10,11 +10,11 @@ import {
   runFindLeadsCompanyEnrichment, companyPatchFromEvidence, companyEvidenceFor,
   computeFinalAcceptedPersonIds, emptyCompanyEnrichmentObservability,
   PEOPLE_ACTOR_ID, type RunAgentAcceptedItem, type RunToolResultLike,
-} from "../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { COMPANY_DETAILS_ACTOR_ID, COMPANY_DETAILS_ACTOR_KEY } from "../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
-import type { CompanyActorExecutor } from "../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
-import { FIXTURE_COMPLETE, FIXTURE_ERROR } from "../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
+} from "../../../supabase/functions/_shared/runAgentCompanyEnrichment.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { COMPANY_DETAILS_ACTOR_ID, COMPANY_DETAILS_ACTOR_KEY } from "../../../supabase/functions/_shared/structuredCompanyEnrichment.ts";
+import type { CompanyActorExecutor } from "../../../supabase/functions/_shared/companyEnrichmentOrchestrator.ts";
+import { FIXTURE_COMPLETE, FIXTURE_ERROR } from "../../../supabase/functions/_shared/linkedinCompanyActorFixture.ts";
 
 const NOW = "2026-07-16T12:00:00.000Z";
 const BRAIN = { industries: ["B2B SaaS", "AI SaaS"], geography: "United States", company_size: "10-150 employees" };

@@ -9,10 +9,10 @@ import {
   compileActorPlan,
   detectRoutingConflict,
   artifactMayPersist,
-} from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { filterPlanForMode } from "../../supabase/functions/_shared/executionMode.ts";
-import { ORIGINAL_USER_INSTRUCTION, PLANNER_SCOUT_INSTRUCTION } from "../../supabase/functions/_shared/intentRoutingFixture.ts";
+} from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { filterPlanForMode } from "../../../supabase/functions/_shared/executionMode.ts";
+import { ORIGINAL_USER_INSTRUCTION, PLANNER_SCOUT_INSTRUCTION } from "../../../supabase/functions/_shared/intentRoutingFixture.ts";
 
 Deno.test("replay: original founder query compiles to person / qualified_people / people actor", () => {
   const intent = compileLeadEntityIntent(ORIGINAL_USER_INSTRUCTION);

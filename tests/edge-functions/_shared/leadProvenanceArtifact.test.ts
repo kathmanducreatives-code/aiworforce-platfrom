@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildProvenanceRecord, type ProvenanceCtx } from "../../supabase/functions/_shared/leadHandoffGuard.ts";
-import { sealProvenance } from "../../supabase/functions/_shared/leadPersistenceGuard.ts";
-import { ACTOR_IMPL, artifactTypeForActor } from "../../supabase/functions/_shared/leadEntityIntent.ts";
+import { buildProvenanceRecord, type ProvenanceCtx } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
+import { sealProvenance } from "../../../supabase/functions/_shared/leadPersistenceGuard.ts";
+import { ACTOR_IMPL, artifactTypeForActor } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
 // Reproduce the run-agent stamping: resolve the SPECIFIC actor impl + artifact
 // type from the actor key, exactly as run-agent now does at the first write.

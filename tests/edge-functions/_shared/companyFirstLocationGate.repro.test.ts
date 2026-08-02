@@ -16,7 +16,7 @@
 // OFFLINE. `classifyResults` is pure; no provider, model or database is touched.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyResults } from "../../supabase/functions/_shared/sourceQuality.ts";
+import { classifyResults } from "../../../supabase/functions/_shared/sourceQuality.ts";
 
 const STRICT = { location: true, industry: false, stage: false, count_exact: false };
 /** role is null so this isolates the LOCATION gate, which is what failed. */

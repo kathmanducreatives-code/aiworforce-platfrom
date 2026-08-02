@@ -8,27 +8,27 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, HIRING_ACTOR_CATALOG, PROFILE_SEARCH_SCRAPER_MODES,
   actorsRequiringEnrichment, hiringActorCard,
-} from "../../supabase/functions/_shared/hiringActorCatalog.ts";
+} from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
 import {
   compileHarvestCompanyDetailsInput, compileHarvestCompanyEmployeesInput,
   compileHarvestCompanySearchInput, compileHarvestJobSearchInput,
   compileHarvestProfileSearchInput, compileMemo23YcInput, compileSolidcodeYcInput,
   fanOutSolidcodeTeamSizes,
-} from "../../supabase/functions/_shared/hiringActorInputs.ts";
+} from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyCandidate,
   normalizeLinkedInCompanyEnriched, normalizeLinkedInJob, normalizeMemo23Company,
   normalizeMemo23OpenJobs, normalizeSolidcodeCompany,
-} from "../../supabase/functions/_shared/hiringActorNormalizers.ts";
-import { extractAggregatorEvidence, postingProvesEmployer } from "../../supabase/functions/_shared/companyAggregatorEvidence.ts";
+} from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
+import { extractAggregatorEvidence, postingProvesEmployer } from "../../../supabase/functions/_shared/companyAggregatorEvidence.ts";
 import {
   DEFAULT_ROLE_PACKS, REVENUE_OPS_PACK, SALES_OPS_PACK, filterJobsByPacks,
   filterJobsForPack, judgeTitle, judgeTitleForPack,
-} from "../../supabase/functions/_shared/hiringRolePackFilter.ts";
+} from "../../../supabase/functions/_shared/hiringRolePackFilter.ts";
 import {
   COMPANY_EMPLOYEES, LINKEDIN_CANDIDATES, LINKEDIN_ENRICHED, LINKEDIN_JOBS_CONTROL,
   LINKEDIN_JOBS_PACK_B, MEMO23_COMPANIES, PROFILE_SEARCH, SOLIDCODE_COMPANIES,
-} from "../../supabase/functions/_shared/hiringActorFixtures.ts";
+} from "../../../supabase/functions/_shared/hiringActorFixtures.ts";
 
 const LI = (slug: string) => `https://www.linkedin.com/company/${slug}`;
 

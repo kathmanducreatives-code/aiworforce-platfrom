@@ -12,9 +12,9 @@
 // zero CONTACT-ready people. These tests lock in the two structural fixes.
 
 import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { routeQualifiedLead, extractRequestedLeadCount } from "../../supabase/functions/_shared/qualifiedLeadRouting.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { isCompanyFirstRequest } from "../../supabase/functions/_shared/runAgentCompoundBridge.ts";
+import { routeQualifiedLead, extractRequestedLeadCount } from "../../../supabase/functions/_shared/qualifiedLeadRouting.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { isCompanyFirstRequest } from "../../../supabase/functions/_shared/runAgentCompoundBridge.ts";
 
 const CANONICAL = "Find 5 founders or CEOs of early-stage B2B SaaS companies in the United States that are currently hiring for Sales Operations, Revenue Operations, or GTM Operations roles.";
 const ACCOUNT_ONLY = "Show companies hiring Sales Operations.";

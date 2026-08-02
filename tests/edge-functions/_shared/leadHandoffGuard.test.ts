@@ -7,7 +7,7 @@ import {
   buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria,
   buildProvenanceRecord, assertPersistenceProvenance, provenanceMatchesRun,
   type NormalizedProviderItem,
-} from "../../supabase/functions/_shared/leadHandoffGuard.ts";
+} from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
 
 const ctx = { provider: "apify", actor_id: "curious_coder/linkedin-jobs-scraper", provider_run_id: "run_1", workflow_run_id: "run_1", plan_id: "plan_1", trace_id: "t1", query_id: "Q1" };
 const realco: NormalizedProviderItem = { company: "Realco", source_url: "https://boards.greenhouse.io/realco/jobs/9", domain: "realco.com", company_linkedin_url: "https://linkedin.com/company/realco" };

@@ -7,7 +7,7 @@ import {
   isSignalsV2Enabled,
   parseSignalsV2Flag,
   SIGNALS_V2_FLAG,
-} from "../../supabase/functions/_shared/signalsV2Flag.ts";
+} from "../../../supabase/functions/_shared/signalsV2Flag.ts";
 
 // 1. defaults OFF (no env / empty reader) -------------------------------------
 Deno.test("flag defaults OFF when unset", () => {

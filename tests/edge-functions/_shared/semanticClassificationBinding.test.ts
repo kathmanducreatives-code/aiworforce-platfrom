@@ -5,7 +5,7 @@
 // qualifies or rejects a company on its own.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { createStrategistGenerateJson } from "../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
+import { createStrategistGenerateJson } from "../../../supabase/functions/_shared/leadStrategyFeedbackOwner.ts";
 import {
   buildSemanticClassificationBinding,
   classificationTaskDiagnostics,
@@ -13,7 +13,7 @@ import {
   DEFAULT_CLASSIFICATION_MODEL,
   DEFAULT_MAX_CLASSIFICATION_CALLS,
   isSemanticClassificationEnabled,
-} from "../../supabase/functions/_shared/semanticClassificationBinding.ts";
+} from "../../../supabase/functions/_shared/semanticClassificationBinding.ts";
 
 const WS = "e510c1a6-2bb8-4aa4-95f7-0beb786ed995";
 

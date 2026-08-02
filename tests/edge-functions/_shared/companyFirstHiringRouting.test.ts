@@ -7,17 +7,17 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   FALLBACK_REASONS, ROUTE_SOURCES, actorLimitationBriefing, inferRouteFromRequest,
   newRouteExecutionRecord, recordExecutedSource, routeDrift, validateHiringRoute,
-} from "../../supabase/functions/_shared/hiringRouteContract.ts";
+} from "../../../supabase/functions/_shared/hiringRouteContract.ts";
 import {
   advance, countsTowardQuota, evaluateCompanyFit, foundersSearchable,
   newCompanyRecord, projectFunnel,
-} from "../../supabase/functions/_shared/companyFirstStages.ts";
-import { identityIsActionable, identityIsPending, resolveIdentityAgainstLookups } from "../../supabase/functions/_shared/companyIdentityResolution.ts";
-import { buildHarvestApiCompanyEmployeesInput, buildHarvestApiPeopleInput } from "../../supabase/functions/_shared/harvestApiPeople.ts";
-import { compileSolidcodeYcInput, fanOutSolidcodeTeamSizes } from "../../supabase/functions/_shared/hiringActorInputs.ts";
-import { judgeTitle } from "../../supabase/functions/_shared/hiringRolePackFilter.ts";
-import { LINKEDIN_ENRICHED } from "../../supabase/functions/_shared/hiringActorFixtures.ts";
-import { normalizeLinkedInCompanyEnriched } from "../../supabase/functions/_shared/hiringActorNormalizers.ts";
+} from "../../../supabase/functions/_shared/companyFirstStages.ts";
+import { identityIsActionable, identityIsPending, resolveIdentityAgainstLookups } from "../../../supabase/functions/_shared/companyIdentityResolution.ts";
+import { buildHarvestApiCompanyEmployeesInput, buildHarvestApiPeopleInput } from "../../../supabase/functions/_shared/harvestApiPeople.ts";
+import { compileSolidcodeYcInput, fanOutSolidcodeTeamSizes } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { judgeTitle } from "../../../supabase/functions/_shared/hiringRolePackFilter.ts";
+import { LINKEDIN_ENRICHED } from "../../../supabase/functions/_shared/hiringActorFixtures.ts";
+import { normalizeLinkedInCompanyEnriched } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 
 const CANONICAL = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 const LI = (s: string) => `https://www.linkedin.com/company/${s}`;

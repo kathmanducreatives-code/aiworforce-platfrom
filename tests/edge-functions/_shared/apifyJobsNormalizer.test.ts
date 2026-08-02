@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeApifyJobRow, parseDomain, buildSignalSummary, isShortenerUrl } from "../../supabase/functions/_shared/apifyJobsNormalizer.ts";
+import { normalizeApifyJobRow, parseDomain, buildSignalSummary, isShortenerUrl } from "../../../supabase/functions/_shared/apifyJobsNormalizer.ts";
 
 // Representative Apify LinkedIn Jobs row.
 const row = {

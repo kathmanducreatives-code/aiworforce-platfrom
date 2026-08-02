@@ -6,13 +6,13 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   normalizeExecutionMode, isSourceAndQualifyOnly, filterPlanForMode,
   stepAllowedInMode, draftingAllowedInMode,
-} from "../../supabase/functions/_shared/executionMode.ts";
+} from "../../../supabase/functions/_shared/executionMode.ts";
 import {
   buildProviderIndex, assertProviderBacked, filterToProviderBacked,
   hasValidProvenance, buildSourceFingerprint, zeroResult,
-} from "../../supabase/functions/_shared/leadProvenance.ts";
-import { evaluateDraftGate } from "../../supabase/functions/_shared/draftGate.ts";
-import { separateIntent } from "../../supabase/functions/_shared/leadIntentModel.ts";
+} from "../../../supabase/functions/_shared/leadProvenance.ts";
+import { evaluateDraftGate } from "../../../supabase/functions/_shared/draftGate.ts";
+import { separateIntent } from "../../../supabase/functions/_shared/leadIntentModel.ts";
 
 // ---- helpers ---------------------------------------------------------------
 const scout = { agent_slug: "scout", tool_needed: "source_with_apify", step_index: 0 };

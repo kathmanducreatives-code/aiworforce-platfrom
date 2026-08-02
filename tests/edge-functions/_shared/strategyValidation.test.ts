@@ -6,11 +6,11 @@ import {
   validateStrategy, checkInstructionPreserved, checkWorkspace, checkCapabilities,
   checkGeographyPreserved, checkBudget, checkUnsafeContent, checkDuplicateStrategy,
   type ValidateStrategyInput,
-} from "../../supabase/functions/_shared/strategyValidation.ts";
+} from "../../../supabase/functions/_shared/strategyValidation.ts";
 import {
   classifyChange, classifyChangeWithPolicy, decideApprovals, isAutonomous, requiresApproval,
   AUTONOMOUS_CHANGES, APPROVAL_REQUIRED_CHANGES, NON_WAIVABLE, isUnrecognizedChange,
-} from "../../supabase/functions/_shared/approvalPolicy.ts";
+} from "../../../supabase/functions/_shared/approvalPolicy.ts";
 
 const INSTRUCTION = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 

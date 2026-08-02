@@ -18,10 +18,10 @@ import { assert, assertEquals, assertFalse, assertStrictEquals } from "https://d
 import {
   buildOrchestrateResponsePlan, readPlanArtifact,
   type OrchestrateResponsePlan,
-} from "../../supabase/functions/_shared/leadPlanAuthority.ts";
-import { planQualifiedLeadBeforePersistence } from "../../supabase/functions/_shared/leadPlanOrchestration.ts";
-import { claudeFirstFromPersistedPlan } from "../../supabase/functions/_shared/leadPlanningBridge.ts";
-import type { EnvReader } from "../../supabase/functions/intelligenceFlags.ts";
+} from "../../../supabase/functions/_shared/leadPlanAuthority.ts";
+import { planQualifiedLeadBeforePersistence } from "../../../supabase/functions/_shared/leadPlanOrchestration.ts";
+import { claudeFirstFromPersistedPlan } from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
+import type { EnvReader } from "../../../supabase/functions/intelligenceFlags.ts";
 import type { GenerateOpts, GenerateResult } from "../../aiProvider.ts";
 
 const CANONICAL =

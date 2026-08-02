@@ -1,13 +1,13 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadEntityIntent } from "../../supabase/functions/_shared/leadEntityIntent.ts";
-import { compileEvidenceContract } from "../../supabase/functions/_shared/evidenceContract.ts";
-import { evaluateEvidenceSufficiency } from "../../supabase/functions/_shared/evidenceSufficiency.ts";
+import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
+import { compileEvidenceContract } from "../../../supabase/functions/_shared/evidenceContract.ts";
+import { evaluateEvidenceSufficiency } from "../../../supabase/functions/_shared/evidenceSufficiency.ts";
 import {
   planCandidateEnrichment, dedupeCompanyEnrichment, DEFAULT_EVIDENCE_BUDGET,
   emptyLedger, createInMemoryEvidenceCache,
-} from "../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
-import { appendEvidence, companyKeyFor, satisfiedCategories, type CandidateEnvelope, type EvidenceItem } from "../../supabase/functions/_shared/candidateEnvelope.ts";
-import { ACTOR_CAPABILITIES, isCallable, getActorCapability, unverifiedCapabilities } from "../../supabase/functions/_shared/actorCapabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
+import { appendEvidence, companyKeyFor, satisfiedCategories, type CandidateEnvelope, type EvidenceItem } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
+import { ACTOR_CAPABILITIES, isCallable, getActorCapability, unverifiedCapabilities } from "../../../supabase/functions/_shared/actorCapabilityRegistry.ts";
 
 const NOW = "2026-07-16T12:00:00.000Z";
 const RECENT = "2026-07-16T06:00:00.000Z";   // 6h ago

@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deriveCompanyIcp, DEFAULT_DISQUALIFIERS } from "../../supabase/functions/_shared/companyBrainIcp.ts";
-import { preRankCandidates, scoreCandidate } from "../../supabase/functions/_shared/leadPreRank.ts";
-import { buildLeadAnalystSummary } from "../../supabase/functions/_shared/leadAnalyst.ts";
+import { deriveCompanyIcp, DEFAULT_DISQUALIFIERS } from "../../../supabase/functions/_shared/companyBrainIcp.ts";
+import { preRankCandidates, scoreCandidate } from "../../../supabase/functions/_shared/leadPreRank.ts";
+import { buildLeadAnalystSummary } from "../../../supabase/functions/_shared/leadAnalyst.ts";
 
 // ---------- Part B: Company Brain → ICP ----------
 Deno.test("1: structured ICP is used directly", () => {

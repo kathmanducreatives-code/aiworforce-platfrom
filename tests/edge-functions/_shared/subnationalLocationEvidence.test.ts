@@ -19,7 +19,7 @@ import {
   matchesRequiredLocationFromFields,
   detectCountryFromRegionText,
   normalizeRegionToken,
-} from "../../supabase/functions/_shared/locationMatch.ts";
+} from "../../../supabase/functions/_shared/locationMatch.ts";
 
 /** A job candidate as the jobs pipeline actually shapes it: text only. */
 const job = (location: string) => ({ location });
