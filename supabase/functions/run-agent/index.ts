@@ -57,6 +57,9 @@ import {
   routeDrift, validateHiringRoute,
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
+import {
+  projectCompanyFirstPersistence, quotaCreditFromProjection,
+} from "../_shared/companyFirstPersistenceProjection.ts";
 import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
 import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
@@ -1091,6 +1094,9 @@ Deno.serve(async (req) => {
         // memo23 first; broad job boards are only reachable through the
         // fallback route, which requires a recorded structured reason.
         let companyFirstRoute: Awaited<ReturnType<typeof executeCompanyFirstRoute>> | null = null;
+        let companyFirstPersisted = 0;
+        let companyFirstQuotaCredit = 0;
+        let companyFirstProjection: Record<string, number> | null = null;
         if (routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
           try {
@@ -1140,10 +1146,34 @@ Deno.serve(async (req) => {
                 }
                 : undefined,
             });
+            // ── CANONICAL PERSISTENCE + CONTACT ENRICHMENT ─────────────────
+            // The SAME persistPlan the legacy pipeline uses. It owns accounts,
+            // contacts, lead_candidates and the contact-enrichment handoff, so
+            // company-first creates no parallel path — it only supplies plans.
+            const projection = projectCompanyFirstPersistence(
+              companyFirstRoute, workspace_id, task.id);
+            for (const p of projection.plans) {
+              if (!p.plan.persistable) continue;
+              try {
+                await persistPlan(p.plan);
+                companyFirstPersisted++;
+              } catch (pe) {
+                console.log("[run-agent][company-first-persist][error]",
+                  { key: p.idempotencyKey, error: String(pe) });
+              }
+            }
+            // QUOTA: only CONTACT + quota_eligible. A qualified company and a
+            // verified founder are both worth zero here, by construction.
+            companyFirstQuotaCredit = quotaCreditFromProjection(projection);
+            companyFirstProjection = projection.counts;
+
             console.log("[run-agent][company-first-route][done]", {
               task_id: task.id,
               executed_source_order: companyFirstRoute.executed_source_order,
               funnel: companyFirstRoute.funnel,
+              persisted: companyFirstPersisted,
+              projection: projection.counts,
+              quota_credit: companyFirstQuotaCredit,
               diagnostics: companyFirstRoute.diagnostics,
             });
           } catch (e) {
@@ -1571,6 +1601,11 @@ Deno.serve(async (req) => {
             ? {
               executed_source_order: companyFirstRoute.executed_source_order,
               funnel: companyFirstRoute.funnel,
+              // PERSISTED outcomes, distinct from the in-memory funnel: the
+              // Workbench and quota read these, not diagnostics alone.
+              persisted_records: companyFirstPersisted,
+              projection: companyFirstProjection,
+              quota_credit: companyFirstQuotaCredit,
               ...companyFirstRoute.diagnostics,
             }
             : null,

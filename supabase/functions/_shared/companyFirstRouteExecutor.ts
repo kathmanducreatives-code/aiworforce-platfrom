@@ -21,13 +21,14 @@
 
 import {
   compileHarvestCompanyDetailsInput, compileHarvestCompanyEmployeesInput,
-  compileHarvestJobSearchInput, compileMemo23YcInput, compileSolidcodeYcInput,
-  fanOutSolidcodeTeamSizes, type CompiledActorCall,
+  compileHarvestCompanySearchInput, compileHarvestJobSearchInput,
+  compileMemo23YcInput, fanOutSolidcodeTeamSizes, type CompiledActorCall,
 } from "./hiringActorInputs.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
-  normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
-  normalizeSolidcodeCompany, type NormalizedHiringCompany, type NormalizedHiringJob,
+  normalizeLinkedInCompanyCandidate, normalizeLinkedInJob, normalizeMemo23Company,
+  normalizeMemo23OpenJobs, normalizeSolidcodeCompany,
+  type NormalizedHiringCompany, type NormalizedHiringJob,
   type NormalizedHiringPerson,
 } from "./hiringActorNormalizers.ts";
 import {
@@ -88,6 +89,16 @@ export interface CompanyFirstRouteOpts {
   ycMaxSize?: string;
   /** solidcode fan-out bands (one value per call — never combined). */
   solidcodeTeamSizes?: string[];
+  /**
+   * GENERAL-ROUTE discovery filters. Verified live values only.
+   * `companyNameSearch` is a LITERAL company-name keyword — never a concept
+   * phrase: `searchQuery` matches names, and "B2B software platform" returned
+   * exactly one company in the benchmark.
+   */
+  generalLocations?: string[];
+  generalIndustryIds?: string[];
+  generalCompanySizes?: string[];
+  companyNameSearch?: string | null;
   foundersPerCompany?: number;
 }
 
@@ -236,18 +247,41 @@ export async function executeCompanyFirstRoute(
       if (calls.some((c) => c.ok)) recordExecutedSource(opts.routeRecord, source);
 
     } else if (source === "apify_linkedin_company_search") {
-      // General route discovery is handled by the caller-supplied invoker using
-      // the same compiler; candidates are normalized as candidate-only.
+      // CANDIDATE GENERATOR ONLY. Nothing this Actor returns may satisfy a Brain
+      // gate: its industry filter returned TechCrunch and a staffing firm under
+      // "Software Development", and its size filter reads employeeCountRange,
+      // which contradicted the exact count by up to 23x. Enrichment decides.
+      const compiled = compileHarvestCompanySearchInput({
+        // A concept phrase is deliberately NOT passed here.
+        ...(opts.companyNameSearch ? { searchQuery: opts.companyNameSearch } : {}),
+        locations: opts.generalLocations ?? ["United States"],
+        industryIds: opts.generalIndustryIds ?? [],
+        companySize: opts.generalCompanySizes ?? [],
+        // `short` costs half and its employeeCount is null either way — the
+        // exact count comes from enrichment, so paying for `full` buys nothing.
+        scraperMode: "short",
+        maxItems: maxCandidates,
+      });
+      if (!compiled.ok) { log("company_search_compile_failed", compiled.errors); continue; }
+      const rows = await run(compiled as CompiledActorCall<unknown>);
+      for (const r of rows) discovered.push(normalizeLinkedInCompanyCandidate(r));
+      d.discovery.push({ actor_key: source, input_hash: compiled.inputHash,
+        batch: compiled.batchIdentity, rows: rows.length, deduped: rows.length });
       recordExecutedSource(opts.routeRecord, source);
     }
   }
 
-  // Deduplicate candidates on their namespaced source id.
+  // Deduplicate on the STRONGEST available identity: a LinkedIn URL or domain
+  // beats the source id, because the same company can arrive from two sources
+  // under different ids.
   const seen = new Set<string>();
   const candidates = discovered.filter((c) => {
-    if (seen.has(c.external_source_id)) return false;
-    seen.add(c.external_source_id); return true;
+    const key = (c.linkedin_company_url ?? c.canonical_domain ?? c.external_source_id)
+      .toLowerCase().replace(/\/$/, "");
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
   });
+  for (const e of d.discovery) e.deduped = candidates.length;
 
   // ═══ 2. IDENTITY ═════════════════════════════════════════════════════════
   const rows: CompanyFirstRouteResult["companies"] = [];
