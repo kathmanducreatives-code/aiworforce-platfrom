@@ -32,6 +32,34 @@ export interface GenericPeopleInput {
 }
 
 const HARVEST_SCRAPER_MODES = new Set<string>(["Short", "Full", "Full + email search"]);
+
+// ── THE TWO SHORT ENUMS ARE DIFFERENT STRINGS ───────────────────────────────
+// linkedin-profile-search takes "Short"; linkedin-company-employees takes
+// "Short ($4 per 1k)" with the price INSIDE the value. Sending the wrong one is
+// accepted silently and falls back to that Actor's default, which is Full.
+//
+// Verified live 2026-08-01; see hiringActorCatalog COMPANY_EMPLOYEES_SCRAPER_MODES.
+const COMPANY_EMPLOYEES_MODES = new Set<string>([
+  "Short ($4 per 1k)", "Full ($8 per 1k)", "Full + email search ($12 per 1k)",
+]);
+
+/**
+ * Map any accepted spelling onto the company-employees enum.
+ *
+ * Callers (and stored tool inputs) have long passed the profile-search spelling,
+ * so those aliases are translated rather than rejected — rejecting them would
+ * break existing saved inputs. Email modes are never produced here.
+ */
+function toCompanyEmployeesMode(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  if (COMPANY_EMPLOYEES_MODES.has(v)) return v;
+  switch (v.toLowerCase()) {
+    case "short": return "Short ($4 per 1k)";
+    case "full": return "Full ($8 per 1k)";
+    default: return null;
+  }
+}
 const DEDUP_MODES = new Set<string>(["off", "insert_ids", "insert_profiles", "read_only"]);
 
 // Full LinkedIn company/school URL (company filters require these, not names).
@@ -244,12 +272,18 @@ export function buildHarvestApiCompanyEmployeesInput(generic: any): Record<strin
     companies = [generic.query.trim()];
   }
   
-  let mode = "Full";
-  if (typeof f.mode === "string" && HARVEST_SCRAPER_MODES.has(f.mode)) {
-    mode = f.mode;
-  } else if (typeof f.profileScraperMode === "string" && HARVEST_SCRAPER_MODES.has(f.profileScraperMode)) {
-    mode = f.profileScraperMode;
-  }
+  // TWO DEFECTS FIXED HERE (both verified against the live schema 2026-08-01):
+  //   1. the value was validated against the PROFILE-SEARCH enum, so
+  //      "Short ($4 per 1k)" could never be produced; and
+  //   2. it was emitted under the key `mode`, which this Actor does not have —
+  //      the live field is `profileScraperMode`. The Actor therefore received no
+  //      mode at all and applied its own default, Full ($8 per 1k).
+  // Net effect: company-employees runs paid the Full rate and Short was
+  // unreachable. Default stays Full here so behaviour changes only for callers
+  // that actually asked for Short.
+  const mode = toCompanyEmployeesMode(f.mode) ??
+    toCompanyEmployeesMode(f.profileScraperMode) ??
+    "Full ($8 per 1k)";
   
   const maxItems = Math.max(1, Math.min(100, Number(generic.max_results) || Number(generic.maxItems) || 10));
   
@@ -267,9 +301,19 @@ export function buildHarvestApiCompanyEmployeesInput(generic: any): Record<strin
   
   const out: Record<string, unknown> = {
     companies,
+    // The live schema field. `mode` is retained alongside it for backward
+    // compatibility with anything that reads this object back, but the Actor
+    // only ever reads `profileScraperMode`.
+    profileScraperMode: mode,
     mode,
     maxItems,
   };
+  // A per-company bound is the whole reason to prefer this Actor over
+  // profile-search, which has none. Honour it when the caller supplies one.
+  const perCompany = Number(f.maxItemsPerCompany);
+  if (Number.isFinite(perCompany) && perCompany > 0) {
+    out.maxItemsPerCompany = Math.min(Math.trunc(perCompany), maxItems);
+  }
   if (jobTitles && jobTitles.length > 0) out.jobTitles = jobTitles;
   if (locations && locations.length > 0) out.locations = locations;
   if (searchQuery) out.searchQuery = searchQuery;

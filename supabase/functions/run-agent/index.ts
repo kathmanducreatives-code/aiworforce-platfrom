@@ -53,6 +53,19 @@ import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthorit
 import { applySequentialSourceExecution, sequentialSourceDiagnostics } from "../_shared/sequentialSourceBridge.ts";
 import { createPlanAwareActionBudget } from "../_shared/planAwareBudgetBinding.ts";
 import {
+  actorLimitationBriefing, inferRouteFromRequest, newRouteExecutionRecord,
+  routeDrift, validateHiringRoute,
+} from "../_shared/hiringRouteContract.ts";
+import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
+import {
+  collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
+  combineContactIdentities, computeCompanyFirstQuotaProgress, createPersistPlan,
+  loadPriorContactIdentities, nextAdaptiveAction, reconcilePriorIdentities,
+  type PersistedOutcome,
+} from "../_shared/qualifiedLeadPersistence.ts";
+import { projectCompanyFirstPersistence } from "../_shared/companyFirstPersistenceProjection.ts";
+import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVerification.ts";
+import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
 } from "../_shared/semanticClassificationBinding.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
@@ -879,45 +892,12 @@ Deno.serve(async (req) => {
           const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
           return Array.isArray(items) ? items : [];
         };
-        const persistPlan = async (plan: CompoundPersistencePlan) => {
-          try {
-            // 1) resolve/insert the canonical account (select-then-insert; no upsert
-            //    constraint dependency). Only for a verifiable account.
-            let accountId: string | null = null;
-            if (plan.account && (plan.account.domain || plan.account.linkedinUrl)) {
-              const domain = plan.account.domain;
-              if (domain) {
-                const { data: existing } = await supabase.from("accounts").select("id").eq("workspace_id", workspace_id).eq("domain", domain).maybeSingle();
-                accountId = (existing as { id?: string } | null)?.id ?? null;
-              }
-              if (!accountId) {
-                const { data: ins } = await supabase.from("accounts").insert({ workspace_id, name: plan.account.name, domain: plan.account.domain, linkedin_url: plan.account.linkedinUrl, description: plan.account.description, source: "compound_company_first" }).select("id").maybeSingle();
-                accountId = (ins as { id?: string } | null)?.id ?? null;
-              }
-            }
-            // INVARIANT: a CONTACT lead must have a real account_id.
-            const contactEligible = plan.verdict === "CONTACT" && !!accountId;
-            const { data: lc } = await supabase.from("lead_candidates").insert({
-              workspace_id, plan_id: plan_id ?? null, account_id: accountId, lead_type: plan.leadCandidate.lead_type, status: "new",
-              reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
-              raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
-            }).select("id").maybeSingle();
-            const leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
-            // 2) attach the contact through the PR #85 safe writer (verified account only).
-            if (plan.contact && (plan.contact.name || plan.contact.linkedinUrl) && leadCandidateId) {
-              await writeContactWithVerifiedAccount({
-                db: supabase as unknown as ContactPersistenceDb, mode: "insert",
-                identity: { workspace_id, full_name: plan.contact.name, title: plan.contact.title, linkedin_url: plan.contact.linkedinUrl, email: null },
-                rawBase: { source: "compound_company_first", via: "company_first" },
-                resolve: { workspaceId: workspace_id, leadCandidateId, contactLinkedInUrl: plan.contact.linkedinUrl ?? null, provenance: { source: "compound_company_first", company_match: contactEligible }, companyScopedSearch: true },
-                linkLeadCandidateId: leadCandidateId,
-              });
-            }
-            return { ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId };
-          } catch (e) {
-            return { ok: false, accountId: null, contactId: null, leadCandidateId: null, reason: (e as Error).message };
-          }
-        };
+        // CANONICAL PERSISTENCE. Extracted to `qualifiedLeadPersistence.ts` so
+        // the same function this handler runs can be exercised by a test with an
+        // isolated client. Behaviour, SQL and ordering are unchanged.
+        const persistPlan = createPersistPlan({
+          db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,
+        });
 
         // FINAL-LEAD QUOTA — explicit request wins; otherwise the lead-sourcing
         // default. Deliberately NOT DEFAULT_COMPOUND_LIMITS.rawJobs: that is a
@@ -1038,6 +1018,36 @@ Deno.serve(async (req) => {
               : null,
           })
           : null;
+        // ── VALIDATED HIRING ROUTE ──────────────────────────────────────────
+        // GPT chooses the route and the source order; this validates that
+        // choice deterministically before anything executes. A broad job board
+        // now requires a structured reason, which is what stops the old
+        // broad-job-first default reasserting itself for a tight ICP.
+        const requestedSourceOrder: string[] =
+          (gptStrategy?.diagnostics?.source_order as string[] | undefined) ?? [];
+        const routeResolution = validateHiringRoute({
+          route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
+            ?? inferRouteFromRequest(tool_input_body?.user_request ?? null),
+          source_order: requestedSourceOrder,
+          fallback_reason:
+            (gptStrategy?.diagnostics?.fallback_reason as string | undefined) ?? null,
+        }, { userRequest: tool_input_body?.user_request ?? null });
+        const routeRecord = routeResolution.ok
+          ? newRouteExecutionRecord(routeResolution, requestedSourceOrder)
+          : null;
+        console.log("[run-agent][hiring-route]", {
+          task_id: task.id,
+          ok: routeResolution.ok,
+          requested: routeResolution.requested_route,
+          validated: routeResolution.ok ? routeResolution.validated_route : null,
+          source_order: routeResolution.ok ? routeResolution.validated_source_order : null,
+          fallback_reason: routeResolution.ok ? routeResolution.fallback_reason : null,
+          repairs: routeResolution.ok ? routeResolution.repairs : routeResolution.errors,
+          // The limitation briefing GPT was given, by count — the content itself
+          // travels in the strategist context, not only in a prompt hash.
+          actor_limitation_briefing_size: actorLimitationBriefing().length,
+        });
+
         if (gptStrategy?.diagnostics) {
           console.log("[run-agent][lead-strategy-initial]", {
             task_id: task.id,
@@ -1048,6 +1058,195 @@ Deno.serve(async (req) => {
             plan_hash: gptStrategy.diagnostics.plan_hash,
             fallback_reason: gptStrategy.diagnostics.fallback_reason,
           });
+        }
+
+        // ══ COMPANY-FIRST EXECUTION ══════════════════════════════════════════
+        // The validated route now DRIVES execution. For a tight ICP this reaches
+        // memo23 first; broad job boards are only reachable through the
+        // fallback route, which requires a recorded structured reason.
+        let companyFirstRoute: Awaited<ReturnType<typeof executeCompanyFirstRoute>> | null = null;
+        let companyFirstPersisted = 0;
+        let companyFirstQuotaCredit = 0;
+        let companyFirstProjection: Record<string, number> | null = null;
+        let companyFirstQuotaProgress:
+          ReturnType<typeof computeCompanyFirstQuotaProgress> | null = null;
+        let companyFirstAdaptive: ReturnType<typeof nextAdaptiveAction> | null = null;
+        let companyFirstIdentities: ReturnType<typeof collectCompanyFirstContactIdentities> | null = null;
+        let combinedQuota: ReturnType<typeof combineContactIdentities> | null = null;
+        let legacySourcingRan = false;
+        let legacySkipReason: string | null = null;
+        let legacyBlockedCalls = 0;
+        // ══ RESUME STATE, FROM CANONICAL PERSISTENCE ═════════════════════════
+        // Loaded BEFORE any paid provider boundary, so a resumed task that has
+        // already met its quota spends nothing. The source of truth is the
+        // lead_candidates rows persistPlan wrote — never the request body, which
+        // no caller populates and which a stale client could otherwise use to
+        // inflate quota and stop a task early.
+        const priorContactState = await loadPriorContactIdentities(
+          supabase as never,
+          { workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id },
+        );
+        const priorReconciled = reconcilePriorIdentities(
+          priorContactState,
+          (body.resumed_contact_identities ?? null) as string[] | null,
+        );
+        const priorLegacyContactIdentities: string[] = priorReconciled.identities;
+        console.log("[run-agent][prior-contact-state]", {
+          task_id: task.id,
+          prior_contact_credit: priorLegacyContactIdentities.length,
+          scanned_rows: priorContactState.scanned_rows,
+          unidentifiable: priorContactState.unidentifiable,
+          ignored_request_identities: priorReconciled.ignored_request_identities,
+          lookup_error: priorContactState.error,
+          // Digests only — never a raw lead or contact identifier.
+          identity_digests: priorContactState.identity_digests,
+          source: priorContactState.source,
+        });
+        // PRE-LOOP RESUME STOP. Prior CONTACT credit is canonical persisted
+        // state, so a resumed task whose quota is already met performs ZERO
+        // discovery, enrichment, job-search, founder and contact calls. This is
+        // checked before the FIRST paid boundary, not after it.
+        const priorQuotaProgress = computeCompanyFirstQuotaProgress({
+          persisted: [],
+          legacyContactIdentities: priorLegacyContactIdentities,
+          requestedQuota: quota.requestedLeadCount,
+        });
+        const priorDecision = nextAdaptiveAction(priorQuotaProgress);
+        const resumeSatisfied = priorDecision.action === "stop_quota_satisfied";
+        console.log("[run-agent][resume-precheck]", {
+          task_id: task.id,
+          prior_contact_credit: priorQuotaProgress.deduplicated_contact_credit,
+          requested_quota: quota.requestedLeadCount,
+          remaining_quota: priorQuotaProgress.remaining_quota,
+          decision: priorDecision.action, reason: priorDecision.reason,
+          company_first_will_run: !resumeSatisfied,
+        });
+
+        if (!resumeSatisfied && routeResolution.ok && routeRecord &&
+            routeResolution.validated_route !== "broad_job_fallback") {
+          try {
+            companyFirstRoute = await executeCompanyFirstRoute({
+              // The SAME provider entry point the rest of run-agent uses. The
+              // executor holds no provider import of its own.
+              invoke: async (call) => {
+                const rows = await invokeJobs({
+                  selected_actor_key: call.actorKey,
+                  actor_id: call.actorId,
+                  ...(call.input as Record<string, unknown>),
+                });
+                return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
+              },
+              // THE EXISTING canonical verifier — never re-implemented here.
+              verifyEmployer: (person, companyUrl) => {
+                const v = verifyCurrentEmployer(
+                  {
+                    title: person.title,
+                    currentCompany: person.current_employer,
+                    currentCompanyLinkedinUrl: person.current_employer_linkedin_url,
+                    isCurrent: person.current_employer_is_current ?? null,
+                  },
+                  { name: null, normalizedName: null, canonicalDomain: null,
+                    linkedinUrl: companyUrl, linkedinCompanyId: null, location: null,
+                    dedupeKey: companyUrl, dedupeKeyKind: "linkedin_url" } as never,
+                );
+                // The existing gate decides; this never re-defines "verified".
+                return { verified: employerGatePasses(v.outcome), outcome: String(v.outcome) };
+              },
+              log: (m, meta) => console.log("[run-agent][company-first-route]", m, meta),
+            }, {
+              route: routeResolution,
+              routeRecord,
+              requestedLeadCount: quota.requestedLeadCount,
+              taskId: task.id,
+              workspaceId: workspace_id,
+              // The SAME compiled Brain policy the legacy path enforces, so the
+              // company-fit gate and the existing hard gate cannot disagree.
+              brain: brainEnforced
+                ? {
+                  employee_min: effectivePolicy.constraints.min_employees ?? null,
+                  employee_max: effectivePolicy.constraints.max_employees ?? null,
+                  positive_industries: effectivePolicy.constraints.positive_industries ?? [],
+                  excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
+                  required_geography: null,
+                }
+                : undefined,
+            });
+            // ── CANONICAL PERSISTENCE + CONTACT ENRICHMENT ─────────────────
+            // The SAME persistPlan the legacy pipeline uses. It owns accounts,
+            // contacts, lead_candidates and the contact-enrichment handoff, so
+            // company-first creates no parallel path — it only supplies plans.
+            const projection = projectCompanyFirstPersistence(
+              companyFirstRoute, workspace_id, task.id);
+            const persistedOutcomes: PersistedOutcome[] = [];
+            for (const p of projection.plans) {
+              if (!p.plan.persistable) continue;
+              try {
+                const r = await persistPlan(p.plan);
+                if (r.ok) companyFirstPersisted++;
+                persistedOutcomes.push({
+                  identity: p.idempotencyKey, verdict: String(p.plan.verdict),
+                  quotaEligible: p.quotaEligible, result: r,
+                });
+              } catch (pe) {
+                console.log("[run-agent][company-first-persist][error]",
+                  { key: p.idempotencyKey, error: String(pe) });
+                persistedOutcomes.push({
+                  identity: p.idempotencyKey, verdict: String(p.plan.verdict),
+                  quotaEligible: p.quotaEligible,
+                  result: { ok: false, accountId: null, contactId: null,
+                    leadCandidateId: null, reason: String(pe) },
+                });
+              }
+            }
+
+            // ── QUOTA FROM PERSISTED OUTCOMES, NOT FROM THE PROJECTION ──────
+            // A plan PROJECTED as CONTACT that failed to write, or that lost its
+            // account and therefore its contact eligibility, is not a lead. The
+            // controller reads what persistence actually returned.
+            companyFirstQuotaProgress = computeCompanyFirstQuotaProgress({
+              persisted: persistedOutcomes,
+              // Legacy CONTACTs already persisted by an EARLIER round or by the
+              // run this one resumed. The legacy loop has not run yet at this
+              // point, so anything it produces is combined afterwards via
+              // combineContactIdentities — this set covers resume only.
+              legacyContactIdentities: priorLegacyContactIdentities,
+              requestedQuota: quota.requestedLeadCount,
+              contactPending: companyFirstRoute.funnel.contact_ready -
+                projection.counts.contact_ready >= 0
+                ? projection.counts.contact_ready - persistedOutcomes.filter((o) =>
+                  o.verdict === "CONTACT" && o.result.ok).length
+                : 0,
+              qualifiedCompany: companyFirstRoute.funnel.qualified_companies,
+              founderPending: companyFirstRoute.funnel.founder_searched -
+                companyFirstRoute.funnel.founder_verified,
+            });
+            companyFirstIdentities = collectCompanyFirstContactIdentities(persistedOutcomes);
+            companyFirstQuotaCredit = companyFirstQuotaProgress.company_first_contact_credit;
+            companyFirstAdaptive = nextAdaptiveAction(companyFirstQuotaProgress);
+            companyFirstProjection = projection.counts;
+
+            console.log("[run-agent][company-first-quota]", {
+              task_id: task.id, ...companyFirstQuotaProgress,
+              next_action: companyFirstAdaptive.action, reason: companyFirstAdaptive.reason,
+              // A projected CONTACT that persistence did not confirm is visible
+              // as the gap between these two numbers.
+              projected_contact_ready: projection.counts.contact_ready,
+            });
+
+            console.log("[run-agent][company-first-route][done]", {
+              task_id: task.id,
+              executed_source_order: companyFirstRoute.executed_source_order,
+              funnel: companyFirstRoute.funnel,
+              persisted: companyFirstPersisted,
+              projection: projection.counts,
+              quota_credit: companyFirstQuotaCredit,
+              diagnostics: companyFirstRoute.diagnostics,
+            });
+          } catch (e) {
+            // A route failure must not lose the task; the legacy path still runs
+            // and the failure is recorded rather than swallowed.
+            console.log("[run-agent][company-first-route][error]", String(e));
+          }
         }
 
         const claudeFirst = persistedPlan
@@ -1227,6 +1426,45 @@ Deno.serve(async (req) => {
           requestedLeadCount: quota.requestedLeadCount,
         });
 
+        // ══ ENFORCED ADAPTIVE DECISION ═══════════════════════════════════════
+        // The decision computed from PERSISTED outcomes now controls whether the
+        // sourcing loop runs at all. Previously it was logged and ignored, which
+        // meant a satisfied quota still paid for another round, and pending
+        // founder/contact work still looked like a failed source.
+        //
+        // Fails CLOSED: an unrecognised decision runs nothing rather than
+        // guessing that more spending is safe.
+        const adaptiveDecision = companyFirstAdaptive?.action ?? priorDecision.action;
+        if (resumeSatisfied) {
+          legacySkipReason = "quota_satisfied_by_persisted_prior_contacts";
+        } else if (companyFirstAdaptive) {
+          if (adaptiveDecision === "stop_quota_satisfied") {
+            legacySkipReason = "quota_satisfied_by_company_first";
+          } else if (adaptiveDecision === "await_pending_work") {
+            // NOT exhausted, NOT failed — work is in flight. Launching another
+            // discovery source here is paying twice for one answer.
+            legacySkipReason = companyFirstAdaptive.reason;
+          } else if (adaptiveDecision !== "continue_sourcing") {
+            legacySkipReason = `unrecognised_adaptive_decision:${adaptiveDecision}`;
+          }
+        }
+        console.log("[run-agent][adaptive-enforcement]", {
+          task_id: task.id,
+          decision: companyFirstAdaptive?.action ?? null,
+          reason: companyFirstAdaptive?.reason ?? null,
+          requested_quota: quota.requestedLeadCount,
+          persisted_contact: companyFirstQuotaProgress?.company_first_contact_credit ?? 0,
+          founder_pending: companyFirstQuotaProgress?.founder_pending ?? 0,
+          contact_pending: companyFirstQuotaProgress?.contact_pending ?? 0,
+          will_run_another_source: legacySkipReason === null,
+          skip_reason: legacySkipReason,
+        });
+
+        // ENFORCEMENT AT THE PROVIDER BOUNDARY. When the decision says stop or
+        // wait, the loop is bounded to zero rounds AND the invokers hard-refuse.
+        // Two independent guards, because a bound is a number someone can change
+        // and a refusal is a fact.
+        const sourcingBlocked = legacySkipReason !== null;
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
@@ -1236,7 +1474,13 @@ Deno.serve(async (req) => {
           plannerMetadata: broadeningPlanner.lastMetadata,
           durableIdempotency: supabaseToolCallReader(supabase as never),
           stateStore: cfStateStore,
-          invokeJobs: sequentialSources.invokeJobs, invokePeople, persist: persistPlan,
+          invokeJobs: sourcingBlocked
+            ? (() => { legacyBlockedCalls++; return Promise.resolve([]); })
+            : sequentialSources.invokeJobs,
+          invokePeople: sourcingBlocked
+            ? (() => { legacyBlockedCalls++; return Promise.resolve([]); })
+            : invokePeople,
+          persist: persistPlan,
           // Null when disabled ⇒ the pipeline makes no model call at all.
           classifyCompanyEvidence: classificationBinding.classifyCompanyEvidence ?? undefined,
           classificationCallsRemaining: classificationBinding.classificationCallsRemaining,
@@ -1256,11 +1500,43 @@ Deno.serve(async (req) => {
           // quota, money, repeated low-quality sources and the hard provider
           // ceiling each still end the run. Absent when the sequential bridge is
           // disabled, which keeps the pre-existing fixed limits in force.
-          ...(sequentialSources.enabled
+          ...(sequentialSources.enabled && !sourcingBlocked
             ? { actionBudget: createPlanAwareActionBudget(sequentialSources.planBudgetSnapshot) }
             : {}),
+          // ZERO ROUNDS when the adaptive decision blocked sourcing. Without
+          // dropping actionBudget above, loopBound would come from the hard
+          // provider ceiling instead of maxRounds and the loop would still run.
+          ...(sourcingBlocked ? { bounds: { maxRounds: 0 } } : {}),
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
         });
+
+        // ══ COMBINED, DEDUPLICATED CONTACT QUOTA ═════════════════════════════
+        // Both paths' PERSISTED CONTACT identities, unioned. The same person
+        // reached twice is one lead; two different people are two. Identities
+        // come from canonical lead-candidate ids first — never a display name or
+        // a vanity URL, either of which would silently merge or split leads.
+        {
+          const thisRunLegacy = collectLegacyContactIdentities((cf.items ?? []) as never);
+          // Prior persisted CONTACTs join the legacy side, so a resume cannot
+          // re-credit a lead an earlier attempt already produced.
+          const legacyIds = {
+            ...thisRunLegacy,
+            identities: [...new Set([...priorLegacyContactIdentities, ...thisRunLegacy.identities])],
+          };
+          combinedQuota = combineContactIdentities(
+            legacyIds,
+            companyFirstIdentities ??
+              { identities: [], strategy: "none", unidentifiable: 0 },
+            quota.requestedLeadCount,
+          );
+          legacySourcingRan = !sourcingBlocked;
+          console.log("[run-agent][combined-quota]", {
+            task_id: task.id, ...combinedQuota,
+            legacy_sourcing_ran: legacySourcingRan,
+            legacy_blocked_provider_calls: legacyBlockedCalls,
+            adaptive_decision: companyFirstAdaptive?.action ?? null,
+          });
+        }
 
         // ONE canonical run context, built once and carried unchanged into the
         // response, the UI panel, the task result and the CSV export. Surfaces
@@ -1462,6 +1738,42 @@ Deno.serve(async (req) => {
           // only — never a prompt, a credential or a claim. Present even when the
           // feature is off, so "no classification" is a recorded fact rather than
           // an absent key the reader has to interpret.
+          // COMPANY-FIRST ROUTE EXECUTION — the real funnel, stage by stage,
+          // with the diagnostics that prove which Actor ran in what order.
+          company_first_route: companyFirstRoute
+            ? {
+              executed_source_order: companyFirstRoute.executed_source_order,
+              funnel: companyFirstRoute.funnel,
+              // PERSISTED outcomes, distinct from the in-memory funnel: the
+              // Workbench and quota read these, not diagnostics alone.
+              persisted_records: companyFirstPersisted,
+              projection: companyFirstProjection,
+              quota_credit: companyFirstQuotaCredit,
+              // The controller's actual inputs, persisted for audit.
+              quota_progress: companyFirstQuotaProgress,
+              adaptive_action: companyFirstAdaptive,
+              // The decision and what execution actually did, side by side, so a
+              // disagreement is visible rather than inferred.
+              enforcement: {
+                decision: companyFirstAdaptive?.action ?? null,
+                reason: companyFirstAdaptive?.reason ?? null,
+                legacy_sourcing_ran: legacySourcingRan,
+                legacy_skip_reason: legacySkipReason,
+                blocked_provider_calls: legacyBlockedCalls,
+              },
+              combined_quota: combinedQuota,
+              ...companyFirstRoute.diagnostics,
+            }
+            : null,
+          // FUNNEL, stage by stage. Qualified companies stay visible while
+          // founder enrichment is still pending — hiding them is how a run that
+          // did real work reports as a failure.
+          stage_funnel: cf.stage_funnel ?? null,
+          // VALIDATED ROUTE, persisted whole: requested vs validated vs executed
+          // are three different facts and are never merged into one field.
+          hiring_route: routeRecord
+            ? { ...routeRecord, drift: routeDrift(routeRecord) }
+            : { error: routeResolution.ok ? null : routeResolution.errors },
           semantic_classification: {
             provider: "lead_strategist_facade",
             escalation_used: false,
