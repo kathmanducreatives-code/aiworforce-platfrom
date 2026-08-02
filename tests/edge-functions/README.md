@@ -13,5 +13,5 @@ Run them with:
 deno test tests/edge-functions/_shared/
 ```
 
-Imports point back at the real source via `../../supabase/functions/...` — keep
+Imports point back at the real source via `../../../supabase/functions/...` — keep
 new tests here rather than anywhere under `supabase/`.
