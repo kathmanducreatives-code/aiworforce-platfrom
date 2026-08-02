@@ -12,36 +12,37 @@ import {
 
 const WS = "ws-1", PLAN = "plan-1", TASK = "task-1";
 
-/** Mock client honouring the two scope filters the loader applies. */
+/**
+ * Mock client modelling PostgREST filter semantics.
+ *
+ * The distinction that matters: `.eq(col, null)` becomes `col=eq.null` and
+ * matches NOTHING (SQL `= NULL` is never true), while `.is(col, null)` becomes
+ * `col=is.null` and matches NULL rows. The mock reproduces that faithfully —
+ * otherwise it would paper over the exact bug under test.
+ */
 function db(rows: Record<string, unknown>[], opts: { throwOn?: boolean } = {}) {
-  const queries: Array<Record<string, unknown>> = [];
-  return {
-    queries,
-    client: {
-      from(table: string) {
-        return {
-          select(_c: string) {
-            const f: Record<string, unknown> = { table };
-            const chain = {
-              eq(col: string, v: unknown) {
-                f[col] = v;
-                // Second .eq resolves the query.
-                if (Object.keys(f).length >= 3) {
-                  queries.push(f);
-                  if (opts.throwOn) throw new Error("db unavailable");
-                  return Promise.resolve({
-                    data: rows.filter((r) =>
-                      r.workspace_id === f.workspace_id && r.plan_id === f.plan_id),
-                  });
-                }
-                return chain;
-              },
-            };
-            return chain;
-          },
-        };
+  const filters: Array<{ op: "eq" | "is"; col: string; val: unknown }> = [];
+  const make = () => {
+    const chain = {
+      eq(col: string, val: unknown) { filters.push({ op: "eq", col, val }); return chain; },
+      is(col: string, val: null) { filters.push({ op: "is", col, val }); return chain; },
+      then(res: (v: { data: unknown }) => unknown, rej?: (e: unknown) => unknown) {
+        if (opts.throwOn) return Promise.reject(new Error("db unavailable")).then(res, rej);
+        const data = rows.filter((r) =>
+          filters.every((f) => {
+            const cell = (r as Record<string, unknown>)[f.col] ?? null;
+            // `eq` with null matches nothing, exactly as PostgREST behaves.
+            if (f.op === "eq") return f.val !== null && cell === f.val;
+            return cell === null;
+          }));
+        return Promise.resolve({ data }).then(res, rej);
       },
-    },
+    };
+    return chain;
+  };
+  return {
+    filters,
+    client: { from: (_t: string) => ({ select: (_c: string) => make() }) },
   };
 }
 
@@ -61,10 +62,11 @@ Deno.test("1. persisted CONTACT rows become prior identities", async () => {
   assertEquals(s.identities, ["lc:lc1", "lc:lc2"]);
   assertEquals(s.source, "canonical_persisted_state");
   assertEquals(s.error, null);
-  // Scope was pushed into the query, not filtered only in memory.
-  assertEquals(d.queries[0].workspace_id, WS);
-  assertEquals(d.queries[0].plan_id, PLAN);
-  assertEquals(d.queries[0].table, "lead_candidates");
+  // Scope was pushed into the QUERY, not filtered only in memory.
+  assertEquals(d.filters.find((f) => f.col === "workspace_id")?.val, WS);
+  const plan = d.filters.find((f) => f.col === "plan_id")!;
+  assertEquals(plan.op, "eq", "a real plan id uses equality");
+  assertEquals(plan.val, PLAN);
 });
 
 // ═══ 2/13. QUOTA-SATISFIED RESUME ═════════════════════════════════════════
@@ -211,4 +213,103 @@ Deno.test("12/14. run-agent loads persisted prior state before any provider call
   assert(src.includes("identity_digests: priorContactState.identity_digests"));
   assertFalse(src.includes("identities: priorLegacyContactIdentities,"),
     "raw identities must not be logged");
+});
+
+
+// ═══ NULL plan_id — `IS NULL`, NEVER `= NULL` ══════════════════════════════
+//
+// PostgREST renders `.eq("plan_id", null)` as `plan_id=eq.null`, which matches
+// no rows. A task with no plan would find none of its own persisted CONTACTs
+// and re-source leads it had already paid for.
+
+const nullPlanRow = (id: string, over: Record<string, unknown> = {}) => ({
+  id, workspace_id: WS, plan_id: null, account_id: `acct-${id}`, lead_type: "person",
+  raw: { contact_eligible: true, task_id: TASK, record_kind: "founder",
+    person: { source_profile_id: `P-${id}` } },
+  ...over,
+});
+
+Deno.test("N1. a non-null plan counts only that plan's CONTACT rows", async () => {
+  const d = db([contactRow("mine"), contactRow("other", { plan_id: "plan-2" }), nullPlanRow("noplan")]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: PLAN, taskId: TASK });
+  assertEquals(s.identities, ["lc:mine"]);
+});
+
+Deno.test("N2. a null plan loads rows where plan_id IS NULL", async () => {
+  const d = db([nullPlanRow("a"), nullPlanRow("b")]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  assertEquals(s.identities, ["lc:a", "lc:b"],
+    "a plan-less task must still find its own persisted CONTACTs");
+  // The builder must have used `is`, not `eq` — `eq` would have matched nothing.
+  const plan = d.filters.find((f) => f.col === "plan_id")!;
+  assertEquals(plan.op, "is");
+  assertEquals(plan.val, null);
+});
+
+Deno.test("N3. plan rows do not count for a null-plan task", async () => {
+  const d = db([contactRow("planned"), nullPlanRow("mine")]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  assertEquals(s.identities, ["lc:mine"]);
+});
+
+Deno.test("N4. null-plan rows do not count for a task that has a plan", async () => {
+  const d = db([nullPlanRow("noplan"), contactRow("mine")]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: PLAN, taskId: TASK });
+  assertEquals(s.identities, ["lc:mine"]);
+});
+
+Deno.test("N5. workspace and task scope still apply on the null-plan path", async () => {
+  const d = db([
+    nullPlanRow("other_ws", { workspace_id: "ws-2" }),
+    nullPlanRow("other_task", {
+      raw: { contact_eligible: true, task_id: "task-2", person: { source_profile_id: "X" } } }),
+    nullPlanRow("mine"),
+  ]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  assertEquals(s.identities, ["lc:mine"]);
+});
+
+Deno.test("N6. a quota-satisfied null-plan resume stops before any provider call", async () => {
+  const d = db(["a", "b", "c"].map((x) => nullPlanRow(x)));
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  const p = computeCompanyFirstQuotaProgress({
+    persisted: [], legacyContactIdentities: s.identities, requestedQuota: 3 });
+  assertEquals(p.remaining_quota, 0);
+  assertEquals(nextAdaptiveAction(p).action, "stop_quota_satisfied",
+    "before the fix this resumed with zero credit and sourced again");
+});
+
+Deno.test("N7. duplicate null-plan CONTACT rows still count once", async () => {
+  const d = db([nullPlanRow("dup"), nullPlanRow("dup")]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  assertEquals(s.identities, ["lc:dup"]);
+});
+
+Deno.test("N8. WATCH/NEEDS_REVIEW/REJECT/SKIP still never count on the null-plan path", async () => {
+  const d = db([
+    nullPlanRow("watch", { raw: { contact_eligible: false, task_id: TASK } }),
+    nullPlanRow("acct", { lead_type: "account" }),
+    nullPlanRow("real"),
+  ]);
+  const s = await loadPriorContactIdentities(d.client as never,
+    { workspaceId: WS, planId: null, taskId: TASK });
+  assertEquals(s.identities, ["lc:real"]);
+});
+
+Deno.test("N9. the loader branches on the plan filter rather than always using eq", async () => {
+  const src = await Deno.readTextFile(
+    new URL("./qualifiedLeadPersistence.ts", import.meta.url));
+  assert(src.includes('query.is("plan_id", null)'),
+    "a null plan must use IS NULL");
+  assert(src.includes('query.eq("plan_id", scope.planId)'),
+    "a real plan must use equality");
+  assertFalse(src.includes('.eq("plan_id", scope.planId ?? null)'),
+    "the null case must not collapse back into eq");
 });

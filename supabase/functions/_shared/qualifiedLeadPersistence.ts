@@ -405,15 +405,23 @@ export interface PriorContactState {
   error: string | null;
 }
 
-/** A minimal list-query surface. The real Supabase builder satisfies it. */
+/**
+ * A minimal list-query surface. The real Supabase builder satisfies it.
+ *
+ * `is` is required as well as `eq`: PostgREST turns `.eq("plan_id", null)` into
+ * `plan_id=eq.null`, which matches NO rows, because SQL `= NULL` is never true.
+ * A task with no plan would therefore find none of its own persisted CONTACTs
+ * and re-source leads it had already paid for. `IS NULL` is the only correct
+ * comparison, so the builder must offer both and the filter chain must stay
+ * awaitable at any depth.
+ */
+export interface PriorContactFilter extends PromiseLike<{ data: unknown; error?: unknown }> {
+  eq: (c: string, v: unknown) => PriorContactFilter;
+  is: (c: string, v: null) => PriorContactFilter;
+}
+
 export interface PriorContactDb {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (c: string, v: unknown) => {
-        eq: (c: string, v: unknown) => PromiseLike<{ data: unknown; error?: unknown }>;
-      };
-    };
-  };
+  from: (table: string) => { select: (cols: string) => PriorContactFilter };
 }
 
 const EMPTY_PRIOR: PriorContactState = {
@@ -436,10 +444,14 @@ export async function loadPriorContactIdentities(
   db: PriorContactDb, scope: PriorContactScope,
 ): Promise<PriorContactState> {
   try {
-    const res = await db.from("lead_candidates")
+    // NULL PLAN NEEDS `IS NULL`, NOT `= NULL`.
+    let query = db.from("lead_candidates")
       .select("id, account_id, lead_type, plan_id, raw")
-      .eq("workspace_id", scope.workspaceId)
-      .eq("plan_id", scope.planId);
+      .eq("workspace_id", scope.workspaceId);
+    query = scope.planId == null
+      ? query.is("plan_id", null)
+      : query.eq("plan_id", scope.planId);
+    const res = await query;
     const rows = Array.isArray((res as { data?: unknown }).data)
       ? (res as { data: Record<string, unknown>[] }).data : [];
 
@@ -451,6 +463,10 @@ export async function loadPriorContactIdentities(
       if (raw.contact_eligible !== true) continue;
       // Scope re-check: the plan filter alone would let a sibling task through.
       if (String(raw.task_id ?? "") !== scope.taskId) continue;
+      // Plan scope, re-asserted in memory. `null` and a plan id are different
+      // scopes in both directions — neither may absorb the other's leads.
+      const rowPlan = (r.plan_id ?? null) as string | null;
+      if ((scope.planId ?? null) !== rowPlan) continue;
       // Person leads only. An account-level record is progress, never a lead.
       if (r.lead_type !== "person") continue;
       const id = leadIdentity({
