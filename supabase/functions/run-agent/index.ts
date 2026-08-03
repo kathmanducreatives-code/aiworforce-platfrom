@@ -62,6 +62,46 @@ import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
 } from "../_shared/leadMissionRuntime.ts";
 import {
+  CAPABILITY_EXECUTION_STATE_VERSION, runCapabilityPlan, toRouteResultShape,
+  type CapabilityExecutionState, type CapabilityRunResult,
+} from "../_shared/leadCapabilityEngine.ts";
+
+/**
+ * Reload persisted capability state for a resume.
+ *
+ * Structural only — `runCapabilityPlan` re-checks `mission_hash` and discards a
+ * state that belongs to a different question, so a stale or hand-edited body
+ * cannot make the engine continue somebody else's run.
+ */
+function readCapabilityExecutionState(
+  body: Record<string, unknown>,
+): CapabilityExecutionState | null {
+  const s = body.capability_execution_state;
+  if (!s || typeof s !== "object") return null;
+  const c = s as Record<string, unknown>;
+  return c.version === CAPABILITY_EXECUTION_STATE_VERSION &&
+    Array.isArray(c.completed_capabilities)
+    ? (s as CapabilityExecutionState)
+    : null;
+}
+
+/**
+ * The diagnostics shape the existing persistence projection expects.
+ *
+ * The engine's own telemetry is richer and is persisted separately; this only
+ * satisfies the legacy structure so `persistPlan` keeps working unchanged.
+ */
+function emptyCapabilityDiagnostics(run: CapabilityRunResult): Record<string, unknown> {
+  return {
+    route: { requested: "lead_mission_v1", validated: "lead_mission_v1",
+      executed: run.state.entry_capability, fallback_reason: run.state.fallback_reason },
+    capability_outcomes: run.capability_outcomes,
+    provider_attempts: run.state.provider_attempts,
+    cost: { estimated_max_usd: 0,
+      note: "capability engine reports cost in graph units; see capability_execution_state" },
+  };
+}
+import {
   collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
   combineContactIdentities, computeCompanyFirstQuotaProgress, createPersistPlan,
   loadPriorContactIdentities, nextAdaptiveAction, reconcilePriorIdentities,
@@ -1198,7 +1238,101 @@ Deno.serve(async (req) => {
           company_first_will_run: !resumeSatisfied,
         });
 
-        if (!resumeSatisfied && routeResolution.ok && routeRecord &&
+        // SEMANTIC CLASSIFICATION BINDING. Constructed here rather than further
+        // down because the capability engine is what consults it: an UNKNOWN
+        // Company Brain verdict is resolved, not rejected, and this is the thing
+        // that resolves it. OFF by default — both SEMANTIC_COMPANY_CLASSIFICATION
+        // and the workspace allow-list must pass.
+        const classificationBinding = buildSemanticClassificationBinding({
+          workspaceId: workspace_id,
+          requestedLeadCount: quota.requestedLeadCount,
+        });
+
+        // ══ THE CAPABILITY ENGINE IS THE AUTHORITY FOR MISSION TASKS ═════════
+        // For a task carrying a LeadMissionV1, the graph's own steps ARE the
+        // state machine: entry capability, ordering, evidence gates, provider
+        // attempts, cost and resume all come from `runCapabilityPlan`.
+        // `executeCompanyFirstRoute` is not consulted at all, so the two cannot
+        // disagree about the same run — it survives only for pre-mission tasks.
+        let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
+        if (!resumeSatisfied && persistedMission && missionPlan) {
+          try {
+            capabilityRun = await runCapabilityPlan({
+              invoke: async (call) => {
+                const rows = await invokeJobs({
+                  selected_actor_key: call.actorKey,
+                  actor_id: call.actorId,
+                  ...(call.input as Record<string, unknown>),
+                });
+                return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
+              },
+              verifyEmployer: (person, companyUrl) => {
+                const v = verifyCurrentEmployer(
+                  {
+                    title: person.title,
+                    currentCompany: person.current_employer,
+                    currentCompanyLinkedinUrl: person.current_employer_linkedin_url,
+                    isCurrent: person.current_employer_is_current ?? null,
+                  },
+                  { name: null, normalizedName: null, canonicalDomain: null,
+                    linkedinUrl: companyUrl, linkedinCompanyId: null, location: null,
+                    dedupeKey: companyUrl, dedupeKeyKind: "linkedin_url" } as never,
+                );
+                return { verified: employerGatePasses(v.outcome), outcome: String(v.outcome) };
+              },
+              // UNKNOWN is resolved through the EXISTING semantic-classification
+              // binding, or not at all. A null classifier leaves the company
+              // pending — it never becomes a rejection for want of budget.
+              classifyCompany: classificationBinding.classifyCompanyEvidence
+                ? async (input) => {
+                  const r = await classificationBinding.classifyCompanyEvidence!(input) as
+                    { verdict?: string; reason?: string } | null;
+                  const v = r?.verdict;
+                  return v === "pass" || v === "fail" || v === "unknown"
+                    ? { verdict: v, reason: String(r?.reason ?? "") }
+                    : null;
+                }
+                : undefined,
+              log: (m, meta) => console.log("[run-agent][capability-engine]", m, meta),
+            }, {
+              mission: persistedMission,
+              plan: missionPlan,
+              state: readCapabilityExecutionState(body as Record<string, unknown>),
+              brain: brainEnforced
+                ? {
+                  employee_min: effectivePolicy.constraints.min_employees ?? null,
+                  employee_max: effectivePolicy.constraints.max_employees ?? null,
+                  positive_industries: effectivePolicy.constraints.positive_industries ?? [],
+                  excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
+                  required_geography: null,
+                }
+                : undefined,
+              maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
+            });
+            companyFirstRoute = {
+              ...toRouteResultShape(capabilityRun),
+              diagnostics: emptyCapabilityDiagnostics(capabilityRun),
+            } as never;
+            console.log("[run-agent][capability-engine][done]", {
+              task_id: task.id,
+              entry: capabilityRun.state.entry_capability,
+              completed: capabilityRun.state.completed_capabilities,
+              pending: capabilityRun.state.pending_capabilities,
+              attempts: capabilityRun.state.provider_attempts.length,
+              cost_units: capabilityRun.state.accumulated_cost_units,
+              qualified: capabilityRun.state.qualified_company_keys.length,
+              unknown: capabilityRun.state.unknown_company_keys.length,
+              terminal_reason: capabilityRun.state.terminal_reason,
+            });
+          } catch (e) {
+            // A containment violation is a BUG, not a provider failure, and it
+            // must not silently degrade into the legacy path.
+            console.log("[run-agent][capability-engine][error]", String(e));
+            throw e;
+          }
+        }
+
+        if (!resumeSatisfied && !capabilityRun && routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
           try {
             companyFirstRoute = await executeCompanyFirstRoute({
@@ -1497,10 +1631,8 @@ Deno.serve(async (req) => {
         // disabled — a per-company classification never justifies the escalation
         // tier. Ten unique company/evidence combinations per task; cache hits,
         // skips and unresolved identities all cost zero.
-        const classificationBinding = buildSemanticClassificationBinding({
-          workspaceId: workspace_id,
-          requestedLeadCount: quota.requestedLeadCount,
-        });
+        // Built ABOVE, before the capability engine, because the engine is what
+        // resolves an UNKNOWN Company Brain verdict.
 
         // ══ ENFORCED ADAPTIVE DECISION ═══════════════════════════════════════
         // The decision computed from PERSISTED outcomes now controls whether the
@@ -1778,6 +1910,24 @@ Deno.serve(async (req) => {
               }
               : null,
             legacy_loop_containment: missionLegacy,
+            // ── CAPABILITY EXECUTION STATE ─────────────────────────────────
+            // What ran, what is still pending, every provider attempt and its
+            // outcome, accumulated cost, and the deduplicated/qualified/unknown
+            // company sets. A resume reloads THIS and continues at the next
+            // incomplete capability — it never re-interprets the query.
+            capability_execution_state: capabilityRun?.state ?? null,
+            capability_outcomes: capabilityRun?.capability_outcomes ?? null,
+            // Companies the Brain could not decide on. Held for evidence
+            // resolution, explicitly NOT counted as rejections.
+            unknown_companies_pending_evidence:
+              capabilityRun?.state.unknown_company_keys ?? null,
+            semantic_classification_status: {
+              enabled: classificationBinding.enablement.enabled,
+              reason: classificationBinding.enablement.reason,
+              calls_allowed: classificationBinding.enablement.maxCalls,
+              consulted_by_engine: capabilityRun !== null &&
+                classificationBinding.classifyCompanyEvidence !== null,
+            },
             hiring_route: routeRecord
               ? { ...routeRecord, drift: routeDrift(routeRecord) }
               : { error: routeResolution.ok ? null : routeResolution.errors },

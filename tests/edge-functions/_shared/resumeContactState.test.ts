@@ -193,18 +193,26 @@ Deno.test("12/14. run-agent loads persisted prior state before any provider call
   assert(src.includes("reconcilePriorIdentities("),
     "and any request hint must be reconciled, never trusted");
 
-  // ORDERING: the lookup precedes BOTH paid boundaries.
+  // ORDERING: the lookup precedes EVERY paid boundary. The capability engine is
+  // now one of them for mission tasks, so it is checked alongside the other two.
   const lookup = src.indexOf("loadPriorContactIdentities(");
   const route = src.indexOf("executeCompanyFirstRoute({");
   const legacy = src.indexOf("executeRunAgentCompanyFirstSourcing({");
-  assert(lookup > -1 && route > -1 && legacy > -1);
+  const engine = src.indexOf("runCapabilityPlan({");
+  assert(lookup > -1 && route > -1 && legacy > -1 && engine > -1);
   assert(lookup < route, "prior state must load before company-first discovery");
   assert(lookup < legacy, "and before the legacy sourcing loop");
+  assert(lookup < engine, "and before the capability engine");
 
   // The pre-check gates the company-first route itself.
   assert(src.includes("const resumeSatisfied = priorDecision.action === \"stop_quota_satisfied\""),
     "a satisfied resume must be an explicit pre-loop decision");
-  assert(src.includes("if (!resumeSatisfied && routeResolution.ok"),
+  // BOTH executors are gated on the same pre-check. The engine owns mission
+  // tasks and the legacy route executor owns the rest, so a satisfied resume has
+  // to skip whichever one would otherwise run.
+  assert(src.includes("if (!resumeSatisfied && persistedMission && missionPlan)"),
+    "a satisfied resume must skip the capability engine entirely");
+  assert(src.includes("if (!resumeSatisfied && !capabilityRun && routeResolution.ok"),
     "a satisfied resume must skip company-first discovery entirely");
   assert(src.includes("quota_satisfied_by_persisted_prior_contacts"),
     "and skip the legacy loop with a recorded reason");
