@@ -23,6 +23,10 @@ import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shar
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { routeQualifiedLead, extractRequestedLeadCount, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
+import {
+  mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
+} from "../_shared/leadMission.ts";
+import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 
 
 const cors = {
@@ -175,6 +179,36 @@ function roleFamilyLabel(fam: RoleFamily): string {
 // and the hiring role/industry — the product never becomes the industry and the
 // persona is never a founder/growth title. `lead_intent` is threaded so run-agent
 // can use planJobsActorInput + filterHiringCandidates without re-parsing.
+/**
+ * Build the canonical mission for a prompt.
+ *
+ * Deterministic interpretation of the user's own sentence, then the Company
+ * Brain fills what the user left open. The Brain cannot widen what the user
+ * closed — a "SaaS startups" request does not silently acquire the Brain's
+ * "Recruiting Agencies" — and anything it wanted to add but could not is carried
+ * back on the payload so the UI can offer it as an explicit choice.
+ *
+ * `required_capabilities` is filled from the graph the mission itself implies,
+ * so the preview and run-agent cannot disagree about what will run.
+ */
+function buildMissionForPrompt(
+  prompt: string, requestedCount: number, intent: LeadIntent,
+): LeadMissionV1 & { brain_rejected_broadening: unknown[] } {
+  const parsed = parseLeadMissionDeterministic(prompt, { requestedCount });
+  const merged = mergeCompanyBrainIntoMission(parsed, {
+    industries: intent.target_industry ?? [],
+    stages: intent.company_stage ?? [],
+    locations: intent.target_geography ?? [],
+  });
+  const plan = buildCapabilityGraph(merged.mission);
+  return {
+    ...merged.mission,
+    required_capabilities: plan.steps.map((s) => s.capability),
+    prohibited_capabilities: plan.prohibited,
+    brain_rejected_broadening: merged.rejected_broadening,
+  };
+}
+
 function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: any): any {
   const fam = intent.hiring_signal.role_family;
   const job = planJobsActorInput(intent);
@@ -219,6 +253,13 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
       location,
       user_product: intent.user_product?.category, // shown as product, not industry
     },
+    // ── THE CANONICAL MISSION ────────────────────────────────────────────────
+    // Interpreted ONCE, here, from the user's own prompt. Everything downstream
+    // — the preview card, orchestrate's plan, run-agent's capability graph —
+    // reads THIS object rather than re-deriving intent from whichever string it
+    // happened to receive. `original_user_query` is immutable; the planner's
+    // rewritten step instruction never replaces it.
+    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, intent),
     output: isQualifiedLead
       ? "Qualified company + verified decision-maker leads in Workbench"
       : "Account opportunities in Workbench",

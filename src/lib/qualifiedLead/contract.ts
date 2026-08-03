@@ -194,6 +194,10 @@ export function buildStartWorkflowPayload(
     workflow_id: payload.workflow_id,
     workflow_inputs: inputs,
     original_instruction: original,
+    // THE MISSION TRAVELS WITH THE START. The card the user just approved and the
+    // plan run-agent executes are then the same object, so "the preview said
+    // startups but it sourced job boards" stops being expressible.
+    lead_mission: (payload as { lead_mission?: unknown }).lead_mission,
     lead_intent: payload.lead_intent,
     workflow_category: (payload.lead_intent as { workflow_type?: string } | undefined)?.workflow_type,
     source_type: (payload.lead_intent as { source_type?: string } | undefined)?.source_type,

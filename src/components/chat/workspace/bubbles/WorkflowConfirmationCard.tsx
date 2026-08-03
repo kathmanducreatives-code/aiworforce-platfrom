@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Play, Settings2, ShieldCheck, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import {
+  isMission, missionCapabilities, missionRejectedBroadening, missionRows,
+  provenanceLabel, type MissionLike,
+} from '@/lib/leadMission/missionView';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -96,6 +100,18 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
     .filter(([, v]) => v != null && v !== '')
     .map(([k, v]) => (k === 'count' ? `${v} ${Number(v) === 1 ? 'result' : 'results'}` : String(v)))
     .slice(0, 5);
+
+  // THE MISSION THE BACKEND WILL EXECUTE — not a second reading of the request.
+  //
+  // Everything below that renders from `mission` is showing the exact object
+  // orchestrate persists and run-agent executes. The older strings on this
+  // payload stay for pre-mission conversations, and a mismatch between the two
+  // is no longer possible for anything that has a mission.
+  const missionCandidate = (payload as unknown as { lead_mission?: unknown }).lead_mission;
+  const mission: MissionLike | null = isMission(missionCandidate) ? missionCandidate : null;
+  const missionDetail = mission ? missionRows(mission) : [];
+  const missionSteps = mission ? missionCapabilities(mission) : [];
+  const notBroadened = mission ? missionRejectedBroadening(mission) : [];
 
   // The qualified-lead route, decided by Pilot from the user's own words.
   const qualifiedLead = isQualifiedLeadPayload(payload);
@@ -212,6 +228,53 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
             <span className="font-semibold">Setup needed: {setupNeeded}</span>
             {blockedReason && <span className="text-amber-300/80"> — {blockedReason}</span>}
           </div>
+        </div>
+      )}
+
+      {/* MISSION PREVIEW — the exact object run-agent will execute. */}
+      {mission && !isEditing && (
+        <div data-testid="mission-preview" className="mt-3 space-y-2">
+          {missionDetail.map((r) => (
+            <div key={r.key} data-testid={`mission-row-${r.key}`} className="flex items-baseline gap-2 text-[12.5px]">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590] shrink-0 w-[104px]">
+                {r.label}
+              </span>
+              <span className="text-[#C9D1D9]">{r.value}</span>
+              {r.provenance && (
+                <span
+                  data-testid={`mission-provenance-${r.key}`}
+                  className="text-[10px] text-[#7D8590] border border-white/[0.08] rounded px-1 py-0.5 shrink-0"
+                >
+                  {provenanceLabel(r.provenance)}
+                </span>
+              )}
+            </div>
+          ))}
+          {missionSteps.length > 0 && (
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590]">
+                Capabilities
+              </div>
+              <ol data-testid="mission-capabilities" className="mt-1 space-y-0.5">
+                {missionSteps.map((label, i) => (
+                  <li key={`${label}-${i}`} className="text-[12px] text-[#C9D1D9] flex gap-1.5">
+                    <span className="text-[#7D8590] tabular-nums">{i + 1}.</span>
+                    <span>{label}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {notBroadened.length > 0 && (
+            <div
+              data-testid="mission-not-broadened"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-[11.5px] text-[#9aa4af]"
+            >
+              <span className="text-[#C9D1D9]">Not included:</span>{' '}
+              {notBroadened.join('; ')}. Your Company Brain targets these, but you did not ask for
+              them — say so explicitly to widen the search.
+            </div>
+          )}
         </div>
       )}
 

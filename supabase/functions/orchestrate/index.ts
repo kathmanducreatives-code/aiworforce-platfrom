@@ -548,7 +548,15 @@ Deno.serve(async (req) => {
       needs_outreach?: boolean;
       execution_mode?: "fast" | "deep" | "outreach" | "source_and_qualify_only";
       confidence?: number;
+      lead_mission?: unknown;
     };
+    // THE MISSION, CARRIED NOT RE-DERIVED. pilot-chat interpreted the user's
+    // words once; orchestrate's job is to put that object on the plan step so
+    // run-agent executes it. The step `instruction` below is still a rewritten
+    // job-shaped sentence for the legacy path, and that is exactly why the
+    // mission must travel separately: on TEST task 8af17651 the rewrite was the
+    // only thing that survived, and it had already lost the word "startups".
+    const lead_mission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
 
     if (!user_instruction || !workspace_id) {
       return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);
@@ -895,7 +903,9 @@ Deno.serve(async (req) => {
           planner_source: "fallback",
         },
       );
-      (sourcingStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      (sourcingStep as Step & { metadata?: Record<string, unknown> }).metadata = {
+        tool_input: lead_mission ? { ...tool_input, lead_mission } : tool_input,
+      };
 
       const steps: Step[] = [sourcingStep];
       const rankStep = mkStep(1, "aria", "Rank signals", `Score and rank the sourced signals against: ${user_instruction}`, {

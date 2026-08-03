@@ -57,6 +57,10 @@ import {
   routeDrift, validateHiringRoute,
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
+import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import {
+  legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
+} from "../_shared/leadMissionRuntime.ts";
 import {
   collectCompanyFirstContactIdentities, collectLegacyContactIdentities,
   combineContactIdentities, computeCompanyFirstQuotaProgress, createPersistPlan,
@@ -1055,20 +1059,55 @@ Deno.serve(async (req) => {
         // reading is the UNION of every carrier rather than a priority winner. A
         // stage marker in ANY carrier is genuine evidence of startup intent, and
         // choosing exactly one carrier is what keeps losing it.
-        const routeUserRequest: string | null = [
-          tool_input_body?.user_request as string | undefined,
-          input ?? undefined,
-          instruction,
-          tool_input_body?.query as string | undefined,
-        ].filter((c): c is string => typeof c === "string" && c.trim().length > 0)
-          .join("\n") || null;
-        const routeResolution = validateHiringRoute({
-          route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
-            ?? inferRouteFromRequest(routeUserRequest),
-          source_order: requestedSourceOrder,
-          fallback_reason:
-            (gptStrategy?.diagnostics?.fallback_reason as string | undefined) ?? null,
-        }, { userRequest: routeUserRequest });
+        //
+        // ══ AND ONLY WHEN THERE IS NO MISSION ════════════════════════════════
+        // A task carrying a `LeadMissionV1` was interpreted ONCE, upstream, from
+        // the user's own words. Re-deriving intent here would recreate the very
+        // disagreement the mission exists to remove, so for those tasks every
+        // carrier is ignored and the persisted mission is the only authority.
+        // The union below survives solely for tasks planned before missions
+        // existed.
+        const persistedMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        const missionPlan = persistedMission ? buildCapabilityGraph(persistedMission) : null;
+        console.log("[run-agent][lead-mission]", {
+          task_id: task.id,
+          has_mission: persistedMission !== null,
+          mission_version: persistedMission?.version ?? null,
+          mission_type: persistedMission?.mission_type ?? null,
+          requested_output: persistedMission?.requested_output ?? null,
+          entry_capability: missionPlan?.entry_capability ?? null,
+          capabilities: missionPlan?.steps.map((s) => s.capability) ?? null,
+          allowed_providers: missionPlan?.allowed_providers ?? null,
+          // The compatibility path is a fact worth seeing, not an implementation
+          // detail: it is the only way carrier inference can still run.
+          authority: persistedMission ? "lead_mission_v1" : "legacy_carrier_union",
+        });
+
+        const routeUserRequest: string | null = persistedMission
+          ? persistedMission.original_user_query
+          : [
+            tool_input_body?.user_request as string | undefined,
+            input ?? undefined,
+            instruction,
+            tool_input_body?.query as string | undefined,
+          ].filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+            .join("\n") || null;
+        const routeResolution = persistedMission
+          // The mission already decided this. `validateHiringRoute` is called
+          // only to compile the legacy source order the executor still consumes,
+          // and it is given the mission's route — never a re-inference.
+          ? validateHiringRoute({
+            ...missionRouteRequest(persistedMission),
+            source_order: missionPlan?.allowed_providers ?? [],
+          }, { userRequest: persistedMission.original_user_query })
+          : validateHiringRoute({
+            route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
+              ?? inferRouteFromRequest(routeUserRequest),
+            source_order: requestedSourceOrder,
+            fallback_reason:
+              (gptStrategy?.diagnostics?.fallback_reason as string | undefined) ?? null,
+          }, { userRequest: routeUserRequest });
         const routeRecord = routeResolution.ok
           ? newRouteExecutionRecord(routeResolution, requestedSourceOrder)
           : null;
@@ -1513,7 +1552,19 @@ Deno.serve(async (req) => {
         // The reason is DERIVED FROM WHAT THE ROUTE ACTUALLY DID and validated
         // against the contract's own closed set — never invented here. A reason
         // the contract rejects blocks the loop instead of excusing it.
+        //
+        // ══ FOR A MISSION TASK THE LOOP IS SIMPLY UNREACHABLE ════════════════
+        // The reasoning below is the LEGACY containment: it justifies a broad
+        // sweep after the fact. A mission does not need justifying, because the
+        // question was already answered when the capability graph was built — if
+        // `job_discovery` is not in the graph, no quota shortfall and no
+        // exhausted provider makes a job board appropriate. This runs FIRST so
+        // the derived-reason path cannot re-open a door the mission closed.
         let legacyFallbackReason: string | null = null;
+        const missionLegacy = legacyLoopReachable(persistedMission, missionPlan);
+        if (!missionLegacy.reachable && legacySkipReason === null) {
+          legacySkipReason = `lead_mission_forbids_broad_job_sourcing:${missionLegacy.reason}`;
+        }
         if (legacySkipReason === null && routeResolution.ok &&
             routeResolution.validated_route !== "broad_job_fallback") {
           const candidateReason = companyFirstRoute === null
@@ -1706,6 +1757,30 @@ Deno.serve(async (req) => {
             },
             lead_entity_intent: cfIntent,
             routing: { target_entity: cfIntent.target_entity, output_type: cfIntent.output_type, execution_mode: "company_first", company_first: true, company_gate_required: cfIntent.company_gate_required },
+            // ── THE MISSION AND WHAT IT AUTHORISED ─────────────────────────
+            // Persisted, not response-only. `hiring_route` lived only in the
+            // HTTP response, so the one artefact that would have shown the
+            // 2026-08-03 route downgrade was absent from the task that failed.
+            // Resume reads these instead of re-interpreting the query.
+            original_user_query: persistedMission?.original_user_query ?? routeUserRequest,
+            lead_mission: persistedMission,
+            lead_mission_version: persistedMission?.version ?? null,
+            mission_authority: persistedMission ? "lead_mission_v1" : "legacy_carrier_union",
+            field_provenance: persistedMission?.field_provenance ?? null,
+            capability_graph: missionPlan
+              ? {
+                version: missionPlan.version,
+                entry_capability: missionPlan.entry_capability,
+                steps: missionPlan.steps,
+                prohibited: missionPlan.prohibited,
+                allowed_providers: missionPlan.allowed_providers,
+                estimated_cost_units: missionPlan.estimated_cost_units,
+              }
+              : null,
+            legacy_loop_containment: missionLegacy,
+            hiring_route: routeRecord
+              ? { ...routeRecord, drift: routeDrift(routeRecord) }
+              : { error: routeResolution.ok ? null : routeResolution.errors },
           },
         }).eq("id", task.id);
 

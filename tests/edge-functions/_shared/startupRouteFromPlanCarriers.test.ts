@@ -132,8 +132,16 @@ Deno.test("run-agent scans every carrier and guards the legacy loop at the real 
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
   // ── carrier union ──────────────────────────────────────────────────────────
-  assert(src.includes("const routeUserRequest: string | null = ["),
-    "the resolved request must be a named value built from a carrier list");
+  // SUPERSEDED SCOPE: the carrier union is now the COMPATIBILITY branch. A task
+  // carrying a LeadMissionV1 routes from the mission's immutable query instead,
+  // so the union must still exist and must sit behind the mission check. See
+  // `leadMissionArchitecture.test.ts` for the mission path itself.
+  assert(src.includes("const routeUserRequest: string | null = persistedMission"),
+    "a mission must take precedence over any carrier");
+  assert(src.includes("? persistedMission.original_user_query"),
+    "a mission task routes from the immutable user query");
+  assert(/:\s*\[\s*\n\s*tool_input_body\?\.user_request/.test(src),
+    "the carrier list must survive as the fallback for pre-mission tasks");
   for (const carrier of [
     "tool_input_body?.user_request as string | undefined",
     "input ?? undefined",

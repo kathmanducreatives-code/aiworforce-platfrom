@@ -59,6 +59,72 @@ function hasAny(text: string, terms: string[]): boolean {
   return terms.some((n) => { const q = lc(n).trim(); return !!q && t.includes(q); });
 }
 
+// ---- INDUSTRY FAMILIES: contradiction vs insufficiency ----------------------
+//
+// The old industry gate treated "the provider label does not literally contain
+// the ICP phrase" as a proven mismatch. Brain ICPs are written as marketing
+// phrases ("B2B SaaS"); LinkedIn writes taxonomy labels ("Software Development").
+// The two never share a substring, so on TEST task
+// 8af17651-5fa2-48e2-af87-4bc923146243 every genuine SaaS company — Docusign,
+// Outreach, Clay, Sortly, Harmonic Security — was hard-rejected as off-industry
+// while the ICP was, in fact, B2B SaaS.
+//
+// The distinction that matters is CONTRADICTION vs INSUFFICIENCY. "Restaurants"
+// contradicts a SaaS ICP. "Software Development" does not — it is the same
+// family, stated at a coarser grain, and the honest answer is UNKNOWN so
+// enrichment or semantic classification can resolve it.
+const INDUSTRY_FAMILIES: ReadonlyArray<{ family: string; tokens: readonly string[] }> = [
+  { family: "software", tokens: [
+    "saas", "software as a service", "software", "software development", "computer software",
+    "information technology", "it services", "internet", "technology", "tech", "platform",
+    "cloud", "artificial intelligence", "ai", "machine learning", "data infrastructure",
+    "developer tools", "cybersecurity", "computer and network security", "fintech",
+    "devops", "analytics",
+  ] },
+  { family: "staffing", tokens: [
+    "staffing", "recruiting", "recruitment", "talent acquisition", "executive search",
+    "headhunting", "employment agency", "human resources services",
+  ] },
+  { family: "manufacturing", tokens: [
+    "manufactur", "industrial", "machinery", "automotive", "aerospace", "chemicals",
+    "steel", "cement", "plastics", "electronics manufacturing",
+  ] },
+  { family: "construction", tokens: ["construction", "civil engineering", "building materials", "contractor"] },
+  { family: "retail", tokens: ["retail", "supermarket", "grocery", "apparel", "consumer goods", "wholesale"] },
+  { family: "hospitality", tokens: ["restaurant", "hospitality", "hotel", "food service", "catering", "leisure"] },
+  { family: "education", tokens: ["university", "school", "education", "higher education", "e-learning", "academic"] },
+  { family: "healthcare", tokens: ["hospital", "healthcare", "health care", "medical", "clinic", "pharmaceutic", "biotech"] },
+  { family: "financial", tokens: ["bank", "banking", "insurance", "capital markets", "investment management", "credit union"] },
+  { family: "government", tokens: ["government", "public sector", "federal", "ministry", "municipal", "defense"] },
+  { family: "logistics", tokens: ["logistics", "freight", "shipping", "trucking", "supply chain", "warehousing"] },
+  { family: "energy", tokens: ["oil", "gas", "petroleum", "mining", "coal", "utilities", "renewable energy"] },
+  { family: "real_estate", tokens: ["real estate", "property management", "commercial real estate", "proptech"] },
+];
+
+/**
+ * Which families a piece of text evidences. Empty = the label names no family we
+ * recognise, which is INSUFFICIENT evidence rather than a mismatch.
+ */
+export function industryFamilies(text: string | null | undefined): string[] {
+  const t = lc(text);
+  if (!t.trim()) return [];
+  const out: string[] = [];
+  for (const { family, tokens } of INDUSTRY_FAMILIES) {
+    if (tokens.some((k) => t.includes(k))) out.push(family);
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Tokens that positively evidence a SaaS/subscription software business, used to
+ * turn a same-family UNKNOWN into a PASS. Deliberately narrower than the family
+ * vocabulary: this is supporting evidence, not classification.
+ */
+const SAAS_SUPPORT_TOKENS = [
+  "saas", "software as a service", "subscription", "b2b software", "cloud platform",
+  "self-serve", "seat-based", "per-seat", "arr", "mrr", "free trial", "api platform",
+];
+
 // Default off-ICP industry/type exclusions — applied UNLESS the Brain positively
 // targets that space. These are the "huge irrelevant company" buckets.
 export const DEFAULT_EXCLUDED_INDUSTRIES: string[] = [
@@ -265,6 +331,12 @@ export interface CompanyBrainEvidence extends IcpCandidate {
   employee_count?: number | string | null;
   company_stage?: string | null;
   business_model?: string | null;
+  /**
+   * Enriched company description. Often the ONLY place a business model is
+   * actually stated, so the industry and business-model gates read it as
+   * supporting evidence before concluding anything.
+   */
+  description?: string | null;
   /** Tri-state: true/false when known, null/undefined when unresolved. */
   founder_led?: boolean | null;
 }
@@ -349,16 +421,33 @@ export function evaluateCompanyBrainEvidence(
   // ---- INDUSTRY ------------------------------------------------------------
   const positives = (c.positive_industries ?? []).filter(Boolean);
   const negatives = (c.negative_industries ?? []).filter(Boolean);
+  // Enriched free text counts as industry evidence; a company description is
+  // often the only place the business model is actually stated.
+  const industryEvidence = `${lc(cand.industry)} ${lc(cand.company_category)} ${lc(cand.company_type)}`.trim();
+  const supportText = `${text} ${lc(cand.description)} ${lc(cand.business_model)}`;
+
   if (negatives.length && hasAny(text, negatives)) {
     add("industry", "fail", "matches a Brain-avoided industry");
   } else if (!positives.length) {
     add("industry", "pass", "no industry constraint in effect");
-  } else if (hasAny(text, positives)) {
-    add("industry", "pass", `matches an ICP industry`);
-  } else if (!lc(cand.industry).trim() && !lc(cand.company_category).trim() && !lc(cand.company_type).trim()) {
+  } else if (hasAny(supportText, positives)) {
+    add("industry", "pass", "matches an ICP industry");
+  } else if (!industryEvidence) {
     add("industry", "unknown", "no industry evidence");
   } else {
-    add("industry", "fail", "industry evidence does not match the ICP");
+    // THREE-VALUED. A different KNOWN family contradicts the ICP; the same
+    // family at a coarser grain does not.
+    const observed = industryFamilies(industryEvidence);
+    const wanted = [...new Set(positives.flatMap((p) => industryFamilies(p)))];
+    if (observed.length && wanted.length && !observed.some((f) => wanted.includes(f))) {
+      add("industry", "fail", `industry "${industryEvidence.trim()}" belongs to a different sector than the ICP`);
+    } else if (observed.length && wanted.length && hasAny(supportText, SAAS_SUPPORT_TOKENS) &&
+      wanted.includes("software")) {
+      add("industry", "pass", `industry "${industryEvidence.trim()}" plus business-model evidence supports the ICP`);
+    } else {
+      add("industry", "unknown",
+        `industry "${industryEvidence.trim()}" neither confirms nor contradicts the ICP; needs enrichment or classification`);
+    }
   }
 
   // ---- BUSINESS MODEL ------------------------------------------------------
@@ -366,16 +455,27 @@ export function evaluateCompanyBrainEvidence(
   if (!models.length) {
     add("business_model", "pass", "no business-model constraint in effect");
   } else {
-    const observed = `${lc(cand.business_model)} ${text}`;
+    const observed = `${lc(cand.business_model)} ${lc(cand.description)} ${text}`;
     // "No evidence" is NOT "the wrong model". A company name alone makes `text`
     // non-empty, which previously turned every evidence-free company into a
     // proven negative. A FAIL now requires an observed model that contradicts
     // the Brain; absence of any model signal stays UNKNOWN so the enrichment
     // path can resolve it.
+    //
+    // A shared FAMILY is also not a contradiction. "Software Development" and
+    // "B2B SaaS" are the same business stated at different grains, so a
+    // required-model list that lives in the software family is not refuted by
+    // a generic software label — that is UNKNOWN, and enrichment or semantic
+    // classification is what resolves it.
+    const observedFamilies = industryFamilies(observed);
+    const wantedFamilies = [...new Set(models.flatMap((m) => industryFamilies(m)))];
+    const familyConflict = observedFamilies.length > 0 && wantedFamilies.length > 0 &&
+      !observedFamilies.some((f) => wantedFamilies.includes(f));
+
     if (hasAny(observed, models)) add("business_model", "pass", "matches the required business model");
-    else if (hasAny(observed, KNOWN_BUSINESS_MODEL_TERMS)) {
-      add("business_model", "fail", "business model does not match the ICP");
-    } else add("business_model", "unknown", "no business-model evidence");
+    else if (hasAny(observed, KNOWN_BUSINESS_MODEL_TERMS) && familyConflict) {
+      add("business_model", "fail", "business model belongs to a different sector than the ICP");
+    } else add("business_model", "unknown", "no conclusive business-model evidence");
   }
 
   // ---- COMPANY STAGE -------------------------------------------------------
