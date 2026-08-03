@@ -1025,13 +1025,33 @@ Deno.serve(async (req) => {
         // broad-job-first default reasserting itself for a tight ICP.
         const requestedSourceOrder: string[] =
           (gptStrategy?.diagnostics?.source_order as string[] | undefined) ?? [];
+        // THE REQUEST TEXT, FROM WHEREVER THE PLAN ACTUALLY PUT IT.
+        //
+        // Production plans never populate `tool_input.user_request`. They carry
+        // the user's words in the top-level `instruction` and in
+        // `tool_input.query` — the same `instruction` this file already treats as
+        // the request at the `user_request: instruction ?? ""` call site below.
+        //
+        // Reading only `user_request` resolved to null on every real plan, and
+        // `inferRouteFromRequest(null)` returns `general_company_first`. A startup
+        // mission therefore lost its route SILENTLY — no error, just the wrong
+        // sources. Proven on production task
+        // a090311d-4d08-4cb8-895b-516e9135b803 (plan
+        // 15c385c3-fc88-43ff-a531-fb714a234875), whose tool_input carries 18
+        // fields and no `user_request`, and which ran Indeed -> LinkedIn Jobs ->
+        // Glassdoor for a SaaS-startup query.
+        const routeUserRequest: string | null =
+          (tool_input_body?.user_request as string | undefined)
+            ?? instruction
+            ?? (tool_input_body?.query as string | undefined)
+            ?? null;
         const routeResolution = validateHiringRoute({
           route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
-            ?? inferRouteFromRequest(tool_input_body?.user_request ?? null),
+            ?? inferRouteFromRequest(routeUserRequest),
           source_order: requestedSourceOrder,
           fallback_reason:
             (gptStrategy?.diagnostics?.fallback_reason as string | undefined) ?? null,
-        }, { userRequest: tool_input_body?.user_request ?? null });
+        }, { userRequest: routeUserRequest });
         const routeRecord = routeResolution.ok
           ? newRouteExecutionRecord(routeResolution, requestedSourceOrder)
           : null;
