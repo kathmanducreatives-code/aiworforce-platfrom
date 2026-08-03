@@ -5,14 +5,14 @@ import {
   normalizeCompanyLinkedInUrl,
   normalizeDomain,
   isJobBoardDomain,
-} from "../../../supabase/functions/_shared/companyIdentity.ts";
+} from "../../../supabase/functions/_shared/decisionMaker/companyIdentity.ts";
 import { classifyDecisionMakerRole, isTargetRoleFamily } from "../../../supabase/functions/_shared/decisionMaker/roleFamily.ts";
 import {
   normalizeProviderProfile,
   normalizePersonLinkedInUrl,
   dedupeProfiles,
 } from "../../../supabase/functions/_shared/decisionMaker/personProfile.ts";
-import { verifyCurrentEmployer } from "../../../supabase/functions/_shared/employerVerification.ts";
+import { verifyCurrentEmployer } from "../../../supabase/functions/_shared/decisionMaker/employerVerification.ts";
 import { companySizeBand, rankCandidates, scoreCandidate } from "../../../supabase/functions/_shared/decisionMaker/ranking.ts";
 import { planPeopleSearch, fallbackStages, MAX_RESULTS_PER_LEAD } from "../../../supabase/functions/_shared/decisionMaker/searchPlanner.ts";
 import { findDecisionMakers, type ProviderResponse } from "../../../supabase/functions/_shared/decisionMaker/pipeline.ts";

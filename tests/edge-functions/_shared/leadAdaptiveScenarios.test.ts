@@ -13,7 +13,7 @@ import {
   parseNextAction, validateNextAction, resolveNextAction, deterministicNextAction,
   assessSourceQuality, actionSignature,
 } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveAction.ts";
-import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/intelligence/leads/leadRoleTaxonomy.ts";
 import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
 import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
 import { decideDiscoveryBatchSize } from "../../../supabase/functions/_shared/discoveryBatchSize.ts";

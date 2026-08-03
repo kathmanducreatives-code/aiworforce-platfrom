@@ -17,7 +17,7 @@ import {
 } from "../../../supabase/functions/_shared/decisionMaker/providerAdapter.ts";
 import { planPeopleSearch } from "../../../supabase/functions/_shared/decisionMaker/searchPlanner.ts";
 import { normalizeProviderProfile } from "../../../supabase/functions/_shared/decisionMaker/personProfile.ts";
-import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/decisionMaker/companyIdentity.ts";
 import * as F from "../../../supabase/functions/_shared/decisionMaker/fixtures.ts";
 
 const WS = "00000000-0000-4000-8000-000000000001";

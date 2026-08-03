@@ -9,7 +9,7 @@ import {
   parseRoleTaxonomy, validateRoleTaxonomy, eligibleFamilies, deferredFamilies,
   isRejectedOperationsTitle, isSecondaryExecutiveTitle, TAXONOMY_BOUNDS,
   type RoleTaxonomy,
-} from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadRoleTaxonomy.ts";
 import {
   parseQueryPacks, validateQueryPacks, selectPacksForCall, deferredPacks, PACK_BOUNDS,
   type QueryPack,

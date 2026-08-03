@@ -11,7 +11,7 @@ import { emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcing
 import type { RoundObservationInput } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
 import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
 import type { LeadMissionSourceProfile } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";
-import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/intelligence/leads/leadRoleTaxonomy.ts";
 import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
 import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
 import { approvedToAdaptive, bindFeedbackAskClaude, resolveAdaptiveOrderedPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveRuntime.ts";

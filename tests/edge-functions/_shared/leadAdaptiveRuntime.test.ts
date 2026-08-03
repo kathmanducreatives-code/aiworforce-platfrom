@@ -12,7 +12,7 @@ import {
   ADAPTIVE_PACK_STATE_KEY, RUNTIME_MAX_RECENCY_DAYS,
   type AdaptivePackState, type BuildObservationInput, type RoundStageMetrics,
 } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveRuntime.ts";
-import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+import { validateRoleTaxonomy } from "../../../supabase/functions/_shared/intelligence/leads/leadRoleTaxonomy.ts";
 import { validateQueryPacks, type QueryPack } from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
 import { deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
 import { validateOrderedPlan, orderedPlanHash, type OrderedHiringSourcePlan } from "../../../supabase/functions/_shared/hiringSourcePlan.ts";

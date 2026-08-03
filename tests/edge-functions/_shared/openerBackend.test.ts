@@ -423,7 +423,7 @@ Deno.test("telemetry is sanitized — no prompts, responses or contact data", as
 // DRIFT GUARD — the mirrored rules must match the frontend source
 // ===========================================================================
 
-const FRONTEND_SRC = await Deno.readTextFile(new URL("../../../../src/lib/outreachOpener.ts", import.meta.url));
+const FRONTEND_SRC = await Deno.readTextFile(new URL("../../../src/lib/outreachOpener.ts", import.meta.url));
 
 Deno.test("DRIFT: backend constraints match src/lib/outreachOpener.ts", () => {
   for (const [key, value] of Object.entries(DEFAULT_OPENER_CONSTRAINTS)) {
