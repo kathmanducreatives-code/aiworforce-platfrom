@@ -17,6 +17,9 @@ import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts"
 import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
+import {
+  isLeadMissionV1, parseLeadMissionDeterministic,
+} from "../_shared/leadMission.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -556,7 +559,25 @@ Deno.serve(async (req) => {
     // job-shaped sentence for the legacy path, and that is exactly why the
     // mission must travel separately: on TEST task 8af17651 the rewrite was the
     // only thing that survived, and it had already lost the word "startups".
-    const lead_mission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
+    //
+    // AND DERIVED WHEN IT IS ABSENT, WHICH IS THE COMMON CASE.
+    //
+    // Only the workflow-confirmation card attached a mission. The lead-intake
+    // path never did, so TEST plan c8243321-46cb-4b76-ae33-72570150e6ea reached
+    // run-agent with an 18-field `tool_input` and no `lead_mission` — and every
+    // containment guard downstream is conditioned on a mission existing. The
+    // result was five paid people searches off a job board.
+    //
+    // `user_instruction` IS the user's verbatim sentence at this point, so a
+    // mission can always be derived deterministically. An absent mission is now
+    // impossible rather than merely discouraged, which is what lets run-agent
+    // refuse to spend when one is missing.
+    const suppliedMission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
+    const lead_mission: unknown = isLeadMissionV1(suppliedMission)
+      ? suppliedMission
+      : parseLeadMissionDeterministic(user_instruction ?? "", {
+        requestedCount: typeof tool_input?.max_results === "number" ? tool_input.max_results : null,
+      });
 
     if (!user_instruction || !workspace_id) {
       return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);

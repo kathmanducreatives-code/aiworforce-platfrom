@@ -27,6 +27,10 @@ import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
+import {
+  buildPaidExecutionPreflight, preflightDryRun,
+} from "../_shared/leadPaidExecutionPreflight.ts";
 
 
 const cors = {
@@ -193,7 +197,7 @@ function roleFamilyLabel(fam: RoleFamily): string {
  */
 function buildMissionForPrompt(
   prompt: string, requestedCount: number, intent: LeadIntent,
-): LeadMissionV1 & { brain_rejected_broadening: unknown[] } {
+): LeadMissionV1 & { brain_rejected_broadening: unknown[]; preflight_dry_run: unknown } {
   const parsed = parseLeadMissionDeterministic(prompt, { requestedCount });
   const merged = mergeCompanyBrainIntoMission(parsed, {
     industries: intent.target_industry ?? [],
@@ -201,11 +205,27 @@ function buildMissionForPrompt(
     locations: intent.target_geography ?? [],
   });
   const plan = buildCapabilityGraph(merged.mission);
+  // THE DRY RUN THE USER APPROVES IS THE RECORD THAT GATES SPENDING.
+  //
+  // Built from the SAME `buildPaidExecutionPreflight` run-agent calls before its
+  // first paid boundary, so the card cannot describe a plan the backend will
+  // refuse — or, as on TEST task e8abeb8f-…-cfcbc6a416d4, a plan the backend
+  // never even saw.
+  const firstCall = compileFirstProviderCall(plan);
+  const preflight = buildPaidExecutionPreflight({
+    mission: merged.mission,
+    plan,
+    firstProvider: firstCall.provider,
+    firstProviderInput: firstCall.compiled?.ok ? firstCall.compiled.input : null,
+    firstProviderCompileOk: firstCall.compiled ? firstCall.compiled.ok : undefined,
+    firstProviderErrors: firstCall.compiled && !firstCall.compiled.ok ? firstCall.compiled.errors : [],
+  });
   return {
     ...merged.mission,
     required_capabilities: plan.steps.map((s) => s.capability),
     prohibited_capabilities: plan.prohibited,
     brain_rejected_broadening: merged.rejected_broadening,
+    preflight_dry_run: preflightDryRun(preflight),
   };
 }
 

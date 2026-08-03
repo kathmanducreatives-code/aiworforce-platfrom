@@ -64,6 +64,9 @@ import {
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import { guardedInvoker } from "./leadMissionRuntime.ts";
+import {
+  assertPeopleProviderAllowed, PaidExecutionBlockedError,
+} from "./leadPaidExecutionPreflight.ts";
 import { missionHash, type LeadMissionV1 } from "./leadMission.ts";
 
 export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1" as const;
@@ -225,7 +228,7 @@ export interface CapabilityRunResult {
   /** Per-capability outcome, in execution order. Persisted for audit. */
   capability_outcomes: Array<{
     capability: CapabilityId;
-    status: "complete" | "skipped_resumed" | "skipped_no_input" | "exhausted";
+    status: "complete" | "skipped_resumed" | "skipped_no_input" | "exhausted" | "incomplete";
     rows: number;
     providers_used: string[];
     evidence_satisfied: boolean;
@@ -298,6 +301,7 @@ export async function runCapabilityPlan(
       // become "try the next provider" is exactly how a guard turns into a
       // suggestion, so it propagates.
       if (e instanceof CapabilityContainmentError) throw e;
+      if (e instanceof PaidExecutionBlockedError) throw e;
       record("error", 0, String(e));
       log("provider_error", { capability, provider, error: String(e) });
       return [];
@@ -313,12 +317,22 @@ export async function runCapabilityPlan(
       capability, status, rows, providers_used: providers,
       evidence_satisfied: evidence, reason,
     });
-    if (status === "complete" || status === "skipped_resumed" || status === "skipped_no_input") {
-      if (!state.completed_capabilities.includes(capability)) {
-        state.completed_capabilities.push(capability);
-      }
+    // COMPLETED MEANS THE CAPABILITY DID ITS JOB — nothing weaker.
+    //
+    // A capability whose provider returned zero usable records, whose required
+    // evidence is missing, or whose input failed validation is NOT complete. It
+    // stays pending, so a resume retries it and the downstream people gate keeps
+    // refusing. Marking it complete on a zero result is what let task
+    // e8abeb8f-…-cfcbc6a416d4 treat a schema-rejected memo23 call as "no
+    // candidates" and walk on to a job board.
+    const genuinelyComplete =
+      (status === "complete" && evidence === true) || status === "skipped_resumed";
+    if (genuinelyComplete && !state.completed_capabilities.includes(capability)) {
+      state.completed_capabilities.push(capability);
     }
-    state.pending_capabilities = state.pending_capabilities.filter((c) => c !== capability);
+    if (genuinelyComplete) {
+      state.pending_capabilities = state.pending_capabilities.filter((c) => c !== capability);
+    }
     state.current_capability = null;
   };
 
@@ -603,6 +617,14 @@ export async function runCapabilityPlan(
           "no qualified company — founder discovery has no input");
         continue;
       }
+      // THE PEOPLE GATE. Company discovery, identity, enrichment, hiring
+      // verification and a Brain PASS must ALL be behind us. Task
+      // e8abeb8f-…-cfcbc6a416d4 bought five people against zero qualified
+      // companies, off job-board rows, and nothing refused.
+      assertPeopleProviderAllowed("apify_linkedin_company_employees", {
+        completed_capabilities: state.completed_capabilities,
+        qualified_company_keys: state.qualified_company_keys,
+      });
       const used: string[] = [];
       const roles = opts.mission.decision_makers.roles;
       const perCompany = opts.foundersPerCompany ?? 3;
@@ -778,4 +800,46 @@ export function toRouteResultShape(run: CapabilityRunResult): {
     })),
     funnel: run.funnel,
   };
+}
+
+// --------------------------------------------------------------- preflight ----
+
+/**
+ * Compile the FIRST paid call without invoking it.
+ *
+ * The preflight has to validate the exact input that will be sent, and the only
+ * honest way to do that is to compile it with the same compiler the engine uses.
+ * On TEST task e8abeb8f-…-cfcbc6a416d4 the memo23 call was rejected by Apify with
+ * `apify_input_schema_error` and the run treated that as "no candidates" — an
+ * invalid input and an empty result are not the same thing, and only one of them
+ * means the source was actually asked.
+ */
+export function compileFirstProviderCall(
+  plan: CapabilityPlan, opts: Partial<CapabilityEngineOpts> = {},
+): { provider: string | null; compiled: CompileResult<unknown> | null } {
+  const step = plan.steps[0];
+  if (!step) return { provider: null, compiled: null };
+  const provider = step.providers[0] ?? null;
+  if (!provider) return { provider: null, compiled: null };
+  const maxCandidates = opts.maxCandidates ?? 50;
+
+  if (provider === "apify_yc_companies_memo23") {
+    return {
+      provider,
+      compiled: compileMemo23YcInput({
+        mode: "companies",
+        regions: opts.ycRegions ?? ["United States of America"],
+        industries: opts.ycIndustries ?? ["B2B"],
+        isHiring: true,
+        minEmployeeSize: opts.ycMinSize ?? "1+",
+        maxEmployeeSize: opts.ycMaxSize ?? "250",
+        scrapeOpenJobs: true,
+        scrapeFounderDetails: false,
+        maxItems: maxCandidates,
+      }) as CompileResult<unknown>,
+    };
+  }
+  // Other entry providers are not engine-driven yet; the preflight records the
+  // provider and leaves validation to the capability that owns it.
+  return { provider, compiled: null };
 }

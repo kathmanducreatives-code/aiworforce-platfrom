@@ -36,6 +36,26 @@ export interface MissionLike {
   field_provenance?: Record<string, string>;
   confidence?: number;
   brain_rejected_broadening?: Array<{ field?: string; values?: string[]; reason?: string }>;
+  preflight_dry_run?: {
+    mission_summary?: string;
+    capability_order?: string[];
+    first_provider?: string | null;
+    input_summary?: string;
+    estimated_cost_units?: number;
+    ok?: boolean;
+    blocked_reasons?: string[];
+  };
+}
+
+/**
+ * The preflight the BACKEND will run, carried on the mission.
+ *
+ * Read, never recomputed. This is the record that gates spending; showing a
+ * separately-derived preview is how the card came to promise a plan the backend
+ * had never seen.
+ */
+export function missionDryRun(m: MissionLike) {
+  return m.preflight_dry_run ?? null;
 }
 
 export const LEAD_MISSION_VERSION = 'lead-mission-v1';

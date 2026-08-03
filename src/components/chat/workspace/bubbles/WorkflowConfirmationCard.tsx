@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Play, Settings2, ShieldCheck, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
-  isMission, missionCapabilities, missionRejectedBroadening, missionRows,
+  isMission, missionCapabilities, missionDryRun, missionRejectedBroadening, missionRows,
   provenanceLabel, type MissionLike,
 } from '@/lib/leadMission/missionView';
 import { Label } from '@/components/ui/label';
@@ -112,6 +112,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
   const missionDetail = mission ? missionRows(mission) : [];
   const missionSteps = mission ? missionCapabilities(mission) : [];
   const notBroadened = mission ? missionRejectedBroadening(mission) : [];
+  const dryRun = mission ? missionDryRun(mission) : null;
 
   // The qualified-lead route, decided by Pilot from the user's own words.
   const qualifiedLead = isQualifiedLeadPayload(payload);
@@ -265,6 +266,36 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
               </ol>
             </div>
           )}
+          {dryRun && (
+            <div
+              data-testid="mission-dry-run"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-1"
+            >
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590]">
+                Before we spend anything
+              </div>
+              <div className="text-[12px] text-[#C9D1D9]">
+                First paid Actor:{' '}
+                <span data-testid="dry-run-first-provider" className="font-mono text-[11.5px]">
+                  {dryRun.first_provider ?? 'none'}
+                </span>
+              </div>
+              <div className="text-[11.5px] text-[#9aa4af]" data-testid="dry-run-input-summary">
+                Input: {dryRun.input_summary || '(not compiled)'}
+              </div>
+              <div className="text-[11.5px] text-[#9aa4af]">
+                Estimated cost: {dryRun.estimated_cost_units ?? 0} units ·{' '}
+                {(dryRun.capability_order ?? []).length} capabilities
+              </div>
+              {dryRun.ok === false && (
+                <div data-testid="dry-run-blocked" className="text-[11.5px] text-amber-300/90">
+                  This will be refused before any credits are spent:{' '}
+                  {(dryRun.blocked_reasons ?? []).join('; ')}
+                </div>
+              )}
+            </div>
+          )}
+
           {notBroadened.length > 0 && (
             <div
               data-testid="mission-not-broadened"

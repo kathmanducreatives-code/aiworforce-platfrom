@@ -62,9 +62,13 @@ import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
 } from "../_shared/leadMissionRuntime.ts";
 import {
-  CAPABILITY_EXECUTION_STATE_VERSION, runCapabilityPlan, toRouteResultShape,
+  CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, runCapabilityPlan,
+  toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
+import {
+  assertPaidExecutionAllowed, buildPaidExecutionPreflight,
+} from "../_shared/leadPaidExecutionPreflight.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -1247,6 +1251,51 @@ Deno.serve(async (req) => {
           workspaceId: workspace_id,
           requestedLeadCount: quota.requestedLeadCount,
         });
+
+        // ══ PAID-EXECUTION PREFLIGHT — PROVE THE PLAN BEFORE SPENDING ════════
+        // Runs before EVERY paid boundary on this path, mission or not. On TEST
+        // task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4 the plan step carried no
+        // `lead_mission`, so `persistedMission` was null, `guardedInvoker`
+        // degraded to the raw invoker, `legacyLoopReachable` said yes, and five
+        // harvestapi people searches were bought off LinkedIn job rows. Every
+        // guard was deployed; every guard was conditioned on the one field that
+        // was missing. An absent mission now BLOCKS spending instead of relaxing
+        // it.
+        const firstCall = missionPlan
+          ? compileFirstProviderCall(missionPlan, {
+            maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
+          })
+          : { provider: null, compiled: null };
+        const paidPreflight = buildPaidExecutionPreflight({
+          mission: persistedMission,
+          plan: missionPlan,
+          firstProvider: firstCall.provider,
+          firstProviderInput: firstCall.compiled?.ok ? firstCall.compiled.input : null,
+          firstProviderCompileOk: firstCall.compiled ? firstCall.compiled.ok : undefined,
+          firstProviderErrors: firstCall.compiled && !firstCall.compiled.ok
+            ? firstCall.compiled.errors : [],
+        });
+        console.log("[run-agent][paid-preflight]", {
+          task_id: task.id,
+          ok: paidPreflight.ok,
+          mission_authority: paidPreflight.mission_authority,
+          entry_capability: paidPreflight.entry_capability,
+          ordered_capabilities: paidPreflight.ordered_capabilities,
+          first_provider: paidPreflight.first_provider,
+          input_valid: paidPreflight.first_provider_input_valid,
+          blocked: paidPreflight.blocked,
+        });
+        // PERSISTED BEFORE THE THROW, so a blocked run is still auditable. The
+        // failed task left no route telemetry at all, which is why its intent had
+        // to be reconstructed from Actor payloads after the money was gone.
+        try {
+          await supabase.from("tasks").update({
+            result: { paid_execution_preflight: paidPreflight },
+          }).eq("id", task.id);
+        } catch (e) {
+          console.log("[run-agent][paid-preflight][persist-error]", String(e));
+        }
+        if (!resumeSatisfied) assertPaidExecutionAllowed(paidPreflight);
 
         // ══ THE CAPABILITY ENGINE IS THE AUTHORITY FOR MISSION TASKS ═════════
         // For a task carrying a LeadMissionV1, the graph's own steps ARE the
