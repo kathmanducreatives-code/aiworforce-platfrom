@@ -6,22 +6,22 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   enrichFounderFromLinkedIn, normalizeFounderProfile, isSparseFounderResearch,
   buildProfileActorInput, FOUNDER_ACTOR_ENV, FOUNDER_ACTOR_FALLBACK_ENV,
-} from "../../../supabase/functions/_shared/founderLinkedIn.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/founderLinkedIn.ts";
 import {
   enrichCompanyFromLinkedIn, normalizeCompanyLinkedIn, isSparseCompanyLinkedIn,
-} from "../../../supabase/functions/_shared/companyLinkedIn.ts";
-import { selectPages, extractFromPages, isExcludedPath, MAX_PAGES } from "../../../supabase/functions/_shared/companyWebsite.ts";
-import { isExampleSentence } from "../../../supabase/functions/_shared/companyUnderstanding.ts";
-import { mapDraftToV2, type DraftInput } from "../../../supabase/functions/_shared/generateBrainDraft.ts";
-import { buildActivationSuggestions, hasSuggestions } from "../../../supabase/functions/_shared/activationSuggestions.ts";
-import { computeCompanyBrainCompleteness } from "../../../supabase/functions/companyBrainCompleteness.ts";
-import { normalizeCompanyBrain } from "../../../supabase/functions/normalizeCompanyBrain.ts";
-import type { ResearchDeps } from "../../../supabase/functions/_shared/types.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/companyLinkedIn.ts";
+import { selectPages, extractFromPages, isExcludedPath, MAX_PAGES } from "../../../supabase/functions/_shared/companyBrainResearch/companyWebsite.ts";
+import { isExampleSentence } from "../../../supabase/functions/_shared/companyBrainResearch/companyUnderstanding.ts";
+import { mapDraftToV2, type DraftInput } from "../../../supabase/functions/_shared/companyBrainResearch/generateBrainDraft.ts";
+import { buildActivationSuggestions, hasSuggestions } from "../../../supabase/functions/_shared/companyBrainResearch/activationSuggestions.ts";
+import { computeCompanyBrainCompleteness } from "../../../supabase/functions/_shared/companyBrainCompleteness.ts";
+import { normalizeCompanyBrain } from "../../../supabase/functions/_shared/normalizeCompanyBrain.ts";
+import type { ResearchDeps } from "../../../supabase/functions/_shared/companyBrainResearch/types.ts";
 import {
   AGENTORY_HOME, FIXTURE_G_AGENTORY_LIKE, FIXTURE_G_USER_DESCRIPTION,
   ACTOR_SHAPE_PARSEFORGE, ACTOR_SHAPE_NESTED, ACTOR_SHAPE_SPARSE,
   ACTOR_COMPANY_SHAPE_A, ACTOR_COMPANY_SHAPE_B,
-} from "../../../supabase/functions/_shared/testFixtures.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/testFixtures.ts";
 
 const PROFILE_URL = "https://linkedin.com/in/jane-doe";
 const COMPANY_URL = "https://linkedin.com/company/cekura";

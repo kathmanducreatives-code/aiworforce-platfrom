@@ -28,7 +28,7 @@ Deno.test("B1 Pilot: the request routes qualified_lead_sourcing / company_first"
 
 // ---- BOUNDARY 2: orchestrate forwards the quota, unpinned ------------------
 Deno.test("B2 orchestrate: source forwards requested_lead_count and company_first", async () => {
-  const src = await Deno.readTextFile(new URL("../orchestrate/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/orchestrate/index.ts", import.meta.url));
   assertStringIncludes(src, "routeQualifiedLead");
   assertStringIncludes(src, 'workflow_kind: "qualified_lead_sourcing"');
   assertStringIncludes(src, "requested_lead_count: qualifiedLeadCount");
@@ -54,7 +54,7 @@ Deno.test("B3b run-agent: the explicit quota survives resolution as EXPLICIT", (
   assertEquals(q.source, "explicit");
 });
 Deno.test("B3c run-agent: the company-first branch is wired to the entry helper", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "isCompanyFirstRequest(routingEntityIntent)");
   assertStringIncludes(src, "executeRunAgentCompanyFirstSourcing({");
   assertStringIncludes(src, "body.requested_lead_count");

@@ -141,24 +141,24 @@ async function bridge(o: Parameters<typeof applySequentialSourceExecution>[0] ex
 // ======================================================= the call graph ======
 
 Deno.test("1./2. both authorities have a real non-test production caller", async () => {
-  const bridgeSrc = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
-  const runAgentSrc = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const bridgeSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sequentialSourceBridge.ts", import.meta.url));
+  const runAgentSrc = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
   // The bridge reaches the feedback runtime, which is the only caller of
   // `applyObservation` outside tests.
-  assert(bridgeSrc.includes('from "../../../supabase/functions/_shared/sourceFeedbackRuntime.ts"'),
+  assert(bridgeSrc.includes('from "./sourceFeedbackRuntime.ts"'),
     "the bridge must import the feedback runtime");
   assert(bridgeSrc.includes("applyObservationWithFeedback("),
     "the bridge must call the composite observation entry point");
 
-  const runtimeSrc = await Deno.readTextFile(new URL("./sourceFeedbackRuntime.ts", import.meta.url));
+  const runtimeSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sourceFeedbackRuntime.ts", import.meta.url));
   assert(runtimeSrc.includes("applyObservation("), "the feedback runtime must call applyObservation");
 
   // run-agent reaches the bridge's observation hook through the controller.
   assert(runAgentSrc.includes("onRoundComplete: sequentialSources.onObservation"),
     "run-agent must pass the observation hook to the controller");
 
-  const controllerSrc = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const controllerSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assert(controllerSrc.includes("deps.onRoundComplete("), "the controller must invoke the hook");
 });
 
@@ -856,10 +856,10 @@ Deno.test("18./20. quota policy and the single authorities are untouched", async
 
   // 20. the halt uses the EXISTING status vocabulary and the EXISTING checkpoint;
   // no parallel status list, ledger or continuation store was introduced.
-  const contractSrc = await Deno.readTextFile(new URL("./taskStatusContract.ts", import.meta.url));
+  const contractSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/taskStatusContract.ts", import.meta.url));
   assert(contractSrc.includes('"source_transition_failed"'),
     "the new outcome must live in the one status vocabulary");
-  const controllerSrc = await Deno.readTextFile(new URL("./companyFirstQuotaController.ts", import.meta.url));
+  const controllerSrc = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyFirstQuotaController.ts", import.meta.url));
   assertFalse(/newIdempotencyLedger\s*\(\s*\)[\s\S]{0,80}halt/.test(controllerSrc),
     "the halt path must not create a second idempotency ledger");
   assert(controllerSrc.includes("recordCompletedCall("), "provider idempotency stays the existing ledger");

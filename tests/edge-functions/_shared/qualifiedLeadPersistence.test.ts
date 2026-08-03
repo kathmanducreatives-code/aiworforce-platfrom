@@ -334,7 +334,7 @@ Deno.test("resume does not grant a second quota credit for the same identity", (
 
 // ═══ THE QUOTA MUST BE CONSUMED, NOT JUST LOGGED ══════════════════════════
 Deno.test("run-agent consumes persisted quota progress, not the projection", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assert(src.includes("computeCompanyFirstQuotaProgress("),
     "the handler must compute progress from PERSISTED outcomes");
   assert(src.includes("nextAdaptiveAction("),

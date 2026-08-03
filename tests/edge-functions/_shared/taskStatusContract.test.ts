@@ -222,7 +222,7 @@ Deno.test("3.x error classification never leaks raw database text to the user", 
 // ---- wiring + migration proofs --------------------------------------------
 
 Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is absent", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "claimContinuationViaRpc({");
   assertStringIncludes(src, "if (rpc.available && !rpc.claimed)");
   assertStringIncludes(src, "const cas = rpc.available");
@@ -243,7 +243,7 @@ Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is abse
 // file declares the required properties. They are NOT execution proof against a
 // real Postgres — that is what the controlled TEST plan exists for.
 Deno.test("MIGRATION CONTRACT: the claim RPC declares the required properties, and is NOT applied", async () => {
-  const sql = await Deno.readTextFile(new URL("../../migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
+  const sql = await Deno.readTextFile(new URL("../../../supabase/migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
   // The property the PostgREST version cannot provide.
   assertStringIncludes(sql, "for update");
   assertStringIncludes(sql, "create or replace function public.claim_sourcing_continuation");
@@ -328,7 +328,7 @@ Deno.test("6.C release failures are reported, never thrown — the outcome is al
 });
 
 Deno.test("6.D every row status the projection can produce is accepted by the release RPC", async () => {
-  const sql = await Deno.readTextFile(new URL("../../migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
+  const sql = await Deno.readTextFile(new URL("../../../supabase/migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
   const allowed = /p_row_status not in \(([^)]*)\)/.exec(sql)?.[1] ?? "";
   for (const terminal of TERMINAL_STATUSES) {
     const { rowStatus } = projectStatus(terminal);
@@ -338,7 +338,7 @@ Deno.test("6.D every row status the projection can produce is accepted by the re
 });
 
 Deno.test("6.E WIRING: run-agent releases the RPC lease on the finishing write", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "releaseContinuationViaRpc({");
   // Released only on the path that actually took a column lease.
   assertStringIncludes(src, "if (heldClaim?.viaRpc)");
@@ -348,7 +348,7 @@ Deno.test("6.E WIRING: run-agent releases the RPC lease on the finishing write",
 });
 
 Deno.test("6.F MIGRATION CONTRACT: the documented rollback drops the real signature", async () => {
-  const sql = await Deno.readTextFile(new URL("../../migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
+  const sql = await Deno.readTextFile(new URL("../../../supabase/migrations/20260727090000_continuation_claim_lease.sql", import.meta.url));
   // release_sourcing_continuation is (uuid, uuid, uuid, text) — a 3-arg DROP fails.
   assertStringIncludes(sql, "drop function public.release_sourcing_continuation(uuid, uuid, uuid, text);");
 });

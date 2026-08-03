@@ -4,15 +4,15 @@
 // (no Apify, no Firecrawl), ZERO database reads or writes, ZERO deployment.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/leadMission.ts";
-import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/leadPlanner.ts";
-import { parseLeadStrategy, type LeadInitialStrategy } from "../../../supabase/functions/_shared/leadStrategy.ts";
-import { decideTitle, reviewStrategyTitles, belongsToOtherFamily } from "../../../supabase/functions/_shared/leadStrategyValidation.ts";
-import { compileLeadStrategy, compileDeterministicPlan } from "../../../supabase/functions/_shared/leadStrategyCompiler.ts";
-import { buildLeadGeographyContext, extractExplicitLocations } from "../../../supabase/functions/_shared/leadGeography.ts";
-import { resolveGeographyAuthority } from "../../../supabase/functions/mission.ts";
-import type { GenerateJsonFn } from "../../../supabase/functions/plannerWrapper.ts";
-import type { GenerateResult } from "../../aiProvider.ts";
+import { buildLeadMission, type LeadSourcingMission } from "../../../supabase/functions/_shared/intelligence/leads/leadMission.ts";
+import { planInitialLeadSourcing } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanner.ts";
+import { parseLeadStrategy, type LeadInitialStrategy } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategy.ts";
+import { decideTitle, reviewStrategyTitles, belongsToOtherFamily } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategyValidation.ts";
+import { compileLeadStrategy, compileDeterministicPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategyCompiler.ts";
+import { buildLeadGeographyContext, extractExplicitLocations } from "../../../supabase/functions/_shared/intelligence/leads/leadGeography.ts";
+import { resolveGeographyAuthority } from "../../../supabase/functions/_shared/intelligence/mission.ts";
+import type { GenerateJsonFn } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
+import type { GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 const PRIMARY = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 

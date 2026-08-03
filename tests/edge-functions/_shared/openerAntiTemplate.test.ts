@@ -19,7 +19,7 @@
 // Pure and deterministic. No model, no network, no database.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { scoreOpenerCandidate, selectBestCandidate } from "../../../supabase/functions/_shared/openerCandidates.ts";
+import { scoreOpenerCandidate, selectBestCandidate } from "../../../supabase/functions/_shared/workbench/openerCandidates.ts";
 
 const OPTS = {
   personalization_depth: "specific",

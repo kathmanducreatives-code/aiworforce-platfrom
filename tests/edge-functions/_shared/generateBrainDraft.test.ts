@@ -2,14 +2,14 @@
 // The LLM is a local stub; no provider ever runs.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildDraftPrompt, mapDraftToV2, generateBrainDraft, type DraftInput } from "../../../supabase/functions/_shared/generateBrainDraft.ts";
-import { extractFromPages } from "../../../supabase/functions/_shared/companyWebsite.ts";
-import { countDisqualifiers } from "../../../supabase/functions/_shared/draftQuality.ts";
-import type { FounderResearch } from "../../../supabase/functions/_shared/types.ts";
+import { buildDraftPrompt, mapDraftToV2, generateBrainDraft, type DraftInput } from "../../../supabase/functions/_shared/companyBrainResearch/generateBrainDraft.ts";
+import { extractFromPages } from "../../../supabase/functions/_shared/companyBrainResearch/companyWebsite.ts";
+import { countDisqualifiers } from "../../../supabase/functions/_shared/companyBrainResearch/draftQuality.ts";
+import type { FounderResearch } from "../../../supabase/functions/_shared/companyBrainResearch/types.ts";
 import {
   HOME, FIXTURE_A_CLEAN_SAAS, FIXTURE_B_AMBIGUOUS, FIXTURE_F_SPARSE,
   FIXTURE_E_USER_BEATS_SITE, FIXTURE_E_USER_DESCRIPTION,
-} from "../../../supabase/functions/_shared/testFixtures.ts";
+} from "../../../supabase/functions/_shared/companyBrainResearch/testFixtures.ts";
 
 const research = (pages: typeof FIXTURE_A_CLEAN_SAAS, desc?: string) =>
   extractFromPages(pages, { websiteUrl: HOME, nameHint: "Cekura", descriptionHint: desc });

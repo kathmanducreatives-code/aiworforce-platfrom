@@ -14,12 +14,12 @@ import {
   buildQualifiedLeadPlanSteps, buildQualifiedLeadPlanSummary, readPlanArtifact,
   QUALIFIED_LEAD_PLAN_VERSION,
   type QualifiedLeadPlanArtifact, type QualifiedLeadPlanContract,
-} from "../../../supabase/functions/_shared/leadPlanAuthority.ts";
-import { planQualifiedLeadBeforePersistence } from "../../../supabase/functions/_shared/leadPlanOrchestration.ts";
-import { claudeFirstFromPersistedPlan } from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
-import { LEAD_ROLE_SEPARATION_RULE, LEAD_PLANNER_PROHIBITIONS, LEAD_STRATEGY_OUTPUT_SCHEMA } from "../../../supabase/functions/_shared/leadStrategy.ts";
-import type { EnvReader } from "../../../supabase/functions/intelligenceFlags.ts";
-import type { GenerateOpts, GenerateResult } from "../../aiProvider.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadPlanAuthority.ts";
+import { planQualifiedLeadBeforePersistence } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanOrchestration.ts";
+import { claudeFirstFromPersistedPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanningBridge.ts";
+import { LEAD_ROLE_SEPARATION_RULE, LEAD_PLANNER_PROHIBITIONS, LEAD_STRATEGY_OUTPUT_SCHEMA } from "../../../supabase/functions/_shared/intelligence/leads/leadStrategy.ts";
+import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import type { GenerateOpts, GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 const CANONICAL =
   "Find 5 founders or CEOs of early-stage B2B SaaS companies in the United States "

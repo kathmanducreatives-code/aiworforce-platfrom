@@ -237,7 +237,7 @@ Deno.test("validation is pure: no network, no clock, no provider reachable", () 
 // verify wiring, not runtime behaviour — the resolver tests above cover that.
 // ---------------------------------------------------------------------------
 
-const RUN_AGENT_SRC = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+const RUN_AGENT_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
 Deno.test("wiring: run-agent passes the VERIFIED service-role flag to the resolver", () => {
   assert(

@@ -13,9 +13,9 @@
 // is tenant-specific, never a global word ban.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildCtaPlan, validateCta, hasCta } from "../../../supabase/functions/_shared/ctaPlan.ts";
-import { buildSellerContext, buildSellerClaims, detectBrainContradictions } from "../../../supabase/functions/_shared/sellerContext.ts";
-import { scoreOpenerCandidate, selectBestCandidate } from "../../../supabase/functions/_shared/openerCandidates.ts";
+import { buildCtaPlan, validateCta, hasCta } from "../../../supabase/functions/_shared/workbench/ctaPlan.ts";
+import { buildSellerContext, buildSellerClaims, detectBrainContradictions } from "../../../supabase/functions/_shared/workbench/sellerContext.ts";
+import { scoreOpenerCandidate, selectBestCandidate } from "../../../supabase/functions/_shared/workbench/openerCandidates.ts";
 
 // ------------------------------------------------------------- tenant brains --
 

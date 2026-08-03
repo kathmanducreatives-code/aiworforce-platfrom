@@ -32,7 +32,7 @@ const noopPersist = async () => ({ ok: true, accountId: "a", contactId: null, le
 
 // ============ 1. real dependency construction includes the planner ==========
 Deno.test("1. run-agent's company-first construction passes proposeBroadening", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "createBroadeningPlanner");
   assertStringIncludes(src, "proposeBroadening: broadeningPlanner.plan");
   assertStringIncludes(src, "plannerMetadata: broadeningPlanner.lastMetadata");

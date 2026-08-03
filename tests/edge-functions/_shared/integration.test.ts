@@ -5,7 +5,7 @@ import {
   knownPersonFromLead,
   type IntegrationPorts,
   type LeadRecordLike,
-} from "../../../supabase/functions/_shared/integration.ts";
+} from "../../../supabase/functions/_shared/decisionMaker/integration.ts";
 import {
   classifyToolFailure,
   extractProfiles,
@@ -14,11 +14,11 @@ import {
   makePeopleSearchProvider,
   runProviderPlan,
   type ToolResultLike,
-} from "../../../supabase/functions/_shared/providerAdapter.ts";
-import { planPeopleSearch } from "../../../supabase/functions/_shared/searchPlanner.ts";
-import { normalizeProviderProfile } from "../../../supabase/functions/_shared/personProfile.ts";
-import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/companyIdentity.ts";
-import * as F from "../../../supabase/functions/_shared/fixtures.ts";
+} from "../../../supabase/functions/_shared/decisionMaker/providerAdapter.ts";
+import { planPeopleSearch } from "../../../supabase/functions/_shared/decisionMaker/searchPlanner.ts";
+import { normalizeProviderProfile } from "../../../supabase/functions/_shared/decisionMaker/personProfile.ts";
+import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/decisionMaker/companyIdentity.ts";
+import * as F from "../../../supabase/functions/_shared/decisionMaker/fixtures.ts";
 
 const WS = "00000000-0000-4000-8000-000000000001";
 const OTHER_WS = "00000000-0000-4000-8000-0000000000ff";
@@ -384,7 +384,7 @@ Deno.test("53-54. no real database write or outreach occurs in these tests", asy
 // LEGACY REGRESSION GUARD (§18)
 // ===========================================================================
 
-const EXECUTOR_SRC = await Deno.readTextFile(new URL("../leadActionExecutor.ts", import.meta.url));
+const EXECUTOR_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadActionExecutor.ts", import.meta.url));
 
 Deno.test("1-2. the live action uses the new engine and NOT the legacy verifier", () => {
   assert(
@@ -422,7 +422,7 @@ Deno.test("3. research_company and generate_outreach paths are untouched", () =>
 // PRODUCTION HOTFIX REGRESSIONS
 // ===========================================================================
 
-const REGISTRY_SRC = await Deno.readTextFile(new URL("../actorRegistry.ts", import.meta.url));
+const REGISTRY_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/actorRegistry.ts", import.meta.url));
 
 Deno.test("HOTFIX: every planned actor_key actually exists in the actor registry", () => {
   // The planner emitted "apify_company_employees", which is NOT a registry key

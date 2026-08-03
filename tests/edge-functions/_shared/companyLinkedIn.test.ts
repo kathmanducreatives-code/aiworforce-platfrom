@@ -1,7 +1,7 @@
 // Company LinkedIn adapter — fixture tests. No provider runs.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeCompanyLinkedIn, enrichCompanyFromLinkedIn, isLinkedInCompanyUrl } from "../../../supabase/functions/_shared/companyLinkedIn.ts";
+import { normalizeCompanyLinkedIn, enrichCompanyFromLinkedIn, isLinkedInCompanyUrl } from "../../../supabase/functions/_shared/companyBrainResearch/companyLinkedIn.ts";
 
 const URL_ = "https://www.linkedin.com/company/cekura";
 

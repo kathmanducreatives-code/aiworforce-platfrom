@@ -7,16 +7,16 @@ import {
   readIntelligenceFlags, allIntelligenceFlagsOff, GEOGRAPHY_GATED_FLAGS,
   GEOGRAPHY_GATE_NOTE, isGeographyGated, GEOGRAPHY_GATE_CLEARED, geographyGateSatisfied,
   type IntelligenceFlag,
-} from "../../../supabase/functions/_shared/intelligenceFlags.ts";
-import { inferGeography } from "../../../supabase/functions/jobIntentTaxonomy.ts";
+} from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import { inferGeography } from "../../../supabase/functions/_shared/jobIntentTaxonomy.ts";
 import {
   buildPlannerDiagnostics, auditRedaction, extractTokenUsage, attachDiagnostics,
   diagnosticsHash, PLANNER_DIAGNOSTICS_KEY,
-} from "../../../supabase/functions/_shared/plannerDiagnostics.ts";
-import { runPlanner } from "../../../supabase/functions/_shared/plannerWrapper.ts";
-import { buildMission } from "../../../supabase/functions/_shared/mission.ts";
-import { emptyMissionContext } from "../../../supabase/functions/_shared/missionContext.ts";
-import { plannerCapabilityMenu } from "../../../supabase/functions/_shared/capabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/intelligence/plannerDiagnostics.ts";
+import { runPlanner } from "../../../supabase/functions/_shared/intelligence/plannerWrapper.ts";
+import { buildMission } from "../../../supabase/functions/_shared/intelligence/mission.ts";
+import { emptyMissionContext } from "../../../supabase/functions/_shared/intelligence/missionContext.ts";
+import { plannerCapabilityMenu } from "../../../supabase/functions/_shared/intelligence/capabilityRegistry.ts";
 
 const NO_ENV = () => undefined;
 
@@ -145,7 +145,7 @@ Deno.test("32.C the kernel performs NO persistence — diagnostics are a plain o
 });
 
 Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-chat", async () => {
-  const dir = new URL(".", import.meta.url);
+  const dir = new URL("../../../supabase/functions/_shared/intelligence/", import.meta.url);
   for await (const entry of Deno.readDir(dir)) {
     if (!entry.isFile || !entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
     const src = await Deno.readTextFile(new URL(entry.name, dir));
@@ -156,7 +156,7 @@ Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-
 });
 
 Deno.test("32.E only run-agent imports the kernel, and only through the gated bridge", async () => {
-  const root = new URL("../../", import.meta.url);   // supabase/functions/
+  const root = new URL("../../../supabase/functions/", import.meta.url);   // supabase/functions/
 
   // pilot-chat still never touches the kernel — it classifies and delegates.
   const pilot = await Deno.readTextFile(new URL("pilot-chat/index.ts", root));

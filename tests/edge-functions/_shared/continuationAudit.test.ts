@@ -292,7 +292,7 @@ Deno.test("4.9 DOCUMENTED LIMITATION: two stale reclaimers can both pass the pol
 // ---- wiring proof ---------------------------------------------------------
 
 Deno.test("WIRING: run-agent takes the claim before it resumes, and releases it after", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "decideClaimAttempt(held ?? null, Date.now())");
   assertStringIncludes(src, "claimContinuation({");
   assertStringIncludes(src, "observedStatus,");

@@ -451,7 +451,7 @@ Deno.test("F34b the fusion state is a SLICE of the existing checkpoint", () => {
 // ======================================================= 12. no second owner ====
 
 Deno.test("F45-F48 no second event model, freshness policy, verdict or dedupe authority", async () => {
-  const src = await Deno.readTextFile(new URL("hiringEvidenceFusion.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/hiringEvidenceFusion.ts", import.meta.url));
 
   // The canonical event and its identity come from the existing adapter.
   assert(src.includes("jobRecordToSignalEvent"), "must route through the existing adapter");
@@ -474,7 +474,7 @@ Deno.test("F45-F48 no second event model, freshness policy, verdict or dedupe au
 });
 
 Deno.test("F44/F50 no Actor runs and no module reaches a provider directly", async () => {
-  const src = await Deno.readTextFile(new URL("hiringEvidenceFusion.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/hiringEvidenceFusion.ts", import.meta.url));
   for (const forbidden of ["fetch(", "apify.com", "APIFY_TOKEN", "firecrawl"]) {
     assertFalse(src.includes(forbidden), `fusion reaches a provider via ${forbidden}`);
   }

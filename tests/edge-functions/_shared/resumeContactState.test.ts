@@ -181,7 +181,7 @@ Deno.test("a lookup failure yields zero prior credit, never a phantom quota", as
 
 // ═══ 12/14. STRUCTURE: LOADED BEFORE ANY PAID BOUNDARY ════════════════════
 Deno.test("12/14. run-agent loads persisted prior state before any provider call", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
   // The request body is no longer the source.
   assertFalse(src.includes("legacyContactIdentities: []"),
@@ -305,7 +305,7 @@ Deno.test("N8. WATCH/NEEDS_REVIEW/REJECT/SKIP still never count on the null-plan
 
 Deno.test("N9. the loader branches on the plan filter rather than always using eq", async () => {
   const src = await Deno.readTextFile(
-    new URL("./qualifiedLeadPersistence.ts", import.meta.url));
+    new URL("../../../supabase/functions/_shared/qualifiedLeadPersistence.ts", import.meta.url));
   assert(src.includes('query.is("plan_id", null)'),
     "a null plan must use IS NULL");
   assert(src.includes('query.eq("plan_id", scope.planId)'),

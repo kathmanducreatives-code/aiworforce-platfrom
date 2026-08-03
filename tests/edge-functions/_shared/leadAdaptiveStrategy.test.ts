@@ -9,25 +9,25 @@ import {
   parseRoleTaxonomy, validateRoleTaxonomy, eligibleFamilies, deferredFamilies,
   isRejectedOperationsTitle, isSecondaryExecutiveTitle, TAXONOMY_BOUNDS,
   type RoleTaxonomy,
-} from "../../../supabase/functions/_shared/leadRoleTaxonomy.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadRoleTaxonomy.ts";
 import {
   parseQueryPacks, validateQueryPacks, selectPacksForCall, deferredPacks, PACK_BOUNDS,
   type QueryPack,
-} from "../../../supabase/functions/_shared/leadQueryPacks.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadQueryPacks.ts";
 import {
   adaptiveCapabilityCards, cardsCarryNoProviderIdentifiers, ADAPTIVE_DISCOVERY_CAPABILITIES,
   type AdaptiveCapabilityCard,
-} from "../../../supabase/functions/_shared/leadCapabilityCards.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadCapabilityCards.ts";
 import {
   validateAdaptiveStrategy, recommendSourceOrder, looksLikeRawActorId, parseAdaptiveStrategy,
   MAX_RECENCY_DAYS, type AdaptiveStrategy, type MissionTruth,
-} from "../../../supabase/functions/_shared/leadSourceStrategy.ts";
-import { routeAdaptiveLeadDecision, isAdaptiveLeadDecision } from "../../../supabase/functions/_shared/leadAdaptiveRoute.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadSourceStrategy.ts";
+import { routeAdaptiveLeadDecision, isAdaptiveLeadDecision } from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveRoute.ts";
 import {
   buildAdaptivePlanningContext, contextCarriesNoSecrets,
   deterministicRevenueOpsTaxonomy, deterministicRevenueOpsPacks,
-} from "../../../supabase/functions/_shared/leadAdaptiveContext.ts";
-import { isPlannerTask } from "../../providerRouting.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadAdaptiveContext.ts";
+import { isPlannerTask } from "../../../supabase/functions/_shared/providerRouting.ts";
 
 // ------------------------------------------------------------------ fixtures ----
 

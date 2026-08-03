@@ -122,7 +122,7 @@ Deno.test("negative inputs cannot widen the budget", () => {
 // ------------------------------------------------------- the wiring itself --
 
 Deno.test("the bridge exposes a budget snapshot, null while disabled", async () => {
-  const src = await Deno.readTextFile(new URL("./sequentialSourceBridge.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sequentialSourceBridge.ts", import.meta.url));
   assert(src.includes("planBudgetSnapshot: () => PlanBudgetSnapshot | null;"),
     "the bridge result must carry the snapshot accessor");
   assert(src.includes("planBudgetSnapshot: () => null,"),
@@ -132,13 +132,13 @@ Deno.test("the bridge exposes a budget snapshot, null while disabled", async () 
 });
 
 Deno.test("the executor forwards the budget to the quota controller", async () => {
-  const src = await Deno.readTextFile(new URL("./executeRunAgentCompanyFirstSourcing.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/executeRunAgentCompanyFirstSourcing.ts", import.meta.url));
   assert(src.includes('actionBudget?: QuotaControllerDeps["actionBudget"];'));
   assert(src.includes("actionBudget: deps.actionBudget,"));
 });
 
 Deno.test("run-agent SUPPLIES the budget — the caller that was missing", async () => {
-  const src = await Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assert(src.includes("createPlanAwareActionBudget(sequentialSources.planBudgetSnapshot)"),
     "the company-first workflow must supply the plan-aware budget");
   assert(src.includes("sequentialSources.enabled"),

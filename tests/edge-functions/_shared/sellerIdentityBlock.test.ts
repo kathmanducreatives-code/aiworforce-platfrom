@@ -19,8 +19,8 @@ import {
   buildGenerationProvenance,
   buildOpenerStagePayload,
   type ModelBoundary,
-} from "../../../supabase/functions/_shared/openerBackend.ts";
-import { applyStageUpdate, emptyAccountState, mergeStage, type WorkbenchAccountState } from "../../../supabase/functions/_shared/accountState.ts";
+} from "../../../supabase/functions/_shared/workbench/openerBackend.ts";
+import { applyStageUpdate, emptyAccountState, mergeStage, type WorkbenchAccountState } from "../../../supabase/functions/_shared/workbench/accountState.ts";
 
 const T = "2026-07-21T10:00:00.000Z";
 

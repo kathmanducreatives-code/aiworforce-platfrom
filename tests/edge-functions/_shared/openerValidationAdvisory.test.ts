@@ -19,7 +19,7 @@ import {
   DEFAULT_OPENER_CONSTRAINTS,
   type PersonalizationContext,
   type OpenerEligibility,
-} from "../../../supabase/functions/_shared/openerBackend.ts";
+} from "../../../supabase/functions/_shared/workbench/openerBackend.ts";
 
 /** Minimal context: one fresh allowed company-site evidence item. */
 function ctx(depth: "specific" | "company_level" = "specific"): PersonalizationContext {

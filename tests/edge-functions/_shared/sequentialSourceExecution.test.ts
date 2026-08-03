@@ -517,7 +517,7 @@ Deno.test("T20b diagnostics carry the funnel and expose no secrets or raw input"
 
 Deno.test("T33 no Actor executes during these tests", async () => {
   // Every test supplies its own fake. The module has no provider import at all.
-  const src = await Deno.readTextFile(new URL("sequentialSourceRuntime.ts", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/sequentialSourceRuntime.ts", import.meta.url));
   for (const forbidden of ["apify.com", "fetch(", "APIFY_TOKEN", "firecrawl"]) {
     assertFalse(src.includes(forbidden), `the runtime reaches a provider directly via ${forbidden}`);
   }

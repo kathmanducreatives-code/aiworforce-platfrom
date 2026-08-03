@@ -17,8 +17,8 @@ import {
   DEFAULT_OUTPUT_MODE,
   type PersonalizationContext,
   type ModelBoundary,
-} from "../../../supabase/functions/_shared/openerBackend.ts";
-import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/accountState.ts";
+} from "../../../supabase/functions/_shared/workbench/openerBackend.ts";
+import { applyStageUpdate, emptyAccountState, type WorkbenchAccountState } from "../../../supabase/functions/_shared/workbench/accountState.ts";
 
 const T = "2026-07-19T15:00:00.000Z";
 const BRAIN = {

@@ -3,14 +3,14 @@
 // provider calls anywhere (replay-safe).
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileCompanyBrainContext } from "../../../supabase/functions/companyBrainCompiler.ts";
-import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntelligenceProfile.ts";
-import { classifyRoleFamily, classifyCompanyExclusion, buildHiringSignalView } from "../../../supabase/functions/_shared/hiringRoleFamily.ts";
-import { classifyPost, classifyEngagement, classifyCommentIntent, buildCommentSignal } from "../../../supabase/functions/_shared/linkedInIntelligence.ts";
-import { classifyCompetitor } from "../../../supabase/functions/_shared/competitorIntelligence.ts";
-import { evaluateWorkflowTrend, evaluateFunding } from "../../../supabase/functions/_shared/marketIntelligence.ts";
-import { allowedAction, classifyPerson, dedupeTags, cleanLabel } from "../../../supabase/functions/_shared/radarDecision.ts";
-import { buildSourceDiagnostics, explainDiagnostics, resolveReadiness } from "../../../supabase/functions/_shared/radarDiagnostics.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
+import { buildRadarIntelligenceProfile } from "../../../supabase/functions/_shared/radarIntel/radarIntelligenceProfile.ts";
+import { classifyRoleFamily, classifyCompanyExclusion, buildHiringSignalView } from "../../../supabase/functions/_shared/radarIntel/hiringRoleFamily.ts";
+import { classifyPost, classifyEngagement, classifyCommentIntent, buildCommentSignal } from "../../../supabase/functions/_shared/radarIntel/linkedInIntelligence.ts";
+import { classifyCompetitor } from "../../../supabase/functions/_shared/radarIntel/competitorIntelligence.ts";
+import { evaluateWorkflowTrend, evaluateFunding } from "../../../supabase/functions/_shared/radarIntel/marketIntelligence.ts";
+import { allowedAction, classifyPerson, dedupeTags, cleanLabel } from "../../../supabase/functions/_shared/radarIntel/radarDecision.ts";
+import { buildSourceDiagnostics, explainDiagnostics, resolveReadiness } from "../../../supabase/functions/_shared/radarIntel/radarDiagnostics.ts";
 
 // ---- fixtures: two workspaces ---------------------------------------------
 // A — Agentory-like B2B SaaS; competitor seeds Alta / Gojiberry AI (workspace-only).
@@ -193,7 +193,7 @@ Deno.test("27. intelligence profile is workspace-scoped", () => {
 Deno.test("28. replay-safe: modules are pure (no fetch/provider imports)", async () => {
   const files = ["radarIntelligenceProfile", "hiringRoleFamily", "linkedInIntelligence", "competitorIntelligence", "marketIntelligence", "radarDecision", "radarDiagnostics"];
   for (const f of files) {
-    const src = await Deno.readTextFile(new URL(`./${f}.ts`, import.meta.url));
+    const src = await Deno.readTextFile(new URL(`../../../supabase/functions/_shared/radarIntel/${f}.ts`, import.meta.url));
     assert(!/\bfetch\s*\(/.test(src), `${f} must not call fetch`);
     assert(!/api\.(anthropic|apify|firecrawl)\.com/.test(src), `${f} must not reference a provider host`);
   }

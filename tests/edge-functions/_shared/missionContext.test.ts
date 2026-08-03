@@ -5,8 +5,8 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   buildMissionContext, emptyMissionContext, bounded, stripSecrets, looksLikeSecret,
   contextSize, withinPromptBudget, CONTEXT_LIMITS,
-} from "../../../supabase/functions/_shared/missionContext.ts";
-import type { CanonicalCompanyBrain } from "../../../supabase/functions/getCompiledCompanyBrainForWorkspace.ts";
+} from "../../../supabase/functions/_shared/intelligence/missionContext.ts";
+import type { CanonicalCompanyBrain } from "../../../supabase/functions/_shared/getCompiledCompanyBrainForWorkspace.ts";
 
 function brain(overrides: Record<string, unknown> = {}): CanonicalCompanyBrain {
   return {

@@ -18,11 +18,11 @@ import { assert, assertEquals, assertFalse, assertStrictEquals } from "https://d
 import {
   buildOrchestrateResponsePlan, readPlanArtifact,
   type OrchestrateResponsePlan,
-} from "../../../supabase/functions/_shared/leadPlanAuthority.ts";
-import { planQualifiedLeadBeforePersistence } from "../../../supabase/functions/_shared/leadPlanOrchestration.ts";
-import { claudeFirstFromPersistedPlan } from "../../../supabase/functions/_shared/leadPlanningBridge.ts";
-import type { EnvReader } from "../../../supabase/functions/intelligenceFlags.ts";
-import type { GenerateOpts, GenerateResult } from "../../aiProvider.ts";
+} from "../../../supabase/functions/_shared/intelligence/leads/leadPlanAuthority.ts";
+import { planQualifiedLeadBeforePersistence } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanOrchestration.ts";
+import { claudeFirstFromPersistedPlan } from "../../../supabase/functions/_shared/intelligence/leads/leadPlanningBridge.ts";
+import type { EnvReader } from "../../../supabase/functions/_shared/intelligence/intelligenceFlags.ts";
+import type { GenerateOpts, GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 const CANONICAL =
   "Find 5 founders or CEOs of early-stage B2B SaaS companies in the United States "

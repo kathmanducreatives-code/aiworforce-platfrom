@@ -19,7 +19,7 @@ import {
 import { runCompanyFirstQuotaController } from "../../../supabase/functions/_shared/companyFirstQuotaController.ts";
 import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 
-const runAgent = () => Deno.readTextFile(new URL("../run-agent/index.ts", import.meta.url));
+const runAgent = () => Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
 const contact = (lc: string): PersistedOutcome => ({
   identity: `cf:${lc}`, verdict: "CONTACT", quotaEligible: true,

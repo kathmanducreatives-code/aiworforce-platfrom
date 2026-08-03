@@ -10,8 +10,8 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   resolveRuntimeEnvironment, projectRefFromUrl, environmentFallbackReason,
   CANONICAL_PROJECT_REFS,
-} from "../../../supabase/functions/_shared/runtimeEnvironment.ts";
-import { decideCapability, AGENTORY_CAPABILITIES, type AgentoryCapability } from "../../../supabase/functions/_shared/capabilityRegistry.ts";
+} from "../../../supabase/functions/_shared/intelligence/runtimeEnvironment.ts";
+import { decideCapability, AGENTORY_CAPABILITIES, type AgentoryCapability } from "../../../supabase/functions/_shared/intelligence/capabilityRegistry.ts";
 
 const PROD_URL = `https://${CANONICAL_PROJECT_REFS.production}.supabase.co`;
 const TEST_URL = `https://${CANONICAL_PROJECT_REFS.test}.supabase.co`;
