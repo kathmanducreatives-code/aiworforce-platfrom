@@ -931,9 +931,38 @@ Deno.serve(async (req) => {
         // an unfiltered LinkedIn search, so the envelope is passed through verbatim.
         const invokeJobs = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
           const rr = await runTool("source_with_apify", envelope, baseCtx);
-          if (!rr.ok || !rr.data) throw new Error(rr.error ?? "jobs_actor_failed");
+          if (!rr.ok || !rr.data) {
+            // THE FAILURE DATA TRAVELS WITH THE ERROR. A RUNNING Apify run comes
+            // back as `!ok` carrying its run_id and dataset_id; throwing a bare
+            // string discarded both and abandoned a paid run (TEST run
+            // rWikfnKgnp5DazDYr). The engine reads these off the error to record
+            // the run as pending and resume it later.
+            const err = new Error(rr.error ?? "jobs_actor_failed") as Error & {
+              toolResult?: unknown;
+            };
+            err.toolResult = rr.data ?? null;
+            throw err;
+          }
           const items = (rr.data as { items?: unknown[] }).items;
           return Array.isArray(items) ? items : [];
+        };
+        /**
+         * Recognise a started-but-unfinished Apify run on a thrown invoker error.
+         *
+         * Only a run that Apify says is RUNNING/READY counts — a schema
+         * rejection, an auth failure or a timeout are NOT pending and must keep
+         * failing, or "pending" becomes a way to swallow real errors.
+         */
+        const readPendingRun = (e: unknown) => {
+          const d = (e as { toolResult?: Record<string, unknown> } | null)?.toolResult;
+          if (!d || typeof d !== "object") return null;
+          const runId = typeof d.run_id === "string" ? d.run_id : "";
+          if (!runId || d.pending !== true) return null;
+          return {
+            run_id: runId,
+            dataset_id: typeof d.dataset_id === "string" ? d.dataset_id : null,
+            actor_build_id: typeof d.build_id === "string" ? d.build_id : null,
+          };
         };
         const invokePeople = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
           const rr = await runTool("source_with_apify", envelope, baseCtx);
@@ -1323,12 +1352,16 @@ Deno.serve(async (req) => {
                 // This is the SAME defect `finalActorPayload.ts` was written for
                 // after production task 2425ec4f; the passthrough contract already
                 // existed and the new engine simply was not using it.
+                const resumeRunId = (call as { resumeRunId?: string }).resumeRunId;
                 const rows = await invokeJobs({
                   selected_actor_key: call.actorKey,
                   actor_id: call.actorId,
                   compiled_actor_input: true,
                   capability_key: call.actorKey,
                   user_input: call.input as Record<string, unknown>,
+                  // Adopting an in-flight run costs nothing; starting a second
+                  // one costs the whole Actor again.
+                  ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
                 });
                 return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
               },
@@ -1359,10 +1392,15 @@ Deno.serve(async (req) => {
                     : null;
                 }
                 : undefined,
+              readPendingRun,
               log: (m, meta) => console.log("[run-agent][capability-engine]", m, meta),
             }, {
               mission: persistedMission,
               plan: missionPlan,
+              // THE FALLBACK IS CONFIGURED, so an unconfigured-fallback skip can
+              // no longer masquerade as a memo23 input failure. One call per
+              // band: this Actor ANDs multiple values and returns zero rows.
+              solidcodeTeamSizes: ["2-10", "11-50", "51-200"],
               state: readCapabilityExecutionState(body as Record<string, unknown>),
               brain: brainEnforced
                 ? {
@@ -1420,12 +1458,16 @@ Deno.serve(async (req) => {
                 // This is the SAME defect `finalActorPayload.ts` was written for
                 // after production task 2425ec4f; the passthrough contract already
                 // existed and the new engine simply was not using it.
+                const resumeRunId = (call as { resumeRunId?: string }).resumeRunId;
                 const rows = await invokeJobs({
                   selected_actor_key: call.actorKey,
                   actor_id: call.actorId,
                   compiled_actor_input: true,
                   capability_key: call.actorKey,
                   user_input: call.input as Record<string, unknown>,
+                  // Adopting an in-flight run costs nothing; starting a second
+                  // one costs the whole Actor again.
+                  ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
                 });
                 return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
               },

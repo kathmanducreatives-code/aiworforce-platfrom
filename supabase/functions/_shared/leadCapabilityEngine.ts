@@ -89,7 +89,7 @@ export interface ProviderAttempt {
   capability: CapabilityId;
   provider: string;
   attempt: number;
-  outcome: "ok" | "empty" | "error" | "skipped_idempotent" | "compile_failed";
+  outcome: "ok" | "empty" | "error" | "pending" | "skipped_idempotent" | "compile_failed" | "skipped_not_configured";
   rows: number;
   cost_units: number;
   reason: string | null;
@@ -113,6 +113,17 @@ export interface CapabilityExecutionState {
   contact_identities: string[];
   terminal_reason: string | null;
   fallback_reason: string | null;
+  /**
+   * Paid Actor runs that were still RUNNING when the poll window closed.
+   *
+   * These are BILLED runs that exist. Discarding them is what abandoned TEST run
+   * rWikfnKgnp5DazDYr (dataset KmurtcXfCOhGcBmH4) — started, charged, never read.
+   * A resume adopts the run id instead of starting a second Actor.
+   */
+  pending_runs: Array<{
+    capability: CapabilityId; provider: string; run_id: string;
+    dataset_id: string | null; actor_build_id: string | null; started_at: string;
+  }>;
 }
 
 export function newExecutionState(
@@ -133,6 +144,7 @@ export function newExecutionState(
     contact_identities: [],
     terminal_reason: null,
     fallback_reason: null,
+    pending_runs: [],
   };
 }
 
@@ -188,9 +200,23 @@ function companyKey(c: NormalizedHiringCompany): string {
 
 export type ActorInvoker = (call: CompiledActorCall<unknown>) => Promise<Record<string, unknown>[]>;
 
+/** A provider call that started a real, billable run that has not finished. */
+export interface PendingRun {
+  run_id: string;
+  dataset_id: string | null;
+  actor_build_id?: string | null;
+  cost_units?: number;
+}
+
 export interface CapabilityEngineDeps {
   /** The ONLY provider entry point. Wrapped in `guardedInvoker` by the engine. */
   invoke: ActorInvoker;
+  /**
+   * Report a started-but-unfinished run. Returning a value makes the attempt
+   * PENDING rather than an error, so the capability is neither completed nor
+   * failed and no fallback is allowed to spend against it.
+   */
+  readPendingRun?: (e: unknown) => PendingRun | null;
   verifyEmployer: (
     person: NormalizedHiringPerson, companyLinkedInUrl: string,
   ) => { verified: boolean; outcome: string };
@@ -303,8 +329,16 @@ export async function runCapabilityPlan(
       record("skipped_idempotent", 0, call.batchIdentity);
       return [];
     }
+    // RESUME BEFORE START. If a run for this capability+provider is already in
+    // flight from an earlier invocation, adopt its id: the caller reads that run
+    // and its dataset instead of issuing a second, separately-billed start.
+    const inFlight = (opts.state?.pending_runs ?? []).find(
+      (r) => r.capability === capability && r.provider === provider);
+    const outbound = inFlight
+      ? { ...call, resumeRunId: inFlight.run_id } as typeof call
+      : call;
     try {
-      const rows = await invoke(call);
+      const rows = await invoke(outbound);
       deps.onCallComplete?.(call.batchIdentity);
       record(rows.length > 0 ? "ok" : "empty", rows.length, null);
       return rows;
@@ -314,6 +348,29 @@ export async function runCapabilityPlan(
       // suggestion, so it propagates.
       if (e instanceof CapabilityContainmentError) throw e;
       if (e instanceof PaidExecutionBlockedError) throw e;
+
+      // A RUN THAT STARTED IS NOT A FAILURE. It is billed and it exists, so it
+      // is recorded as PENDING with its real cost and its identifiers, and the
+      // capability neither completes nor falls back.
+      const pending = deps.readPendingRun?.(e) ?? null;
+      if (pending?.run_id) {
+        state.provider_attempts.push({
+          capability, provider, attempt: attemptNo, outcome: "pending", rows: 0,
+          cost_units: pending.cost_units ?? spec.cost_units,
+          reason: `run ${pending.run_id} still running; dataset ${pending.dataset_id ?? "pending"}`,
+        });
+        state.accumulated_cost_units += pending.cost_units ?? spec.cost_units;
+        if (!state.pending_runs.some((r) => r.run_id === pending.run_id)) {
+          state.pending_runs.push({
+            capability, provider, run_id: pending.run_id,
+            dataset_id: pending.dataset_id ?? null,
+            actor_build_id: pending.actor_build_id ?? null,
+            started_at: new Date().toISOString(),
+          });
+        }
+        log("provider_pending", { capability, provider, run_id: pending.run_id });
+        return [];
+      }
       record("error", 0, String(e));
       log("provider_error", { capability, provider, error: String(e) });
       return [];
@@ -368,11 +425,21 @@ export async function runCapabilityPlan(
       const tried: string[] = [];
       /** Set the moment any provider's input fails validation. */
       let schemaFailure = false;
+      /** Set when a provider started a real run that has not finished. */
+      let runPending = false;
+      const pendingFor = (provider: string) =>
+        state.provider_attempts.some(
+          (a) => a.capability === cap && a.provider === provider && a.outcome === "pending");
       const compileFailedFor = (provider: string) =>
         state.provider_attempts.some(
           (a) => a.capability === cap && a.provider === provider && a.outcome === "compile_failed");
       for (const provider of step.providers) {
         if (schemaFailure) break;
+        // A FALLBACK MUST NOT SPEND WHILE THE PRIMARY IS STILL RUNNING. The
+        // primary may yet return everything the mission needs, and paying a
+        // second source to answer a question already in flight is the waste this
+        // whole gate exists to stop.
+        if (runPending) break;
         if (companies.length >= maxCandidates) break;
         // solidcode is FALLBACK ONLY: it runs when the primary produced nothing,
         // not merely when the quota is unmet.
@@ -405,10 +472,18 @@ export async function runCapabilityPlan(
             addCompany(companies, c, normalizeMemo23OpenJobs(r));
           }
         } else if (provider === "apify_yc_companies_solidcode") {
+          // NOT CONFIGURED IS NOT INVALID INPUT.
+          //
+          // Reporting a missing fallback configuration as `compile_failed` made
+          // the whole capability read `provider_input_validation_failed` on TEST
+          // task 80501967-…-1b7db0ad46e7 — even though memo23's input was
+          // perfectly valid and its run had started. A fallback nobody
+          // configured is skipped, and says so.
           if ((opts.solidcodeTeamSizes ?? []).length === 0) {
             state.provider_attempts.push({
-              capability: cap, provider, attempt: 1, outcome: "compile_failed",
-              rows: 0, cost_units: 0, reason: "no team-size bands supplied; a bandless call duplicates memo23 at 2x price",
+              capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
+              rows: 0, cost_units: 0,
+              reason: "no team-size bands configured; a bandless call duplicates memo23 at 2x price",
             });
             continue;
           }
@@ -429,9 +504,19 @@ export async function runCapabilityPlan(
         // catching this locally is that nothing downstream gets to reinterpret
         // it as "the source came back empty".
         if (compileFailedFor(provider)) { schemaFailure = true; break; }
+        if (pendingFor(provider)) { runPending = true; break; }
       }
       state.company_keys = companies.map((c) => c.key);
 
+      if (companies.length === 0 && runPending) {
+        // PENDING, NOT EXHAUSTED. The capability stays incomplete and unspent-on;
+        // a later resume adopts the same run id rather than starting another.
+        state.terminal_reason = "provider_run_pending";
+        state.fallback_reason = null;
+        finish(cap, "incomplete", 0, used, false,
+          `provider_run_pending: ${state.pending_runs.map((r) => `${r.provider}:${r.run_id}`).join(", ")}`);
+        break;
+      }
       if (companies.length === 0) {
         // AN INVALID INPUT IS NOT AN EMPTY RESULT.
         //

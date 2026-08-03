@@ -939,12 +939,30 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     };
   }
 
-  const startRes = await apifyFetch(`/acts/${actorPath}/runs?token=${APIFY_API_TOKEN}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(actorInput),
-    timeoutMs: 20_000,
-  }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
+  // ── RESUME AN EXISTING RUN INSTEAD OF STARTING A NEW ONE ──────────────────
+  //
+  // A run that was still RUNNING when the previous invocation's 90s poll window
+  // closed is a PAID run that already exists. TEST run rWikfnKgnp5DazDYr was
+  // abandoned exactly that way: started, billed, never read. Adopting the run id
+  // is the difference between resuming and paying twice for the same question.
+  //
+  // `resume_run_id` therefore SKIPS the start call entirely. No POST /runs, no
+  // second Actor, no additional charge.
+  const resumeRunId = typeof (i as { resume_run_id?: unknown }).resume_run_id === "string"
+    ? String((i as { resume_run_id?: unknown }).resume_run_id).trim()
+    : "";
+
+  const startRes = resumeRunId
+    ? await apifyFetch(`/actor-runs/${resumeRunId}?token=${APIFY_API_TOKEN}`, {
+      method: "GET",
+      timeoutMs: 20_000,
+    }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }))
+    : await apifyFetch(`/acts/${actorPath}/runs?token=${APIFY_API_TOKEN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(actorInput),
+      timeoutMs: 20_000,
+    }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
 
   if (startRes.status === 401 || startRes.status === 403) {
     // Token reached Apify but was rejected — almost always actor access/rental,
@@ -1017,11 +1035,24 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const resolvedDatasetId: string | undefined = finalRun?.defaultDatasetId ?? dataset_id;
 
+  // THE BUILD IS RECORDED, NOT PINNED BLIND. Apify reports the build the run
+  // actually used; persisting it is what makes "which schema did this validate
+  // against" answerable later without guessing.
+  const build_id: string | null = finalRun?.buildId ?? null;
+  const build_number: string | null = finalRun?.buildNumber ?? null;
+
   if (status !== "SUCCEEDED") {
+    // RUNNING/READY is PENDING, not failure. The run exists and is billable, so
+    // the identifiers travel back for a later resume rather than being discarded.
+    const pending = status === "RUNNING" || status === "READY";
     return {
       ok: false,
       error: `apify_run_${(status || "timeout").toLowerCase()}`,
-      data: { run_id, dataset_id: resolvedDatasetId, status },
+      data: {
+        run_id, dataset_id: resolvedDatasetId, status,
+        pending, resumable: pending, actor_id, build_id, build_number,
+        resumed_from: resumeRunId || null,
+      },
     };
   }
 
