@@ -1025,12 +1025,11 @@ Deno.serve(async (req) => {
         // broad-job-first default reasserting itself for a tight ICP.
         const requestedSourceOrder: string[] =
           (gptStrategy?.diagnostics?.source_order as string[] | undefined) ?? [];
-        // THE REQUEST TEXT, FROM WHEREVER THE PLAN ACTUALLY PUT IT.
+        // THE REQUEST TEXT, FROM EVERY CARRIER THE PLAN USES.
         //
         // Production plans never populate `tool_input.user_request`. They carry
-        // the user's words in the top-level `instruction` and in
-        // `tool_input.query` — the same `instruction` this file already treats as
-        // the request at the `user_request: instruction ?? ""` call site below.
+        // the user's words in the top-level `instruction`, in `tool_input.query`
+        // and in the top-level `input`.
         //
         // Reading only `user_request` resolved to null on every real plan, and
         // `inferRouteFromRequest(null)` returns `general_company_first`. A startup
@@ -1040,11 +1039,29 @@ Deno.serve(async (req) => {
         // 15c385c3-fc88-43ff-a531-fb714a234875), whose tool_input carries 18
         // fields and no `user_request`, and which ran Indeed -> LinkedIn Jobs ->
         // Glassdoor for a SaaS-startup query.
-        const routeUserRequest: string | null =
-          (tool_input_body?.user_request as string | undefined)
-            ?? instruction
-            ?? (tool_input_body?.query as string | undefined)
-            ?? null;
+        //
+        // PREFERRING ONE CARRIER WAS STILL WRONG. `instruction` is the PLANNER'S
+        // REWRITE, not the user's words, and the rewrite drops company stage. On
+        // TEST task 8af17651-5fa2-48e2-af87-4bc923146243 (plan
+        // c2cf285d-fa72-43fe-9506-33195aefadf3) the user asked for "founders of
+        // SaaS startups hiring Sales Operations" while `instruction` read "Find 5
+        // jobs matching: Sales Operations OR Revenue Operations OR ...". Only
+        // `input` still carried the word "startups", so ranking `instruction`
+        // first resolved the mission to `general_company_first` ->
+        // harvestapi/linkedin-company-search (0 rows) and then two broad
+        // LinkedIn Jobs rounds: 50 raw jobs, 0 qualified leads.
+        //
+        // Route inference is a NARROW company-stage marker scan, so the sound
+        // reading is the UNION of every carrier rather than a priority winner. A
+        // stage marker in ANY carrier is genuine evidence of startup intent, and
+        // choosing exactly one carrier is what keeps losing it.
+        const routeUserRequest: string | null = [
+          tool_input_body?.user_request as string | undefined,
+          input ?? undefined,
+          instruction,
+          tool_input_body?.query as string | undefined,
+        ].filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+          .join("\n") || null;
         const routeResolution = validateHiringRoute({
           route: (gptStrategy?.diagnostics as Record<string, unknown> | undefined)?.route as string
             ?? inferRouteFromRequest(routeUserRequest),
@@ -1478,6 +1495,49 @@ Deno.serve(async (req) => {
           contact_pending: companyFirstQuotaProgress?.contact_pending ?? 0,
           will_run_another_source: legacySkipReason === null,
           skip_reason: legacySkipReason,
+        });
+
+        // ══ NO SILENT BROAD-JOB SOURCING UNDER A COMPANY-FIRST ROUTE ═════════
+        // The legacy loop discovers through broad job boards. On a validated
+        // NON-fallback route those boards are reachable only via
+        // `broad_job_fallback`, which by contract requires a structured reason —
+        // so reaching them from here without one re-creates exactly the default
+        // the route exists to remove.
+        //
+        // It did. On TEST task 8af17651-5fa2-48e2-af87-4bc923146243 the route
+        // executor's primary source returned 0 rows, `legacySkipReason` stayed
+        // null because quota was unmet, and two broad LinkedIn Jobs rounds ran
+        // anyway: 50 raw jobs, 20 companies, 0 qualified leads, no record that a
+        // fallback had occurred.
+        //
+        // The reason is DERIVED FROM WHAT THE ROUTE ACTUALLY DID and validated
+        // against the contract's own closed set — never invented here. A reason
+        // the contract rejects blocks the loop instead of excusing it.
+        let legacyFallbackReason: string | null = null;
+        if (legacySkipReason === null && routeResolution.ok &&
+            routeResolution.validated_route !== "broad_job_fallback") {
+          const candidateReason = companyFirstRoute === null
+            ? "primary_source_unavailable"
+            : (companyFirstRoute.funnel.qualified_companies > 0
+              ? "remaining_quota_justifies_round"
+              : "primary_source_no_candidates");
+          const fallbackCheck = validateHiringRoute({
+            route: "broad_job_fallback", fallback_reason: candidateReason,
+          }, { userRequest: routeUserRequest });
+          if (fallbackCheck.ok) {
+            legacyFallbackReason = candidateReason;
+            if (routeRecord) routeRecord.fallback_reason = fallbackCheck.fallback_reason;
+          } else {
+            legacySkipReason = `broad_job_fallback_unjustified:${candidateReason}`;
+          }
+        }
+        console.log("[run-agent][broad-job-fallback]", {
+          task_id: task.id,
+          validated_route: routeResolution.ok ? routeResolution.validated_route : null,
+          company_first_ran: companyFirstRoute !== null,
+          qualified_companies: companyFirstRoute?.funnel.qualified_companies ?? 0,
+          fallback_reason: legacyFallbackReason,
+          blocked: legacySkipReason,
         });
 
         // ENFORCEMENT AT THE PROVIDER BOUNDARY. When the decision says stop or

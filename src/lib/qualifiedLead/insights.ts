@@ -126,24 +126,59 @@ export function readDiagnosticsFromResult(result: unknown): CompanyDiagnosticVie
   return out;
 }
 
-/** Turn a gate code into something a person can read. */
+/**
+ * Turn a gate code into something a person can read.
+ *
+ * EVERY code the Brain gate actually emits must be here. `companyIcpFilter`
+ * emits `industry`, `business_model`, `employee_count`, `company_stage` and
+ * `founder_led`; `industry` and `founder_led` were both missing, so a real
+ * rejection rendered the bare field name "industry" next to a sentence — the
+ * user-visible half of the duplicate-reason defect on TEST task
+ * 8af17651-5fa2-48e2-af87-4bc923146243.
+ */
 export function gateLabel(gate: string): string {
   const known: Record<string, string> = {
     employee_count: 'Employee count outside the target range',
     business_model: 'Business model does not match the ICP',
+    industry: 'Industry does not match the ICP',
     company_vertical: 'Industry does not match the ICP',
     company_stage: 'Company stage outside the target range',
     allowed_stages: 'Company stage outside the target range',
     positive_industries: 'Industry does not match the ICP',
     negative_industries: 'Industry is on the avoid list',
     excluded_company_types: 'Company type is on the avoid list',
+    founder_led: 'Not founder-led',
     require_founder_led: 'Not founder-led',
     geography: 'Location outside the requested geography',
   };
   if (known[gate]) return known[gate];
-  // Unknown codes are shown as-is rather than hidden — an unexplained rejection
-  // is still more useful than a silent one.
-  return gate.replace(/_/g, ' ');
+  // Unknown codes are sentence-cased rather than hidden — an unexplained
+  // rejection is still more useful than a silent one — but never left as a raw
+  // snake_case identifier, which reads as a bug rather than a reason.
+  const words = gate.replace(/_/g, ' ').trim();
+  if (!words) return 'Rejected by the Company Brain';
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+/**
+ * The reasons ONE company was rejected, deduplicated and readable.
+ *
+ * Several distinct gate codes share a single meaning — `industry`,
+ * `company_vertical` and `positive_industries` are all "industry does not
+ * match" — so a company failing more than one rendered the same sentence
+ * repeatedly. Deduplication belongs on the LABEL, not the code: the codes are
+ * genuinely different checks, but the user is being told one thing.
+ */
+export function gateLabels(gates: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const g of gates) {
+    const label = gateLabel(g);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+  }
+  return out;
 }
 
 /**
@@ -166,12 +201,23 @@ export function buildQualificationInsightsView(
     (d) => d.company_brain_status === 'pass' && d.qualification_status !== 'rejected',
   );
 
-  const counts = new Map<string, number>();
+  // COUNTED BY MEANING, ONCE PER COMPANY. Keying on the raw gate code produced
+  // two "Industry does not match the ICP" chips side by side whenever a company
+  // failed both `company_vertical` and `industry`, and double-counted that one
+  // company. The representative code is kept so the chip keeps a stable key.
+  const counts = new Map<string, { gate: string; count: number }>();
   for (const d of rejected) {
-    for (const g of d.failed_gates) counts.set(g, (counts.get(g) ?? 0) + 1);
+    const seen = new Set<string>();
+    for (const g of d.failed_gates) {
+      const label = gateLabel(g);
+      if (seen.has(label)) continue;
+      seen.add(label);
+      const prior = counts.get(label);
+      if (prior) prior.count += 1;
+      else counts.set(label, { gate: g, count: 1 });
+    }
   }
-  const failed_gate_counts = [...counts.entries()]
-    .map(([gate, count]) => ({ gate, count }))
+  const failed_gate_counts = [...counts.values()]
     .sort((a, b) => b.count - a.count || a.gate.localeCompare(b.gate));
 
   let rejection_summary: string | null = null;

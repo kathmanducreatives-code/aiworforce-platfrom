@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   insightsFromResult, readDiagnosticsFromResult, buildQualificationInsightsView,
-  readCompanyDiagnostic, processingState, gateLabel,
+  readCompanyDiagnostic, processingState, gateLabel, gateLabels,
   type CompanyDiagnosticView,
 } from "./insights.ts";
 
@@ -124,7 +124,55 @@ Deno.test("a rejection summary explains WHY nothing qualified", () => {
 Deno.test("gate codes render as readable text, and unknown codes still show", () => {
   assertEquals(gateLabel("employee_count"), "Employee count outside the target range");
   assertEquals(gateLabel("company_vertical"), "Industry does not match the ICP");
-  assertEquals(gateLabel("some_new_gate"), "some new gate");
+  // Unknown codes still SHOW — never hidden — but never as a raw snake_case
+  // identifier either, which reads to a user as a bug rather than a reason.
+  assertEquals(gateLabel("some_new_gate"), "Some new gate");
+});
+
+Deno.test("every gate code companyIcpFilter emits has a real sentence", () => {
+  // These are the exact codes `add(...)` emits in companyIcpFilter.ts. `industry`
+  // and `founder_led` had no entry, so TEST task
+  // 8af17651-5fa2-48e2-af87-4bc923146243 rendered the bare word "industry" beside
+  // a full sentence in the Workbench.
+  for (const code of [
+    "employee_count", "industry", "business_model", "company_stage", "founder_led",
+  ]) {
+    const label = gateLabel(code);
+    assert(label !== code, `${code} must not render as its own field name`);
+    assert(!label.includes("_"), `${code} must not render a snake_case identifier`);
+    assert(/\s/.test(label), `${code} must render as words, not a token`);
+  }
+});
+
+Deno.test("reasons that mean the same thing are shown once", () => {
+  // A real rejection from that task: three codes, two meanings.
+  assertEquals(gateLabels(["company_vertical", "industry", "business_model"]), [
+    "Industry does not match the ICP",
+    "Business model does not match the ICP",
+  ]);
+  // Order is stable and first-seen.
+  assertEquals(gateLabels(["business_model", "industry", "company_vertical"]), [
+    "Business model does not match the ICP",
+    "Industry does not match the ICP",
+  ]);
+  assertEquals(gateLabels([]), []);
+});
+
+Deno.test("the failed-gate summary counts meanings once per company", () => {
+  // Two companies, each failing BOTH industry-flavoured gates. The chip must read
+  // 2, not 4, and must appear once rather than twice.
+  const view = buildQualificationInsightsView(readDiagnosticsFromResult({
+    company_first_state: {
+      candidate_diagnostics: [
+        diag({ company_key: "a", failed_gates: ["company_vertical", "industry"] }),
+        diag({ company_key: "b", failed_gates: ["industry", "company_vertical"] }),
+      ],
+    },
+  }));
+  const industry = view.failed_gate_counts.filter(
+    (g) => gateLabel(g.gate) === "Industry does not match the ICP");
+  assertEquals(industry.length, 1, "one chip per meaning, not one per gate code");
+  assertEquals(industry[0].count, 2, "counted once per company, not once per code");
 });
 
 // ================================================= 24. PROCESSING STATES ==
@@ -206,7 +254,10 @@ Deno.test("2/3. the panel renders company, signal, Brain status and exact failed
   assert(src.includes("company_name"), "company name must render");
   assert(src.includes("hiring_signal_title"), "the hiring signal must render");
   assert(src.includes("company_brain_status"), "Company Brain status must render");
-  assert(src.includes("failed_gates.map(gateLabel)"), "exact failed gates must render, humanised");
+  assert(src.includes("gateLabels(c.failed_gates)"),
+    "exact failed gates must render, humanised AND deduplicated");
+  assertFalse(src.includes("failed_gates.map(gateLabel)"),
+    "the undeduplicated render repeated the same sentence and must not return");
   assert(src.includes("rejection_summary"), "the rejection summary must render");
   assert(src.includes("companies_evaluated") && src.includes("companies_rejected"),
     "evaluated and rejected counts must render");

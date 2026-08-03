@@ -46,14 +46,29 @@ const PRODUCTION_TOOL_INPUT: Record<string, unknown> = {
   // NOTE: no `user_request`. That absence IS the defect under test.
 };
 
-/** The resolution order run-agent uses. Mirrors the production call site. */
+/**
+ * The resolution run-agent uses. Mirrors the production call site.
+ *
+ * SUPERSEDED SHAPE: this began as a priority chain (`user_request ?? instruction
+ * ?? query`). TEST task 8af17651-5fa2-48e2-af87-4bc923146243 showed a priority
+ * chain still loses the route whenever the winning carrier is the planner's
+ * rewrite, so every carrier is now scanned. See
+ * `startupRouteFromPlanCarriers.test.ts`. The assertions below are unchanged in
+ * intent and strictly harder to satisfy: the route must survive REGARDLESS of
+ * which carrier holds the words.
+ */
 function resolveRouteRequest(
-  toolInput: Record<string, unknown> | null, instruction: string | undefined,
+  toolInput: Record<string, unknown> | null,
+  instruction: string | undefined,
+  input?: string | null,
 ): string | null {
-  return (toolInput?.user_request as string | undefined)
-    ?? instruction
-    ?? (toolInput?.query as string | undefined)
-    ?? null;
+  return [
+    toolInput?.user_request as string | undefined,
+    input ?? undefined,
+    instruction,
+    toolInput?.query as string | undefined,
+  ].filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+    .join("\n") || null;
 }
 
 Deno.test("the production payload really has no user_request", () => {
@@ -75,18 +90,31 @@ Deno.test("a missing user_request no longer downgrades the route", () => {
     "startup_company_first");
 });
 
-Deno.test("instruction is preferred before tool_input.query", () => {
-  // Both carriers present and DIFFERENT: instruction must win.
-  const req = resolveRouteRequest(
+Deno.test("startup intent survives in WHICHEVER carrier holds it", () => {
+  // Carriers present and DIFFERENT: the stage word must not be shadowed by a
+  // sibling carrier that lacks it. This is what a priority chain got wrong.
+  const shadowed = resolveRouteRequest(
     { ...PRODUCTION_TOOL_INPUT, query: "Find cybersecurity companies hiring RevOps" },
     CANONICAL);
-  assertEquals(req, CANONICAL, "instruction outranks tool_input.query");
-  // query is the last resort when instruction is absent.
-  assertEquals(resolveRouteRequest(PRODUCTION_TOOL_INPUT, undefined), CANONICAL);
-  // and an explicit user_request still outranks both.
-  assertEquals(
-    resolveRouteRequest({ ...PRODUCTION_TOOL_INPUT, user_request: "YC startups hiring RevOps" }, CANONICAL),
-    "YC startups hiring RevOps");
+  assert(shadowed!.includes(CANONICAL), "instruction is scanned");
+  assert(shadowed!.includes("cybersecurity"), "tool_input.query is scanned too, not dropped");
+  assertEquals(inferRouteFromRequest(shadowed), "startup_company_first");
+
+  // Each carrier ALONE is sufficient.
+  assertEquals(inferRouteFromRequest(
+    resolveRouteRequest(PRODUCTION_TOOL_INPUT, undefined)), "startup_company_first",
+    "tool_input.query alone");
+  assertEquals(inferRouteFromRequest(
+    resolveRouteRequest(null, CANONICAL)), "startup_company_first", "instruction alone");
+  assertEquals(inferRouteFromRequest(
+    resolveRouteRequest(null, undefined, CANONICAL)), "startup_company_first", "input alone");
+  assertEquals(inferRouteFromRequest(resolveRouteRequest(
+    { ...PRODUCTION_TOOL_INPUT, query: undefined, user_request: "YC startups hiring RevOps" },
+    undefined)), "startup_company_first", "user_request alone");
+
+  // No carrier at all is still the honest downgrade, not a crash.
+  assertEquals(resolveRouteRequest(null, undefined), null);
+  assertEquals(inferRouteFromRequest(null), "general_company_first");
 });
 
 Deno.test("the canonical query selects startup_company_first with memo23 FIRST", () => {
@@ -127,8 +155,8 @@ Deno.test("run-agent uses the widened resolution at the real call site", async (
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assert(src.includes("const routeUserRequest: string | null ="),
     "the resolved request must be a named value at the call site");
-  assert(src.includes("?? instruction"), "instruction must be a carrier");
-  assert(src.includes("?? (tool_input_body?.query as string | undefined)"),
+  assert(src.includes("instruction,"), "instruction must be a carrier");
+  assert(src.includes("tool_input_body?.query as string | undefined"),
     "tool_input.query must be a carrier");
   assert(src.includes("inferRouteFromRequest(routeUserRequest)"),
     "route inference must read the resolved value");

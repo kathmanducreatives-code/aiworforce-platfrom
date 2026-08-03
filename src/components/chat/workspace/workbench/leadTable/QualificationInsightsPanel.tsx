@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Filter } from 'lucide-react';
-import { gateLabel, type QualificationInsightsView } from '@/lib/qualifiedLead/insights';
+import { gateLabel, gateLabels, type QualificationInsightsView } from '@/lib/qualifiedLead/insights';
 
 /**
  * WORKBENCH INSIGHTS — where evaluated-but-rejected companies become visible.
@@ -119,7 +119,7 @@ export default function QualificationInsightsPanel({ insights, processing = null
               )}
               {c.failed_gates.length > 0 && (
                 <div data-testid={`gates-${c.company_key}`} className="text-[11px] text-amber-200/80 mt-1">
-                  {c.failed_gates.map(gateLabel).join(' · ')}
+                  {gateLabels(c.failed_gates).join(' · ')}
                 </div>
               )}
             </div>
