@@ -146,7 +146,7 @@ Deno.test("1./2. both authorities have a real non-test production caller", async
 
   // The bridge reaches the feedback runtime, which is the only caller of
   // `applyObservation` outside tests.
-  assert(bridgeSrc.includes('from "../../../supabase/functions/_shared/sourceFeedbackRuntime.ts"'),
+  assert(bridgeSrc.includes('from "./sourceFeedbackRuntime.ts"'),
     "the bridge must import the feedback runtime");
   assert(bridgeSrc.includes("applyObservationWithFeedback("),
     "the bridge must call the composite observation entry point");

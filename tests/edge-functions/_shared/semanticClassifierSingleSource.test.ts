@@ -100,7 +100,7 @@ Deno.test("3. no file imports or names the deleted module", async () => {
 
 Deno.test("4. compoundSourcingPipeline classifies through the canonical module", async () => {
   const src = await read("../../../supabase/functions/_shared/compoundSourcingPipeline.ts");
-  assert(src.includes('from "../../../supabase/functions/_shared/companySemanticClassification.ts"'),
+  assert(src.includes('from "./companySemanticClassification.ts"'),
     "the pipeline must import the canonical classifier");
   for (const symbol of ["classifyCompany", "shouldClassify", "brainEvidenceFrom"]) {
     assert(src.includes(symbol), `the pipeline must use ${symbol}`);
@@ -118,7 +118,7 @@ Deno.test("4. compoundSourcingPipeline classifies through the canonical module",
 
 Deno.test("5. run-agent reaches the classifier only via semanticClassificationBinding", async () => {
   const src = await read("../../../supabase/functions/run-agent/index.ts");
-  assert(src.includes('from "../../../supabase/functions/_shared/semanticClassificationBinding.ts"'),
+  assert(src.includes('from "../_shared/semanticClassificationBinding.ts"'),
     "run-agent must import the binding");
   assert(src.includes("buildSemanticClassificationBinding("),
     "and build the binding at the call site");
