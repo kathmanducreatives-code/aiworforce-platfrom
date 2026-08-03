@@ -71,6 +71,18 @@ import { missionHash, type LeadMissionV1 } from "./leadMission.ts";
 
 export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1" as const;
 
+/**
+ * Discovery-time size bounds for memo23.
+ *
+ * BROAD ON PURPOSE. The Actor's size filters are fixed enums, and the mission's
+ * real bound (10-150) is not expressible in them. Discovery casts wide and the
+ * exact range is enforced from ENRICHED headcount, because the Actor's own
+ * `teamSize` is advisory and was up to 23x wrong in the live benchmark.
+ * Both values appear in the published schema and in the in-repo pinned enums.
+ */
+export const MEMO23_DEFAULT_MIN_SIZE = "10+";
+export const MEMO23_DEFAULT_MAX_SIZE = "500";
+
 // ------------------------------------------------------------------ state ----
 
 export interface ProviderAttempt {
@@ -354,7 +366,13 @@ export async function runCapabilityPlan(
     if (cap === "startup_company_discovery") {
       const used: string[] = [];
       const tried: string[] = [];
+      /** Set the moment any provider's input fails validation. */
+      let schemaFailure = false;
+      const compileFailedFor = (provider: string) =>
+        state.provider_attempts.some(
+          (a) => a.capability === cap && a.provider === provider && a.outcome === "compile_failed");
       for (const provider of step.providers) {
+        if (schemaFailure) break;
         if (companies.length >= maxCandidates) break;
         // solidcode is FALLBACK ONLY: it runs when the primary produced nothing,
         // not merely when the quota is unmet.
@@ -366,15 +384,20 @@ export async function runCapabilityPlan(
         used.push(provider);
 
         if (provider === "apify_yc_companies_memo23") {
-          const compiled = compileMemo23YcInput({
+    const compiled = compileMemo23YcInput({
             mode: "companies",
+            queries: [],
+            topCompany: false,
+            nonprofit: false,
+            batch: ["All Batches"],
             regions: opts.ycRegions ?? ["United States of America"],
             industries: opts.ycIndustries ?? ["B2B"],
             isHiring: true,
-            minEmployeeSize: opts.ycMinSize ?? "1+",
-            maxEmployeeSize: opts.ycMaxSize ?? "250",
+            minEmployeeSize: opts.ycMinSize ?? MEMO23_DEFAULT_MIN_SIZE,
+            maxEmployeeSize: opts.ycMaxSize ?? MEMO23_DEFAULT_MAX_SIZE,
             scrapeOpenJobs: true,
             scrapeFounderDetails: false,
+            enrichEmails: false,
             maxItems: maxCandidates,
           });
           for (const r of await callProvider(cap, provider, compiled)) {
@@ -399,10 +422,33 @@ export async function runCapabilityPlan(
             }
           }
         }
+        // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
+        //
+        // Continuing to the next approved provider would still be spending on
+        // the back of a call we never validly made, and the whole point of
+        // catching this locally is that nothing downstream gets to reinterpret
+        // it as "the source came back empty".
+        if (compileFailedFor(provider)) { schemaFailure = true; break; }
       }
       state.company_keys = companies.map((c) => c.key);
 
       if (companies.length === 0) {
+        // AN INVALID INPUT IS NOT AN EMPTY RESULT.
+        //
+        // On TEST task e8abeb8f-…-cfcbc6a416d4 the memo23 call was rejected by
+        // Apify and the run carried on as though the source had simply returned
+        // nothing — which is how a schema failure became a LinkedIn Jobs sweep
+        // and five people searches. A source that was never validly asked has
+        // not answered, and the mission stops here.
+        const invalid = state.provider_attempts.filter(
+          (a) => a.capability === cap && a.outcome === "compile_failed");
+        if (invalid.length > 0) {
+          state.terminal_reason = "provider_input_validation_failed";
+          state.fallback_reason = null;
+          finish(cap, "incomplete", 0, used, false,
+            `provider_input_validation_failed: ${invalid.map((a) => `${a.provider}: ${a.reason}`).join(" | ")}`);
+          break;
+        }
         const ex = onCapabilityExhausted(opts.plan, cap, tried);
         state.terminal_reason = ex.reason;
         state.fallback_reason = ex.status === "exhausted" ? "approved_providers_exhausted" : null;
@@ -828,13 +874,23 @@ export function compileFirstProviderCall(
       provider,
       compiled: compileMemo23YcInput({
         mode: "companies",
+        queries: [],
+        topCompany: false,
+        nonprofit: false,
+        batch: ["All Batches"],
         regions: opts.ycRegions ?? ["United States of America"],
         industries: opts.ycIndustries ?? ["B2B"],
         isHiring: true,
-        minEmployeeSize: opts.ycMinSize ?? "1+",
-        maxEmployeeSize: opts.ycMaxSize ?? "250",
+        // THE CLOSEST BROAD FILTER, NOT THE TARGET RANGE. The mission wants
+        // 10-150; the Actor's size options are fixed enums and 150 is not one of
+        // them, so discovery casts to 10+ .. 500 and the exact 10-150 bound is
+        // enforced later from ENRICHED headcount. Narrowing here to "100" would
+        // silently drop every 100-150 company.
+        minEmployeeSize: opts.ycMinSize ?? MEMO23_DEFAULT_MIN_SIZE,
+        maxEmployeeSize: opts.ycMaxSize ?? MEMO23_DEFAULT_MAX_SIZE,
         scrapeOpenJobs: true,
         scrapeFounderDetails: false,
+        enrichEmails: false,
         maxItems: maxCandidates,
       }) as CompileResult<unknown>,
     };

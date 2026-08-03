@@ -32,6 +32,9 @@ export interface Memo23YcCompanyInput {
   minEmployeeSize?: string;
   maxEmployeeSize?: string;
   queries?: string[];
+  /** Sentinel-bearing multi-selects. "All …" values are stripped by the Actor. */
+  topCompany?: boolean;
+  nonprofit?: boolean;
   scrapeOpenJobs?: boolean;
   scrapeFounderDetails?: boolean;
   maxItems: number;
@@ -51,6 +54,12 @@ export interface SolidcodeYcCompanyInput {
   includeFounders?: boolean;
   maxResults: number;
 }
+
+/** The ONLY keys solidcode/ycombinator-scraper accepts. */
+export const SOLIDCODE_FIELDS: readonly string[] = [
+  "searchQuery", "status", "regions", "industries", "teamSize",
+  "isHiring", "includeJobs", "includeFounders", "maxResults",
+];
 
 export interface HarvestCompanySearchInput {
   /** A company NAME keyword. Never a concept phrase. */
@@ -239,9 +248,23 @@ export function compileSolidcodeYcInput(i: SolidcodeYcCompanyInput): CompileResu
     );
   }
   if (!Number.isInteger(i.maxResults) || i.maxResults < 1) e.push("maxResults must be a positive integer");
+  // FIELD WHITELIST. `build` spreads whatever it is given, so an unrecognised
+  // key — most likely a memo23 field like `minEmployeeSize` or `batch` reaching
+  // the wrong compiler — would be forwarded to SolidCode verbatim. The two
+  // Actors share a subject and share no schema; emitting only known keys is what
+  // makes that class of mix-up unrepresentable rather than merely discouraged.
+  const foreign = Object.keys(i).filter((k) => !SOLIDCODE_FIELDS.includes(k));
+  if (foreign.length) {
+    e.push(`unsupported field(s) for solidcode/ycombinator-scraper: ${foreign.join(", ")}`);
+  }
   if (e.length) return fail(K, e);
+  const clean: SolidcodeYcCompanyInput = { maxResults: i.maxResults };
+  for (const k of SOLIDCODE_FIELDS) {
+    const v = (i as unknown as Record<string, unknown>)[k];
+    if (v !== undefined && v !== null) (clean as unknown as Record<string, unknown>)[k] = v;
+  }
   w.push("fallback Actor only — prefer memo23 for primary YC discovery");
-  return build(K, i, "company", cost(K, i.maxResults), w, i.teamSize?.[0] ?? "any-size");
+  return build(K, clean, "company", cost(K, i.maxResults), w, i.teamSize?.[0] ?? "any-size");
 }
 
 /**

@@ -1308,10 +1308,27 @@ Deno.serve(async (req) => {
           try {
             capabilityRun = await runCapabilityPlan({
               invoke: async (call) => {
+                // THE COMPILED INPUT IS AUTHORITATIVE — send it, do not re-derive it.
+                //
+                // Spreading `call.input` at the TOP level of this envelope is what
+                // broke TEST task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4.
+                // `runTool` only honours a pre-compiled payload when it arrives as
+                // `user_input` alongside `compiled_actor_input: true`; without those
+                // flags it looked up an adapter by actor_id, found none for
+                // memo23/y-combinator-scraper, and synthesised a generic jobs
+                // payload instead — `{query: null, location: null, role_keywords:
+                // null, max_results}`. Apify answered "Field input.location must be
+                // string" and the run treated that as "no candidates".
+                //
+                // This is the SAME defect `finalActorPayload.ts` was written for
+                // after production task 2425ec4f; the passthrough contract already
+                // existed and the new engine simply was not using it.
                 const rows = await invokeJobs({
                   selected_actor_key: call.actorKey,
                   actor_id: call.actorId,
-                  ...(call.input as Record<string, unknown>),
+                  compiled_actor_input: true,
+                  capability_key: call.actorKey,
+                  user_input: call.input as Record<string, unknown>,
                 });
                 return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
               },
@@ -1388,10 +1405,27 @@ Deno.serve(async (req) => {
               // The SAME provider entry point the rest of run-agent uses. The
               // executor holds no provider import of its own.
               invoke: async (call) => {
+                // THE COMPILED INPUT IS AUTHORITATIVE — send it, do not re-derive it.
+                //
+                // Spreading `call.input` at the TOP level of this envelope is what
+                // broke TEST task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4.
+                // `runTool` only honours a pre-compiled payload when it arrives as
+                // `user_input` alongside `compiled_actor_input: true`; without those
+                // flags it looked up an adapter by actor_id, found none for
+                // memo23/y-combinator-scraper, and synthesised a generic jobs
+                // payload instead — `{query: null, location: null, role_keywords:
+                // null, max_results}`. Apify answered "Field input.location must be
+                // string" and the run treated that as "no candidates".
+                //
+                // This is the SAME defect `finalActorPayload.ts` was written for
+                // after production task 2425ec4f; the passthrough contract already
+                // existed and the new engine simply was not using it.
                 const rows = await invokeJobs({
                   selected_actor_key: call.actorKey,
                   actor_id: call.actorId,
-                  ...(call.input as Record<string, unknown>),
+                  compiled_actor_input: true,
+                  capability_key: call.actorKey,
+                  user_input: call.input as Record<string, unknown>,
                 });
                 return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
               },

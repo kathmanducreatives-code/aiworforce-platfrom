@@ -189,7 +189,7 @@ Deno.test("6. zero YC results use ONLY the approved startup fallback", async () 
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan(
     mockDeps({ apify_yc_companies_memo23: [] }, rec),
-    { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["1-10", "11-50"] },
+    { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["2-10", "11-50"] },
   );
 
   // memo23 empty → solidcode tried. Nothing else.
@@ -222,7 +222,7 @@ Deno.test("7. a provider failure cannot escape the graph", async () => {
       return Promise.resolve([]);
     },
     verifyEmployer: () => ({ verified: false, outcome: "no_match" }),
-  }, { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["1-10"] });
+  }, { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["2-10"] });
 
   // The error is RECORDED as an attempt, not swallowed and not escalated into
   // an off-graph retry.
