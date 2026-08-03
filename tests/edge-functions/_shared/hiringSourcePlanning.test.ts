@@ -315,7 +315,7 @@ Deno.test("S38 no second flag parser was introduced", async () => {
 
 Deno.test("S39 planning owns no qualification, quota or execution authority", async () => {
   for (const f of ["hiringSourcePlan.ts", "hiringSourceCatalog.ts"]) {
-    const src = await Deno.readTextFile(new URL(`./${f}`, import.meta.url));
+    const src = await Deno.readTextFile(new URL(`../../../supabase/functions/_shared/${f}`, import.meta.url));
     for (const forbidden of [
       "evaluateCompanyBrainEvidence", "isQuotaEligibleCandidate",
       "runCompoundSourcing", "buildPeopleScope", "verifyCurrentEmployer",

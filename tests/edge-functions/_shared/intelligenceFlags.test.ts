@@ -145,7 +145,7 @@ Deno.test("32.C the kernel performs NO persistence — diagnostics are a plain o
 });
 
 Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-chat", async () => {
-  const dir = new URL(".", import.meta.url);
+  const dir = new URL("../../../supabase/functions/_shared/intelligence/", import.meta.url);
   for await (const entry of Deno.readDir(dir)) {
     if (!entry.isFile || !entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
     const src = await Deno.readTextFile(new URL(entry.name, dir));
@@ -156,7 +156,7 @@ Deno.test("32.D no module in the kernel imports run-agent, orchestrate or pilot-
 });
 
 Deno.test("32.E only run-agent imports the kernel, and only through the gated bridge", async () => {
-  const root = new URL("../../", import.meta.url);   // supabase/functions/
+  const root = new URL("../../../supabase/functions/", import.meta.url);   // supabase/functions/
 
   // pilot-chat still never touches the kernel — it classifies and delegates.
   const pilot = await Deno.readTextFile(new URL("pilot-chat/index.ts", root));

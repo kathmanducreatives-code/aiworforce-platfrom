@@ -193,7 +193,7 @@ Deno.test("27. intelligence profile is workspace-scoped", () => {
 Deno.test("28. replay-safe: modules are pure (no fetch/provider imports)", async () => {
   const files = ["radarIntelligenceProfile", "hiringRoleFamily", "linkedInIntelligence", "competitorIntelligence", "marketIntelligence", "radarDecision", "radarDiagnostics"];
   for (const f of files) {
-    const src = await Deno.readTextFile(new URL(`./${f}.ts`, import.meta.url));
+    const src = await Deno.readTextFile(new URL(`../../../supabase/functions/_shared/radarIntel/${f}.ts`, import.meta.url));
     assert(!/\bfetch\s*\(/.test(src), `${f} must not call fetch`);
     assert(!/api\.(anthropic|apify|firecrawl)\.com/.test(src), `${f} must not reference a provider host`);
   }
