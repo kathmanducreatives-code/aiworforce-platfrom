@@ -254,8 +254,16 @@ Deno.test("13. run-agent sends the compiled input through the passthrough contra
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assert(src.includes("compiled_actor_input: true"),
     "the compiled payload must be marked authoritative");
-  assert(src.includes("user_input: call.input as Record<string, unknown>"),
-    "it must travel as user_input, which is the only channel runTool honours");
+  // CORRECTED. This previously asserted `user_input`, which `runTool` does NOT
+  // read at the envelope level — so the assertion passed while the payload was
+  // dropped and `{}` went to Apify. Asserting the sender's shape against a
+  // receiver contract that was never checked is what let runs rWikfnKgnp5DazDYr
+  // and eGzD7gzJNGFm4c4IZ happen. The HTTP body itself is now asserted in
+  // `apifyTransportIntegrity.test.ts`.
+  assert(src.includes("input: call.input as Record<string, unknown>"),
+    "it must travel as `input` — the key toolRegistry actually reads");
+  assertFalse(src.includes("user_input: call.input"),
+    "the user_input key is the defect and must not return");
   assert(src.includes("capability_key: call.actorKey"),
     "the capability must be named so the final-payload validator can check it");
   // The defective top-level spread must not return.

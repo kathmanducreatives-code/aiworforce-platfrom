@@ -9,6 +9,7 @@
 //   import { runTool } from "../_shared/toolRegistry.ts";
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hashInput } from "./hiringActorInputs.ts";
 import { validateFinalActorPayload, finalPayloadDiagnostics } from "./finalActorPayload.ts";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
@@ -899,6 +900,43 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   let actorInput: Record<string, unknown>;
   if (compiledPassthrough) {
+    // ── TRANSPORT INTEGRITY: FAIL CLOSED ────────────────────────────────────
+    //
+    // A compiled invocation that arrives with no payload is a WIRING BUG, never
+    // a legitimate "run with defaults". run-agent sent the payload under
+    // `user_input`, which is not the key read three lines above, so `userInput`
+    // resolved to `{}` and `JSON.stringify({})` reached Apify. The Actor then
+    // applied its own schema defaults and ran a Jobs-mode scrape. Runs
+    // rWikfnKgnp5DazDYr and eGzD7gzJNGFm4c4IZ were both empty bodies, and both
+    // looked successful.
+    //
+    // An empty compiled payload can never be correct, so it stops here rather
+    // than being spent.
+    if (!i.input || typeof i.input !== "object" || Array.isArray(i.input)) {
+      return {
+        ok: false,
+        error: "compiled_input_missing",
+        data: {
+          actor_id, actor_key: registry_actor_key,
+          capability: typeof compiledCapability === "string" ? compiledCapability : null,
+          reason: "compiled_actor_input=true but the envelope carried no `input` object; " +
+            "no provider call was made",
+          received_envelope_keys: Object.keys(i as Record<string, unknown>).sort(),
+        },
+      };
+    }
+    if (Object.keys(userInput).length === 0) {
+      return {
+        ok: false,
+        error: "compiled_input_missing",
+        data: {
+          actor_id, actor_key: registry_actor_key,
+          capability: typeof compiledCapability === "string" ? compiledCapability : null,
+          reason: "the compiled payload is empty; Apify would substitute its own defaults",
+          received_envelope_keys: Object.keys(i as Record<string, unknown>).sort(),
+        },
+      };
+    }
     actorInput = userInput;
   } else {
     actorInput = actorCfg?.input_adapter
@@ -935,6 +973,35 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         ...finalPayloadDiagnostics(finalVerdict),
         actor_key: registry_actor_key,
         reason: "the compiled payload failed final validation; no provider call was made",
+      },
+    };
+  }
+
+  // ── OUTBOUND HASH EQUALITY, ON THE OBJECT ABOUT TO BE SERIALIZED ─────────
+  //
+  // `compiled_input_hash` was declared on this envelope and written by one
+  // caller, and read by nothing. Had it been enforced, the empty-body defect
+  // would have failed closed instead of running twice. It is checked HERE —
+  // after every transformation, against the exact object handed to
+  // JSON.stringify below — because validating one object and sending another is
+  // the failure this whole path keeps repeating.
+  const outboundHash = hashInput(actorInput);
+  const expectedHash = typeof i.compiled_input_hash === "string" ? i.compiled_input_hash : null;
+  if (compiledPassthrough && expectedHash && expectedHash !== outboundHash) {
+    console.error("[toolRegistry] compiled_input_hash_mismatch", {
+      actor_id, expected: expectedHash, actual: outboundHash,
+    });
+    return {
+      ok: false,
+      error: "compiled_input_hash_mismatch",
+      data: {
+        actor_id, actor_key: registry_actor_key,
+        capability: typeof compiledCapability === "string" ? compiledCapability : null,
+        expected_hash: expectedHash,
+        outbound_hash: outboundHash,
+        outbound_keys: Object.keys(actorInput).sort(),
+        reason: "the payload about to be sent is not the payload that was compiled and validated; " +
+          "no provider call was made",
       },
     };
   }
@@ -1052,6 +1119,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         run_id, dataset_id: resolvedDatasetId, status,
         pending, resumable: pending, actor_id, build_id, build_number,
         resumed_from: resumeRunId || null,
+        outbound_input_hash: outboundHash,
       },
     };
   }

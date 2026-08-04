@@ -1358,7 +1358,19 @@ Deno.serve(async (req) => {
                   actor_id: call.actorId,
                   compiled_actor_input: true,
                   capability_key: call.actorKey,
-                  user_input: call.input as Record<string, unknown>,
+                  // `input` — the key `runTool` ACTUALLY reads (toolRegistry.ts:884).
+                  //
+                  // This was `user_input`, which runTool never reads at the
+                  // envelope level: `user_input` exists there only as a parameter
+                  // name INSIDE input_adapter callbacks. So `i.input` was
+                  // undefined, the passthrough branch assigned `{}`, and
+                  // `JSON.stringify({})` went to Apify — which filled every field
+                  // with its schema defaults and ran a Jobs-mode scrape. Runs
+                  // rWikfnKgnp5DazDYr and eGzD7gzJNGFm4c4IZ were both empty bodies.
+                  input: call.input as Record<string, unknown>,
+                  // The hash of what we intend to send, checked against the hash
+                  // of what is actually serialized, immediately before the POST.
+                  compiled_input_hash: call.inputHash,
                   // Adopting an in-flight run costs nothing; starting a second
                   // one costs the whole Actor again.
                   ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
@@ -1464,7 +1476,19 @@ Deno.serve(async (req) => {
                   actor_id: call.actorId,
                   compiled_actor_input: true,
                   capability_key: call.actorKey,
-                  user_input: call.input as Record<string, unknown>,
+                  // `input` — the key `runTool` ACTUALLY reads (toolRegistry.ts:884).
+                  //
+                  // This was `user_input`, which runTool never reads at the
+                  // envelope level: `user_input` exists there only as a parameter
+                  // name INSIDE input_adapter callbacks. So `i.input` was
+                  // undefined, the passthrough branch assigned `{}`, and
+                  // `JSON.stringify({})` went to Apify — which filled every field
+                  // with its schema defaults and ran a Jobs-mode scrape. Runs
+                  // rWikfnKgnp5DazDYr and eGzD7gzJNGFm4c4IZ were both empty bodies.
+                  input: call.input as Record<string, unknown>,
+                  // The hash of what we intend to send, checked against the hash
+                  // of what is actually serialized, immediately before the POST.
+                  compiled_input_hash: call.inputHash,
                   // Adopting an in-flight run costs nothing; starting a second
                   // one costs the whole Actor again.
                   ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
