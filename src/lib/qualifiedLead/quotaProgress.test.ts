@@ -92,12 +92,16 @@ Deno.test("PART 5: account counts and lead counts are separate groups", () => {
   const p = buildQuotaProgress(ONE_COMPANY_NO_PERSON, [NO_PERSON_CANDIDATE]);
   const counts = buildWorkbenchCounts({ rows: [NO_PERSON_CANDIDATE], progress: p });
 
+  // EVALUATED sits between discovery and qualification. It was added because
+  // "Accounts found: 20 / Qualified companies: 20" hid the fact that nothing had
+  // been judged at all — the two counters were adjacent and looked like a funnel.
   assertEquals(counts.map((c) => c.label), [
-    "ACCOUNTS FOUND", "QUALIFIED COMPANIES",
+    "ACCOUNTS FOUND", "EVALUATED", "QUALIFIED COMPANIES",
     "DECISION-MAKERS VERIFIED", "CONTACT-READY", "REMAINING",
   ]);
   const byKey = Object.fromEntries(counts.map((c) => [c.key, c]));
   assertEquals(byKey.accounts_found.group, "account");
+  assertEquals(byKey.evaluated.group, "account");
   assertEquals(byKey.contact_ready.group, "lead");
   // One visible account row, zero CONTACT-ready leads. The old header said 1/1.
   assertEquals(byKey.accounts_found.value, 1);

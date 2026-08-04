@@ -39,11 +39,29 @@ export interface WorkbenchCountsInput {
 export function buildWorkbenchCounts({ rows, progress }: WorkbenchCountsInput): WorkbenchCount[] {
   const resolved = rows.map((r) => resolveQualification(r));
 
+  // ACCOUNTS FOUND is discovery. It says nothing about qualification, and the
+  // two must never collapse into each other.
   const accountsFound = rows.length;
+
+  // EVALUATED is "something actually judged this row".
+  const evaluated = resolved.filter((q) => q.evaluated).length;
+
+  // QUALIFIED COMPANIES counts EXPLICIT positive verdicts only.
+  //
+  // This was `q.level !== 'not_qualified'`, which counted every row that had not
+  // been actively rejected — including rows nothing had looked at. TEST plan
+  // edb4cbf6-…-65b1d3fbbcda reported 20 qualified companies for a run whose
+  // `qualified_company_keys` was empty. Absence of a rejection is not a pass.
+  //
+  // When the capability engine reports its own qualified set, that set is the
+  // authority; the row-level fallback exists for legacy runs.
   const qualifiedCompanies = progress?.qualifiedCompanies
-    ?? resolved.filter((q) => q.level !== 'not_qualified').length;
+    ?? resolved.filter((q) => q.qualified).length;
+  // Same discipline: only rows that were evaluated AND are not still waiting on
+  // a decision-maker count. An unevaluated row has no verified decision-maker.
   const decisionMakersVerified = progress?.verifiedDecisionMakers
-    ?? resolved.filter((q) => q.level !== 'needs_decision_maker').length;
+    ?? resolved.filter((q) => q.evaluated && q.level !== 'needs_decision_maker'
+      && q.level !== 'not_evaluated').length;
   // CONTACT-READY comes from the quota contract, or from precedence — never from
   // `contact_status`, which only says whether a contact field is populated.
   const contactReady = progress?.eligible ?? resolved.filter((q) => q.contactReady).length;
@@ -51,6 +69,7 @@ export function buildWorkbenchCounts({ rows, progress }: WorkbenchCountsInput): 
 
   return [
     { key: 'accounts_found', label: 'ACCOUNTS FOUND', value: accountsFound, group: 'account', tone: 'neutral' },
+    { key: 'evaluated', label: 'EVALUATED', value: evaluated, group: 'account', tone: 'neutral' },
     { key: 'qualified_companies', label: 'QUALIFIED COMPANIES', value: qualifiedCompanies, group: 'account', tone: 'neutral' },
     { key: 'decision_makers_verified', label: 'DECISION-MAKERS VERIFIED', value: decisionMakersVerified, group: 'lead', tone: 'neutral' },
     { key: 'contact_ready', label: 'CONTACT-READY', value: contactReady, group: 'lead', tone: contactReady > 0 ? 'positive' : 'warning' },

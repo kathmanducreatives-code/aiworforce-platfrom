@@ -174,6 +174,24 @@ interface BaseCtx {
   task_id?: string | null;
   /** Requested execution mode; source_and_qualify_only forbids draft writes. */
   execution_mode?: string | null;
+  /**
+   * WHO OWNS PERSISTENCE FOR THIS CALL.
+   *
+   * `"capability_engine"` means a LeadMissionV1 run is in charge: the engine
+   * qualifies companies and persists them through `projectCompanyFirstPersistence`
+   * -> `persistPlan`, with a verdict and evidence on every row. This writer must
+   * publish nothing, because what it would publish is RAW DISCOVERY — a YC row
+   * or a job posting with no verdict, no fit score and no evidence.
+   *
+   * TEST plan edb4cbf6-…-65b1d3fbbcda is the proof: the engine qualified ZERO
+   * companies and this writer published 20 job rows anyway, which the Workbench
+   * then counted as 20 qualified companies.
+   *
+   * Absent/`"legacy"` keeps the historical behaviour for genuinely legacy
+   * workflows. It is set EXPLICITLY by the caller and never inferred from the
+   * shape of the data.
+   */
+  persistence_authority?: "capability_engine" | "legacy" | null;
   // ---- provider provenance context (Find Leads sourcing) ----
   /** Provider name (e.g. "apify"). */
   provider?: string | null;
@@ -292,6 +310,17 @@ export async function writeMemoryFromToolCall(ctx: ToolCallCtx): Promise<void> {
       tool_call_id: ctx.tool_call_id,
       conv: ctx.conversation_id,
     });
+    // ── ONE PERSISTENCE AUTHORITY PER RUN ─────────────────────────────────
+    // A capability-engine run publishes through the engine's own projection.
+    // Anything this writer would add is unevaluated discovery, and an
+    // unevaluated row that reaches the Workbench is indistinguishable from a
+    // qualified one.
+    if (ctx.persistence_authority === "capability_engine") {
+      console.log("[memoryWriter] skipped: capability_engine owns persistence", {
+        tool, plan_id: ctx.plan_id, task_id: ctx.task_id,
+      });
+      return;
+    }
     if (tool === "source_with_apify") {
       const out = ctx.output as any;
       if (isLinkedinCommentersOutput(out, ctx.selected_actor_key)) {

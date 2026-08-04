@@ -1,5 +1,10 @@
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import type { LeadResultPanelAction } from '@/lib/chatActions';
+// RELATIVE, not the `@/` alias: this is a VALUE import and the alias is a
+// bundler-only convention that does not resolve outside Vite.
+import {
+  isExplicitlyQualified, type QualificationRecord,
+} from '../../../../../lib/qualifiedLead/qualification';
 
 /**
  * Local-only credit estimates. NO ledger writes — these are presented to the
@@ -30,6 +35,7 @@ export function estimateCredits(action: LeadResultPanelAction, rows: LeadTableRo
 /** Why a recommended action cannot be dispatched yet. */
 export type UnmetPrerequisite =
   | 'no_qualified_companies'
+  | 'no_qualified_companies_ready_for_people_search'
   | 'no_verified_person';
 
 export interface Recommendation {
@@ -52,7 +58,37 @@ export function isRecommendationDispatchable(r: Recommendation): boolean {
   return r.enabled !== false;
 }
 
+/**
+ * THE PEOPLE GATE, ON THE DIRECT-ACTION PATH.
+ *
+ * The capability engine refuses a people provider until the whole company chain
+ * has completed and a company carries an explicit Brain pass. The Workbench
+ * button bypassed that engine entirely, so it could buy people searches for
+ * companies that had never been qualified — which is exactly what the 20 rows on
+ * TEST plan edb4cbf6-…-65b1d3fbbcda would have done.
+ *
+ * A row is eligible only when something EXPLICITLY qualified it. Absence of a
+ * rejection is not a pass.
+ */
+export function peopleSearchEligibleRows(rows: LeadTableRow[]): LeadTableRow[] {
+  return rows.filter((r) => isExplicitlyQualified(r as QualificationRecord));
+}
+
 export function recommendNextAction(rows: LeadTableRow[], partial = false): Recommendation {
+  // FAIL CLOSED BEFORE ANY OTHER RECOMMENDATION. Rows can exist in the table
+  // while none of them has been qualified; visibility is not qualification.
+  if (rows.length > 0 && peopleSearchEligibleRows(rows).length === 0) {
+    return {
+      action: 'find_contacts',
+      label: 'Find decision-makers',
+      reason:
+        'None of these companies carries an explicit Company Brain pass yet, so a people search ' +
+        'would be paid for against unqualified companies. Qualify companies first.',
+      estimated_credits: 0,
+      enabled: false,
+      unmet_prerequisite: 'no_qualified_companies_ready_for_people_search',
+    };
+  }
   // NO ROWS MEANS NO PREREQUISITE. "Find decision-makers" searches people AT
   // qualified companies; with no qualified company there is nothing to search,
   // and offering it invites a paid call that cannot produce a lead. The honest

@@ -1371,6 +1371,9 @@ Deno.serve(async (req) => {
                   // The hash of what we intend to send, checked against the hash
                   // of what is actually serialized, immediately before the POST.
                   compiled_input_hash: call.inputHash,
+                  // The engine qualifies and persists; the legacy writer must not
+                  // publish raw discovery alongside it.
+                  persistence_authority: "capability_engine" as const,
                   // Adopting an in-flight run costs nothing; starting a second
                   // one costs the whole Actor again.
                   ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
@@ -1489,6 +1492,9 @@ Deno.serve(async (req) => {
                   // The hash of what we intend to send, checked against the hash
                   // of what is actually serialized, immediately before the POST.
                   compiled_input_hash: call.inputHash,
+                  // The engine qualifies and persists; the legacy writer must not
+                  // publish raw discovery alongside it.
+                  persistence_authority: "capability_engine" as const,
                   // Adopting an in-flight run costs nothing; starting a second
                   // one costs the whole Actor again.
                   ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),

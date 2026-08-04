@@ -20,6 +20,8 @@
 // Pure — no React, no network.
 
 export type QualificationLevel =
+  /** No qualification signal of any kind. NOT a pass — see `not_evaluated`. */
+  | 'not_evaluated'
   | 'contact_ready'
   | 'needs_decision_maker'
   | 'needs_verification'
@@ -47,6 +49,19 @@ export interface QualificationResult {
   contactReady: boolean;
   /** 1 for a CONTACT-ready lead, 0 for everything else. Never fractional. */
   quotaCredit: 0 | 1;
+  /**
+   * EXPLICIT positive qualification. The ONLY thing a "Qualified companies"
+   * counter may count.
+   *
+   * Deliberately not `level !== 'not_qualified'`. TEST plan
+   * edb4cbf6-…-65b1d3fbbcda published 20 rows with every field null; each fell
+   * through to `needs_decision_maker`, which is not `not_qualified`, so the
+   * Workbench reported 20 qualified companies for a run that qualified zero.
+   * Absence of a verdict is not a verdict.
+   */
+  qualified: boolean;
+  /** True once anything actually judged this record. */
+  evaluated: boolean;
   /** The field that decided the outcome — for honest UI explanations. */
   decidedBy: string;
   /** Short lines the card renders, most important first. */
@@ -56,6 +71,8 @@ export interface QualificationResult {
 }
 
 const REJECTING_DISPOSITIONS = new Set(['reject', 'skip', 'rejected', 'skipped']);
+/** Verdicts that constitute an EXPLICIT pass. Nothing else qualifies. */
+const QUALIFYING_DISPOSITIONS = new Set(['contact', 'qualified', 'accept', 'accepted', 'pass', 'passed']);
 const MISSING_DM = new Set(['missing', 'none', 'not_found', 'needs_manual_review', 'unverified']);
 const FAILED_EMPLOYER = new Set(['mismatch', 'failed', 'unverified', 'no_match', 'stale']);
 
@@ -98,12 +115,41 @@ export function resolveQualification(rec: QualificationRecord): QualificationRes
     level,
     contactReady: false,
     quotaCredit: 0,
+    qualified: false,
+    evaluated: true,
     decidedBy,
     // "0 quota credit" is stated explicitly so a visible card can never be
     // mistaken for progress toward the requested count.
     displayLines: dedupe([lead, ...blockers, 'Not CONTACT-ready', '0 quota credit']),
     context,
   });
+
+  // 0. NOTHING JUDGED THIS RECORD.
+  //
+  // Every controlling field is absent, so no gate ran and no verdict exists.
+  // The old code fell straight through to `needs_decision_maker`, which reads
+  // as "nearly qualified" and was counted as qualified. Raw discovery is not a
+  // near miss; it is an unanswered question.
+  const hasAnySignal =
+    rec.quota_eligible === true || rec.quota_eligible === false ||
+    !!disposition || !!gate || !!analyst || !!dm || !!employer ||
+    typeof rec.fit_score === 'number';
+  if (!hasAnySignal) {
+    return {
+      level: 'not_evaluated',
+      contactReady: false,
+      quotaCredit: 0,
+      qualified: false,
+      evaluated: false,
+      decidedBy: 'no_qualification_evidence',
+      displayLines: dedupe([
+        'Not evaluated',
+        'No qualification verdict was recorded for this company',
+        '0 quota credit',
+      ]),
+      context,
+    };
+  }
 
   // 1. EXPLICIT runtime answer wins over every heuristic below it.
   if (rec.quota_eligible === false) {
@@ -146,6 +192,8 @@ export function resolveQualification(rec: QualificationRecord): QualificationRes
       level: 'contact_ready',
       contactReady: true,
       quotaCredit: 1,
+      qualified: true,
+      evaluated: true,
       decidedBy: rec.quota_eligible === true ? 'quota_eligible' : 'disposition',
       displayLines: ['CONTACT-ready', 'Verified decision-maker', 'Counts toward quota'],
       context,
@@ -169,4 +217,19 @@ function dedupe(xs: string[]): string[] {
 /** Count CONTACT quota credit across records. Never counts visible cards. */
 export function countContactReady(records: QualificationRecord[]): number {
   return records.reduce((n, r) => n + resolveQualification(r).quotaCredit, 0);
+}
+
+/**
+ * Does this record carry an EXPLICIT positive company-qualification verdict?
+ *
+ * Separate from CONTACT-readiness: a company can be qualified while its
+ * decision-maker work is still pending. Used by the "Qualified companies"
+ * counter, which must never be satisfied by the absence of a rejection.
+ */
+export function isExplicitlyQualified(rec: QualificationRecord): boolean {
+  if (rec.quota_eligible === true) return true;
+  const d = lc(rec.disposition) || lc(rec.verdict);
+  if (REJECTING_DISPOSITIONS.has(d)) return false;
+  if (QUALIFYING_DISPOSITIONS.has(d)) return true;
+  return lc(rec.gate_decision) === 'accept';
 }

@@ -741,6 +741,8 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     compiled_actor_input?: boolean;
     capability_key?: string;
     compiled_input_hash?: string;
+    /** Which component owns persistence for this call. Explicit, never inferred. */
+    persistence_authority?: "capability_engine" | "legacy";
     source_type?: string;
     search_goal?: string;
     query?: string;
@@ -1475,6 +1477,12 @@ export async function runTool(
         }
       : {};
     await writeMemoryFromToolCall({
+      // Declared by the caller, never inferred. The capability engine sets this
+      // so the legacy writer publishes nothing for a LeadMissionV1 run.
+      persistence_authority:
+        (input as { persistence_authority?: unknown } | null)?.persistence_authority === "capability_engine"
+          ? "capability_engine" as const
+          : "legacy" as const,
       admin: ctx.admin,
       workspace_id: ctx.workspace_id,
       plan_id: ctx.plan_id ?? null,

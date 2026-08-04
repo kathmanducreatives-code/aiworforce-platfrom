@@ -70,6 +70,14 @@ export interface LeadTableRow {
 
   // Analyst brief (Aria + proof gate + analyst summary).
   analyst_verdict?: string | null;
+  /**
+   * Controlling qualification fields, surfaced so the table can be judged by the
+   * SAME resolver the counters use. Without these a row reached the Workbench
+   * with nothing to judge it by, and "no rejection" was read as a pass.
+   */
+  quota_eligible?: boolean | null;
+  disposition?: string | null;
+  verdict?: string | null;
   final_overall_fit?: number | null;
   confidence_level?: string | null;
   gate_decision?: string | null;
@@ -256,6 +264,9 @@ export function useLeadResults(planId: string | null) {
           poster_photo: s(poster.photo),
           // Analyst brief.
           analyst_verdict: s(rawMeta.analyst_verdict),
+          quota_eligible: typeof rawMeta.quota_eligible === 'boolean' ? rawMeta.quota_eligible : null,
+          disposition: s(rawMeta.disposition),
+          verdict: s(rawMeta.verdict),
           final_overall_fit: n(rawMeta.final_overall_fit) ?? n(rawMeta.overall_fit),
           confidence_level: s(rawMeta.confidence_level),
           gate_decision: s(rawMeta.gate_decision),
