@@ -128,8 +128,21 @@ export interface EngineProgress {
   /** Only ever set by `company_brain_qualification`. Zero until then. */
   qualified_companies: number;
   decision_makers_verified: number;
-  /** True while more stages are still owed — nothing here is actionable yet. */
+  /** Every job in every discovered company's `openJobs`, not just commercial ones. */
+  open_jobs_evaluated: number;
+  shortlisted: number;
+  /**
+   * Is work ACTIVELY happening right now?
+   *
+   * Published as `true` from inside the run. It is NOT a synonym for "some
+   * capability is still pending": a partial run legitimately ends holding
+   * pending capabilities, and reading those as activity is what would leave a
+   * finished workflow saying "Sourcing in progress" forever. The caller
+   * corrects this once when the invocation ends — see {@link finalizedProgress}.
+   */
   in_progress: boolean;
+  /** A billed Actor run is still in flight; the workflow is resumable, not dead. */
+  awaiting_external_run: boolean;
 }
 
 /** One company's free prequalification verdict, as persisted. */
@@ -194,6 +207,8 @@ export interface CapabilityExecutionState {
     eligible_companies: number;
     employee_size_excluded: number;
     technical_only_companies: number;
+    /** EVERY job seen across every company, commercial or not. */
+    open_jobs_evaluated: number;
     shortlist_keys: string[];
     companies: PrequalificationRecord[];
   } | null;
@@ -539,7 +554,12 @@ export async function runCapabilityPlan(
       // THE ONLY SOURCE OF A QUALIFIED COUNT IS THE BRAIN'S VERDICT.
       qualified_companies: companies.filter((c) => c.verdict === "pass").length,
       decision_makers_verified: companies.reduce((n, c) => n + c.verified_founders.length, 0),
-      in_progress: state.pending_capabilities.length > 0,
+      open_jobs_evaluated: state.prequalification?.open_jobs_evaluated ?? 0,
+      shortlisted: companies.filter((c) => c.shortlisted).length,
+      // TRUE BECAUSE THIS IS BEING PUBLISHED FROM INSIDE THE RUN. The caller
+      // corrects it when the invocation ends.
+      in_progress: true,
+      awaiting_external_run: state.pending_runs.length > 0,
     };
     state.progress = progress;
     // AWAITED. A fire-and-forget write in an edge function is a write that may
@@ -1173,6 +1193,29 @@ export async function runCapabilityPlan(
 }
 
 /**
+ * The progress snapshot to persist once the invocation has ENDED.
+ *
+ * TEST task 41342269 finished with seven capabilities still pending — a
+ * legitimate partial result — and its last published snapshot said
+ * `in_progress: true`. Anything reading that field would have shown "Sourcing in
+ * progress" forever on a workflow that had already stopped.
+ *
+ * PENDING CAPABILITIES ARE NOT ACTIVITY. The only thing that still counts as
+ * "waiting" after the invocation returns is a BILLED Actor run that has not been
+ * read, because that one really does have work happening elsewhere.
+ */
+export function finalizedProgress(
+  state: CapabilityExecutionState,
+): EngineProgress | null {
+  if (!state.progress) return null;
+  return {
+    ...state.progress,
+    in_progress: false,
+    awaiting_external_run: state.pending_runs.length > 0,
+  };
+}
+
+/**
  * How many LinkedIn company URLs go into one company-details request.
  *
  * The Actor accepts a list; this is the batch bound, not a per-company loop.
@@ -1260,6 +1303,7 @@ export function applyPrequalification(
     eligible_companies: result.eligible_companies,
     employee_size_excluded: result.employee_size_excluded,
     technical_only_companies: result.technical_only_companies,
+    open_jobs_evaluated: result.companies.reduce((n, c) => n + c.jobs.length, 0),
     shortlist_keys: shortlist.map((c) => c.company_key),
     companies: result.companies.map((c) => ({
       company_key: c.company_key,

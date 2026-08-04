@@ -1,7 +1,13 @@
 import { Loader2 } from 'lucide-react';
 import {
-  exclusionSummary, progressLines, type WorkbenchProgress,
+  exclusionSummary, progressLines, runActivity, type WorkbenchProgress,
 } from '@/lib/workbench/workbenchProgress';
+
+const ACTIVITY_LABEL = {
+  running: 'Sourcing in progress',
+  awaiting_provider: 'Waiting on a provider run — resumable',
+  finished: 'Run complete',
+} as const;
 
 /**
  * Live stage counters for the run that owns this Workbench.
@@ -14,13 +20,14 @@ import {
 export default function WorkflowProgressStrip({ progress }: { progress: WorkbenchProgress }) {
   const lines = progressLines(progress);
   const exclusions = exclusionSummary(progress);
+  const activity = runActivity(progress);
 
   return (
     <div className="px-3 py-2 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
       <div className="flex items-center gap-1.5 mb-1.5">
-        {progress.in_progress && <Loader2 className="h-3 w-3 animate-spin text-emerald-300" />}
+        {activity !== 'finished' && <Loader2 className="h-3 w-3 animate-spin text-emerald-300" />}
         <span className="text-[11px] uppercase tracking-wider text-[#7D8590]">
-          {progress.in_progress ? 'Sourcing in progress' : 'Run complete'}
+          {ACTIVITY_LABEL[activity]}
         </span>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -38,7 +45,7 @@ export default function WorkflowProgressStrip({ progress }: { progress: Workbenc
           Excluded before any paid lookup: {exclusions.join(', ')}.
         </div>
       )}
-      {progress.in_progress && (
+      {activity !== 'finished' && (
         <div className="text-[11px] text-amber-300/80 mt-1">
           These rows are still being verified — they are not qualified leads yet.
         </div>

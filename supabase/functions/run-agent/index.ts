@@ -62,8 +62,8 @@ import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
 } from "../_shared/leadMissionRuntime.ts";
 import {
-  CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, runCapabilityPlan,
-  toRouteResultShape,
+  CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
+  runCapabilityPlan, toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
 import {
@@ -72,6 +72,9 @@ import {
 import {
   createRunTerminalGuard, supabaseTerminalGuardDb,
 } from "../_shared/leadRunTerminalGuard.ts";
+import {
+  readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
+} from "../_shared/providerResponseContract.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -238,7 +241,35 @@ async function persistLeadResultsPanel(
   db: { from: (t: string) => any },
   planId: string | null | undefined,
   uiPanel: Record<string, unknown>,
-  summary: { eligible: number; requested: number; rawJobs: number; terminalStatus: string },
+  summary: {
+    eligible: number; requested: number; rawJobs: number; terminalStatus: string;
+    /**
+     * The task that owns this Workbench.
+     *
+     * WITHOUT THIS THE PANEL CANNOT READ ITS OWN PROGRESS. The engine writes
+     * stage counts to `tasks.result.workbench_progress`, and the frontend
+     * auto-open path builds its selection from THIS metadata. On task 41342269
+     * the id was absent, the selection carried `taskId: null`, and a run that had
+     * recorded 25 discovered companies displayed "Accounts found: 0".
+     */
+    taskId?: string | null;
+    /**
+     * Capability-engine counts. Present ONLY for LeadMissionV1 runs.
+     *
+     * The legacy `rawJobs` counter belongs to `companyFirstQuotaController`,
+     * which does not run on this path — it is structurally 0 here, and reporting
+     * it produced "I reviewed 0 raw jobs" for a run that had just read 177
+     * embedded YC roles.
+     */
+    mission?: {
+      companies_discovered: number;
+      companies_evaluated: number;
+      open_jobs_evaluated: number;
+      commercially_eligible: number;
+      shortlisted: number;
+      qualified: number;
+    } | null;
+  },
 ): Promise<void> {
   if (!planId) return;
   try {
@@ -261,9 +292,21 @@ async function persistLeadResultsPanel(
     // CONTACT-ready people. Collapsing them is what produced "25 results" for a
     // run that delivered nothing.
     const delivered = `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
+    const m = summary.mission ?? null;
+    // THE COUNTS COME FROM THE PATH THAT ACTUALLY RAN.
+    //
+    // A capability-engine run never touches the legacy quota controller, so its
+    // `rawJobs` is structurally zero. Reporting the engine's own numbers is both
+    // truthful and useful: it says where the funnel stopped.
+    const evidence = m
+      ? `I discovered ${m.companies_discovered} ${m.companies_discovered === 1 ? "company" : "companies"} and ` +
+        `evaluated ${m.companies_evaluated} against ${m.open_jobs_evaluated} embedded open ` +
+        `${m.open_jobs_evaluated === 1 ? "role" : "roles"}: ${m.commercially_eligible} commercially eligible, ` +
+        `${m.shortlisted} shortlisted, ${m.qualified} qualified.`
+      : `I reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"}.`;
     const content = summary.eligible > 0
-      ? `I opened the results in Workbench — ${delivered}. Reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"} to get there. Nothing was sent.`
-      : `I opened the results in Workbench — ${delivered}. I reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"} and none produced a contact-ready lead yet. Nothing was sent.`;
+      ? `I opened the results in Workbench — ${delivered}. ${evidence} Nothing was sent.`
+      : `I opened the results in Workbench — ${delivered}. ${evidence} None produced a contact-ready lead yet. Nothing was sent.`;
 
     await db.from("messages").insert({
       conversation_id: conversationId,
@@ -273,11 +316,14 @@ async function persistLeadResultsPanel(
       metadata: {
         ui_panel: uiPanel,
         plan_id: planId,
+        // The third link in the ownership chain, and the one that was missing.
+        task_id: summary.taskId ?? null,
         agent_id: "pilot",
         workflow_kind: "qualified_lead_sourcing",
         terminal_status: summary.terminalStatus,
-        // Evidence counts, kept distinct from the quota on purpose.
-        raw_jobs_reviewed: summary.rawJobs,
+        // Evidence counts, kept distinct from the quota on purpose. The legacy
+        // job counter is emitted ONLY when the legacy path produced it.
+        ...(m ? { mission_counts: m } : { raw_jobs_reviewed: summary.rawJobs }),
         contact_ready_leads: summary.eligible,
         requested_leads: summary.requested,
       },
@@ -978,8 +1024,32 @@ Deno.serve(async (req) => {
             err.toolResult = rr.data ?? null;
             throw err;
           }
-          const items = (rr.data as { items?: unknown[] }).items;
-          return Array.isArray(items) ? items : [];
+          // READ THROUGH THE CONTRACT, NOT A FIELD NAME.
+          //
+          // This read `data.items` only. The structured-company branch of
+          // `runTool` returns its rows under `company_items` and used to set
+          // `items: []`, so every company-details call through the capability
+          // engine received ZERO rows — a defect that was live and unnoticed
+          // because identity resolution never produced a URL to enrich.
+          // `readProviderResultItems` reads whichever the contract populated.
+          const kind = resolveResponseKind({
+            actorKey: (envelope.selected_actor_key as string | null) ?? null,
+            actorId: (envelope.actor_id as string | null) ?? null,
+            sourceType: (rr.data as { normalized_source_type?: string }).normalized_source_type ?? null,
+          });
+          const items = readProviderResultItems(rr.data as Record<string, unknown>, kind);
+          // A STRUCTURED RESPONSE THAT ARRIVED JOB-NORMALIZED IS A TRANSPORT BUG,
+          // not an empty result. Saying so here is what would have caught task
+          // 41342269 in the log instead of six hours later in a CSV diff.
+          if (kind === "structured_companies") {
+            const shape = structuredRowsLookIntact(items);
+            if (!shape.intact) {
+              console.error("[run-agent][provider-response][shape-violation]", {
+                actor_id: envelope.actor_id, reason: shape.reason,
+              });
+            }
+          }
+          return items;
         };
         /**
          * Recognise a started-but-unfinished Apify run on a thrown invoker error.
@@ -1508,6 +1578,25 @@ Deno.serve(async (req) => {
               ...toRouteResultShape(capabilityRun),
               diagnostics: emptyCapabilityDiagnostics(capabilityRun),
             } as never;
+            // THE RUN HAS ENDED — correct the snapshot that said otherwise.
+            // The in-run publishes necessarily say `in_progress: true`; only
+            // here is it known that no more work will happen in this
+            // invocation. Pending capabilities are a partial RESULT, not
+            // activity.
+            try {
+              const finalProgress = finalizedProgress(capabilityRun.state);
+              if (finalProgress) {
+                const { data: cur } = await supabase
+                  .from("tasks").select("result").eq("id", task.id).maybeSingle();
+                const prior = (cur?.result && typeof cur.result === "object")
+                  ? cur.result as Record<string, unknown> : {};
+                await supabase.from("tasks").update({
+                  result: { ...prior, workbench_progress: finalProgress },
+                }).eq("id", task.id);
+              }
+            } catch (e) {
+              console.log("[run-agent][capability-engine][final-progress-error]", String(e));
+            }
             console.log("[run-agent][capability-engine][done]", {
               task_id: task.id,
               entry: capabilityRun.state.entry_capability,
@@ -2235,6 +2324,19 @@ Deno.serve(async (req) => {
           requested: cf.quota.requested_leads,
           rawJobs: cf.counts.rawJobs,
           terminalStatus: cf.status,
+          taskId: task.id,
+          // Present only when the capability engine ran. `capabilityRun` is null
+          // for legacy tasks, and the legacy counter is then still correct.
+          mission: capabilityRun
+            ? {
+              companies_discovered: capabilityRun.state.company_keys.length,
+              companies_evaluated: capabilityRun.state.prequalification?.unique_companies ?? 0,
+              open_jobs_evaluated: capabilityRun.state.prequalification?.open_jobs_evaluated ?? 0,
+              commercially_eligible: capabilityRun.state.prequalification?.eligible_companies ?? 0,
+              shortlisted: capabilityRun.state.prequalification?.shortlist_keys.length ?? 0,
+              qualified: capabilityRun.state.qualified_company_keys.length,
+            }
+            : null,
         });
 
         // Conclusively SKIP the ordinary people-first branch for this request.

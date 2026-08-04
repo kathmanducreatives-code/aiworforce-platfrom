@@ -83,6 +83,14 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         openedPanelsRef.current.add(m.id);
         openWorkbench({
           planId: panel.plan_id,
+          // THE FULL OWNERSHIP CHAIN: conversation → task → plan.
+          //
+          // This used to omit `taskId`, so `useWorkbenchData` could never find
+          // the task row and the panel could not read the incremental progress
+          // the engine had written to `tasks.result.workbench_progress`. Task
+          // 41342269 had recorded 25 discovered companies and the Workbench
+          // showed "Accounts found: 0".
+          taskId: (meta?.task_id as string | undefined) ?? null,
           panel,
           conversationId: m.conversation_id ?? conversationId,
         });

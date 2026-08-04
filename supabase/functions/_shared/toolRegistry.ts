@@ -13,6 +13,9 @@ import { hashInput } from "./hiringActorInputs.ts";
 import { validateFinalActorPayload, finalPayloadDiagnostics } from "./finalActorPayload.ts";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
+import {
+  assertResponseKindConsistent, buildCountLedger,
+} from "./providerResponseContract.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
 import { buildCuriousCoderLinkedInJobsInput } from "./curiousCoderJobsInput.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
@@ -837,10 +840,28 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const source_type = actorCfg?.source_type ?? normalizeApifySourceType(requested_source_type ?? "jobs");
 
-  // The canonical structured company-details actor is identified by its RESOLVED
-  // registry key / actor id — NEVER by the normalized source_type (which falls
-  // through to "jobs"). Its dataset items must reach the company normalizer
-  // COMPLETE: no job normalization, no provider_payload, no truncation.
+  // ── THE RESPONSE SHAPE IS A PROPERTY OF THE ACTOR ───────────────────────────
+  //
+  // `source_type` above defaults to "jobs" whenever the caller sent none AND the
+  // actor has no `APIFY_ACTORS` entry. memo23 is exactly that case: the
+  // capability engine sends `actor_id` + `selected_actor_key` and no
+  // `source_type`, and there is no APIFY_ACTORS row for
+  // memo23/y-combinator-scraper. On TEST task 41342269 that default turned 50
+  // correct YC company rows into 25 fabricated LinkedIn job records.
+  //
+  // Classification therefore reads the actor key AS SENT (`i.selected_actor_key`)
+  // and the resolved `actor_id` — never the defaulted source_type. The old
+  // single-actor `isCompanyDetails` check was the right idea scoped to one
+  // provider; this is the same idea applied to every structured-company actor.
+  const responseKind = assertResponseKindConsistent({
+    actorKey: registry_actor_key ?? selected_actor_key,
+    actorId: actor_id,
+    // Only a source_type the CALLER asked for can conflict; the "jobs" default
+    // is exactly what must not be treated as a request.
+    sourceType: requested_source_type,
+    declared: (i as { response_kind?: string }).response_kind ?? null,
+  });
+  const isStructuredCompanies = responseKind === "structured_companies";
   const isCompanyDetails = registry_actor_key === COMPANY_DETAILS_ACTOR_KEY || actor_id === COMPANY_DETAILS_ACTOR_ID;
 
   // If the registry explicitly approved this actor (it passed isActorRuntimeEnabled
@@ -1138,7 +1159,10 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   // max_results, not the first returned. Other sources fetch exactly max_results.
   // Company details are never a "jobs" pool even though the alias resolves to
   // "jobs" — fetch exactly max_results, never the 25-row pre-rank pool.
-  const isJobsSource = /jobs/i.test(source_type) && !isCompanyDetails;
+  // A STRUCTURED-COMPANY ACTOR IS NEVER A JOBS SOURCE, whatever `source_type`
+  // defaulted to. The 25-row cap below is a LinkedIn-Jobs pre-rank pool; applied
+  // to a company scraper it silently discarded half of a paid 50-row dataset.
+  const isJobsSource = /jobs/i.test(source_type) && !isCompanyDetails && !isStructuredCompanies;
   const fetchLimit = isJobsSource ? Math.min(25, Math.max(max_results, 10)) : max_results;
   const itemsRes = await apifyFetch(
     `/datasets/${resolvedDatasetId}/items?clean=true&limit=${fetchLimit}&token=${APIFY_API_TOKEN}`,
@@ -1162,26 +1186,48 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   // records fabricated in `items`. Respects max_results (fetchLimit == max_results
   // above). Provider run provenance is preserved; sanitization happens downstream
   // in the normalizer — the raw items never enter observability from here.
-  if (isCompanyDetails) {
+  if (isStructuredCompanies) {
     const company_items = rawItems.slice(0, max_results);
+    const ledger = buildCountLedger(
+      fetchLimit, rawItems.length, company_items.length,
+      company_items.length < rawItems.length ? "max_results_cap" : null,
+    );
+    // VISIBLE, NOT SILENT. A company-discovery response that lost rows between
+    // the dataset and the caller is reported in the payload rather than looking
+    // like a smaller dataset — the 50→25 loss was invisible for exactly this
+    // reason.
+    if (ledger.truncated) {
+      console.warn("[runTool][structured-companies][truncated]", {
+        actor_id, requested_limit: ledger.requested_limit,
+        downloaded: ledger.downloaded, returned: ledger.returned,
+      });
+    }
+    const kindLabel = isCompanyDetails ? "company_details" : "structured_companies";
     return {
       ok: true,
       data: {
         actor_id,
-        selected_actor_key: registry_actor_key,
-        actor_output_type: "company_details",
+        selected_actor_key: registry_actor_key ?? selected_actor_key,
+        response_kind: responseKind,
+        actor_output_type: kindLabel,
         requested_source_type,
-        normalized_source_type: "company_details",
+        normalized_source_type: kindLabel,
         run_id,
         dataset_id: resolvedDatasetId,
-        // Complete, untruncated structured company records.
+        // ONE CONTRACT, TWO NAMES. `company_items` is what the structured branch
+        // has always been authoritative on; `items` is what every consumer
+        // actually reads — including `invokeJobs`, which is why company
+        // enrichment has been receiving `[]` from this branch all along. They
+        // are the SAME array, so they cannot drift apart.
         company_items,
-        // Never fabricate job/people rows for a company-enrichment call.
-        items: [],
+        items: company_items,
         count: company_items.length,
         total: company_items.length,
+        result_ledger: ledger,
         no_results: company_items.length === 0,
-        summary: `Company details actor returned ${company_items.length} company record(s)`,
+        summary:
+          `${kindLabel} actor returned ${company_items.length} complete company record(s) ` +
+          `(downloaded ${ledger.downloaded} of a ${ledger.requested_limit}-row request)`,
         citations: [],
       },
     };

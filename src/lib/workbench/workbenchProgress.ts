@@ -30,7 +30,11 @@ export interface WorkbenchProgress {
   hiring_verified: number;
   qualified_companies: number;
   decision_makers_verified: number;
+  open_jobs_evaluated: number;
+  shortlisted: number;
   in_progress: boolean;
+  /** A billed Actor run is still in flight — resumable, not running here. */
+  awaiting_external_run: boolean;
 }
 
 export interface ProgressLine {
@@ -67,8 +71,25 @@ export function readWorkbenchProgress(result: unknown): WorkbenchProgress | null
     hiring_verified: q.hiring_verified ?? 0,
     qualified_companies: q.qualified_companies ?? 0,
     decision_makers_verified: q.decision_makers_verified ?? 0,
+    open_jobs_evaluated: q.open_jobs_evaluated ?? 0,
+    shortlisted: q.shortlisted ?? 0,
     in_progress: q.in_progress === true,
+    awaiting_external_run: q.awaiting_external_run === true,
   };
+}
+
+/**
+ * What the strip should say about the run's state.
+ *
+ * Three states, not two. A workflow that stopped holding a billed Actor run is
+ * neither running nor finished — calling it either would be a lie the user acts
+ * on.
+ */
+export type RunActivity = 'running' | 'awaiting_provider' | 'finished';
+
+export function runActivity(progress: WorkbenchProgress): RunActivity {
+  if (progress.awaiting_external_run) return 'awaiting_provider';
+  return progress.in_progress ? 'running' : 'finished';
 }
 
 /** Stages in the order the engine reaches them. */
@@ -94,6 +115,10 @@ export function progressLines(progress: WorkbenchProgress): ProgressLine[] {
   return [
     { label: 'Accounts found', value: progress.accounts_found, reached: true },
     { label: 'Evaluated', value: progress.evaluated, reached: reachedBy(progress, 'prequalified') },
+    {
+      label: 'Open roles read', value: progress.open_jobs_evaluated,
+      reached: reachedBy(progress, 'prequalified'),
+    },
     {
       label: 'Eligible opportunities', value: progress.eligible_opportunities,
       reached: reachedBy(progress, 'prequalified'),
@@ -130,5 +155,5 @@ export function exclusionSummary(progress: WorkbenchProgress): string[] {
  */
 export function progressRowsAreActionable(progress: WorkbenchProgress | null): boolean {
   if (!progress) return true;
-  return !progress.in_progress;
+  return runActivity(progress) === 'finished';
 }
