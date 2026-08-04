@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { AgentDept } from '@/data/agentProfiles';
 import { setChatOpener } from '@/lib/chatCommandBus';
 import type { RunDiagnosticsSource } from '@/lib/qualifiedLead/diagnostics';
+import { conversationBucket } from '@/lib/workbench/workbenchSession';
 
 export type ChatViewKind =
   | { kind: 'empty' }
@@ -96,7 +97,15 @@ interface Ctx {
   workbenchOpen: boolean;
   workbenchClosing: boolean;
   workbenchWidth: number;
+  /**
+   * The Workbench for the conversation the user is CURRENTLY looking at.
+   *
+   * Null when this conversation has never opened one — never the previous
+   * chat's selection, which is what it used to be.
+   */
   selectedOutput: WorkbenchSelection | null;
+  /** The conversation that owns the Workbench. Null outside a chat view. */
+  activeConversationId: string | null;
   historyOpen: boolean;
   open: () => void;
   close: () => void;
@@ -124,7 +133,14 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchClosing, setWorkbenchClosing] = useState(false);
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
-  const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
+  // ONE SELECTION PER CONVERSATION, not one for the whole app.
+  //
+  // The single `selectedOutput` this replaced survived every chat switch, so a
+  // new conversation rendered the previous one's plan_id and showed its leads.
+  // Keying by conversation both clears the new chat and restores the old one on
+  // the way back, with no second mechanism to keep in sync.
+  const [selectionByConversation, setSelectionByConversation] =
+    useState<Record<string, WorkbenchSelection>>({});
   const [historyOpen, setHistoryOpen] = useState(false);
   const [composerFocused, setComposerFocusedState] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,12 +152,26 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
     setComposerFocusedState(v);
   }, []);
 
+  // The chat view is the authority on which conversation is on screen; the
+  // Workbench does not get its own, separately-updated copy that could disagree.
+  const activeConversationId = view.kind === 'chat' ? view.conversationId : null;
+
+  const selectedOutput = useMemo(
+    () => selectionByConversation[conversationBucket(null, activeConversationId)] ?? null,
+    [selectionByConversation, activeConversationId],
+  );
+
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
     if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
     setWorkbenchClosing(false);
-    setSelectedOutput(sel);
+    setSelectionByConversation((prev) => ({
+      ...prev,
+      // The selection's OWN conversation wins. A card opened from history
+      // belongs to the chat it came from, not to whatever is on screen.
+      [conversationBucket(sel.conversationId, activeConversationId)]: sel,
+    }));
     setWorkbenchOpen(true);
-  }, []);
+  }, [activeConversationId]);
   const closeWorkbench = useCallback(() => {
     setWorkbenchClosing(true);
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -185,7 +215,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory, composerFocused, setComposerFocused }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, activeConversationId, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory, composerFocused, setComposerFocused }}
     >
       {children}
     </ChatWorkspaceContext.Provider>

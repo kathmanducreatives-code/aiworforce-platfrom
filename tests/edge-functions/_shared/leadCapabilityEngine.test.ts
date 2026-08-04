@@ -36,12 +36,33 @@ const BRAIN = {
   required_geography: null,
 };
 
-/** One memo23 YC row, in the provider's real shape. */
+/**
+ * One memo23 YC row, in the provider's real shape.
+ *
+ * THE FIELD NAMES ARE `teamSize` AND `openJobs`. This fixture used to say
+ * `team_size` and `jobs`, which memo23 never emits — `normalizeMemo23Company`
+ * reads `r.teamSize` and `normalizeMemo23OpenJobs` reads `r.openJobs`, so the
+ * old fixture was silently exercising a company with no size and no jobs. It
+ * passed only because nothing downstream had yet been made to depend on either.
+ * Free prequalification depends on both.
+ */
 function ycRow(name: string, slug: string) {
   return {
     id: slug, name, website: `https://${slug}.com`,
-    industry: "B2B", batch: "W22", team_size: 42,
-    jobs: [{ title: "Revenue Operations Manager", url: `https://x/${slug}/1` }],
+    industry: "B2B", industries: ["B2B"], batch: "W22", teamSize: 42,
+    oneLiner: `${name} is a B2B SaaS platform.`,
+    allLocations: "San Francisco, CA, USA",
+    openJobs: [{ title: "Revenue Operations Manager", url: `https://x/${slug}/1` }],
+  };
+}
+
+/** One harvestapi/linkedin-company-search row — the IDENTITY provider. */
+function searchRow(name: string, slug: string) {
+  return {
+    id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${slug}`,
+    website: `https://${slug}.com`,
+    description: `${name} is a B2B SaaS platform sold on subscription.`,
+    location: "San Francisco, CA",
   };
 }
 
@@ -80,6 +101,9 @@ function mockDeps(
 
 const HAPPY_ROWS = {
   apify_yc_companies_memo23: [ycRow("Sortly", "sortly"), ycRow("Clay", "clay")],
+  // Identity resolution now uses the SEARCH actor. `apify_linkedin_company_details`
+  // is reached only by enrichment, which is the whole point of the change.
+  apify_linkedin_company_search: [searchRow("Sortly", "sortly")],
   apify_linkedin_company_details: [enrichRow("Sortly", "sortly")],
   apify_linkedin_job_search: [{
     id: "j1", title: "Revenue Operations Manager",
@@ -165,7 +189,7 @@ Deno.test("5. legacy job Actors cannot run for a non-job mission", async () => {
   const guarded = guardedInvoker(plan, () => Promise.resolve([]));
   for (const forbidden of [
     "apify_jobs", "apify_linkedin_jobs_crawlworks", "apify_indeed_jobs_automation_lab",
-    "apify_glassdoor_jobs", "apify_linkedin_company_search",
+    "apify_glassdoor_jobs",
   ]) {
     await assertRejects(
       () => guarded({ actorKey: forbidden } as CompiledActorCall<unknown>),
@@ -173,6 +197,30 @@ Deno.test("5. legacy job Actors cannot run for a non-job mission", async () => {
       forbidden,
     );
   }
+
+  // `apify_linkedin_company_search` left this list because it is now the CORRECT
+  // provider for `company_identity_resolution`. The guarantee it used to carry
+  // is not dropped — it is enforced per capability, which is strictly stronger:
+  // the search Actor may not enrich, and the enrichment Actor may not search.
+  // The second half of that is the exact defect being fixed: identity resolution
+  // calling `apify_linkedin_company_details` with `{searches:[name]}`, sixteen
+  // times, for zero rows.
+  await assertRejects(
+    () => guarded({
+      actorKey: "apify_linkedin_company_details",
+      capabilityId: "company_identity_resolution",
+    } as unknown as CompiledActorCall<unknown>),
+    CapabilityContainmentError,
+    "company_identity_resolution",
+  );
+  await assertRejects(
+    () => guarded({
+      actorKey: "apify_linkedin_company_search",
+      capabilityId: "company_enrichment",
+    } as unknown as CompiledActorCall<unknown>),
+    CapabilityContainmentError,
+    "company_enrichment",
+  );
 
   // (b) And on a REAL run the engine never reaches for one in the first place.
   const rec: Recorder = { calls: [] };

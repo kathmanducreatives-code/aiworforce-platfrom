@@ -38,10 +38,17 @@
 
 import {
   compileHarvestCompanyDetailsInput, compileHarvestCompanyEmployeesInput,
+  compileHarvestCompanySearchInput,
   compileHarvestJobSearchInput, compileHarvestProfileSearchInput,
   compileMemo23YcInput, fanOutSolidcodeTeamSizes,
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
+import {
+  acceptLinkedInMatch, linkedInSearchQueryFor, LINKEDIN_RESOLUTION_CONCURRENCY,
+  prequalificationKey, prequalifyYcCompanies, shortlistForLinkedInResolution,
+  type PrequalificationResult, type PrequalifiedCompany, type YcCompanyInput,
+} from "./leadCommercialPrequalification.ts";
+import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
@@ -89,10 +96,58 @@ export interface ProviderAttempt {
   capability: CapabilityId;
   provider: string;
   attempt: number;
-  outcome: "ok" | "empty" | "error" | "pending" | "skipped_idempotent" | "compile_failed" | "skipped_not_configured";
+  outcome:
+    | "ok" | "empty" | "error" | "pending" | "skipped_idempotent" | "compile_failed"
+    | "skipped_not_configured"
+    /** The execution deadline closed before this call could safely start. */
+    | "skipped_deadline";
   rows: number;
   cost_units: number;
   reason: string | null;
+}
+
+/**
+ * What the Workbench may show WHILE the run is still going.
+ *
+ * Every field is a count of something already proven. There is deliberately no
+ * "qualified" number before the Brain has run: a mid-run row that looks
+ * qualified is the fail-open the whole persistence-authority change was for.
+ */
+export interface EngineProgress {
+  stage:
+    | "accounts_found" | "prequalified" | "identity_resolved"
+    | "companies_enriched" | "hiring_verified" | "qualified" | "decision_makers_verified";
+  accounts_found: number;
+  evaluated: number;
+  eligible_opportunities: number;
+  exclusion_reasons: Record<string, number>;
+  identity_resolved: number;
+  identity_unresolved: number;
+  companies_enriched: number;
+  hiring_verified: number;
+  /** Only ever set by `company_brain_qualification`. Zero until then. */
+  qualified_companies: number;
+  decision_makers_verified: number;
+  /** True while more stages are still owed — nothing here is actionable yet. */
+  in_progress: boolean;
+}
+
+/** One company's free prequalification verdict, as persisted. */
+export interface PrequalificationRecord {
+  company_key: string;
+  name: string;
+  canonical_domain: string | null;
+  team_size: number | null;
+  size_status: PrequalifiedCompany["size_status"];
+  best_tier: PrequalifiedCompany["best_tier"];
+  score: number;
+  strongest_signal: string | null;
+  /** Every commercial job, not just the strongest. */
+  commercial_jobs: string[];
+  eligible: boolean;
+  exclusion: PrequalifiedCompany["exclusion"];
+  shortlisted: boolean;
+  reasons: string[];
 }
 
 export interface CapabilityExecutionState {
@@ -124,6 +179,26 @@ export interface CapabilityExecutionState {
     capability: CapabilityId; provider: string; run_id: string;
     dataset_id: string | null; actor_build_id: string | null; started_at: string;
   }>;
+  /**
+   * The FREE decision about who was worth paying to identify.
+   *
+   * Persisted in full — including the exclusions — because "why was this
+   * company not pursued?" is the question the previous run could not answer
+   * without reading 16 zero-row Actor datasets by hand.
+   */
+  prequalification: {
+    version: string;
+    total_rows: number;
+    unique_companies: number;
+    artifacts_excluded: number;
+    eligible_companies: number;
+    employee_size_excluded: number;
+    technical_only_companies: number;
+    shortlist_keys: string[];
+    companies: PrequalificationRecord[];
+  } | null;
+  /** The last published progress snapshot. Never contains a premature pass. */
+  progress: EngineProgress | null;
 }
 
 export function newExecutionState(
@@ -145,6 +220,8 @@ export function newExecutionState(
     terminal_reason: null,
     fallback_reason: null,
     pending_runs: [],
+    prequalification: null,
+    progress: null,
   };
 }
 
@@ -166,6 +243,17 @@ export function stateMatchesMission(
 
 export interface EngineCompany {
   key: string;
+  /**
+   * The key the FREE prequalification used for this row.
+   *
+   * Kept alongside `key` rather than derived from it: `key` prefers a LinkedIn
+   * URL and falls back to the YC source id, so for a domainless row the two
+   * genuinely differ. Carrying both is what lets a shortlist and its companies
+   * stay the same set.
+   */
+  prequal_key: string | null;
+  prequalified: PrequalifiedCompany | null;
+  shortlisted: boolean;
   company: NormalizedHiringCompany;
   identity: IdentityResolution | null;
   enriched: NormalizedHiringCompany | null;
@@ -233,6 +321,24 @@ export interface CapabilityEngineDeps {
   }) => Promise<{ verdict: "pass" | "fail" | "unknown"; reason: string } | null>;
   callCompleted?: (key: string) => boolean;
   onCallComplete?: (key: string) => void;
+  /**
+   * The wall-clock budget, checked BEFORE every provider call.
+   *
+   * Absent means unbounded, which is only correct in tests. In production the
+   * engine that does not hold one is the engine that gets killed holding a paid
+   * run it never read — TEST task c8a6e53d, 16 Actor starts, plan Running
+   * forever.
+   */
+  deadline?: ExecutionDeadline;
+  /**
+   * Publish a stage snapshot as soon as it is true.
+   *
+   * The Workbench updates from these. They are counts of proven work, never
+   * rows, and never carry a qualified verdict before the Brain has produced one.
+   */
+  onProgress?: (p: EngineProgress) => void | Promise<void>;
+  /** The state after each capability, so a caller can persist it as it grows. */
+  onStateChange?: (s: CapabilityExecutionState) => void;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -307,11 +413,14 @@ export async function runCapabilityPlan(
     capability: CapabilityId, provider: string, compiled: CompileResult<unknown>,
   ): Promise<Record<string, unknown>[]> => {
     const spec = CAPABILITY_REGISTRY[capability];
-    const attemptNo = state.provider_attempts
-      .filter((a) => a.capability === capability && a.provider === provider).length + 1;
+    // COUNTED AT RECORD TIME, not before the await. The resolution stage runs two
+    // calls concurrently; computing the number up front gave both of them
+    // "attempt 1" and made the ledger unreadable.
     const record = (outcome: ProviderAttempt["outcome"], rows: number, reason: string | null) => {
+      const attempt = state.provider_attempts
+        .filter((a) => a.capability === capability && a.provider === provider).length + 1;
       state.provider_attempts.push({
-        capability, provider, attempt: attemptNo, outcome, rows,
+        capability, provider, attempt, outcome, rows,
         cost_units: outcome === "ok" || outcome === "empty" ? spec.cost_units : 0,
         reason,
       });
@@ -329,20 +438,42 @@ export async function runCapabilityPlan(
       record("skipped_idempotent", 0, call.batchIdentity);
       return [];
     }
+    // THE DEADLINE IS CHECKED BEFORE THE CALL, NEVER AFTER.
+    //
+    // `expired()` means "there is no longer room for another call plus writing
+    // state" — not "time is up". Starting a call that cannot finish is exactly
+    // how the previous run died holding a billed Actor run it never read.
+    if (deps.deadline?.expired()) {
+      record("skipped_deadline", 0,
+        `execution deadline reached after ${deps.deadline.elapsedMs()}ms; call not started`);
+      state.terminal_reason = "execution_deadline_reached";
+      log("provider_skipped_deadline", { capability, provider });
+      return [];
+    }
     // RESUME BEFORE START. If a run for this capability+provider is already in
     // flight from an earlier invocation, adopt its id: the caller reads that run
     // and its dataset instead of issuing a second, separately-billed start.
     const inFlight = (opts.state?.pending_runs ?? []).find(
       (r) => r.capability === capability && r.provider === provider);
-    const outbound = inFlight
-      ? { ...call, resumeRunId: inFlight.run_id } as typeof call
-      : call;
+    // `capabilityId` is what lets `guardedInvoker` enforce per-capability
+    // containment rather than the plan-wide union.
+    const outbound = {
+      ...call,
+      capabilityId: capability,
+      ...(inFlight ? { resumeRunId: inFlight.run_id } : {}),
+    } as typeof call;
+    const startedAt = Date.now();
     try {
       const rows = await invoke(outbound);
+      // THE ESTIMATE LEARNS FROM REALITY. memo23 took 24s on task c8a6e53d; a
+      // deadline still assuming 12s would have authorised one more call it could
+      // not finish.
+      deps.deadline?.observeCall(Date.now() - startedAt);
       deps.onCallComplete?.(call.batchIdentity);
       record(rows.length > 0 ? "ok" : "empty", rows.length, null);
       return rows;
     } catch (e) {
+      deps.deadline?.observeCall(Date.now() - startedAt);
       // A CONTAINMENT error is an engine bug, not a provider failure. Letting it
       // become "try the next provider" is exactly how a guard turns into a
       // suggestion, so it propagates.
@@ -355,7 +486,10 @@ export async function runCapabilityPlan(
       const pending = deps.readPendingRun?.(e) ?? null;
       if (pending?.run_id) {
         state.provider_attempts.push({
-          capability, provider, attempt: attemptNo, outcome: "pending", rows: 0,
+          capability, provider,
+          attempt: state.provider_attempts
+            .filter((a) => a.capability === capability && a.provider === provider).length + 1,
+          outcome: "pending", rows: 0,
           cost_units: pending.cost_units ?? spec.cost_units,
           reason: `run ${pending.run_id} still running; dataset ${pending.dataset_id ?? "pending"}`,
         });
@@ -375,6 +509,44 @@ export async function runCapabilityPlan(
       log("provider_error", { capability, provider, error: String(e) });
       return [];
     }
+  };
+
+  /**
+   * Publish what is TRUE right now.
+   *
+   * `qualified_companies` reads the explicit verdict and nothing else, so a
+   * mid-run snapshot cannot report a company as qualified before the Company
+   * Brain has said so. `in_progress` stays true until the plan is out of pending
+   * capabilities, which is what tells the Workbench these rows are not yet
+   * actionable.
+   */
+  const publish = async (stage: EngineProgress["stage"]) => {
+    const exclusion_reasons: Record<string, number> = {};
+    for (const c of state.prequalification?.companies ?? []) {
+      if (!c.exclusion) continue;
+      exclusion_reasons[c.exclusion] = (exclusion_reasons[c.exclusion] ?? 0) + 1;
+    }
+    const progress: EngineProgress = {
+      stage,
+      accounts_found: companies.length,
+      evaluated: state.prequalification?.unique_companies ?? 0,
+      eligible_opportunities: state.prequalification?.eligible_companies ?? 0,
+      exclusion_reasons,
+      identity_resolved: companies.filter((c) => c.identity && identityIsActionable(c.identity)).length,
+      identity_unresolved: companies.filter((c) => c.identity && !identityIsActionable(c.identity)).length,
+      companies_enriched: companies.filter((c) => c.enriched !== null).length,
+      hiring_verified: companies.filter((c) => c.hiring_jobs.length > 0).length,
+      // THE ONLY SOURCE OF A QUALIFIED COUNT IS THE BRAIN'S VERDICT.
+      qualified_companies: companies.filter((c) => c.verdict === "pass").length,
+      decision_makers_verified: companies.reduce((n, c) => n + c.verified_founders.length, 0),
+      in_progress: state.pending_capabilities.length > 0,
+    };
+    state.progress = progress;
+    // AWAITED. A fire-and-forget write in an edge function is a write that may
+    // never land — the process can be torn down before the promise settles,
+    // which is the same class of loss the terminal guard exists to stop.
+    await deps.onProgress?.(progress);
+    deps.onStateChange?.(state);
   };
 
   const finish = (
@@ -423,6 +595,8 @@ export async function runCapabilityPlan(
     if (cap === "startup_company_discovery") {
       const used: string[] = [];
       const tried: string[] = [];
+      /** Raw provider rows, kept for the FREE prequalification pass below. */
+      const rawYcRows: YcCompanyInput[] = [];
       /** Set the moment any provider's input fails validation. */
       let schemaFailure = false;
       /** Set when a provider started a real run that has not finished. */
@@ -469,7 +643,12 @@ export async function runCapabilityPlan(
           });
           for (const r of await callProvider(cap, provider, compiled)) {
             const c = normalizeMemo23Company(r);
-            addCompany(companies, c, normalizeMemo23OpenJobs(r));
+            rawYcRows.push(r as YcCompanyInput);
+            // The prequalification key is derived by the PREQUALIFICATION module
+            // from the same raw row, so the shortlist and the working set cannot
+            // drift apart.
+            addCompany(companies, c, normalizeMemo23OpenJobs(r),
+              prequalificationKey(r as YcCompanyInput));
           }
         } else if (provider === "apify_yc_companies_solidcode") {
           // NOT CONFIGURED IS NOT INVALID INPUT.
@@ -542,7 +721,30 @@ export async function runCapabilityPlan(
         // happens to be later in the plan.
         break;
       }
+      // ── FREE COMMERCIAL PREQUALIFICATION ────────────────────────────────────
+      //
+      // Between discovery and the first paid identity call, and costing nothing.
+      // memo23 already returned every company's FULL openJobs array, team size
+      // and website; this decides who is worth paying to identify BEFORE anyone
+      // is paid for. Task c8a6e53d skipped this step and bought 16 identity
+      // lookups for companies that were only hiring engineers, or had 350 staff
+      // against a 10-150 mission.
+      applyPrequalification(state, companies, rawYcRows, {
+        min: opts.brain?.employee_min ?? null,
+        max: opts.brain?.employee_max ?? null,
+      }, opts.mission.requested_count);
+      // The working set may have shrunk — artifacts are gone.
+      state.company_keys = companies.map((c) => c.key);
+      log("prequalification_complete", {
+        unique: state.prequalification?.unique_companies,
+        eligible: state.prequalification?.eligible_companies,
+        size_excluded: state.prequalification?.employee_size_excluded,
+        technical_only: state.prequalification?.technical_only_companies,
+        shortlist: state.prequalification?.shortlist_keys,
+      });
+
       finish(cap, "complete", companies.length, used, true, null);
+      await publish("prequalified");
       continue;
     }
 
@@ -558,18 +760,69 @@ export async function runCapabilityPlan(
     }
 
     // ── IDENTITY ─────────────────────────────────────────────────────────────
+    //
+    // WHAT THIS REPLACED, AND WHY IT WAS WRONG.
+    //
+    // The previous route ran, for EVERY discovered company:
+    //
+    //     harvestapi/linkedin-company  with  { searches: [companyName] }
+    //
+    // `harvestapi/linkedin-company` is an ENRICHMENT actor. It resolves LinkedIn
+    // company URLs into company records; it is not a name-search index. On TEST
+    // task c8a6e53d that produced 16 sequential Actor starts, every one of them
+    // returning zero rows, until the edge function hit its wall clock.
+    //
+    // The correct route is: search with the SEARCH actor, for the SHORTLIST
+    // only, at most two at a time.
     if (cap === "company_identity_resolution") {
+      const provider = "apify_linkedin_company_search";
+      // ONLY THE SHORTLIST. A company nobody decided was worth identifying is
+      // never paid for. When prequalification did not run (a non-YC entry
+      // capability), everything is a target — the old behaviour, unchanged.
+      const targets = state.prequalification
+        ? companies.filter((c) => c.shortlisted)
+        : companies.slice();
       let resolved = 0;
-      for (const c of companies) {
+      let unresolved = 0;
+
+      /** Resolve one company. Never more than `CONCURRENCY` of these in flight. */
+      const resolveOne = async (c: EngineCompany): Promise<void> => {
         let lookups: Array<{ name: string | null; linkedinUrl: string | null; website: string | null }> = [];
+        // ALREADY IDENTIFIED IS NOT WORTH PAYING FOR. memo23 has no LinkedIn
+        // field, but a resumed run or another provider may have supplied one.
         if (!c.company.linkedin_company_url && c.company.company_name) {
-          const compiled = compileHarvestCompanyDetailsInput({ searches: [c.company.company_name] });
-          const found = await callProvider(cap, "apify_linkedin_company_details", compiled);
+          const compiled = compileHarvestCompanySearchInput({
+            // Name plus domain. `linkedInSearchQueryFor` owns this so the dry run
+            // and the live call cannot describe different searches.
+            searchQuery: c.prequalified
+              ? linkedInSearchQueryFor(c.prequalified)
+              : c.company.company_name,
+            // `full` is required: `short` returns employeeCount === null, and an
+            // unverifiable size cannot settle a 10-150 gate.
+            scraperMode: "full",
+            maxItems: 5,
+          });
+          const found = await callProvider(cap, provider, compiled);
           lookups = found.map((f) => ({
             name: (f.name as string) ?? null,
             linkedinUrl: (f.linkedinUrl as string) ?? null,
             website: (f.website as string) ?? null,
           }));
+          // A BARE NAME MATCH IS NOT AN IDENTITY. "Apollo", "Magic", "Hub" and
+          // "Streak" are real YC companies and also ordinary words; accepting one
+          // on name alone attaches a founder from the wrong company, which is
+          // worse than returning nothing.
+          if (c.prequalified) {
+            const before = lookups.length;
+            lookups = lookups.filter((l, i) => acceptLinkedInMatch(c.prequalified!, {
+              name: l.name, website: l.website, linkedinUrl: l.linkedinUrl,
+              description: (found[i]?.description as string) ?? null,
+              location: (found[i]?.location as string) ?? null,
+            }).accepted);
+            if (before > 0 && lookups.length === 0) {
+              c.record.missing_evidence.push("linkedin_match_rejected_weak");
+            }
+          }
         }
         c.identity = resolveIdentityAgainstLookups({
           company_key: c.key,
@@ -580,37 +833,99 @@ export async function runCapabilityPlan(
         }, lookups);
         if (identityIsActionable(c.identity)) resolved++;
         else {
+          unresolved++;
+          // UNRESOLVED IS A HOLDING STATE, NOT A REJECTION — and NOT a retry
+          // loop. It stays `identity_pending`, never reaches founder discovery,
+          // and is reported as such rather than being asked again at a price.
           c.record = advance(c.record, "identity_pending", c.identity.status);
           c.record.missing_evidence.push(...c.identity.evidence);
         }
+      };
+
+      await runBounded(targets, LINKEDIN_RESOLUTION_CONCURRENCY, resolveOne,
+        () => deps.deadline?.expired() === true);
+
+      // Companies that were never shortlisted are explicitly not evaluated. They
+      // must not look like failed lookups, and they must never be actionable.
+      for (const c of companies) {
+        if (targets.includes(c) || c.identity) continue;
+        c.record = advance(c.record, "identity_pending", "not_shortlisted_for_paid_resolution");
+        c.record.missing_evidence.push(
+          c.prequalified?.exclusion
+            ? `excluded_before_paid_resolution:${c.prequalified.exclusion}`
+            : "excluded_before_paid_resolution",
+        );
       }
-      finish(cap, "complete", resolved, ["apify_linkedin_company_details"], resolved > 0,
+
+      finish(cap, "complete", resolved, [provider], resolved > 0,
         resolved === 0 ? "no company reached an actionable identity" : null);
+      log("identity_resolution_complete", {
+        targets: targets.length, resolved, unresolved,
+        concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
+      });
+      await publish("identity_resolved");
       continue;
     }
 
     // ── ENRICHMENT (MANDATORY, BEFORE QUALIFICATION) ─────────────────────────
+    // ONE CALL FOR ALL RESOLVED COMPANIES, NOT ONE CALL EACH.
+    //
+    // `harvestapi/linkedin-company` takes `companies[]` — a LIST of LinkedIn
+    // company URLs. The per-company loop this replaced paid a full Actor start
+    // for every single company and spent the wall clock the run needed to finish.
     if (cap === "company_enrichment") {
       let enriched = 0;
       const actionable = companies.filter((c) => c.identity && identityIsActionable(c.identity));
+      // DEDUPED. Two YC rows can resolve to one LinkedIn company; enriching it
+      // twice pays twice for the same record.
+      const byUrl = new Map<string, EngineCompany[]>();
       for (const c of actionable) {
         const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
         if (!url) continue;
-        const compiled = compileHarvestCompanyDetailsInput({ companies: [url] });
-        const rows = await callProvider(cap, "apify_linkedin_company_details", compiled);
-        if (rows.length > 0) {
-          c.enriched = normalizeLinkedInCompanyEnriched(rows[0]);
-          c.record = advance(c.record, "enrichment_complete", "provider_evidence_collected");
-          enriched++;
-        } else {
-          c.record = advance(c.record, "enrichment_pending", "enrichment_returned_no_rows");
+        const list = byUrl.get(url) ?? [];
+        list.push(c);
+        byUrl.set(url, list);
+      }
+      const urls = [...byUrl.keys()];
+
+      if (urls.length > 0) {
+        // BOUNDED BATCHES, not an unbounded single request. One batch is the
+        // normal case for a shortlist of five; the bound exists so a larger
+        // mission degrades into a few calls rather than one request the Actor
+        // rejects.
+        for (const batch of chunk(urls, COMPANY_DETAILS_BATCH_SIZE)) {
+          const compiled = compileHarvestCompanyDetailsInput({ companies: batch });
+          const rows = await callProvider(cap, "apify_linkedin_company_details", compiled);
+          // MAPPED BACK BY URL. A batched response arrives in the Actor's order,
+          // not ours, so pairing by index would attach one company's evidence to
+          // another — a silent, unfalsifiable corruption.
+          for (const row of rows) {
+            const normalized = normalizeLinkedInCompanyEnriched(row);
+            const url = normalized.linkedin_company_url;
+            const matches = url ? byUrl.get(url) ?? [] : [];
+            for (const c of matches) {
+              c.enriched = normalized;
+              c.record = advance(c.record, "enrichment_complete", "provider_evidence_collected");
+              enriched++;
+            }
+          }
         }
+      }
+      for (const c of actionable) {
+        if (c.enriched) continue;
+        c.record = advance(c.record, "enrichment_pending", "enrichment_returned_no_rows");
       }
       // EVIDENCE GATE. Enrichment that produced nothing is not enrichment, and
       // qualification must see that rather than an empty record it could read as
       // a proven negative.
       finish(cap, "complete", enriched, ["apify_linkedin_company_details"], enriched > 0,
         enriched === 0 ? "no company was enriched; qualification will hold them as unknown" : null);
+      log("company_enrichment_complete", {
+        resolved_urls: urls.length,
+        actor_starts: Math.ceil(urls.length / COMPANY_DETAILS_BATCH_SIZE),
+        enriched,
+      });
+      await publish("companies_enriched");
       continue;
     }
 
@@ -652,6 +967,7 @@ export async function runCapabilityPlan(
       }
       finish(cap, "complete", verified, ["apify_linkedin_job_search"], verified > 0,
         verified === 0 ? "no company had a matching open role" : null);
+      await publish("hiring_verified");
       continue;
     }
 
@@ -737,6 +1053,7 @@ export async function runCapabilityPlan(
         passed === 0
           ? `no company passed the Company Brain; ${unknown} held as unknown pending evidence`
           : null);
+      await publish("qualified");
       continue;
     }
 
@@ -810,6 +1127,7 @@ export async function runCapabilityPlan(
       }
       finish(cap, "complete", verified, [], verified > 0,
         verified === 0 ? "no decision-maker was verified at their company" : null);
+      await publish("decision_makers_verified");
       continue;
     }
 
@@ -854,6 +1172,117 @@ export async function runCapabilityPlan(
   };
 }
 
+/**
+ * How many LinkedIn company URLs go into one company-details request.
+ *
+ * The Actor accepts a list; this is the batch bound, not a per-company loop.
+ */
+export const COMPANY_DETAILS_BATCH_SIZE = 10;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight.
+ *
+ * `stop` is checked before each item is CLAIMED, so a closed deadline ends the
+ * stage without abandoning work already in flight. Deliberately not
+ * `Promise.all` over everything: a shortlist of five resolved all at once is
+ * five simultaneous paid Actor starts, which is precisely the burst this
+ * mission's budget cannot absorb.
+ */
+export async function runBounded<T>(
+  items: readonly T[], limit: number,
+  worker: (item: T) => Promise<void>,
+  stop: () => boolean = () => false,
+): Promise<{ processed: number; skipped: number }> {
+  let next = 0;
+  let processed = 0;
+  const width = Math.max(1, Math.min(limit, items.length));
+  const lanes = Array.from({ length: width }, async () => {
+    for (;;) {
+      if (stop()) return;
+      const i = next++;
+      if (i >= items.length) return;
+      await worker(items[i]);
+      processed++;
+    }
+  });
+  await Promise.all(lanes);
+  return { processed, skipped: items.length - processed };
+}
+
+/**
+ * Score the discovered rows and decide the shortlist — no provider, no cost.
+ *
+ * Attaches the verdict to each working-set company AND records it on the state,
+ * because "why was this company not pursued?" must be answerable from the task
+ * row alone.
+ */
+export function applyPrequalification(
+  state: CapabilityExecutionState,
+  companies: EngineCompany[],
+  rawRows: readonly YcCompanyInput[],
+  size: { min: number | null; max: number | null },
+  requestedLeadCount: number,
+): PrequalificationResult {
+  const result = prequalifyYcCompanies(rawRows, { min: size.min, max: size.max });
+  const shortlist = shortlistForLinkedInResolution(result, requestedLeadCount);
+  const shortlistKeys = new Set(shortlist.map((c) => c.company_key));
+  const byKey = new Map(result.companies.map((c) => [c.company_key, c]));
+
+  for (const c of companies) {
+    const pq = c.prequal_key ? byKey.get(c.prequal_key) ?? null : null;
+    c.prequalified = pq;
+    c.shortlisted = pq !== null && shortlistKeys.has(pq.company_key);
+  }
+
+  // SCRAPER ARTIFACTS LEAVE THE WORKING SET ENTIRELY.
+  //
+  // The five empty rows memo23 returns all normalize to the same fallback key
+  // (`yc_memo23:unknown`), so the engine's own dedupe collapsed them into ONE
+  // company that prequalification had already refused to score. It could never
+  // be paid for — but it counted as an account found and would have reached
+  // persistence, which is how Y Combinator's own page once became a qualified
+  // lead. A row with no name and no website is not a prospect.
+  for (let i = companies.length - 1; i >= 0; i--) {
+    if (companies[i].prequalified === null) companies.splice(i, 1);
+  }
+
+  state.prequalification = {
+    version: result.version,
+    total_rows: result.total_rows,
+    unique_companies: result.unique_companies,
+    artifacts_excluded: result.excluded.length,
+    eligible_companies: result.eligible_companies,
+    employee_size_excluded: result.employee_size_excluded,
+    technical_only_companies: result.technical_only_companies,
+    shortlist_keys: shortlist.map((c) => c.company_key),
+    companies: result.companies.map((c) => ({
+      company_key: c.company_key,
+      name: c.name,
+      canonical_domain: c.canonical_domain,
+      team_size: c.team_size,
+      size_status: c.size_status,
+      best_tier: c.best_tier,
+      score: c.score,
+      strongest_signal: c.strongest_signal,
+      // EVERY commercial job, not `openJobs[0]` — which for a YC startup is
+      // almost always an engineer, and is what the old display showed.
+      commercial_jobs: c.jobs.filter((j) => j.tier === "A" || j.tier === "B" || j.tier === "C")
+        .map((j) => j.title),
+      eligible: c.eligible,
+      exclusion: c.exclusion,
+      shortlisted: shortlistKeys.has(c.company_key),
+      reasons: c.reasons,
+    })),
+  };
+  return result;
+}
+
 /** Union of jobs kept by ANY approved pack. `filterJobsForPack` takes one pack. */
 function keptForPacks(
   jobs: readonly NormalizedHiringJob[], packs: readonly RolePack[],
@@ -871,11 +1300,13 @@ function packTitles(packs: readonly RolePack[]): string[] {
 
 function addCompany(
   set: EngineCompany[], c: NormalizedHiringCompany, ycJobs: NormalizedHiringJob[],
+  prequalKey: string | null = null,
 ): void {
   const key = companyKey(c);
   if (set.some((x) => x.key === key)) return;
   set.push({
-    key, company: c, identity: null, enriched: null,
+    key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
+    company: c, identity: null, enriched: null,
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, classification: null, verdict: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),

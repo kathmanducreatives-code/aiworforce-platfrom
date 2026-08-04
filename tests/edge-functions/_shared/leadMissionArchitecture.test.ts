@@ -15,7 +15,8 @@ import {
 } from "../../../supabase/functions/_shared/leadMission.ts";
 import {
   CAPABILITY_REGISTRY, CapabilityContainmentError, assertProviderAllowed,
-  buildCapabilityGraph, isCapabilityId, isProviderAllowed, onCapabilityExhausted,
+  buildCapabilityGraph, isCapabilityId, isProviderAllowed, isProviderAllowedForCapability,
+  onCapabilityExhausted,
 } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
@@ -221,7 +222,6 @@ Deno.test("5. no second route inference occurs for a LeadMissionV1 task", async 
 Deno.test("6. a non-job mission cannot reach LinkedIn Cookies, Jobs, Indeed or Glassdoor", () => {
   const plan = buildCapabilityGraph(canonicalMission());
   for (const forbidden of [
-    "apify_linkedin_company_search",       // "LinkedIn Cookies" initial discovery
     "apify_jobs",                          // broad LinkedIn Jobs
     "apify_linkedin_jobs_crawlworks",
     "apify_indeed_jobs_automation_lab",    // Indeed
@@ -242,6 +242,52 @@ Deno.test("6. a non-job mission cannot reach LinkedIn Cookies, Jobs, Indeed or G
   ]) {
     assert(isProviderAllowed(plan, allowed), `${allowed} must be reachable`);
   }
+});
+
+// `apify_linkedin_company_search` USED to be on the forbidden list above, as
+// "LinkedIn Cookies initial discovery" — the actor that returned 0 rows when a
+// startup mission was misrouted to `general_company_discovery`.
+//
+// It is now the CORRECT provider for `company_identity_resolution`: the search
+// Actor searches, and `apify_linkedin_company_details` enriches a URL it is
+// given. Plan-wide containment cannot express that distinction, and its
+// inability to is exactly why identity resolution was able to call the
+// enrichment Actor with `{searches:[name]}` sixteen times for nothing.
+//
+// So the guarantee is not dropped, it is SHARPENED: the question is no longer
+// "may this mission use this Actor?" but "may THIS STEP use it?".
+Deno.test("6b. a provider may only be used by the capability that declares it", () => {
+  const plan = buildCapabilityGraph(canonicalMission());
+
+  // Reachable by the mission, and correct for identity resolution.
+  assert(isProviderAllowed(plan, "apify_linkedin_company_search"));
+  assert(isProviderAllowedForCapability(
+    plan, "apify_linkedin_company_search", "company_identity_resolution"));
+
+  // The exact defect: identity resolution reaching for the ENRICHMENT actor.
+  assertFalse(isProviderAllowedForCapability(
+    plan, "apify_linkedin_company_details", "company_identity_resolution"),
+    "the enrichment Actor is not a name-search index");
+  const err = assertThrows(
+    () => assertProviderAllowed(plan, "apify_linkedin_company_details",
+      { capability: "company_identity_resolution" }),
+    CapabilityContainmentError,
+  );
+  assert(String(err.message).includes("company_identity_resolution"));
+
+  // ...and the mirror image: enrichment may not run the search Actor.
+  assertFalse(isProviderAllowedForCapability(
+    plan, "apify_linkedin_company_search", "company_enrichment"));
+
+  // Each declared pairing still holds.
+  assert(isProviderAllowedForCapability(
+    plan, "apify_linkedin_company_details", "company_enrichment"));
+  assert(isProviderAllowedForCapability(
+    plan, "apify_yc_companies_memo23", "startup_company_discovery"));
+
+  // A capability that is not in this plan falls back to the plan-wide answer
+  // rather than failing open on a typo.
+  assertFalse(isProviderAllowedForCapability(plan, "apify_jobs", "job_discovery"));
 });
 
 Deno.test("7. zero YC results do not silently trigger broad job discovery", () => {

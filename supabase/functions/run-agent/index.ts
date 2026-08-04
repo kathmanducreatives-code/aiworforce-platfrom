@@ -69,6 +69,9 @@ import {
 import {
   assertPaidExecutionAllowed, buildPaidExecutionPreflight,
 } from "../_shared/leadPaidExecutionPreflight.ts";
+import {
+  createRunTerminalGuard, supabaseTerminalGuardDb,
+} from "../_shared/leadRunTerminalGuard.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -351,6 +354,32 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // ══ THE TERMINAL GUARD — A RUN ALWAYS ENDS SOMEWHERE ════════════════════════
+  //
+  // TEST task c8a6e53d-c227-4405-9fcc-e0791b03a4ec sat in `running` with
+  // `updated_at == created_at`: the row was created and never touched again,
+  // because this function was killed mid-Actor-call and every status write lives
+  // AFTER the work. The plan showed Running indefinitely and the only way to
+  // learn what happened was to read the tool-call ledger by hand.
+  //
+  // The guard's writer runs in `finally`, so a throw, an early return, a
+  // deadline stop and a clean completion all leave terminal rows. It READS the
+  // current row first and never overwrites a status the handler already wrote,
+  // so the forty existing exit paths keep their own, more specific outcomes.
+  const terminalGuard = createRunTerminalGuard(supabaseTerminalGuardDb(supabase as never), {
+    log: (m, meta) => console.log("[run-agent][terminal-guard]", m, meta),
+    onWriteError: (e) => console.error("[run-agent][terminal-guard][write-error]", String(e)),
+  });
+
+  // EVERYTHING BELOW RUNS INSIDE THE GUARD.
+  //
+  // Deliberately NOT re-indented. Re-indenting 4,000 lines would bury a
+  // correctness change inside a whitespace diff nobody could review, and this
+  // file's own history is the argument: the transport defect survived because a
+  // real change was invisible among mechanical ones. The guarded region ends at
+  // the matching marker immediately above this handler's closing brace.
+  const guardedResponse = await terminalGuard.run(async () => {
+
   let body: any;
   try {
     body = await req.json();
@@ -578,6 +607,12 @@ Deno.serve(async (req) => {
     }
     task = inserted as { id: string };
   }
+
+  // THE GUARD NOW KNOWS WHICH ROWS TO FINALIZE. Bound at the first point both
+  // ids exist — before any paid boundary, so a kill during discovery still
+  // leaves a terminal task and plan rather than the pair that hung on
+  // task c8a6e53d.
+  terminalGuard.bind({ taskId: task.id, planId: plan_id ?? null });
 
   await supabase.from("activity_feed").insert({
     workspace_id,
@@ -1408,6 +1443,47 @@ Deno.serve(async (req) => {
                 }
                 : undefined,
               readPendingRun,
+              // THE SAME BUDGET THE TERMINAL GUARD FINALIZES AGAINST. One clock,
+              // so "the engine stopped early" and "the run was written partial"
+              // can never disagree about why.
+              deadline: terminalGuard.deadline,
+              // INCREMENTAL, AND NEVER PREMATURELY QUALIFIED. Each stage's counts
+              // are persisted as soon as they are true, so the Workbench fills in
+              // as the run proceeds instead of staying empty until the end.
+              // `qualified_companies` stays 0 until the Brain has spoken.
+              //
+              // READ-MODIFY-WRITE, because `update({result})` REPLACES the whole
+              // jsonb — a blind write here would delete the paid-execution
+              // preflight persisted a few lines above, which is the one record
+              // that explains a blocked run.
+              onProgress: async (p) => {
+                try {
+                  const { data: cur } = await supabase
+                    .from("tasks").select("result").eq("id", task.id).maybeSingle();
+                  const prior = (cur?.result && typeof cur.result === "object")
+                    ? cur.result as Record<string, unknown> : {};
+                  await supabase.from("tasks").update({
+                    result: { ...prior, workbench_progress: p },
+                  }).eq("id", task.id);
+                } catch (e) {
+                  console.log("[run-agent][capability-engine][progress-error]", String(e));
+                }
+              },
+              // THE GUARD SEES THE LATEST STATE, so a kill after enrichment is
+              // finalized with the attempts, cost and pending runs that existed
+              // at that moment — not an empty state.
+              onStateChange: (s) => terminalGuard.observe({
+                completed_capabilities: s.completed_capabilities,
+                pending_capabilities: s.pending_capabilities,
+                failed_capabilities: [],
+                provider_attempts: s.provider_attempts,
+                pending_runs: s.pending_runs.map((r) => ({
+                  run_id: r.run_id, dataset_id: r.dataset_id, provider: r.provider,
+                })),
+                accumulated_cost_units: s.accumulated_cost_units,
+                terminal_reason: s.terminal_reason,
+                qualified_company_keys: s.qualified_company_keys,
+              }),
               log: (m, meta) => console.log("[run-agent][capability-engine]", m, meta),
             }, {
               mission: persistedMission,
@@ -4651,4 +4727,19 @@ Deno.serve(async (req) => {
   await supabase.from("task_plans").update({ status: planStatus, completed_at: new Date().toISOString() }).eq("id", plan_id);
 
   return json({ success: planStatus !== "failed", task_id: task.id, status: planStatus });
+
+  // ══ END OF THE TERMINAL-GUARDED REGION ══════════════════════════════════════
+  }).catch((e) => {
+    // The guard has ALREADY written terminal rows by the time this runs — its
+    // writer is in `finally` and the rethrow happens after it. So this only
+    // decides what the HTTP caller sees; the plan is no longer Running either
+    // way.
+    console.error("[run-agent][unhandled]", String(e));
+    return json({ error: "run_agent_unhandled_exception", message: String(e) }, 500);
+  });
+
+  // The fallback exists because the guard's signature admits `undefined`; a run
+  // that produced no Response at all is itself a defect worth reporting rather
+  // than hiding behind an empty 200.
+  return guardedResponse ?? json({ error: "run_agent_no_response" }, 500);
 });

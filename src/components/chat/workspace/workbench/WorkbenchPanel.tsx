@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { workbenchQueryKey } from '@/lib/workbench/workbenchSession';
+import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
+import WorkflowProgressStrip from './WorkflowProgressStrip';
 
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
@@ -20,9 +24,30 @@ import { Loader2, FlaskConical, Table2, Sparkles, Activity } from 'lucide-react'
 type Tab = 'table' | 'insights' | 'activity';
 
 export default function WorkbenchPanel() {
-  const { selectedOutput, closeWorkbench } = useChatWorkspace();
+  const { workspaceId } = useWorkspace();
+  const { selectedOutput, activeConversationId, closeWorkbench } = useChatWorkspace();
   const data = useWorkbenchData(selectedOutput);
   const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
+
+  // REMOUNT WHEN THE OWNER CHANGES.
+  //
+  // `LeadResultsView` holds a lot of local state: selected rows, per-row action
+  // progress, account research views, filters, the open drawer. Clearing the
+  // fetched rows alone would leave every one of those pointing at leads that are
+  // no longer on screen — a selection of ids from another chat's plan. A `key`
+  // change discards all of it in one step, which is the only way to be sure none
+  // of it survived.
+  const workbenchKey = workbenchQueryKey({
+    workspaceId: workspaceId ?? null,
+    conversationId: selectedOutput?.conversationId ?? activeConversationId ?? null,
+    taskId: selectedOutput?.taskId ?? null,
+    planId: selectedOutput?.planId ?? null,
+  }).join('|');
+
+  // INCREMENTAL PROGRESS. Written stage by stage by the capability engine into
+  // `tasks.result.workbench_progress`, so the panel fills in as the run proceeds
+  // instead of staying empty until the very end.
+  const progress = readWorkbenchProgress((data.task as { result?: unknown } | null)?.result ?? null);
 
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
@@ -82,7 +107,7 @@ export default function WorkbenchPanel() {
 
   const renderTable = () => {
     if (leadsPanel) {
-      return <LeadResultsView meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} />;
+      return <LeadResultsView key={workbenchKey} meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} taskId={selectedOutput?.taskId ?? null} />;
     }
     if (failed) return <FailureRecoveryCard toolCall={data.toolCall} task={data.task} />;
     if (!hasResults && !hasRankings && !hasDrafts && isApify) {
@@ -141,14 +166,19 @@ export default function WorkbenchPanel() {
       </div>
 
       {tab === 'table' ? (
-        <div className="flex-1 min-h-0 min-w-0 relative z-[1] overflow-hidden">
-          <ChatErrorBoundary>
-            {leadsPanel ? (
-              <LeadResultsView meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} />
-            ) : (
-              <div className="h-full overflow-auto p-4 space-y-3">{renderTable()}</div>
-            )}
-          </ChatErrorBoundary>
+        <div className="flex-1 min-h-0 min-w-0 relative z-[1] overflow-hidden flex flex-col">
+          {leadsPanel && progress && <WorkflowProgressStrip progress={progress} />}
+          {/* The strip is a fixed-height sibling; the table takes what is left
+              and scrolls inside it rather than pushing the panel taller. */}
+          <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+            <ChatErrorBoundary>
+              {leadsPanel ? (
+                <LeadResultsView key={workbenchKey} meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} taskId={selectedOutput?.taskId ?? null} />
+              ) : (
+                <div className="h-full overflow-auto p-4 space-y-3">{renderTable()}</div>
+              )}
+            </ChatErrorBoundary>
+          </div>
         </div>
       ) : (
         <div className="flex-1 min-w-0 overflow-auto p-4 space-y-3 relative z-[1]">

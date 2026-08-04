@@ -112,6 +112,17 @@ export interface YcCompanyInput {
   openJobs?: Array<{ title?: string | null; url?: string | null }> | null;
 }
 
+/**
+ * The dedupe key for one raw provider row.
+ *
+ * Exported so the ENGINE derives a row's key with the same code that built the
+ * shortlist. Recomputing it with a lookalike helper is how a shortlist and its
+ * companies quietly stop referring to the same set.
+ */
+export function prequalificationKey(row: Pick<YcCompanyInput, "name" | "website">): string {
+  return normalizeDomain(row?.website) ?? `name:${normalizeCompanyName(row?.name)}`;
+}
+
 export type ExclusionKind =
   | "artifact" | "duplicate" | "technical_only" | "employee_size" | "insufficient_commercial";
 
@@ -196,7 +207,7 @@ export function prequalifyYcCompanies(
       excluded.push({ name, domain, reason: "directory/platform artifact, not a prospect" });
       continue;
     }
-    const key = domain ?? `name:${normalizeCompanyName(name)}`;
+    const key = prequalificationKey(r);
     if (byKey.has(key)) continue;
 
     const jobs = (r.openJobs ?? [])

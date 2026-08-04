@@ -187,8 +187,20 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["company_candidate"],
     produces: ["company_identity"],
     allowed_next: ["company_enrichment"],
-    providers: [],
-    cost_units: 0,
+    // THE SEARCH ACTOR, NOT THE ENRICHMENT ACTOR.
+    //
+    // This list was empty, and the engine reached for
+    // `apify_linkedin_company_details` with `{searches:[name]}` instead —
+    // allowed only because containment is checked plan-wide and enrichment
+    // declares that provider one step later. `harvestapi/linkedin-company` is an
+    // enrichment Actor: it turns a LinkedIn URL into a record, and is not a name
+    // index. On TEST task c8a6e53d that produced 16 zero-row Actor starts.
+    // Declaring the real provider here is what makes the graph describe what
+    // actually runs.
+    providers: ["apify_linkedin_company_search"],
+    // IT SPENDS, SO IT COSTS. Zero said this stage was free while it was the
+    // most expensive thing in the run.
+    cost_units: 1,
     max_attempts: 1,
     fallback_policy: "terminal_on_exhaustion",
     evidence_required: ["canonical_domain or linkedin_company_url"],
@@ -486,9 +498,40 @@ export function isProviderAllowed(plan: CapabilityPlan, actorKey: string): boole
  * the call that makes "zero startup results silently ran LinkedIn Jobs"
  * impossible rather than merely discouraged.
  */
+/**
+ * Is this provider allowed FOR THIS CAPABILITY?
+ *
+ * Plan-wide containment is too coarse to catch the mistake that mattered.
+ * `company_identity_resolution` reached for `apify_linkedin_company_details`
+ * with `{searches:[name]}` — an ENRICHMENT Actor used as a name index — and
+ * nothing objected, because enrichment declares that provider one step later
+ * and the plan-wide set is a union. Sixteen zero-row Actor starts later, the
+ * edge function was killed.
+ *
+ * A capability may only use a provider it DECLARES. An unknown capability falls
+ * back to the plan-wide answer rather than failing open on a typo.
+ */
+export function isProviderAllowedForCapability(
+  plan: CapabilityPlan, actorKey: string, capability: string,
+): boolean {
+  const step = plan.steps.find((s) => s.capability === capability);
+  if (!step) return isProviderAllowed(plan, actorKey);
+  return step.providers.includes(actorKey as CapabilityId extends never ? never : string);
+}
+
 export function assertProviderAllowed(
   plan: CapabilityPlan, actorKey: string, ctx: { capability?: string } = {},
 ): void {
+  if (ctx.capability && isProviderAllowed(plan, actorKey) &&
+      !isProviderAllowedForCapability(plan, actorKey, ctx.capability)) {
+    const step = plan.steps.find((s) => s.capability === ctx.capability);
+    throw new CapabilityContainmentError(
+      `provider "${actorKey}" is in this mission's plan but is NOT declared by capability ` +
+      `"${ctx.capability}" (that capability may use: ${step?.providers.join(", ") || "none"}). ` +
+      `Using another capability's provider is how an enrichment Actor became a name-search index.`,
+      { provider: actorKey, capability: ctx.capability },
+    );
+  }
   if (isProviderAllowed(plan, actorKey)) return;
   const broad = BROAD_JOB_PROVIDERS.includes(actorKey);
   throw new CapabilityContainmentError(

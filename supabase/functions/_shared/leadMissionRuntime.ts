@@ -108,7 +108,11 @@ export function guardedInvoker<T extends { actorKey?: string; selected_actor_key
     const actorKey = String(call.actorKey ?? call.selected_actor_key ?? "");
     if (actorKey) {
       try {
-        assertProviderAllowed(plan, actorKey);
+        // THE CAPABILITY TRAVELS WITH THE CALL, so containment can ask the
+        // question that matters: not "may this mission use this Actor at all?"
+        // but "may THIS STEP use it?".
+        const capability = (call as { capabilityId?: string }).capabilityId;
+        assertProviderAllowed(plan, actorKey, capability ? { capability } : {});
       } catch (e) {
         if (e instanceof CapabilityContainmentError) {
           onBlocked?.(actorKey, e);

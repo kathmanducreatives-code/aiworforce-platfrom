@@ -161,7 +161,23 @@ Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Act
   const run = await runCapabilityPlan({
     invoke: (c: CompiledActorCall<unknown>) => {
       if (c.actorKey === "apify_yc_companies_memo23") {
-        return Promise.resolve([{ id: "big", name: "BigCo", website: "https://bigco.com" }]);
+        // YC SELF-REPORTS 40. LinkedIn says 400.
+        //
+        // That gap is the point of the test and the reason `teamSize` is marked
+        // `unsafe` in the normalizer: the free prequalification gate reads the
+        // self-reported number (40 — inside 10-150, so the company is correctly
+        // worth paying to identify), and the ENRICHED count is what actually
+        // decides. A fixture with no size at all could never show that, because
+        // an unverified size never reaches enrichment in the first place.
+        return Promise.resolve([{
+          id: "big", name: "BigCo", website: "https://bigco.com", teamSize: 40,
+          openJobs: [{ title: "Revenue Operations Manager", url: "https://x/big/1" }],
+        }]);
+      }
+      if (c.actorKey === "apify_linkedin_company_search") {
+        return Promise.resolve([{ id: "big", name: "BigCo",
+          linkedinUrl: "https://www.linkedin.com/company/bigco",
+          website: "https://bigco.com" }]);
       }
       if (c.actorKey === "apify_linkedin_company_details") {
         return Promise.resolve([{ id: "big", name: "BigCo",

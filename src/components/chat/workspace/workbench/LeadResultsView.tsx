@@ -35,16 +35,25 @@ import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { buildQuotaProgress } from '@/lib/qualifiedLead/quotaProgress';
 import { buildWorkbenchCounts } from '@/lib/qualifiedLead/workbenchCounts';
 import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
+import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
 
 interface Props {
   meta: LeadResultsPanelMeta;
   conversationId: string | null;
+  taskId?: string | null;
 }
 
-export default function LeadResultsView({ meta, conversationId }: Props) {
-  const { items, loading, error, refresh } = useLeadResults(meta.plan_id);
+export default function LeadResultsView({ meta, conversationId, taskId = null }: Props) {
   const { closeWorkbench } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
+  // THE FULL OWNERSHIP CHAIN, not just the plan id. `meta.plan_id` alone is what
+  // let a new conversation display a previous chat's completed run.
+  const { items, loading, error, refresh } = useLeadResults({
+    workspaceId: workspaceId ?? null,
+    conversationId,
+    taskId,
+    planId: meta.plan_id ?? null,
+  });
   const tools = useToolAvailability();
   // Direct lead-action state. Per-row (Part E) is the source of truth; a light
   // global banner is kept for selection/errors only.
@@ -429,6 +438,13 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
       ) : error ? (
         <div className="m-3 text-[12px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-md p-2">
           {error} <button onClick={refresh} className="underline ml-2">Retry</button>
+        </div>
+      ) : items.length === 0 ? (
+        // THIS WORKFLOW, not "some workflow". The distinction matters: the panel
+        // used to show a previous chat's rows here, so an empty current run was
+        // indistinguishable from a full one.
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">
+          {EMPTY_WORKBENCH_MESSAGE}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">No leads match these filters.</div>

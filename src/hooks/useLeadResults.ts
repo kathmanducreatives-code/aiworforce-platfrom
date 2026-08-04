@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { workbenchQueryKey, type WorkbenchOwnership } from '@/lib/workbench/workbenchSession';
 
 export type ContactStatus = 'needs_contact' | 'profile_found' | 'email_found' | 'verified';
 export type EnrichmentStatus = 'locked' | 'not_started' | 'enrichable' | 'enriched' | 'failed';
@@ -118,12 +119,43 @@ function inferPersona(leadType: string | null | undefined): { persona: string | 
   return { persona: null, reason: null };
 }
 
-export function useLeadResults(planId: string | null) {
+/**
+ * Load the Workbench rows OWNED BY one conversation's workflow.
+ *
+ * The query itself was never the bug — it has always been scoped by `plan_id`.
+ * The bug was being handed a plan id belonging to a different chat. So the hook
+ * now takes the whole ownership chain, and enforces two things the plan id alone
+ * cannot:
+ *
+ *   * Changing owner CLEARS the rows synchronously, before the new query
+ *     resolves. Otherwise the previous chat's leads stay on screen during the
+ *     fetch — the stale Workbench, just briefly.
+ *   * A response is applied only if its owner is still the current one. An
+ *     in-flight request from the chat the user just left must not land.
+ */
+export function useLeadResults(ownership: WorkbenchOwnership) {
+  const planId = ownership.planId;
+  const ownerKey = workbenchQueryKey(ownership).join('|');
   const [items, setItems] = useState<LeadTableRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The owner a response must still match to be applied. */
+  const ownerRef = useRef(ownerKey);
+
+  // SYNCHRONOUS RESET, in render rather than an effect. An effect runs after
+  // paint, which is one frame of the old conversation's rows displayed under the
+  // new conversation's header.
+  const [renderedOwner, setRenderedOwner] = useState(ownerKey);
+  if (renderedOwner !== ownerKey) {
+    setRenderedOwner(ownerKey);
+    setItems([]);
+    setError(null);
+    ownerRef.current = ownerKey;
+  }
 
   const load = useCallback(async () => {
+    const requestOwner = ownerKey;
+    ownerRef.current = requestOwner;
     if (!planId) { setItems([]); return; }
     setLoading(true);
     setError(null);
@@ -288,15 +320,19 @@ export function useLeadResults(planId: string | null) {
           raw: r,
         };
       });
+      // LATE RESPONSES ARE DROPPED. The user may have switched chats while this
+      // was in flight; applying it now would repopulate the Workbench they left.
+      if (ownerRef.current !== requestOwner) return;
       setItems(normalized);
     } catch (e) {
+      if (ownerRef.current !== requestOwner) return;
       setError(e instanceof Error ? e.message : 'Failed to load lead results');
     } finally {
-      setLoading(false);
+      if (ownerRef.current === requestOwner) setLoading(false);
     }
-  }, [planId]);
+  }, [planId, ownerKey]);
 
   useEffect(() => { void load(); }, [load]);
 
-  return { items, loading, error, refresh: load };
+  return { items, loading, error, refresh: load, ownerKey };
 }
