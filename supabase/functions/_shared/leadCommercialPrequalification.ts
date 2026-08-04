@@ -112,6 +112,9 @@ export interface YcCompanyInput {
   openJobs?: Array<{ title?: string | null; url?: string | null }> | null;
 }
 
+export type ExclusionKind =
+  | "artifact" | "duplicate" | "technical_only" | "employee_size" | "insufficient_commercial";
+
 export interface PrequalifiedCompany {
   company_key: string;
   name: string;
@@ -134,6 +137,15 @@ export interface PrequalifiedCompany {
   /** The single strongest commercial role, for display. Never `openJobs[0]`. */
   strongest_signal: string | null;
   size_fit: boolean;
+  /**
+   * HARD ELIGIBILITY, decided before any paid call.
+   *
+   * `size_unverified` is NOT a pass. It ranks below every verified in-range
+   * company and is only reachable when more candidates are genuinely needed.
+   */
+  size_status: "in_range" | "below_min" | "above_max" | "size_unverified";
+  eligible: boolean;
+  exclusion: ExclusionKind | null;
   reasons: string[];
   /** Domain is sufficient internal identity; LinkedIn is resolved later. */
   linkedin_identity_status: "unresolved";
@@ -153,6 +165,9 @@ export interface PrequalificationResult {
   tier_b_companies: number;
   tier_c_only_companies: number;
   technical_only_companies: number;
+  /** Real commercial signal but a KNOWN out-of-range headcount. */
+  employee_size_excluded: number;
+  eligible_companies: number;
 }
 
 interface SizeBounds { min?: number | null; max?: number | null }
@@ -200,8 +215,12 @@ export function prequalifyYcCompanies(
       tier_a > 0 ? "A" : tier_b > 0 ? "B" : (tier_c > 1 ? "C" : null);
 
     const team = typeof r.teamSize === "number" ? r.teamSize : null;
-    const size_fit = team === null ? false
-      : (size.min == null || team >= size.min) && (size.max == null || team <= size.max);
+    const size_status: PrequalifiedCompany["size_status"] =
+      team === null ? "size_unverified"
+      : (size.min != null && team < size.min) ? "below_min"
+      : (size.max != null && team > size.max) ? "above_max"
+      : "in_range";
+    const size_fit = size_status === "in_range";
 
     const reasons: string[] = [];
     let score = 0;
@@ -210,8 +229,9 @@ export function prequalifyYcCompanies(
     if (best_tier === "C") { score += 15; reasons.push(`${tier_c} Tier-C roles with mutual support`); }
     if (commercial >= 2) { score += 25; reasons.push("multiple commercial openings"); }
     if (size_fit) { score += 30; reasons.push(`team size ${team} inside the target range`); }
-    else if (team !== null) reasons.push(`team size ${team} outside the target range`);
-    else reasons.push("team size unknown");
+    else if (size_status === "above_max") reasons.push(`team size ${team} exceeds the maximum — excluded before any paid call`);
+    else if (size_status === "below_min") reasons.push(`team size ${team} is below the minimum — excluded before any paid call`);
+    else reasons.push("team size unverified — ranks below every verified in-range company");
     if ((r.industries ?? []).some((i) => lc(i) === "b2b")) { score += 10; reasons.push("YC industry B2B"); }
     if (technical > 0 && commercial === 0) reasons.push(`${technical} technical role(s) only — not commercial evidence`);
 
@@ -230,14 +250,26 @@ export function prequalifyYcCompanies(
       locations: r.allLocations ?? null,
       jobs, tier_a, tier_b, tier_c, technical, best_tier, score,
       strongest_signal: strongest?.title ?? null,
-      size_fit, reasons,
+      size_fit, size_status,
+      // A KNOWN out-of-range size is disqualifying on its own. Apollo (200) and
+      // Magic (350) each have a real commercial opening and are still wrong for
+      // a 10-150 mission; paying to resolve them buys a lead that can never
+      // pass the Brain gate.
+      eligible: best_tier !== null && size_status !== "above_max" && size_status !== "below_min",
+      exclusion: (size_status === "above_max" || size_status === "below_min")
+        ? "employee_size"
+        : best_tier === null
+        ? (technical > 0 ? "technical_only" : "insufficient_commercial")
+        : null,
+      reasons,
       linkedin_identity_status: "unresolved",
       identity_confidence: domain ? "domain_exact" : "name_only",
     });
   }
 
+  const rank = (c: PrequalifiedCompany) => c.size_status === "in_range" ? 0 : 1;
   const companies = [...byKey.values()].sort((a, b) =>
-    b.score - a.score || a.name.localeCompare(b.name));
+    rank(a) - rank(b) || b.score - a.score || a.name.localeCompare(b.name));
 
   return {
     version: PREQUALIFICATION_VERSION,
@@ -248,7 +280,9 @@ export function prequalifyYcCompanies(
     tier_a_companies: companies.filter((c) => c.best_tier === "A").length,
     tier_b_companies: companies.filter((c) => c.best_tier === "B").length,
     tier_c_only_companies: companies.filter((c) => c.best_tier === "C").length,
-    technical_only_companies: companies.filter((c) => c.best_tier === null).length,
+    technical_only_companies: companies.filter((c) => c.exclusion === "technical_only").length,
+    employee_size_excluded: companies.filter((c) => c.exclusion === "employee_size").length,
+    eligible_companies: companies.filter((c) => c.eligible).length,
   };
 }
 
@@ -273,8 +307,10 @@ export const LINKEDIN_RESOLUTION_CONCURRENCY = 2;
 export function shortlistForLinkedInResolution(
   result: PrequalificationResult, requestedLeadCount: number,
 ): PrequalifiedCompany[] {
+  // The cap is a CEILING, not a quota. Filling it with known out-of-range
+  // companies would spend the budget on leads that cannot qualify.
   return result.companies
-    .filter((c) => c.best_tier !== null)
+    .filter((c) => c.eligible)
     .slice(0, shortlistSize(requestedLeadCount));
 }
 

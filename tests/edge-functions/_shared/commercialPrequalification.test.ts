@@ -69,13 +69,50 @@ Deno.test("2. a request for 5 leads caps the shortlist at 10", () => {
   assertEquals(LINKEDIN_RESOLUTION_CONCURRENCY, 2);
 });
 
-Deno.test("3. the real run shortlists 7, not 25", () => {
+Deno.test("3. the real run shortlists 5, not 25 — size gate applied first", () => {
   const sl = shortlistForLinkedInResolution(run(), 5);
-  assert(sl.length <= shortlistSize(5));
-  assertEquals(sl.length, 7, "only companies with a real commercial signal");
-  // The two strongest are the ones a human would pick.
-  assertEquals(sl[0].name, "SnapMagic");
-  assertEquals(sl[1].name, "Tara AI");
+  assert(sl.length <= shortlistSize(5), "the cap is a ceiling");
+  assertEquals(sl.map((x) => x.name),
+    ["SnapMagic", "Tara AI", "Zentail", "Bitmovin", "Etleap"]);
+  // Every one is inside 10-150 on VERIFIED evidence.
+  for (const c of sl) assertEquals(c.size_status, "in_range", c.name);
+});
+
+Deno.test("3b. Apollo (200) and Magic (350) never reach LinkedIn resolution", () => {
+  const r = run();
+  const sl = shortlistForLinkedInResolution(r, 5).map((x) => x.name);
+  for (const tooBig of ["Apollo", "Magic"]) {
+    const c = r.companies.find((x) => x.name === tooBig)!;
+    assert(c.best_tier !== null, `${tooBig} does have a real commercial opening`);
+    assertEquals(c.size_status, "above_max");
+    assertEquals(c.eligible, false, "a known out-of-range headcount is disqualifying on its own");
+    assertEquals(c.exclusion, "employee_size");
+    assertFalse(sl.includes(tooBig), `${tooBig} must not consume a paid search`);
+  }
+  // The cap is NOT filled with ineligible companies just because room exists.
+  assert(sl.length < shortlistSize(5));
+});
+
+Deno.test("3c. exclusion kinds are distinct and the totals reconcile", () => {
+  const r = run();
+  assertEquals(r.unique_companies, 20);
+  assertEquals(r.eligible_companies, 5);
+  assertEquals(r.employee_size_excluded, 5, "Apollo 200, Magic 350, HackerRank 300, InfluxData 210, Odeko 371");
+  const kinds = new Set(r.companies.map((c) => c.exclusion));
+  assert(kinds.has("employee_size") && kinds.has("technical_only") && kinds.has(null));
+  // Every company is either eligible or carries exactly one exclusion reason.
+  for (const c of r.companies) {
+    assertEquals(c.eligible, c.exclusion === null, c.name);
+  }
+});
+
+Deno.test("3d. an unverified size never outranks a verified in-range company", () => {
+  const r = prequalifyYcCompanies([
+    c("NoSize", "https://nosize.com", null, ["Head of Sales", "Account Executive"]),
+    c("Verified", "https://verified.com", 20, ["Account Executive"]),
+  ], SIZE);
+  assertEquals(r.companies[0].name, "Verified", "verified in-range ranks first despite a lower score");
+  assertEquals(r.companies[1].size_status, "size_unverified");
 });
 
 // ══════════════════ 4/5/6. technical-only never qualifies, full array read ══
@@ -85,7 +122,9 @@ Deno.test("4. technical-only companies are never shortlisted", () => {
   for (const technicalOnly of ["Odeko", "Mashgin", "HackerRank", "Mux", "Streak", "Revion", "Hub"]) {
     assertFalse(sl.includes(technicalOnly), `${technicalOnly} hires only engineers — not a GTM signal`);
   }
-  assertEquals(run().technical_only_companies, 13);
+  // Odeko and HackerRank are technical-only AND out of range; the size gate
+  // claims them first, so each company carries exactly one exclusion reason.
+  assertEquals(run().technical_only_companies, 5);
 });
 
 Deno.test("5. the FULL jobs array is read — a commercial role after engineers is found", () => {
