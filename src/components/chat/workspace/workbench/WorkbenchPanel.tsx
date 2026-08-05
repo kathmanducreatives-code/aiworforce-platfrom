@@ -3,7 +3,9 @@ import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { workbenchQueryKey } from '@/lib/workbench/workbenchSession';
 import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
+import { readEvaluationRows } from '@/lib/workbench/evaluationRows';
 import WorkflowProgressStrip from './WorkflowProgressStrip';
+import EvaluatedCompaniesTable from './EvaluatedCompaniesTable';
 
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
@@ -47,7 +49,11 @@ export default function WorkbenchPanel() {
   // INCREMENTAL PROGRESS. Written stage by stage by the capability engine into
   // `tasks.result.workbench_progress`, so the panel fills in as the run proceeds
   // instead of staying empty until the very end.
-  const progress = readWorkbenchProgress((data.task as { result?: unknown } | null)?.result ?? null);
+  const taskResult = (data.task as { result?: unknown } | null)?.result ?? null;
+  const progress = readWorkbenchProgress(taskResult);
+  // Evaluated-but-unqualified companies. A SEPARATE projection from the lead
+  // table: these rows have no lead_candidate_id, so nothing can act on them.
+  const evaluationRows = readEvaluationRows(taskResult);
 
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
@@ -173,7 +179,16 @@ export default function WorkbenchPanel() {
           <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
             <ChatErrorBoundary>
               {leadsPanel ? (
-                <LeadResultsView key={workbenchKey} meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} taskId={selectedOutput?.taskId ?? null} />
+                <div className="h-full flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <LeadResultsView key={workbenchKey} meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} taskId={selectedOutput?.taskId ?? null} />
+                  </div>
+                  {evaluationRows.length > 0 && (
+                    <div className="max-h-[45%] overflow-auto border-t border-white/[0.06] shrink-0">
+                      <EvaluatedCompaniesTable rows={evaluationRows} />
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="h-full overflow-auto p-4 space-y-3">{renderTable()}</div>
               )}

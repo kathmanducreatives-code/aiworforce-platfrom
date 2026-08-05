@@ -75,6 +75,7 @@ import {
 import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
+import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -267,7 +268,11 @@ async function persistLeadResultsPanel(
       open_jobs_evaluated: number;
       commercially_eligible: number;
       shortlisted: number;
+      /** Named separately so "0 qualified" can say WHICH stage stopped it. */
+      identities_resolved: number;
+      identities_unresolved: number;
       qualified: number;
+      contact_ready: number;
     } | null;
   },
 ): Promise<void> {
@@ -298,15 +303,34 @@ async function persistLeadResultsPanel(
     // A capability-engine run never touches the legacy quota controller, so its
     // `rawJobs` is structurally zero. Reporting the engine's own numbers is both
     // truthful and useful: it says where the funnel stopped.
+    // NAME THE STAGE THAT STOPPED IT.
+    //
+    // "0 qualified" on its own makes the user do the diagnosis. On task 42e39fb1
+    // the honest sentence was available and unsaid: six companies had strong
+    // signals and their LinkedIn identities could not be resolved.
+    const stalled = m && m.qualified === 0 && m.shortlisted > 0
+      ? m.identities_unresolved === m.shortlisted
+        ? ` Their LinkedIn company identities could not be resolved, so none reached final qualification.`
+        : m.identities_resolved === 0
+        ? ` None of them reached an actionable company identity, so verification could not run.`
+        : ` ${m.identities_resolved} identities resolved but none passed the Company Brain.`
+      : "";
     const evidence = m
       ? `I discovered ${m.companies_discovered} ${m.companies_discovered === 1 ? "company" : "companies"} and ` +
-        `evaluated ${m.companies_evaluated} against ${m.open_jobs_evaluated} embedded open ` +
-        `${m.open_jobs_evaluated === 1 ? "role" : "roles"}: ${m.commercially_eligible} commercially eligible, ` +
-        `${m.shortlisted} shortlisted, ${m.qualified} qualified.`
+        `evaluated ${m.open_jobs_evaluated} embedded open ` +
+        `${m.open_jobs_evaluated === 1 ? "role" : "roles"} across them. ` +
+        `${m.commercially_eligible} showed strong commercial expansion signals and ` +
+        `${m.shortlisted} ${m.shortlisted === 1 ? "was" : "were"} shortlisted; ` +
+        `${m.identities_resolved} ${m.identities_resolved === 1 ? "identity" : "identities"} resolved, ` +
+        `${m.qualified} qualified.${stalled}`
       : `I reviewed ${summary.rawJobs} raw job${summary.rawJobs === 1 ? "" : "s"}.`;
-    const content = summary.eligible > 0
-      ? `I opened the results in Workbench — ${delivered}. ${evidence} Nothing was sent.`
-      : `I opened the results in Workbench — ${delivered}. ${evidence} None produced a contact-ready lead yet. Nothing was sent.`;
+    // The shortlisted companies ARE in the Workbench now, as non-actionable
+    // evaluation rows — so "nothing produced a lead" is no longer the same
+    // claim as "nothing is there to look at".
+    const tail = m && m.shortlisted > 0 && summary.eligible === 0
+      ? ` The shortlisted ${m.shortlisted === 1 ? "company is" : "companies are"} in Workbench for review, marked not qualified.`
+      : summary.eligible > 0 ? "" : " None produced a contact-ready lead yet.";
+    const content = `I opened the results in Workbench — ${delivered}. ${evidence}${tail} Nothing was sent.`;
 
     await db.from("messages").insert({
       conversation_id: conversationId,
@@ -1578,6 +1602,42 @@ Deno.serve(async (req) => {
               ...toRouteResultShape(capabilityRun),
               diagnostics: emptyCapabilityDiagnostics(capabilityRun),
             } as never;
+            // THE EVIDENCE OF WORK DONE, kept apart from the leads.
+            //
+            // Six companies on task 42e39fb1 had real commercial signals inside
+            // the size range and vanished, because only Brain passes are
+            // persisted. These rows make that work visible WITHOUT calling any
+            // of it qualified: they carry no lead_candidate_id, so no action
+            // path can reach them.
+            const evaluation = projectEvaluationRows(capabilityRun.companies.map((c) => ({
+              key: c.key,
+              shortlisted: c.shortlisted,
+              prequalified: c.prequalified
+                ? {
+                  name: c.prequalified.name,
+                  canonical_domain: c.prequalified.canonical_domain,
+                  team_size: c.prequalified.team_size,
+                  best_tier: c.prequalified.best_tier,
+                  score: c.prequalified.score,
+                  strongest_signal: c.prequalified.strongest_signal,
+                  exclusion: c.prequalified.exclusion,
+                  eligible: c.prequalified.eligible,
+                  jobs: c.prequalified.jobs,
+                  reasons: c.prequalified.reasons,
+                  yc_url: c.prequalified.yc_url,
+                }
+                : null,
+              identityResolved: !!c.identity && c.identity.status !== "unresolved",
+              identityAttempted: c.identity !== null,
+              enriched: c.enriched !== null,
+              hiringVerified: c.hiring_jobs.length > 0,
+              verdict: c.verdict,
+              contactCount: c.contact_identities.length,
+            })));
+            console.log("[run-agent][capability-engine][evaluation-rows]", {
+              task_id: task.id, rows: evaluation.rows.length, counts: evaluation.counts,
+            });
+
             // THE RUN HAS ENDED — correct the snapshot that said otherwise.
             // The in-run publishes necessarily say `in_progress: true`; only
             // here is it known that no more work will happen in this
@@ -1591,7 +1651,14 @@ Deno.serve(async (req) => {
                 const prior = (cur?.result && typeof cur.result === "object")
                   ? cur.result as Record<string, unknown> : {};
                 await supabase.from("tasks").update({
-                  result: { ...prior, workbench_progress: finalProgress },
+                  result: {
+                    ...prior,
+                    workbench_progress: finalProgress,
+                    // A SEPARATE KEY, deliberately not merged into any lead
+                    // collection. Nothing that reads leads will find these.
+                    workbench_evaluation_rows: evaluation.rows,
+                    workbench_evaluation_counts: evaluation.counts,
+                  },
                 }).eq("id", task.id);
               }
             } catch (e) {
@@ -2334,7 +2401,10 @@ Deno.serve(async (req) => {
               open_jobs_evaluated: capabilityRun.state.prequalification?.open_jobs_evaluated ?? 0,
               commercially_eligible: capabilityRun.state.prequalification?.eligible_companies ?? 0,
               shortlisted: capabilityRun.state.prequalification?.shortlist_keys.length ?? 0,
+              identities_resolved: capabilityRun.state.progress?.identity_resolved ?? 0,
+              identities_unresolved: capabilityRun.state.progress?.identity_unresolved ?? 0,
               qualified: capabilityRun.state.qualified_company_keys.length,
+              contact_ready: capabilityRun.state.contact_identities.length,
             }
             : null,
         });

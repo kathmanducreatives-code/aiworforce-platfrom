@@ -281,6 +281,45 @@ export function fanOutSolidcodeTeamSizes(
   return bands.map((b) => compileSolidcodeYcInput({ ...base, teamSize: [b] }));
 }
 
+/**
+ * Why this string is not a usable company-NAME query — or null if it is fine.
+ *
+ * `harvestapi/linkedin-company-search` matches company names. Anything that is
+ * a URL, a domain, an email or a descriptive sentence will match nothing, and
+ * the Actor reports that as a successful empty run, so the cost is real and the
+ * failure is silent. That is exactly what happened six times on TEST task
+ * 42e39fb1.
+ *
+ * Deliberately permissive about NAMES: "Tara AI", "Y Combinator" and
+ * "Acme Software Group" are all legitimate and must pass. The rejections are
+ * for things that are structurally not names.
+ */
+export function invalidCompanyNameQueryReason(query: string): string | null {
+  const q = query.trim();
+  if (!q) return "empty query";
+  const lower = q.toLowerCase();
+  if (/^https?:\/\//.test(lower)) return "protocol string — this field takes a company name";
+  if (lower.includes("/")) return "URL path — this field takes a company name";
+  if (/\S+@\S+/.test(lower)) return "email-like value — this field takes a company name";
+  // A DOMAIN ANYWHERE IN THE STRING, not just as the whole value. "SnapMagic
+  // snapmagic.com" was two tokens, and the second one is what broke it.
+  for (const tok of lower.split(/\s+/)) {
+    const t = tok.replace(/[(),]/g, "");
+    if (COMPANY_NAME_DOMAIN_TOKEN.test(t)) {
+      return `token "${tok}" is a domain — the domain belongs in match verification, not the query`;
+    }
+  }
+  // A DESCRIPTION, NOT A NAME. Real company names are short; a benchmark concept
+  // phrase returned exactly one company literally named that.
+  if (q.split(/\s+/).length > 6) return "too many words to be a company name";
+  if (q.length > 80) return "too long to be a company name";
+  return null;
+}
+
+/** Hostname shape with a real TLD. Kept in sync with the prequalification copy. */
+const COMPANY_NAME_DOMAIN_TOKEN =
+  /^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|io|ai|co|net|org|dev|app|xyz|inc|tech|so|to|sh|me|us|uk|de|fr|ca)$/i;
+
 export function compileHarvestCompanySearchInput(
   i: HarvestCompanySearchInput,
 ): CompileResult<HarvestCompanySearchInput> {
@@ -293,14 +332,26 @@ export function compileHarvestCompanySearchInput(
   if (!Number.isInteger(i.maxItems) || i.maxItems < 1 || i.maxItems > 1000) {
     e.push("maxItems must be an integer between 1 and 1000");
   }
-  if (e.length) return fail(K, e);
-  // searchQuery is a NAME match. A concept phrase returns almost nothing.
-  if (i.searchQuery && i.searchQuery.trim().split(/\s+/).length > 2) {
-    w.push(
-      `searchQuery "${i.searchQuery}" looks conceptual; this field matches company NAMES. ` +
-      `A 3-word concept returned 1 company in the benchmark. Prefer filters.`,
-    );
+  // ── searchQuery MUST BE A COMPANY NAME ──────────────────────────────────────
+  //
+  // This used to be a WARNING keyed on word count: "more than two words looks
+  // conceptual". It measured the wrong property and missed the real failure.
+  // "SnapMagic snapmagic.com" is exactly two tokens, so nothing fired — and all
+  // six live searches on TEST task 42e39fb1 returned zero rows, because this
+  // field is a NAME index and a domain is not a name.
+  //
+  // Now it is an ERROR, checked before anything is spent, and it validates what
+  // actually matters: is this a name, or is it a URL/domain/sentence?
+  const q = (i.searchQuery ?? "").trim();
+  if (i.searchQuery !== undefined) {
+    const reason = invalidCompanyNameQueryReason(q);
+    if (reason) {
+      e.push(`invalid_company_name_search_query: ${reason} (searchQuery: ${JSON.stringify(i.searchQuery)})`);
+    }
   }
+  // FAIL BEFORE THE ACTOR STARTS. A malformed name query is not a preference,
+  // it is a call that cannot succeed — and six of them were paid for.
+  if (e.length) return fail(K, e);
   if (i.companySize?.length) {
     w.push("companySize filters employeeCountRange, which contradicts exact employeeCount — a hint, not proof");
   }

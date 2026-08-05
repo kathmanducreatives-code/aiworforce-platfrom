@@ -145,6 +145,13 @@ export function assertResponseKindConsistent(i: ResponseKindInput): ProviderResp
 export interface ResultCountLedger {
   /** What the Actor's dataset endpoint was asked for. */
   requested_limit: number;
+  /**
+   * The compiled Actor input's own `maxItems`, when it carried one.
+   *
+   * This is the number the Actor was actually paid to produce. When it and
+   * `requested_limit` disagree, rows were bought and never read.
+   */
+  requested_max_items: number | null;
   /** Rows actually downloaded from the dataset. */
   downloaded: number;
   /** Rows returned to the caller, after any cap. */
@@ -156,11 +163,19 @@ export interface ResultCountLedger {
 
 export function buildCountLedger(
   requested_limit: number, downloaded: number, returned: number, reason: string | null,
+  requested_max_items: number | null = null,
 ): ResultCountLedger {
+  // TRUNCATION IS ALSO "WE ASKED THE ACTOR FOR MORE THAN WE READ". A dataset of
+  // 50 rows read 25 rows deep is not a 25-row dataset, and the difference was
+  // invisible until this field existed.
+  const underRead = requested_max_items != null && requested_limit < requested_max_items;
+  const cut = returned < downloaded;
   return {
-    requested_limit, downloaded, returned,
-    truncated: returned < downloaded,
-    truncation_reason: returned < downloaded ? reason : null,
+    requested_limit, requested_max_items, downloaded, returned,
+    truncated: cut || underRead,
+    truncation_reason: cut ? reason
+      : underRead ? `fetch_limit_${requested_limit}_below_actor_maxItems_${requested_max_items}`
+      : null,
   };
 }
 

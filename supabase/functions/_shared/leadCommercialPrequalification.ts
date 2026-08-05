@@ -325,9 +325,60 @@ export function shortlistForLinkedInResolution(
     .slice(0, shortlistSize(requestedLeadCount));
 }
 
-/** The search query for one shortlisted company. Name + domain evidence. */
+/**
+ * The search query for one shortlisted company — THE BARE NAME.
+ *
+ * This used to return `` `${name} ${domain}` ``. The reasoning was that the
+ * domain gave the matcher corroborating evidence; the effect was that all six
+ * searches on TEST task 42e39fb1 returned ZERO rows.
+ *
+ * `harvestapi/linkedin-company-search` matches on company NAME — the Actor card
+ * has carried that as a known defect since the benchmark. "SnapMagic
+ * snapmagic.com" is not a company name, so LinkedIn's name index matched
+ * nothing, six paid runs produced nothing, and every downstream capability
+ * correctly reported zero.
+ *
+ * THE DOMAIN'S JOB IS ON THE WAY BACK, not on the way out. `acceptLinkedInMatch`
+ * already compares the returned company's website against
+ * `canonical_domain`, which is where an identity is actually proven. Putting it
+ * in the query bought nothing and cost the lookup.
+ */
 export function linkedInSearchQueryFor(c: PrequalifiedCompany): string {
-  return c.canonical_domain ? `${c.name} ${c.canonical_domain}` : c.name;
+  return normalizeCompanySearchName(c.name);
+}
+
+/**
+ * The domain a returned candidate must corroborate. Never sent to the Actor.
+ */
+export function expectedDomainFor(c: PrequalifiedCompany): string | null {
+  return c.canonical_domain;
+}
+
+/**
+ * Trim a company name down to something a NAME index can match.
+ *
+ * Deliberately conservative: it strips what is provably not part of a name
+ * (URLs, bare domains, protocol strings) and leaves everything else alone.
+ * "Tara AI" and "Y Combinator" are real names and must survive untouched.
+ */
+export function normalizeCompanySearchName(name: unknown): string {
+  return String(name ?? "")
+    .split(/\s+/)
+    .filter((tok) => tok && !looksLikeDomainToken(tok))
+    .join(" ")
+    .trim();
+}
+
+/** Common TLDs seen in this corpus, plus the shape of a hostname. */
+const DOMAINISH = /^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|io|ai|co|net|org|dev|app|xyz|inc|tech|so|to|sh|me|us|uk|de|fr|ca)\b/i;
+
+export function looksLikeDomainToken(token: string): boolean {
+  const t = token.trim().toLowerCase().replace(/[(),]/g, "");
+  if (!t) return false;
+  if (t.includes("@")) return true;                 // email-like
+  if (t.startsWith("http://") || t.startsWith("https://")) return true;
+  if (t.includes("/")) return true;                 // any URL path
+  return DOMAINISH.test(t);
 }
 
 // ------------------------------------------------------- match acceptance ----

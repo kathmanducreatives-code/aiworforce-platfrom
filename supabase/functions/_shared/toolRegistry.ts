@@ -1163,7 +1163,25 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   // defaulted to. The 25-row cap below is a LinkedIn-Jobs pre-rank pool; applied
   // to a company scraper it silently discarded half of a paid 50-row dataset.
   const isJobsSource = /jobs/i.test(source_type) && !isCompanyDetails && !isStructuredCompanies;
-  const fetchLimit = isJobsSource ? Math.min(25, Math.max(max_results, 10)) : max_results;
+  // THE COMPILED INPUT ALREADY SAYS HOW MANY ROWS WERE ASKED FOR.
+  //
+  // `max_results` is an ENVELOPE field, and the capability engine does not send
+  // one — so it fell back to the generic default of 25 while the compiled
+  // memo23 input asked Apify for `maxItems: 50`. The Actor produced the larger
+  // set and we downloaded 25 of it. A quieter version of the same 50→25 loss
+  // fixed one commit ago, arriving by a different default.
+  //
+  // For a structured-company actor the Actor's own `maxItems` is the
+  // authoritative count; the envelope value is only a fallback.
+  const compiledMaxItems = (() => {
+    const ui = (i.input && typeof i.input === "object") ? i.input as Record<string, unknown> : null;
+    const v = ui?.maxItems;
+    return typeof v === "number" && Number.isInteger(v) && v > 0 && v <= 1000 ? v : null;
+  })();
+  const structuredLimit = compiledMaxItems ?? max_results;
+  const fetchLimit = isJobsSource
+    ? Math.min(25, Math.max(max_results, 10))
+    : (isStructuredCompanies || isCompanyDetails ? structuredLimit : max_results);
   const itemsRes = await apifyFetch(
     `/datasets/${resolvedDatasetId}/items?clean=true&limit=${fetchLimit}&token=${APIFY_API_TOKEN}`,
     { method: "GET", timeoutMs: 20_000 },
@@ -1187,10 +1205,14 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   // above). Provider run provenance is preserved; sanitization happens downstream
   // in the normalizer — the raw items never enter observability from here.
   if (isStructuredCompanies) {
-    const company_items = rawItems.slice(0, max_results);
+    // SLICED TO THE SAME LIMIT WE FETCHED. Slicing to `max_results` here while
+    // fetching `structuredLimit` above would re-impose the 25-row default one
+    // line after removing it.
+    const company_items = rawItems.slice(0, fetchLimit);
     const ledger = buildCountLedger(
       fetchLimit, rawItems.length, company_items.length,
-      company_items.length < rawItems.length ? "max_results_cap" : null,
+      company_items.length < rawItems.length ? "fetch_limit_cap" : null,
+      compiledMaxItems,
     );
     // VISIBLE, NOT SILENT. A company-discovery response that lost rows between
     // the dataset and the caller is reported in the payload rather than looking

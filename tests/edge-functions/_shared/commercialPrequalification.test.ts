@@ -171,7 +171,12 @@ Deno.test("7. domain is canonical identity; LinkedIn stays unresolved", () => {
   assertEquals(normalizeDomain("https://getmagic.com/"), "getmagic.com");
   assertEquals(normalizeDomain("http://www.tara.ai"), "tara.ai");
   assertEquals(normalizeDomain(null), null);
-  assertEquals(linkedInSearchQueryFor(snap), "SnapMagic snapmagic.com");
+  // THE QUERY IS THE BARE NAME. This used to assert "SnapMagic snapmagic.com",
+  // and that exact string returned zero rows six times on TEST task 42e39fb1 —
+  // the Actor matches company NAMES, and a domain is not a name. The domain is
+  // still the canonical identity above; it just belongs in match verification,
+  // never in the search.
+  assertEquals(linkedInSearchQueryFor(snap), "SnapMagic");
 });
 
 // ═════════════════════════ 8. weak name-only matches are refused ══

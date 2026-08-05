@@ -63,6 +63,11 @@ const REAL_25 = [
 
 /** The five companies that must reach the paid stage — and only these. */
 const ELIGIBLE = ["SnapMagic", "Tara AI", "Zentail", "Bitmovin", "Etleap"];
+/** What the real search Actor would return for each bare-name query. */
+const DOMAIN_BY_NAME: Record<string, string> = {
+  SnapMagic: "snapmagic.com", "Tara AI": "tara.ai", Zentail: "zentail.com",
+  Bitmovin: "bitmovin.com", Etleap: "etleap.com",
+};
 /** Real commercial signal, but a headcount outside 10-150. */
 const OVERSIZED = ["Apollo", "Magic", "HackerRank", "InfluxData", "Odeko"];
 
@@ -97,11 +102,14 @@ function tracingDeps(trace: Trace, rows: Record<string, Record<string, unknown>[
       trace.inFlight[k] -= 1;
       if (k === "apify_linkedin_company_search") {
         // The search Actor answers for whichever company was asked about.
+        // The query is now the BARE COMPANY NAME, so the mock resolves the
+        // domain the way the real Actor does — from its own index, not from the
+        // query string.
         const q = String((call.input as { searchQuery?: string }).searchQuery ?? "");
-        const domain = q.split(/\s+/).pop() ?? "";
+        const domain = DOMAIN_BY_NAME[q] ?? `${q.toLowerCase().replace(/\s+/g, "")}.com`;
         const slug = domain.split(".")[0];
         return [{
-          id: slug, name: q.replace(` ${domain}`, ""),
+          id: slug, name: q,
           linkedinUrl: `https://www.linkedin.com/company/${slug}`,
           website: `https://${domain}`,
         }];
@@ -173,11 +181,10 @@ Deno.test("7. exactly the five eligible companies reach LinkedIn company search"
     assert(queries.some((q) => q.startsWith(name)), `${name} must be searched`);
   }
   // Name AND domain — a bare name search is what returns the wrong "Apollo".
-  assert(queries.includes("SnapMagic snapmagic.com"));
-  assert(queries.includes("Tara AI tara.ai"));
-  assert(queries.includes("Zentail zentail.com"));
-  assert(queries.includes("Bitmovin bitmovin.com"));
-  assert(queries.includes("Etleap etleap.com"));
+  // BARE NAMES. "SnapMagic snapmagic.com" is what failed six times live.
+  for (const n of ELIGIBLE) assert(queries.includes(n), `${n} must be searched by name`);
+  assertFalse(queries.some((q) => /\.(com|ai)\b/.test(q)),
+    "no query may carry a domain — this field is a NAME index");
 });
 
 Deno.test("8. out-of-range companies never reach identity resolution", async () => {
@@ -224,7 +231,7 @@ Deno.test("10. a commercial role listed after an engineering role is still found
   const etleap = run.state.prequalification!.companies.find((x) => x.name === "Etleap")!;
   assertEquals(etleap.strongest_signal, "Account Executive");
   assert(etleap.eligible);
-  assert(searchQueries(trace).includes("Etleap etleap.com"));
+  assert(searchQueries(trace).includes("Etleap"));
 });
 
 // ════════════════════ 11/12. concurrency and batching ══
