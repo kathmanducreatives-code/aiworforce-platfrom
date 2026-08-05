@@ -63,7 +63,7 @@ import {
 } from "../_shared/leadMissionRuntime.ts";
 import {
   CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
-  runCapabilityPlan, toRouteResultShape,
+  runCapabilityPlan, toPortfolioCandidates, toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
 import {
@@ -76,6 +76,7 @@ import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
+import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 
 /**
@@ -1610,6 +1611,28 @@ Deno.serve(async (req) => {
             // persisted. These rows make that work visible WITHOUT calling any
             // of it qualified: they carry no lead_candidate_id, so no action
             // path can reach them.
+            // THE PORTFOLIO, built from the run that just happened.
+            //
+            // `requested_opportunity_count` is what the user asked to SEE;
+            // contact-ready is what they can act on today. Collapsing the two is
+            // what made "find 100" mean "return 100 perfect leads or fail".
+            const portfolioTargets = interpretTargets(
+              persistedMission.original_user_query, quota.requestedLeadCount);
+            const portfolio = buildPortfolio(
+              toPortfolioCandidates(capabilityRun.companies),
+              portfolioTargets,
+              { sourcesExhausted: capabilityRun.state.pending_capabilities.length === 0 },
+            );
+            console.log("[run-agent][capability-engine][portfolio]", {
+              task_id: task.id,
+              requested: portfolioTargets.requested_opportunity_count,
+              delivered: portfolio.counts.delivered,
+              tiers: [portfolio.counts.tier_a, portfolio.counts.tier_b, portfolio.counts.tier_c],
+              qualified: portfolio.counts.qualified,
+              contact_ready: portfolio.counts.contact_ready,
+              shortfall: portfolio.shortfall.opportunities,
+            });
+
             const evaluation = projectEvaluationRows(capabilityRun.companies.map((c) => ({
               key: c.key,
               shortlisted: c.shortlisted,
@@ -1662,6 +1685,15 @@ Deno.serve(async (req) => {
                     // collection. Nothing that reads leads will find these.
                     workbench_evaluation_rows: evaluation.rows,
                     workbench_evaluation_counts: evaluation.counts,
+                    // The ranked portfolio the Workbench renders, with its
+                    // targets, tier counts and honest shortfall.
+                    workbench_portfolio: {
+                      version: portfolio.version,
+                      targets: portfolio.targets,
+                      counts: portfolio.counts,
+                      shortfall: portfolio.shortfall,
+                      entries: portfolio.entries,
+                    },
                   },
                 }).eq("id", task.id);
               }

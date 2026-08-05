@@ -4,6 +4,8 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { workbenchQueryKey } from '@/lib/workbench/workbenchSession';
 import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
 import { readEvaluationRows } from '@/lib/workbench/evaluationRows';
+import { readPortfolio, workbenchIsEmpty } from '@/lib/workbench/portfolioView';
+import PortfolioSummary from './PortfolioSummary';
 import WorkflowProgressStrip from './WorkflowProgressStrip';
 import EvaluatedCompaniesTable from './EvaluatedCompaniesTable';
 import ContinueVerificationBar from './ContinueVerificationBar';
@@ -56,6 +58,8 @@ export default function WorkbenchPanel() {
   // Evaluated-but-unqualified companies. A SEPARATE projection from the lead
   // table: these rows have no lead_candidate_id, so nothing can act on them.
   const evaluationRows = readEvaluationRows(taskResult);
+  // The ranked portfolio the engine built for this run.
+  const portfolio = readPortfolio(taskResult);
 
   // CONTINUE VERIFICATION. Offered only when the run genuinely stopped owing
   // results AND still holds a paid company dataset — otherwise continuing would
@@ -203,6 +207,7 @@ export default function WorkbenchPanel() {
               }}
             />
           )}
+          {leadsPanel && portfolio && <PortfolioSummary portfolio={portfolio} />}
           {leadsPanel && progress && <WorkflowProgressStrip progress={progress} />}
           {/* The strip is a fixed-height sibling; the table takes what is left
               and scrolls inside it rather than pushing the panel taller. */}

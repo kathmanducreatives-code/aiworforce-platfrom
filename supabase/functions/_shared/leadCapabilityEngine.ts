@@ -54,6 +54,10 @@ import {
   reachesCompanyBrain, type HiringAssessment, type SupportingSignal,
 } from "./commercialSignalPolicy.ts";
 import {
+  applyMissionPrecedence, decideCompanyBrain, type BrainDecision,
+} from "./companyBrainSemanticFit.ts";
+import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
+import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
   normalizeSolidcodeCompany,
@@ -281,6 +285,11 @@ export interface EngineCompany {
   fit: CompanyFitResult | null;
   /** The canonical hiring decision, with its evidence and reason. */
   hiring_assessment: HiringAssessment | null;
+  /**
+   * The explicit Company Brain outcome. Exactly one of QUALIFIED / REVIEW /
+   * REJECT for every company that reached the gate — never a silent absence.
+   */
+  brain: BrainDecision | null;
   /** Set when the Brain returned UNKNOWN and evidence resolution was attempted. */
   classification: { verdict: "pass" | "fail" | "unknown"; reason: string; source: string } | null;
   /**
@@ -1081,13 +1090,71 @@ export async function runCapabilityPlan(
           postings: c.hiring_jobs.map((j) => ({ job_id: j.job_id, title: j.title, description: j.description })),
         });
 
+        // MISSION PRECEDENCE, computed once per company: the user's words, then
+        // the mission, then only the workspace categories that actually relate to
+        // it. "Recruiting Agencies" must not broaden a SaaS mission.
+        const appliedPolicy = applyMissionPrecedence({
+          original_user_query: opts.mission.original_user_query,
+          mission_verticals: opts.mission.company_profile?.verticals ?? [],
+          mission_geography: opts.brain?.required_geography ?? null,
+          workspace_industries: opts.brain?.positive_industries ?? [],
+        });
+        const gateInput = {
+          // MAPPED AT THE BOUNDARY. `IdentityResolution.status` is
+          // verified_match | ambiguous | mismatch | unresolved; the Brain only
+          // needs to know "proven", "proven wrong" or "not proven". `ambiguous`
+          // is NOT a mismatch — it is an unproven identity, which is REVIEW.
+          identity_status: (c.identity && identityIsActionable(c.identity)
+            ? "verified_match"
+            : c.identity?.status === "mismatch"
+            ? "rejected_mismatch"
+            : "unresolved") as "verified_match" | "unresolved" | "rejected_mismatch",
+          active: true,
+          geography: src.geography ?? null,
+          required_geography: opts.brain?.required_geography ?? null,
+          employee_count: src.employee_count ?? null,
+          employee_ceiling: opts.brain?.employee_max ?? 200,
+          commercial_tier: c.hiring_assessment?.tier ?? null,
+          semantic: null,
+        };
+        const hiringVerified = c.hiring_assessment?.verdict === "hiring_verified";
+
         if (c.fit.stage === "company_fit_pass") {
-          c.verdict = "pass";
-          c.record = advance(c.record, "qualified_company", "hiring_signal_verified");
-          passed++;
+          c.brain = decideCompanyBrain({
+            gates: gateInput,
+            semantic: {
+              business_model: "b2b_saas", company_fit: "pass", confidence: 0.8,
+              agentory_use_case: "strong", supporting_evidence: ["deterministic gates passed"],
+              conflicting_evidence: [], unknown_fields: [],
+              reason: "all deterministic Company Brain gates passed",
+            },
+            policy: appliedPolicy, hiring_verified: hiringVerified,
+          });
+          if (c.brain.outcome === "QUALIFIED") {
+            c.verdict = "pass";
+            c.record = advance(c.record, "qualified_company", "hiring_signal_verified");
+            passed++;
+          } else if (c.brain.outcome === "REJECT") {
+            c.verdict = "reject";
+            c.record = advance(c.record, "company_fit_reject", c.brain.reason);
+          } else {
+            c.verdict = "unknown";
+            unknown++;
+            c.record.stage_reason = `company_brain_review:${c.brain.reason}`;
+          }
           continue;
         }
         if (c.fit.stage === "company_fit_reject") {
+          c.brain = decideCompanyBrain({
+            gates: gateInput,
+            semantic: {
+              business_model: "unknown", company_fit: "fail", confidence: 0.9,
+              agentory_use_case: "none", supporting_evidence: [],
+              conflicting_evidence: c.fit.failed_gates, unknown_fields: [],
+              reason: `deterministic hard gate failed: ${c.fit.reason}`,
+            },
+            policy: appliedPolicy, hiring_verified: hiringVerified,
+          });
           c.verdict = "reject";
           c.record = advance(c.record, "company_fit_reject", c.fit.reason);
           c.record.failed_gates = c.fit.failed_gates;
@@ -1107,7 +1174,30 @@ export async function runCapabilityPlan(
             positive_industries: opts.brain?.positive_industries ?? [],
           })
           : null;
-        if (resolved && resolved.verdict === "pass") {
+        const semantic = resolved
+          ? {
+            business_model: (resolved.verdict === "pass" ? "b2b_software" : "unknown") as never,
+            company_fit: (resolved.verdict === "pass" ? "pass"
+              : resolved.verdict === "fail" ? "fail" : "review") as never,
+            confidence: 0.6,
+            agentory_use_case: (resolved.verdict === "pass" ? "plausible" : "weak") as never,
+            supporting_evidence: [], conflicting_evidence: [],
+            // THE CLASSIFIER RESOLVES THE UNKNOWNS IT WAS ASKED ABOUT.
+            //
+            // Carrying `missing_evidence` forward after an explicit pass/fail
+            // would make the semantic path unable to settle anything — every
+            // resolved company would fall back to REVIEW, which is the opposite
+            // of what asking the question was for. Only an inconclusive answer
+            // leaves the fields unknown.
+            unknown_fields: resolved.verdict === "unknown" ? c.fit.missing_evidence : [],
+            reason: resolved.reason,
+          }
+          : null;
+        c.brain = decideCompanyBrain({
+          gates: gateInput, semantic, policy: appliedPolicy, hiring_verified: hiringVerified,
+        });
+
+        if (resolved && resolved.verdict === "pass" && c.brain.outcome === "QUALIFIED") {
           c.classification = { ...resolved, source: "semantic_classification" };
           c.verdict = "pass";
           c.record = advance(c.record, "qualified_company", "semantic_classification_pass");
@@ -1253,6 +1343,53 @@ export async function runCapabilityPlan(
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
   };
+}
+
+/**
+ * Project the engine's working set into portfolio candidates.
+ *
+ * The portfolio module has existed and been tested since the previous change and
+ * nothing consumed it, so a request for 100 still ran the old quota path. This
+ * is the adapter that makes it real: one candidate per company, carrying the
+ * explicit Brain outcome, the canonical identity state and the commercial tier.
+ */
+export function toPortfolioCandidates(
+  companies: readonly EngineCompany[],
+): PortfolioCandidate[] {
+  return companies
+    .filter((c) => c.prequalified !== null)
+    .map((c) => {
+      const pq = c.prequalified!;
+      const identity: PortfolioCandidate["identity_status"] =
+        c.identity && identityIsActionable(c.identity) ? "verified_match"
+        : c.identity?.status === "mismatch" ? "rejected_mismatch"
+        : "unresolved";
+      const brain: PortfolioCandidate["brain"] =
+        c.brain?.outcome === "QUALIFIED" ? "qualified"
+        : c.brain?.outcome === "REVIEW" ? "review"
+        : c.brain?.outcome === "REJECT" ? "reject"
+        : null;
+      return {
+        company_key: c.key,
+        company_name: pq.name,
+        domain: pq.canonical_domain,
+        tier: c.hiring_assessment?.tier ?? pq.best_tier,
+        brain,
+        identity_status: identity,
+        active: true,
+        // Geography and B2B relevance are decided by the Brain's own gates; the
+        // floor only re-checks what it can see here.
+        geography_ok: true,
+        b2b_use_case: c.brain ? c.brain.outcome !== "REJECT" : true,
+        has_factual_signal: (c.hiring_assessment?.commercial_jobs.length ?? 0) > 0 ||
+          pq.best_tier !== null,
+        source_evidence: !!pq.yc_url || !!pq.canonical_domain,
+        source_url: pq.yc_url ?? (pq.canonical_domain ? `https://${pq.canonical_domain}` : null),
+        contact_ready: c.contact_identities.length > 0,
+        round: c.hiring_assessment?.strongest?.round ?? null,
+        score: pq.score,
+      };
+    });
 }
 
 /**
@@ -1415,7 +1552,7 @@ function addCompany(
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     company: c, identity: null, enriched: null,
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
-    classification: null, verdict: null,
+    brain: null, classification: null, verdict: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
   });

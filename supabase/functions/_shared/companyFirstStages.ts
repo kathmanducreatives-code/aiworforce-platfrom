@@ -186,10 +186,24 @@ export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
   if ((i.excluded_industries ?? []).some((x) => x && names.includes(x.toLowerCase()))) {
     failed.push("excluded_industry");
   }
+  // INDUSTRY IS NEVER A HARD REJECTION ON WORDING.
+  //
+  // This used to `failed.push("industry_not_in_icp")` when the enriched industry
+  // names did not literally contain an ICP phrase. LinkedIn's vocabulary has no
+  // "B2B SaaS" — it has "Software Development", "Technology, Information and
+  // Internet", "IT Services and IT Consulting" — so every company in the audited
+  // run would have hard-failed on wording alone, including one whose YC one-liner
+  // describes a product sold to engineering organisations.
+  //
+  // A label mismatch is now MISSING EVIDENCE, which makes the stage
+  // `company_fit_pending` and routes the company to the structured semantic
+  // assessment that can actually read the product and the customer. It is not a
+  // loosening: the label alone cannot pass a company either, and
+  // `excluded_industries` above still rejects outright.
   if ((i.positive_industries ?? []).length > 0) {
     if (i.industry_ids.length === 0) missing.push("industry_evidence_absent");
     else if (!(i.positive_industries ?? []).some((x) => x && names.includes(x.toLowerCase()))) {
-      failed.push("industry_not_in_icp");
+      missing.push("industry_label_not_in_icp_wording");
     }
   }
 
