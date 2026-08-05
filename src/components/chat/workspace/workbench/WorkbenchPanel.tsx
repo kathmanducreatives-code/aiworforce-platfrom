@@ -6,6 +6,8 @@ import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
 import { readEvaluationRows } from '@/lib/workbench/evaluationRows';
 import WorkflowProgressStrip from './WorkflowProgressStrip';
 import EvaluatedCompaniesTable from './EvaluatedCompaniesTable';
+import ContinueVerificationBar from './ContinueVerificationBar';
+import { canContinueWorkflow, hasStoredCompanyRun } from '@/lib/workbench/continueWorkflow';
 
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
@@ -27,7 +29,7 @@ type Tab = 'table' | 'insights' | 'activity';
 
 export default function WorkbenchPanel() {
   const { workspaceId } = useWorkspace();
-  const { selectedOutput, activeConversationId, closeWorkbench } = useChatWorkspace();
+  const { selectedOutput, activeConversationId, closeWorkbench, openWorkbench } = useChatWorkspace();
   const data = useWorkbenchData(selectedOutput);
   const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
 
@@ -54,6 +56,19 @@ export default function WorkbenchPanel() {
   // Evaluated-but-unqualified companies. A SEPARATE projection from the lead
   // table: these rows have no lead_candidate_id, so nothing can act on them.
   const evaluationRows = readEvaluationRows(taskResult);
+
+  // CONTINUE VERIFICATION. Offered only when the run genuinely stopped owing
+  // results AND still holds a paid company dataset — otherwise continuing would
+  // just re-run discovery, which is the double-charge this avoids.
+  const showContinue = canContinueWorkflow({
+    workflowState: data.planStatus === 'partial' ? 'partial' : (data.planStatus ?? null),
+    hasStoredCompanyRun: hasStoredCompanyRun(taskResult),
+    continuationActive: progress?.in_progress === true,
+    hasWorkspaceAccess: !!workspaceId,
+    taskId: selectedOutput?.taskId ?? null,
+    planId: selectedOutput?.planId ?? null,
+    conversationId: selectedOutput?.conversationId ?? activeConversationId ?? null,
+  });
 
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
@@ -173,6 +188,21 @@ export default function WorkbenchPanel() {
 
       {tab === 'table' ? (
         <div className="flex-1 min-h-0 min-w-0 relative z-[1] overflow-hidden flex flex-col">
+          {leadsPanel && showContinue && (
+            <ContinueVerificationBar
+              originalTaskId={selectedOutput!.taskId!}
+              originalPlanId={selectedOutput!.planId!}
+              conversationId={(selectedOutput?.conversationId ?? activeConversationId)!}
+              onContinued={({ planId, taskId, conversationId }) => {
+                // OWNERSHIP FOLLOWS THE CONTINUATION; the conversation does not
+                // change, so the user stays in the same chat and Workbench.
+                openWorkbench({
+                  planId, taskId, conversationId,
+                  panel: leadsPanel ? { ...leadsPanel, plan_id: planId } : null,
+                });
+              }}
+            />
+          )}
           {leadsPanel && progress && <WorkflowProgressStrip progress={progress} />}
           {/* The strip is a fixed-height sibling; the table takes what is left
               and scrolls inside it rather than pushing the panel taller. */}
