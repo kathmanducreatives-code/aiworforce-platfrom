@@ -70,9 +70,17 @@ Deno.serve(async (req) => {
       .eq("id", request.original_task_id).maybeSingle(),
     admin.from("task_plans").select("id, workspace_id, user_id, steps, user_instruction")
       .eq("id", request.original_plan_id).maybeSingle(),
-    admin.from("conversations").select("id, workspace_id")
+    admin.from("conversations").select("id, workspace_id, user_id")
       .eq("id", request.conversation_id).maybeSingle(),
   ]);
+
+  // POSITIVE PROOF OF LINKAGE, because `conversations.workspace_id` is unset on
+  // almost every row and comparing it refused every real conversation.
+  const { count: planMessageCount } = await admin.from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", request.conversation_id)
+    .filter("metadata->>plan_id", "eq", request.original_plan_id);
+  const conversationCarriesOriginalPlan = (planMessageCount ?? 0) > 0;
 
   // ── 3. MAY THEY? Same guard as every other path, unmodified. ────────────────
   const workspaceId = (task?.workspace_id ?? plan?.workspace_id) as string | null;
@@ -109,6 +117,7 @@ Deno.serve(async (req) => {
   const decision = decideContinuation({
     request,
     task: task as never, plan: plan as never, conversation: conversation as never,
+    conversationCarriesOriginalPlan,
     toolCalls: (toolCalls ?? []) as never,
     existing,
   });

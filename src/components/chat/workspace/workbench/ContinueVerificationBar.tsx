@@ -27,7 +27,11 @@ export default function ContinueVerificationBar({
     setError(null);
     const r = await continueWorkflow({ originalTaskId, originalPlanId, conversationId });
     if (!r.ok || !r.plan_id) {
-      setError(r.message ?? 'Could not continue this workflow.');
+      // The REAL reason, not "non-2xx status code". The first failed click
+      // returned a 403 carrying an exact cause and none of it reached the user.
+      const code = r.error && r.error !== 'continuation_failed' ? ` (${r.error})` : '';
+      const ref = r.request_id ? ` · ref ${r.request_id}` : '';
+      setError(`${r.message ?? 'Could not continue this workflow.'}${code}${ref}`);
       setBusy(false);
       return;
     }

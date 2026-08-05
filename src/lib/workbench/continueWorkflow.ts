@@ -10,6 +10,7 @@
 // PURE decision logic here; the network call is one thin wrapper at the bottom.
 
 import { supabase } from '@/integrations/supabase/client';
+import { describeContinuationError, readErrorBody } from './continuationErrors';
 
 export const CONTINUATION_REASON = 'resume_from_existing_company_dataset' as const;
 
@@ -68,6 +69,8 @@ export interface ContinuationResult {
   conversation_id?: string | null;
   error?: string;
   message?: string;
+  status?: number | null;
+  request_id?: string | null;
 }
 
 /**
@@ -92,11 +95,15 @@ export async function continueWorkflow(input: {
     },
   });
   if (error) {
-    const detail = (data ?? null) as { error?: string; message?: string } | null;
+    // `invoke` sets `data` to null and never reads the body on a non-2xx, so the
+    // real reason has to be recovered from the Response it attaches.
+    const detail = await readErrorBody(error);
     return {
       ok: false,
-      error: detail?.error ?? 'continuation_failed',
-      message: detail?.message ?? error.message,
+      status: detail.status,
+      error: detail.code ?? 'continuation_failed',
+      message: describeContinuationError(detail.status, detail.code, detail.message),
+      request_id: detail.requestId,
     };
   }
   const d = (data ?? {}) as ContinuationResult;

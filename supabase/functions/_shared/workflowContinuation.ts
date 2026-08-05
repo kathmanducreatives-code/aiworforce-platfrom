@@ -188,7 +188,21 @@ export interface ContinuationInputs {
   } | null;
   plan: { id: string; workspace_id: string | null; user_id: string | null;
     steps: unknown; user_instruction: string | null } | null;
-  conversation: { id: string; workspace_id: string | null } | null;
+  conversation: { id: string; workspace_id: string | null; user_id?: string | null } | null;
+  /**
+   * Does this conversation demonstrably contain the ORIGINAL plan?
+   *
+   * `conversations.workspace_id` is NULL on 232 of 234 rows in TEST — the column
+   * exists but this application never populates it, so requiring it to equal the
+   * task's workspace refused every real conversation with a 403. That is exactly
+   * what happened to the first "Continue verification" click.
+   *
+   * The caller proves linkage instead: the conversation must already carry a
+   * message for the original plan. That is STRONGER than the column check it
+   * replaces — it is positive evidence that this conversation is the one that
+   * ran this workflow, rather than a field that happens to agree.
+   */
+  conversationCarriesOriginalPlan: boolean;
   toolCalls: ReadonlyArray<{
     status?: string | null;
     input_json?: Record<string, unknown> | null;
@@ -244,10 +258,26 @@ export function decideContinuation(i: ContinuationInputs): ContinuationDecision 
   }
   const workspaceId = i.task.workspace_id ?? i.plan.workspace_id;
   if (!workspaceId) return { ok: false, refusal: "task_not_found" };
-  // The conversation must live in the SAME workspace. Without this a member of
-  // workspace A could graft a continuation onto a conversation in workspace B.
-  if (!i.conversation || i.conversation.id !== r.conversation_id ||
-      i.conversation.workspace_id !== workspaceId) {
+  // THE CONVERSATION MUST BELONG TO THIS WORKFLOW.
+  //
+  // Without this a member of workspace A could graft a continuation onto a
+  // conversation in workspace B. The original check compared
+  // `conversations.workspace_id` — but that column is NULL on 232 of 234 rows in
+  // TEST, so it refused every genuine conversation with a 403.
+  //
+  // Two ways to establish ownership, and at least one must hold:
+  //   * the conversation DECLARES the same workspace (when the column is set), or
+  //   * the conversation demonstrably CARRIES the original plan.
+  // The second is stronger evidence than the first, because it proves this
+  // conversation actually ran this workflow. A conversation that declares a
+  // DIFFERENT workspace is refused outright, whatever else is true.
+  if (!i.conversation || i.conversation.id !== r.conversation_id) {
+    return { ok: false, refusal: "conversation_workspace_mismatch" };
+  }
+  const declaresOtherWorkspace = i.conversation.workspace_id != null &&
+    i.conversation.workspace_id !== workspaceId;
+  const declaresThisWorkspace = i.conversation.workspace_id === workspaceId;
+  if (declaresOtherWorkspace || !(declaresThisWorkspace || i.conversationCarriesOriginalPlan)) {
     return { ok: false, refusal: "conversation_workspace_mismatch" };
   }
   if (!taskIsTerminal(i.task.status)) return { ok: false, refusal: "task_not_terminal" };

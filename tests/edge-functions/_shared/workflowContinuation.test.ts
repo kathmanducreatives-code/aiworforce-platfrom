@@ -46,7 +46,8 @@ function inputs(over: Partial<ContinuationInputs> = {}): ContinuationInputs {
       result: { lead_mission: { original_user_query: "Find founders of SaaS startups…" } } },
     plan: { id: PLAN, workspace_id: WS, user_id: "u1", steps: [{ agent_slug: "scout" }],
       user_instruction: "Find founders of SaaS startups…" },
-    conversation: { id: CONV, workspace_id: WS },
+    conversation: { id: CONV, workspace_id: null, user_id: "u1" },
+    conversationCarriesOriginalPlan: true,
     toolCalls: TOOL_CALLS,
     existing: null,
     ...over,
@@ -72,7 +73,8 @@ Deno.test("1/2/3. member creates; non-member 403; no JWT 401", () => {
   assertEquals((noJwt as { status: number }).status, 401);
 
   // A member of ANOTHER workspace cannot graft onto this conversation.
-  const crossWs = decideContinuation(inputs({ conversation: { id: CONV, workspace_id: "other-ws" } }));
+  const crossWs = decideContinuation(inputs({
+    conversation: { id: CONV, workspace_id: "other-ws" }, conversationCarriesOriginalPlan: true }));
   assertEquals(crossWs.ok, false);
   assertEquals((crossWs as { refusal: string }).refusal, "conversation_workspace_mismatch");
   assertEquals(REFUSAL_STATUS.conversation_workspace_mismatch, 403);
@@ -281,6 +283,66 @@ Deno.test("14. the four tracked companies survive prequalification of the stored
     assertFalse(/\.(com|ai|to)\b/.test(linkedInSearchQueryFor(c)),
       `query "${linkedInSearchQueryFor(c)}" must not carry a domain`);
   }
+});
+
+// ═══════ REGRESSION: the 403 that killed the first real click ══
+//
+// `conversations.workspace_id` is NULL on 232 of 234 rows in TEST — the column
+// exists and this application never populates it. The original check required it
+// to EQUAL the task's workspace, so the first "Continue verification" click was
+// refused with `conversation_workspace_mismatch` (403) after 1341ms, having
+// created nothing. The user saw only "Edge Function returned a non-2xx status
+// code".
+//
+// The check is not dropped; it is replaced with something stronger.
+
+Deno.test("REGRESSION: a NULL conversation workspace no longer 403s", () => {
+  const real = decideContinuation(inputs({
+    conversation: { id: CONV, workspace_id: null, user_id: "u1" },
+    conversationCarriesOriginalPlan: true,
+  }));
+  assert(real.ok && real.created,
+    "the exact production shape — null workspace, provably the right conversation");
+});
+
+Deno.test("REGRESSION: linkage is REQUIRED, so the guarantee is not weakened", () => {
+  // Null workspace AND no proof this conversation ran the plan → still refused.
+  const unproven = decideContinuation(inputs({
+    conversation: { id: CONV, workspace_id: null, user_id: "u1" },
+    conversationCarriesOriginalPlan: false,
+  }));
+  assertEquals((unproven as { refusal: string }).refusal, "conversation_workspace_mismatch");
+
+  // A conversation DECLARING another workspace is refused even with linkage —
+  // an explicit foreign owner outranks circumstantial evidence.
+  const foreign = decideContinuation(inputs({
+    conversation: { id: CONV, workspace_id: "other-ws", user_id: "u1" },
+    conversationCarriesOriginalPlan: true,
+  }));
+  assertEquals((foreign as { refusal: string }).refusal, "conversation_workspace_mismatch");
+
+  // A matching declared workspace still works on its own.
+  const declared = decideContinuation(inputs({
+    conversation: { id: CONV, workspace_id: WS, user_id: "u1" },
+    conversationCarriesOriginalPlan: false,
+  }));
+  assert(declared.ok && declared.created);
+
+  // A different conversation id is always refused.
+  const wrongConv = decideContinuation(inputs({
+    conversation: { id: "11111111-1111-1111-1111-111111111111", workspace_id: WS },
+    conversationCarriesOriginalPlan: true,
+  }));
+  assertEquals((wrongConv as { refusal: string }).refusal, "conversation_workspace_mismatch");
+});
+
+Deno.test("REGRESSION: the endpoint proves linkage from messages, server-side", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/continue-workflow/index.ts", import.meta.url));
+  assert(src.includes('.eq("conversation_id", request.conversation_id)'));
+  assert(src.includes('.filter("metadata->>plan_id", "eq", request.original_plan_id)'),
+    "linkage must be proven against the ORIGINAL plan, not a caller-supplied value");
+  assert(src.includes("conversationCarriesOriginalPlan"));
 });
 
 // ══════════════════════ 15/16. no phantoms, no spend ══
