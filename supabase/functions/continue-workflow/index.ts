@@ -213,6 +213,11 @@ Deno.serve(async (req) => {
         ...(toolInput ? { tool_input: toolInput } : {}),
         execution_mode: "company_first",
         capability_execution_state: spec.capability_execution_state,
+        // THE OTHER HALF OF THE RESUME. Without these the continuation adopts
+        // the discovery run and then pays a second time to resolve the identity
+        // of every company that run already resolved.
+        lead_resume_records: spec.lead_resume_records,
+        lead_resume_lineage_root: spec.lineage_root_task_id,
       }),
     });
     invokeStatus = res.status;

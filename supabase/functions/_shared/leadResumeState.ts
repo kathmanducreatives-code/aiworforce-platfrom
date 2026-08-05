@@ -240,3 +240,87 @@ export function continuationAvailable(c: Checkpoint | null): boolean {
   return !!c && c.continuation_required && c.pending_company_keys.length +
     (c.next_pending_capability ? 1 : 0) > 0;
 }
+
+// ------------------------------------------------------ reading it back in ----
+//
+// A checkpoint nobody reads is a receipt, not a resume. These are the readers
+// that turn `tasks.result` back into the two things the guard needs: the prior
+// per-company records, and the lineage root the operation key is built from.
+
+/** The key `tasks.result` stores the checkpoint under. */
+export const CHECKPOINT_RESULT_KEY = "lead_resume_checkpoint" as const;
+/** The key `tasks.result` stores the lineage root task id under. */
+export const LINEAGE_ROOT_RESULT_KEY = "lead_resume_lineage_root" as const;
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? v as Record<string, unknown> : null;
+}
+
+function asStage<T extends string>(v: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof v === "string" && (allowed as readonly string[]).includes(v)
+    ? v as T : fallback;
+}
+
+/**
+ * Per-company records from a persisted task result.
+ *
+ * VALIDATED, not cast. This crosses a trust boundary — the result column is
+ * JSON that a previous deploy, or a hand edit, may have written in another
+ * shape. A record whose `company_key` is missing is dropped rather than
+ * defaulted, because a record under the wrong key would skip a paid call for a
+ * company it does not describe. Everything else falls back to the "not started"
+ * value, which can only ever cause work to be REDONE, never wrongly skipped.
+ */
+export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecord[] {
+  const result = asRecord(taskResult);
+  const checkpoint = asRecord(result?.[CHECKPOINT_RESULT_KEY]);
+  if (!checkpoint || checkpoint.version !== RESUME_STATE_VERSION) return [];
+  if (!Array.isArray(checkpoint.companies)) return [];
+  const out: CompanyResumeRecord[] = [];
+  for (const raw of checkpoint.companies) {
+    const c = asRecord(raw);
+    const key = c?.company_key;
+    if (!c || typeof key !== "string" || !key) continue;
+    const base = newCompanyRecord(
+      key, typeof c.company_name === "string" ? c.company_name : key);
+    out.push({
+      ...base,
+      identity: asStage(c.identity,
+        ["not_started", "resolved", "unresolved", "mismatch"] as const, "not_started"),
+      enrichment: asStage(c.enrichment,
+        ["not_started", "completed", "failed", "not_required"] as const, "not_started"),
+      hiring: asStage(c.hiring,
+        ["not_started", "verified_from_existing_evidence", "verified_externally",
+          "verification_needed", "not_verified", "failed"] as const, "not_started"),
+      brain: asStage(c.brain,
+        ["not_started", "qualified", "review", "rejected", "failed"] as const, "not_started"),
+      founder: asStage(c.founder,
+        ["not_started", "completed", "unresolved", "failed", "not_eligible"] as const,
+        "not_started"),
+      linkedin_company_url: typeof c.linkedin_company_url === "string"
+        ? c.linkedin_company_url : null,
+      completed_operations: Array.isArray(c.completed_operations)
+        ? c.completed_operations.filter((o): o is string => typeof o === "string" && !!o)
+        : [],
+      updated_at: typeof c.updated_at === "string" ? c.updated_at : base.updated_at,
+    });
+  }
+  return out;
+}
+
+/**
+ * The task id every invocation in one continuation chain shares.
+ *
+ * `providerOperationKey` is only stable if this is. Using the immediate parent
+ * would make a THIRD invocation compute different keys from the second and
+ * re-buy everything the second had already paid for — the exact failure the key
+ * exists to prevent. So the root propagates: a run that has one keeps it, and
+ * only a run without one becomes the root.
+ */
+export function lineageRootTaskId(
+  parentTaskId: string, parentTaskResult: unknown,
+): string {
+  const stored = asRecord(parentTaskResult)?.[LINEAGE_ROOT_RESULT_KEY];
+  return typeof stored === "string" && stored ? stored : parentTaskId;
+}

@@ -59,7 +59,8 @@ import {
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
 import {
-  CHECKPOINT_RESERVE_MS, shouldCheckpoint, type CompanyResumeRecord,
+  CHECKPOINT_RESERVE_MS, inputFingerprint, providerOperationKey, shouldCheckpoint,
+  shouldSkipProviderCall, type CompanyResumeRecord,
 } from "./leadResumeState.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
@@ -112,7 +113,12 @@ export interface ProviderAttempt {
     | "ok" | "empty" | "error" | "pending" | "skipped_idempotent" | "compile_failed"
     | "skipped_not_configured"
     /** The execution deadline closed before this call could safely start. */
-    | "skipped_deadline";
+    | "skipped_deadline"
+    /**
+     * A previous invocation already bought this exact answer, or already gave up
+     * on this company. Costs nothing and is not a failure.
+     */
+    | "skipped_resume_reuse";
   rows: number;
   cost_units: number;
   reason: string | null;
@@ -411,6 +417,28 @@ export interface CapabilityEngineOpts {
   ycMaxSize?: string;
   solidcodeTeamSizes?: string[];
   foundersPerCompany?: number;
+  /**
+   * The scope that makes a provider call identifiable across invocations, plus
+   * whatever a PREVIOUS invocation of this same mission already paid for.
+   *
+   * SUPPLIED ON EVERY RUN, not only on a continuation. The scope is what gives a
+   * call a stable operation key; the key is what a later run reads. A first run
+   * therefore carries the scope with an EMPTY `records` — it skips nothing, and
+   * it writes the ledger the next run consults. Omitting the scope until records
+   * exist would mean no run ever wrote one.
+   *
+   * `lineage_root_task_id` must be the SAME value for every invocation in a
+   * chain; see `lineageRootTaskId`. A per-task value here would silently turn
+   * every operation key into a new question and re-buy the lot.
+   *
+   * Omitted entirely, the engine behaves exactly as it did before this option
+   * existed.
+   */
+  resume?: {
+    workspace_id: string;
+    lineage_root_task_id: string;
+    records: readonly CompanyResumeRecord[];
+  };
 }
 
 export interface CapabilityRunResult {
@@ -458,9 +486,44 @@ export async function runCapabilityPlan(
     log("capability_containment_violation", { actorKey });
   });
 
+  // ── WHAT A PREVIOUS INVOCATION ALREADY PAID FOR ────────────────────────────
+  const resumeScope = opts.resume ?? null;
+  const priorRecords = new Map<string, CompanyResumeRecord>(
+    (resumeScope?.records ?? []).map((r) => [r.company_key, r]));
+
+  /**
+   * Re-attach what an earlier invocation already proved about this company.
+   *
+   * Deliberately narrow. The record carries STAGES and ONE payload — the
+   * resolved LinkedIn URL — so that is all this restores. Restoring the URL is
+   * what actually stops the re-buy: the identity stage already declines to pay
+   * for a company it can name, so a restored company never reaches the search
+   * actor at all. Enrichment, hiring and founder payloads are NOT in the record,
+   * so those stages are deliberately left to run again rather than be skipped
+   * into an empty result the Brain would read as a proven negative.
+   *
+   * Idempotent — it is applied before every capability and must stay safe to
+   * repeat.
+   */
+  const restoreFromResume = (c: EngineCompany): void => {
+    const prior = priorRecords.get(c.key);
+    if (!prior) return;
+    for (const op of prior.completed_operations) {
+      if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+    }
+    if (prior.identity === "resolved" && prior.linkedin_company_url &&
+        !c.company.linkedin_company_url) {
+      c.company = { ...c.company, linkedin_company_url: prior.linkedin_company_url };
+      log("identity_restored_from_resume", {
+        company_key: c.key, linkedin_company_url: prior.linkedin_company_url,
+      });
+    }
+  };
+
   /** One provider call: idempotency, cost, attempt record, never off-graph. */
   const callProvider = async (
     capability: CapabilityId, provider: string, compiled: CompileResult<unknown>,
+    company?: EngineCompany,
   ): Promise<Record<string, unknown>[]> => {
     const spec = CAPABILITY_REGISTRY[capability];
     // COUNTED AT RECORD TIME, not before the await. The resolution stage runs two
@@ -484,6 +547,40 @@ export async function runCapabilityPlan(
       return [];
     }
     const call = compiled;
+
+    // ── THE RESUME GUARD ─────────────────────────────────────────────────────
+    //
+    // Checked FIRST, ahead of every other gate, because the cheapest call is the
+    // one that is never made. `shouldSkipProviderCall` has been persisted and
+    // tested since the checkpoint landed and no call site consulted it, so a
+    // continuation re-bought identity resolution for companies it had already
+    // resolved — the precise waste the checkpoint was written to end.
+    //
+    // ONLY where the skip is LOSSLESS. `company` is passed by call sites whose
+    // result the resume state can restore or whose outcome is already terminal;
+    // for everything else this is inert and the call proceeds as before. A skip
+    // that returned an empty result the caller then read as evidence would trade
+    // money for correctness, which is a worse bargain than the one it replaces.
+    const operationKey = resumeScope && company
+      ? providerOperationKey({
+        workspace_id: resumeScope.workspace_id,
+        lineage_root_task_id: resumeScope.lineage_root_task_id,
+        company_key: company.key,
+        capability, provider,
+        input_fingerprint: inputFingerprint(call.input),
+      })
+      : null;
+    if (operationKey && company) {
+      const verdict = shouldSkipProviderCall(priorRecords.get(company.key), operationKey);
+      if (verdict.skip) {
+        record("skipped_resume_reuse", 0, verdict.reason);
+        log("provider_skipped_resume_reuse", {
+          capability, provider, company_key: company.key, reason: verdict.reason,
+        });
+        return [];
+      }
+    }
+
     if (deps.callCompleted?.(call.batchIdentity)) {
       record("skipped_idempotent", 0, call.batchIdentity);
       return [];
@@ -534,6 +631,14 @@ export async function runCapabilityPlan(
       deps.deadline?.observeCall(Date.now() - startedAt);
       deps.onCallComplete?.(call.batchIdentity);
       record(rows.length > 0 ? "ok" : "empty", rows.length, null);
+      // THE LEDGER OF WHAT WAS BOUGHT, written only after the answer arrived.
+      //
+      // An errored or still-pending call records nothing, so a retry is never
+      // mistaken for completed work. An EMPTY result does record: the question
+      // was asked and paid for, and asking it again buys the same silence.
+      if (operationKey && company && !company.completed_operations.includes(operationKey)) {
+        company.completed_operations.push(operationKey);
+      }
       return rows;
     } catch (e) {
       deps.deadline?.observeCall(Date.now() - startedAt);
@@ -658,6 +763,10 @@ export async function runCapabilityPlan(
       continue;
     }
     state.current_capability = cap;
+    // Applied before every capability, not once after discovery: companies are
+    // added by more than one provider, and a restore that ran too early would
+    // miss the ones added last.
+    if (resumeScope) for (const c of companies) restoreFromResume(c);
 
     // ── DISCOVERY ────────────────────────────────────────────────────────────
     if (cap === "startup_company_discovery") {
@@ -870,7 +979,12 @@ export async function runCapabilityPlan(
             scraperMode: "full",
             maxItems: 5,
           });
-          const found = await callProvider(cap, provider, compiled);
+          // SCOPED TO THE COMPANY, so the resume guard can refuse it. Lossless:
+          // a company this run already resolved carries its URL back in through
+          // `restoreFromResume` and never reaches this branch, and a company a
+          // previous run gave up on re-derives the same unresolved identity from
+          // zero lookups — the outcome it already had, for nothing.
+          const found = await callProvider(cap, provider, compiled, c);
           lookups = found.map((f) => ({
             name: (f.name as string) ?? null,
             linkedinUrl: (f.linkedinUrl as string) ?? null,

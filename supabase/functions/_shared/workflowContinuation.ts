@@ -25,6 +25,10 @@
 // write, which is what lets the whole decision be tested without a database and
 // without a paid Actor.
 
+import {
+  lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
+} from "./leadResumeState.ts";
+
 export const CONTINUATION_VERSION = "workflow-continuation-v1" as const;
 
 /** The only reason currently supported. Kept closed on purpose. */
@@ -233,6 +237,17 @@ export interface ContinuationPlanSpec {
   };
   /** The engine state that makes discovery ADOPT the run instead of starting it. */
   capability_execution_state: Record<string, unknown>;
+  /**
+   * Per-company stage state from the parent run's checkpoint.
+   *
+   * The capability state above stops discovery buying a SECOND Actor run. This
+   * is the other half: it stops the per-company stages re-buying work the parent
+   * already paid for. Empty when the parent wrote no checkpoint, which simply
+   * means nothing is known to be done.
+   */
+  lead_resume_records: CompanyResumeRecord[];
+  /** Stable across the whole chain — the operation keys are built from it. */
+  lineage_root_task_id: string;
   steps: unknown;
   user_instruction: string | null;
 }
@@ -312,6 +327,8 @@ export function decideContinuation(i: ContinuationInputs): ContinuationDecision 
         continuation_reason: r.continuation_reason,
       },
       capability_execution_state: buildResumeState(run),
+      lead_resume_records: readCheckpointCompanies(i.task.result),
+      lineage_root_task_id: lineageRootTaskId(i.task.id, i.task.result),
       steps: i.plan.steps,
       user_instruction: i.plan.user_instruction,
     },

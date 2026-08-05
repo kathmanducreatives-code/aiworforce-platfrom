@@ -81,7 +81,10 @@ import {
   applyMissionPrecedence, buildClassifierPayload, parseSemanticFitStrict,
   SEMANTIC_INPUT_SCHEMA_VERSION,
 } from "../_shared/companyBrainSemanticFit.ts";
-import { buildCheckpoint } from "../_shared/leadResumeState.ts";
+import {
+  buildCheckpoint, LINEAGE_ROOT_RESULT_KEY, readCheckpointCompanies,
+  RESUME_STATE_VERSION, type CompanyResumeRecord,
+} from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 
 /**
@@ -101,6 +104,23 @@ function readCapabilityExecutionState(
     Array.isArray(c.completed_capabilities)
     ? (s as CapabilityExecutionState)
     : null;
+}
+
+/**
+ * Per-company work a previous invocation already paid for.
+ *
+ * `continue-workflow` reads the parent task's checkpoint and sends it here.
+ * Re-validated on arrival rather than trusted: this body is server-to-server
+ * today, but a resume record under a wrong key would skip a paid call for a
+ * company it does not describe, so the shape is proven, not assumed.
+ */
+function readLeadResumeRecords(body: Record<string, unknown>): CompanyResumeRecord[] {
+  const raw = body.lead_resume_records;
+  if (!Array.isArray(raw)) return [];
+  // `readCheckpointCompanies` owns the validation; feed it the shape it reads.
+  return readCheckpointCompanies({
+    lead_resume_checkpoint: { version: RESUME_STATE_VERSION, companies: raw },
+  });
 }
 
 /**
@@ -475,6 +495,13 @@ Deno.serve(async (req) => {
   const needs_approval: boolean = body.needs_approval === true;
   const tool_input_body: any = body.tool_input ?? null;
   const execution_mode_body: string | undefined = body.execution_mode;
+  // WHAT A PREVIOUS INVOCATION ALREADY BOUGHT. Sent by `continue-workflow`;
+  // absent on a first run, where it correctly means "nothing is known to be
+  // done" and the engine spends exactly as it did before.
+  const leadResumeRecords = readLeadResumeRecords(body as Record<string, unknown>);
+  const leadResumeLineageRootIn: string | null =
+    typeof body.lead_resume_lineage_root === "string" && body.lead_resume_lineage_root
+      ? body.lead_resume_lineage_root : null;
   // orchestrate threads the plan step's required tool here (index.ts kickoff). It
   // was previously never read — the root cause of the Scout-fallback failure, where
   // a source_with_apify step whose tool_input carried no tool_name fell through to
@@ -1468,6 +1495,12 @@ Deno.serve(async (req) => {
         // attempts, cost and resume all come from `runCapabilityPlan`.
         // `executeCompanyFirstRoute` is not consulted at all, so the two cannot
         // disagree about the same run — it survives only for pre-mission tasks.
+
+        // THE CHAIN'S ROOT. A continuation inherits it; a first run becomes it.
+        // Inheriting is what keeps a third invocation computing the same
+        // operation keys as the second instead of re-buying everything.
+        const leadResumeLineageRoot = leadResumeLineageRootIn ?? task.id;
+
         let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
         if (!resumeSatisfied && persistedMission && missionPlan) {
           try {
@@ -1615,6 +1648,21 @@ Deno.serve(async (req) => {
               // band: this Actor ANDs multiple values and returns zero rows.
               solidcodeTeamSizes: ["2-10", "11-50", "51-200"],
               state: readCapabilityExecutionState(body as Record<string, unknown>),
+              // THE RESUME GUARD'S SCOPE — supplied on EVERY run, not only on a
+              // continuation.
+              //
+              // The scope is what lets a call be given a stable operation key,
+              // and the key is what a LATER run reads. Passing it only when
+              // records already exist would mean no run ever wrote the ledger
+              // and no run could ever read one: the first run must record what
+              // it bought for the second to know not to buy it again. `records`
+              // is empty on a first run, which correctly means "nothing is known
+              // to be done" — so nothing is skipped.
+              resume: {
+                workspace_id,
+                lineage_root_task_id: leadResumeLineageRoot,
+                records: leadResumeRecords,
+              },
               brain: brainEnforced
                 ? {
                   employee_min: effectivePolicy.constraints.min_employees ?? null,
@@ -1726,6 +1774,10 @@ Deno.serve(async (req) => {
                       reason: capabilityRun.state.terminal_reason === "execution_deadline_checkpoint"
                         ? "execution_deadline_checkpoint" : "all_work_complete",
                     }),
+                    // PERSISTED SO THE NEXT CONTINUATION CAN INHERIT IT. Read
+                    // back by `lineageRootTaskId`; without it every link in the
+                    // chain would compute its own root and skip nothing.
+                    [LINEAGE_ROOT_RESULT_KEY]: leadResumeLineageRoot,
                     semantic_classification_observability: {
                       input_schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
                       model: classificationBinding.enablement?.model ?? null,
