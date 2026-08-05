@@ -54,9 +54,13 @@ import {
   reachesCompanyBrain, type HiringAssessment, type SupportingSignal,
 } from "./commercialSignalPolicy.ts";
 import {
-  applyMissionPrecedence, decideCompanyBrain, type BrainDecision,
+  applyMissionPrecedence, decideCompanyBrain,
+  type BrainDecision, type ParsedSemanticFit, type SemanticFitInput,
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
+import {
+  CHECKPOINT_RESERVE_MS, shouldCheckpoint, type CompanyResumeRecord,
+} from "./leadResumeState.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
@@ -290,6 +294,10 @@ export interface EngineCompany {
    * REJECT for every company that reached the gate — never a silent absence.
    */
   brain: BrainDecision | null;
+  /** The classifier's raw-safe parse: status, repaired fields, assessment. */
+  semantic_parse: ParsedSemanticFit | null;
+  /** Stable keys of provider operations already completed for this company. */
+  completed_operations: string[];
   /** Set when the Brain returned UNKNOWN and evidence resolution was attempted. */
   classification: { verdict: "pass" | "fail" | "unknown"; reason: string; source: string } | null;
   /**
@@ -345,10 +353,18 @@ export interface CapabilityEngineDeps {
    * point: a company we could not classify is held for review, never converted
    * into a rejection because the budget for interpreting it was zero.
    */
-  classifyCompany?: (input: {
-    company_name: string | null; description: string | null;
-    provider_industry: string | null; positive_industries: string[];
-  }) => Promise<{ verdict: "pass" | "fail" | "unknown"; reason: string } | null>;
+  /**
+   * THE STRUCTURED CLASSIFIER. One contract, end to end.
+   *
+   * This used to return `{verdict, reason}` while the semantic module expected
+   * the full schema, so the live path could never produce a real business-model
+   * judgement — only an offline stub could. There is now ONE shape, and it is
+   * the schema the Brain actually reasons over.
+   *
+   * Absent, or returning null, means UNKNOWN STAYS UNKNOWN: the company is held
+   * for review, never converted into a rejection for want of budget.
+   */
+  classifyCompany?: (input: SemanticFitInput) => Promise<ParsedSemanticFit | null>;
   callCompleted?: (key: string) => boolean;
   onCallComplete?: (key: string) => void;
   /**
@@ -360,6 +376,8 @@ export interface CapabilityEngineDeps {
    * forever.
    */
   deadline?: ExecutionDeadline;
+  /** Wall clock kept back for writing a checkpoint. Defaults to 18s. */
+  checkpointReserveMs?: number;
   /**
    * Publish a stage snapshot as soon as it is true.
    *
@@ -399,6 +417,8 @@ export interface CapabilityRunResult {
   state: CapabilityExecutionState;
   companies: EngineCompany[];
   funnel: FunnelCounts;
+  /** Per-company stage state, so a resume continues where each one stopped. */
+  resume_records: CompanyResumeRecord[];
   /** Per-capability outcome, in execution order. Persisted for audit. */
   capability_outcomes: Array<{
     capability: CapabilityId;
@@ -473,11 +493,24 @@ export async function runCapabilityPlan(
     // `expired()` means "there is no longer room for another call plus writing
     // state" — not "time is up". Starting a call that cannot finish is exactly
     // how the previous run died holding a billed Actor run it never read.
-    if (deps.deadline?.expired()) {
+    // THE RESERVE, checked BEFORE the deadline itself.
+    //
+    // `expired()` means "no room for another call". The reserve is stricter: it
+    // stops starting paid work while there is still time to WRITE A CHECKPOINT,
+    // so a resume knows exactly which company owes which stage. The previous run
+    // learned it was out of time by being killed.
+    if (deps.deadline &&
+        shouldCheckpoint({
+          elapsedMs: () => deps.deadline!.elapsedMs(),
+          remainingMs: () => deps.deadline!.remainingMs(),
+        }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)) {
       record("skipped_deadline", 0,
-        `execution deadline reached after ${deps.deadline.elapsedMs()}ms; call not started`);
-      state.terminal_reason = "execution_deadline_reached";
-      log("provider_skipped_deadline", { capability, provider });
+        `checkpoint reserve reached after ${deps.deadline.elapsedMs()}ms ` +
+        `(${deps.deadline.remainingMs()}ms left); call not started`);
+      state.terminal_reason = "execution_deadline_checkpoint";
+      log("provider_skipped_checkpoint_reserve", {
+        capability, provider, remaining_ms: deps.deadline.remainingMs(),
+      });
       return [];
     }
     // RESUME BEFORE START. If a run for this capability+provider is already in
@@ -1166,31 +1199,45 @@ export async function runCapabilityPlan(
         // unsuitable. Rejecting here is what destroyed Docusign, Outreach, Clay,
         // Sortly and Harmonic Security on the 2026-08-03 run while looking like
         // precision.
-        const resolved = deps.classifyCompany
+        const parsed = deps.classifyCompany
           ? await deps.classifyCompany({
+            original_user_query: opts.mission.original_user_query,
+            mission_verticals: opts.mission.company_profile?.verticals ?? [],
+            mission_geography: opts.brain?.required_geography ?? null,
+            workspace_industries: opts.brain?.positive_industries ?? [],
             company_name: src.company_name ?? null,
-            description: src.description ?? null,
-            provider_industry: src.provider_industry ?? null,
-            positive_industries: opts.brain?.positive_industries ?? [],
+            yc_description: c.company.description ?? null,
+            website_description: src.website ?? null,
+            linkedin_description: c.enriched?.description ?? null,
+            linkedin_industry: src.provider_industry ?? null,
+            linkedin_industry_ids: (src.industry_ids ?? []).map((x) => x.name),
+            employee_count: src.employee_count ?? null,
+            employee_advisory: src.employee_range_advisory ?? null,
+            geography: src.geography ?? null,
+            commercial_signal: c.hiring_assessment?.strongest?.title ?? null,
+            commercial_tier: c.hiring_assessment?.tier ?? null,
           })
           : null;
-        const semantic = resolved
+        c.semantic_parse = parsed;
+        // The legacy `{verdict, reason}` view, DERIVED rather than requested, so
+        // existing telemetry keeps working without a second live contract.
+        const resolved = parsed
           ? {
-            business_model: (resolved.verdict === "pass" ? "b2b_software" : "unknown") as never,
-            company_fit: (resolved.verdict === "pass" ? "pass"
-              : resolved.verdict === "fail" ? "fail" : "review") as never,
-            confidence: 0.6,
-            agentory_use_case: (resolved.verdict === "pass" ? "plausible" : "weak") as never,
-            supporting_evidence: [], conflicting_evidence: [],
-            // THE CLASSIFIER RESOLVES THE UNKNOWNS IT WAS ASKED ABOUT.
-            //
-            // Carrying `missing_evidence` forward after an explicit pass/fail
-            // would make the semantic path unable to settle anything — every
-            // resolved company would fall back to REVIEW, which is the opposite
-            // of what asking the question was for. Only an inconclusive answer
-            // leaves the fields unknown.
-            unknown_fields: resolved.verdict === "unknown" ? c.fit.missing_evidence : [],
-            reason: resolved.reason,
+            verdict: (parsed.assessment.company_fit === "pass" ? "pass"
+              : parsed.assessment.company_fit === "fail" ? "fail" : "unknown") as
+              "pass" | "fail" | "unknown",
+            reason: parsed.assessment.reason,
+          }
+          : null;
+        // THE CLASSIFIER'S OWN STRUCTURED ANSWER, not a re-synthesis of it.
+        // A definitive answer resolves the fields it was asked about; only an
+        // inconclusive one leaves them unknown.
+        const semantic = parsed
+          ? {
+            ...parsed.assessment,
+            unknown_fields: parsed.assessment.company_fit === "review"
+              ? [...new Set([...parsed.assessment.unknown_fields, ...c.fit.missing_evidence])]
+              : parsed.assessment.unknown_fields,
           }
           : null;
         c.brain = decideCompanyBrain({
@@ -1340,8 +1387,45 @@ export async function runCapabilityPlan(
   return {
     state,
     companies,
+    resume_records: companies.map(toResumeRecord),
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
+  };
+}
+
+/**
+ * Where did this company individually get to?
+ *
+ * The audited run recorded progress per CAPABILITY only, so a resume could not
+ * tell that SnapMagic's identity and enrichment were already paid for. This is
+ * the per-company record a continuation reads.
+ */
+export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
+  const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null;
+  return {
+    company_key: c.key,
+    company_name: c.prequalified?.name ?? c.company.company_name ?? c.key,
+    identity: c.identity === null ? "not_started"
+      : identityIsActionable(c.identity) ? "resolved"
+      : c.identity.status === "mismatch" ? "mismatch" : "unresolved",
+    enrichment: c.enriched !== null ? "completed"
+      : c.identity && identityIsActionable(c.identity) ? "not_started" : "not_required",
+    hiring: !c.hiring_assessment ? "not_started"
+      : c.hiring_assessment.verdict === "hiring_verified"
+        ? (c.hiring_assessment.evidence_source === "external_job_search"
+          ? "verified_externally" : "verified_from_existing_evidence")
+      : c.hiring_assessment.verdict === "hiring_verification_needed" ? "verification_needed"
+      : c.hiring_assessment.verdict === "watch" ? "verification_needed"
+      : "not_verified",
+    brain: !c.brain ? "not_started"
+      : c.brain.outcome === "QUALIFIED" ? "qualified"
+      : c.brain.outcome === "REVIEW" ? "review" : "rejected",
+    founder: c.verdict !== "pass" ? "not_eligible"
+      : c.verified_founders.length > 0 ? "completed"
+      : c.founders.length > 0 ? "unresolved" : "not_started",
+    linkedin_company_url: url,
+    completed_operations: c.completed_operations,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -1552,7 +1636,8 @@ function addCompany(
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     company: c, identity: null, enriched: null,
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
-    brain: null, classification: null, verdict: null,
+    brain: null, semantic_parse: null, completed_operations: [],
+    classification: null, verdict: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
   });

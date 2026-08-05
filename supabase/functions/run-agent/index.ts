@@ -77,6 +77,11 @@ import {
 } from "../_shared/providerResponseContract.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
+import {
+  applyMissionPrecedence, buildClassifierPayload, parseSemanticFitStrict,
+  SEMANTIC_INPUT_SCHEMA_VERSION,
+} from "../_shared/companyBrainSemanticFit.ts";
+import { buildCheckpoint } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 
 /**
@@ -1528,14 +1533,35 @@ Deno.serve(async (req) => {
               // UNKNOWN is resolved through the EXISTING semantic-classification
               // binding, or not at all. A null classifier leaves the company
               // pending — it never becomes a rejection for want of budget.
+              // THE LIVE STRUCTURED CLASSIFIER.
+              //
+              // This used to squeeze the model's answer down to
+              // `{verdict, reason}` before the Brain ever saw it, so the live
+              // path could not produce a business-model judgement at all — only
+              // an offline stub could. The full evidence payload now goes out
+              // and the full schema comes back through the fail-closed parser.
               classifyCompany: classificationBinding.classifyCompanyEvidence
-                ? async (input) => {
-                  const r = await classificationBinding.classifyCompanyEvidence!(input) as
-                    { verdict?: string; reason?: string } | null;
-                  const v = r?.verdict;
-                  return v === "pass" || v === "fail" || v === "unknown"
-                    ? { verdict: v, reason: String(r?.reason ?? "") }
-                    : null;
+                ? async (evidence) => {
+                  const policy = applyMissionPrecedence({
+                    original_user_query: evidence.original_user_query,
+                    mission_verticals: evidence.mission_verticals,
+                    mission_geography: evidence.mission_geography,
+                    workspace_industries: evidence.workspace_industries,
+                  });
+                  const payload = buildClassifierPayload(evidence, policy);
+                  const raw = await classificationBinding.classifyCompanyEvidence!(payload);
+                  // A NULL RESPONSE IS NOT A PASS AND NOT A REJECTION. The
+                  // parser turns anything unusable into REVIEW with a status
+                  // that says so.
+                  const parsed = parseSemanticFitStrict(raw);
+                  console.log("[run-agent][semantic-fit]", {
+                    task_id: task.id, company: evidence.company_name,
+                    parse_status: parsed.parse_status,
+                    business_model: parsed.assessment.business_model,
+                    company_fit: parsed.assessment.company_fit,
+                    repaired: parsed.raw_shape.repaired_fields,
+                  });
+                  return parsed;
                 }
                 : undefined,
               readPendingRun,
@@ -1685,6 +1711,43 @@ Deno.serve(async (req) => {
                     // collection. Nothing that reads leads will find these.
                     workbench_evaluation_rows: evaluation.rows,
                     workbench_evaluation_counts: evaluation.counts,
+                    // THE CHECKPOINT. Per-company stage state plus the
+                    // continuation flag the UI reads, so a run holding pending
+                    // verification can never be described as complete.
+                    lead_resume_checkpoint: buildCheckpoint({
+                      now: Date.now(),
+                      deadlineAt: terminalGuard.deadline.startedAt + terminalGuard.deadline.budgetMs,
+                      remainingMs: terminalGuard.deadline.remainingMs(),
+                      lastCompletedCapability:
+                        capabilityRun.state.completed_capabilities.slice(-1)[0] ?? null,
+                      nextPendingCapability:
+                        capabilityRun.state.pending_capabilities[0] ?? null,
+                      companies: capabilityRun.resume_records,
+                      reason: capabilityRun.state.terminal_reason === "execution_deadline_checkpoint"
+                        ? "execution_deadline_checkpoint" : "all_work_complete",
+                    }),
+                    semantic_classification_observability: {
+                      input_schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
+                      model: classificationBinding.enablement?.model ?? null,
+                      companies: capabilityRun.companies
+                        .filter((c) => c.brain !== null)
+                        .map((c) => ({
+                          company_key: c.key,
+                          evaluated_at: new Date().toISOString(),
+                          parse_status: c.semantic_parse?.parse_status ?? "invalid_fallback_review",
+                          repaired_fields: c.semantic_parse?.raw_shape.repaired_fields ?? [],
+                          business_model: c.brain!.business_model,
+                          company_fit: c.semantic_parse?.assessment.company_fit ?? "review",
+                          confidence: c.brain!.confidence,
+                          agentory_use_case: c.brain!.agentory_use_case,
+                          supporting_evidence: c.brain!.supporting_evidence,
+                          conflicting_evidence: c.brain!.conflicting_evidence,
+                          unknown_fields: c.brain!.unknown_fields,
+                          failed_hard_gates: c.brain!.failed_hard_gates,
+                          final_verdict: c.brain!.outcome,
+                          final_reason: c.brain!.reason,
+                        })),
+                    },
                     // The ranked portfolio the Workbench renders, with its
                     // targets, tier counts and honest shortfall.
                     workbench_portfolio: {

@@ -332,3 +332,151 @@ function safeJson(s: string): unknown {
     return m ? JSON.parse(m[0]) : null;
   } catch { return null; }
 }
+
+// ------------------------------------------------------- strict parsing ----
+
+/** How much of the classifier's answer survived validation. */
+export type ParseStatus = "valid" | "repaired" | "invalid_fallback_review";
+
+export interface ParsedSemanticFit {
+  assessment: SemanticFitAssessment;
+  parse_status: ParseStatus;
+  /** Safe diagnostics only — never the prompt, the key or the raw model text. */
+  raw_shape: {
+    received_keys: string[];
+    repaired_fields: string[];
+    rejected_values: string[];
+  };
+}
+
+const MODELS: readonly string[] =
+  ["b2b_saas", "ai_saas", "b2b_software", "b2b_service", "consumer", "unknown"];
+const FITS: readonly string[] = ["pass", "review", "fail"];
+const USES: readonly string[] = ["strong", "plausible", "weak", "none"];
+
+/** What an unusable answer becomes. Never a pass, never a rejection. */
+export const FALLBACK_REVIEW: SemanticFitAssessment = Object.freeze({
+  business_model: "unknown",
+  company_fit: "review",
+  confidence: 0,
+  agentory_use_case: "weak",
+  supporting_evidence: [],
+  conflicting_evidence: [],
+  unknown_fields: ["classifier_response_unusable"],
+  reason: "the classifier response could not be validated — held for review",
+});
+
+/**
+ * Parse a live classifier response, FAIL CLOSED.
+ *
+ * A malformed answer can only ever become REVIEW. Three rules make an
+ * unexplained pass impossible, because "pass" is the one verdict that spends
+ * money downstream:
+ *
+ *   * a pass must cite at least one supporting evidence item;
+ *   * a pass must carry a credible Agentory use case;
+ *   * an unrecognised enum value is a rejection of the FIELD, not of the company.
+ *
+ * The raw model text is never returned — only which keys arrived and which
+ * values were repaired, so a failure is diagnosable without leaking the prompt.
+ */
+export function parseSemanticFitStrict(raw: unknown): ParsedSemanticFit {
+  const o = typeof raw === "string" ? safeJson(raw) : raw;
+  if (!o || typeof o !== "object") {
+    return {
+      assessment: { ...FALLBACK_REVIEW },
+      parse_status: "invalid_fallback_review",
+      raw_shape: { received_keys: [], repaired_fields: [], rejected_values: ["not_an_object"] },
+    };
+  }
+  const r = o as Record<string, unknown>;
+  const received_keys = Object.keys(r);
+  const repaired: string[] = [];
+  const rejected: string[] = [];
+
+  const enumOr = (v: unknown, allowed: readonly string[], fallback: string, field: string) => {
+    const s = String(v ?? "").trim().toLowerCase();
+    if (allowed.includes(s)) return s;
+    if (v !== undefined) rejected.push(`${field}=${JSON.stringify(v)}`);
+    repaired.push(field);
+    return fallback;
+  };
+  const strArr = (v: unknown, field: string) => {
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+    if (v !== undefined) { repaired.push(field); rejected.push(`${field}=not_an_array`); }
+    return [];
+  };
+
+  const business_model = enumOr(r.business_model, MODELS, "unknown", "business_model") as BusinessModel;
+  let company_fit = enumOr(r.company_fit, FITS, "review", "company_fit") as CompanyFitVerdict;
+  const agentory_use_case = enumOr(r.agentory_use_case, USES, "weak", "agentory_use_case") as AgentoryUseCase;
+
+  const rawConf = Number(r.confidence);
+  const confidence = Number.isFinite(rawConf) ? Math.max(0, Math.min(1, rawConf)) : 0;
+  if (!Number.isFinite(rawConf) || rawConf < 0 || rawConf > 1) repaired.push("confidence");
+
+  const supporting_evidence = strArr(r.supporting_evidence, "supporting_evidence");
+  const conflicting_evidence = strArr(r.conflicting_evidence, "conflicting_evidence");
+  const unknown_fields = strArr(r.unknown_fields, "unknown_fields");
+  const reason = typeof r.reason === "string" ? r.reason : "";
+
+  // AN UNEXPLAINED PASS IS NOT A PASS. These two downgrades are the whole point
+  // of a fail-closed parser: `pass` is the verdict that authorises spending.
+  if (company_fit === "pass" && supporting_evidence.length === 0) {
+    company_fit = "review";
+    repaired.push("company_fit:pass_without_supporting_evidence");
+  }
+  if (company_fit === "pass" && agentory_use_case === "none") {
+    company_fit = "review";
+    repaired.push("company_fit:pass_without_use_case");
+  }
+
+  // A completely unrecognisable payload — nothing we asked for arrived.
+  const gotAnything = ["business_model", "company_fit", "confidence", "reason"]
+    .some((k) => k in r);
+  if (!gotAnything) {
+    return {
+      assessment: { ...FALLBACK_REVIEW },
+      parse_status: "invalid_fallback_review",
+      raw_shape: { received_keys, repaired_fields: repaired, rejected_values: rejected },
+    };
+  }
+
+  return {
+    assessment: {
+      business_model, company_fit, confidence, agentory_use_case,
+      supporting_evidence, conflicting_evidence, unknown_fields, reason,
+    },
+    parse_status: repaired.length === 0 ? "valid" : "repaired",
+    raw_shape: { received_keys, repaired_fields: repaired, rejected_values: rejected },
+  };
+}
+
+/** The evidence payload handed to the live classifier. Versioned. */
+export const SEMANTIC_INPUT_SCHEMA_VERSION = "semantic-fit-input-v1" as const;
+
+export function buildClassifierPayload(
+  i: SemanticFitInput, policy: AppliedPolicy,
+): Record<string, unknown> {
+  return {
+    schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
+    instruction: buildSemanticFitPrompt(i, policy),
+    mission: {
+      original_user_query: i.original_user_query,
+      verticals: policy.mission_verticals,
+      geography: policy.geography,
+      workspace_context_applied: policy.workspace_context_applied,
+      workspace_categories_ignored: policy.workspace_categories_ignored,
+    },
+    company: {
+      name: i.company_name, linkedin_industry: i.linkedin_industry,
+      linkedin_industry_ids: i.linkedin_industry_ids,
+      yc_description: i.yc_description,
+      website_description: i.website_description,
+      linkedin_description: i.linkedin_description,
+      employee_count: i.employee_count, employee_advisory: i.employee_advisory,
+      geography: i.geography,
+    },
+    signal: { strongest: i.commercial_signal, tier: i.commercial_tier },
+  };
+}

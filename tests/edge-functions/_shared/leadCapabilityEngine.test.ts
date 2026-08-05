@@ -22,6 +22,7 @@ import {
   type CapabilityEngineDeps, type CapabilityExecutionState,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { parseSemanticFitStrict } from "../../../supabase/functions/_shared/companyBrainSemanticFit.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -377,7 +378,17 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   const recB: Recorder = { calls: [] };
   const runB = await runCapabilityPlan(
     mockDeps(thin, recB, {
-      classifyCompany: () => Promise.resolve({ verdict: "pass" as const, reason: "B2B SaaS confirmed" }),
+      // THE STRUCTURED CONTRACT. `deps.classifyCompany` used to return
+      // `{verdict, reason}` while the Brain reasoned over the full schema, so
+      // the live path could never produce a business-model judgement. A pass
+      // must now cite supporting evidence and a credible use case — the parser
+      // downgrades it otherwise.
+      classifyCompany: () => Promise.resolve(parseSemanticFitStrict({
+        business_model: "b2b_saas", company_fit: "pass", confidence: 0.85,
+        agentory_use_case: "strong",
+        supporting_evidence: ["sells a subscription platform to businesses"],
+        conflicting_evidence: [], unknown_fields: [], reason: "B2B SaaS confirmed",
+      })),
     }),
     { mission: m, plan, brain: BRAIN },
   );
@@ -393,7 +404,12 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   const recC: Recorder = { calls: [] };
   const runC = await runCapabilityPlan(
     mockDeps(thin, recC, {
-      classifyCompany: () => Promise.resolve({ verdict: "fail" as const, reason: "staffing firm" }),
+      classifyCompany: () => Promise.resolve(parseSemanticFitStrict({
+        business_model: "b2b_service", company_fit: "fail", confidence: 0.8,
+        agentory_use_case: "weak", supporting_evidence: [],
+        conflicting_evidence: ["staffing agency, not a software product"],
+        unknown_fields: [], reason: "staffing firm",
+      })),
     }),
     { mission: m, plan, brain: BRAIN },
   );
