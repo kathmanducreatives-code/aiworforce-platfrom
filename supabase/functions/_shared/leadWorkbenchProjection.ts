@@ -80,6 +80,14 @@ export interface ProjectableCompany {
     reasons: readonly string[];
     yc_url?: string | null;
   } | null;
+  /**
+   * CANONICAL: `identityIsActionable` — status === "verified_match" AND a URL.
+   *
+   * The progress strip used that predicate while this projection accepted
+   * "anything not unresolved", so the audited run reported 6 resolved / 4
+   * unresolved in one place and 7 / 3 in the other. One of the two numbers on
+   * screen was always wrong.
+   */
   identityResolved: boolean;
   identityAttempted: boolean;
   enriched: boolean;

@@ -50,6 +50,10 @@ import {
 } from "./leadCommercialPrequalification.ts";
 import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
 import {
+  TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
+  reachesCompanyBrain, type HiringAssessment, type SupportingSignal,
+} from "./commercialSignalPolicy.ts";
+import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
   normalizeSolidcodeCompany,
@@ -275,6 +279,8 @@ export interface EngineCompany {
   yc_open_jobs: NormalizedHiringJob[];
   hiring_jobs: NormalizedHiringJob[];
   fit: CompanyFitResult | null;
+  /** The canonical hiring decision, with its evidence and reason. */
+  hiring_assessment: HiringAssessment | null;
   /** Set when the Brain returned UNKNOWN and evidence resolution was attempted. */
   classification: { verdict: "pass" | "fail" | "unknown"; reason: string; source: string } | null;
   /**
@@ -950,43 +956,93 @@ export async function runCapabilityPlan(
     }
 
     // ── HIRING VERIFICATION ──────────────────────────────────────────────────
+    // ── HIRING VERIFICATION — FREE EVIDENCE FIRST ────────────────────────────
+    //
+    // THIS IS THE GATE THAT SENT ZERO COMPANIES TO THE COMPANY BRAIN.
+    //
+    // It used to filter the YC `openJobs` it already held through
+    // `DEFAULT_ROLE_PACKS`, whose Sales-Ops pack lists only four literal titles
+    // ("Sales Operations Manager", …). "Head of Sales", "GTM Engineer" and
+    // "Founding Account Executive" — the very roles prequalification had just
+    // scored Tier A — matched none of them. So the free evidence was discarded,
+    // a paid LinkedIn job search was bought per company, those results were
+    // filtered through the same narrow packs (3 searches, 12 rows, 0 kept), and
+    // the deadline closed at 109s with four companies never reached.
+    //
+    // The canonical policy is now the only vocabulary, and paid verification is
+    // a fallback for the lone-Tier-B case alone.
     if (cap === "hiring_verification") {
-      const packs = opts.rolePacks ?? DEFAULT_ROLE_PACKS;
       const targets = companies.filter((c) => c.identity && identityIsActionable(c.identity));
-      let verified = 0;
+      let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
       for (const c of targets) {
-        // memo23 already returned open jobs for some companies — paying a second
-        // Actor for evidence we hold is waste, not diligence.
-        const fromYc = keptForPacks(c.yc_open_jobs, packs);
-        if (fromYc.length > 0) {
-          c.hiring_jobs = dedupeJobs(fromYc);
-          c.record = advance(c.record, "hiring_verified", "yc_open_jobs_sufficient");
-          verified++;
-          continue;
+        // Supporting signals the free evidence already proves.
+        const supporting: SupportingSignal[] = [];
+        if ((c.prequalified?.tier_a ?? 0) + (c.prequalified?.tier_b ?? 0) >= 2) {
+          supporting.push("multiple_commercial_openings");
         }
-        const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
-        if (!url) continue;
-        const compiled = compileHarvestJobSearchInput({
-          company: [url],
-          // The packs ARE the approved titles. Deriving them here rather than
-          // from the mission sentence is what keeps verification scoped to the
-          // roles the mission actually asked about.
-          jobTitles: packTitles(packs),
-          maxItems: 10,
-          ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
-        });
-        const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
-        const jobs = keptForPacks(rows.map(normalizeLinkedInJob), packs);
-        c.hiring_jobs = dedupeJobs(jobs);
-        if (c.hiring_jobs.length > 0) {
-          c.record = advance(c.record, "hiring_verified", "job_evidence_present");
+        let assessment = assessHiring(
+          c.yc_open_jobs.map((j) => ({ title: j.title, url: j.job_url, location: j.location })),
+          supporting, { source: "yc_open_jobs" });
+
+        // PAID FALLBACK, ONLY FOR A LONE TIER B. Everything else is settled by
+        // evidence already held; re-checking it is pure waste.
+        if (needsPaidJobVerification(assessment) && !deps.deadline?.expired()) {
+          const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
+          if (url) {
+            const compiled = compileHarvestJobSearchInput({
+              company: [url],
+              jobTitles: [...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20),
+              maxItems: 10,
+              ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
+            });
+            const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
+            paidCalls++;
+            if (rows.length > 0) {
+              const external = assessHiring(
+                rows.map(normalizeLinkedInJob).map((j) => ({
+                  title: j.title ?? "", url: j.job_url, location: j.location })),
+                [...supporting, "another_active_gtm_opening"],
+                { source: "external_job_search" });
+              // The external pass only ever UPGRADES; it cannot demote evidence
+              // the free pass already accepted.
+              if (external.verdict === "hiring_verified") assessment = external;
+            }
+          }
+        }
+
+        c.hiring_assessment = assessment;
+        c.hiring_jobs = dedupeJobs(
+          c.yc_open_jobs.filter((j) =>
+            assessment.commercial_jobs.some((cj) => cj.title === j.title)));
+
+        if (assessment.verdict === "hiring_verified") {
+          c.record = advance(c.record, "hiring_verified",
+            assessment.evidence_source === "yc_open_jobs"
+              ? "yc_open_jobs_sufficient" : "job_evidence_present");
           verified++;
+        } else if (assessment.verdict === "hiring_verification_needed") {
+          review++;
+          c.record.stage_reason = `hiring_verification_needed:${assessment.reason}`;
+        } else if (assessment.verdict === "watch") {
+          watch++;
+          c.record.stage_reason = `hiring_watch:${assessment.reason}`;
         } else {
+          notVerified++;
           c.record = advance(c.record, "hiring_not_verified", "no_matching_open_role");
+          c.record.stage_reason = assessment.reason;
         }
       }
-      finish(cap, "complete", verified, ["apify_linkedin_job_search"], verified > 0,
-        verified === 0 ? "no company had a matching open role" : null);
+      // EVIDENCE IS SATISFIED WHEN A DECISION WAS REACHED, not only when a
+      // company passed. A run that correctly finds three watch-list companies
+      // has done its job.
+      const decided = verified + review + watch;
+      finish(cap, "complete", verified, paidCalls > 0 ? ["apify_linkedin_job_search"] : [],
+        decided > 0,
+        decided === 0 ? "no company had a relevant commercial role" : null);
+      log("hiring_verification_complete", {
+        targets: targets.length, verified, review, watch, notVerified,
+        paid_job_searches: paidCalls,
+      });
       await publish("hiring_verified");
       continue;
     }
@@ -994,8 +1050,15 @@ export async function runCapabilityPlan(
     // ── COMPANY BRAIN QUALIFICATION ──────────────────────────────────────────
     if (cap === "company_brain_qualification") {
       let passed = 0, unknown = 0;
-      const eligible = companies.filter(
-        (c) => c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0);
+      // EVERY COMPANY WITH A DECISION REACHES THE BRAIN.
+      //
+      // This used to require `stage === "hiring_verified"`, so a lone Tier B or a
+      // Tier C watch item was silently NOT_EVALUATED — no pass, no reject, no
+      // unknown. That is how seven enriched companies produced a Brain summary of
+      // "0 passed, 0 held as unknown": the eligible set was empty.
+      const eligible = companies.filter((c) =>
+        c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
+        (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false));
       for (const c of eligible) {
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
@@ -1351,7 +1414,8 @@ function addCompany(
   set.push({
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     company: c, identity: null, enriched: null,
-    yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, classification: null, verdict: null,
+    yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
+    classification: null, verdict: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
   });

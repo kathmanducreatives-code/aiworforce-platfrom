@@ -76,6 +76,7 @@ import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
+import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -1627,7 +1628,10 @@ Deno.serve(async (req) => {
                   yc_url: c.prequalified.yc_url,
                 }
                 : null,
-              identityResolved: !!c.identity && c.identity.status !== "unresolved",
+              // THE CANONICAL PREDICATE, the same one progress counters and
+              // downstream eligibility use. "not unresolved" silently counted an
+              // ambiguous match as resolved.
+              identityResolved: !!c.identity && identityIsActionable(c.identity),
               identityAttempted: c.identity !== null,
               enriched: c.enriched !== null,
               hiringVerified: c.hiring_jobs.length > 0,

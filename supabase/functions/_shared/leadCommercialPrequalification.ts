@@ -25,43 +25,13 @@
 //
 // PURE. No network, provider, model or database access.
 
+import {
+  classifyTitle, type SignalTier, type TitleClass,
+} from "./commercialSignalPolicy.ts";
+
 export const PREQUALIFICATION_VERSION = "commercial-prequalification-v1" as const;
 
-export type SignalTier = "A" | "B" | "C";
-
-/** Strongest commercial-expansion evidence. A founding/leadership GTM hire. */
-const TIER_A: readonly string[] = [
-  "sales operations", "revenue operations", "gtm operations",
-  "revenue strategy and operations", "sales strategy and operations",
-  "sales strategy & operations", "revenue strategy & operations",
-  "founding account executive", "founding sdr", "founding bdr",
-  "head of sales", "vp of sales", "vp sales", "gtm lead", "gtm engineer",
-  "deal desk", "sales enablement operations",
-];
-
-/** Real commercial hiring, but not necessarily a new GTM motion. */
-const TIER_B: readonly string[] = [
-  "account executive", "sdr", "bdr", "sales development representative",
-  "business development representative", "sales director", "director of sales",
-  "head of growth", "growth lead", "demand generation", "marketing operations",
-  "growth marketing", "partnerships", "sales enablement", "enterprise sales",
-];
-
-/** Ambiguous. Commercial only alongside a second supporting signal. */
-const TIER_C: readonly string[] = [
-  "business operations", "strategy and operations", "strategy & operations",
-  "customer operations", "head of operations", "chief of staff",
-  "customer success",
-];
-
-/** Never commercial evidence on their own. */
-const TECHNICAL: readonly string[] = [
-  "software engineer", "full stack", "fullstack", "backend", "back-end",
-  "frontend", "front-end", "ml engineer", "machine learning", "infrastructure",
-  "product engineer", "designer", "devops", "platform engineer", "data engineer",
-  "computer vision", "deep learning", "security engineer", "qa engineer",
-  "founding engineer", "forward deployed engineer",
-];
+export type { SignalTier };
 
 /**
  * Directory and platform artifacts that are not prospects.
@@ -85,18 +55,16 @@ export function normalizeCompanyName(name: unknown): string {
   return lc(name).replace(/[.,]/g, "").replace(/\s+(inc|llc|ltd|corp|co)$/i, "").replace(/\s+/g, " ").trim();
 }
 
-/** Which tier a single job title belongs to, if any. */
-export function classifyJobTitle(title: unknown): SignalTier | "technical" | "other" {
-  const t = lc(title);
-  if (!t) return "other";
-  // Commercial tiers are checked BEFORE technical, so "Sales Engineer" is not
-  // discarded as engineering and "Founding Account Executive" is not discarded
-  // for containing "founding".
-  if (TIER_A.some((k) => t.includes(k))) return "A";
-  if (TIER_B.some((k) => t.includes(k))) return "B";
-  if (TIER_C.some((k) => t.includes(k))) return "C";
-  if (TECHNICAL.some((k) => t.includes(k))) return "technical";
-  return "other";
+/**
+ * Which tier a single job title belongs to.
+ *
+ * DELEGATES to the canonical policy. It used to own a private copy of the tier
+ * lists, and `hiring_verification` owned a different one — which is how a
+ * company could be scored Tier A here and found to have no commercial signal one
+ * capability later. A role list that lives in two places disagrees in two places.
+ */
+export function classifyJobTitle(title: unknown): TitleClass {
+  return classifyTitle(title);
 }
 
 export interface YcCompanyInput {
