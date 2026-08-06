@@ -26,7 +26,7 @@
 // PURE. No network, provider, model or database access.
 
 import {
-  abstractSourceLabel, findEvidence,
+  abstractSourceLabel, findEvidence, hardFactsForPrompt,
   type EvidenceItem, type EvidenceRegistry, type EvidenceType,
 } from "./leadEvidenceRegistry.ts";
 
@@ -554,7 +554,7 @@ export function buildGroundedClassifierPayload(i: {
       company_key: i.registry.company_key,
       // HARD FACTS ARE GIVEN, NOT ASKED FOR. The model cites them; restating
       // one differently is a verification failure, not a stylistic choice.
-      established_facts: i.registry.hard_facts,
+      established_facts: hardFactsForPrompt(i.registry.hard_facts),
     },
     evidence: i.registry.items.map((x) => ({
       evidence_id: x.evidence_id,
