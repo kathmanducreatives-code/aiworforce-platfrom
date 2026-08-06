@@ -273,7 +273,7 @@ Deno.test("11b. shadow mode does not change the user-facing decision", async () 
   assertEquals(e.brain?.outcome, "REVIEW", "enforce applies the grounded one");
 });
 
-Deno.test("12-13. a grounded classifier failure falls back safely, never to REJECT", async () => {
+Deno.test("12-13. in ENFORCE an unavailable grounder becomes REVIEW, never QUALIFIED", async () => {
   const { run } = await runWith({
     classifyCompany: legacyPass,
     groundingMode: "enforce",
@@ -282,10 +282,26 @@ Deno.test("12-13. a grounded classifier failure falls back safely, never to REJE
   });
   const c = run.companies.find((x) => x.brain)!;
   assertEquals(c.grounded, null);
+  // NEVER A REJECTION — nobody is thrown away for an outage…
   assertFalse(c.brain!.outcome === "REJECT",
     "an unavailable grounder must never reject a company");
-  // With no grounding, the legacy decision stands.
-  assertEquals(c.brain!.outcome, "QUALIFIED");
+  // …and never an ungrounded QUALIFIED either. Falling back to the legacy
+  // verdict would restore exactly the unchecked pass that enforcing exists to
+  // prevent, at the moment there is least evidence it is deserved.
+  assertEquals(c.brain!.outcome, "REVIEW");
+  assert(c.brain!.reason.includes("grounded_classifier_unavailable"),
+    `the outage must name itself, got: ${c.brain!.reason}`);
+});
+
+Deno.test("12b. in SHADOW an unavailable grounder leaves the legacy verdict alone", async () => {
+  const { run } = await runWith({
+    classifyCompany: legacyPass,
+    groundingMode: "shadow",
+    groundCompany: () => Promise.resolve(null),
+  });
+  const c = run.companies.find((x) => x.brain)!;
+  assertEquals(c.brain!.outcome, "QUALIFIED",
+    "shadow observes; it never degrades a decision");
 });
 
 Deno.test("14. a malformed grounded response cannot qualify a company", async () => {
@@ -379,4 +395,129 @@ Deno.test("33-35. run-agent wires grounding without touching the protected file"
     }
   }
   assertFalse(/from\s+["'][^"']*\/mcp\//.test(src), "no import from mcp/");
+});
+
+// ══════════════════════════════ STAGE 1 — THE PRE-ENFORCE GATE ══
+//
+// The six conditions that had to hold before QA was switched from shadow to
+// enforce. They are written as tests rather than as a checklist someone ticked,
+// so flipping the mode back on in future re-checks them automatically.
+
+Deno.test("G1. no claim may reference another company's evidence", async () => {
+  const { run } = await runWith({
+    classifyCompany: legacyPass, groundingMode: "enforce",
+    groundCompany: ({ registry }) => {
+      // An id built for a DIFFERENT company, in the correct format.
+      const foreign = registry.items[0].evidence_id.replace(/:[0-9a-f]{8}$/, ":ffffffff");
+      return Promise.resolve(verifyGroundedResult({
+        registry,
+        result: parseGroundedResult({
+          business_model: { value: "b2b_saas", confidence: 0.9, claims: [{
+            claim: "borrowed", claim_type: "business_model",
+            evidence_ids: [foreign], evidence_excerpts: [],
+          }] },
+          company_fit: "pass", agentory_use_case: "strong",
+          supporting_claims: [], confidence: 0.9, reason: "",
+        }),
+      }));
+    },
+  });
+  const c = run.companies.find((x) => x.grounded)!;
+  assertEquals(c.grounded!.validated_claims.length, 0);
+  assertEquals(c.brain?.outcome, "REVIEW");
+});
+
+Deno.test("G2-G3. invented evidence never reaches Workbench, and cannot hold a PASS", async () => {
+  const { run } = await runWith({
+    classifyCompany: legacyPass, groundingMode: "enforce",
+    groundCompany: ({ registry }) => {
+      const d = registry.items
+        .find((x) => x.evidence_type === "company_description")!.evidence_id;
+      return Promise.resolve(verifyGroundedResult({
+        registry,
+        result: parseGroundedResult({
+          business_model: { value: "b2b_saas", confidence: 0.95, claims: [{
+            claim: "Sortly sells API subscriptions.", claim_type: "business_model",
+            evidence_ids: [d],
+            evidence_excerpts: [{ evidence_id: d, excerpt: "API subscriptions" }],
+          }] },
+          company_fit: "pass", agentory_use_case: "strong",
+          supporting_claims: [], confidence: 0.95, reason: "",
+        }),
+      }));
+    },
+  });
+  const c = run.companies.find((x) => x.grounded)!;
+  assertEquals(c.brain?.outcome, "REVIEW", "an unsupported PASS does not stay PASS");
+  const ui = JSON.stringify(buildWorkbenchExplanation(c.grounded!, c.evidence_registry!));
+  assertFalse(ui.includes("API subscriptions"));
+});
+
+Deno.test("G4. a provider failure leaves the company unresolved, never rejected", async () => {
+  const { run } = await runWith({
+    classifyCompany: legacyPass, groundingMode: "enforce",
+    groundCompany: ({ registry }) => Promise.resolve(verifyGroundedResult({
+      registry,
+      result: parseGroundedResult({
+        business_model: { value: "unknown", confidence: 0.2, claims: [] },
+        company_fit: "fail", agentory_use_case: "none",
+        supporting_claims: [{
+          claim: "The company is not hiring.", claim_type: "commercial_signal",
+          evidence_ids: [], evidence_excerpts: [],
+        }],
+        confidence: 0.2, reason: "provider said nothing",
+      }),
+    })),
+  });
+  const c = run.companies.find((x) => x.grounded)!;
+  // An unsupported FAIL is downgraded, not honoured.
+  assertEquals(c.grounded!.final_grounded_decision, "review");
+  assertFalse(c.brain?.outcome === "REJECT");
+});
+
+Deno.test("G5. a fully grounded company still qualifies under enforce", async () => {
+  const { run } = await runWith({
+    classifyCompany: legacyPass, groundingMode: "enforce",
+    groundCompany: ({ registry }) => {
+      const d = registry.items
+        .find((x) => x.evidence_type === "company_description")!.evidence_id;
+      const j = registry.items
+        .find((x) => x.evidence_type === "yc_job" || x.evidence_type === "job_posting")!
+        .evidence_id;
+      return Promise.resolve(verifyGroundedResult({
+        registry,
+        result: parseGroundedResult({
+          business_model: { value: "b2b_software", confidence: 0.9, claims: [{
+            claim: "Sortly sells electronic-design software to engineering teams.",
+            claim_type: "business_model", evidence_ids: [d],
+            evidence_excerpts: [{ evidence_id: d, excerpt: "electronic-design software" }],
+          }] },
+          company_fit: "pass", agentory_use_case: "strong",
+          supporting_claims: [{
+            claim: "Hiring Revenue Operations Manager.", claim_type: "commercial_signal",
+            evidence_ids: [j],
+            evidence_excerpts: [{ evidence_id: j, excerpt: "Revenue Operations Manager" }],
+          }],
+          confidence: 0.9, reason: "B2B design software with a current opening",
+        }),
+      }));
+    },
+  });
+  const c = run.companies.find((x) => x.grounded)!;
+  assertEquals(c.grounded!.grounding_score, 1);
+  assertEquals(c.brain?.outcome, "QUALIFIED",
+    "enforcing must not break the case it is meant to allow");
+});
+
+Deno.test("G6. enforcing makes no people Actor reachable", async () => {
+  const { rec } = await runWith({
+    classifyCompany: legacyPass, groundingMode: "enforce",
+    groundCompany: () => Promise.resolve(null),
+  });
+  for (const actor of [
+    "apify_linkedin_company_employees", "apify_people_search",
+    "apify_linkedin_profile_search",
+  ]) {
+    assertFalse(rec.calls.includes(actor), `${actor} must remain unreachable`);
+  }
 });

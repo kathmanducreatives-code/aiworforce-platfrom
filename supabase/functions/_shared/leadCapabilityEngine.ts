@@ -1433,10 +1433,24 @@ export async function runCapabilityPlan(
           : null;
         c.grounded = grounded;
 
-        // ENFORCE ONLY. In shadow the verification is computed, stored and
-        // compared, and the legacy decision is what the user sees — so "would
-        // enforcing change this run?" gets an answer before enforcing does.
-        const groundingForBrain = deps.groundingMode === "enforce" && grounded
+        // ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE ─────────────────────────
+        //
+        // In shadow the verification is computed, stored and compared, and the
+        // legacy decision is what the user sees — so "would enforcing change
+        // this run?" gets an answer before enforcing does.
+        //
+        // IN ENFORCE, AN ABSENT GROUNDER IS ITSELF A REVIEW.
+        //
+        // This previously passed `null` when the grounder returned nothing,
+        // which let the legacy classifier's verdict stand — so an outage
+        // quietly restored exactly the ungrounded QUALIFIED that enforcing
+        // exists to prevent, and did it at the moment there was least evidence
+        // that the company deserved it. Enforce now degrades to REVIEW rather
+        // than to the old behaviour: a human is asked, nobody is rejected, and
+        // no company is qualified on a claim nothing checked.
+        const groundingForBrain = deps.groundingMode !== "enforce"
+          ? null
+          : grounded
           ? {
             final_grounded_decision: grounded.final_grounded_decision,
             grounding_score: grounded.grounding_score,
@@ -1445,7 +1459,12 @@ export async function runCapabilityPlan(
             ],
             downgrade_reasons: grounded.downgrade_reasons,
           }
-          : null;
+          : {
+            final_grounded_decision: "review" as const,
+            grounding_score: 0,
+            validated_claim_types: [] as string[],
+            downgrade_reasons: ["grounded_classifier_unavailable"],
+          };
 
         if (c.fit.stage === "company_fit_pass") {
           c.brain = decideCompanyBrain({
