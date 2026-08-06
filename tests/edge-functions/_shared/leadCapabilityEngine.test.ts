@@ -167,16 +167,30 @@ Deno.test("3. enrichment happens BEFORE qualification, and qualification uses it
   assertEquals(sortly!.enriched!.employee_count, 42);
 });
 
-Deno.test("4. founder discovery runs only AFTER a company qualifies", async () => {
+Deno.test("4. founder discovery does not run automatically at all", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
   const run = await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
-  const founderIdx = rec.calls.indexOf("apify_linkedin_company_employees");
-  const enrichIdx = rec.calls.indexOf("apify_linkedin_company_details");
-  assert(founderIdx > enrichIdx, "founder search must follow enrichment");
+  // THE CONTRACT CHANGED, DELIBERATELY.
+  //
+  // This used to assert that the people Actor ran AFTER enrichment. It ran on
+  // every qualified company, on every "find me founders of X" query — which is
+  // most of them — before anyone had agreed to buy a single person. Ordering was
+  // never the problem; the automatic purchase was.
+  //
+  // People are an OFFER now. The company pipeline still completes in full.
+  assertFalse(rec.calls.includes("apify_linkedin_company_employees"),
+    "the people Actor must not run automatically");
+  assertFalse(rec.calls.includes("apify_people_search"),
+    "nor its fallback");
+  assert(rec.calls.includes("apify_linkedin_company_details"),
+    "the company pipeline still runs in full");
   assert(run.state.qualified_company_keys.length > 0, "a company must have qualified");
+  // And the qualified company carries the offer instead.
+  assertEquals(buildCapabilityGraph(m).offered_capabilities,
+    ["offer_founder_unlock", "offer_contact_unlock"]);
 });
 
 // ═══════════════════════════════════════════════════════ 5. containment ══
@@ -434,14 +448,18 @@ Deno.test("10. execution telemetry records attempts, outcomes and cost", async (
   for (const a of s.provider_attempts) {
     assert(a.capability, "every attempt names its capability");
     assert(a.provider, "every attempt names its provider");
-    assert(["ok", "empty", "error", "skipped_idempotent", "compile_failed"].includes(a.outcome));
+    assert(["ok", "empty", "error", "skipped_idempotent", "compile_failed",
+      "skipped_resume_reuse"].includes(a.outcome));
     assert(a.attempt >= 1);
   }
   assert(s.accumulated_cost_units > 0, "cost must accumulate");
   assert(s.company_keys.length > 0, "deduplicated companies are recorded");
   assertEquals(s.company_keys.length, new Set(s.company_keys).size, "company keys are deduplicated");
-  assert(s.contact_identities.length > 0, "CONTACT-ready identities are recorded");
-  assertEquals(s.contact_identities.length, new Set(s.contact_identities).size);
+  // NO CONTACT IDENTITIES, and that is the point. People are offered, not
+  // bought, so an automatic run reaches zero of them — while every company
+  // counter above still fills.
+  assertEquals(s.contact_identities.length, 0,
+    "an automatic run buys nobody, so it records no contact identity");
 });
 
 Deno.test("10b. run-agent persists the execution state and consults classification", async () => {

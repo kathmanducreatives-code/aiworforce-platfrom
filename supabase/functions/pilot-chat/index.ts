@@ -27,6 +27,8 @@ import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
+import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
 import {
   buildPaidExecutionPreflight, preflightDryRun,
@@ -197,13 +199,35 @@ function roleFamilyLabel(fam: RoleFamily): string {
  */
 function buildMissionForPrompt(
   prompt: string, requestedCount: number, intent: LeadIntent,
-): LeadMissionV1 & { brain_rejected_broadening: unknown[]; preflight_dry_run: unknown } {
-  const parsed = parseLeadMissionDeterministic(prompt, { requestedCount });
-  const merged = mergeCompanyBrainIntoMission(parsed, {
+  /**
+   * The model's raw proposal, already fetched by the async caller.
+   *
+   * Threaded in rather than awaited here so this function — and
+   * `buildHiringConfirmation` above it — stay synchronous. `undefined` means no
+   * model ran, which `compileLeadMission` reads as "nothing proposed" and
+   * answers deterministically.
+   */
+  gptProposal?: unknown,
+): LeadMissionV1 & {
+  brain_rejected_broadening: unknown[];
+  preflight_dry_run: unknown;
+  query_interpretation: unknown;
+} {
+  const brain = {
     industries: intent.target_industry ?? [],
     stages: intent.company_stage ?? [],
     locations: intent.target_geography ?? [],
+  };
+  // ONE INTERPRETATION, HERE. The model proposes, `compileLeadMission`
+  // validates and repairs, the Company Brain fills what is still open, and the
+  // user's own words outrank both. Everything downstream reads the result.
+  const compiled = compileLeadMission({
+    originalUserQuery: prompt,
+    proposal: gptProposal,
+    companyBrain: brain,
+    requestedCount,
   });
+  const merged = mergeCompanyBrainIntoMission(compiled.final_mission, brain);
   const plan = buildCapabilityGraph(merged.mission);
   // THE DRY RUN THE USER APPROVES IS THE RECORD THAT GATES SPENDING.
   //
@@ -226,10 +250,45 @@ function buildMissionForPrompt(
     prohibited_capabilities: plan.prohibited,
     brain_rejected_broadening: merged.rejected_broadening,
     preflight_dry_run: preflightDryRun(preflight),
+    // ── OBSERVABILITY ──────────────────────────────────────────────────────
+    // Enough to answer "why did it choose YC for this query?" and "why did it
+    // run a job search?" without reading an Actor payload by hand. Structured
+    // outputs and short reasons only — never the model's reasoning text.
+    query_interpretation: {
+      schema_version: compiled.schema_version,
+      parser_source: compiled.parser_source,
+      original_query: compiled.original_query,
+      gpt_proposal: compiled.gpt_proposal,
+      validator_changes: compiled.validator_changes,
+      confidence: compiled.confidence,
+      unknowns: compiled.unknowns,
+      safety_violations: compiled.safety_violations,
+      workspace_context: compiled.workspace_context,
+      capability_plan: {
+        requested: compiled.capability_decision.requested,
+        approved: compiled.capability_decision.approved,
+        rejected: compiled.capability_decision.rejected,
+        offers: compiled.capability_decision.offers,
+        entry_capability: plan.entry_capability,
+        routing_reason: plan.routing_reason,
+        steps: plan.steps.map((s) => ({
+          capability: s.capability,
+          providers: s.providers,
+          reason: s.reason,
+        })),
+        offered_capabilities: plan.offered_capabilities,
+        // The two questions the audit could not answer.
+        paid_provider_work_required: plan.steps.some((s) => s.providers.length > 0),
+        embedded_evidence_preferred:
+          !plan.steps.some((s) => s.capability === "hiring_verification"),
+      },
+    },
   };
 }
 
-function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: any): any {
+function buildHiringConfirmation(
+  prompt: string, intent: LeadIntent, company: any, gptProposal?: unknown,
+): any {
   const fam = intent.hiring_signal.role_family;
   const job = planJobsActorInput(intent);
   const roleDisplay = (job.role_keywords.length ? job.role_keywords : roleFamilyAliases(fam)).slice(0, 6).join(", ");
@@ -279,7 +338,7 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
     // reads THIS object rather than re-deriving intent from whichever string it
     // happened to receive. `original_user_query` is immutable; the planner's
     // rewritten step instruction never replaces it.
-    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, intent),
+    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, intent, gptProposal),
     output: isQualifiedLead
       ? "Qualified company + verified decision-maker leads in Workbench"
       : "Account opportunities in Workbench",
@@ -419,7 +478,31 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
     },
   });
   if (lieIntent.hiring_signal.requested && lieIntent.hiring_signal.role_family) {
-    return buildHiringConfirmation(prompt, lieIntent, company);
+    // ── THE ONE INTERPRETIVE MODEL CALL, BEFORE ANYTHING IS PLANNED ────────
+    //
+    // Gated OFF by default; both a flag and a workspace allow-list must pass.
+    // Disabled, `proposeMission` is null and the deterministic parser answers —
+    // which is exactly what happens today, so this is inert until switched on.
+    // A model failure returns null and degrades the same way: a less precise
+    // mission, never a failed workflow.
+    const compilerBinding = buildMissionCompilerBinding({ workspaceId });
+    const gptProposal = compilerBinding.proposeMission
+      ? await compilerBinding.proposeMission({
+        originalUserQuery: prompt,
+        companyBrain: {
+          industries: lieIntent.target_industry ?? [],
+          stages: lieIntent.company_stage ?? [],
+          locations: lieIntent.target_geography ?? [],
+        },
+        requestedCount: lieIntent.count ?? null,
+      })
+      : undefined;
+    console.log("[pilot-chat][mission-compiler]", {
+      workspace_id: workspaceId,
+      ...compilerBinding.diagnostics,
+      proposal_received: gptProposal != null,
+    });
+    return buildHiringConfirmation(prompt, lieIntent, company, gptProposal);
   }
 
   const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.

@@ -352,6 +352,14 @@ export interface CapabilityPlan {
   allowed_providers: string[];
   entry_capability: CapabilityId;
   estimated_cost_units: number;
+  /**
+   * Work the Workbench may OFFER when the run finishes. Not steps, not costed,
+   * and not reachable by the engine — an offer is a button, and the button has
+   * to be pressed by a person before anything is bought.
+   */
+  offered_capabilities: string[];
+  /** Why the entry capability was chosen. Persisted for "why YC?" questions. */
+  routing_reason: string;
 }
 
 function step(
@@ -386,15 +394,53 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   const wantsPeople = mission.requested_output === "contact_ready_leads" ||
     mission.target_entity === "person";
 
+  // WHAT THE COMPILED MISSION ASKED FOR.
+  //
+  // Non-empty only on the model-compiled path, where a validated proposal has
+  // already been mapped onto internal stages by `leadCapabilityCatalogue`. When
+  // it IS non-empty it constrains the plan, which is what makes one query's
+  // graph differ from another's instead of every query getting the same
+  // sequence. Empty, the deterministic inference below is unchanged.
+  const requested = mission.required_capabilities;
+  const asked = (c: CapabilityId) => requested.includes(c);
+  const missionSaysSo = requested.length > 0;
+  const strategy = mission.directives?.source_strategy ?? [];
+
   let entry: CapabilityId;
   let entryReason: string;
+
+  // DISCOVERY WINS OVER RESOLUTION WHEN BOTH ARE ASKED FOR.
+  //
+  // `known_company_identity_resolution` in the catalogue expands to TWO internal
+  // stages — `known_company_resolution` and `company_identity_resolution` —
+  // because resolving a named company and resolving a discovered one are the
+  // same work. A startup mission legitimately asks for it as a PIPELINE step,
+  // and reading that as "the user named the companies" sent every YC query to
+  // the known-company entry and skipped discovery entirely.
+  const asksDiscovery = asked("startup_company_discovery") ||
+    asked("general_company_discovery");
 
   if (known.length > 0) {
     entry = "known_company_resolution";
     entryReason = `${known.length} company identifier(s) supplied by the user — discovery is skipped`;
+  } else if (missionSaysSo && asked("known_company_resolution") && !asksDiscovery) {
+    entry = "known_company_resolution";
+    entryReason = "the mission names the companies to evaluate — no discovery is needed";
   } else if (mission.requested_output === "job_listings") {
     entry = "job_discovery";
     entryReason = "the requested output is job listings";
+  } else if (strategy.includes("job_signal_first")) {
+    // HIRING-FIRST. The companies worth looking at are the ones with the opening,
+    // so the opening is what is searched for — not a company profile that is then
+    // checked for hiring one company at a time.
+    entry = "job_discovery";
+    entryReason = "the mission is hiring-first: companies are reached through their openings";
+  } else if (missionSaysSo && asked("startup_company_discovery")) {
+    entry = "startup_company_discovery";
+    entryReason = "the mission requires startup-cohort discovery";
+  } else if (missionSaysSo && asked("general_company_discovery")) {
+    entry = "general_company_discovery";
+    entryReason = "the mission requires general company discovery outside startup cohorts";
   } else if (hasSignal(mission, "funding")) {
     entry = "funding_signal_discovery";
     entryReason = "the mission requires a funding signal";
@@ -414,8 +460,26 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
 
   if (entry === "job_discovery") {
     steps.push(step("job_deduplication", order++, "job output must be deduplicated"));
-    // A job mission enriches employers only when it also wants companies/people.
-    if (wantsPeople || mission.requested_output === "enriched_companies") {
+    // ── JOBS AS THE DELIVERABLE, OR JOBS AS THE ROUTE TO A COMPANY ──────────
+    //
+    // These are different missions and used to produce the same plan. When the
+    // user asked for JOB LISTINGS, the postings are the answer and the plan is
+    // finished. When the user asked for COMPANIES and the opening is merely how
+    // they are found — "manufacturers hiring their first salesperson" — the
+    // employer still has to be resolved, enriched and evaluated, or the run
+    // returns job rows to a question about companies.
+    //
+    // The old condition asked only whether people or enriched companies were
+    // wanted, so a hiring-first COMPANY mission stopped at deduplication.
+    const jobsAreTheDeliverable = mission.requested_output === "job_listings";
+    if (!jobsAreTheDeliverable) {
+      steps.push(step("company_identity_resolution", order++,
+        "companies reached through their openings still need a canonical identity"));
+      steps.push(step("company_enrichment", order++,
+        "qualification requires enriched evidence, never job-row fields"));
+      steps.push(step("company_brain_qualification", order++,
+        "the employers are qualified against the Company Brain"));
+    } else if (wantsPeople || mission.requested_output === "enriched_companies") {
       steps.push(step("company_identity_resolution", order++, "employer enrichment was requested"));
       steps.push(step("company_enrichment", order++, "employer enrichment was requested"));
     }
@@ -428,8 +492,28 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     // MANDATORY, and always BEFORE qualification.
     steps.push(step("company_enrichment", order++, "qualification requires enriched evidence, never discovery-time fields"));
 
-    if (hasSignal(mission, "hiring")) {
-      steps.push(step("hiring_verification", order++, "the mission requires a verified hiring signal"));
+    // ── PAID HIRING VERIFICATION IS NOT AUTOMATIC ──────────────────────────
+    //
+    // It used to follow from the word "hiring" appearing anywhere in the query,
+    // so a partner-fit question ("agencies that could partner with us") and a
+    // fit question ("companies that could use Agentory") would each buy a job
+    // search per company to prove something neither one asked about.
+    //
+    // A compiled mission states whether it needs EXTERNAL verification. When it
+    // does not, embedded evidence answers for nothing. Only a mission with no
+    // compiled capabilities falls back to the old signal-presence reading.
+    const needsPaidHiring = missionSaysSo
+      ? asked("hiring_verification")
+      : hasSignal(mission, "hiring");
+    if (needsPaidHiring) {
+      steps.push(step("hiring_verification", order++,
+        missionSaysSo
+          ? "the mission requires externally verified hiring evidence"
+          : "the mission requires a verified hiring signal"));
+    } else if (hasSignal(mission, "hiring")) {
+      // Recorded so the ABSENCE is legible: hiring matters to this mission and
+      // embedded evidence is expected to settle it without a paid call.
+      entryReason += "; hiring evidence taken from embedded sources, not purchased";
     }
     if (hasSignal(mission, "expansion")) {
       steps.push(step("expansion_signal_verification", order++, "the mission requires a verified expansion signal"));
@@ -437,15 +521,26 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     steps.push(step("company_brain_qualification", order++, "companies are qualified against the Company Brain"));
   }
 
-  if (wantsPeople) {
-    steps.push(step("founder_discovery", order++, `the mission requests ${mission.decision_makers.roles.join("/") || "decision-makers"}`));
-    if (mission.decision_makers.current_employment_required) {
-      steps.push(step("employer_verification", order++, "current employment must be verified"));
-    }
-    steps.push(step("contact_enrichment", order++, "a lead needs a contact method to be CONTACT-ready"));
-  }
-
   steps.push(step("persistence", order++, "results are persisted to the Workbench"));
+
+  // ── PEOPLE ARE OFFERED, NEVER SCHEDULED ────────────────────────────────────
+  //
+  // `founder_discovery`, `employer_verification` and `contact_enrichment` were
+  // appended here whenever the query mentioned founders — which is most lead
+  // queries. Every company that qualified then had its people bought, before
+  // anyone had agreed to buy a single one.
+  //
+  // They are OFFERS now. Nothing here adds a step; the Workbench renders a
+  // locked row and the purchase happens, if ever, on an explicit action. The
+  // three stages fall into `prohibited` below by simple absence, so
+  // `assertProviderAllowed` refuses their Actors for this plan outright.
+  const offered_capabilities: string[] = [];
+  if (wantsPeople || mission.directives?.founder_unlock_recommended) {
+    offered_capabilities.push("offer_founder_unlock");
+  }
+  if (mission.requested_output === "contact_ready_leads") {
+    offered_capabilities.push("offer_contact_unlock");
+  }
 
   // Anything not in the plan is PROHIBITED. Stated positively so containment is
   // a set membership test rather than a list of remembered exclusions.
@@ -466,6 +561,8 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     allowed_providers,
     entry_capability: entry,
     estimated_cost_units: steps.reduce((n, s) => n + s.cost_units * s.max_attempts, 0),
+    offered_capabilities,
+    routing_reason: entryReason,
   };
 }
 

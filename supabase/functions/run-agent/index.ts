@@ -1581,7 +1581,18 @@ Deno.serve(async (req) => {
                     mission_geography: evidence.mission_geography,
                     workspace_industries: evidence.workspace_industries,
                   });
-                  const payload = buildClassifierPayload(evidence, policy);
+                  // ── THE SAME MISSION, FROM QUERY TO VERDICT ─────────────
+                  //
+                  // The classifier used to receive only verticals and geography
+                  // and re-derive everything else from the raw sentence — so the
+                  // stage that judged a company could disagree with the stage
+                  // that chose it, about the same run. It now reads the compiled
+                  // mission's own constraints, signals and instructions.
+                  const payload = buildClassifierPayload(evidence, policy, {
+                    hard_constraints: persistedMission.hard_constraints,
+                    soft_preferences: persistedMission.soft_preferences,
+                    ...(persistedMission.directives ?? {}),
+                  });
                   const raw = await classificationBinding.classifyCompanyEvidence!(payload);
                   // A NULL RESPONSE IS NOT A PASS AND NOT A REJECTION. The
                   // parser turns anything unusable into REVIEW with a status

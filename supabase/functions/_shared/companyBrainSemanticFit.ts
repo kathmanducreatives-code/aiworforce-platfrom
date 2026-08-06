@@ -455,8 +455,36 @@ export function parseSemanticFitStrict(raw: unknown): ParsedSemanticFit {
 /** The evidence payload handed to the live classifier. Versioned. */
 export const SEMANTIC_INPUT_SCHEMA_VERSION = "semantic-fit-input-v1" as const;
 
+/**
+ * The compiled mission's directives, as the classifier receives them.
+ *
+ * Structurally identical to `MissionDirectives` but declared locally so this
+ * module keeps its "no upward imports" shape — it is imported BY the mission
+ * layer, not the other way round.
+ */
+export interface ClassifierMissionDirectives {
+  hard_constraints?: Record<string, unknown>;
+  soft_preferences?: Record<string, unknown>;
+  preferred_signals?: string[];
+  adjacent_signals?: string[];
+  excluded_signals?: string[];
+  required_evidence?: string[];
+  allowed_broadening?: unknown;
+  disallowed_broadening?: string[];
+  evaluation_instructions?: string;
+}
+
 export function buildClassifierPayload(
   i: SemanticFitInput, policy: AppliedPolicy,
+  /**
+   * THE SAME MISSION THE PLANNER COMPILED.
+   *
+   * Optional so the deterministic path is unchanged. Supplied, it is what stops
+   * the classifier inventing its own idea of what the query wanted: the query is
+   * interpreted ONCE, and every later stage reads that interpretation rather
+   * than re-deriving a conflicting one from the same sentence.
+   */
+  directives?: ClassifierMissionDirectives | null,
 ): Record<string, unknown> {
   return {
     schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
@@ -467,6 +495,19 @@ export function buildClassifierPayload(
       geography: policy.geography,
       workspace_context_applied: policy.workspace_context_applied,
       workspace_categories_ignored: policy.workspace_categories_ignored,
+      ...(directives
+        ? {
+          hard_constraints: directives.hard_constraints ?? {},
+          soft_preferences: directives.soft_preferences ?? {},
+          preferred_signals: directives.preferred_signals ?? [],
+          adjacent_signals: directives.adjacent_signals ?? [],
+          excluded_signals: directives.excluded_signals ?? [],
+          required_evidence: directives.required_evidence ?? [],
+          allowed_broadening: directives.allowed_broadening ?? null,
+          disallowed_broadening: directives.disallowed_broadening ?? [],
+          evaluation_instructions: directives.evaluation_instructions ?? "",
+        }
+        : {}),
     },
     company: {
       name: i.company_name, linkedin_industry: i.linkedin_industry,

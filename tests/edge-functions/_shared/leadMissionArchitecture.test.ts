@@ -83,9 +83,15 @@ Deno.test("1b. its capability graph is startup-first, enriches before qualifying
   assert(enrich >= 0 && qualify >= 0, "both capabilities must be present");
   assert(enrich < qualify, "enrichment must precede Company Brain qualification");
 
-  // Founder discovery strictly AFTER qualification.
-  const founders = order.indexOf("founder_discovery");
-  assert(founders > qualify, "founder discovery must follow qualification");
+  // FOUNDER DISCOVERY IS ABSENT. It is an offer, not a step — the graph never
+  // schedules a people Actor, so "after qualification" is no longer a question
+  // the plan can answer.
+  assertEquals(order.indexOf("founder_discovery"), -1,
+    "founder discovery must not appear in an automatic graph");
+  assertEquals(order.indexOf("employer_verification"), -1);
+  assertEquals(order.indexOf("contact_enrichment"), -1);
+  assertEquals(plan.offered_capabilities, ["offer_founder_unlock", "offer_contact_unlock"],
+    "the people work is surfaced as offers instead");
 
   // And the full expected chain is present, in order.
   for (const [a, b] of [
@@ -93,10 +99,7 @@ Deno.test("1b. its capability graph is startup-first, enriches before qualifying
     ["company_identity_resolution", "company_enrichment"],
     ["company_enrichment", "hiring_verification"],
     ["hiring_verification", "company_brain_qualification"],
-    ["company_brain_qualification", "founder_discovery"],
-    ["founder_discovery", "employer_verification"],
-    ["employer_verification", "contact_enrichment"],
-    ["contact_enrichment", "persistence"],
+    ["company_brain_qualification", "persistence"],
   ]) {
     assert(order.indexOf(a) < order.indexOf(b), `${a} must precede ${b}`);
   }
@@ -238,10 +241,19 @@ Deno.test("6. a non-job mission cannot reach LinkedIn Cookies, Jobs, Indeed or G
   for (const allowed of [
     "apify_yc_companies_memo23", "apify_yc_companies_solidcode",
     "apify_linkedin_company_details", "apify_linkedin_job_search",
-    "apify_linkedin_company_employees",
   ]) {
     assert(isProviderAllowed(plan, allowed), `${allowed} must be reachable`);
   }
+  // THE PEOPLE ACTOR MOVED SIDES. It used to be on the approved list above,
+  // because founder discovery was a step in every people-shaped mission. It is
+  // an OFFER now, so its Actor is outside this plan entirely and the same
+  // containment assertion that refuses Indeed refuses it too.
+  assertFalse(isProviderAllowed(plan, "apify_linkedin_company_employees"),
+    "the people Actor is unreachable until an explicit unlock");
+  assertThrows(
+    () => assertProviderAllowed(plan, "apify_linkedin_company_employees"),
+    CapabilityContainmentError,
+  );
 });
 
 // `apify_linkedin_company_search` USED to be on the forbidden list above, as
@@ -378,7 +390,10 @@ Deno.test("10. funding and expansion queries build their own graphs", () => {
   assert(funding.required_signals.some((s) => s.type === "funding"));
   const fPlan = buildCapabilityGraph(funding);
   assertEquals(fPlan.entry_capability, "funding_signal_discovery");
-  assert(fPlan.steps.map((s) => s.capability).includes("founder_discovery"));
+  // "…and their CEOs" is a request for PEOPLE, and it is answered with an offer
+  // rather than a purchase. The step is gone; the offer names it.
+  assertFalse(fPlan.steps.map((s) => s.capability).includes("founder_discovery"));
+  assert(fPlan.offered_capabilities.includes("offer_founder_unlock"));
   assertFalse(isProviderAllowed(fPlan, "apify_jobs"));
 
   const expansion = parseLeadMissionDeterministic(

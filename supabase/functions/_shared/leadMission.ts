@@ -102,6 +102,36 @@ export interface MissionDecisionMakers {
   current_employment_required: boolean;
 }
 
+/**
+ * The interpreting model's JUDGEMENT about the query, carried forward whole.
+ *
+ * Optional, because a deterministically-parsed mission has none. Present, it is
+ * what every later stage must obey instead of re-deriving its own idea of what
+ * the query wanted — the failure this whole compiler exists to remove.
+ *
+ * Deliberately NOT part of `missionHash`. The hash answers "is this the same
+ * question?", and the question is the query, profile, signals and capabilities.
+ * Directives are guidance about how to judge the answer; folding them in would
+ * invalidate the resume state of every run whose guidance was reworded.
+ */
+export interface MissionDirectives {
+  preferred_signals: string[];
+  adjacent_signals: string[];
+  excluded_signals: string[];
+  required_evidence: string[];
+  allowed_broadening: {
+    role_families: string[];
+    company_types: string[];
+    geographies: string[];
+    employee_range: { min: number | null; max: number | null };
+  };
+  disallowed_broadening: string[];
+  evaluation_instructions: string;
+  source_strategy: string[];
+  requested_contact_ready_count: number | null;
+  founder_unlock_recommended: boolean;
+}
+
 export interface LeadMissionV1 {
   version: typeof LEAD_MISSION_VERSION;
   /** IMMUTABLE. The user's words, never a planner rewrite. */
@@ -123,6 +153,8 @@ export interface LeadMissionV1 {
 
   field_provenance: Record<string, FieldProvenance>;
   confidence: number;
+  /** Set only on the model-compiled path. See {@link MissionDirectives}. */
+  directives?: MissionDirectives;
 }
 
 /** Structural guard. Used to decide mission-path vs legacy-carrier path. */

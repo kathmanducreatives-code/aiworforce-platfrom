@@ -37,8 +37,16 @@ const gates = (o: Partial<HardGateInput> = {}): HardGateInput => ({
 Deno.test("1. run-agent binds the FULL structured schema", async () => {
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(src.includes("buildClassifierPayload(evidence, policy)"),
+  assert(src.includes("buildClassifierPayload(evidence, policy"),
     "the full evidence payload must go out");
+  // AND THE COMPILED MISSION GOES WITH IT. The classifier used to receive only
+  // verticals and geography, then re-derive the rest from the raw sentence —
+  // which is how the stage that judged a company could disagree with the stage
+  // that chose it, about the same run.
+  assert(src.includes("persistedMission.directives"),
+    "the validated mission's directives must reach the classifier");
+  assert(src.includes("hard_constraints: persistedMission.hard_constraints"),
+    "and its hard constraints too");
   assert(src.includes("parseSemanticFitStrict(raw)"),
     "the full schema must come back through the fail-closed parser");
   assertFalse(/return v === "pass" \|\| v === "fail" \|\| v === "unknown"/.test(src),
