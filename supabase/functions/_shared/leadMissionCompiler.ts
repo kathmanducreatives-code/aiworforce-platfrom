@@ -33,7 +33,9 @@
 import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
-  type BrainMergeInput, type LeadMissionV1, type MissionDirectives,
+  EXECUTION_PREFERENCES,
+  type BrainMergeInput, type ExecutionPreference, type LeadMissionV1,
+  type MissionDirectives,
 } from "./leadMission.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
@@ -668,6 +670,13 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
     source_strategy: p?.preferred_source_strategy ?? [],
     requested_contact_ready_count: p?.requested_contact_ready_count ?? null,
     founder_unlock_recommended: p?.founder_unlock_recommended ?? true,
+    // ABSTRACT ONLY. Validated against a closed vocabulary, so the field can
+    // never become a place to name a vendor.
+    execution_preference: EXECUTION_PREFERENCES.includes(
+      String((i.proposal as Record<string, unknown> | null | undefined)
+        ?.execution_preference ?? "") as ExecutionPreference)
+      ? String((i.proposal as Record<string, unknown>).execution_preference) as ExecutionPreference
+      : "balanced",
   };
 
   // Hard constraints from an explicit query must survive as hard constraints.

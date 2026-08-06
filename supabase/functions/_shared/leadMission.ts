@@ -130,7 +130,22 @@ export interface MissionDirectives {
   source_strategy: string[];
   requested_contact_ready_count: number | null;
   founder_unlock_recommended: boolean;
+  /**
+   * COST VERSUS DEPTH, expressed abstractly.
+   *
+   * The model and the user may influence how thoroughly a mission is pursued
+   * WITHOUT naming a provider. Code reads this to choose among the Actors
+   * already approved for a capability — which preserves the containment
+   * property the whole design rests on: there is no field anywhere in which a
+   * model can say "use memo23".
+   */
+  execution_preference?: ExecutionPreference;
 }
+
+export type ExecutionPreference = "economical" | "balanced" | "thorough";
+
+export const EXECUTION_PREFERENCES: readonly ExecutionPreference[] =
+  ["economical", "balanced", "thorough"];
 
 export interface LeadMissionV1 {
   version: typeof LEAD_MISSION_VERSION;

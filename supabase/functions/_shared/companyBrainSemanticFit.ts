@@ -218,6 +218,20 @@ export function decideCompanyBrain(i: {
   policy: AppliedPolicy;
   /** Tier B with no supporting signal is a REVIEW, never a pass. */
   hiring_verified: boolean;
+  /**
+   * THE VERIFIED GROUNDING, when the grounded classifier ran.
+   *
+   * Supplied, it OUTRANKS `semantic.company_fit`: the model's own verdict is an
+   * opinion, and this is what survived being checked against the evidence it
+   * cited. Absent, the behaviour is exactly as before — an ungrounded run still
+   * works, it simply cannot reach QUALIFIED on confidence alone.
+   */
+  grounding?: {
+    final_grounded_decision: "pass" | "review" | "fail";
+    grounding_score: number;
+    validated_claim_types: string[];
+    downgrade_reasons: string[];
+  } | null;
 }): BrainDecision {
   const failed = failedHardGates({ ...i.gates, semantic: i.semantic });
   const s = i.semantic;
@@ -242,16 +256,41 @@ export function decideCompanyBrain(i: {
     return { ...base, outcome: "REVIEW",
       reason: "no semantic assessment available — held for review, not rejected" };
   }
-  if (s.company_fit === "fail") {
+  // ── THE GROUNDED VERDICT OUTRANKS THE MODEL'S OWN ────────────────────────
+  //
+  // `s.company_fit` is what the classifier said. `grounding` is what survived
+  // being checked against the evidence it cited. Where they disagree the
+  // verified one wins, because the whole failure this replaces was a confident
+  // claim nobody could substantiate reaching a salesperson as a fact.
+  const g = i.grounding ?? null;
+  const effectiveFit = g ? g.final_grounded_decision : s.company_fit;
+
+  if (effectiveFit === "fail") {
+    // A REJECT MUST BE EARNED. The verifier already refuses to let an
+    // unsupported "fail" stand, so reaching here means the model was explicit
+    // and at least one of its claims held up.
     return { ...base, outcome: "REJECT", reason: s.reason || "semantic assessment: not a fit" };
   }
-  if (s.company_fit === "review" || s.business_model === "unknown" ||
+  if (effectiveFit === "review" || s.business_model === "unknown" ||
       s.unknown_fields.length > 0 || !i.hiring_verified ||
       s.agentory_use_case === "weak") {
-    return { ...base, outcome: "REVIEW",
-      reason: s.reason || "likely fit, with one or more facts still uncertain" };
+    return {
+      ...base, outcome: "REVIEW",
+      reason: g && g.downgrade_reasons.length > 0
+        // THE DOWNGRADE IS THE REASON. "likely fit, facts uncertain" told a
+        // reviewer nothing; "grounding_score_0.33_below_0.6" tells them exactly
+        // what to go and check.
+        ? `held for review: ${g.downgrade_reasons.join("; ")}`
+        : s.reason || "likely fit, with one or more facts still uncertain",
+    };
   }
-  return { ...base, outcome: "QUALIFIED", reason: s.reason || "strong fit with a current signal" };
+  return {
+    ...base, outcome: "QUALIFIED",
+    reason: g
+      ? `${s.reason || "strong fit with a current signal"} ` +
+        `(grounding ${g.grounding_score}, validated: ${g.validated_claim_types.join(", ")})`
+      : s.reason || "strong fit with a current signal",
+  };
 }
 
 // ------------------------------------------------------------- the prompt ----
