@@ -82,8 +82,8 @@ import {
   SEMANTIC_INPUT_SCHEMA_VERSION,
 } from "../_shared/companyBrainSemanticFit.ts";
 import {
-  buildCheckpoint, LINEAGE_ROOT_RESULT_KEY, readCheckpointCompanies,
-  RESUME_STATE_VERSION, type CompanyResumeRecord,
+  buildCheckpoint, LINEAGE_ROOT_RESULT_KEY, lineageRootTaskId,
+  readCheckpointCompanies, type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 
@@ -107,20 +107,84 @@ function readCapabilityExecutionState(
 }
 
 /**
- * Per-company work a previous invocation already paid for.
+ * Per-company work a previous invocation already paid for — LOADED, NOT ACCEPTED.
  *
- * `continue-workflow` reads the parent task's checkpoint and sends it here.
- * Re-validated on arrival rather than trusted: this body is server-to-server
- * today, but a resume record under a wrong key would skip a paid call for a
- * company it does not describe, so the shape is proven, not assumed.
+ * WHAT THIS REPLACES, AND WHY.
+ *
+ * The previous version read `body.lead_resume_records` and merely re-validated
+ * its SHAPE. Shape was never the risk. A caller who is a member of this
+ * workspace could send a well-formed record under a real company key carrying
+ * someone else's LinkedIn URL, and the engine would restore it as that
+ * company's identity — attaching the wrong employer to a real lead — or mark
+ * an unbought operation "completed" and suppress a call the run needed.
+ *
+ * The records now come from the DATABASE, addressed by a task id, and every one
+ * of these must hold:
+ *
+ *   * the parent task exists;
+ *   * its `workspace_id` equals the workspace this run is authorised for —
+ *     so a task id from another workspace yields nothing, not a cross-tenant read;
+ *   * the checkpoint parses at the expected version.
+ *
+ * The client may therefore say WHICH run to continue. It may not say what that
+ * run found. The lineage root is read from the same row, so the operation keys
+ * stay stable across the chain without the client being able to move them.
  */
-function readLeadResumeRecords(body: Record<string, unknown>): CompanyResumeRecord[] {
-  const raw = body.lead_resume_records;
-  if (!Array.isArray(raw)) return [];
-  // `readCheckpointCompanies` owns the validation; feed it the shape it reads.
-  return readCheckpointCompanies({
-    lead_resume_checkpoint: { version: RESUME_STATE_VERSION, companies: raw },
-  });
+async function loadLeadResumeRecords(
+  db: { from: (t: string) => any },
+  parentTaskId: string | null,
+  workspaceId: string,
+): Promise<{
+  records: CompanyResumeRecord[];
+  lineageRoot: string | null;
+  rejection: string | null;
+}> {
+  const none = (rejection: string | null) => ({ records: [], lineageRoot: null, rejection });
+  if (!parentTaskId) return none(null);
+  try {
+    const { data } = await db.from("tasks")
+      .select("id, workspace_id, result").eq("id", parentTaskId).maybeSingle();
+    if (!data) return none("resume_parent_task_not_found");
+    // THE WORKSPACE CHECK IS THE WHOLE GUARD. Without it a task id is a
+    // capability, and task ids travel.
+    if (String((data as { workspace_id?: unknown }).workspace_id ?? "") !== String(workspaceId)) {
+      console.log("[run-agent][resume][cross-workspace-refused]", {
+        parent_task_id: parentTaskId, requested_workspace: workspaceId,
+      });
+      return none("resume_cross_workspace_refused");
+    }
+    const result = (data as { result?: unknown }).result ?? null;
+    return {
+      records: readCheckpointCompanies(result),
+      lineageRoot: lineageRootTaskId(parentTaskId, result),
+      rejection: null,
+    };
+  } catch (e) {
+    // A FAILED LOAD IS NOT A LICENCE TO TRUST THE CLIENT. It means nothing is
+    // known to be done, so the run re-buys rather than skipping wrongly.
+    console.log("[run-agent][resume][load-error]", String(e));
+    return none("resume_load_failed");
+  }
+}
+
+/**
+ * Client-supplied fields that are IGNORED, and named when present.
+ *
+ * None of these is something a browser may decide. The mission, the graph, the
+ * provider and every provider input are derived server-side from the task's own
+ * plan; a body carrying them is either a stale caller or someone testing what
+ * the boundary accepts. Either way the answer is the same, and it is recorded.
+ */
+const CLIENT_CONTROLLED_FIELDS_IGNORED = [
+  "actor_id", "actorId", "actor_key", "selected_actor_key",
+  "provider", "providers", "provider_input", "raw_actor_input",
+  "compiled_actor_input", "capability_plan", "capability_graph",
+  "allowed_providers", "budget", "budget_override", "max_spend",
+  "lead_resume_records", "lead_resume_checkpoint",
+] as const;
+
+export function rejectedClientFields(body: Record<string, unknown>): string[] {
+  return CLIENT_CONTROLLED_FIELDS_IGNORED.filter((k) => body[k] !== undefined);
 }
 
 /**
@@ -495,13 +559,18 @@ Deno.serve(async (req) => {
   const needs_approval: boolean = body.needs_approval === true;
   const tool_input_body: any = body.tool_input ?? null;
   const execution_mode_body: string | undefined = body.execution_mode;
-  // WHAT A PREVIOUS INVOCATION ALREADY BOUGHT. Sent by `continue-workflow`;
-  // absent on a first run, where it correctly means "nothing is known to be
-  // done" and the engine spends exactly as it did before.
-  const leadResumeRecords = readLeadResumeRecords(body as Record<string, unknown>);
-  const leadResumeLineageRootIn: string | null =
-    typeof body.lead_resume_lineage_root === "string" && body.lead_resume_lineage_root
-      ? body.lead_resume_lineage_root : null;
+  // WHICH RUN TO CONTINUE — an ID, never the findings themselves. The records
+  // are loaded from the database below, after the workspace is verified.
+  const leadResumeParentTaskId: string | null =
+    typeof body.lead_resume_parent_task_id === "string" && body.lead_resume_parent_task_id
+      ? body.lead_resume_parent_task_id
+      : (typeof body.continuation_of_task_id === "string" && body.continuation_of_task_id
+        ? body.continuation_of_task_id
+        : null);
+  const ignoredClientFields = rejectedClientFields(body as Record<string, unknown>);
+  if (ignoredClientFields.length > 0) {
+    console.log("[run-agent][client-fields-ignored]", { fields: ignoredClientFields });
+  }
   // orchestrate threads the plan step's required tool here (index.ts kickoff). It
   // was previously never read — the root cause of the Scout-fallback failure, where
   // a source_with_apify step whose tool_input carried no tool_name fell through to
@@ -1496,10 +1565,26 @@ Deno.serve(async (req) => {
         // `executeCompanyFirstRoute` is not consulted at all, so the two cannot
         // disagree about the same run — it survives only for pre-mission tasks.
 
+        // ── RESUME STATE, LOADED SERVER-SIDE ────────────────────────────────
+        // Addressed by task id, gated on workspace ownership, read from the
+        // database. The client says which run to continue; the database says
+        // what that run found.
+        const resumeLoad = await loadLeadResumeRecords(
+          supabase as never, leadResumeParentTaskId, workspace_id);
+        const leadResumeRecords = resumeLoad.records;
+        console.log("[run-agent][resume][loaded]", {
+          task_id: task.id,
+          parent_task_id: leadResumeParentTaskId,
+          records: leadResumeRecords.length,
+          rejection: resumeLoad.rejection,
+          client_fields_ignored: ignoredClientFields,
+        });
+
         // THE CHAIN'S ROOT. A continuation inherits it; a first run becomes it.
         // Inheriting is what keeps a third invocation computing the same
-        // operation keys as the second instead of re-buying everything.
-        const leadResumeLineageRoot = leadResumeLineageRootIn ?? task.id;
+        // operation keys as the second instead of re-buying everything. Read
+        // from the same verified row as the records, never from the body.
+        const leadResumeLineageRoot = resumeLoad.lineageRoot ?? task.id;
 
         let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
         if (!resumeSatisfied && persistedMission && missionPlan) {

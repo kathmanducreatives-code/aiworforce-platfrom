@@ -213,11 +213,13 @@ Deno.serve(async (req) => {
         ...(toolInput ? { tool_input: toolInput } : {}),
         execution_mode: "company_first",
         capability_execution_state: spec.capability_execution_state,
-        // THE OTHER HALF OF THE RESUME. Without these the continuation adopts
-        // the discovery run and then pays a second time to resolve the identity
-        // of every company that run already resolved.
-        lead_resume_records: spec.lead_resume_records,
-        lead_resume_lineage_root: spec.lineage_root_task_id,
+        // THE OTHER HALF OF THE RESUME — AN ADDRESS, NOT A PAYLOAD.
+        //
+        // This used to send the checkpoint records themselves. run-agent now
+        // loads them from the database against this task id and refuses the read
+        // unless the row's workspace matches the one it is authorised for, so a
+        // forged record cannot attach a wrong identity or suppress a needed call.
+        lead_resume_parent_task_id: spec.lineage.parent_task_id,
       }),
     });
     invokeStatus = res.status;

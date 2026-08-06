@@ -370,8 +370,17 @@ Deno.test("12. a general company query selects general_company_discovery", () =>
 Deno.test("13. a hiring-first non-YC query reaches external hiring evidence", () => {
   const r = compile(MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL);
   const plan = buildCapabilityGraph(r.final_mission);
-  // The mission is hiring-first, so companies are reached through the opening.
-  assertEquals(plan.entry_capability, "job_discovery");
+  // HIRING-FIRST, THROUGH CARDED ACTORS.
+  //
+  // The natural route is "search openings, then look at the employers", and the
+  // Actors that can do that have no verified schema card — so no bounded input
+  // can be compiled and no cost estimated for them. A hiring-first mission
+  // therefore discovers by company profile and verifies hiring INSIDE that set
+  // with the company-scoped LinkedIn job search, which is carded and priced.
+  assertEquals(plan.entry_capability, "general_company_discovery");
+  assert(plan.routing_reason.includes("hiring-first"));
+  assert(plan.steps.map((s) => s.capability).includes("hiring_verification"),
+    "hiring is still verified, per company");
   assert(r.capability_decision.approved.includes("external_hiring_verification"));
   assertFalse(isProviderAllowed(plan, "apify_yc_companies_memo23"),
     "a manufacturer query has no YC requirement");
@@ -392,7 +401,8 @@ Deno.test("14. embedded YC evidence prevents an unnecessary job-search call", ()
   // verification would re-buy what discovery already proved.
   const mfg = buildCapabilityGraph(
     compile(MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL).final_mission);
-  assertEquals(mfg.entry_capability, "job_discovery");
+  assert(mfg.steps.map((s) => s.capability).includes("hiring_verification"),
+    "a mission that needs verified hiring buys exactly one company-scoped check");
   assert(needsExternalHiringVerification(
     ["external_hiring_verification"], compile(MANUFACTURER_QUERY).final_mission));
   assertFalse(needsExternalHiringVerification(

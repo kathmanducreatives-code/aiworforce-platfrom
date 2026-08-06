@@ -63,7 +63,8 @@ import {
   shouldSkipProviderCall, type CompanyResumeRecord,
 } from "./leadResumeState.ts";
 import {
-  dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
+  dedupeJobs, dedupePeople, normalizeHarvestPerson,
+  normalizeLinkedInCompanyCandidate, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
   normalizeSolidcodeCompany,
   type NormalizedHiringCompany, type NormalizedHiringJob, type NormalizedHiringPerson,
@@ -925,7 +926,73 @@ export async function runCapabilityPlan(
       continue;
     }
 
-    if (cap === "general_company_discovery" || cap === "known_company_resolution" ||
+    // ── GENERAL COMPANY DISCOVERY ────────────────────────────────────────────
+    //
+    // The route for everything that is not a startup cohort and not a supplied
+    // list: manufacturers, integrators, agencies, engineering firms. It was
+    // DECLARED in the graph and never driven, so those missions planned a
+    // sensible route and then reported `skipped_no_input` — a correct answer to
+    // nothing.
+    //
+    // The concepts searched for are compiled from the VALIDATED MISSION, never
+    // from free model text. `compileCompanySearchConcepts` strips URLs and
+    // vendor names, enforces the mission's hard geography, and caps both the
+    // number of queries and the rows each may return, so an over-eager
+    // interpretation costs a bounded amount rather than an open one.
+    if (cap === "general_company_discovery") {
+      const provider = "apify_linkedin_company_search";
+      const concepts = compileCompanySearchConcepts(opts.mission, maxCandidates);
+      if (concepts.queries.length === 0) {
+        finish(cap, "skipped_no_input", 0, [], false,
+          "the mission carries no company type, vertical or geography to search on");
+        continue;
+      }
+      let found = 0;
+      for (const q of concepts.queries) {
+        if (companies.length >= maxCandidates) break;
+        const compiled = compileHarvestCompanySearchInput({
+          searchQuery: q,
+          // `full` is required: `short` returns employeeCount === null, and an
+          // unverifiable size cannot settle an employee-ceiling gate.
+          scraperMode: "full",
+          maxItems: concepts.maxItemsPerQuery,
+          ...(concepts.locations.length ? { locations: concepts.locations } : {}),
+        });
+        for (const r of await callProvider(cap, provider, compiled)) {
+          const c = normalizeLinkedInCompanyCandidate(r);
+          // DEDUPED BY `addCompany`, which keys on LinkedIn URL / domain / id —
+          // so the same company surfacing under two concepts is one row, and is
+          // therefore identified and enriched once.
+          addCompany(companies, c, []);
+          found++;
+        }
+      }
+      state.company_keys = companies.map((c) => c.key);
+      if (companies.length === 0) {
+        const invalid = state.provider_attempts.filter(
+          (a) => a.capability === cap && a.outcome === "compile_failed");
+        if (invalid.length > 0) {
+          state.terminal_reason = "provider_input_validation_failed";
+          finish(cap, "incomplete", 0, [provider], false,
+            `provider_input_validation_failed: ${invalid.map((a) => a.reason).join(" | ")}`);
+          break;
+        }
+        const ex = onCapabilityExhausted(opts.plan, cap, [provider]);
+        state.terminal_reason = ex.reason;
+        state.fallback_reason = ex.status === "exhausted" ? "approved_providers_exhausted" : null;
+        finish(cap, "exhausted", 0, [provider], false, ex.reason);
+        break;
+      }
+      finish(cap, "complete", companies.length, [provider], true, null);
+      log("general_company_discovery_complete", {
+        queries: concepts.queries, locations: concepts.locations,
+        rows: found, unique_companies: companies.length,
+      });
+      await publish("accounts_found");
+      continue;
+    }
+
+    if (cap === "known_company_resolution" ||
         cap === "job_discovery" || cap === "funding_signal_discovery" ||
         cap === "expansion_signal_discovery" || cap === "job_deduplication" ||
         cap === "expansion_signal_verification") {
@@ -1734,6 +1801,101 @@ function keptForPacks(
     for (const j of filterJobsForPack(jobs, pack).kept) out.push(j);
   }
   return out;
+}
+
+/** Concepts a general company search may be run for, already bounded. */
+export interface CompanySearchConcepts {
+  queries: string[];
+  locations: string[];
+  maxItemsPerQuery: number;
+  /** Concepts that were dropped, and why. Persisted for audit. */
+  rejected: Array<{ value: string; reason: string }>;
+}
+
+/** At most this many separate searches, whatever the mission asks for. */
+export const MAX_COMPANY_SEARCH_QUERIES = 4;
+/** At most this many rows per search. */
+export const MAX_COMPANY_SEARCH_ROWS = 50;
+
+const CONCEPT_URL = /https?:\/\/|www\.|\.[a-z]{2,6}(\/|$)/i;
+const CONCEPT_VENDOR =
+  /\b(apify|harvestapi|memo23|solidcode|crawlworks|actor|scraper|linkedin\.com)\b/i;
+
+/**
+ * Compile the concepts a general company search may look for.
+ *
+ * THE MISSION IS THE SOURCE, not free model text. Company types and verticals
+ * come from the validated mission — which the user's own words already outrank —
+ * and geography is applied as a FILTER rather than pasted into the query string,
+ * because `searchQuery` is a name/concept index and a query carrying a country
+ * name returns nothing.
+ *
+ * Everything is bounded and everything rejected is named:
+ *   * URLs and vendor names are stripped — a concept is a business description,
+ *     and a model that puts a provider or a link here is reaching for a control
+ *     it does not have;
+ *   * the query count is capped, because each one is a separate paid Actor run;
+ *   * rows per query are capped;
+ *   * a concept unrelated to the mission's own verticals is dropped, so an
+ *     industrial-automation query cannot quietly acquire "SaaS".
+ */
+export function compileCompanySearchConcepts(
+  mission: LeadMissionV1, maxCandidates: number,
+): CompanySearchConcepts {
+  const rejected: CompanySearchConcepts["rejected"] = [];
+  const seen = new Set<string>();
+  const queries: string[] = [];
+
+  // The mission's own verticals first, then any soft company-type preference.
+  const raw: string[] = [
+    ...mission.company_profile.verticals,
+    ...mission.company_profile.business_models,
+  ];
+
+  for (const value of raw) {
+    const v = String(value ?? "").trim();
+    if (!v) continue;
+    if (CONCEPT_URL.test(v)) {
+      rejected.push({ value: v, reason: "looks like a URL or domain, not a business concept" });
+      continue;
+    }
+    if (CONCEPT_VENDOR.test(v)) {
+      rejected.push({ value: v, reason: "names a provider or tool rather than a business" });
+      continue;
+    }
+    // A NAME INDEX WANTS A SHORT CONCEPT. A whole sentence returns nothing, and
+    // `compileHarvestCompanySearchInput` refuses it anyway — better to drop it
+    // here with a reason than to spend a compile failure on it.
+    if (v.split(/\s+/).length > 6) {
+      rejected.push({ value: v, reason: "too long for a company-name index" });
+      continue;
+    }
+    const key = v.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (queries.length >= MAX_COMPANY_SEARCH_QUERIES) {
+      rejected.push({ value: v, reason: `beyond the ${MAX_COMPANY_SEARCH_QUERIES}-query cap` });
+      continue;
+    }
+    queries.push(v);
+  }
+
+  // HARD GEOGRAPHY IS A FILTER, NOT A SEARCH TERM. Concatenating it into the
+  // query is what turned "SnapMagic" into "SnapMagic snapmagic.com" and returned
+  // zero rows six times.
+  const locations = [...new Set(
+    mission.company_profile.locations.map((l) => String(l).trim()).filter(Boolean),
+  )].slice(0, 20);
+
+  return {
+    queries,
+    locations,
+    maxItemsPerQuery: Math.max(1, Math.min(
+      MAX_COMPANY_SEARCH_ROWS,
+      Math.ceil(maxCandidates / Math.max(1, queries.length)),
+    )),
+    rejected,
+  };
 }
 
 function packTitles(packs: readonly RolePack[]): string[] {

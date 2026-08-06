@@ -147,6 +147,19 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["requested_output is job_listings, or job_discovery explicitly allowed"],
     produces: ["job_posting"],
     allowed_next: ["job_deduplication", "company_identity_resolution"],
+    // STILL THE BOARD SET, AND STILL UNDRIVEN.
+    //
+    // `apify_linkedin_job_search` deliberately does NOT appear here. It is
+    // company-SCOPED by contract — `compileHarvestJobSearchInput` rejects an
+    // input without `company[]`, because that Actor verifies hiring inside a
+    // known company set and cannot discover employers it was not given.
+    //
+    // The four boards can discover, but none of them has a card in
+    // `hiringActorCatalog`, so no bounded input can be compiled for them and no
+    // cost can be estimated. Driving one needs a live schema verification pass
+    // first; until then a hiring-first mission is routed through company
+    // discovery plus company-scoped verification, which uses only carded
+    // Actors — see `buildCapabilityGraph`.
     providers: [
       "apify_jobs", "apify_linkedin_jobs_crawlworks",
       "apify_indeed_jobs_automation_lab", "apify_glassdoor_jobs",
@@ -326,9 +339,20 @@ export const ALL_GRAPH_PROVIDERS: ReadonlySet<string> = new Set(
   CAPABILITY_IDS.flatMap((c) => CAPABILITY_REGISTRY[c].providers),
 );
 
-/** Broad job-board keys. Reachable ONLY through `job_discovery`. */
-export const BROAD_JOB_PROVIDERS: readonly string[] =
-  CAPABILITY_REGISTRY.job_discovery.providers;
+/**
+ * Broad job-BOARD keys. Reachable only through `job_discovery`.
+ *
+ * STATED EXPLICITLY, no longer derived from `job_discovery.providers`.
+ * "Broad" means an untargeted board sweep — the thing that turned a startup
+ * mission into 50 raw Indeed rows. LinkedIn Jobs joined that capability as its
+ * primary provider, and deriving this list would have silently reclassified a
+ * targeted, company-scoped search as a broad sweep, changing what every
+ * downstream guard and diagnostic means.
+ */
+export const BROAD_JOB_PROVIDERS: readonly string[] = Object.freeze([
+  "apify_jobs", "apify_linkedin_jobs_crawlworks",
+  "apify_indeed_jobs_automation_lab", "apify_glassdoor_jobs",
+]);
 
 // ------------------------------------------------------------------ plan ----
 
@@ -430,11 +454,23 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     entry = "job_discovery";
     entryReason = "the requested output is job listings";
   } else if (strategy.includes("job_signal_first")) {
-    // HIRING-FIRST. The companies worth looking at are the ones with the opening,
-    // so the opening is what is searched for — not a company profile that is then
-    // checked for hiring one company at a time.
-    entry = "job_discovery";
-    entryReason = "the mission is hiring-first: companies are reached through their openings";
+    // HIRING-FIRST, ROUTED THROUGH CARDED ACTORS.
+    //
+    // The natural shape is "search the openings, then look at their employers".
+    // The Actors that can do that — the four job boards — have no card in
+    // `hiringActorCatalog`, so no bounded input can be compiled and no cost
+    // estimated for them. Running one anyway would mean sending an unvalidated
+    // payload to a paid Actor, which is the exact failure `compileFirstProviderCall`
+    // exists to prevent.
+    //
+    // So a hiring-first mission discovers companies by profile and then verifies
+    // hiring INSIDE that set with the company-scoped LinkedIn job search, which
+    // is carded, bounded and priced. Same deliverable — companies with proven
+    // current openings — reached with Actors whose schemas are verified.
+    entry = "general_company_discovery";
+    entryReason =
+      "the mission is hiring-first; discovery is by company profile and hiring is " +
+      "verified per company, because open job-board discovery has no verified Actor schema";
   } else if (missionSaysSo && asked("startup_company_discovery")) {
     entry = "startup_company_discovery";
     entryReason = "the mission requires startup-cohort discovery";
