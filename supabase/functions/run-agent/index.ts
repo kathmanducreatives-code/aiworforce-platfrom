@@ -214,6 +214,10 @@ import { employerGatePasses, verifyCurrentEmployer } from "../_shared/employerVe
 import {
   buildSemanticClassificationBinding, classificationTaskDiagnostics,
 } from "../_shared/semanticClassificationBinding.ts";
+import {
+  buildGroundedBrainBinding, buildShadowComparison,
+} from "../_shared/groundedBrainBinding.ts";
+import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
@@ -1513,6 +1517,34 @@ Deno.serve(async (req) => {
           requestedLeadCount: quota.requestedLeadCount,
         });
 
+        // ── THE GROUNDED COMPANY BRAIN ───────────────────────────────────────
+        //
+        // A SEPARATE flag from the classifier, because it answers a separate
+        // question: not "may we interpret this company?" but "may an
+        // interpretation change what qualifies?". Off, nothing here runs. In
+        // `shadow` it runs, is verified, and is recorded WITHOUT touching the
+        // user-facing decision. Only `enforce` lets it decide.
+        //
+        // NO EXTRA BUDGET. It draws on the classification allowance rather than
+        // adding one, so a grounded run cannot cost more than an ungrounded run
+        // was already permitted to.
+        const groundedBinding = buildGroundedBrainBinding({
+          workspaceId: workspace_id,
+          originalUserQuery: persistedMission?.original_user_query ?? null,
+          missionDirectives: persistedMission?.directives
+            ? {
+              hard_constraints: persistedMission.hard_constraints,
+              soft_preferences: persistedMission.soft_preferences,
+              execution_preference: persistedMission.directives.execution_preference ?? "balanced",
+              ...persistedMission.directives,
+            }
+            : null,
+          callsRemaining: classificationBinding.classificationCallsRemaining,
+        });
+        console.log("[run-agent][grounded-brain][binding]", {
+          task_id: task.id, ...groundedBinding.diagnostics,
+        });
+
         // ══ PAID-EXECUTION PREFLIGHT — PROVE THE PLAN BEFORE SPENDING ════════
         // Runs before EVERY paid boundary on this path, mission or not. On TEST
         // task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4 the plan step carried no
@@ -1693,6 +1725,28 @@ Deno.serve(async (req) => {
                   return parsed;
                 }
                 : undefined,
+              // ── THE GROUNDED SECOND OPINION ──────────────────────────────
+              // Null unless the flag AND the workspace allow-list both pass, so
+              // this is inert until deliberately switched on for one workspace.
+              // The engine builds the registry and hands it over already built.
+              groundCompany: groundedBinding.groundCompany
+                ? async ({ registry, requiresCommercialSignal, company_key }) => {
+                  const v = await groundedBinding.groundCompany!({
+                    registry, requiresCommercialSignal,
+                  });
+                  console.log("[run-agent][grounded-brain]", {
+                    task_id: task.id, company_key,
+                    mode: groundedBinding.mode,
+                    available: v !== null,
+                    grounding_score: v?.grounding_score ?? null,
+                    decision: v?.final_grounded_decision ?? null,
+                    validated: v?.validated_claims.length ?? 0,
+                    rejected: v?.rejected_claims.length ?? 0,
+                  });
+                  return v;
+                }
+                : undefined,
+              groundingMode: groundedBinding.mode,
               readPendingRun,
               // THE SAME BUDGET THE TERMINAL GUARD FINALIZES AGAINST. One clock,
               // so "the engine stopped early" and "the run was written partial"
@@ -1874,6 +1928,66 @@ Deno.serve(async (req) => {
                     // back by `lineageRootTaskId`; without it every link in the
                     // chain would compute its own root and skip nothing.
                     [LINEAGE_ROOT_RESULT_KEY]: leadResumeLineageRoot,
+                    // ── GROUNDING: WHAT WAS CLAIMED, AND WHAT SURVIVED ──────
+                    //
+                    // Two separate keys on purpose. `workbench_grounded_*` is
+                    // what a user may see and contains ONLY validated claims;
+                    // `grounded_brain_diagnostics` keeps the rejected ones, with
+                    // their reasons, for whoever has to explain a downgrade.
+                    // Nothing here is raw model output.
+                    grounded_brain_diagnostics: {
+                      mode: groundedBinding.mode,
+                      enablement: groundedBinding.diagnostics,
+                      companies: capabilityRun.companies
+                        .filter((c) => c.grounded !== null || c.evidence_registry !== null)
+                        .map((c) => ({
+                          company_key: c.key,
+                          evidence_ids: (c.evidence_registry?.items ?? [])
+                            .map((x) => x.evidence_id),
+                          evidence_types: [...new Set(
+                            (c.evidence_registry?.items ?? []).map((x) => x.evidence_type))],
+                          grounding_score: c.grounded?.grounding_score ?? null,
+                          grounded_decision: c.grounded?.final_grounded_decision ?? null,
+                          confidence_before_grounding:
+                            c.grounded?.classifier_result.confidence ?? null,
+                          confidence_after_grounding: c.grounded
+                            ? Number((c.grounded.classifier_result.confidence *
+                              c.grounded.grounding_score).toFixed(4))
+                            : null,
+                          validated_claims: (c.grounded?.validated_claims ?? [])
+                            .map((x) => ({ claim_type: x.claim_type, claim: x.claim })),
+                          rejected_claims: (c.grounded?.rejected_claims ?? [])
+                            .map((x) => ({
+                              claim_type: x.claim_type, reason: x.reason, detail: x.detail,
+                            })),
+                          downgrade_reasons: c.grounded?.downgrade_reasons ?? [],
+                          unacknowledged_conflicts:
+                            c.grounded?.unacknowledged_conflicts ?? [],
+                        })),
+                      // WHAT ENFORCING WOULD HAVE DONE, recorded without doing it.
+                      shadow_comparison: groundedBinding.mode === "shadow"
+                        ? capabilityRun.companies
+                          .filter((c) => c.grounded !== null)
+                          .map((c) => buildShadowComparison({
+                            companyKey: c.key,
+                            legacyOutcome: c.brain?.outcome ?? "REVIEW",
+                            legacyConfidence: c.brain?.confidence ?? 0,
+                            grounded: c.grounded,
+                          }))
+                        : [],
+                    },
+                    // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot
+                    // reach this array; `buildWorkbenchExplanation` is built
+                    // from `validated_claims` and nothing else.
+                    workbench_grounded_explanations: capabilityRun.companies
+                      .filter((c) => c.grounded !== null && c.evidence_registry !== null)
+                      .map((c) => ({
+                        company_key: c.key,
+                        company_name: c.company.company_name,
+                        recommended_action: c.verdict === "pass"
+                          ? "offer_founder_unlock" : null,
+                        ...buildWorkbenchExplanation(c.grounded!, c.evidence_registry!),
+                      })),
                     semantic_classification_observability: {
                       input_schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
                       model: classificationBinding.enablement?.model ?? null,

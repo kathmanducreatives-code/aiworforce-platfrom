@@ -59,6 +59,11 @@ import {
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
 import {
+  buildEvidenceRegistry, type EvidenceRegistry,
+} from "./leadEvidenceRegistry.ts";
+import { buildCompanyEvidence } from "./leadCompanyEvidence.ts";
+import type { GroundedVerification } from "./groundedClaims.ts";
+import {
   CHECKPOINT_RESERVE_MS, inputFingerprint, providerOperationKey, shouldCheckpoint,
   shouldSkipProviderCall, type CompanyResumeRecord,
 } from "./leadResumeState.ts";
@@ -305,6 +310,10 @@ export interface EngineCompany {
   semantic_parse: ParsedSemanticFit | null;
   /** Stable keys of provider operations already completed for this company. */
   completed_operations: string[];
+  /** The canonical evidence registry, built at qualification time. */
+  evidence_registry: EvidenceRegistry | null;
+  /** What survived verification against that registry. Null when not grounded. */
+  grounded: GroundedVerification | null;
   /** Set when the Brain returned UNKNOWN and evidence resolution was attempted. */
   classification: { verdict: "pass" | "fail" | "unknown"; reason: string; source: string } | null;
   /**
@@ -372,6 +381,29 @@ export interface CapabilityEngineDeps {
    * for review, never converted into a rejection for want of budget.
    */
   classifyCompany?: (input: SemanticFitInput) => Promise<ParsedSemanticFit | null>;
+  /**
+   * THE GROUNDED SECOND OPINION, built from this company's own evidence.
+   *
+   * The engine assembles the canonical registry — it is the only layer holding
+   * the discovery row, the enriched row and the job evidence together — and
+   * hands it over already built, so nothing above has to reconstruct it and no
+   * model-written text can enter it.
+   *
+   * Null when the flag is off. A null RETURN means "not grounded", which holds
+   * the company for review; it never becomes a rejection.
+   */
+  groundCompany?: (i: {
+    registry: EvidenceRegistry;
+    requiresCommercialSignal: boolean;
+    company_key: string;
+  }) => Promise<GroundedVerification | null>;
+  /**
+   * `shadow` observes and records; `enforce` lets the verified verdict decide.
+   *
+   * Defaulting to `shadow` is deliberate: a missing or misspelled mode must not
+   * be able to change what qualifies.
+   */
+  groundingMode?: "shadow" | "enforce";
   callCompleted?: (key: string) => boolean;
   onCallComplete?: (key: string) => void;
   /**
@@ -1333,6 +1365,88 @@ export async function runCapabilityPlan(
         };
         const hiringVerified = c.hiring_assessment?.verdict === "hiring_verified";
 
+        // ── THE CANONICAL EVIDENCE REGISTRY, FOR EVERY COMPANY ──────────────
+        //
+        // BUILT ABOVE ALL THREE BRANCHES, not just the unknown one.
+        //
+        // The deterministic-pass branch below fabricates a semantic assessment
+        // — `business_model: "b2b_saas"`, `supporting_evidence: ["deterministic
+        // gates passed"]` — and that is the path most companies qualify
+        // through. Grounding only the classifier branch would have left the
+        // commonest route to QUALIFIED completely ungoverned, which is the
+        // opposite of the point.
+        //
+        // This is the only layer holding the discovery row, the enriched row
+        // and the job evidence for one company at once, so it is the only place
+        // the registry can be assembled without something upstream rebuilding
+        // it from a projection. Nothing model-written enters it.
+        const registry = buildEvidenceRegistry({
+          evidence: buildCompanyEvidence({
+            company_key: c.key,
+            source_capability: opts.plan.entry_capability,
+            source_query: opts.mission.original_user_query,
+            company: c.company,
+            enriched: c.enriched,
+            identity_state: c.identity
+              ? (identityIsActionable(c.identity) ? "resolved"
+                : c.identity.status === "mismatch" ? "mismatch"
+                : c.identity.status === "ambiguous" ? "ambiguous" : "unresolved")
+              : "not_attempted",
+            linkedin_company_url: c.identity?.linkedin_company_url ??
+              c.company.linkedin_company_url ?? null,
+            commercial_jobs: c.hiring_jobs.map((j) => ({
+              title: j.title ?? "", url: j.job_url, location: j.location,
+              posted_date: j.posted_date, tier: c.hiring_assessment?.tier ?? null,
+            })),
+            strongest_signal: c.hiring_assessment?.strongest?.title ?? null,
+          }),
+          // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
+          jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
+          yc_description: c.company.description ?? null,
+          // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
+          // found" is what would let an outage look like a company that is not
+          // hiring — the one inference this whole stage exists to forbid.
+          provider_failures: state.provider_attempts
+            .filter((a) => a.outcome === "error" &&
+              (a.capability === "hiring_verification" ||
+                a.capability === "company_enrichment"))
+            .map((a) => ({
+              provider: a.provider, capability: a.capability,
+              reason: a.reason ?? "provider call failed",
+            })),
+          // Two sources disagreeing about size stays a conflict, never a merge.
+          employee_count_alternatives:
+            c.enriched?.employee_count != null && c.company.employee_count != null &&
+              c.enriched.employee_count !== c.company.employee_count
+              ? [{ source: "discovery", value: c.company.employee_count }]
+              : [],
+        });
+        c.evidence_registry = registry;
+
+        // ── GROUNDING: DOES THE MODEL'S STORY SURVIVE ITS OWN EVIDENCE? ─────
+        const requiresCommercialSignal =
+          opts.mission.required_signals.some((s) => s.type === "hiring");
+        const grounded = deps.groundCompany
+          ? await deps.groundCompany({
+            registry, requiresCommercialSignal, company_key: c.key,
+          })
+          : null;
+        c.grounded = grounded;
+
+        // ENFORCE ONLY. In shadow the verification is computed, stored and
+        // compared, and the legacy decision is what the user sees — so "would
+        // enforcing change this run?" gets an answer before enforcing does.
+        const groundingForBrain = deps.groundingMode === "enforce" && grounded
+          ? {
+            final_grounded_decision: grounded.final_grounded_decision,
+            grounding_score: grounded.grounding_score,
+            validated_claim_types: [
+              ...new Set(grounded.validated_claims.map((x) => x.claim_type)),
+            ],
+            downgrade_reasons: grounded.downgrade_reasons,
+          }
+          : null;
+
         if (c.fit.stage === "company_fit_pass") {
           c.brain = decideCompanyBrain({
             gates: gateInput,
@@ -1343,6 +1457,7 @@ export async function runCapabilityPlan(
               reason: "all deterministic Company Brain gates passed",
             },
             policy: appliedPolicy, hiring_verified: hiringVerified,
+            grounding: groundingForBrain,
           });
           if (c.brain.outcome === "QUALIFIED") {
             c.verdict = "pass";
@@ -1368,6 +1483,11 @@ export async function runCapabilityPlan(
               reason: `deterministic hard gate failed: ${c.fit.reason}`,
             },
             policy: appliedPolicy, hiring_verified: hiringVerified,
+            // A VERIFIED GATE FAILURE IS A LEGITIMATE REJECT, and
+            // `decideCompanyBrain` returns on `failed.length > 0` before it
+            // consults grounding — so passing it here changes nothing and keeps
+            // the three call sites identical.
+            grounding: groundingForBrain,
           });
           c.verdict = "reject";
           c.record = advance(c.record, "company_fit_reject", c.fit.reason);
@@ -1423,6 +1543,7 @@ export async function runCapabilityPlan(
           : null;
         c.brain = decideCompanyBrain({
           gates: gateInput, semantic, policy: appliedPolicy, hiring_verified: hiringVerified,
+          grounding: groundingForBrain,
         });
 
         if (resolved && resolved.verdict === "pass" && c.brain.outcome === "QUALIFIED") {
@@ -1913,6 +2034,7 @@ function addCompany(
     company: c, identity: null, enriched: null,
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
     brain: null, semantic_parse: null, completed_operations: [],
+    evidence_registry: null, grounded: null,
     classification: null, verdict: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
