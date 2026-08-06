@@ -86,6 +86,7 @@ import {
   readCheckpointCompanies, type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
+import { missionHash } from "../_shared/leadMission.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -138,8 +139,11 @@ async function loadLeadResumeRecords(
   records: CompanyResumeRecord[];
   lineageRoot: string | null;
   rejection: string | null;
+  /** The verified row, for readers that need more than resume records. */
+  parentResult: unknown;
 }> {
-  const none = (rejection: string | null) => ({ records: [], lineageRoot: null, rejection });
+  const none = (rejection: string | null) =>
+    ({ records: [], lineageRoot: null, rejection, parentResult: null });
   if (!parentTaskId) return none(null);
   try {
     const { data } = await db.from("tasks")
@@ -158,6 +162,9 @@ async function loadLeadResumeRecords(
       records: readCheckpointCompanies(result),
       lineageRoot: lineageRootTaskId(parentTaskId, result),
       rejection: null,
+      // SAME VERIFIED ROW. Anything reading this has already passed the
+      // workspace-ownership check above; there is no second, looser path.
+      parentResult: result,
     };
   } catch (e) {
     // A FAILED LOAD IS NOT A LICENCE TO TRUST THE CLIENT. It means nothing is
@@ -218,6 +225,10 @@ import {
   buildGroundedBrainBinding, buildShadowComparison,
 } from "../_shared/groundedBrainBinding.ts";
 import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
+import { buildPoolBinding } from "../_shared/poolEvaluationBinding.ts";
+import {
+  POOL_EVAL_RESULT_KEY, readPoolCheckpoint, buildPoolCheckpoint,
+} from "../_shared/poolCheckpoint.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
@@ -1545,6 +1556,20 @@ Deno.serve(async (req) => {
           task_id: task.id, ...groundedBinding.diagnostics,
         });
 
+        // ── STAGE 2: FULL-POOL EVALUATION AND RANKING ────────────────────────
+        // Separate flags from the grounded Brain, because they are separate
+        // risks: one changes how many companies are assessed, the other changes
+        // what the user sees first. Off, `evaluateBatch` and `rankPool` are null
+        // and the engine keeps the per-company path exactly as it was.
+        const poolBinding = buildPoolBinding({
+          workspaceId: workspace_id,
+          originalUserQuery: persistedMission?.original_user_query ?? null,
+          missionDirectives: (persistedMission?.directives ?? null) as never,
+        });
+        console.log("[run-agent][stage2][binding]", {
+          task_id: task.id, ...poolBinding.diagnostics,
+        });
+
         // ══ PAID-EXECUTION PREFLIGHT — PROVE THE PLAN BEFORE SPENDING ════════
         // Runs before EVERY paid boundary on this path, mission or not. On TEST
         // task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4 the plan step carried no
@@ -1617,6 +1642,31 @@ Deno.serve(async (req) => {
         // operation keys as the second instead of re-buying everything. Read
         // from the same verified row as the records, never from the body.
         const leadResumeLineageRoot = resumeLoad.lineageRoot ?? task.id;
+
+        // ── STAGE 2 CHECKPOINT, LOADED SERVER-SIDE ──────────────────────────
+        //
+        // Same trust rule as the provider resume ledger: the client may say
+        // WHICH run to continue, the database says what that run evaluated. A
+        // client-supplied grounded result would let a caller mark a company
+        // evaluated — and QUALIFIED — without one ever having been.
+        //
+        // The fingerprint is the mission hash here rather than the discovered
+        // set, because discovery has not run yet at this point. A mission change
+        // already invalidates the whole capability state, so a stale pool cannot
+        // survive one.
+        const poolFingerprint = persistedMission
+          ? await missionHash(persistedMission) : "no-mission";
+        const poolRestore = readPoolCheckpoint(resumeLoad.parentResult, poolFingerprint);
+        const restoredPoolResults = poolRestore.results;
+        if (poolRestore.stale) {
+          console.log("[run-agent][stage2][checkpoint-stale]", {
+            task_id: task.id,
+            note: "pool fingerprint changed; evaluation and ranking will be redone",
+          });
+        }
+        console.log("[run-agent][stage2][restored]", {
+          task_id: task.id, restored: restoredPoolResults.size, stale: poolRestore.stale,
+        });
 
         let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
         if (!resumeSatisfied && persistedMission && missionPlan) {
@@ -1747,6 +1797,42 @@ Deno.serve(async (req) => {
                 }
                 : undefined,
               groundingMode: groundedBinding.mode,
+              // ── STAGE 2 WIRING ──────────────────────────────────────────
+              ...(poolBinding.evaluateBatch
+                ? {
+                  evaluateBatch: poolBinding.evaluateBatch,
+                  batchLimits: poolBinding.limits,
+                  // RESTORED SERVER-SIDE, from the verified parent task only.
+                  // A client-supplied grounded result would let a caller mark a
+                  // company evaluated without one ever having been.
+                  restoredGroundedResults: restoredPoolResults,
+                  onBatchComplete: async ({ evaluated, next_offset }) => {
+                    try {
+                      const { data: cur } = await supabase
+                        .from("tasks").select("result").eq("id", task.id).maybeSingle();
+                      const prior = (cur?.result && typeof cur.result === "object")
+                        ? cur.result as Record<string, unknown> : {};
+                      await supabase.from("tasks").update({
+                        result: {
+                          ...prior,
+                          [POOL_EVAL_RESULT_KEY]: buildPoolCheckpoint({
+                            missionHash: poolFingerprint,
+                            evaluated, next_offset,
+                            accounting: poolBinding.accounting,
+                          }),
+                        },
+                      }).eq("id", task.id);
+                    } catch (e) {
+                      console.log("[run-agent][stage2][checkpoint-error]", String(e));
+                    }
+                  },
+                }
+                : {}),
+              // Ranking runs only in enforce; in shadow it is computed and
+              // persisted below without touching the delivered order.
+              ...(poolBinding.rankPool && poolBinding.rankingMode === "enforce"
+                ? { rankPool: poolBinding.rankPool }
+                : {}),
               readPendingRun,
               // THE SAME BUDGET THE TERMINAL GUARD FINALIZES AGAINST. One clock,
               // so "the engine stopped early" and "the run was written partial"
@@ -1976,6 +2062,63 @@ Deno.serve(async (req) => {
                           }))
                         : [],
                     },
+                    // ── STAGE 2: RANKED WORKBENCH ROWS AND POOL METRICS ──
+                    //
+                    // `workbench_pool` is what the UI renders. It carries the
+                    // semantic rank, the ranking SOURCE (so a deterministic
+                    // fallback is visible rather than passed off as a semantic
+                    // comparison), and honest coverage — evaluated versus
+                    // unevaluated — so an incomplete pool is never presented as
+                    // a complete one. Rejected claims and provider names are
+                    // absent by construction: every field here comes from a
+                    // compact summary, which is built from validated claims.
+                    ...(capabilityRun.pool
+                      ? {
+                        workbench_pool: {
+                          ranking_source: capabilityRun.pool.ranking.ranking_source,
+                          ranking_confidence:
+                            capabilityRun.pool.ranking.portfolio_summary.ranking_confidence,
+                          pool_explanation:
+                            capabilityRun.pool.ranking.portfolio_summary.pool_explanation,
+                          metrics: {
+                            ...capabilityRun.pool.delivery.metrics,
+                            discovered: capabilityRun.pool.eligible.discovered,
+                            hard_gated: capabilityRun.pool.eligible.hard_gated,
+                            restored: capabilityRun.pool.restored,
+                          },
+                          partial: capabilityRun.pool.unevaluated > 0,
+                          rows: capabilityRun.pool.delivery.delivered.map((d) => ({
+                            semantic_rank: d.rank,
+                            company_key: d.summary.company_key,
+                            company_name: d.summary.company_name,
+                            brain_decision: d.summary.brain_decision,
+                            opportunity_tier: d.summary.opportunity_tier,
+                            strongest_signal: d.summary.strongest_signal,
+                            reason_to_contact_now: d.summary.reason_to_contact_now,
+                            ranking_reason: d.ranking_reason,
+                            relative_strength: d.relative_strength,
+                            grounding_score: d.summary.grounding_score,
+                            confidence_after_grounding: d.summary.confidence_after_grounding,
+                            missing_evidence: d.summary.missing_evidence,
+                            material_conflicts: d.summary.material_conflicts,
+                            recommended_action: d.recommended_action,
+                            // NOT AN EXECUTION. Stage 3 owns the unlock; until
+                            // then this is a state, not a button that spends.
+                            founder_state: "locked",
+                          })),
+                        },
+                        // INTERNAL ONLY. Validator changes and rejected ranking
+                        // entries explain a downgrade to whoever has to answer
+                        // for it; they are not user-facing content.
+                        stage2_ranking_diagnostics: {
+                          validator_changes: capabilityRun.pool.ranking.validator_changes,
+                          rejected_entries: capabilityRun.pool.ranking.rejected_entries,
+                          fallback_reason: capabilityRun.pool.ranking.fallback_reason,
+                          eligible_exclusions: capabilityRun.pool.excluded,
+                          model_accounting: poolBinding.accounting,
+                        },
+                      }
+                      : {}),
                     // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot
                     // reach this array; `buildWorkbenchExplanation` is built
                     // from `validated_claims` and nothing else.

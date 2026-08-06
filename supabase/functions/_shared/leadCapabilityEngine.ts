@@ -64,6 +64,17 @@ import {
 import { buildCompanyEvidence } from "./leadCompanyEvidence.ts";
 import type { GroundedVerification } from "./groundedClaims.ts";
 import {
+  buildEligiblePool, type EligiblePool,
+} from "./leadEligiblePool.ts";
+import {
+  planBatches, resolveBatchLimits,
+  type BatchLimits, type BatchMember, type BatchResult,
+} from "./groundedBatchEvaluation.ts";
+import {
+  applyPortfolioPolicy, buildCandidateSummary, validatePoolRanking,
+  type GroundedCandidateSummary, type PortfolioDelivery, type ValidatedRanking,
+} from "./poolRanking.ts";
+import {
   CHECKPOINT_RESERVE_MS, inputFingerprint, providerOperationKey, shouldCheckpoint,
   shouldSkipProviderCall, type CompanyResumeRecord,
 } from "./leadResumeState.ts";
@@ -404,6 +415,30 @@ export interface CapabilityEngineDeps {
    * be able to change what qualifies.
    */
   groundingMode?: "shadow" | "enforce";
+  /**
+   * STAGE 2 — evaluate a whole batch of companies in one call.
+   *
+   * Present only when full-pool evaluation is enabled for this workspace. Its
+   * presence is what switches the engine from "judge each company as it
+   * arrives" to "collect the set, gate it for free, then evaluate in bounded
+   * batches". Absent, every line of the previous path runs unchanged.
+   */
+  evaluateBatch?: (batch: readonly BatchMember[]) => Promise<BatchResult | null>;
+  /** Server-resolved and clamped. Never supplied by a client. */
+  batchLimits?: BatchLimits;
+  /** Grounded results a previous invocation already paid for, by company key. */
+  restoredGroundedResults?: Map<string, GroundedVerification>;
+  /** Called after each completed batch so the caller can checkpoint. */
+  onBatchComplete?: (i: {
+    evaluated: Array<{ company_key: string; verification: GroundedVerification }>;
+    next_offset: number;
+  }) => void | Promise<void>;
+  /** STAGE 2 — compare the evaluated pool. Null/absent ⇒ deterministic order. */
+  rankPool?: (i: {
+    summaries: readonly GroundedCandidateSummary[];
+    requestedCount: number;
+    unevaluatedCount: number;
+  }) => Promise<ValidatedRanking | null>;
   callCompleted?: (key: string) => boolean;
   onCallComplete?: (key: string) => void;
   /**
@@ -480,6 +515,16 @@ export interface CapabilityRunResult {
   funnel: FunnelCounts;
   /** Per-company stage state, so a resume continues where each one stopped. */
   resume_records: CompanyResumeRecord[];
+  /** STAGE 2 output. Null when full-pool evaluation was not enabled. */
+  pool: {
+    eligible: EligiblePool["metrics"];
+    excluded: EligiblePool["excluded"];
+    summaries: GroundedCandidateSummary[];
+    ranking: ValidatedRanking;
+    delivery: PortfolioDelivery;
+    restored: number;
+    unevaluated: number;
+  } | null;
   /** Per-capability outcome, in execution order. Persisted for audit. */
   capability_outcomes: Array<{
     capability: CapabilityId;
@@ -512,6 +557,12 @@ export async function runCapabilityPlan(
 
   const outcomes: CapabilityRunResult["capability_outcomes"] = [];
   const companies: EngineCompany[] = [];
+  // STAGE 2 state, captured inside the qualification capability and read after
+  // the plan finishes — ranking compares the whole pool, so it cannot run until
+  // every company that is going to be evaluated has been.
+  let poolState: {
+    pool: EligiblePool; restored: number; evaluatedKeys: string[];
+  } | null = null;
   const maxCandidates = opts.maxCandidates ?? 50;
 
   // THE GUARDED BOUNDARY. Every provider call in this file goes through it.
@@ -942,7 +993,13 @@ export async function runCapabilityPlan(
       applyPrequalification(state, companies, rawYcRows, {
         min: opts.brain?.employee_min ?? null,
         max: opts.brain?.employee_max ?? null,
-      }, opts.mission.requested_count);
+      }, opts.mission.requested_count,
+        // STAGE 2 CAN USE MORE COMPANIES, so it is allowed to pay to resolve
+        // more. Bounded by the evaluation ceiling, and unchanged when Stage 2
+        // is off — every identity and enrichment call comes out of this number.
+        deps.evaluateBatch
+          ? (deps.batchLimits ?? resolveBatchLimits({})).max_evaluated
+          : undefined);
       // The working set may have shrunk — artifacts are gone.
       state.company_keys = companies.map((c) => c.key);
       log("prequalification_complete", {
@@ -1314,6 +1371,143 @@ export async function runCapabilityPlan(
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
         (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false));
+      /** One company's canonical registry. Shared by both evaluation paths. */
+      const registryFor = (c: EngineCompany) => buildEvidenceRegistry({
+        evidence: buildCompanyEvidence({
+          company_key: c.key,
+          source_capability: opts.plan.entry_capability,
+          source_query: opts.mission.original_user_query,
+          company: c.company,
+          enriched: c.enriched,
+          identity_state: c.identity
+            ? (identityIsActionable(c.identity) ? "resolved"
+              : c.identity.status === "mismatch" ? "mismatch"
+              : c.identity.status === "ambiguous" ? "ambiguous" : "unresolved")
+            : "not_attempted",
+          linkedin_company_url: c.identity?.linkedin_company_url ??
+            c.company.linkedin_company_url ?? null,
+          commercial_jobs: c.hiring_jobs.map((j) => ({
+            title: j.title ?? "", url: j.job_url, location: j.location,
+            posted_date: j.posted_date, tier: c.hiring_assessment?.tier ?? null,
+          })),
+          strongest_signal: c.hiring_assessment?.strongest?.title ?? null,
+        }),
+        // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
+        jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
+        yc_description: c.company.description ?? null,
+        // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
+        // found" would let an outage look like a company that is not hiring —
+        // the one inference this whole stage exists to forbid.
+        provider_failures: state.provider_attempts
+          .filter((a) => a.outcome === "error" &&
+            (a.capability === "hiring_verification" ||
+              a.capability === "company_enrichment"))
+          .map((a) => ({
+            provider: a.provider, capability: a.capability,
+            reason: a.reason ?? "provider call failed",
+          })),
+        employee_count_alternatives:
+          c.enriched?.employee_count != null && c.company.employee_count != null &&
+            c.enriched.employee_count !== c.company.employee_count
+            ? [{ source: "discovery", value: c.company.employee_count }]
+            : [],
+      });
+
+      // ══ STAGE 2 — COLLECT, THEN EVALUATE ═══════════════════════════════════
+      //
+      // The per-company path below evaluates while capabilities are still
+      // running: each company is judged the moment it arrives, so nothing ever
+      // holds the whole set and no model can compare two of them. It also
+      // stopped after roughly ten calls, which meant a run that discovered forty
+      // companies judged a quarter of them and reported the rest in an order
+      // that had never read a description.
+      //
+      // When Stage 2 is enabled the set is COLLECTED first: free gates remove
+      // only companies a verified fact contradicts, and the survivors are
+      // evaluated in bounded batches. `groundedByKey` is what the loop below
+      // then reads instead of calling the per-company grounder — the decision
+      // logic itself is untouched, which is why the old path stays exactly as
+      // it was when the flag is off.
+      const groundedByKey = new Map<string, GroundedVerification>();
+      let stage2Pool: EligiblePool | null = null;
+      let stage2Restored = 0;
+      if (deps.evaluateBatch && eligible.length > 0) {
+        const registries = new Map(eligible.map((c) => [c.key, registryFor(c)]));
+        for (const c of eligible) c.evidence_registry = registries.get(c.key)!;
+
+        stage2Pool = buildEligiblePool(
+          eligible.map((c) => ({
+            company_key: c.key,
+            company_name: (c.enriched ?? c.company).company_name ?? null,
+            registry: registries.get(c.key)!,
+          })),
+          {
+            mission: opts.mission,
+            employee_min: opts.brain?.employee_min ?? null,
+            employee_max: opts.brain?.employee_max ?? null,
+          },
+        );
+        log("stage2_eligible_pool", stage2Pool.metrics);
+
+        // RESTORED WORK IS NOT RE-BOUGHT. A continuation supplies the grounded
+        // results its earlier invocation already paid for; those companies are
+        // removed from the batch plan rather than skipped with an empty result.
+        const restored = deps.restoredGroundedResults ?? new Map();
+        const toEvaluate = stage2Pool.eligible.filter((p) => {
+          const prior = restored.get(p.company_key);
+          if (prior) {
+            groundedByKey.set(p.company_key, prior);
+            stage2Restored++;
+            return false;
+          }
+          return true;
+        });
+
+        const requiresSignal =
+          opts.mission.required_signals.some((s) => s.type === "hiring");
+        const limits = deps.batchLimits ?? resolveBatchLimits({});
+        const { batches, beyond_cap } = planBatches(toEvaluate, limits);
+        for (const batch of batches) {
+          // THE DEADLINE IS CHECKED BETWEEN BATCHES, never mid-batch. A batch
+          // that started is allowed to finish; the companies in the batches
+          // after it are recorded UNEVALUATED, which is a different and honest
+          // thing from being reviewed.
+          if (deps.deadline && shouldCheckpoint({
+            elapsedMs: () => deps.deadline!.elapsedMs(),
+            remainingMs: () => deps.deadline!.remainingMs(),
+          }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)) {
+            state.terminal_reason = "execution_deadline_checkpoint";
+            log("stage2_batch_deadline_stop", { evaluated: groundedByKey.size });
+            break;
+          }
+          const members = batch.map((p) => ({
+            company_key: p.company_key, company_name: p.company_name,
+            registry: p.registry, requiresCommercialSignal: requiresSignal,
+          }));
+          const result = await deps.evaluateBatch(members);
+          if (!result) continue;
+          for (const o of result.outcomes) {
+            if (o.verification) groundedByKey.set(o.company_key, o.verification);
+          }
+          await deps.onBatchComplete?.({
+            evaluated: [...groundedByKey.entries()].map(([k, v]) => ({
+              company_key: k, verification: v,
+            })),
+            next_offset: groundedByKey.size,
+          });
+        }
+        poolState = {
+          pool: stage2Pool, restored: stage2Restored,
+          evaluatedKeys: [...groundedByKey.keys()],
+        };
+        log("stage2_batch_evaluation_complete", {
+          eligible: stage2Pool.eligible.length,
+          evaluated: groundedByKey.size,
+          restored: stage2Restored,
+          beyond_cap,
+        });
+      }
+
       for (const c of eligible) {
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
@@ -1380,58 +1574,22 @@ export async function runCapabilityPlan(
         // and the job evidence for one company at once, so it is the only place
         // the registry can be assembled without something upstream rebuilding
         // it from a projection. Nothing model-written enters it.
-        const registry = buildEvidenceRegistry({
-          evidence: buildCompanyEvidence({
-            company_key: c.key,
-            source_capability: opts.plan.entry_capability,
-            source_query: opts.mission.original_user_query,
-            company: c.company,
-            enriched: c.enriched,
-            identity_state: c.identity
-              ? (identityIsActionable(c.identity) ? "resolved"
-                : c.identity.status === "mismatch" ? "mismatch"
-                : c.identity.status === "ambiguous" ? "ambiguous" : "unresolved")
-              : "not_attempted",
-            linkedin_company_url: c.identity?.linkedin_company_url ??
-              c.company.linkedin_company_url ?? null,
-            commercial_jobs: c.hiring_jobs.map((j) => ({
-              title: j.title ?? "", url: j.job_url, location: j.location,
-              posted_date: j.posted_date, tier: c.hiring_assessment?.tier ?? null,
-            })),
-            strongest_signal: c.hiring_assessment?.strongest?.title ?? null,
-          }),
-          // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
-          jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
-          yc_description: c.company.description ?? null,
-          // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
-          // found" is what would let an outage look like a company that is not
-          // hiring — the one inference this whole stage exists to forbid.
-          provider_failures: state.provider_attempts
-            .filter((a) => a.outcome === "error" &&
-              (a.capability === "hiring_verification" ||
-                a.capability === "company_enrichment"))
-            .map((a) => ({
-              provider: a.provider, capability: a.capability,
-              reason: a.reason ?? "provider call failed",
-            })),
-          // Two sources disagreeing about size stays a conflict, never a merge.
-          employee_count_alternatives:
-            c.enriched?.employee_count != null && c.company.employee_count != null &&
-              c.enriched.employee_count !== c.company.employee_count
-              ? [{ source: "discovery", value: c.company.employee_count }]
-              : [],
-        });
+        const registry = registryFor(c);
         c.evidence_registry = registry;
 
         // ── GROUNDING: DOES THE MODEL'S STORY SURVIVE ITS OWN EVIDENCE? ─────
         const requiresCommercialSignal =
           opts.mission.required_signals.some((s) => s.type === "hiring");
-        const grounded = deps.groundCompany
-          ? await deps.groundCompany({
-            registry, requiresCommercialSignal, company_key: c.key,
-          })
-          : null;
-        c.grounded = grounded;
+        // STAGE 2 FIRST. When the pool phase above evaluated this company, its
+        // verified result is used; the per-company grounder is the path for the
+        // non-Stage-2 case and is not called twice for the same company.
+        const grounded = groundedByKey.get(c.key)
+          ?? (deps.groundCompany
+            ? await deps.groundCompany({
+              registry, requiresCommercialSignal, company_key: c.key,
+            })
+            : null);
+        c.grounded = grounded ?? null;
 
         // ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE ─────────────────────────
         //
@@ -1705,9 +1863,86 @@ export async function runCapabilityPlan(
     state.terminal_reason = "capability_plan_complete";
   }
 
+  // ══ STAGE 2 — COMPARE THE POOL, THEN LET POLICY DECIDE WHAT SHIPS ═════════
+  //
+  // AFTER the plan, deliberately. Ranking is the one operation that needs every
+  // company at once, so running it inside a capability would mean comparing a
+  // set that was still being assembled.
+  let pool: CapabilityRunResult["pool"] = null;
+  if (poolState) {
+    const evaluated = new Set(poolState.evaluatedKeys);
+    const summaries: GroundedCandidateSummary[] = companies
+      .filter((c) => evaluated.has(c.key))
+      .map((c) => buildCandidateSummary({
+        company_key: c.key,
+        company_name: (c.enriched ?? c.company).company_name ?? null,
+        brain_outcome: c.brain?.outcome ?? "REVIEW",
+        tier: (c.hiring_assessment?.tier ?? null) as "A" | "B" | "C" | null,
+        grounded: c.grounded,
+      }));
+    // An eligible company with no grounded result was never evaluated — the
+    // deadline stopped the run, or its batch failed. Counted, never guessed at.
+    const unevaluated = Math.max(0, poolState.pool.eligible.length - summaries.length);
+
+    let ranking: ValidatedRanking | null = null;
+    if (deps.rankPool && summaries.length > 0) {
+      // RANKING NEEDS TIME IT MAY NOT HAVE. When the reserve is already reached
+      // the deterministic order ships and says so, rather than the run dying
+      // holding an unordered pool.
+      const outOfTime = deps.deadline
+        ? shouldCheckpoint({
+          elapsedMs: () => deps.deadline!.elapsedMs(),
+          remainingMs: () => deps.deadline!.remainingMs(),
+        }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)
+        : false;
+      if (!outOfTime) {
+        try {
+          ranking = await deps.rankPool({
+            summaries, requestedCount: opts.mission.requested_count,
+            unevaluatedCount: unevaluated,
+          });
+        } catch (e) {
+          // A RANKING OUTAGE IS AN ORDERING PROBLEM, NOT A RUN-ENDING ONE. The
+          // pool is fully evaluated by this point; losing the comparison costs
+          // a better order, and throwing would cost the whole run.
+          log("stage2_ranking_failed", { error: String(e) });
+          ranking = null;
+        }
+      } else {
+        log("stage2_ranking_skipped_deadline", { evaluated: summaries.length });
+      }
+    }
+    // `validatePoolRanking` with a null answer IS the deterministic fallback,
+    // so there is one ordering function and no second code path to drift.
+    const validated = ranking ?? validatePoolRanking({
+      raw: null, summaries, requestedCount: opts.mission.requested_count,
+    });
+    pool = {
+      eligible: poolState.pool.metrics,
+      excluded: poolState.pool.excluded,
+      summaries,
+      ranking: validated,
+      delivery: applyPortfolioPolicy({
+        ranking: validated, summaries,
+        requestedCount: opts.mission.requested_count,
+        eligibleCount: poolState.pool.eligible.length,
+        unevaluatedCount: unevaluated,
+      }),
+      restored: poolState.restored,
+      unevaluated,
+    };
+    log("stage2_pool_complete", {
+      evaluated: summaries.length, unevaluated,
+      ranking_source: validated.ranking_source,
+      delivered: pool.delivery.metrics.delivered,
+      shortfall: pool.delivery.metrics.shortfall,
+    });
+  }
+
   return {
     state,
     companies,
+    pool,
     resume_records: companies.map(toResumeRecord),
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
@@ -1876,9 +2111,11 @@ export function applyPrequalification(
   rawRows: readonly YcCompanyInput[],
   size: { min: number | null; max: number | null },
   requestedLeadCount: number,
+  shortlistCeiling?: number,
 ): PrequalificationResult {
   const result = prequalifyYcCompanies(rawRows, { min: size.min, max: size.max });
-  const shortlist = shortlistForLinkedInResolution(result, requestedLeadCount);
+  const shortlist = shortlistForLinkedInResolution(
+    result, requestedLeadCount, shortlistCeiling);
   const shortlistKeys = new Set(shortlist.map((c) => c.company_key));
   const byKey = new Map(result.companies.map((c) => [c.company_key, c]));
 

@@ -267,10 +267,30 @@ export function prequalifyYcCompanies(
 
 // ------------------------------------------------------------- shortlist ----
 
-/** `min(10, max(5, requested × 2))` — bounded above AND below. */
-export function shortlistSize(requestedLeadCount: number): number {
+/**
+ * `min(ceiling, max(5, requested × 2))` — bounded above AND below.
+ *
+ * THE CEILING WAS THE REAL TEN-COMPANY LIMIT.
+ *
+ * Removing the classifier's ten-call cap did not, on its own, evaluate more
+ * companies: identity resolution only runs for the SHORTLIST, so a hard `10`
+ * here meant a run that discovered forty enriched ten and the pool never saw
+ * the rest. The cap that mattered was upstream of the one everybody was
+ * looking at.
+ *
+ * It stays 10 by default — every paid identity and enrichment call comes out of
+ * this number, so widening it for everyone would multiply provider spend on
+ * every run. Stage 2 passes a larger ceiling because it is the thing that can
+ * actually USE more companies, and it is bounded by the evaluation limit.
+ */
+export const DEFAULT_SHORTLIST_CEILING = 10;
+
+export function shortlistSize(
+  requestedLeadCount: number, ceiling: number = DEFAULT_SHORTLIST_CEILING,
+): number {
   const n = Math.max(0, Math.trunc(requestedLeadCount));
-  return Math.min(10, Math.max(5, n * 2));
+  const cap = Math.max(1, Math.trunc(ceiling));
+  return Math.min(cap, Math.max(5, n * 2));
 }
 
 /** Maximum simultaneous paid Actor starts in the resolution stage. */
@@ -285,12 +305,13 @@ export const LINKEDIN_RESOLUTION_CONCURRENCY = 2;
  */
 export function shortlistForLinkedInResolution(
   result: PrequalificationResult, requestedLeadCount: number,
+  ceiling: number = DEFAULT_SHORTLIST_CEILING,
 ): PrequalifiedCompany[] {
   // The cap is a CEILING, not a quota. Filling it with known out-of-range
   // companies would spend the budget on leads that cannot qualify.
   return result.companies
     .filter((c) => c.eligible)
-    .slice(0, shortlistSize(requestedLeadCount));
+    .slice(0, shortlistSize(requestedLeadCount, ceiling));
 }
 
 /**
