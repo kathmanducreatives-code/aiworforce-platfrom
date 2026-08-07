@@ -3,7 +3,7 @@ import { X, Sparkles, TrendingUp, Clock, ExternalLink } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useCreditBalance } from '@/hooks/useCreditBalance';
-import { formatCredits, isDevBypass } from '@/lib/credits/ledger';
+import { formatCredits } from '@/lib/credits/ledger';
 import { getPlan } from '@/lib/pricing/plans';
 
 interface Props {
@@ -45,12 +45,6 @@ export default function CreditDrawer({ open, onClose }: Props) {
             Credits are used when your AI workforce runs real work. Confirmation cards always show the estimated credits first.
           </SheetDescription>
         </SheetHeader>
-
-        {isDevBypass() && (
-          <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-[12px] text-amber-200">
-            Dev mode · credits are estimated locally and not charged.
-          </div>
-        )}
 
         <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
           <div className="flex items-end justify-between gap-3">
@@ -113,9 +107,10 @@ export default function CreditDrawer({ open, onClose }: Props) {
           ) : (
             <div className="space-y-1.5">
               {txns.map((t) => {
-                const delta = t.transaction_type === 'reservation' || t.transaction_type === 'charge'
-                  ? -(t.actual_credits ?? t.reserved_credits ?? t.estimated_credits ?? 0)
-                  : (t.refunded_credits ?? t.actual_credits ?? 0);
+                // Signed by the ledger, not re-derived here — deriving it from
+                // the type in two views is how a new type rendered a charge as
+                // a credit.
+                const delta = t.delta_credits;
                 const positive = delta > 0;
                 return (
                   <div key={t.id} className="flex items-center gap-3 rounded-md border border-white/[0.05] bg-white/[0.015] px-3 py-2">

@@ -4,7 +4,7 @@ import { ArrowLeft, Check, Coins, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCreditBalance } from '@/hooks/useCreditBalance';
 import { PRICING_PLANS, getPlan } from '@/lib/pricing/plans';
-import { formatCredits, isDevBypass } from '@/lib/credits/ledger';
+import { formatCredits } from '@/lib/credits/ledger';
 
 function relTime(iso: string): string {
   const d = Date.now() - new Date(iso).getTime();
@@ -42,12 +42,6 @@ export default function SettingsBilling() {
             If a workflow returns partial results, Agentory charges fairly.
           </p>
         </header>
-
-        {isDevBypass() && (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-[12.5px] text-amber-200">
-            Dev mode · credits estimated locally, not charged.
-          </div>
-        )}
 
         {/* Plan & credits */}
         <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6">
@@ -153,9 +147,8 @@ export default function SettingsBilling() {
                 </thead>
                 <tbody>
                   {txns.map((t) => {
-                    const delta = t.transaction_type === 'reservation' || t.transaction_type === 'charge'
-                      ? -(t.actual_credits ?? t.reserved_credits ?? t.estimated_credits ?? 0)
-                      : (t.refunded_credits ?? t.actual_credits ?? 0);
+                    // Signed by the ledger, not re-derived per view.
+                    const delta = t.delta_credits;
                     const positive = delta > 0;
                     return (
                       <tr key={t.id} className="border-t border-white/[0.04] hover:bg-white/[0.015]">

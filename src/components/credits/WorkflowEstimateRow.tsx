@@ -1,5 +1,5 @@
 import { Sparkles, ShieldCheck } from 'lucide-react';
-import { formatCredits, isDevBypass } from '@/lib/credits/ledger';
+import { formatCredits } from '@/lib/credits/ledger';
 
 interface Props {
   estimatedCredits: number;
@@ -42,11 +42,6 @@ export default function WorkflowEstimateRow({ estimatedCredits, agents, runs, ou
         <ShieldCheck className="h-3 w-3 text-emerald-400/70" />
         {safetyNote || 'Credits are only used after you click Start. Nothing will be sent automatically.'}
       </div>
-      {isDevBypass() && (
-        <div className="text-[11px] text-amber-300/80 pt-0.5">
-          Dev mode · credits estimated locally, not charged.
-        </div>
-      )}
     </div>
   );
 }

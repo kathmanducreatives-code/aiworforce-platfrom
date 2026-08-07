@@ -1,45 +1,63 @@
-// Credit lifecycle helpers (frontend v1).
+// CREDIT DISPLAY. READ-ONLY, AND DELIBERATELY POWERLESS.
 //
-// v1 storage: workspace credit state lives inside `company_brain.profile.credits`
-// as a JSON blob. Interfaces are designed so a future migration to dedicated
-// `workspace_credits` / `credit_transactions` tables is mechanical.
+// WHAT THIS USED TO BE, AND WHY IT CHANGED.
 //
-// NOTHING here calls payment providers and NOTHING auto-sends outreach. Every
-// reservation is the result of an explicit user confirmation in the UI.
+// This module used to hold the balance itself, in `company_brain.profile.credits`
+// — a JSON blob that RLS policy `company_brain_member_update` lets ANY workspace
+// member write. It also exported `reserveCredits`, `finalizeCharge` and
+// `refundCredits`, which did balance arithmetic in the browser: read the
+// balance, subtract, write it back. Two things saved it from being a hole. It
+// was never called by anything, and nothing charged.
+//
+// Stage 3 charges. So the balance moved to `workspace_credit_balances`, behind
+// tables with NO client write policy and functions only the service role may
+// execute. This file now READS that, and can do nothing else. The write
+// functions are gone rather than deprecated: a live-looking `reserveCredits`
+// sitting next to a real ledger is how the wrong one gets wired up.
+//
+// There is also no dev bypass any more. The browser cannot know whether a charge
+// happened — the server decides — so a local flag claiming "not charged" was
+// capable of being confidently wrong.
 
 import { supabase } from '@/integrations/supabase/client';
-import { getWorkflowCost, computeActualCharge } from '@/lib/pricing/workflowCosts';
+import { getWorkflowCost } from '@/lib/pricing/workflowCosts';
 import { getPlan } from '@/lib/pricing/plans';
 
+/** Mirrors `credit_transactions.kind`. */
 export type CreditTxnType =
-  | 'monthly_grant'
-  | 'workflow_estimate'
-  | 'reservation'
-  | 'charge'
-  | 'partial_refund'
-  | 'refund'
-  | 'manual_adjustment'
-  | 'overage_purchase';
+  | 'founder_unlock'
+  | 'contact_unlock'
+  | 'grant'
+  | 'adjustment';
 
+/** Mirrors `credit_transactions.status`. */
 export type CreditTxnStatus =
-  | 'estimated'
   | 'reserved'
   | 'charged'
   | 'partial'
-  | 'minimum_charge'
   | 'not_charged'
-  | 'refunded';
+  | 'released'
+  | 'granted';
 
 export interface CreditTransaction {
   id: string;
-  workflow_id?: string;
-  workflow_title?: string;
   transaction_type: CreditTxnType;
   status: CreditTxnStatus;
-  estimated_credits?: number;
-  reserved_credits?: number;
-  actual_credits?: number;
-  refunded_credits?: number;
+  estimated_credits: number;
+  reserved_credits: number;
+  actual_credits: number;
+  refunded_credits: number;
+  /**
+   * Signed effect on the balance, computed once here.
+   *
+   * The two views that render history used to derive this themselves from the
+   * transaction type, which meant a new type silently rendered a charge as a
+   * credit. One derivation, one place.
+   */
+  delta_credits: number;
+  /** The run this belonged to, when it belonged to one. */
+  workflow_id?: string;
+  workflow_title?: string;
   reason?: string;
   created_at: string;
 }
@@ -47,46 +65,74 @@ export interface CreditTransaction {
 export interface CreditState {
   plan_id: string;
   credit_balance: number;
-  monthly_credit_allowance: number;
-  billing_status: 'trial' | 'active' | 'past_due' | 'canceled';
-  current_period_start: string;
-  current_period_end: string;
+  /** Held by an in-flight unlock: spent from the balance, not yet charged. */
+  reserved_credits: number;
   transactions: CreditTransaction[];
+  /**
+   * NOT KNOWN SERVER-SIDE YET. Billing periods and allowances do not exist in
+   * the ledger, and inventing a 30-day window here — which the old default
+   * state did — puts a renewal date in front of a user that nothing honours.
+   */
+  monthly_credit_allowance?: number;
+  billing_status?: 'trial' | 'active' | 'past_due' | 'canceled';
+  current_period_start?: string;
+  current_period_end?: string;
 }
 
-const DEFAULT_STATE = (): CreditState => {
-  const now = new Date();
-  const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  return {
-    plan_id: 'free_trial',
-    credit_balance: 30,
-    monthly_credit_allowance: 30,
-    billing_status: 'trial',
-    current_period_start: now.toISOString(),
-    current_period_end: periodEnd.toISOString(),
-    transactions: [
-      {
-        id: cryptoRandomId(),
-        transaction_type: 'monthly_grant',
-        status: 'charged',
-        actual_credits: 30,
-        reason: 'Free trial credits',
-        created_at: now.toISOString(),
-      },
-    ],
-  };
+const EMPTY: CreditState = {
+  plan_id: 'free_trial',
+  credit_balance: 0,
+  reserved_credits: 0,
+  transactions: [],
 };
 
-export function isDevBypass(): boolean {
-  return (
-    import.meta.env?.VITE_DEV_BYPASS_CREDITS === 'true' ||
-    import.meta.env?.MODE === 'development'
-  );
+const LABEL: Record<CreditTxnType, string> = {
+  founder_unlock: 'Decision-maker unlock',
+  contact_unlock: 'Contact unlock',
+  grant: 'Credit grant',
+  adjustment: 'Adjustment',
+};
+
+interface TxnRow {
+  id: string;
+  kind: CreditTxnType;
+  status: CreditTxnStatus;
+  estimated_credits: number | null;
+  reserved_credits: number | null;
+  actual_credits: number | null;
+  refunded_credits: number | null;
+  task_id: string | null;
+  company_key: string | null;
+  reason: string | null;
+  created_at: string;
 }
 
-function cryptoRandomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `txn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function toTransaction(r: TxnRow): CreditTransaction {
+  const actual = r.actual_credits ?? 0;
+  const reserved = r.reserved_credits ?? 0;
+  // A grant adds; a reservation holds; anything finalized costs what it
+  // actually charged, which for a released or zero-result unlock is nothing.
+  const delta = r.kind === 'grant' || r.kind === 'adjustment'
+    ? actual
+    : r.status === 'reserved'
+      ? -reserved
+      : -actual;
+  return {
+    id: r.id,
+    transaction_type: r.kind,
+    status: r.status,
+    estimated_credits: r.estimated_credits ?? 0,
+    reserved_credits: reserved,
+    actual_credits: actual,
+    refunded_credits: r.refunded_credits ?? 0,
+    delta_credits: delta,
+    workflow_id: r.task_id ?? undefined,
+    workflow_title: r.company_key
+      ? `${LABEL[r.kind] ?? r.kind} · ${r.company_key}`
+      : LABEL[r.kind] ?? r.kind,
+    reason: r.reason ?? undefined,
+    created_at: r.created_at,
+  };
 }
 
 async function getWorkspaceId(userId: string): Promise<string | null> {
@@ -100,168 +146,47 @@ async function getWorkspaceId(userId: string): Promise<string | null> {
   return (data as { workspace_id?: string } | null)?.workspace_id ?? null;
 }
 
-async function loadBrain(workspaceId: string): Promise<{ profile: Record<string, unknown> }> {
-  const { data } = await supabase
-    .from('company_brain')
-    .select('profile')
-    .eq('workspace_id', workspaceId)
-    .maybeSingle();
-  const profile = (data?.profile as Record<string, unknown> | null) ?? {};
-  return { profile };
-}
-
-async function saveCreditState(workspaceId: string, state: CreditState): Promise<void> {
-  const { profile } = await loadBrain(workspaceId);
-  const next = { ...profile, credits: state };
-  await supabase
-    .from('company_brain')
-    .upsert(
-      { workspace_id: workspaceId, profile: next as unknown as never },
-      { onConflict: 'workspace_id' },
-    );
-}
-
+/**
+ * Read the workspace's credit state.
+ *
+ * Both reads go through RLS as the signed-in user, so this returns their own
+ * workspace's ledger or nothing. A workspace with no balance row has never been
+ * granted credits, and is reported as zero rather than as a default allowance —
+ * showing 30 free credits that the server will not honour is worse than showing
+ * none.
+ */
 export async function getCreditState(): Promise<CreditState> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return DEFAULT_STATE();
+  if (!user) return EMPTY;
   const workspaceId = await getWorkspaceId(user.id);
-  if (!workspaceId) return DEFAULT_STATE();
-  const { profile } = await loadBrain(workspaceId);
-  const existing = (profile?.credits as CreditState | undefined) ?? null;
-  if (!existing) {
-    const fresh = DEFAULT_STATE();
-    await saveCreditState(workspaceId, fresh);
-    return fresh;
-  }
-  return existing;
-}
+  if (!workspaceId) return EMPTY;
 
-export async function reserveCredits(opts: {
-  workflowId: string;
-  workflowTitle?: string;
-  estimatedCredits: number;
-  metadata?: Record<string, unknown>;
-}): Promise<
-  | { ok: true; transactionId: string; balanceAfter: number; devBypass: boolean }
-  | { ok: false; error: 'insufficient_credits'; balance: number; needed: number }
-> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: true, transactionId: 'dev', balanceAfter: 0, devBypass: true };
-  }
-  const workspaceId = await getWorkspaceId(user.id);
-  if (!workspaceId) return { ok: true, transactionId: 'dev', balanceAfter: 0, devBypass: true };
+  const [{ data: balance }, { data: txns }] = await Promise.all([
+    supabase
+      .from('workspace_credit_balances')
+      .select('balance_credits, reserved_credits, plan_id')
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    supabase
+      .from('credit_transactions')
+      .select(
+        'id, kind, status, estimated_credits, reserved_credits, actual_credits,' +
+        ' refunded_credits, task_id, company_key, reason, created_at')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ]);
 
-  const { profile } = await loadBrain(workspaceId);
-  const state: CreditState = (profile?.credits as CreditState | undefined) ?? DEFAULT_STATE();
+  const b = balance as {
+    balance_credits?: number; reserved_credits?: number; plan_id?: string;
+  } | null;
 
-  if (isDevBypass()) {
-    const txn: CreditTransaction = {
-      id: cryptoRandomId(),
-      workflow_id: opts.workflowId,
-      workflow_title: opts.workflowTitle,
-      transaction_type: 'reservation',
-      status: 'reserved',
-      estimated_credits: opts.estimatedCredits,
-      reserved_credits: 0,
-      reason: 'Dev mode — not charged',
-      created_at: new Date().toISOString(),
-    };
-    state.transactions = [txn, ...state.transactions].slice(0, 100);
-    await saveCreditState(workspaceId, state);
-    return { ok: true, transactionId: txn.id, balanceAfter: state.credit_balance, devBypass: true };
-  }
-
-  if (state.credit_balance < opts.estimatedCredits) {
-    return { ok: false, error: 'insufficient_credits', balance: state.credit_balance, needed: opts.estimatedCredits };
-  }
-
-  const txn: CreditTransaction = {
-    id: cryptoRandomId(),
-    workflow_id: opts.workflowId,
-    workflow_title: opts.workflowTitle,
-    transaction_type: 'reservation',
-    status: 'reserved',
-    estimated_credits: opts.estimatedCredits,
-    reserved_credits: opts.estimatedCredits,
-    created_at: new Date().toISOString(),
+  return {
+    plan_id: b?.plan_id ?? 'free_trial',
+    credit_balance: b?.balance_credits ?? 0,
+    reserved_credits: b?.reserved_credits ?? 0,
+    transactions: ((txns ?? []) as unknown as TxnRow[]).map(toTransaction),
   };
-  state.credit_balance -= opts.estimatedCredits;
-  state.transactions = [txn, ...state.transactions].slice(0, 100);
-  await saveCreditState(workspaceId, state);
-  return { ok: true, transactionId: txn.id, balanceAfter: state.credit_balance, devBypass: false };
-}
-
-export async function finalizeCharge(opts: {
-  transactionId: string;
-  workflowId: string;
-  estimated: number;
-  requested: number;
-  accepted: number;
-  providerRan: boolean;
-  failedBeforeProvider?: boolean;
-  resultSummary?: string;
-}): Promise<{ actual: number; refunded: number; status: CreditTxnStatus }> {
-  const { actual, status } = computeActualCharge({
-    estimated: opts.estimated,
-    requested: opts.requested,
-    accepted: opts.accepted,
-    providerRan: opts.providerRan,
-    failedBeforeProvider: opts.failedBeforeProvider,
-  });
-  const refunded = Math.max(0, opts.estimated - actual);
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { actual, refunded, status };
-  const workspaceId = await getWorkspaceId(user.id);
-  if (!workspaceId) return { actual, refunded, status };
-
-  const { profile } = await loadBrain(workspaceId);
-  const state: CreditState = (profile?.credits as CreditState | undefined) ?? DEFAULT_STATE();
-
-  if (!isDevBypass()) {
-    // Refund difference to balance (reservation already deducted full estimate).
-    state.credit_balance += refunded;
-  }
-
-  // Update reservation row + add charge row.
-  state.transactions = state.transactions.map((t) =>
-    t.id === opts.transactionId
-      ? { ...t, status, actual_credits: actual, refunded_credits: refunded, reason: opts.resultSummary }
-      : t,
-  );
-  state.transactions.unshift({
-    id: cryptoRandomId(),
-    workflow_id: opts.workflowId,
-    transaction_type: refunded > 0 ? 'partial_refund' : 'charge',
-    status,
-    actual_credits: actual,
-    refunded_credits: refunded,
-    reason: opts.resultSummary,
-    created_at: new Date().toISOString(),
-  });
-  state.transactions = state.transactions.slice(0, 100);
-  await saveCreditState(workspaceId, state);
-  return { actual, refunded, status };
-}
-
-export async function refundCredits(transactionId: string, amount: number, reason: string): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  const workspaceId = await getWorkspaceId(user.id);
-  if (!workspaceId) return;
-  const { profile } = await loadBrain(workspaceId);
-  const state: CreditState = (profile?.credits as CreditState | undefined) ?? DEFAULT_STATE();
-  state.credit_balance += amount;
-  state.transactions.unshift({
-    id: cryptoRandomId(),
-    transaction_type: 'refund',
-    status: 'refunded',
-    refunded_credits: amount,
-    reason,
-    created_at: new Date().toISOString(),
-  });
-  await saveCreditState(workspaceId, state);
 }
 
 export function formatCredits(n: number): string {
