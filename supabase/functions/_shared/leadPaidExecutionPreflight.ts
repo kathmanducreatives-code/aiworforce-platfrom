@@ -30,6 +30,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { LeadMissionV1 } from "./leadMission.ts";
+import type { LeadIntelligenceCapabilities } from "./leadIntelligencePolicy.ts";
 import {
   CAPABILITY_REGISTRY, type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
@@ -67,7 +68,9 @@ export type PreflightBlockCode =
   | "input_validation_failed"
   | "startup_mission_requires_memo23"
   | "people_provider_before_qualification"
-  | "mission_lacks_qualification_contract";
+  | "mission_lacks_qualification_contract"
+  | "inconsistent_intelligence_configuration"
+  | "mission_compilation_failed";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -108,6 +111,13 @@ export interface BuildPreflightInput {
   /** Compile result for the first call: `ok:false` means the input is invalid. */
   firstProviderCompileOk?: boolean;
   firstProviderErrors?: string[];
+  /**
+   * The workspace's resolved intelligence capabilities.
+   *
+   * Optional so every existing caller and test keeps working unchanged; absent
+   * means the two architecture checks simply do not apply.
+   */
+  intelligence?: LeadIntelligenceCapabilities | null;
 }
 
 function isStartupMission(m: LeadMissionV1): boolean {
@@ -232,6 +242,34 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
       block("provider_not_in_plan",
         `provider "${provider}" is not in this mission's allowed providers`);
     }
+  }
+
+  // ── THE ARCHITECTURE MUST BE WHOLE ─────────────────────────────────────
+  //
+  // A workspace half-way into the new architecture is not a rollout state, it
+  // is a broken one. My Company ran with semantic classification ON and the
+  // compiler, grounded Brain, pool evaluation and rounds all OFF — and spent
+  // real money in that configuration. Failing closed here costs a refused run;
+  // proceeding cost task 44b82535.
+  if (i.intelligence && i.intelligence.mode === "inconsistent") {
+    block("inconsistent_intelligence_configuration", i.intelligence.reason);
+  }
+
+  // ── COMPILATION FAILED, SO THE MISSION IS NOT THE ONE WE PLANNED FOR ────
+  //
+  // The distinction that matters, and the reason this is not the blunt rule
+  // "no GPT mission, no spend": a workspace whose compiler is OFF is MEANT to
+  // run a deterministic mission, and blocking it would break every legitimate
+  // deterministic workflow. A workspace whose compiler is ON and which still
+  // holds no directives had its compilation FAIL — and silently continuing is
+  // exactly the downgrade into paid generic sourcing this exists to stop.
+  //
+  // `directives` is the provenance marker: only the model-compiled path sets it.
+  if (mission && i.intelligence?.expects_compiled_mission && !mission.directives) {
+    block("mission_compilation_failed",
+      "this workspace runs the compiled-mission architecture, but the mission " +
+      "carries no compiler directives — compilation failed and the deterministic " +
+      "fallback must not be spent against");
   }
 
   // ── NO QUALIFICATION CONTRACT, NO SPEND ────────────────────────────────

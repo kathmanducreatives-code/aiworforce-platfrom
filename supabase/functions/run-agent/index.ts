@@ -234,6 +234,9 @@ import {
 } from "../_shared/multiRoundController.ts";
 import { applyRoundPlanToMission } from "../_shared/roundPlanContract.ts";
 import {
+  getLeadIntelligenceCapabilities,
+} from "../_shared/leadIntelligencePolicy.ts";
+import {
   POOL_EVAL_RESULT_KEY, readPoolCheckpoint, buildPoolCheckpoint,
 } from "../_shared/poolCheckpoint.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
@@ -1581,6 +1584,18 @@ Deno.serve(async (req) => {
         // Its own flag, because it is its own risk: this one decides how many
         // times a run may SPEND on discovery. Off, `planNextRound` is null and
         // the run stays exactly single-round.
+        // ── THE CANONICAL ANSWER, RESOLVED ONCE ─────────────────────────────
+        // Five stages used to answer this independently and could disagree.
+        // This is now the single record of what architecture the workspace is
+        // in, and the preflight refuses to spend on a partial one.
+        const intelligence = getLeadIntelligenceCapabilities(workspace_id);
+        console.log("[run-agent][intelligence-policy]", {
+          task_id: task.id, mode: intelligence.mode,
+          stages: intelligence.stages,
+          missing_required: intelligence.missing_required,
+          reason: intelligence.reason,
+        });
+
         const multiRoundBinding = buildMultiRoundBinding({ workspaceId: workspace_id });
         let multiRoundSummary:
           ReturnType<typeof roundSummaryForWorkbench> | null = null;
@@ -1610,6 +1625,7 @@ Deno.serve(async (req) => {
           firstProviderCompileOk: firstCall.compiled ? firstCall.compiled.ok : undefined,
           firstProviderErrors: firstCall.compiled && !firstCall.compiled.ok
             ? firstCall.compiled.errors : [],
+          intelligence,
         });
         console.log("[run-agent][paid-preflight]", {
           task_id: task.id,
