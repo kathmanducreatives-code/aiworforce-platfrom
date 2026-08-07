@@ -31,6 +31,7 @@
 
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { LeadIntelligenceCapabilities } from "./leadIntelligencePolicy.ts";
+import type { ContractCompatibility } from "./leadRuntimeIdentity.ts";
 import {
   CAPABILITY_REGISTRY, type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
@@ -70,7 +71,8 @@ export type PreflightBlockCode =
   | "people_provider_before_qualification"
   | "mission_lacks_qualification_contract"
   | "inconsistent_intelligence_configuration"
-  | "mission_compilation_failed";
+  | "mission_compilation_failed"
+  | "incompatible_planner_contract";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -118,6 +120,13 @@ export interface BuildPreflightInput {
    * means the two architecture checks simply do not apply.
    */
   intelligence?: LeadIntelligenceCapabilities | null;
+  /**
+   * Result of checking the planner's contract version against this executor's.
+   *
+   * Optional so existing callers and tests are unaffected; absent means the
+   * compatibility check simply does not apply.
+   */
+  contract?: ContractCompatibility | null;
 }
 
 function isStartupMission(m: LeadMissionV1): boolean {
@@ -242,6 +251,18 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
       block("provider_not_in_plan",
         `provider "${provider}" is not in this mission's allowed providers`);
     }
+  }
+
+  // ── PLANNER AND EXECUTOR MUST SPEAK THE SAME CONTRACT ──────────────────
+  //
+  // They are different Edge Functions with independently bundled `_shared`, so
+  // they can legitimately be different BUILDS — that is allowed and normal.
+  // What is not allowed is different CONTRACT GENERATIONS: a mission whose
+  // shape this executor does not understand must not be spent against, and a
+  // mission carrying no contract version at all came from a bundle predating
+  // this guard and cannot be assumed compatible.
+  if (i.contract && !i.contract.ok) {
+    block("incompatible_planner_contract", i.contract.detail);
   }
 
   // ── THE ARCHITECTURE MUST BE WHOLE ─────────────────────────────────────

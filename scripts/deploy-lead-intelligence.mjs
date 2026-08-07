@@ -21,7 +21,7 @@
 // bug this script exists to stop. We read the imports.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const FUNCTIONS_DIR = "supabase/functions";
@@ -139,6 +139,22 @@ function main() {
     console.log("\n--dry-run: nothing deployed.");
     return;
   }
+
+  // ── STAMP THE BUNDLE WITH ITS OWN IDENTITY ──────────────────────────────
+  // Written BEFORE deploying so every function bundles the same build info.
+  // This is what makes "which code ran this task?" answerable from a task row
+  // instead of inferred from behaviour.
+  const buildInfoPath = join(FUNCTIONS_DIR, "_shared", "buildInfo.ts");
+  const stamp = new Date().toISOString();
+  writeFileSync(buildInfoPath,
+    `// GENERATED AT DEPLOY TIME by scripts/deploy-lead-intelligence.mjs.\n` +
+    `// Do not hand-edit. Regenerate by deploying.\n\n` +
+    `export const BUILD_INFO = {\n` +
+    `  git_sha: ${JSON.stringify(gitSha())},\n` +
+    `  build_timestamp: ${JSON.stringify(stamp)},\n` +
+    `  dirty: ${gitDirty()},\n` +
+    `} as const;\n`);
+  console.log(`\n── build stamp ──\n  ${gitShort()} @ ${stamp}${gitDirty() ? " (dirty)" : ""}`);
 
   console.log("\n── deploying ──");
   for (const f of fns) {
