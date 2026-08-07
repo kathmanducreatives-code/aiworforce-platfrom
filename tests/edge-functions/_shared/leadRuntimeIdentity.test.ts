@@ -56,10 +56,18 @@ Deno.test("1. a runtime identity names the build, never a Supabase version", () 
   assertEquals(id.role, "executor");
   assertEquals(id.function, "run-agent");
   assertEquals(id.lead_intelligence_contract_version, LEAD_INTELLIGENCE_CONTRACT_VERSION);
-  // Undeployed code is OBVIOUSLY undeployed rather than silently plausible.
-  assertEquals(id.git_sha, "local");
-  assert(id.dirty);
-  assert(typeof id.build_timestamp === "string");
+  // The SHA is a real build identifier, whatever the current build is. Pinning
+  // a literal here was wrong: `buildInfo.ts` is regenerated on every deploy, so
+  // the value legitimately changes. What must hold is that it IDENTIFIES a
+  // build — either a git SHA or the explicit "local" sentinel for code that
+  // never went through the deploy script.
+  assert(id.git_sha.length > 0, "a build must always identify itself");
+  assert(id.git_sha === "local" || /^[0-9a-f]{40}$/.test(id.git_sha),
+    `git_sha must be a full SHA or "local", got "${id.git_sha}"`);
+  assertEquals(id.git_short, id.git_sha.slice(0, 8));
+  assert(typeof id.dirty === "boolean");
+  assert(!Number.isNaN(Date.parse(id.build_timestamp)),
+    "build_timestamp must be a real instant");
   // The thing that misled us is absent by construction.
   assertFalse(Object.keys(id).some((k) => /version$/.test(k) && k !== "lead_intelligence_contract_version"));
 });

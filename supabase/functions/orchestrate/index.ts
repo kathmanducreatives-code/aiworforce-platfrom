@@ -20,6 +20,9 @@ import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionM
 import {
   isLeadMissionV1, parseLeadMissionDeterministic,
 } from "../_shared/leadMission.ts";
+import {
+  getLeadIntelligenceCapabilities,
+} from "../_shared/leadIntelligencePolicy.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -572,15 +575,53 @@ Deno.serve(async (req) => {
     // mission can always be derived deterministically. An absent mission is now
     // impossible rather than merely discouraged, which is what lets run-agent
     // refuse to spend when one is missing.
-    const suppliedMission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
-    const lead_mission: unknown = isLeadMissionV1(suppliedMission)
-      ? suppliedMission
-      : parseLeadMissionDeterministic(user_instruction ?? "", {
-        requestedCount: typeof tool_input?.max_results === "number" ? tool_input.max_results : null,
-      });
-
     if (!user_instruction || !workspace_id) {
       return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);
+    }
+
+    const suppliedMission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
+
+    // ── ORCHESTRATE TRANSPORTS A MISSION. IT DOES NOT WRITE ONE. ───────────
+    //
+    // This used to fall back to `parseLeadMissionDeterministic` whenever a
+    // compiled mission failed to arrive. The intent was sound — guarantee a
+    // mission always exists so run-agent can refuse to spend without one — but
+    // the mechanism guaranteed the wrong thing: it manufactured a mission that
+    // PASSES `isLeadMissionV1` while carrying no directives, no planner
+    // runtime and no contract version, and handed it downstream as though the
+    // compiler had produced it. Task 1d73e23f is that path: confidence 0.6,
+    // `original_user_query` silently replaced by the classifier's rewritten
+    // instruction, and a second planner quietly outvoting the first.
+    //
+    // Under the new architecture a missing mission is now a PLANNING FAILURE,
+    // which is the honest description of it. The deterministic parser stays for
+    // workspaces that have deliberately not adopted the compiler — there it is
+    // the intended behaviour, not error recovery.
+    const orchestrateIntelligence = getLeadIntelligenceCapabilities(workspace_id);
+    let lead_mission: unknown;
+    if (isLeadMissionV1(suppliedMission)) {
+      lead_mission = suppliedMission;
+    } else if (orchestrateIntelligence.mode === "new_architecture") {
+      console.error("[orchestrate][mission-not-compiled]", {
+        workspace_id,
+        intelligence_mode: orchestrateIntelligence.mode,
+        had_body_mission: b.lead_mission != null,
+        had_tool_input_mission: tool_input?.lead_mission != null,
+      });
+      return json({
+        error: "mission_not_compiled",
+        details:
+          "this workspace runs the compiled-mission architecture and no valid " +
+          "LeadMission reached orchestrate; planning failed upstream. No " +
+          "deterministic mission was substituted and no provider work was " +
+          "scheduled.",
+        intelligence_mode: orchestrateIntelligence.mode,
+      }, 422);
+    } else {
+      // Explicitly deterministic workspace: this is the designed behaviour.
+      lead_mission = parseLeadMissionDeterministic(user_instruction ?? "", {
+        requestedCount: typeof tool_input?.max_results === "number" ? tool_input.max_results : null,
+      });
     }
 
     // Auth.
