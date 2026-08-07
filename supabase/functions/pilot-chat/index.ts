@@ -28,6 +28,9 @@ import {
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
+import {
+  runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
+} from "../_shared/leadRuntimeIdentity.ts";
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
 import {
@@ -246,6 +249,13 @@ function buildMissionForPrompt(
   });
   return {
     ...merged.mission,
+    // ── WHICH BUILD COMPILED THIS, AND WHAT CONTRACT IT SPEAKS ────────────
+    // Stamped here because this is where the mission is actually produced, and
+    // carried ON the mission because that is the object that survives every hop
+    // to run-agent. Without it, a stale planner and a fresh executor were
+    // indistinguishable from a task row — which cost half a day on 2026-08-07.
+    planner_runtime: runtimeIdentity("planner", "pilot-chat") as unknown as Record<string, unknown>,
+    lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
     required_capabilities: plan.steps.map((s) => s.capability),
     prohibited_capabilities: plan.prohibited,
     brain_rejected_broadening: merged.rejected_broadening,

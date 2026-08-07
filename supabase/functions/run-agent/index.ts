@@ -237,6 +237,9 @@ import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
 import {
+  runtimeIdentity, checkContractCompatibility,
+} from "../_shared/leadRuntimeIdentity.ts";
+import {
   POOL_EVAL_RESULT_KEY, readPoolCheckpoint, buildPoolCheckpoint,
 } from "../_shared/poolCheckpoint.ts";
 import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
@@ -1596,6 +1599,27 @@ Deno.serve(async (req) => {
           reason: intelligence.reason,
         });
 
+        // ── WHICH BUILD IS EXECUTING, AND MAY IT ACT ON THIS PLAN? ──────────
+        //
+        // The contract is mandatory ONLY under `new_architecture`. A workspace
+        // deliberately on the deterministic path has no compiled mission and
+        // therefore no planner stamp; demanding one would break a legitimate
+        // workflow to guard against a problem it cannot have.
+        const executorRuntime = runtimeIdentity("executor", "run-agent");
+        const plannerRuntime =
+          (persistedMission?.planner_runtime as Record<string, unknown> | undefined) ?? null;
+        const contractCheck = intelligence.mode === "new_architecture"
+          ? checkContractCompatibility(
+            persistedMission?.lead_intelligence_contract_version ?? null,
+            typeof plannerRuntime?.git_sha === "string" ? plannerRuntime.git_sha : null)
+          : null;
+        console.log("[run-agent][runtime]", {
+          task_id: task.id,
+          executor: executorRuntime,
+          planner: plannerRuntime,
+          contract: contractCheck,
+        });
+
         const multiRoundBinding = buildMultiRoundBinding({ workspaceId: workspace_id });
         let multiRoundSummary:
           ReturnType<typeof roundSummaryForWorkbench> | null = null;
@@ -1626,6 +1650,7 @@ Deno.serve(async (req) => {
           firstProviderErrors: firstCall.compiled && !firstCall.compiled.ok
             ? firstCall.compiled.errors : [],
           intelligence,
+          contract: contractCheck,
         });
         console.log("[run-agent][paid-preflight]", {
           task_id: task.id,
@@ -1642,7 +1667,18 @@ Deno.serve(async (req) => {
         // to be reconstructed from Actor payloads after the money was gone.
         try {
           await supabase.from("tasks").update({
-            result: { paid_execution_preflight: paidPreflight },
+            result: {
+              paid_execution_preflight: paidPreflight,
+              // ONE ROW ANSWERS "WHICH CODE DID THIS?". Persisted alongside the
+              // preflight — the same record that authorises spending — so a
+              // blocked run carries its provenance too.
+              lead_runtime: {
+                planner_runtime: plannerRuntime,
+                executor_runtime: executorRuntime,
+                contract: contractCheck,
+                intelligence_mode: intelligence.mode,
+              },
+            },
           }).eq("id", task.id);
         } catch (e) {
           console.log("[run-agent][paid-preflight][persist-error]", String(e));

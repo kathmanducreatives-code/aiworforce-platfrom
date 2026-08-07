@@ -170,6 +170,18 @@ export interface LeadMissionV1 {
   confidence: number;
   /** Set only on the model-compiled path. See {@link MissionDirectives}. */
   directives?: MissionDirectives;
+  /**
+   * WHICH BUILD COMPILED THIS MISSION, and which contract generation it speaks.
+   *
+   * Carried on the mission itself because the mission is the object that
+   * actually travels pilot-chat → orchestrate → run-agent. Anything stored
+   * beside it can be dropped by an intermediate hop; this cannot.
+   *
+   * Deliberately NOT part of `missionHash` — the hash answers "is this the same
+   * question?", and redeploying the planner does not change the question.
+   */
+  planner_runtime?: Record<string, unknown>;
+  lead_intelligence_contract_version?: string;
 }
 
 /** Structural guard. Used to decide mission-path vs legacy-carrier path. */
