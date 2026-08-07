@@ -2092,6 +2092,12 @@ Deno.serve(async (req) => {
             const evaluation = projectEvaluationRows(capabilityRun.companies.map((c) => ({
               key: c.key,
               shortlisted: c.shortlisted,
+              // THE AUTHORITATIVE FIELDS, enrichment first. Without these the
+              // projection fell back to the key — which on this path is a
+              // LinkedIn URL — and reported a null size for every company whose
+              // enrichment had already been bought.
+              companyName: (c.enriched ?? c.company).company_name ?? null,
+              employeeCount: (c.enriched ?? c.company).employee_count ?? null,
               prequalified: c.prequalified
                 ? {
                   name: c.prequalified.name,

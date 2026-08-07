@@ -94,6 +94,63 @@ export interface ProjectableCompany {
   hiringVerified: boolean;
   verdict: "pass" | "reject" | "unknown" | null;
   contactCount: number;
+  /**
+   * The AUTHORITATIVE provider-supplied name, from discovery or enrichment.
+   *
+   * Added because this projection used to fall back to `key`, and on the
+   * LinkedIn discovery path the key IS the company URL — so task 44b82535
+   * persisted `https://www.linkedin.com/company/abr-talent` as a company NAME
+   * for 93 of 94 rows.
+   */
+  companyName?: string | null;
+  /**
+   * Employee count from ENRICHMENT, which is where it actually comes from.
+   *
+   * The projection previously read `prequalified.team_size` alone. That field
+   * is populated only on the startup/prequalification path, so on task
+   * 44b82535 sixty successfully enriched companies still reported a null
+   * count — the enrichment was bought and then never read.
+   */
+  employeeCount?: number | null;
+}
+
+/** A value that is a URL, not a name. */
+export function looksLikeUrl(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  return /^https?:\/\//i.test(s) || /^www\./i.test(s) || /linkedin\.com\//i.test(s);
+}
+
+/**
+ * A human-readable name, or null — NEVER a URL.
+ *
+ * Authoritative provider fields first, exactly in the order they can be
+ * trusted. The slug fallback exists only for the case where no provider ever
+ * supplied a name: `.../company/abr-talent` becomes "Abr Talent", which is a
+ * guess and is clearly better than showing the user a URL. When even that is
+ * impossible the answer is null, because an absent name is honest and a URL in
+ * a name column is not.
+ */
+export function readableCompanyName(i: {
+  authoritative?: string | null;
+  prequalified?: string | null;
+  key?: string | null;
+}): string | null {
+  for (const c of [i.authoritative, i.prequalified]) {
+    const s = String(c ?? "").trim();
+    if (s && !looksLikeUrl(s)) return s;
+  }
+  const key = String(i.key ?? "").trim();
+  if (key && !looksLikeUrl(key)) return key;
+  // LAST RESORT: derive from the LinkedIn slug rather than emit the URL.
+  const slug = key.match(/linkedin\.com\/company\/([^/?#]+)/i)?.[1];
+  if (slug) {
+    const words = slug.replace(/[-_]+/g, " ").trim();
+    if (words) {
+      return words.split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+  }
+  return null;
 }
 
 /**
@@ -119,7 +176,8 @@ export function deriveLifecycle(c: ProjectableCompany): WorkbenchLifecycle {
 /** One non-actionable row. Deliberately has no lead_candidate_id. */
 export interface WorkbenchEvaluationRow {
   company_key: string;
-  company_name: string;
+  /** Null when no provider ever supplied one. NEVER a URL. */
+  company_name: string | null;
   domain: string | null;
   employee_count: number | null;
   strongest_signal: string | null;
@@ -178,9 +236,13 @@ export function projectEvaluationRows(
     const supporting = pq?.jobs.find((j) => j.title === pq.strongest_signal) ?? null;
     rows.push({
       company_key: c.key,
-      company_name: pq?.name ?? c.key,
+      // NEVER THE KEY. On the LinkedIn path the key is a URL.
+      company_name: readableCompanyName({
+        authoritative: c.companyName, prequalified: pq?.name, key: c.key,
+      }),
       domain: pq?.canonical_domain ?? null,
-      employee_count: pq?.team_size ?? null,
+      // Enrichment first — it is the stage that actually measures this.
+      employee_count: c.employeeCount ?? pq?.team_size ?? null,
       strongest_signal: pq?.strongest_signal ?? null,
       signal_tier: pq?.best_tier ?? null,
       supporting_job_title: supporting?.title ?? pq?.strongest_signal ?? null,
@@ -200,7 +262,9 @@ export function projectEvaluationRows(
   rows.sort((a, b) =>
     LIFECYCLE_ORDER.indexOf(b.status) - LIFECYCLE_ORDER.indexOf(a.status) ||
     b.prequalification_score - a.prequalification_score ||
-    a.company_name.localeCompare(b.company_name));
+    // An unnamed company sorts last within its band rather than crashing the
+    // comparator or jumping to the front on an empty string.
+    (a.company_name ?? "￿").localeCompare(b.company_name ?? "￿"));
 
   return {
     version: WORKBENCH_PROJECTION_VERSION,

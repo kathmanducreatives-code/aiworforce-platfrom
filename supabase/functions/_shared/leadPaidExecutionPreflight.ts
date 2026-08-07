@@ -66,7 +66,8 @@ export type PreflightBlockCode =
   | "provider_not_in_plan"
   | "input_validation_failed"
   | "startup_mission_requires_memo23"
-  | "people_provider_before_qualification";
+  | "people_provider_before_qualification"
+  | "mission_lacks_qualification_contract";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -113,6 +114,80 @@ function isStartupMission(m: LeadMissionV1): boolean {
   return m.company_profile.stages.some((s) => /startup|seed|series a|early/i.test(s));
 }
 
+/** Missions whose whole purpose is to decide that somebody QUALIFIES. */
+function isQualifyingMission(m: LeadMissionV1): boolean {
+  return m.mission_type === "qualified_lead_sourcing" ||
+    m.requested_output === "contact_ready_leads" ||
+    m.requested_output === "qualified_companies";
+}
+
+export interface QualificationContract {
+  ok: boolean;
+  /** The discriminators the mission actually supplies. Empty ⇒ none. */
+  sources: string[];
+  detail: string;
+}
+
+/**
+ * DOES THIS MISSION SAY HOW ANYTHING QUALIFIES?
+ *
+ * Task 44b82535 spent 9 cost units and returned nothing because the answer was
+ * no and nobody asked. Its mission was STRUCTURALLY perfect — mission present,
+ * plan non-empty, entry capability matched, first input valid — so this
+ * preflight returned `ok: true` and authorised the spend. It was also
+ * semantically empty: `required_signals: []`, `required_capabilities: []`,
+ * `directives: null`, and a company profile consisting of the single vertical
+ * "b2b saas".
+ *
+ * That mission cannot fail. Every B2B SaaS company on earth satisfies it
+ * equally, so no evidence could ever separate a good answer from a bad one and
+ * the money was spent finding companies that could never be qualified.
+ *
+ * THE QUESTION THIS ASKS is deliberately not "did GPT run" or "is there a
+ * hiring signal". Either would be wrong: a deterministic mission naming
+ * explicit companies is perfectly answerable, and forcing a hiring requirement
+ * onto every lead query would make hiring Actors run for missions that never
+ * wanted them. The question is narrower — is there ANY discriminator that
+ * evidence could be gathered against?
+ *
+ * A bare vertical plus a job title is NOT one. It describes a category, not a
+ * reason to contact a particular company today.
+ */
+export function missionQualificationContract(m: LeadMissionV1): QualificationContract {
+  const sources: string[] = [];
+
+  // A commercial/timing signal — hiring, funding, expansion, anything.
+  if (m.required_signals.length > 0) {
+    sources.push(`required_signals:${m.required_signals.map((s) => s.type).join("|")}`);
+  }
+  // The compiler's explicit evidence contract.
+  const evidence = m.directives?.required_evidence ?? [];
+  if (evidence.length > 0) sources.push(`required_evidence:${evidence.length}`);
+
+  // The user named the companies. "Is it one of these?" is a complete
+  // qualification contract on its own, and needs no signal at all.
+  if ((m.company_profile.known_companies?.length ?? 0) > 0) {
+    sources.push("known_companies");
+  }
+  // An explicitly required evidence-producing capability.
+  const evidenceCaps = m.required_capabilities.filter((c) => {
+    const spec = CAPABILITY_REGISTRY[c];
+    return !!spec && (spec.produces?.length ?? 0) > 0;
+  });
+  if (evidenceCaps.length > 0) sources.push(`required_capabilities:${evidenceCaps.join("|")}`);
+
+  if (sources.length > 0) {
+    return { ok: true, sources, detail: "the mission defines what evidence qualifies" };
+  }
+  return {
+    ok: false,
+    sources: [],
+    detail:
+      "the mission names no signal, no required evidence, no known companies and " +
+      "no evidence capability — nothing collected could decide that a company qualifies",
+  };
+}
+
 /**
  * Build the preflight record.
  *
@@ -156,6 +231,19 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     if (plan && !plan.allowed_providers.includes(provider)) {
       block("provider_not_in_plan",
         `provider "${provider}" is not in this mission's allowed providers`);
+    }
+  }
+
+  // ── NO QUALIFICATION CONTRACT, NO SPEND ────────────────────────────────
+  //
+  // Checked BEFORE the route rules below, because a mission that cannot
+  // qualify anything is not a routing problem — no route would rescue it. This
+  // is the guard task 44b82535 needed and did not have: it passed every
+  // structural check here and bought 94 companies it could never assess.
+  if (mission && isQualifyingMission(mission)) {
+    const contract = missionQualificationContract(mission);
+    if (!contract.ok) {
+      block("mission_lacks_qualification_contract", contract.detail);
     }
   }
 
