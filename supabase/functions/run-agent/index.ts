@@ -1806,7 +1806,11 @@ Deno.serve(async (req) => {
                   // A client-supplied grounded result would let a caller mark a
                   // company evaluated without one ever having been.
                   restoredGroundedResults: restoredPoolResults,
-                  onBatchComplete: async ({ evaluated, next_offset }) => {
+                  // WHAT SET THOSE RESTORED VERDICTS WERE COMPUTED OVER, so the
+                  // engine can tell at ranking time whether this run discovered
+                  // the same companies. The mission hash cannot answer that.
+                  restoredPoolFingerprint: poolRestore.discoveredFingerprint,
+                  onBatchComplete: async ({ evaluated, next_offset, pool_fingerprint }) => {
                     try {
                       const { data: cur } = await supabase
                         .from("tasks").select("result").eq("id", task.id).maybeSingle();
@@ -1817,6 +1821,7 @@ Deno.serve(async (req) => {
                           ...prior,
                           [POOL_EVAL_RESULT_KEY]: buildPoolCheckpoint({
                             missionHash: poolFingerprint,
+                            discoveredPoolFingerprint: pool_fingerprint,
                             evaluated, next_offset,
                             accounting: poolBinding.accounting,
                           }),
@@ -1828,10 +1833,16 @@ Deno.serve(async (req) => {
                   },
                 }
                 : {}),
-              // Ranking runs only in enforce; in shadow it is computed and
-              // persisted below without touching the delivered order.
-              ...(poolBinding.rankPool && poolBinding.rankingMode === "enforce"
-                ? { rankPool: poolBinding.rankPool }
+              // THE RANKER RUNS IN BOTH MODES; THE MODE DECIDES ITS AUTHORITY.
+              // Passing `rankPool` only under enforce meant shadow computed
+              // nothing, persisted nothing, and left enforce to be switched on
+              // with no evidence of what it would reorder. The engine ships the
+              // deterministic order in shadow and records the difference.
+              ...(poolBinding.rankPool
+                ? {
+                  rankPool: poolBinding.rankPool,
+                  rankingMode: poolBinding.rankingMode,
+                }
                 : {}),
               readPendingRun,
               // THE SAME BUDGET THE TERMINAL GUARD FINALIZES AGAINST. One clock,
@@ -2116,6 +2127,19 @@ Deno.serve(async (req) => {
                           fallback_reason: capabilityRun.pool.ranking.fallback_reason,
                           eligible_exclusions: capabilityRun.pool.excluded,
                           model_accounting: poolBinding.accounting,
+                          // WHY THE ORDER IS WHAT IT IS. Without the mode, a
+                          // deterministic `ranking_source` in shadow reads as a
+                          // ranking failure rather than a ranking withheld.
+                          ranking_mode: capabilityRun.pool.ranking_mode,
+                          // WHAT ENFORCE WOULD HAVE DONE, recorded without doing
+                          // it — the evidence the enforce decision needs.
+                          ranking_shadow_comparison: capabilityRun.pool.ranking_shadow,
+                          // The discovered set this ranking describes, and
+                          // whether it is the set the restored verdicts came
+                          // from. Null ⇒ nothing restored to compare against.
+                          pool_fingerprint: capabilityRun.pool.fingerprint,
+                          pool_composition_changed:
+                            capabilityRun.pool.composition_changed,
                         },
                       }
                       : {}),

@@ -72,8 +72,11 @@ import {
 } from "./groundedBatchEvaluation.ts";
 import {
   applyPortfolioPolicy, buildCandidateSummary, validatePoolRanking,
+  deterministicRanking, buildRankingShadowComparison,
   type GroundedCandidateSummary, type PortfolioDelivery, type ValidatedRanking,
+  type RankingShadowComparison,
 } from "./poolRanking.ts";
+import { poolFingerprintOf } from "./poolCheckpoint.ts";
 import {
   CHECKPOINT_RESERVE_MS, inputFingerprint, providerOperationKey, shouldCheckpoint,
   shouldSkipProviderCall, type CompanyResumeRecord,
@@ -428,10 +431,19 @@ export interface CapabilityEngineDeps {
   batchLimits?: BatchLimits;
   /** Grounded results a previous invocation already paid for, by company key. */
   restoredGroundedResults?: Map<string, GroundedVerification>;
+  /**
+   * The eligible-set fingerprint those restored results were computed over.
+   *
+   * Compared against this run's own set at ranking time. Absent or null means
+   * UNKNOWN composition, which is reported as such — never as "unchanged".
+   */
+  restoredPoolFingerprint?: string | null;
   /** Called after each completed batch so the caller can checkpoint. */
   onBatchComplete?: (i: {
     evaluated: Array<{ company_key: string; verification: GroundedVerification }>;
     next_offset: number;
+    /** This run's eligible set, so the checkpoint records what it evaluated. */
+    pool_fingerprint: string;
   }) => void | Promise<void>;
   /** STAGE 2 — compare the evaluated pool. Null/absent ⇒ deterministic order. */
   rankPool?: (i: {
@@ -439,6 +451,16 @@ export interface CapabilityEngineDeps {
     requestedCount: number;
     unevaluatedCount: number;
   }) => Promise<ValidatedRanking | null>;
+  /**
+   * `shadow` computes the ranking and records what it WOULD have changed;
+   * `enforce` lets it decide the order the user sees.
+   *
+   * Defaults to `shadow` for the same reason `groundingMode` does: a missing or
+   * misspelled mode must never be able to reorder what somebody calls today.
+   * Note that this gates the RANKING'S AUTHORITY, not whether it runs — a
+   * shadow mode that computes nothing observes nothing.
+   */
+  rankingMode?: "shadow" | "enforce";
   callCompleted?: (key: string) => boolean;
   onCallComplete?: (key: string) => void;
   /**
@@ -520,7 +542,15 @@ export interface CapabilityRunResult {
     eligible: EligiblePool["metrics"];
     excluded: EligiblePool["excluded"];
     summaries: GroundedCandidateSummary[];
+    /** What ordered the delivery. Deterministic whenever the mode is shadow. */
     ranking: ValidatedRanking;
+    ranking_mode: "shadow" | "enforce";
+    /** What enforcing would have changed. Null under enforce — it did it. */
+    ranking_shadow: RankingShadowComparison | null;
+    /** Of the eligible set, computed after discovery. */
+    fingerprint: string;
+    /** True/false against a restored pool; null when there was none to compare. */
+    composition_changed: boolean | null;
     delivery: PortfolioDelivery;
     restored: number;
     unevaluated: number;
@@ -562,6 +592,8 @@ export async function runCapabilityPlan(
   // every company that is going to be evaluated has been.
   let poolState: {
     pool: EligiblePool; restored: number; evaluatedKeys: string[];
+    /** Of the eligible set — computable only here, after discovery. */
+    fingerprint: string;
   } | null = null;
   const maxCandidates = opts.maxCandidates ?? 50;
 
@@ -1449,6 +1481,14 @@ export async function runCapabilityPlan(
         );
         log("stage2_eligible_pool", stage2Pool.metrics);
 
+        // THE COMPOSITION FINGERPRINT, AT THE ONLY POINT IT CAN BE TAKEN.
+        // The restore-time check upstream compares mission hashes, because
+        // discovery had not run when it read the checkpoint. This is the set
+        // that was actually discovered, and it is what the ranking is compared
+        // against below.
+        const poolFingerprint = poolFingerprintOf(
+          stage2Pool.eligible.map((p) => p.company_key));
+
         // RESTORED WORK IS NOT RE-BOUGHT. A continuation supplies the grounded
         // results its earlier invocation already paid for; those companies are
         // removed from the batch plan rather than skipped with an empty result.
@@ -1494,11 +1534,13 @@ export async function runCapabilityPlan(
               company_key: k, verification: v,
             })),
             next_offset: groundedByKey.size,
+            pool_fingerprint: poolFingerprint,
           });
         }
         poolState = {
           pool: stage2Pool, restored: stage2Restored,
           evaluatedKeys: [...groundedByKey.keys()],
+          fingerprint: poolFingerprint,
         };
         log("stage2_batch_evaluation_complete", {
           eligible: stage2Pool.eligible.length,
@@ -1884,6 +1926,30 @@ export async function runCapabilityPlan(
     // deadline stopped the run, or its batch failed. Counted, never guessed at.
     const unevaluated = Math.max(0, poolState.pool.eligible.length - summaries.length);
 
+    // ── DID THE POOL ITSELF CHANGE UNDER THIS MISSION? ───────────────────
+    //
+    // The restore check upstream can only compare mission hashes, so a
+    // continuation that discovers a DIFFERENT set under the SAME mission
+    // restores the verdicts of the companies still present, re-evaluates the
+    // rest, and would otherwise present the resulting order as continuous with
+    // the previous one. It is not: the pool being compared is not the pool the
+    // earlier ranking described. Unknown is reported as unknown.
+    const compositionChanged = deps.restoredPoolFingerprint
+      ? deps.restoredPoolFingerprint !== poolState.fingerprint
+      : null;
+    if (compositionChanged) {
+      log("stage2_pool_composition_changed", {
+        restored_fingerprint: deps.restoredPoolFingerprint,
+        current_fingerprint: poolState.fingerprint,
+        note: "same mission, different discovered set; ranking recomputed for this pool",
+      });
+    }
+
+    // SHADOW RUNS THE RANKER TOO. Its authority is what the mode governs, not
+    // whether it executes — the earlier version only passed `rankPool` under
+    // enforce, so shadow computed nothing and enforce would have been switched
+    // on with no evidence about what it does.
+    const rankingMode = deps.rankingMode ?? "shadow";
     let ranking: ValidatedRanking | null = null;
     if (deps.rankPool && summaries.length > 0) {
       // RANKING NEEDS TIME IT MAY NOT HAVE. When the reserve is already reached
@@ -1914,14 +1980,46 @@ export async function runCapabilityPlan(
     }
     // `validatePoolRanking` with a null answer IS the deterministic fallback,
     // so there is one ordering function and no second code path to drift.
-    const validated = ranking ?? validatePoolRanking({
-      raw: null, summaries, requestedCount: opts.mission.requested_count,
-    });
+    //
+    // ENFORCE lets the comparison decide the order. SHADOW ships the
+    // deterministic order and records the difference instead — and says so, so
+    // a reader can tell "the ranker is being observed" from "the ranker failed",
+    // which the generic fallback reason cannot express.
+    const shadowing = rankingMode !== "enforce";
+    const validated = shadowing
+      ? deterministicRanking(summaries, ranking
+        ? "ranking computed in shadow mode; deterministic order shipped"
+        : "shadow mode; no ranking was produced to compare")
+      : ranking ?? validatePoolRanking({
+        raw: null, summaries, requestedCount: opts.mission.requested_count,
+      });
+    // Computed in shadow only. Under enforce the ranking IS the order, so a
+    // comparison against a hypothetical deterministic one would describe
+    // nothing that happened.
+    const rankingShadow = shadowing
+      ? buildRankingShadowComparison({
+        proposed: ranking, deterministic: validated, summaries,
+        requestedCount: opts.mission.requested_count,
+      })
+      : null;
+    if (rankingShadow) {
+      log("stage2_ranking_shadow", {
+        computed: rankingShadow.computed,
+        proposed_source: rankingShadow.proposed_source,
+        moved: rankingShadow.moved_count,
+        would_enter: rankingShadow.would_enter_delivery.length,
+        would_leave: rankingShadow.would_leave_delivery.length,
+      });
+    }
     pool = {
       eligible: poolState.pool.metrics,
       excluded: poolState.pool.excluded,
       summaries,
       ranking: validated,
+      ranking_mode: rankingMode,
+      ranking_shadow: rankingShadow,
+      fingerprint: poolState.fingerprint,
+      composition_changed: compositionChanged,
       delivery: applyPortfolioPolicy({
         ranking: validated, summaries,
         requestedCount: opts.mission.requested_count,
@@ -1934,6 +2032,8 @@ export async function runCapabilityPlan(
     log("stage2_pool_complete", {
       evaluated: summaries.length, unevaluated,
       ranking_source: validated.ranking_source,
+      ranking_mode: rankingMode,
+      composition_changed: compositionChanged,
       delivered: pool.delivery.metrics.delivered,
       shortfall: pool.delivery.metrics.shortfall,
     });

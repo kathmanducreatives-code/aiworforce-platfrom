@@ -32,7 +32,7 @@ import {
   POOL_EVAL_RESULT_KEY,
 } from "../../../supabase/functions/_shared/poolCheckpoint.ts";
 import {
-  validatePoolRanking,
+  validatePoolRanking, deterministicRanking, buildRankingShadowComparison,
 } from "../../../supabase/functions/_shared/poolRanking.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 
@@ -353,6 +353,10 @@ Deno.test("23. a REJECT cannot outrank a QUALIFIED through the live path", async
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+    // ENFORCE, deliberately: this asserts that code keeps decision-class
+    // authority even when the ranking IS the delivered order. Under shadow the
+    // deterministic order would satisfy it without the ranker being tested.
+    rankingMode: "enforce",
     rankPool: ({ summaries }) => Promise.resolve(validatePoolRanking({
       // The model puts the worst candidate first.
       raw: {
@@ -373,6 +377,204 @@ Deno.test("23. a REJECT cannot outrank a QUALIFIED through the live path", async
     assert(cls >= lastClass, "decision classes never invert");
     lastClass = cls;
   }
+});
+
+// ═══════════════════════════════ 51-60. shadow mode actually observes ══
+//
+// The first wiring passed `rankPool` to the engine ONLY under enforce, so
+// shadow ran no ranker, produced no comparison and persisted nothing. Enabling
+// enforce would then have been a decision taken with no evidence about what it
+// reorders. These pin the corrected contract: shadow COMPUTES and RECORDS, and
+// the deterministic order is what ships.
+
+/** A ranker that reverses the pool — guaranteed disagreement. */
+const reversingRanker = ({ summaries }: {
+  summaries: readonly { company_key: string }[];
+}) => Promise.resolve(validatePoolRanking({
+  raw: {
+    ranked_candidates: [...summaries].reverse().map((s, i) => ({
+      company_key: s.company_key, rank: i + 1, relative_strength: "strong",
+      ranking_reason: "reordered", comparison_basis: ["mission_fit"],
+      recommended_action: "offer_founder_unlock",
+    })),
+  },
+  summaries: summaries as never, requestedCount: 25,
+}));
+
+Deno.test("51-54. shadow runs the ranker, ships deterministic, records the diff", async () => {
+  const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
+  const m = mission();
+  let ranked = 0;
+  const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+    rankingMode: "shadow",
+    rankPool: (i) => { ranked++; return reversingRanker(i); },
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+
+  const p = out.pool!;
+  // IT RAN. This is the whole defect: it used to be zero.
+  assertEquals(ranked, 1, "shadow must call the ranker");
+  assertEquals(p.ranking_mode, "shadow");
+  // AND IT DID NOT GOVERN.
+  assertEquals(p.ranking.ranking_source, "deterministic_fallback");
+  assert(p.ranking.fallback_reason?.includes("shadow"),
+    "the reason must say the ranking was withheld, not that it failed");
+  // AND THE DISAGREEMENT WAS RECORDED.
+  const s = p.ranking_shadow!;
+  assert(s, "a shadow comparison exists");
+  assert(s.computed, "the comparison is of a real ranking");
+  assert(s.moved_count > 0, "a reversed ranking disagrees with the deterministic one");
+  assertFalse(s.identical_order);
+  assertEquals(s.rank_changes.length, s.moved_count);
+});
+
+Deno.test("55-56. enforce lets the ranking govern and records no shadow", async () => {
+  const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
+  const m = mission();
+  const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+    rankingMode: "enforce", rankPool: reversingRanker,
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+
+  const p = out.pool!;
+  assertEquals(p.ranking_mode, "enforce");
+  assert(["gpt_validated", "gpt_repaired"].includes(p.ranking.ranking_source),
+    `enforce must ship the ranking, got ${p.ranking.ranking_source}`);
+  // Under enforce the ranking IS the order; a comparison against a hypothetical
+  // deterministic one would describe nothing that happened.
+  assertEquals(p.ranking_shadow, null);
+});
+
+Deno.test("57. an absent mode observes rather than reorders", async () => {
+  const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
+  const m = mission();
+  const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+    rankPool: reversingRanker, // no rankingMode at all
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  assertEquals(out.pool!.ranking_mode, "shadow",
+    "a missing mode must never be able to reorder what somebody calls today");
+  assertEquals(out.pool!.ranking.ranking_source, "deterministic_fallback");
+});
+
+Deno.test("58. the shadow diff names who would have reached the user", () => {
+  const sum = (key: string, score: number) => ({
+    company_key: key, company_name: key,
+    brain_decision: "qualified" as const, opportunity_tier: "A" as const,
+    grounding_score: score, confidence_after_grounding: score,
+    business_model: "b2b_software", agentory_use_case: "strong",
+    strongest_signal: null, signal_strength: "none" as const,
+    validated_claim_ids: [], validated_evidence_ids: [],
+    missing_evidence: [], material_conflicts: [],
+    mission_match_summary: "", reason_to_contact_now: null,
+  });
+  // Deterministic order is grounding-score descending: a, b, c, d.
+  const summaries = [sum("a", 0.9), sum("b", 0.8), sum("c", 0.7), sum("d", 0.6)];
+  const deterministic = deterministicRanking(summaries, "test");
+  const proposed = validatePoolRanking({
+    raw: {
+      ranked_candidates: ["d", "c", "b", "a"].map((k, i) => ({
+        company_key: k, rank: i + 1, relative_strength: "strong",
+        ranking_reason: "reordered", comparison_basis: ["mission_fit"],
+        recommended_action: "offer_founder_unlock",
+      })),
+    },
+    summaries, requestedCount: 2,
+  });
+
+  const cmp = buildRankingShadowComparison({
+    proposed, deterministic, summaries, requestedCount: 2,
+  });
+  // ONLY TWO ROWS SHIP, so the reordering is not cosmetic — it changes WHO the
+  // user sees. That is the number the enforce decision turns on.
+  assertEquals(cmp.delivered_window, 2);
+  assertEquals(cmp.would_enter_delivery.sort(), ["c", "d"]);
+  assertEquals(cmp.would_leave_delivery.sort(), ["a", "b"]);
+  assertEquals(cmp.max_rank_delta, 3);
+
+  // A ranker that returned nothing is stated as such, not as agreement.
+  const none = buildRankingShadowComparison({
+    proposed: null, deterministic, summaries, requestedCount: 2,
+  });
+  assertFalse(none.computed);
+  assertEquals(none.would_enter_delivery, []);
+  assertEquals(none.proposed_source, null);
+});
+
+// ══════════════════════ 59-62. the fingerprint is of the DISCOVERED set ══
+//
+// It used to be the mission hash, taken before discovery had run — so a
+// continuation that discovered a different set under the same mission compared
+// equal and the composition change was invisible.
+
+Deno.test("59-60. the pool fingerprint is computed after discovery", async () => {
+  const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
+  const m = mission();
+  const seen: string[] = [];
+  const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+    onBatchComplete: ({ pool_fingerprint }) => { seen.push(pool_fingerprint); },
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+
+  const p = out.pool!;
+  // It is the ELIGIBLE SET, not the mission.
+  assertEquals(p.fingerprint, poolFingerprintOf(
+    p.summaries.map((s) => s.company_key)));
+  assert(p.fingerprint.startsWith("pool:"));
+  assert(seen.length > 0, "the checkpoint callback is told which pool it evaluated");
+  for (const f of seen) assertEquals(f, p.fingerprint, "one pool, one fingerprint");
+  // Nothing was restored, so there is nothing to compare against — and that is
+  // reported as unknown rather than as "unchanged".
+  assertEquals(p.composition_changed, null);
+});
+
+Deno.test("61-62. a different discovered set under the same mission is flagged", async () => {
+  const m = mission();
+  const runWith = async (restoredPoolFingerprint: string | null) => {
+    const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
+    return (await runCapabilityPlan(deps(rec, stage2Deps(rec, {
+      restoredPoolFingerprint,
+    })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN })).pool!;
+  };
+
+  // The same set the previous invocation evaluated ⇒ continuous.
+  const baseline = await runWith(null);
+  const same = await runWith(baseline.fingerprint);
+  assertEquals(same.composition_changed, false);
+
+  // A DIFFERENT set under the SAME mission — the case the mission hash cannot
+  // see, because the mission did not change.
+  const changed = await runWith(poolFingerprintOf(["someone", "else"]));
+  assertEquals(changed.composition_changed, true,
+    "the ranking describes a pool the restored verdicts did not come from");
+});
+
+Deno.test("63. the checkpoint carries both fingerprints and round-trips them", () => {
+  const verification = {
+    version: "grounded-claims-v1",
+    classifier_result: { confidence: 0.9 },
+    validated_claims: [], rejected_claims: [],
+    grounding_score: 1, final_grounded_decision: "pass",
+    downgrade_reasons: [], unacknowledged_conflicts: [],
+  } as never;
+  const discovered = poolFingerprintOf(["a", "b"]);
+  const cp = buildPoolCheckpoint({
+    missionHash: "mission-hash", discoveredPoolFingerprint: discovered,
+    evaluated: [{ company_key: "a", verification }],
+    next_offset: 1, accounting: {},
+  });
+  // The restore key is still the mission — it is all that can be checked before
+  // discovery — and the discovered set rides alongside it.
+  assertEquals(cp.pool_fingerprint, "mission-hash");
+  assertEquals(cp.discovered_pool_fingerprint, discovered);
+
+  const read = readPoolCheckpoint({ [POOL_EVAL_RESULT_KEY]: cp }, "mission-hash");
+  assertEquals(read.results.size, 1);
+  assertEquals(read.discoveredFingerprint, discovered);
+
+  // A checkpoint written before this field existed is UNKNOWN, never "unchanged".
+  const legacy = { ...cp } as Record<string, unknown>;
+  delete legacy.discovered_pool_fingerprint;
+  assertEquals(
+    readPoolCheckpoint({ [POOL_EVAL_RESULT_KEY]: legacy }, "mission-hash")
+      .discoveredFingerprint,
+    null);
 });
 
 // ══════════════════════════════════════════ 42-50. safety & regression ══
@@ -405,8 +607,19 @@ Deno.test("47-50. run-agent wires Stage 2 server-side only", async () => {
   assert(src.includes("readPoolCheckpoint(resumeLoad.parentResult"),
     "the checkpoint is read from the VERIFIED parent row");
   assert(src.includes("workbench_pool"), "the ranked rows are persisted");
-  // Ranking only reaches the engine in enforce.
-  assert(src.includes('poolBinding.rankingMode === "enforce"'));
+  // THE RANKER REACHES THE ENGINE IN BOTH MODES; the mode travels with it and
+  // decides its authority there. Gating the function itself on enforce is what
+  // made shadow compute nothing.
+  assert(src.includes("rankingMode: poolBinding.rankingMode"),
+    "the mode is passed, not used to withhold the ranker");
+  assertFalse(src.includes('poolBinding.rankingMode === "enforce"'),
+    "shadow must not be implemented by refusing to run the ranker");
+  assert(src.includes("ranking_shadow_comparison"),
+    "the shadow disagreement is persisted");
+  assert(src.includes("restoredPoolFingerprint: poolRestore.discoveredFingerprint"),
+    "the composition fingerprint is restored from the verified parent row");
+  assert(src.includes("discoveredPoolFingerprint: pool_fingerprint"),
+    "the checkpoint records the set that was actually discovered");
   // The client cannot supply any of it.
   assertFalse(src.includes("body.pool_summaries"));
   assertFalse(src.includes("body.ranked_candidates"));

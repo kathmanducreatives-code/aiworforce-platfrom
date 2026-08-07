@@ -11,10 +11,23 @@
 // company with no grounded result at all, which under enforce means REVIEW —
 // turning a paid, successful evaluation into an unresolved row.
 //
-// THE FINGERPRINT IS THE SAFETY CATCH. Restored verdicts belong to the pool
-// they were computed for. If discovery found different companies this time, the
-// ranking is stale and the comparison has to be redone; the fingerprint is what
-// makes that detectable rather than assumed.
+// THERE ARE TWO FINGERPRINTS, BECAUSE THEY ANSWER TWO QUESTIONS AT TWO TIMES.
+//
+//   `pool_fingerprint` is the MISSION hash. It is checked when the checkpoint is
+//   READ, which is before discovery has run — so it is the only thing that can
+//   be checked there. A changed mission invalidates every stored verdict.
+//
+//   `discovered_pool_fingerprint` is the eligible set itself, and can only be
+//   computed AFTER discovery. It is checked at RANKING time. This is the one
+//   that catches the case the mission hash cannot: the same mission run twice
+//   discovering different companies. Verdicts for companies still present are
+//   correctly restored and the rest re-evaluated, but the pool being COMPARED
+//   is not the pool the previous ranking described, and saying so is the
+//   difference between a reordered Workbench that is explained and one that
+//   silently changed under the user.
+//
+// The first version stored only the mission hash under the name
+// `pool_fingerprint`, so the composition check could never fire.
 //
 // TRUST: this is read from `tasks.result` through verified lineage ONLY. The
 // same reasoning as the provider resume ledger — a client-supplied grounded
@@ -30,8 +43,15 @@ export const POOL_EVAL_RESULT_KEY = "pool_evaluation_checkpoint" as const;
 
 export interface PoolCheckpoint {
   version: typeof POOL_CHECKPOINT_VERSION;
-  /** Binds these results to the pool they were computed for. */
+  /** The MISSION hash. Checked at restore time, before discovery has run. */
   pool_fingerprint: string;
+  /**
+   * The eligible set these verdicts were computed over, from `poolFingerprintOf`.
+   *
+   * Null only for a checkpoint written before this field existed, which must be
+   * read as "composition unknown" rather than "composition unchanged".
+   */
+  discovered_pool_fingerprint: string | null;
   completed_company_keys: string[];
   /** The verified results themselves — restored, never merely skipped. */
   grounded_results: Array<{ company_key: string; verification: GroundedVerification }>;
@@ -57,6 +77,8 @@ export function poolFingerprintOf(companyKeys: readonly string[]): string {
 
 export function buildPoolCheckpoint(i: {
   missionHash: string;
+  /** From the engine, computed after discovery. Absent ⇒ recorded as unknown. */
+  discoveredPoolFingerprint?: string | null;
   evaluated: Array<{ company_key: string; verification: GroundedVerification }>;
   next_offset: number;
   accounting: object;
@@ -64,6 +86,7 @@ export function buildPoolCheckpoint(i: {
   return {
     version: POOL_CHECKPOINT_VERSION,
     pool_fingerprint: i.missionHash,
+    discovered_pool_fingerprint: i.discoveredPoolFingerprint ?? null,
     completed_company_keys: i.evaluated.map((e) => e.company_key),
     grounded_results: i.evaluated,
     next_batch_offset: i.next_offset,
@@ -82,8 +105,18 @@ export function buildPoolCheckpoint(i: {
  */
 export function readPoolCheckpoint(
   taskResult: unknown, expectedFingerprint: string,
-): { results: Map<string, GroundedVerification>; stale: boolean } {
-  const empty = (stale: boolean) => ({ results: new Map(), stale });
+): {
+  results: Map<string, GroundedVerification>;
+  stale: boolean;
+  /**
+   * The eligible set the restored verdicts were computed over, for the
+   * ranking-time composition check. Null ⇒ unknown, never "unchanged".
+   */
+  discoveredFingerprint: string | null;
+} {
+  const empty = (stale: boolean) => ({
+    results: new Map(), stale, discoveredFingerprint: null,
+  });
   if (!taskResult || typeof taskResult !== "object") return empty(false);
   const cp = (taskResult as Record<string, unknown>)[POOL_EVAL_RESULT_KEY];
   if (!cp || typeof cp !== "object") return empty(false);
@@ -112,5 +145,10 @@ export function readPoolCheckpoint(
     if (!["pass", "review", "fail"].includes(ver.final_grounded_decision)) continue;
     results.set(key, v as GroundedVerification);
   }
-  return { results, stale: false };
+  return {
+    results,
+    stale: false,
+    discoveredFingerprint: typeof c.discovered_pool_fingerprint === "string"
+      ? c.discovered_pool_fingerprint : null,
+  };
 }

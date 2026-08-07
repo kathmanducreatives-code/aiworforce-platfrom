@@ -274,6 +274,22 @@ function fallbackRanking(
   };
 }
 
+/**
+ * The deterministic order, with an explicit reason for shipping it.
+ *
+ * `validatePoolRanking({ raw: null })` also produces the deterministic order,
+ * but stamps it "ranking response was absent or unreadable" — which is a lie in
+ * shadow mode, where the ranking was computed successfully and simply is not
+ * allowed to govern. Shadow needs to say WHY the deterministic order shipped,
+ * because "the ranker failed" and "the ranker is being observed" are the two
+ * facts a reader is trying to tell apart.
+ */
+export function deterministicRanking(
+  summaries: readonly GroundedCandidateSummary[], reason: string,
+): ValidatedRanking {
+  return fallbackRanking(summaries, reason);
+}
+
 function actionFor(s: GroundedCandidateSummary): RecommendedAction {
   return s.brain_decision === "qualified" ? "offer_founder_unlock"
     : s.brain_decision === "review" ? "review"
@@ -550,5 +566,148 @@ export function applyPortfolioPolicy(i: {
       contact_ready: 0,
       founder_unlocked: 0,
     },
+  };
+}
+
+// ───────────────────────────────────────────── what enforcing would do ──
+//
+// SHADOW MODE HAS TO COMPUTE SOMETHING OR IT IS NOT SHADOW MODE.
+//
+// The first version gated the ranker on `enforce`, so shadow ran no comparison
+// and persisted nothing — which meant the only way to find out what semantic
+// ranking would do was to switch it on and let it do it. That is the opposite
+// of what a shadow mode is for, and it made "enable enforce" an unevidenced
+// decision.
+//
+// So: shadow runs the ranker, ships the DETERMINISTIC order, and records this
+// diff. The question it exists to answer is not "did the order change" — it is
+// "would a different set of companies have reached the user", which is the only
+// difference anybody actually pays for.
+
+export interface RankingRankChange {
+  company_key: string;
+  deterministic_rank: number;
+  proposed_rank: number;
+  /** Positive ⇒ the ranker moved it UP the list. */
+  delta: number;
+}
+
+export interface RankingActionChange {
+  company_key: string;
+  deterministic_action: RecommendedAction;
+  proposed_action: RecommendedAction;
+}
+
+export interface RankingShadowComparison {
+  version: typeof POOL_RANKING_VERSION;
+  /** False ⇒ the ranker returned nothing; there is no comparison, only a fact. */
+  computed: boolean;
+  proposed_source: RankingSource | null;
+  proposed_confidence: number | null;
+  identical_order: boolean;
+  moved_count: number;
+  max_rank_delta: number;
+  rank_changes: RankingRankChange[];
+  /** How many rows the portfolio policy would actually deliver. */
+  delivered_window: number;
+  /** Companies the ranker would have put in front of the user, and code did not. */
+  would_enter_delivery: string[];
+  /** Companies code delivered that the ranker would have dropped out of the window. */
+  would_leave_delivery: string[];
+  action_changes: RankingActionChange[];
+  validator_changes: string[];
+  rejected_entries: RejectedRankingEntry[];
+  fallback_reason: string | null;
+}
+
+/**
+ * Compare the ranking that WOULD have governed against the one that did.
+ *
+ * Both sides go through `applyPortfolioPolicy`, so the membership diff is
+ * produced by the same function that decides real delivery rather than by a
+ * reimplementation of its rules that could drift away from it. Only `delivered`
+ * is read from those two calls; the metrics they also compute are discarded,
+ * which is why the counts passed in below are the honest local ones and not
+ * invented figures.
+ */
+export function buildRankingShadowComparison(i: {
+  proposed: ValidatedRanking | null;
+  deterministic: ValidatedRanking;
+  summaries: readonly GroundedCandidateSummary[];
+  requestedCount: number;
+  allowReview?: boolean;
+  allowWatch?: boolean;
+}): RankingShadowComparison {
+  const base: RankingShadowComparison = {
+    version: POOL_RANKING_VERSION,
+    computed: i.proposed !== null,
+    proposed_source: i.proposed?.ranking_source ?? null,
+    proposed_confidence: i.proposed?.portfolio_summary.ranking_confidence ?? null,
+    identical_order: true,
+    moved_count: 0,
+    max_rank_delta: 0,
+    rank_changes: [],
+    delivered_window: 0,
+    would_enter_delivery: [],
+    would_leave_delivery: [],
+    action_changes: [],
+    validator_changes: i.proposed?.validator_changes ?? [],
+    rejected_entries: i.proposed?.rejected_entries ?? [],
+    fallback_reason: i.proposed?.fallback_reason ?? null,
+  };
+  if (!i.proposed) return base;
+
+  const policy = (ranking: ValidatedRanking) =>
+    applyPortfolioPolicy({
+      ranking, summaries: i.summaries, requestedCount: i.requestedCount,
+      // METRICS-ONLY ARGUMENTS, and the metrics are thrown away. Membership
+      // depends on the ranked order, the summaries and the caps — never on
+      // these two — so passing the local counts fabricates nothing.
+      eligibleCount: i.summaries.length, unevaluatedCount: 0,
+      ...(i.allowReview !== undefined ? { allowReview: i.allowReview } : {}),
+      ...(i.allowWatch !== undefined ? { allowWatch: i.allowWatch } : {}),
+    }).delivered.map((d) => d.summary.company_key);
+
+  const shipped = policy(i.deterministic);
+  const wouldShip = policy(i.proposed);
+  const shippedSet = new Set(shipped);
+  const wouldShipSet = new Set(wouldShip);
+
+  const detRank = new Map(i.deterministic.ranked.map((r) => [r.company_key, r.rank]));
+  const detAction = new Map(
+    i.deterministic.ranked.map((r) => [r.company_key, r.recommended_action]));
+
+  const changes: RankingRankChange[] = [];
+  const actionChanges: RankingActionChange[] = [];
+  for (const r of i.proposed.ranked) {
+    const was = detRank.get(r.company_key);
+    if (was !== undefined && was !== r.rank) {
+      changes.push({
+        company_key: r.company_key,
+        deterministic_rank: was,
+        proposed_rank: r.rank,
+        delta: was - r.rank,
+      });
+    }
+    const wasAction = detAction.get(r.company_key);
+    if (wasAction !== undefined && wasAction !== r.recommended_action) {
+      actionChanges.push({
+        company_key: r.company_key,
+        deterministic_action: wasAction,
+        proposed_action: r.recommended_action,
+      });
+    }
+  }
+
+  return {
+    ...base,
+    identical_order: changes.length === 0,
+    moved_count: changes.length,
+    max_rank_delta: changes.reduce((m, c) => Math.max(m, Math.abs(c.delta)), 0),
+    rank_changes: changes,
+    delivered_window: shipped.length,
+    would_enter_delivery: wouldShip.filter((k) => !shippedSet.has(k)),
+    would_leave_delivery: shipped.filter((k) => !wouldShipSet.has(k)),
+    action_changes: actionChanges,
   };
 }
