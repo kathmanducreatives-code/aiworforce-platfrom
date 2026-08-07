@@ -603,7 +603,13 @@ Deno.test("47-50. run-agent wires Stage 2 server-side only", async () => {
   assert(src.includes("evaluateBatch: poolBinding.evaluateBatch"));
   assert(src.includes("batchLimits: poolBinding.limits"),
     "limits come from the server, never the body");
-  assert(src.includes("restoredGroundedResults: restoredPoolResults"));
+  // The restored verdicts now reach the engine through the round executor, so
+  // rounds 2-3 restore them too. What matters is unchanged and asserted here:
+  // they come from the server-side checkpoint, and round 1 is seeded with it.
+  assert(src.includes("restoredGroundedResults: roundGrounded"),
+    "the engine still receives restored verdicts");
+  assert(src.includes("leadResumeRecords, restoredPoolResults)"),
+    "round 1 is seeded from the verified server-side checkpoint");
   assert(src.includes("readPoolCheckpoint(resumeLoad.parentResult"),
     "the checkpoint is read from the VERIFIED parent row");
   assert(src.includes("workbench_pool"), "the ranked rows are persisted");

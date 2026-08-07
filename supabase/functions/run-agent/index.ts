@@ -82,8 +82,8 @@ import {
   SEMANTIC_INPUT_SCHEMA_VERSION,
 } from "../_shared/companyBrainSemanticFit.ts";
 import {
-  buildCheckpoint, LINEAGE_ROOT_RESULT_KEY, lineageRootTaskId,
-  readCheckpointCompanies, type CompanyResumeRecord,
+  buildCheckpoint, CHECKPOINT_RESERVE_MS, LINEAGE_ROOT_RESULT_KEY,
+  lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 import { missionHash } from "../_shared/leadMission.ts";
@@ -226,6 +226,13 @@ import {
 } from "../_shared/groundedBrainBinding.ts";
 import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
 import { buildPoolBinding } from "../_shared/poolEvaluationBinding.ts";
+import {
+  buildMultiRoundBinding,
+} from "../_shared/multiRoundBinding.ts";
+import {
+  runMultiRoundSourcing, roundSummaryForWorkbench, type RoundExecution,
+} from "../_shared/multiRoundController.ts";
+import { applyRoundPlanToMission } from "../_shared/roundPlanContract.ts";
 import {
   POOL_EVAL_RESULT_KEY, readPoolCheckpoint, buildPoolCheckpoint,
 } from "../_shared/poolCheckpoint.ts";
@@ -1570,6 +1577,17 @@ Deno.serve(async (req) => {
           task_id: task.id, ...poolBinding.diagnostics,
         });
 
+        // ── STAGE 4: MULTI-ROUND SOURCING ───────────────────────────────────
+        // Its own flag, because it is its own risk: this one decides how many
+        // times a run may SPEND on discovery. Off, `planNextRound` is null and
+        // the run stays exactly single-round.
+        const multiRoundBinding = buildMultiRoundBinding({ workspaceId: workspace_id });
+        let multiRoundSummary:
+          ReturnType<typeof roundSummaryForWorkbench> | null = null;
+        console.log("[run-agent][stage4][binding]", {
+          task_id: task.id, ...multiRoundBinding.diagnostics,
+        });
+
         // ══ PAID-EXECUTION PREFLIGHT — PROVE THE PLAN BEFORE SPENDING ════════
         // Runs before EVERY paid boundary on this path, mission or not. On TEST
         // task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4 the plan step carried no
@@ -1671,7 +1689,23 @@ Deno.serve(async (req) => {
         let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
         if (!resumeSatisfied && persistedMission && missionPlan) {
           try {
-            capabilityRun = await runCapabilityPlan({
+            // ── ONE ROUND OF SOURCING ────────────────────────────────────
+            //
+            // Extracted as a closure so the round controller can run it more
+            // than once WITHOUT a second sourcing engine existing. Rounds 2 and
+            // 3 differ only in the mission and graph handed in; every guard,
+            // budget, containment rule and evidence path below is the same code
+            // that ran when there was only ever one round.
+            //
+            // `roundResume` carries the previous round's per-company records, so
+            // a later round restores identity and enrichment already paid for
+            // instead of re-buying them.
+            const executeRound = async (
+              roundMission: NonNullable<typeof persistedMission>,
+              roundGraph: NonNullable<typeof missionPlan>,
+              roundResume: typeof leadResumeRecords,
+              roundGrounded: typeof restoredPoolResults,
+            ) => await runCapabilityPlan({
               invoke: async (call) => {
                 // THE COMPILED INPUT IS AUTHORITATIVE — send it, do not re-derive it.
                 //
@@ -1805,7 +1839,7 @@ Deno.serve(async (req) => {
                   // RESTORED SERVER-SIDE, from the verified parent task only.
                   // A client-supplied grounded result would let a caller mark a
                   // company evaluated without one ever having been.
-                  restoredGroundedResults: restoredPoolResults,
+                  restoredGroundedResults: roundGrounded,
                   // WHAT SET THOSE RESTORED VERDICTS WERE COMPUTED OVER, so the
                   // engine can tell at ranking time whether this run discovered
                   // the same companies. The mission hash cannot answer that.
@@ -1888,8 +1922,8 @@ Deno.serve(async (req) => {
               }),
               log: (m, meta) => console.log("[run-agent][capability-engine]", m, meta),
             }, {
-              mission: persistedMission,
-              plan: missionPlan,
+              mission: roundMission,
+              plan: roundGraph,
               // THE FALLBACK IS CONFIGURED, so an unconfigured-fallback skip can
               // no longer masquerade as a memo23 input failure. One call per
               // band: this Actor ANDs multiple values and returns zero rows.
@@ -1908,7 +1942,7 @@ Deno.serve(async (req) => {
               resume: {
                 workspace_id,
                 lineage_root_task_id: leadResumeLineageRoot,
-                records: leadResumeRecords,
+                records: roundResume,
               },
               brain: brainEnforced
                 ? {
@@ -1921,6 +1955,107 @@ Deno.serve(async (req) => {
                 : undefined,
               maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
             });
+
+            // ── ROUND 1 IS THE EXACT MISSION, ALWAYS ─────────────────────
+            // Never broadened because a large number was requested. Asking for
+            // 100 does not make a weaker company a better match.
+            capabilityRun = await executeRound(
+              persistedMission, missionPlan, leadResumeRecords, restoredPoolResults);
+
+            // ── ROUNDS 2-3, QA-FLAGGED ──────────────────────────────────
+            //
+            // Off, this block does nothing and the run is byte-for-byte the
+            // single-round run it was. On, the controller decides whether a
+            // further round is worth it, the planner proposes HOW to broaden,
+            // and `validateRoundPlan` decides whether it may — the people
+            // stages are unreachable from that plan by construction.
+            if (multiRoundBinding.enabled && capabilityRun) {
+              try {
+                const groundedAcross = new Map(restoredPoolResults);
+                for (const c of capabilityRun.companies) {
+                  if (c.grounded) groundedAcross.set(c.key, c.grounded);
+                }
+                let latest = capabilityRun;
+                const asExecution = (
+                  run: NonNullable<typeof capabilityRun>,
+                ): RoundExecution => ({
+                  candidates: run.companies.map((c) => ({
+                    company_key: c.key,
+                    company_name: (c.enriched ?? c.company).company_name ?? null,
+                    linkedin_company_url:
+                      c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null,
+                    website: (c.enriched ?? c.company).website ?? null,
+                    discovered_round: 0,
+                  })),
+                  groundedByKey: new Map(run.companies
+                    .filter((c) => c.grounded)
+                    .map((c) => [c.key, c.grounded as unknown])),
+                  pool: run.pool
+                    ? {
+                      hard_gated: run.pool.eligible.hard_gated,
+                      eligible: run.pool.eligible.eligible,
+                      evaluated: run.pool.delivery.metrics.evaluated,
+                      qualified: run.pool.delivery.metrics.qualified,
+                      review: run.pool.delivery.metrics.review,
+                      watch: run.pool.delivery.metrics.watch,
+                      delivered: run.pool.delivery.metrics.delivered,
+                    }
+                    : null,
+                  providerCostUnits: run.state.accumulated_cost_units,
+                  modelCostUnits: poolBinding.accounting.completed_calls,
+                  providerOperations: run.state.provider_attempts.map((a) => a.capability),
+                });
+
+                const multi = await runMultiRoundSourcing({
+                  runRound: async ({ round, plan }) => {
+                    // Round 1 already ran above; the controller is handed its
+                    // result rather than paying for it twice.
+                    if (round === 1) return asExecution(latest);
+                    const roundMission = plan
+                      ? applyRoundPlanToMission(persistedMission, plan)
+                      : persistedMission;
+                    const roundGraph = buildCapabilityGraph(roundMission);
+                    latest = await executeRound(
+                      roundMission, roundGraph,
+                      // WHAT THE PREVIOUS ROUND ALREADY PROVED, so identity and
+                      // enrichment are restored rather than re-bought.
+                      latest.resume_records, groundedAcross);
+                    for (const c of latest.companies) {
+                      if (c.grounded) groundedAcross.set(c.key, c.grounded);
+                    }
+                    return asExecution(latest);
+                  },
+                  planNextRound: multiRoundBinding.planNextRound,
+                  limits: () => ({
+                    maxProviderCostUnits: multiRoundBinding.maxProviderCostUnits,
+                    maxModelOperations: multiRoundBinding.maxModelOperations,
+                    // THE SAME RESERVE THE ENGINE AND CHECKPOINT USE. A round
+                    // that cannot finish before the reserve must not start:
+                    // starting one is how a run dies holding paid work it never
+                    // wrote down.
+                    deadlineReserveReached: terminalGuard.deadline
+                      ? terminalGuard.deadline.remainingMs() <= CHECKPOINT_RESERVE_MS
+                      : false,
+                  }),
+                  log: (m, meta) => console.log("[run-agent][multi-round]", m, meta),
+                }, {
+                  mission: persistedMission,
+                  requestedCount: quota.requestedLeadCount,
+                  maxRounds: multiRoundBinding.maxRounds,
+                });
+
+                multiRoundSummary = roundSummaryForWorkbench(multi);
+                capabilityRun = latest;
+                console.log("[run-agent][multi-round][complete]", {
+                  task_id: task.id, ...multiRoundSummary,
+                });
+              } catch (e) {
+                // A ROUND-CONTROLLER FAILURE COSTS THE EXTRA ROUNDS, NOT THE
+                // RUN. Round 1's result is already in hand and ships.
+                console.error("[run-agent][multi-round][failed]", String(e));
+              }
+            }
+
             companyFirstRoute = {
               ...toRouteResultShape(capabilityRun),
               diagnostics: emptyCapabilityDiagnostics(capabilityRun),
@@ -2098,6 +2233,12 @@ Deno.serve(async (req) => {
                             restored: capabilityRun.pool.restored,
                           },
                           partial: capabilityRun.pool.unevaluated > 0,
+                          // ROUND-LEVEL OBSERVABILITY. Counts only — no
+                          // provider is named — and the unlock counters are
+                          // present and zero so "delivered" is never read as
+                          // "contactable". Null when multi-round is off.
+                          ...(multiRoundSummary
+                            ? { rounds: multiRoundSummary } : {}),
                           rows: capabilityRun.pool.delivery.delivered.map((d) => ({
                             semantic_rank: d.rank,
                             company_key: d.summary.company_key,
