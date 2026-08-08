@@ -182,6 +182,22 @@ export interface LeadMissionV1 {
    */
   planner_runtime?: Record<string, unknown>;
   lead_intelligence_contract_version?: string;
+  /**
+   * DID THE MODEL ACTUALLY CONTRIBUTE TO THIS MISSION?
+   *
+   * `compileLeadMission` emits a `directives` object even when no proposal was
+   * supplied, so `directives != null` proves the compiler ran — not that the
+   * model did. Live task dc87ffa1 carried directives, a hiring signal and
+   * confidence 0.6: structurally canonical, deterministically compiled.
+   *
+   * This is `CompiledMissionResult.parser_source` carried onto the mission, so
+   * one persisted row answers the question. `gpt_validated` / `gpt_repaired`
+   * mean the model contributed; `deterministic_fallback` means it did not.
+   *
+   * Not part of `missionHash`: how a mission was compiled does not change what
+   * was asked.
+   */
+  mission_parser_source?: "gpt_validated" | "gpt_repaired" | "deterministic_fallback";
 }
 
 /** Structural guard. Used to decide mission-path vs legacy-carrier path. */

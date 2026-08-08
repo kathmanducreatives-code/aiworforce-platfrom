@@ -586,9 +586,29 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     if (!prohibited.includes(c)) prohibited.push(c);
   }
 
-  const allowed_providers = [...new Set(steps.flatMap((s) => s.providers))]
-    .filter((p) => !mission.prohibited_capabilities.some(
-      (c) => CAPABILITY_REGISTRY[c].providers.includes(p)));
+  // ── ALLOWED PROVIDERS ARE THE ONES SCHEDULED STEPS NEED ──────────────────
+  //
+  // This used to subtract any provider that ALSO appears under a prohibited
+  // capability, which conflates two different things: prohibiting a CAPABILITY
+  // and banning a PROVIDER. Providers legitimately implement several
+  // capabilities, so the subtraction removed tools the plan depends on.
+  //
+  // Live task dc87ffa1 is the proof. `apify_linkedin_company_search` implements
+  // `general_company_discovery` (scheduled), `company_identity_resolution`
+  // (scheduled) and `expansion_signal_discovery` (prohibited). The prohibited
+  // one won, the entry capability lost its own provider, and the preflight
+  // refused the run with `provider_not_in_plan` before spending anything.
+  //
+  // CONTAINMENT IS UNAFFECTED. A provider only ever reaches a capability
+  // through that capability's own step, and `assertProviderAllowed` checks the
+  // step it is running under — so a prohibited capability still cannot execute.
+  // What it can no longer do is disarm a scheduled one.
+  //
+  // There is deliberately no provider-level subtraction here because no
+  // provider-level prohibition contract exists. If one is ever added, it
+  // belongs in its own field (`prohibited_providers`) and applies here — never
+  // inferred from capability membership.
+  const allowed_providers = [...new Set(steps.flatMap((s) => s.providers))];
 
   return {
     version: CAPABILITY_GRAPH_VERSION,

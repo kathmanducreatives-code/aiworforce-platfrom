@@ -72,7 +72,8 @@ export type PreflightBlockCode =
   | "mission_lacks_qualification_contract"
   | "inconsistent_intelligence_configuration"
   | "mission_compilation_failed"
-  | "incompatible_planner_contract";
+  | "incompatible_planner_contract"
+  | "mission_not_model_compiled";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -286,6 +287,26 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
   // exactly the downgrade into paid generic sourcing this exists to stop.
   //
   // `directives` is the provenance marker: only the model-compiled path sets it.
+  // ── DIRECTIVES ARE NOT PROOF THE MODEL RAN ──────────────────────────────
+  //
+  // `compileLeadMission` emits a directives object on the deterministic path
+  // too, so the check below (`!mission.directives`) can pass on a mission the
+  // model never touched. Live task dc87ffa1 was exactly that: directives
+  // present, hiring signal present, confidence 0.6, `parser_source`
+  // deterministic_fallback.
+  //
+  // Under `new_architecture` the model is the point. A mission it did not
+  // contribute to is a degraded plan, and spending on one while calling it
+  // GPT-compiled is the confusion this whole investigation kept running into.
+  if (mission && i.intelligence?.expects_compiled_mission &&
+    mission.mission_parser_source !== undefined &&
+    mission.mission_parser_source === "deterministic_fallback") {
+    block("mission_not_model_compiled",
+      "this workspace runs the model-compiled architecture, but the mission's " +
+      "parser_source is 'deterministic_fallback' — the model did not contribute, " +
+      "and a deterministic plan must not be spent against as though it had");
+  }
+
   if (mission && i.intelligence?.expects_compiled_mission && !mission.directives) {
     block("mission_compilation_failed",
       "this workspace runs the compiled-mission architecture, but the mission " +

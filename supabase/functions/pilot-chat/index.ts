@@ -256,6 +256,10 @@ function buildMissionForPrompt(
     // indistinguishable from a task row — which cost half a day on 2026-08-07.
     planner_runtime: runtimeIdentity("planner", "pilot-chat") as unknown as Record<string, unknown>,
     lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
+    // WHETHER THE MODEL ACTUALLY CONTRIBUTED. Carried from the compiler's own
+    // `parser_source` rather than inferred from the presence of directives,
+    // which the deterministic path also produces.
+    mission_parser_source: compiled.parser_source,
     required_capabilities: plan.steps.map((s) => s.capability),
     prohibited_capabilities: plan.prohibited,
     brain_rejected_broadening: merged.rejected_broadening,
