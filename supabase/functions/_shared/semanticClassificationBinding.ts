@@ -25,6 +25,7 @@
 
 import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
+import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -34,7 +35,7 @@ export const SEMANTIC_CLASSIFICATION_MODEL_ENV = "SEMANTIC_COMPANY_CLASSIFICATIO
 export const SEMANTIC_CLASSIFICATION_MAX_CALLS_ENV = "SEMANTIC_COMPANY_CLASSIFICATION_MAX_CALLS";
 
 /** The chosen classifier. Overridable by env, never by user or model input. */
-export const DEFAULT_CLASSIFICATION_MODEL = "gpt-5.6-luna";
+export const DEFAULT_CLASSIFICATION_MODEL: string = DEFAULT_LEAD_INTELLIGENCE_MODEL;
 
 /**
  * Real model requests one qualified-lead task may spend on classification.

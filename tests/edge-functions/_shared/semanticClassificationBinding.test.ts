@@ -67,10 +67,10 @@ Deno.test("4. another workspace stays off while the pilot workspace is on", () =
 });
 
 // ── 5. THE DECIDED MODEL AND ALLOWANCE ───────────────────────────────────────
-Deno.test("5. enabled => gpt-5.6-luna and ten calls", () => {
+Deno.test("5. enabled => the canonical pinned model and ten calls", () => {
   const r = isSemanticClassificationEnabled(WS, env(ON));
   assertEquals(r.enabled, true);
-  assertEquals(r.model, "gpt-5.6-luna");
+  assertEquals(r.model, DEFAULT_CLASSIFICATION_MODEL);
   assertEquals(r.model, DEFAULT_CLASSIFICATION_MODEL);
   assertEquals(r.maxCalls, 10);
   assertEquals(r.maxCalls, DEFAULT_MAX_CLASSIFICATION_CALLS);
@@ -126,7 +126,7 @@ Deno.test("9. enabled binding hands the pipeline exactly ten calls", () => {
     generate: () => Promise.resolve({ ok: true, json: {} }) as never,
   });
   assertEquals(b.classificationCallsRemaining, 10);
-  assertEquals(b.diagnostics.model, "gpt-5.6-luna");
+  assertEquals(b.diagnostics.model, DEFAULT_CLASSIFICATION_MODEL);
   assertEquals(b.diagnostics.enabled, true);
 });
 
@@ -186,7 +186,7 @@ Deno.test("12. task diagnostics report allowance, spend, skips and exhaustion", 
   assertEquals(spent.budget_exhausted, true);
   assertEquals(spent.companies_classified, 8);
   assertEquals((spent.skipped as Record<string, number>).already_classified, 4);
-  assertEquals(spent.model, "gpt-5.6-luna");
+  assertEquals(spent.model, DEFAULT_CLASSIFICATION_MODEL);
 
   // Zero paid calls is a real outcome, not a missing measurement.
   const free = classificationTaskDiagnostics(b, {
@@ -207,9 +207,12 @@ Deno.test("12. task diagnostics report allowance, spend, skips and exhaustion", 
 });
 
 // ── 13. THE PINNED MODEL REALLY REACHES THE MODEL LAYER ──────────────────────
-// The diagnostics claim gpt-5.6-luna. Without this the facade would quietly use
-// its own primary planning tier and the audit record would be a fiction.
-Deno.test("13. the facade calls gpt-5.6-luna, and never escalates", async () => {
+// The diagnostics name a model. Without this the facade would quietly use its
+// own primary planning tier and the audit record would be a fiction.
+// Asserted against the constant, never a literal: a literal here is exactly
+// how the unprefixed id survived review. `leadIntelligenceModelSeam.test.ts`
+// is what proves the constant is an id the adapter will actually accept.
+Deno.test("13. the facade calls the pinned model, and never escalates", async () => {
   const seen: string[] = [];
   const generate = createStrategistGenerateJson({
     allowEscalation: false,
@@ -226,6 +229,7 @@ Deno.test("13. the facade calls gpt-5.6-luna, and never escalates", async () => 
   });
   const out = await b.classifyCompanyEvidence!({ company: "Acme" });
 
-  assertEquals(seen, ["gpt-5.6-luna"], "the pinned classifier model must be the one called");
+  assertEquals(seen, [DEFAULT_CLASSIFICATION_MODEL],
+    "the pinned classifier model must be the one called");
   assertEquals(out, null, "unparseable output is not evidence");
 });

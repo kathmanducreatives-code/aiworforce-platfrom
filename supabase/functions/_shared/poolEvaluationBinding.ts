@@ -34,6 +34,7 @@ import {
   buildPoolRankingPayload, validatePoolRanking, POOL_RANKING_PROMPT,
   type GroundedCandidateSummary, type ValidatedRanking,
 } from "./poolRanking.ts";
+import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -47,7 +48,7 @@ export const POOL_RANKING_WORKSPACES_ENV = "GPT_POOL_RANKING_WORKSPACES";
 export const POOL_RANKING_MODE_ENV = "GPT_POOL_RANKING_MODE";
 export const POOL_RANKING_MODEL_ENV = "GPT_POOL_RANKING_MODEL";
 
-export const DEFAULT_POOL_MODEL = "gpt-5.6-luna";
+export const DEFAULT_POOL_MODEL: string = DEFAULT_LEAD_INTELLIGENCE_MODEL;
 
 const ENABLED: ReadonlySet<string> = new Set(["true", "1", "enabled"]);
 

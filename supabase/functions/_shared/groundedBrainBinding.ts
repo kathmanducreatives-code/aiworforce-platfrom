@@ -42,6 +42,7 @@ import {
   GROUNDED_CLASSIFIER_PROMPT,
   type GroundedVerification,
 } from "./groundedClaims.ts";
+import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 import type { EvidenceRegistry } from "./leadEvidenceRegistry.ts";
 
 export type EnvReader = (key: string) => string | undefined;
@@ -52,7 +53,7 @@ export const GROUNDED_BRAIN_MODE_ENV = "GROUNDED_COMPANY_BRAIN_MODE";
 export const GROUNDED_BRAIN_MODEL_ENV = "GROUNDED_COMPANY_BRAIN_MODEL";
 export const GROUNDED_BRAIN_THRESHOLD_ENV = "GROUNDED_COMPANY_BRAIN_THRESHOLD";
 
-export const DEFAULT_GROUNDED_MODEL = "gpt-5.6-luna";
+export const DEFAULT_GROUNDED_MODEL: string = DEFAULT_LEAD_INTELLIGENCE_MODEL;
 
 const ENABLED_VALUES: ReadonlySet<string> = new Set(["true", "1", "enabled"]);
 

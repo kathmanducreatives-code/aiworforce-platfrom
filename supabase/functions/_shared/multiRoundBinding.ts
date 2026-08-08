@@ -22,6 +22,7 @@ import {
   type RoundPlanProposal,
 } from "./roundPlanContract.ts";
 import { DEFAULT_MAX_ROUNDS } from "./multiRoundState.ts";
+import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -32,7 +33,7 @@ export const MULTI_ROUND_MAX_COST_ENV = "MULTI_ROUND_SOURCING_MAX_COST_UNITS";
 export const MULTI_ROUND_MAX_MODEL_ENV = "MULTI_ROUND_SOURCING_MAX_MODEL_OPS";
 export const MULTI_ROUND_MODEL_ENV = "MULTI_ROUND_SOURCING_MODEL";
 
-export const DEFAULT_ROUND_MODEL = "gpt-5.6-luna";
+export const DEFAULT_ROUND_MODEL: string = DEFAULT_LEAD_INTELLIGENCE_MODEL;
 
 /**
  * Ceilings a round controller may never exceed.
