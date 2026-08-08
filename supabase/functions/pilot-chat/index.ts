@@ -462,6 +462,85 @@ function leadIntentForToolInput(message: string, brain: any): any {
   };
 }
 
+/**
+ * THE ONE PLACE A CANONICAL LEADMISSION IS COMPILED.
+ *
+ * Both the confirmation card and the Start request need this mission, and until
+ * now only the card computed it — so the mission the user approved was
+ * discarded and execution ran on `planToolInput()` output instead. Orchestrate
+ * then manufactured a deterministic replacement, which is how task 1d73e23f
+ * reached run-agent with confidence 0.6 and no directives.
+ *
+ * COMPILED SERVER-SIDE ON EACH REQUEST, NOT THREADED BACK FROM THE CARD.
+ * `actionMetadata` is `body.metadata` — client-supplied — so carrying the
+ * mission through it would let a caller define its own qualification contract,
+ * broadening allowances and evidence requirements, i.e. exactly the fields that
+ * decide what gets bought. Recompiling costs one model call and keeps the
+ * mission a server fact.
+ *
+ * Returns null when the request carries no hiring signal, which is the same
+ * condition under which the card path declines to build one.
+ */
+async function compileCanonicalLeadMission(i: {
+  prompt: string;
+  workspaceId: string;
+  brain: any;
+  requestedCount: number;
+}): Promise<ReturnType<typeof buildMissionForPrompt> | null> {
+  const intent = extractLeadIntent({
+    message: i.prompt,
+    brain: {
+      icp: i.brain?.icp,
+      company: i.brain?.company,
+      competitors: i.brain?.competitors,
+      positioning: i.brain?.positioning,
+    },
+  });
+  if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
+
+  // ── THE ONE INTERPRETIVE MODEL CALL ──────────────────────────────────────
+  // Gated by flag AND workspace allow-list. Disabled, `proposeMission` is null
+  // and `compileLeadMission` answers deterministically — which is a mission
+  // without directives, and which the downstream preflight will refuse to spend
+  // against under `new_architecture`. That refusal is the intended behaviour.
+  const compilerBinding = buildMissionCompilerBinding({ workspaceId: i.workspaceId });
+  const gptProposal = compilerBinding.proposeMission
+    ? await compilerBinding.proposeMission({
+      originalUserQuery: i.prompt,
+      companyBrain: {
+        industries: intent.target_industry ?? [],
+        stages: intent.company_stage ?? [],
+        locations: intent.target_geography ?? [],
+      },
+      requestedCount: intent.count ?? null,
+    })
+    : undefined;
+  console.log("[pilot-chat][mission-compiler]", {
+    workspace_id: i.workspaceId,
+    ...compilerBinding.diagnostics,
+    proposal_received: gptProposal != null,
+  });
+  return buildMissionForPrompt(i.prompt, i.requestedCount, intent, gptProposal);
+}
+
+/**
+ * Strip the card-only decoration so the WIRE carries the canonical mission.
+ *
+ * `buildMissionForPrompt` returns the mission plus three fields that exist for
+ * the preview card. They are not part of the mission contract and orchestrate
+ * has no use for them.
+ */
+function canonicalMissionForTransport(
+  m: ReturnType<typeof buildMissionForPrompt> | null,
+): LeadMissionV1 | null {
+  if (!m) return null;
+  const {
+    brain_rejected_broadening: _a, preflight_dry_run: _b, query_interpretation: _c,
+    ...mission
+  } = m;
+  return mission as LeadMissionV1;
+}
+
 async function generateWorkflowConfirmation(prompt: string, workspaceId: string, admin: any): Promise<any> {
   const { data: cbRow } = await admin
     .from("company_brain")
@@ -701,6 +780,16 @@ interface DelegateArgs {
   workspaceId: string;
   instruction: string;
   toolInput?: ToolInput | null;
+  /**
+   * The canonical compiled LeadMission for lead-sourcing requests.
+   *
+   * Optional because most delegate branches are not lead sourcing — content,
+   * URL analysis, remembered-lead enrichment — and forcing a mission onto them
+   * would invent semantics nobody asked for. Every branch that CAN reach
+   * orchestrate with a lead-sourcing request must supply it; under
+   * `new_architecture` orchestrate now refuses the request without one.
+   */
+  leadMission?: LeadMissionV1 | null;
   modelUsed: string;
   providerUsed: string;
   workflowInputs?: Record<string, any> | null;
@@ -737,6 +826,11 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
     body: JSON.stringify({
       user_instruction: a.instruction,
       workspace_id: a.workspaceId,
+      // THE CANONICAL MISSION, TRANSPORTED — not rebuilt downstream. Its
+      // absence here is the whole defect this fixes: the mission was compiled,
+      // shown on the card, then dropped before execution, leaving
+      // `planToolInput()` as the de facto planner.
+      lead_mission: a.leadMission ?? null,
       tool_input: toolInput ?? null,
     }),
   });
@@ -1665,9 +1759,20 @@ Deno.serve(async (req) => {
     }
 
     console.log("[pilot-chat] submitted lead brief", { source_type: submittedSourceType, effSource, mode, actor: ti.selected_actor_key });
+    // A LEAD-SOURCING PATH, SO IT CARRIES THE CANONICAL MISSION. Compiled from
+    // the instruction actually being sent, not from the raw chat message —
+    // this branch rewrites the instruction above and that rewrite is what
+    // executes. Null when the request carries no hiring signal, which
+    // orchestrate handles per mode.
+    const briefMission = canonicalMissionForTransport(
+      await compileCanonicalLeadMission({
+        prompt: instruction, workspaceId, brain: brainProfile,
+        requestedCount: extractRequestedLeadCount(instruction) ?? count ?? 10,
+      }));
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
       conversationId: conversationId!, workspaceId, instruction,
+      leadMission: briefMission,
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
     });
@@ -1712,9 +1817,18 @@ Deno.serve(async (req) => {
           );
         }
       }
+      const intakeInstruction = leadRequestToInstruction(req);
+      // Same rule as the submitted-brief path above: a lead-sourcing branch
+      // carries the canonical mission rather than letting orchestrate infer one.
+      const intakeMission = canonicalMissionForTransport(
+        await compileCanonicalLeadMission({
+          prompt: intakeInstruction, workspaceId, brain: brainProfile,
+          requestedCount: extractRequestedLeadCount(intakeInstruction) ?? 10,
+        }));
       return await delegateToOrchestrate({
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
-        conversationId, workspaceId, instruction: leadRequestToInstruction(req),
+        conversationId, workspaceId, instruction: intakeInstruction,
+        leadMission: intakeMission,
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
         } as unknown as ToolInput,
@@ -2149,7 +2263,30 @@ Deno.serve(async (req) => {
       ? (extractRequestedLeadCount(message) ?? Math.max(1, Math.min(50, decision.max_results ?? 5)))
       : undefined;
 
+    // ── COMPILE THE CANONICAL MISSION FOR THE RUN THAT IS ABOUT TO HAPPEN ──
+    //
+    // Once, here, on the Start request. The confirmation card compiled one for
+    // the PREVIEW, but that was a different HTTP request and its result was
+    // never carried forward — which is why execution had been running on
+    // `planToolInput()` output alone.
+    const compiledLeadMission = canonicalMissionForTransport(
+      await compileCanonicalLeadMission({
+        prompt: message,
+        workspaceId,
+        brain: brainProfile,
+        requestedCount: requestedLeadCount ?? Math.max(1, Math.min(50, decision.max_results ?? 5)),
+      }));
+    console.log("[pilot-chat][canonical-mission]", {
+      workspace_id: workspaceId,
+      qualified_lead: isQualifiedLead,
+      compiled: compiledLeadMission != null,
+      has_directives: compiledLeadMission?.directives != null,
+      contract: compiledLeadMission?.lead_intelligence_contract_version ?? null,
+      signals: compiledLeadMission?.required_signals?.map((s) => s.type) ?? [],
+    });
+
     return await delegateToOrchestrate({
+      leadMission: compiledLeadMission,
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
