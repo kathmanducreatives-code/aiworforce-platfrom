@@ -56,6 +56,19 @@ function parseAllowlist(raw: string | undefined): string[] {
  * everyone" is not a state this function can return, so there is no single switch
  * that globally enables planning.
  */
+/**
+ * ── WHAT THIS FLAG NOW MEANS ────────────────────────────────────────────────
+ *
+ * It selects WHICH ADAPTER BACKS THE ONE PLANNER, not whether a competing
+ * planning subsystem exists. `selectLeadPlannerAdapter`
+ * (_shared/leadPlannerInterface.ts) reads this decision together with
+ * `GPT_LEAD_STRATEGY` and resolves both to exactly one owner BEFORE any adapter
+ * is invoked.
+ *
+ * The call site that used to read `gptStrategy?.specRewritten` to decide whether
+ * this adapter should also run is gone: an ordinary GPT fallback no longer hands
+ * the task to a second model. See `leadOwnership.ts` for what that defect cost.
+ */
 export function isClaudeFirstLeadPlanningEnabled(
   workspaceId: string,
   read?: EnvReader,

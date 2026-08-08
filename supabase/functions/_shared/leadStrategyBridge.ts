@@ -49,6 +49,32 @@ function flagOn(raw: string | undefined): boolean {
  *
  * Both the flag AND an explicit allow-list are required, and the allow-list has
  * no wildcard — there is no single switch that enables this globally.
+ *
+ * ── WHAT THIS FLAG NOW MEANS ────────────────────────────────────────────────
+ *
+ * It selects WHICH ADAPTER BACKS THE ONE PLANNER. It does not decide whether a
+ * competing planning subsystem exists.
+ *
+ * Before: this flag and `CLAUDE_FIRST_LEAD_PLANNING` each switched on an
+ * independent stack, and run-agent invoked the Claude stack whenever the GPT
+ * stack had not rewritten the spec. Both flags on meant both stacks could make
+ * model calls for one task, and whichever ran last won.
+ *
+ * Now: `selectLeadPlannerAdapter` (leadPlannerInterface.ts) reads this decision
+ * together with the Claude one and resolves BOTH to exactly one owner before any
+ * adapter is invoked. With both flags on, GPT owns the gated path and Claude is
+ * recorded in `notSelected` — recorded, never run. A flag combination can no
+ * longer produce two plans, which is asserted by enumeration in
+ * `tests/edge-functions/_shared/leadOwnershipInvariants.test.ts`.
+ *
+ * This function is unchanged and remains the single definition of GPT
+ * eligibility; only what the runtime does with the answer changed.
+ *
+ * NOTE, NOT CHANGED HERE: `flagOn` below accepts "yes"/"on" as well as
+ * "true"/"1", while the intelligence-kernel registry accepts only
+ * "true"/"1"/"enabled". Narrowing this would silently disable any workspace
+ * currently enabled with "yes", so it is deliberately left for a later,
+ * separately-verified change.
  */
 export function isGptLeadStrategyEnabled(
   workspaceId: string,

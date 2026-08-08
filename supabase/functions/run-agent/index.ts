@@ -43,7 +43,12 @@ import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectiveP
 // enable it globally. With either absent this is inert: no mission is built, no
 // prompt assembled, no model contacted, and the spec below is passed through by
 // reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
-import { applyClaudeFirstLeadPlanning, adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPlan } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+import { applyClaudeFirstLeadPlanning, adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPlan, isClaudeFirstLeadPlanningEnabled } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+// ONE PLANNER, ONE EXECUTION OWNER — see _shared/leadOwnership.ts for what these
+// replace. The selector is pure and runs before any adapter is invoked, so a
+// flag combination can no longer put two planners on one task.
+import { createLeadOwnershipLedger } from "../_shared/leadOwnership.ts";
+import { selectLeadPlannerAdapter } from "../_shared/leadPlannerInterface.ts";
 import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
 // Gated by DYNAMIC_HIRING_SOURCE_PLANNING *and* an explicit workspace allow-list.
@@ -249,7 +254,7 @@ import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersist
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
-import { applyLeadStrategyInitialPlanning } from "../_shared/leadStrategyBridge.ts";
+import { applyLeadStrategyInitialPlanning, isGptLeadStrategyEnabled } from "../_shared/leadStrategyBridge.ts";
 import { constraintsFromBrain } from "../_shared/leadStrategistContext.ts";
 // The missing edge between the GPT strategy and the sequential runtime: without
 // it the strategist's separate query packs never reach the Actor calls.
@@ -1302,6 +1307,40 @@ Deno.serve(async (req) => {
           ? readPlanArtifact([{ metadata: { qualified_lead_plan: body.qualified_lead_plan } }])
           : null;
 
+        // ══ ONE PLANNER OWNER, CHOSEN BEFORE ANY ADAPTER IS INVOKED ══════════
+        //
+        // This used to be two independent call sites 1,200 lines apart, and the
+        // second was conditioned on the FIRST CALL'S RESULT rather than on
+        // whether the first had run:
+        //
+        //     claudeFirst = ... : gptStrategy?.specRewritten ? null : await apply…
+        //
+        // `specRewritten` is false whenever GPT fell back deterministically — a
+        // timeout, a schema-rejected plan, a failed escalation. Every one of
+        // those is an ordinary outcome, and each let Claude make a SECOND model
+        // call proposing a different set of round-one titles for the same task.
+        // Whichever ran last won and nothing recorded that two had run.
+        //
+        // Selection is now pure and happens here, from eligibility alone. Only
+        // the selected adapter is invoked, at its existing call site, with its
+        // existing arguments — so behaviour for the adapter that owns the task
+        // is unchanged, and the adapter that does not own it never runs.
+        const leadOwnership = createLeadOwnershipLedger(task.id);
+        const plannerSelection = selectLeadPlannerAdapter({
+          hasPersistedPlan: persistedPlan !== null,
+          strategyOwnerApplies: useLeadStrategyOwner,
+          gptEnabled: isGptLeadStrategyEnabled(workspace_id).enabled,
+          claudeEnabled: isClaudeFirstLeadPlanningEnabled(workspace_id).enabled,
+        });
+        leadOwnership.claimPlanning(plannerSelection.owner, plannerSelection.reason);
+        for (const n of plannerSelection.notSelected) leadOwnership.decline(n.owner, n.reason);
+        console.log("[run-agent][planner-owner]", {
+          task_id: task.id,
+          planning_owner: plannerSelection.owner,
+          reason: plannerSelection.reason,
+          not_selected: plannerSelection.notSelected,
+        });
+
         // AUTHORITATIVE INITIAL STRATEGY (gated path only).
         //
         // On workflow = qualified_lead_sourcing + execution_mode = company_first,
@@ -1335,7 +1374,11 @@ Deno.serve(async (req) => {
 
         // Everything else (person roles, geography, vertical, quota, gates)
         // is carried through untouched.
-        const gptStrategy = (useLeadStrategyOwner && !persistedPlan)
+        // INVOKED ONLY WHEN THE SELECTOR NAMED IT. The `useLeadStrategyOwner &&
+        // !persistedPlan` test that used to guard this is now folded into
+        // `selectLeadPlannerAdapter` — same conditions, one place, and the Claude
+        // adapter below reads the same decision instead of reading this result.
+        const gptStrategy = (plannerSelection.owner === "gpt_lead_strategy_v1")
           ? await applyLeadStrategyInitialPlanning({
             workspaceId: workspace_id,
             spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyLeadStrategyInitialPlanning>[0]["spec"],
@@ -1740,6 +1783,14 @@ Deno.serve(async (req) => {
 
         let capabilityRun: Awaited<ReturnType<typeof runCapabilityPlan>> | null = null;
         if (!resumeSatisfied && persistedMission && missionPlan) {
+          // THE ENGINE OWNS THIS TASK FROM HERE. The claim throws if anything
+          // else has already claimed execution, so a second engine is a raised
+          // error rather than a silent second run reconciled by dedup later.
+          leadOwnership.claimExecution(
+            "capability_engine_v1",
+            "the task carries a LeadMissionV1; the capability graph is the state machine",
+          );
+          leadOwnership.enterStage("capability_rounds");
           try {
             // ── ONE ROUND OF SOURCING ────────────────────────────────────
             //
@@ -2412,6 +2463,17 @@ Deno.serve(async (req) => {
 
         if (!resumeSatisfied && !capabilityRun && routeResolution.ok && routeRecord &&
             routeResolution.validated_route !== "broad_job_fallback") {
+          // STAGE ONE OF `company_first_v1`, not an owner of its own. The route
+          // executor and the quota loop below are two ordered stages of ONE
+          // design that composes on purpose — primary source, then round until
+          // quota. Claiming them as separate owners would have made the working
+          // multi-round path look like a violation and forced a change to
+          // stop-at-quota semantics, which this phase must not touch.
+          leadOwnership.claimExecution(
+            "company_first_v1",
+            "no mission graph owns this task; the route executor is the entry stage",
+          );
+          leadOwnership.enterStage("route_executor");
           try {
             companyFirstRoute = await executeCompanyFirstRoute({
               // The SAME provider entry point the rest of run-agent uses. The
@@ -2573,9 +2635,15 @@ Deno.serve(async (req) => {
           }
         }
 
-        const claudeFirst = persistedPlan
+        // THE SELECTED ADAPTER, NOT "WHATEVER GPT LEFT UNDONE".
+        //
+        // The old condition — `gptStrategy?.specRewritten ? null : await …` —
+        // asked whether the OTHER planner had succeeded, so an ordinary GPT
+        // fallback opened a second model call here. It now asks only whether the
+        // selector named this adapter, which no GPT outcome can change.
+        const claudeFirst = plannerSelection.owner === "persisted_plan_artifact_v1" && persistedPlan
           ? claudeFirstFromPersistedPlan(persistedPlan, cfIntent.job_search_spec as unknown as Record<string, unknown>)
-          : gptStrategy?.specRewritten
+          : plannerSelection.owner !== "claude_lead_planner_v1"
           ? null
           : await applyClaudeFirstLeadPlanning({
           workspaceId: workspace_id,
@@ -2807,6 +2875,30 @@ Deno.serve(async (req) => {
         // exhausted provider makes a job board appropriate. This runs FIRST so
         // the derived-reason path cannot re-open a door the mission closed.
         let legacyFallbackReason: string | null = null;
+
+        // ══ EXECUTION OWNERSHIP OUTRANKS EVERY REASON BELOW ══════════════════
+        //
+        // THE HOLE THIS CLOSES. `executeRunAgentCompanyFirstSourcing` was called
+        // unconditionally. For most missions it was neutered by chance rather
+        // than by design: `legacyLoopReachable` returns false when the capability
+        // graph excludes `job_discovery`, which is true of a company-first graph.
+        //
+        // But it returns TRUE for a mission whose graph legally contains
+        // `job_discovery` — `requested_output: job_listings`, or job discovery
+        // explicitly allowed. On those tasks the capability engine sourced,
+        // qualified and persisted, and then the quota loop ran FOR REAL on top of
+        // it with live invokers, and the two were reconciled by unioning their
+        // persisted contact identities. That union is the "dedup instead of
+        // ownership" the cleanup exists to remove.
+        //
+        // Ownership is checked FIRST so no downstream reason — an adaptive
+        // decision, a justified broad-job fallback — can re-open a door the
+        // owning engine already closed.
+        if (!leadOwnership.mayExecute("company_first_v1") && legacySkipReason === null) {
+          legacySkipReason = `execution_owned_by:${leadOwnership.executionOwner()}`;
+          leadOwnership.decline("company_first_v1", legacySkipReason);
+        }
+
         const missionLegacy = legacyLoopReachable(persistedMission, missionPlan);
         if (!missionLegacy.reachable && legacySkipReason === null) {
           legacySkipReason = `lead_mission_forbids_broad_job_sourcing:${missionLegacy.reason}`;
@@ -2842,6 +2934,17 @@ Deno.serve(async (req) => {
         // Two independent guards, because a bound is a number someone can change
         // and a refusal is a fact.
         const sourcingBlocked = legacySkipReason !== null;
+        // STAGE TWO OF `company_first_v1`. Claimed only when the loop may
+        // actually source: a blocked call still executes with no-op invokers and
+        // zero rounds, and claiming ownership for a run that cannot spend or
+        // persist would make the ledger lie about who executed the task.
+        if (!sourcingBlocked) {
+          leadOwnership.claimExecution(
+            "company_first_v1",
+            "the quota loop is sourcing for this task",
+          );
+          leadOwnership.enterStage("quota_loop");
+        }
         const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
@@ -3155,6 +3258,12 @@ Deno.serve(async (req) => {
           // Per-candidate diagnostics for Workbench cards + CSV export. Company,
           // person and job URL only — no provider payloads, prompts or traces.
           candidates: cf.items,
+          // ONE ROW ANSWERS "WHICH PLANNER PLANNED THIS, AND WHICH ENGINE OWNED
+          // IT?". Before this, both questions required reading capped diagnostic
+          // blobs and inferring from which log lines appeared. `declined` records
+          // the adapters and engines that were eligible and deliberately did not
+          // run, so a suppressed path is a stated fact rather than an absence.
+          lead_ownership: leadOwnership.snapshot(),
           run_context: runContext,
           // The Workbench reads its panel from here; the run context travels with
           // it so the CSV export can populate every diagnostic column.

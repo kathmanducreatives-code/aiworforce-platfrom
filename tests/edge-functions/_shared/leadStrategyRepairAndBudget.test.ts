@@ -121,9 +121,25 @@ Deno.test("5. the GPT strategist owns this workflow's next action", async () => 
   // The GPT plan is bound into the adaptive seam…
   assert(runAgent.includes("gptAdaptiveStrategyBinding(gptStrategy.resolution.plan"),
     "the validated GPT plan must reach the runtime binding");
-  // …and the Claude bridge is explicitly skipped when GPT produced the strategy.
-  assert(runAgent.includes("gptStrategy?.specRewritten\n          ? null"),
-    "the Claude planner must not also run when GPT owns the strategy");
+
+  // …and the Claude bridge cannot also run.
+  //
+  // This used to assert the literal `gptStrategy?.specRewritten ? null` guard.
+  // That guard was WEAKER than this test's own name claimed: it skipped Claude
+  // only when GPT had rewritten the spec, so an ordinary GPT fallback — timeout,
+  // rejected plan, failed escalation — left `specRewritten` false and Claude
+  // made a second model call for the same task.
+  //
+  // Ownership is now decided by `selectLeadPlannerAdapter` from eligibility
+  // alone, before any adapter is invoked, so no GPT outcome can hand the task to
+  // a second planner. Both call sites must read that decision and nothing else.
+  assert(runAgent.includes('plannerSelection.owner === "gpt_lead_strategy_v1"'),
+    "the GPT adapter must be invoked only when the selector named it");
+  assert(runAgent.includes('plannerSelection.owner !== "claude_lead_planner_v1"'),
+    "the Claude adapter must be invoked only when the selector named it");
+  assert(!runAgent.includes("gptStrategy?.specRewritten\n          ? null"),
+    "the Claude adapter must not be gated on the GPT adapter's RESULT — that is " +
+    "the defect that let both planners run for one task");
 });
 
 Deno.test("5b. the GPT plan's SOURCE ORDER survives into the adaptive plan", async () => {

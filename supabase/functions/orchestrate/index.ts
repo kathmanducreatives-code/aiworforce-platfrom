@@ -1235,6 +1235,33 @@ Return ONLY valid JSON, no prose, no markdown:
     // With no qualified-Lead plan this IS `parsed`, so nothing else moves.
     const responsePlan = buildOrchestrateResponsePlan(qlPlan, parsed!);
 
+    // ── WHICH PLANNER OWNS THIS LEAD TASK, STATED ONCE ─────────────────────
+    //
+    // `planQualifiedLeadBeforePersistence` above is the SAME Claude adapter
+    // run-agent can invoke. Only one of them may own a task, and the mechanism
+    // that guarantees it is the artifact threaded on the kickoff body below:
+    // when `qualified_lead_plan` is present, run-agent's selector resolves to
+    // `persisted_plan_artifact_v1` and invokes no adapter at all.
+    //
+    // That mechanism was implicit — a reader had to notice the artifact was
+    // threaded, and cross-reference a selector 1,500 lines away in another
+    // function, to know a second plan was impossible. Naming the owner here makes
+    // it a recorded fact on the plan, and gives the orchestrate layer the same
+    // one-row answer to "which planner planned this task?" that run-agent now has.
+    const leadPlanningOwner: string | null = qlPlan
+      ? "claude_lead_planner_v1@orchestrate"
+      : isLeadMissionV1(lead_mission)
+      ? "delegated_to_run_agent_selector"
+      : null;
+    if (leadPlanningOwner) {
+      console.log("[orchestrate][planner-owner]", {
+        workspace_id,
+        planning_owner: leadPlanningOwner,
+        artifact_threaded: qlPlan !== null,
+        intelligence_mode: orchestrateIntelligence.mode,
+      });
+    }
+
     // Persist task_plan.
     const { data: taskPlan, error: planError } = await admin
       .from("task_plans")
@@ -1284,6 +1311,8 @@ Return ONLY valid JSON, no prose, no markdown:
         total_steps: responsePlan.steps.length,
         conversation_id,
         planner: plannerSource,
+        // Null for every non-lead workflow, so unrelated plans are unchanged.
+        ...(leadPlanningOwner ? { lead_planning_owner: leadPlanningOwner } : {}),
         provider: ai?.provider ?? "staged",
         model: ai?.model ?? "n/a",
         intent,
