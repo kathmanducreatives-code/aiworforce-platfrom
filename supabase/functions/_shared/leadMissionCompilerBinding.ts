@@ -34,8 +34,17 @@ export const MISSION_COMPILER_FLAG = "GPT_LEAD_MISSION_COMPILER";
 export const MISSION_COMPILER_WORKSPACES_ENV = "GPT_LEAD_MISSION_COMPILER_WORKSPACES";
 export const MISSION_COMPILER_MODEL_ENV = "GPT_LEAD_MISSION_COMPILER_MODEL";
 
-/** The chosen compiler. Overridable by env, never by user or model input. */
-export const DEFAULT_MISSION_COMPILER_MODEL = "gpt-5.6-luna";
+/**
+ * The chosen compiler. Overridable by env, never by user or model input.
+ *
+ * MUST be a CANONICAL id (vendor-prefixed), because that is what the strategist
+ * adapter's allow-list is built from — `allowedModels()` reads the configured
+ * `LEAD_STRATEGIST_*` models, which are canonical. An unprefixed id is the
+ * OpenAI *wire* form; the adapter rejects it with `model_not_allowed` before
+ * the request is ever sent, and `proposeMission` reports that as "no proposal".
+ * The result is a compiler that silently never runs. Keep this prefixed.
+ */
+export const DEFAULT_MISSION_COMPILER_MODEL = "openai/gpt-5.6-luna";
 
 const ENABLED_VALUES: ReadonlySet<string> = new Set(["true", "1", "enabled"]);
 
