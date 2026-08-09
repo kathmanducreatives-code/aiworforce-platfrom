@@ -81,7 +81,10 @@ Deno.test("an unrecognised request never escalates to production", () => {
 Deno.test("db push is refused, with the reason", () => {
   const r = refusalFor(["db", "push"]);
   assert(r, "db push must be refused — local and remote migration versions do not correspond");
-  assertStringIncludes(r?.why ?? "", "96");
+  // The reason must name the cause, not just say "no". The exact pending count
+  // moves as migrations are repaired, so assert the explanation, not the number.
+  assertStringIncludes(r?.why ?? "", "do not correspond");
+  assertStringIncludes(r?.why ?? "", "MCP");
 });
 
 Deno.test("destructive and history-rewriting commands are refused", () => {
@@ -124,4 +127,37 @@ Deno.test("verify-deploy-target accepts the matching pair", async () => {
 Deno.test("verify-deploy-target refuses an unknown ref", async () => {
   assertEquals(await verifyDeployTarget("test", "notaprojectref"), 1,
     "an unrecognised ref must fail closed rather than be assumed safe");
+});
+
+// ═══ MIGRATION HYGIENE ════════════════════════════════════════════════════
+
+Deno.test("every migration file carries a version prefix", async () => {
+  // An unversioned file cannot be ordered and cannot be correlated with remote
+  // history. `outreach.sql` was the only one; Phase 0b renamed it.
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const bad: string[] = [];
+  for await (const e of Deno.readDir(dir)) {
+    if (e.isFile && e.name.endsWith(".sql") && !/^\d{14}_/.test(e.name)) bad.push(e.name);
+  }
+  assertEquals(bad, [], `unversioned migrations cannot be ordered: ${bad.join(", ")}`);
+});
+
+Deno.test("the outreach base migration is ordered before the ALTER that needs it", async () => {
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const names: string[] = [];
+  for await (const e of Deno.readDir(dir)) if (e.isFile) names.push(e.name);
+  const base = names.find((n) => n.includes("outreach_engine_base"));
+  assert(base, "the outreach base migration must exist");
+  // 20260222174523 outreach_engine_additive ALTERs outreach_leads, so the file
+  // that CREATEs it has to sort earlier.
+  assert(base! < "20260222174523", `${base} must sort before the additive migration`);
+});
+
+Deno.test("the baseline snapshot still declares itself informational", async () => {
+  // It must never be executed, and it says so itself. If that header ever goes,
+  // someone is about to apply an 83-table snapshot over a live schema.
+  const sql = await Deno.readTextFile(new URL(
+    "../../supabase/migrations/20260526000000_baseline_from_prod.sql", import.meta.url));
+  assertStringIncludes(sql, "INFORMATIONAL ONLY");
+  assertStringIncludes(sql, "NOT meant to be applied");
 });

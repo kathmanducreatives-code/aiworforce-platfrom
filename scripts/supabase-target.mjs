@@ -45,13 +45,13 @@ const CANONICAL = {
  * `db push` is not merely risky here, it is BROKEN: local migration filenames
  * and the remote history use different version strings for the same migrations,
  * so the CLI believes ~96 migrations are pending and would attempt to re-apply
- * essentially the whole schema. `outreach.sql` alone would abort it — its
+ * essentially the whole schema. The outreach base migration alone would abort it — its
  * `CREATE TYPE` statements have no `IF NOT EXISTS` and those types already
  * exist. Refusing it here is more honest than documenting a command nobody
  * should run. See docs/SUPABASE_TARGETING.md.
  */
 const REFUSED = new Map([
-  ["db push", "local and remote migration versions do not correspond; `db push` would attempt ~96 migrations. Apply single migrations through the TEST-pinned MCP channel instead."],
+  ["db push", "local and remote migration versions do not correspond; `db push` would attempt ~95 migrations. Apply single migrations through the TEST-pinned MCP channel instead."],
   ["db reset", "destructive; never appropriate against a shared project."],
   ["db pull", "requires a migration-history match this repo does not have; it would rewrite local migrations from a mismatched remote."],
 ]);

@@ -1,3 +1,27 @@
+-- OUTREACH ENGINE — BASE TABLES AND ENUMS.
+--
+-- RENAMED AND RECORDED IN PHASE 0B; ITS DDL WAS NOT RE-RUN.
+--
+-- This file had no version prefix, which made it invisible to migration
+-- ordering and left the CLI unable to correlate it with anything remote. Its
+-- objects are nonetheless present on TEST — all four tables and all four enums
+-- were verified live — while NO entry in TEST's migration history creates them.
+-- They were applied outside recorded history, most likely through the SQL
+-- editor.
+--
+-- The version below places it 23 seconds before `20260222174523
+-- outreach_engine_additive`, which ALTERs `outreach_leads` to add the Closely
+-- columns and therefore must run after this file. That ordering is now
+-- expressible; before the rename it was not.
+--
+-- TEST history now records this version as applied. The DDL was NOT executed
+-- again to achieve that: the `CREATE TYPE` statements below have no
+-- `IF NOT EXISTS`, so re-running this file against a database that already has
+-- the types would abort. Recording what is demonstrably already true is the
+-- whole repair.
+--
+-- PRODUCTION migration history was not touched.
+
 -- Outreach Engine Tables
 
 -- Drop existing types if they exist to allow re-running

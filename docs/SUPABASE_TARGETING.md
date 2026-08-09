@@ -42,7 +42,7 @@ TEST, never to production.
 
 | Command | Why |
 |---|---|
-| `db push` | Local migration filenames and the remote history use **different version strings for the same migrations**, so the CLI believes ~96 migrations are pending and would try to re-apply essentially the whole schema. `outreach.sql` alone would abort it — its `CREATE TYPE` statements have no `IF NOT EXISTS` and those types already exist. |
+| `db push` | Local migration filenames and the remote history use **different version strings for the same migrations**, so the CLI believes ~95 migrations are pending and would try to re-apply essentially the whole schema. The outreach base migration alone would abort it — its `CREATE TYPE` statements have no `IF NOT EXISTS` and those types already exist. |
 | `db pull` | Requires a migration-history match this repo does not have; it would rewrite local migrations from a mismatched remote. |
 | `db reset` | Destructive, and never appropriate against a shared project. |
 
@@ -67,3 +67,22 @@ the current honest mismatch. `db push` is refused rather than repaired.
 
 `supabase/migrations/20260526000000_baseline_from_prod.sql` is an informational
 snapshot and says so in its own header. It is never applied.
+
+## What Phase 0b repaired, and what it did not
+
+**Repaired.** `supabase/migrations/outreach.sql` had no version prefix at all.
+Its four tables and four enums were verified present on TEST while *no* entry in
+TEST's migration history creates them — they were applied outside recorded
+history. It is now `20260222174500_outreach_engine_base.sql`, ordered 23 seconds
+before `20260222174523 outreach_engine_additive` which ALTERs those tables and
+must follow them, and TEST history records that version as applied. **Its DDL
+was not re-run**; the record has no statements, which is precisely what
+`supabase migration repair --status applied` writes.
+
+**Not repaired — a standing blocker.** 95 local files still do not correspond to
+TEST history, because their version strings differ by seconds from the remote
+entries the MCP channel assigned. 29 of those remote entries carry no name at
+all, so they cannot be matched to local files by anything better than a guess.
+Recording a fabricated correspondence would make `db push` *appear* safe while
+asserting things nobody verified — worse than the current honest mismatch. The
+divergence is contained by refusing `db push` rather than papered over.
