@@ -3254,8 +3254,23 @@ Deno.serve(async (req) => {
         // gates, so they are recorded as `stage_result` rows with no provider run
         // id, and the summary never sums them into "provider calls".
         //
-        // The stop reason is OBSERVED, not decided: `cf.terminal_reason` is the
-        // controller's own vocabulary, written down rather than reinterpreted.
+        // ── THE REASON MUST BELONG TO THE OWNER THAT EXECUTED ───────────────
+        //
+        // This block runs for BOTH company-first and capability-engine tasks —
+        // the engine executes inside this same branch and returns through the
+        // same path. So writing `cf.terminal_reason` unconditionally attributed
+        // the QUOTA CONTROLLER's reason to rows stamped
+        // `execution_owner: capability_engine_v1`, on a run where that
+        // controller had been deliberately neutered by the ownership guard.
+        //
+        // That is worse than recording nothing: a ledger naming the wrong
+        // owner's reason reads as evidence. Each owner's own authoritative
+        // field is used instead, and neither vocabulary is reinterpreted into a
+        // third one. NULL when the owning path recorded no reason — never
+        // invented.
+        const terminalReasonForOwner = capabilityRun
+          ? capabilityRun.state.terminal_reason ?? null
+          : cf.terminal_reason ?? null;
         try {
           const ledger = createLedgerWriter(supabase as never);
           const own = auditOwnership();
@@ -3272,20 +3287,40 @@ Deno.serve(async (req) => {
             // `rawJobs` and `verifiedCompanies` are the controller's own measured
             // numbers. Anything it did not measure stays absent, and therefore
             // NULL — never 0.
-            counts: {
-              raw: cf.counts.rawJobs ?? null,
-              accepted: cf.counts.verifiedCompanies ?? null,
-            },
+            counts: capabilityRun
+              ? {
+                // `accounts_found` is the engine's own discovery count and
+                // `qualified_companies` its own gate outcome. Neither is
+                // defaulted to 0 here: the engine defaults them internally, but
+                // a NULL progress snapshot means it never published one, and
+                // that is unknown rather than none.
+                raw: capabilityRun.state.progress?.accounts_found ?? null,
+                normalized: capabilityRun.state.prequalification?.unique_companies ?? null,
+                accepted: capabilityRun.state.progress?.qualified_companies ?? null,
+              }
+              : {
+                raw: cf.counts.rawJobs ?? null,
+                accepted: cf.counts.verifiedCompanies ?? null,
+              },
           });
           await recordStageResult(ledger, {
             ...base,
             stage: "person_resolution",
             capability: "decision_maker",
             logical_call_key: `${task.id}:stage:person_resolution`,
-            counts: { raw: cf.counts.candidates ?? null, accepted: cf.quota.eligible_leads ?? null },
+            // The engine keeps its own progress counters; the controller keeps
+            // `cf`. Reading the one that did not execute would report zeros as
+            // though they were measurements, so each owner reports its own and
+            // anything unmeasured stays NULL.
+            counts: capabilityRun
+              ? {
+                raw: capabilityRun.state.progress?.identity_resolved ?? null,
+                accepted: capabilityRun.state.progress?.decision_makers_verified ?? null,
+              }
+              : { raw: cf.counts.candidates ?? null, accepted: cf.quota.eligible_leads ?? null },
             // The last stage result carries the stop reason, so reading the
             // ledger in order ends with why the run ended.
-            next_decision: cf.terminal_reason ?? null,
+            next_decision: terminalReasonForOwner,
           });
         } catch (e) {
           console.log("[run-agent][ledger][stage-result-error]", String(e));
@@ -4482,6 +4517,44 @@ Deno.serve(async (req) => {
         const toolFailed = adaptive.status === "failed" && adaptive.attempts.some((a) => !!a.note);
         if (toolFailed && isApifySelected) {
           sourcingFailure = { error: adaptive.reason || "apify_failed", message: humanizeApifyError(adaptive.reason) };
+        }
+
+        // ══ GENERIC SOURCING: ITS OWN TERMINAL, IN ITS OWN VOCABULARY ════════
+        //
+        // This path had NO ledger terminal at all. It is mutually exclusive with
+        // the company-first branch (which returns before reaching here), so a
+        // generic run previously ended with provider rows and nothing saying why
+        // it stopped — the exact "read the logs" gap the ledger exists to close.
+        //
+        // `adaptive.status` and `adaptive.reason` come from `evaluateWorkflowStatus`
+        // inside the adaptive loop and are already authoritative for this path.
+        // They are written down as-is: success, failure, and the exhausted /
+        // nothing-left-to-broaden terminals all arrive through the same two
+        // fields, so no second stop-reason vocabulary is introduced here.
+        try {
+          await recordStageResult(createLedgerWriter(supabase as never), {
+            workspace_id,
+            task_id: task.id,
+            plan_id: plan_id ?? null,
+            execution_owner: "generic_sourcing_v1",
+            // No compiled plan and no planner adapter ever runs on this path, so
+            // planner provenance is genuinely absent rather than borrowed.
+            stage: "generic_sourcing",
+            capability: source_type ?? null,
+            reason: "unspecified",
+            logical_call_key: `${task.id}:stage:generic_sourcing`,
+            // The loop's own measured numbers. `requested` is the target, not a
+            // result, so it is not recorded as one.
+            counts: {
+              raw: typeof adaptive.found === "number" ? adaptive.found : null,
+              accepted: typeof effectiveFound === "number" ? effectiveFound : null,
+            },
+            // `reason` is the loop's explanation; `status` alone would lose why.
+            // NULL when the loop produced neither — never invented.
+            next_decision: adaptive.reason || adaptive.status || null,
+          });
+        } catch (e) {
+          console.log("[run-agent][ledger][generic-terminal-error]", String(e));
         }
         // Proof gate: drop HARD-REJECTED candidates so they never enter Workbench
         // as opportunities (needs_verification rows are kept but capped/flagged).

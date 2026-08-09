@@ -1673,6 +1673,14 @@ export async function runTool(
  * `0` would read as "checked and found none" instead of "not measured at this
  * layer".
  *
+ * NEXT_DECISION IS ONLY EVER RELAYED, NEVER DERIVED. A provider call knows what
+ * it returned; it does not know whether the workflow will continue, stop at
+ * quota, or exhaust its budget — those are decided upstream, after this row is
+ * already closed. So the field is written only when a caller that genuinely
+ * knows one passes it as `audit_next_decision`, and stays NULL otherwise.
+ * Inventing "completed" or "quota_satisfied" here would put a workflow-level
+ * claim on a row that cannot support it.
+ *
  * COST IS ALWAYS AN ESTIMATE AT THIS LAYER. Apify does not return a charge on the
  * run object we poll, so nothing here may claim `provider_reported`. A per-actor
  * price table can promote this later; until then the row says "estimated" and
@@ -1688,8 +1696,15 @@ function outcomeFromToolResult(
   const datasetId = typeof d.dataset_id === "string" ? d.dataset_id : null;
   const resumed = typeof input.resume_run_id === "string" && input.resume_run_id.length > 0;
 
+  // Non-empty string only: an empty string or a non-string is "not known", not a
+  // decision, and must not reach the row.
+  const relayed = typeof input.audit_next_decision === "string" && input.audit_next_decision.trim()
+    ? input.audit_next_decision.trim()
+    : null;
+
   if (r.ok) {
     return {
+      next_decision: relayed,
       // A resumed run is a real, distinct state: the rows arrived without a
       // second charge. Recording it as a plain success would make the ledger
       // overstate what was spent.
@@ -1710,6 +1725,7 @@ function outcomeFromToolResult(
   const code = String(r.error ?? "unknown_error");
   const pending = d.pending === true;
   return {
+    next_decision: relayed,
     // A RUNNING Apify run is not a failure — it exists and is billable. Recorded
     // as timed_out so a later resume is visibly a resume, not a first attempt.
     status: /timeout|timed[-_ ]?out/i.test(code) || pending ? "timed_out" : "failed",
@@ -1720,6 +1736,19 @@ function outcomeFromToolResult(
     cost: { source: "unknown" },
     metadata: { resumable: d.resumable ?? null, status: d.status ?? null },
   };
+}
+
+/**
+ * Test seam for `outcomeFromToolResult`.
+ *
+ * Exported so the "never fabricate a decision" rule is provable without booting
+ * the whole registry. The function itself stays module-private so no adapter can
+ * reach around the one instrumented call site.
+ */
+export function outcomeFromToolResultForTest(
+  r: ToolResult, input: Record<string, unknown>,
+): ExecutionOutcome {
+  return outcomeFromToolResult(r, input);
 }
 
 async function logToolCall(
