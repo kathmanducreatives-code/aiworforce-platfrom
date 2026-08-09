@@ -386,9 +386,9 @@ Deno.test("summary: one task's execution is reconstructable from rows alone", ()
   assertEquals(s.by_stage[1].accepted, 13);
 
   const text = renderTaskLedger(s);
-  assert(text.includes("3 external calls"));
+  assert(text.includes("provider calls:"));
   assert(text.includes("hiring_evidence"));
-  assert(text.includes("stopped: stop_quota_satisfied"));
+  assert(text.includes("stop_quota_satisfied"));
 });
 
 Deno.test("summary: unknown counts render as unknown, never as zero", () => {
@@ -428,4 +428,123 @@ Deno.test("buildFinalPatch computes duration from the started row", () => {
 
 Deno.test("the table name is a single constant, not a scattered string", () => {
   assertEquals(LEAD_EXECUTION_CALLS_TABLE, "lead_execution_calls");
+});
+
+// ═══ PHASE 2B: OWNERSHIP, RECORD KINDS, FUNNEL, STOP REASON ═══════════════
+
+Deno.test("ownership: the whole planner provenance triple reaches the row", async () => {
+  const { writer, merged } = recordingWriter();
+  await withExecutionAudit(writer, spec({
+    execution_owner: "company_first_v1",
+    planner_owner: "gpt_lead_strategy_v1",
+    planner_adapter: "gpt",
+    planner_outcome: "deterministic_fallback",
+    planner_fallback_reason: "rejected:schema",
+  }), () => Promise.resolve({ result: null, outcome: { status: "succeeded" as const } }));
+
+  const row = merged();
+  assertEquals(row.execution_owner, "company_first_v1");
+  assertEquals(row.planner_owner, "gpt_lead_strategy_v1");
+  assertEquals(row.planner_adapter, "gpt");
+  assertEquals(row.planner_outcome, "deterministic_fallback",
+    "'GPT degraded' must be distinguishable from 'the ladder was intended'");
+  assertEquals(row.planner_fallback_reason, "rejected:schema");
+});
+
+Deno.test("record kinds: a provider call and a stage result are different rows", async () => {
+  const { writer, inserted } = recordingWriter();
+  const { recordStageResult } = await import(
+    "../../../supabase/functions/_shared/executionLedger.ts");
+
+  await withExecutionAudit(writer, spec(), () =>
+    Promise.resolve({ result: null, outcome: { status: "succeeded" as const, provider_run_id: "run_1" } }));
+  await recordStageResult(writer, {
+    workspace_id: WORKSPACE, task_id: "task-1", stage: "hiring_evidence",
+    reason: "fill_required_evidence", logical_call_key: "task-1:stage:hiring",
+    counts: { accepted: 13, rejected: 27 },
+  });
+
+  assertEquals(inserted[0].record_kind, "provider_call");
+  assertEquals(inserted[1].record_kind, "stage_result");
+  assertEquals(inserted[1].provider_id, "agentory_internal",
+    "a stage result is produced by Agentory's gates, not purchased from a vendor");
+  assertEquals(inserted[1].provider_run_id, null,
+    "a stage result must never carry a provider run id");
+});
+
+Deno.test("funnel: stage results never inflate the provider-call count or spend", () => {
+  const providerCall = row({
+    record_kind: "provider_call", stage: "company_discovery",
+    raw_count: 100, estimated_cost_usd: 0.09, cost_source: "estimated",
+  });
+  const stageResult = row({
+    record_kind: "stage_result", stage: "hiring_evidence",
+    accepted_count: 13, rejected_count: 27, provider_run_id: null,
+    estimated_cost_usd: null,
+  });
+
+  const s = summarizeTaskLedger([providerCall, stageResult]);
+  assertEquals(s.calls, 1, "one call was made; the stage result is not a second call");
+  assertEquals(s.estimated_cost_usd, 0.09, "a stage result costs nothing and adds nothing");
+  assertEquals(s.by_stage.length, 1, "provider stages and stage results are grouped apart");
+  assertEquals(s.stage_results.length, 1);
+  assertEquals(s.stage_results[0].accepted, 13);
+});
+
+Deno.test("funnel: a downstream count is never attributed to one Actor row", () => {
+  // Two discovery calls contributed to one qualified count. The qualified number
+  // lives on its own row, so neither Actor is credited with producing it.
+  const s = summarizeTaskLedger([
+    row({ record_kind: "provider_call", stage: "company_discovery", raw_count: 50, actor_id: "actor_a" }),
+    row({ record_kind: "provider_call", stage: "company_discovery", raw_count: 50, actor_id: "actor_b" }),
+    row({ record_kind: "stage_result", stage: "company_discovery", accepted_count: 31, provider_run_id: null }),
+  ]);
+  assertEquals(s.calls, 2);
+  assertEquals(s.by_stage[0].raw, 100, "raw is genuinely attributable and sums");
+  assertEquals(s.by_stage[0].accepted, null,
+    "no provider row claims the qualified count, so it stays unknown at call level");
+  assertEquals(s.stage_results[0].accepted, 31, "the task-level truth lives on its own row");
+});
+
+Deno.test("summary: planner story and execution owner are reconstructable", () => {
+  const s = summarizeTaskLedger([
+    row({
+      execution_owner: "company_first_v1", planner_owner: "gpt_lead_strategy_v1",
+      planner_adapter: "gpt", planner_outcome: "deterministic_fallback",
+      planner_fallback_reason: "model_call_failed",
+      next_decision: "quota_satisfied",
+    }),
+  ]);
+  assertEquals(s.planner.adapter, "gpt");
+  assertEquals(s.planner.outcome, "deterministic_fallback");
+  assertEquals(s.execution_owner, "company_first_v1");
+  assertEquals(s.stop_reason, "quota_satisfied");
+
+  const text = renderTaskLedger(s);
+  assert(text.includes("gpt → deterministic fallback"), text);
+  assert(text.includes("model_call_failed"), "the degraded run must name what degraded it");
+  assert(text.includes("company_first_v1"));
+  assert(text.includes("quota_satisfied"));
+});
+
+Deno.test("summary: an unmeasured task reports unknown, never zero", () => {
+  const s = summarizeTaskLedger([row({
+    raw_count: null, next_decision: null,
+    // The shared fixture carries ownership; this case is a task that recorded none.
+    planner_owner: null, planner_adapter: null, planner_outcome: null,
+    execution_owner: null,
+  })]);
+  const text = renderTaskLedger(s);
+  assert(text.includes("unknown raw"));
+  assert(text.includes("stop:\n  unknown"), text);
+  assertEquals(s.planner.owner, null);
+  assertEquals(s.execution_owner, null);
+});
+
+Deno.test("stop reason: the LAST decision wins, so the run's ending is the ending", () => {
+  const s = summarizeTaskLedger([
+    row({ started_at: "2026-08-10T10:00:00Z", next_decision: "continue_sourcing" }),
+    row({ started_at: "2026-08-10T10:05:00Z", next_decision: "budget_exhausted" }),
+  ]);
+  assertEquals(s.stop_reason, "budget_exhausted");
 });

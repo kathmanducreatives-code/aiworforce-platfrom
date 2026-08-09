@@ -1530,7 +1530,14 @@ export async function runTool(
       task_id: ctx.task_id ?? null,
       plan_id: ctx.plan_id ?? null,
       execution_owner: (auditInput.execution_owner as string | undefined) ?? null,
+      // THE WHOLE PROVENANCE TRIPLE, not just the selected adapter. Without the
+      // outcome, "the ladder planned by design" and "a model adapter ran and
+      // degraded" are the same row again.
       planner_owner: (auditInput.planner_owner as string | undefined) ?? null,
+      planner_adapter: (auditInput.planner_adapter as "gpt" | "claude" | "none" | undefined) ?? null,
+      planner_outcome: (auditInput.planner_outcome as
+        "selected_directly" | "model_validated" | "deterministic_fallback" | undefined) ?? null,
+      planner_fallback_reason: (auditInput.planner_fallback_reason as string | undefined) ?? null,
       stage: (auditInput.audit_stage as ExecutionStage | undefined)
         ?? inferStage(
           (auditInput.capability_key ?? auditInput.selected_actor_key) as string | null,

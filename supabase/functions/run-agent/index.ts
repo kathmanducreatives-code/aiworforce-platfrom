@@ -55,6 +55,9 @@ import { adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPla
 // replace. The selector is pure and runs before any adapter is invoked, so a
 // flag combination can no longer put two planners on one task.
 import { createLeadOwnershipLedger, assertPlannerProvenance, describePlannerProvenance } from "../_shared/leadOwnership.ts";
+// Task-level funnel outcomes, recorded apart from provider calls so no Actor is
+// credited with numbers several calls produced.
+import { createLedgerWriter, recordStageResult } from "../_shared/executionLedger.ts";
 import { selectLeadPlannerAdapter } from "../_shared/leadPlannerInterface.ts";
 import { loadAuthoritativeLeadPlan } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
@@ -1178,8 +1181,23 @@ Deno.serve(async (req) => {
         // toolRegistry reads them — and the actor-native payload under `input`.
         // Re-nesting max_results under `input` is what made the 2026-07-25 run send
         // an unfiltered LinkedIn search, so the envelope is passed through verbatim.
+        // OWNERSHIP TRAVELS WITH EVERY PAID CALL. Stamped in the two wrappers
+        // rather than at each of the ~dozen envelope construction sites, so a new
+        // caller cannot forget it. The values are READ from the authoritative
+        // ledger built earlier in this handler — this does not re-derive
+        // ownership, and it cannot disagree with it.
+        const auditOwnership = (): Record<string, unknown> => {
+          const snap = leadOwnership.snapshot();
+          return {
+            execution_owner: snap.execution_owner,
+            planner_owner: snap.plan_provenance?.owner ?? snap.planning_owner,
+            planner_adapter: snap.plan_provenance?.adapter ?? null,
+            planner_outcome: snap.plan_provenance?.outcome ?? null,
+            planner_fallback_reason: snap.plan_provenance?.fallback_reason ?? null,
+          };
+        };
         const invokeJobs = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
-          const rr = await runTool("source_with_apify", envelope, baseCtx);
+          const rr = await runTool("source_with_apify", { ...envelope, ...auditOwnership() }, baseCtx);
           if (!rr.ok || !rr.data) {
             // THE FAILURE DATA TRAVELS WITH THE ERROR. A RUNNING Apify run comes
             // back as `!ok` carrying its run_id and dataset_id; throwing a bare
@@ -1238,7 +1256,7 @@ Deno.serve(async (req) => {
           };
         };
         const invokePeople = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
-          const rr = await runTool("source_with_apify", envelope, baseCtx);
+          const rr = await runTool("source_with_apify", { ...envelope, ...auditOwnership() }, baseCtx);
           const items = rr.ok && rr.data ? (rr.data as { items?: unknown[] }).items : [];
           return Array.isArray(items) ? items : [];
         };
@@ -3227,6 +3245,52 @@ Deno.serve(async (req) => {
         // The projection is the one already computed above — no second status
         // authority, and `continuation_required` becomes `partial` (resumable),
         // never `complete`.
+        // ══ TASK-LEVEL FUNNEL AND STOP REASON, AS STAGE RESULTS ══════════════
+        //
+        // WHY THESE ARE NOT WRITTEN ONTO A PROVIDER ROW. Several Actor calls
+        // contribute to one qualified-company count; attributing the total to
+        // whichever call happened to be last would make the ledger state
+        // something untrue about that Actor. These are outcomes of Agentory's own
+        // gates, so they are recorded as `stage_result` rows with no provider run
+        // id, and the summary never sums them into "provider calls".
+        //
+        // The stop reason is OBSERVED, not decided: `cf.terminal_reason` is the
+        // controller's own vocabulary, written down rather than reinterpreted.
+        try {
+          const ledger = createLedgerWriter(supabase as never);
+          const own = auditOwnership();
+          const base = {
+            workspace_id, task_id: task.id, plan_id: plan_id ?? null,
+            reason: "unspecified" as const,
+            ...own,
+          };
+          await recordStageResult(ledger, {
+            ...base,
+            stage: "company_discovery",
+            capability: "company_discovery",
+            logical_call_key: `${task.id}:stage:company_discovery`,
+            // `rawJobs` and `verifiedCompanies` are the controller's own measured
+            // numbers. Anything it did not measure stays absent, and therefore
+            // NULL — never 0.
+            counts: {
+              raw: cf.counts.rawJobs ?? null,
+              accepted: cf.counts.verifiedCompanies ?? null,
+            },
+          });
+          await recordStageResult(ledger, {
+            ...base,
+            stage: "person_resolution",
+            capability: "decision_maker",
+            logical_call_key: `${task.id}:stage:person_resolution`,
+            counts: { raw: cf.counts.candidates ?? null, accepted: cf.quota.eligible_leads ?? null },
+            // The last stage result carries the stop reason, so reading the
+            // ledger in order ends with why the run ended.
+            next_decision: cf.terminal_reason ?? null,
+          });
+        } catch (e) {
+          console.log("[run-agent][ledger][stage-result-error]", String(e));
+        }
+
         await finalizeCompanyFirstPlan(supabase, plan_id, task.id, agent.id, workspace_id, statuses, cf.terminal_reason);
 
         // THE PANEL HAS TO BE PERSISTED, NOT JUST RETURNED.
@@ -3717,7 +3781,17 @@ Deno.serve(async (req) => {
               ...(Array.isArray(pp.locations) && pp.locations.length ? { locations: pp.locations } : {}),
             };
           }
-          const rr = await runTool("source_with_apify", attemptInput, baseCtx);
+          // THE GENERIC PATH OWNS ITSELF. It is reached only when the
+          // company-first branch did not claim the task (that branch returns
+          // unconditionally), it carries no compiled plan, and no planner adapter
+          // ever ran for it — so planner provenance is genuinely absent here and
+          // is left absent rather than borrowed from a path that did not execute.
+          const rr = await runTool("source_with_apify", {
+            ...attemptInput,
+            execution_owner: "generic_sourcing_v1",
+            audit_stage: "generic_sourcing",
+            audit_reason: "broadened_retry",
+          }, baseCtx);
           if (rr.ok && rr.data) {
             let mapped = ((rr.data as { items?: any[] }).items ?? []).map(mapItem);
             // Part D — pre-rank the fetched POOL against the Company Brain ICP and

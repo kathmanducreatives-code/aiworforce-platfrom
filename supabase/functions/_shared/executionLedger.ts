@@ -103,7 +103,19 @@ export interface ExecutionCost {
 }
 
 /** What is known before the call is made. */
+/**
+ * A provider call, or a task-level stage outcome.
+ *
+ * Kept in one table because they answer one question together, and kept
+ * DISTINGUISHABLE because they are not the same event. An Actor returning 100
+ * rows does not entitle anyone to record "13 evidence-satisfied" against that
+ * Actor: several calls may have contributed to those 13, and attributing them to
+ * one row makes the ledger untrustworthy exactly where it must be trusted.
+ */
+export type RecordKind = "provider_call" | "stage_result";
+
 export interface ExecutionCallSpec {
+  record_kind?: RecordKind;
   workspace_id: string;
   task_id?: string | null;
   plan_id?: string | null;
@@ -112,6 +124,17 @@ export interface ExecutionCallSpec {
   execution_owner?: string | null;
   /** From the plan artifact's provenance, so a row says which planner chose it. */
   planner_owner?: string | null;
+  /**
+   * The rest of the planner provenance triple.
+   *
+   * `planner_owner` alone says which adapter was SELECTED and nothing about
+   * whether it worked. Without the outcome, "the ladder planned by design" and
+   * "a model adapter ran and degraded" are the same row again — the exact
+   * ambiguity the ownership phase removed.
+   */
+  planner_adapter?: "gpt" | "claude" | "none" | null;
+  planner_outcome?: "selected_directly" | "model_validated" | "deterministic_fallback" | null;
+  planner_fallback_reason?: string | null;
 
   stage: ExecutionStage;
   capability?: string | null;
@@ -151,6 +174,7 @@ export interface ExecutionOutcome {
 export interface ExecutionLedgerRow extends Omit<ExecutionCallSpec, "request_input"> {
   id: string;
   version: typeof EXECUTION_LEDGER_VERSION;
+  record_kind: RecordKind;
   attempt_number: number;
   status: ExecutionStatus;
   request_input: Record<string, unknown> | null;
@@ -285,11 +309,15 @@ export function buildStartedRow(spec: ExecutionCallSpec): ExecutionLedgerRow {
   return {
     id: newId(),
     version: EXECUTION_LEDGER_VERSION,
+    record_kind: spec.record_kind ?? "provider_call",
     workspace_id: spec.workspace_id,
     task_id: spec.task_id ?? null,
     plan_id: spec.plan_id ?? null,
     execution_owner: spec.execution_owner ?? null,
     planner_owner: spec.planner_owner ?? null,
+    planner_adapter: spec.planner_adapter ?? null,
+    planner_outcome: spec.planner_outcome ?? null,
+    planner_fallback_reason: spec.planner_fallback_reason ?? null,
     stage: spec.stage,
     capability: spec.capability ?? null,
     reason: spec.reason,
@@ -433,6 +461,17 @@ export interface StageSummary {
 
 export interface TaskLedgerSummary {
   task_id: string | null;
+
+  /** The planner story, read from whichever row recorded it. */
+  planner: {
+    owner: string | null;
+    adapter: string | null;
+    outcome: string | null;
+    fallback_reason: string | null;
+  };
+  execution_owner: string | null;
+
+  /** PROVIDER CALLS ONLY. Stage results are not calls and never inflate this. */
   calls: number;
   attempts_beyond_first: number;
   succeeded: number;
@@ -447,6 +486,8 @@ export interface TaskLedgerSummary {
   cost_is_partly_estimated: boolean;
   total_duration_ms: number;
   by_stage: StageSummary[];
+  /** Task-level funnel outcomes no single provider call could know. */
+  stage_results: StageSummary[];
   /** The last recorded `next_decision`, which is why the workflow stopped. */
   stop_reason: string | null;
 }
@@ -466,74 +507,145 @@ function sumKnown(values: Array<number | null>): number | null {
  */
 export function summarizeTaskLedger(rows: ExecutionLedgerRow[]): TaskLedgerSummary {
   const ordered = [...rows].sort((a, b) => a.started_at.localeCompare(b.started_at));
-  const stages = new Map<ExecutionStage, ExecutionLedgerRow[]>();
-  for (const r of ordered) {
-    const list = stages.get(r.stage) ?? [];
-    list.push(r);
-    stages.set(r.stage, list);
-  }
 
-  const by_stage: StageSummary[] = [...stages.entries()].map(([stage, rs]) => ({
-    stage,
-    calls: rs.length,
-    raw: sumKnown(rs.map((r) => r.raw_count)),
-    normalized: sumKnown(rs.map((r) => r.normalized_count)),
-    accepted: sumKnown(rs.map((r) => r.accepted_count)),
-    rejected: sumKnown(rs.map((r) => r.rejected_count)),
-  }));
+  // THE TWO KINDS ARE NEVER MIXED. Summing a stage result into "provider calls"
+  // would double-count the funnel and overstate how many times money was spent.
+  const calls = ordered.filter((r) => (r.record_kind ?? "provider_call") === "provider_call");
+  const stageRows = ordered.filter((r) => r.record_kind === "stage_result");
 
+  const group = (rs: ExecutionLedgerRow[]): StageSummary[] => {
+    const m = new Map<ExecutionStage, ExecutionLedgerRow[]>();
+    for (const r of rs) m.set(r.stage, [...(m.get(r.stage) ?? []), r]);
+    return [...m.entries()].map(([stage, list]) => ({
+      stage,
+      calls: list.length,
+      raw: sumKnown(list.map((r) => r.raw_count)),
+      normalized: sumKnown(list.map((r) => r.normalized_count)),
+      accepted: sumKnown(list.map((r) => r.accepted_count)),
+      rejected: sumKnown(list.map((r) => r.rejected_count)),
+    }));
+  };
+
+  // Provenance is stamped on every row of a run, so the first row that carries it
+  // is authoritative; a task with no rows reports nulls rather than guessing.
+  const provenanced = ordered.find((r) => r.planner_owner || r.planner_outcome);
   const withDecision = [...ordered].reverse().find((r) => r.next_decision);
 
   return {
     task_id: ordered[0]?.task_id ?? null,
-    calls: ordered.length,
-    attempts_beyond_first: ordered.filter((r) => r.attempt_number > 1).length,
-    succeeded: ordered.filter((r) => r.status === "succeeded").length,
-    failed: ordered.filter((r) => r.status === "failed").length,
-    timed_out: ordered.filter((r) => r.status === "timed_out").length,
-    reused: ordered.filter((r) => r.status === "reused").length,
-    actual_cost_usd: Number(
-      ordered.reduce((a, r) => a + (r.actual_cost_usd ?? 0), 0).toFixed(4),
-    ),
-    estimated_cost_usd: Number(
-      ordered.reduce((a, r) => a + (r.estimated_cost_usd ?? 0), 0).toFixed(4),
-    ),
-    cost_is_partly_estimated: ordered.some((r) => r.cost_source === "estimated"),
-    total_duration_ms: ordered.reduce((a, r) => a + (r.duration_ms ?? 0), 0),
-    by_stage,
+    planner: {
+      owner: provenanced?.planner_owner ?? null,
+      adapter: provenanced?.planner_adapter ?? null,
+      outcome: provenanced?.planner_outcome ?? null,
+      fallback_reason: provenanced?.planner_fallback_reason ?? null,
+    },
+    execution_owner: ordered.find((r) => r.execution_owner)?.execution_owner ?? null,
+    calls: calls.length,
+    attempts_beyond_first: calls.filter((r) => r.attempt_number > 1).length,
+    succeeded: calls.filter((r) => r.status === "succeeded").length,
+    failed: calls.filter((r) => r.status === "failed").length,
+    timed_out: calls.filter((r) => r.status === "timed_out").length,
+    reused: calls.filter((r) => r.status === "reused").length,
+    actual_cost_usd: Number(calls.reduce((a, r) => a + (r.actual_cost_usd ?? 0), 0).toFixed(4)),
+    estimated_cost_usd: Number(calls.reduce((a, r) => a + (r.estimated_cost_usd ?? 0), 0).toFixed(4)),
+    cost_is_partly_estimated: calls.some((r) => r.cost_source === "estimated"),
+    total_duration_ms: calls.reduce((a, r) => a + (r.duration_ms ?? 0), 0),
+    by_stage: group(calls),
+    stage_results: group(stageRows),
     stop_reason: withDecision?.next_decision ?? null,
   };
 }
 
 /** A compact, human-readable rendering of the summary. Diagnostics only. */
 export function renderTaskLedger(s: TaskLedgerSummary): string {
+  const fmt = (n: number | null) => (n === null ? "unknown" : String(n));
   const lines: string[] = [];
   lines.push(`Task ${s.task_id ?? "(unknown)"}`);
+
   lines.push("");
-  lines.push(`${s.calls} external call${s.calls === 1 ? "" : "s"}` +
-    (s.attempts_beyond_first ? ` (${s.attempts_beyond_first} retried)` : ""));
-  const costBits: string[] = [];
-  if (s.actual_cost_usd > 0) costBits.push(`$${s.actual_cost_usd.toFixed(4)} actual`);
-  if (s.estimated_cost_usd > 0) costBits.push(`$${s.estimated_cost_usd.toFixed(4)} estimated`);
-  lines.push(costBits.length ? costBits.join(" + ") : "no cost recorded");
-  if (s.failed || s.timed_out) {
-    lines.push(`${s.failed} failed, ${s.timed_out} timed out`);
+  lines.push("planner:");
+  if (!s.planner.owner && !s.planner.outcome) {
+    lines.push("  unknown");
+  } else if (s.planner.outcome === "deterministic_fallback") {
+    // The degraded case names what degraded it — that reason is the only
+    // interesting field in this state.
+    lines.push(`  ${s.planner.adapter ?? "?"} → deterministic fallback (${s.planner.fallback_reason ?? "no reason recorded"})`);
+  } else if (s.planner.outcome === "selected_directly") {
+    lines.push("  deterministic (selected directly — no adapter enabled)");
+  } else {
+    lines.push(`  ${s.planner.adapter ?? s.planner.owner} (plan accepted)`);
   }
+
+  lines.push("");
+  lines.push("execution:");
+  lines.push(`  ${s.execution_owner ?? "unknown"}`);
+
+  lines.push("");
+  lines.push(`provider calls:`);
+  lines.push(`  ${s.calls}` + (s.attempts_beyond_first ? ` (${s.attempts_beyond_first} retried)` : ""));
+  if (s.failed || s.timed_out) lines.push(`  ${s.failed} failed, ${s.timed_out} timed out`);
+  if (s.reused) lines.push(`  ${s.reused} reused an already-paid run`);
+
+  lines.push("");
+  lines.push("spend:");
+  lines.push(`  $${s.actual_cost_usd.toFixed(2)} actual`);
+  lines.push(`  $${s.estimated_cost_usd.toFixed(2)} estimated`);
+
   for (const st of s.by_stage) {
     lines.push("");
     lines.push(`${st.stage}:`);
     // "unknown" is printed rather than 0, because the difference between "we
     // checked and found none" and "we never looked" is the whole point.
-    const fmt = (n: number | null) => (n === null ? "unknown" : String(n));
     lines.push(`  ${fmt(st.raw)} raw`);
     lines.push(`  ${fmt(st.normalized)} normalized`);
     lines.push(`  ${fmt(st.accepted)} accepted`);
   }
-  if (s.stop_reason) {
+
+  // Task-level outcomes, printed apart from provider calls so nobody reads a
+  // funnel number as something one Actor produced.
+  for (const st of s.stage_results) {
     lines.push("");
-    lines.push(`stopped: ${s.stop_reason}`);
+    lines.push(`${st.stage} (stage result):`);
+    lines.push(`  ${fmt(st.accepted)} passed`);
+    if (st.rejected !== null) lines.push(`  ${fmt(st.rejected)} rejected`);
   }
+
+  lines.push("");
+  lines.push("stop:");
+  lines.push(`  ${s.stop_reason ?? "unknown"}`);
   return lines.join("\n");
+}
+
+/**
+ * Record a task-level stage outcome — a funnel number no single provider call
+ * could truthfully claim.
+ *
+ * Written as its own row with `record_kind: "stage_result"` and no provider run
+ * id, so summing never confuses it with a paid call. `status` is always
+ * `succeeded` because a stage result is an observation, not an attempt.
+ */
+export async function recordStageResult(
+  writer: LedgerWriter | null | undefined,
+  spec: Omit<ExecutionCallSpec, "record_kind" | "provider_id"> & { counts: ExecutionCounts; next_decision?: string | null },
+): Promise<void> {
+  if (!writer) return;
+  const row = buildStartedRow({
+    ...spec,
+    record_kind: "stage_result",
+    // A stage result is produced by Agentory's own gates, not by a vendor. Naming
+    // a provider here would make it look like a purchase.
+    provider_id: "agentory_internal",
+  });
+  try {
+    await writer.insert(row);
+    await writer.finalize(row.id, buildFinalPatch(row, {
+      status: "succeeded",
+      counts: spec.counts,
+      next_decision: spec.next_decision ?? null,
+    }));
+  } catch (e) {
+    console.error("[execution-ledger] stage result failed", String(e));
+  }
 }
 
 // ── SUPABASE-BACKED WRITER ──────────────────────────────────────────────────
