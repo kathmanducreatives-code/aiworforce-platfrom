@@ -21,6 +21,10 @@
 // intelligence-kernel flag registry: that registry is the Gemini/Claude kernel's
 // own surface, and adding a GPT-owner flag to it would widen a module this path
 // must stay independent of. Same semantics — strict allow-list, default OFF.
+// ONE DEFINITION OF "ENABLED", NOT TWO. Only the VALUE SET is imported — a
+// frozen constant, not the kernel's flag registry — so the independence the
+// comment above asks for is kept while the semantics it claims become true.
+import { INTELLIGENCE_FLAG_ENABLED_VALUES } from "./intelligence/intelligenceFlags.ts";
 import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge.ts";
 import type { LeadStrategyResolution } from "./leadStrategyOwner.ts";
 import { createQualifiedLeadStrategist } from "./leadStrategy/strategist.ts";
@@ -38,10 +42,31 @@ function parseAllowlist(raw: string | undefined): string[] {
   return String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-/** STRICT truthiness — only these exact values enable a flag. */
+/**
+ * STRICT truthiness — only these exact values enable a flag.
+ *
+ * ── NORMALIZED, AND WHY IT IS SAFE ──────────────────────────────────────────
+ *
+ * This used to accept `yes` and `on` as well, while the intelligence-kernel
+ * registry accepted only `true` / `1` / `enabled`. The comment at the head of
+ * this file already claimed "Same semantics — strict allow-list"; it simply was
+ * not true, and two definitions of "enabled" in one system is the kind of drift
+ * that makes a flag audit unreliable.
+ *
+ * Verified before changing, rather than assumed: on TEST, `GPT_LEAD_STRATEGY` —
+ * the only flag this function gates — is NOT SET AT ALL, so no current value can
+ * change meaning. The values that ARE configured (`CLAUDE_FIRST_LEAD_PLANNING`,
+ * `GPT_LEAD_MISSION_COMPILER`) are both the literal string `true`, which both the
+ * old and new sets accept.
+ *
+ * BEFORE THIS REACHES PRODUCTION: confirm `GPT_LEAD_STRATEGY` there is unset or
+ * `true`/`1`/`enabled`. A `yes` or `on` would now resolve to disabled — which
+ * fails SAFE (the deterministic ladder owns titles, no model call) but is still a
+ * change, and should be a decision rather than a surprise.
+ */
 function flagOn(raw: string | undefined): boolean {
-  const v = String(raw ?? "").trim().toLowerCase();
-  return v === "true" || v === "1" || v === "yes" || v === "on";
+  if (typeof raw !== "string") return false;
+  return INTELLIGENCE_FLAG_ENABLED_VALUES.has(raw.trim().toLowerCase());
 }
 
 /**
@@ -141,6 +166,59 @@ export interface LeadStrategyInitialResult {
   resolution: LeadStrategyResolution | null;
   /** Safe provenance for `tasks.result`. NULL when the feature never engaged. */
   diagnostics: Record<string, unknown> | null;
+}
+
+/**
+ * Rebuild this adapter's result from an ALREADY-PLANNED artifact. No model call.
+ *
+ * The mirror of `claudeFirstFromPersistedPlan`. It exists because initial
+ * planning consolidated onto one call site in orchestrate: run-agent no longer
+ * invokes this adapter, it reconstitutes what the adapter decided from the plan
+ * artifact that travelled with — or was loaded for — the task.
+ *
+ * `model_requests: 0` is the field that distinguishes "reused the persisted
+ * plan" from "planned again", and it is what the resume tests assert on.
+ */
+export function gptStrategyFromPersistedPlan(
+  artifact: {
+    plan_source: string;
+    approved_titles: string[];
+    fallback_reason: string | null;
+    planner: Record<string, unknown> | null;
+    strategy_plan?: unknown;
+    source_order?: string[];
+    route?: string | null;
+  },
+  spec: Record<string, unknown>,
+): LeadStrategyInitialResult {
+  const usedGpt = artifact.plan_source === "gpt_validated";
+  const p = (artifact.planner ?? {}) as Record<string, unknown>;
+
+  return {
+    spec: (usedGpt
+      ? { ...spec, keyword_queries: [...artifact.approved_titles] }
+      : spec) as unknown as LeadStrategySpecSlice,
+    specRewritten: usedGpt,
+    enablement: { enabled: true, reason: "enabled" },
+    // Only the PLAN is reconstituted. Provenance stays on `diagnostics`; nothing
+    // downstream reads the resolution's own provenance block.
+    resolution: usedGpt && artifact.strategy_plan
+      ? ({ plan: artifact.strategy_plan, provenance: p, dropped: [] } as unknown as LeadStrategyResolution)
+      : null,
+    diagnostics: artifact.planner
+      ? {
+        ...p,
+        planner_source: usedGpt ? "openai_lead_strategy" : "deterministic_registry",
+        // The routing decisions the executor reads, carried on the artifact
+        // because the adapter that produced them ran in another Edge Function.
+        source_order: artifact.source_order ?? [],
+        route: artifact.route ?? null,
+        fallback_reason: artifact.fallback_reason,
+        model_requests: 0,
+        reused_persisted_plan: true,
+      }
+      : null,
+  };
 }
 
 /** Stable, dependency-free 32-bit hash. Used only for plan identity. */

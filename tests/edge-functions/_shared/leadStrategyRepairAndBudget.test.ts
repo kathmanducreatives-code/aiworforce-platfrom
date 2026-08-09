@@ -122,24 +122,35 @@ Deno.test("5. the GPT strategist owns this workflow's next action", async () => 
   assert(runAgent.includes("gptAdaptiveStrategyBinding(gptStrategy.resolution.plan"),
     "the validated GPT plan must reach the runtime binding");
 
-  // …and the Claude bridge cannot also run.
+  // …and no second planner can run, because run-agent plans NOTHING.
   //
-  // This used to assert the literal `gptStrategy?.specRewritten ? null` guard.
-  // That guard was WEAKER than this test's own name claimed: it skipped Claude
-  // only when GPT had rewritten the spec, so an ordinary GPT fallback — timeout,
-  // rejected plan, failed escalation — left `specRewritten` false and Claude
-  // made a second model call for the same task.
+  // This assertion has tightened twice. It first asserted the literal
+  // `gptStrategy?.specRewritten ? null` guard — which was weaker than this
+  // test's own name claimed, since it skipped Claude only when GPT had
+  // rewritten the spec, letting an ordinary GPT fallback open a second model
+  // call. It then asserted that both adapters read one selection.
   //
-  // Ownership is now decided by `selectLeadPlannerAdapter` from eligibility
-  // alone, before any adapter is invoked, so no GPT outcome can hand the task to
-  // a second planner. Both call sites must read that decision and nothing else.
-  assert(runAgent.includes('plannerSelection.owner === "gpt_lead_strategy_v1"'),
-    "the GPT adapter must be invoked only when the selector named it");
-  assert(runAgent.includes('plannerSelection.owner !== "claude_lead_planner_v1"'),
-    "the Claude adapter must be invoked only when the selector named it");
+  // Initial planning now happens at exactly one call site, in orchestrate. The
+  // strongest available assertion here is that this function cannot plan at all.
+  // Call syntax, not the bare name: run-agent names both adapters in a comment
+  // explaining why neither is imported, and that explanation earns its place.
+  assert(!runAgent.includes("applyLeadStrategyInitialPlanning("),
+    "run-agent must not invoke the GPT planning adapter");
+  assert(!runAgent.includes("applyClaudeFirstLeadPlanning("),
+    "run-agent must not invoke the Claude planning adapter");
+  assert(runAgent.includes("gptStrategyFromPersistedPlan("),
+    "the GPT strategy must be reconstituted from the plan artifact, not re-planned");
   assert(!runAgent.includes("gptStrategy?.specRewritten\n          ? null"),
     "the Claude adapter must not be gated on the GPT adapter's RESULT — that is " +
     "the defect that let both planners run for one task");
+
+  // The one call site must invoke the GPT adapter and record it on the plan.
+  const orchestration = await Deno.readTextFile(new URL(
+    "../../../supabase/functions/_shared/intelligence/leads/leadPlanOrchestration.ts", import.meta.url));
+  assert(orchestration.includes("await applyLeadStrategyInitialPlanning({"),
+    "the GPT strategist must be invoked at the single planner call site");
+  assert(orchestration.includes('plan_source: usedGpt ? "gpt_validated"'),
+    "a GPT-planned task must be recorded as GPT-planned on its artifact");
 });
 
 Deno.test("5b. the GPT plan's SOURCE ORDER survives into the adaptive plan", async () => {

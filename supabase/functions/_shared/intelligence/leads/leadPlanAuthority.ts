@@ -25,7 +25,20 @@ import type { LeadInitialStrategy } from "./leadStrategy.ts";
 export const QUALIFIED_LEAD_PLAN_VERSION = "qualified-lead-visible-plan-1.0.0";
 
 /** Where the plan on screen actually came from. Shown, never inferred. */
-export type AuthoritativePlanSource = "claude_validated" | "deterministic_registry";
+/**
+ * Which adapter produced the authoritative plan.
+ *
+ * `gpt_validated` joined this union when initial planning consolidated onto ONE
+ * call site. Before that, the GPT adapter was invoked inside run-agent and its
+ * output never became a plan artifact at all — so a GPT-planned task persisted a
+ * plan row that said `deterministic_registry` while the run executed GPT's
+ * titles. The artifact is now the only record of what was planned, so it has to
+ * be able to say GPT.
+ */
+export type AuthoritativePlanSource =
+  | "claude_validated"
+  | "gpt_validated"
+  | "deterministic_registry";
 
 /** The bounded facts the summary is allowed to state. All from the contract. */
 export interface QualifiedLeadPlanContract {
@@ -58,6 +71,27 @@ export interface QualifiedLeadPlanArtifact {
   fallback_reason: string | null;
   /** Safe planner provenance. No prompts, no reasoning, no credentials. */
   planner: Record<string, unknown> | null;
+
+  // ── GPT ADAPTER OUTPUT ───────────────────────────────────────────────────
+  //
+  // Present only for `gpt_validated`. These three carried run-agent's routing
+  // decisions when the GPT adapter was invoked there; consolidating planning
+  // onto one call site means they must travel ON the artifact instead, or a
+  // GPT-planned task would silently lose its source order and route on the way
+  // to the executor. Optional so every existing persisted artifact still parses.
+  /** The validated GPT plan. Consumed by `gptAdaptiveStrategyBinding`. */
+  strategy_plan?: unknown;
+  /** Ordered capability keys the strategist chose. */
+  source_order?: string[];
+  /** The hiring route the strategist chose, validated downstream as before. */
+  route?: string | null;
+
+  // ── OWNERSHIP, RECORDED ON THE PLAN ──────────────────────────────────────
+  //
+  // The one field that makes "which planner planned this task?" answerable from
+  // the plan row alone, including on a resume that carries no request body.
+  planning_owner?: string;
+  planned_at?: string;
 }
 
 /** Stable identity for a persisted plan artifact. */
@@ -94,7 +128,14 @@ export function buildQualifiedLeadPlanSummary(
   const where = contract.geography ? ` in ${contract.geography}` : "";
   const hiring = list(contract.hiringRoles);
   const evidence = hiring ? ` hiring ${hiring}` : "";
-  const prefix = source === "claude_validated" ? "Claude-planned" : "Deterministic plan";
+  // NAME THE ADAPTER THAT ACTUALLY PLANNED. A two-way test would have labelled a
+  // GPT-validated plan "Deterministic plan", which is the plan summary telling
+  // the user something untrue about how their plan was made.
+  const prefix = source === "claude_validated"
+    ? "Claude-planned"
+    : source === "gpt_validated"
+    ? "GPT-planned"
+    : "Deterministic plan";
   return `${prefix}: ${contract.requestedCount} CONTACT-ready ${who} at ${company} companies${where}${evidence}.`;
 }
 
@@ -140,7 +181,11 @@ export function buildQualifiedLeadPlanSteps(args: {
     : [];
   const sourceNote = artifact.plan_source === "claude_validated"
     ? `Claude-approved source strategy: ${capabilities.join(", ") || "approved hiring sources"}.`
-    : `Deterministic approved sources (${artifact.fallback_reason ?? "Claude plan not used"}).`;
+    : artifact.plan_source === "gpt_validated"
+    // The GPT adapter states its choice as an ordered capability list rather than
+    // a `strategy.searches` block, so its note is built from `source_order`.
+    ? `GPT-approved source strategy: ${(artifact.source_order ?? []).join(", ") || "approved hiring sources"}.`
+    : `Deterministic approved sources (${artifact.fallback_reason ?? "no model plan was used"}).`;
 
   return [
     {
@@ -243,6 +288,76 @@ export function buildOrchestrateResponsePlan(
 }
 
 /** Read the persisted artifact back off a plan's steps. Null when absent. */
+/** Where an authoritative plan artifact was found. */
+export type LeadPlanArtifactSource = "request_body" | "persisted_plan_row" | "absent";
+
+export interface LoadedLeadPlan {
+  artifact: QualifiedLeadPlanArtifact | null;
+  source: LeadPlanArtifactSource;
+  /** Why nothing was found. Null on success. */
+  missing_reason: string | null;
+}
+
+/**
+ * Find the plan this task must execute — body first, then the persisted row.
+ *
+ * ── THE RESUME WINDOW THIS CLOSES ────────────────────────────────────────────
+ *
+ * run-agent used to read the artifact from `body.qualified_lead_plan` and
+ * nowhere else. On the first invocation orchestrate threads it, so the artifact
+ * was present and the runtime reused it. On a CONTINUATION the body is
+ * reconstructed from a continuation token and carries no artifact — so the
+ * lookup returned null, the planner selector saw `hasPersistedPlan: false`, and
+ * the task planned AGAIN, with a different adapter than the one that produced
+ * the plan the user approved.
+ *
+ * That was silent. Nothing compared the two plans, and the second one won.
+ *
+ * The artifact is already persisted on `task_plans.steps[].metadata`, which is
+ * where `readPlanArtifact` reads it from — the durable copy existed all along
+ * and simply was not consulted. Reading it here makes a plan IMMUTABLE for the
+ * life of a run: once a task has a planner owner and an accepted plan, every
+ * later invocation loads that same plan. Re-planning is not merely discouraged,
+ * it has nowhere to happen.
+ *
+ * `readPlanSteps` is injected so this is testable with no database.
+ */
+export async function loadAuthoritativeLeadPlan(args: {
+  /** `body.qualified_lead_plan` — present on the first invocation. */
+  bodyArtifact: unknown;
+  /** The plan row to fall back to. Null when the task has no plan. */
+  planId: string | null;
+  /** Returns the persisted `steps` array for a plan id, or null. */
+  readPlanSteps: (planId: string) => Promise<unknown>;
+}): Promise<LoadedLeadPlan> {
+  const fromBody = readPlanArtifact([{ metadata: { qualified_lead_plan: args.bodyArtifact } }]);
+  if (fromBody) return { artifact: fromBody, source: "request_body", missing_reason: null };
+
+  if (!args.planId) {
+    return { artifact: null, source: "absent", missing_reason: "no_plan_id_on_request" };
+  }
+
+  let steps: unknown = null;
+  try {
+    steps = await args.readPlanSteps(args.planId);
+  } catch (e) {
+    // A read failure must not silently look like "this task was never planned",
+    // because that is the state that used to trigger re-planning.
+    return {
+      artifact: null, source: "absent",
+      missing_reason: `plan_row_read_failed:${String((e as Error)?.message ?? e).slice(0, 80)}`,
+    };
+  }
+
+  const fromRow = readPlanArtifact(steps);
+  if (fromRow) return { artifact: fromRow, source: "persisted_plan_row", missing_reason: null };
+
+  // A genuinely unplanned task. This is the ordinary case for every workspace
+  // with no planner adapter enabled, and it is NOT an error: the deterministic
+  // ladder owns those runs and always has.
+  return { artifact: null, source: "absent", missing_reason: "no_artifact_on_plan_row" };
+}
+
 export function readPlanArtifact(steps: unknown): QualifiedLeadPlanArtifact | null {
   if (!Array.isArray(steps)) return null;
   for (const step of steps) {

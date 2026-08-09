@@ -262,32 +262,76 @@ Deno.test("Invariant 3: repeated persistence by the SAME owner is idempotent", (
 
 // ═══ WIRING — THE RUNTIME ACTUALLY USES THE MECHANISM ══════════════════════
 
-Deno.test("wiring: run-agent selects the planner once, before invoking any adapter", async () => {
+Deno.test("wiring: run-agent contains NO lead-planning invocation at all", async () => {
   const src = await Deno.readTextFile(RUN_AGENT);
 
+  // The previous phase left both adapters in run-agent and made the selection
+  // choose between them. That was one invocation per task but still two call
+  // sites, and orchestrate held a third that bypassed the selector entirely.
+  // Planning is now consolidated onto one call site, so the strongest available
+  // assertion is an ABSENCE: this function cannot plan.
+  // Matched on CALL and IMPORT syntax rather than on the bare name: the file
+  // names both adapters in a comment explaining why they are absent, and that
+  // explanation is worth keeping.
+  const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  for (const name of [
+    "applyLeadStrategyInitialPlanning",
+    "applyClaudeFirstLeadPlanning",
+    "isGptLeadStrategyEnabled",
+    "isClaudeFirstLeadPlanningEnabled",
+  ]) {
+    assert(!code.includes(`${name}(`),
+      `run-agent must not call ${name} — planning happens at one call site, in orchestrate`);
+    assert(!new RegExp(`import\\s*\\{[^}]*\\b${name}\\b`, "s").test(code),
+      `run-agent must not import ${name}`);
+  }
+
+  // What remains are reconstitution helpers, which cannot make a model request.
+  assert(src.includes("gptStrategyFromPersistedPlan("),
+    "a GPT-planned task must be rebuilt from its artifact");
+  assert(src.includes("claudeFirstFromPersistedPlan("),
+    "a Claude-planned task must be rebuilt from its artifact");
+
+  // The selector still runs, but is fed constants that make a model-backed owner
+  // unreachable — belt as well as braces.
   assert(src.includes("selectLeadPlannerAdapter({"),
-    "run-agent must resolve planner ownership through the selector");
+    "run-agent must still record planner ownership through the selector");
   assert(src.includes("leadOwnership.claimPlanning(plannerSelection.owner"),
-    "the selected planner must claim ownership on the ledger");
+    "the resolved owner must claim ownership on the ledger");
+  assert(/strategyOwnerApplies:\s*false,\s*\n\s*gptEnabled:\s*false,\s*\n\s*claudeEnabled:\s*false/.test(src),
+    "run-agent's selector must be structurally unable to name a model adapter");
 
-  // Both adapter call sites must read the SELECTION, never each other's result.
-  assert(src.includes('plannerSelection.owner === "gpt_lead_strategy_v1"'),
-    "the GPT adapter must be gated on the selection");
-  assert(src.includes('plannerSelection.owner !== "claude_lead_planner_v1"'),
-    "the Claude adapter must be gated on the selection");
-
-  // THE DEFECT MUST NOT COME BACK. The Claude call site must not read
-  // `gptStrategy.specRewritten` to decide whether it runs.
+  // THE ORIGINAL DEFECT MUST NOT COME BACK.
   assert(!/gptStrategy\?\.specRewritten\s*\n\s*\?\s*null/.test(src),
     "the Claude adapter must never be gated on the GPT adapter's result");
+});
 
-  // Selection must precede both invocations in source order — otherwise an
-  // adapter could run before ownership is decided.
-  const selAt = src.indexOf("selectLeadPlannerAdapter({");
-  const gptAt = src.indexOf("await applyLeadStrategyInitialPlanning({");
-  const claudeAt = src.indexOf("await applyClaudeFirstLeadPlanning({");
-  assert(selAt > 0 && gptAt > selAt, "selection must happen before the GPT adapter is invoked");
-  assert(claudeAt > selAt, "selection must happen before the Claude adapter is invoked");
+Deno.test("wiring: run-agent loads its plan instead of making one", async () => {
+  const src = await Deno.readTextFile(RUN_AGENT);
+  assert(src.includes("loadAuthoritativeLeadPlan({"),
+    "the plan must be loaded through the authoritative loader");
+  assert(src.includes("planId: plan_id ?? null"),
+    "the loader must be able to fall back to the persisted plan row");
+  assert(!src.includes("body.qualified_lead_plan\n          ? readPlanArtifact"),
+    "the body-only read is what let a continuation re-plan; it must be gone");
+});
+
+Deno.test("wiring: orchestrate is the single planner call site", async () => {
+  const orch = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/intelligence/leads/leadPlanOrchestration.ts", import.meta.url),
+  );
+  assert(orch.includes("selectLeadPlannerAdapter({"),
+    "the one call site must choose its adapter through the shared selector");
+  assert(orch.includes("await applyLeadStrategyInitialPlanning({"),
+    "the GPT adapter must be invoked here");
+  assert(orch.includes("await applyClaudeFirstLeadPlanning({"),
+    "the Claude adapter must be invoked here");
+  // It used to read the Claude gate directly and invoke Claude unconditionally,
+  // which is what made orchestrate a second, independent planner owner.
+  assert(!/const enablement = isClaudeFirstLeadPlanningEnabled\([\s\S]*?if \(!enablement\.enabled\) return null;/.test(orch),
+    "orchestrate must not gate planning on one adapter's flag alone");
+  assert(orch.includes('artifact.planning_owner = plannerSelection.owner'),
+    "the plan must record which adapter produced it");
 });
 
 Deno.test("wiring: each execution entry point claims ownership before it runs", async () => {

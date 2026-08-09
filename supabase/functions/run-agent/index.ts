@@ -43,13 +43,20 @@ import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectiveP
 // enable it globally. With either absent this is inert: no mission is built, no
 // prompt assembled, no model contacted, and the spec below is passed through by
 // reference. See _shared/intelligence/leads/leadPlanningBridge.ts.
-import { applyClaudeFirstLeadPlanning, adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPlan, isClaudeFirstLeadPlanningEnabled } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
+// NOTE THE ABSENCE. `applyClaudeFirstLeadPlanning` and
+// `isClaudeFirstLeadPlanningEnabled` are deliberately NOT imported: run-agent
+// holds no lead-planning call site and no planner enablement decision. Only the
+// reconstitution helper, the diagnostics reader and the adaptive binding remain,
+// none of which can make a model request. Re-adding either name here would
+// re-create the second planner this consolidation removed, and the architecture
+// tests fail if it happens.
+import { adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPlan, type LeadPlanningBridgeInput } from "../_shared/intelligence/leads/leadPlanningBridge.ts";
 // ONE PLANNER, ONE EXECUTION OWNER — see _shared/leadOwnership.ts for what these
 // replace. The selector is pure and runs before any adapter is invoked, so a
 // flag combination can no longer put two planners on one task.
 import { createLeadOwnershipLedger } from "../_shared/leadOwnership.ts";
 import { selectLeadPlannerAdapter } from "../_shared/leadPlannerInterface.ts";
-import { readPlanArtifact } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
+import { loadAuthoritativeLeadPlan } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
 // Gated by DYNAMIC_HIRING_SOURCE_PLANNING *and* an explicit workspace allow-list.
 // When either is absent the bridge returns `invokeJobs` UNCHANGED — the same
@@ -254,8 +261,9 @@ import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersist
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
 import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
-import { applyLeadStrategyInitialPlanning, isGptLeadStrategyEnabled } from "../_shared/leadStrategyBridge.ts";
-import { constraintsFromBrain } from "../_shared/leadStrategistContext.ts";
+// Same absence, same reason: the GPT adapter is invoked in orchestrate, and only
+// its already-decided output is rebuilt here.
+import { gptStrategyFromPersistedPlan } from "../_shared/leadStrategyBridge.ts";
 // The missing edge between the GPT strategy and the sequential runtime: without
 // it the strategist's separate query packs never reach the Actor calls.
 import { gptAdaptiveStrategyBinding } from "../_shared/leadStrategyAdaptiveBinding.ts";
@@ -1300,37 +1308,60 @@ Deno.serve(async (req) => {
         // would be a second paid Anthropic call for a question already answered —
         // and could answer it differently, so the plan on screen and the plan
         // executing would diverge. The persisted artifact wins.
-        // Orchestrate threads the artifact on the request body. That is the
-        // authoritative copy at this point in the handler — the plan row is read
-        // later, and re-reading it here would only re-derive the same value.
-        const persistedPlan = body.qualified_lead_plan
-          ? readPlanArtifact([{ metadata: { qualified_lead_plan: body.qualified_lead_plan } }])
-          : null;
+        // ══ THE PLAN IS LOADED, NEVER MADE, IN THIS FUNCTION ═════════════════
+        //
+        // Body first, then the persisted plan row. The row fallback is what
+        // closes the resume window: a continuation's body is rebuilt from a
+        // token and carries no artifact, so a body-only read returned null and
+        // the task planned AGAIN — with whichever adapter the flags happened to
+        // select, not the one that produced the plan the user approved.
+        //
+        // The durable copy already existed on `task_plans.steps[].metadata`; it
+        // simply was not consulted. Consulting it makes a plan immutable for the
+        // life of a run.
+        const leadPlanLoad = await loadAuthoritativeLeadPlan({
+          bodyArtifact: body.qualified_lead_plan ?? null,
+          planId: plan_id ?? null,
+          readPlanSteps: async (id) => {
+            const { data } = await supabase
+              .from("task_plans").select("steps").eq("id", id).maybeSingle();
+            return (data as { steps?: unknown } | null)?.steps ?? null;
+          },
+        });
+        const leadPlanArtifact = leadPlanLoad.artifact;
+        console.log("[run-agent][lead-plan-artifact]", {
+          task_id: task.id,
+          source: leadPlanLoad.source,
+          plan_source: leadPlanArtifact?.plan_source ?? null,
+          planning_owner: leadPlanArtifact?.planning_owner ?? null,
+          missing_reason: leadPlanLoad.missing_reason,
+        });
 
-        // ══ ONE PLANNER OWNER, CHOSEN BEFORE ANY ADAPTER IS INVOKED ══════════
+        // ══ THIS FUNCTION NO LONGER OWNS A PLANNER CALL SITE ═════════════════
         //
-        // This used to be two independent call sites 1,200 lines apart, and the
-        // second was conditioned on the FIRST CALL'S RESULT rather than on
-        // whether the first had run:
+        // Two adapters used to be invoked here, 1,200 lines apart, and the second
+        // was conditioned on the FIRST CALL'S RESULT rather than on whether the
+        // first had run — so an ordinary GPT fallback let Claude make a second
+        // model call for one task. The previous phase collapsed that to one
+        // selection; this phase moves the INVOCATION itself out.
         //
-        //     claudeFirst = ... : gptStrategy?.specRewritten ? null : await apply…
-        //
-        // `specRewritten` is false whenever GPT fell back deterministically — a
-        // timeout, a schema-rejected plan, a failed escalation. Every one of
-        // those is an ordinary outcome, and each let Claude make a SECOND model
-        // call proposing a different set of round-one titles for the same task.
-        // Whichever ran last won and nothing recorded that two had run.
-        //
-        // Selection is now pure and happens here, from eligibility alone. Only
-        // the selected adapter is invoked, at its existing call site, with its
-        // existing arguments — so behaviour for the adapter that owns the task
-        // is unchanged, and the adapter that does not own it never runs.
+        // Planning happens once, in `planQualifiedLeadBeforePersistence`, which
+        // is the only place in the codebase that calls a lead-planning adapter.
+        // The selector still runs here, but with `hasPersistedPlan` reflecting a
+        // real loaded artifact it can only ever resolve to
+        // `persisted_plan_artifact_v1` (a task that was planned) or
+        // `deterministic_registry_v1` (one that was not). Both GPT and Claude are
+        // structurally unreachable from this function.
         const leadOwnership = createLeadOwnershipLedger(task.id);
         const plannerSelection = selectLeadPlannerAdapter({
-          hasPersistedPlan: persistedPlan !== null,
-          strategyOwnerApplies: useLeadStrategyOwner,
-          gptEnabled: isGptLeadStrategyEnabled(workspace_id).enabled,
-          claudeEnabled: isClaudeFirstLeadPlanningEnabled(workspace_id).enabled,
+          hasPersistedPlan: leadPlanArtifact !== null,
+          // FORCED FALSE, and that is the point. These two are what would let a
+          // model adapter be named here. The plan for a lead task is made in
+          // orchestrate or it is not made at all; run-agent may reuse a plan or
+          // fall back deterministically, never plan.
+          strategyOwnerApplies: false,
+          gptEnabled: false,
+          claudeEnabled: false,
         });
         leadOwnership.claimPlanning(plannerSelection.owner, plannerSelection.reason);
         for (const n of plannerSelection.notSelected) leadOwnership.decline(n.owner, n.reason);
@@ -1372,31 +1403,26 @@ Deno.serve(async (req) => {
         });
         const brainEnforced = effectivePolicy.provenance.hard_constraints.length > 0;
 
-        // Everything else (person roles, geography, vertical, quota, gates)
-        // is carried through untouched.
-        // INVOKED ONLY WHEN THE SELECTOR NAMED IT. The `useLeadStrategyOwner &&
-        // !persistedPlan` test that used to guard this is now folded into
-        // `selectLeadPlannerAdapter` — same conditions, one place, and the Claude
-        // adapter below reads the same decision instead of reading this result.
-        const gptStrategy = (plannerSelection.owner === "gpt_lead_strategy_v1")
-          ? await applyLeadStrategyInitialPlanning({
-            workspaceId: workspace_id,
-            spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyLeadStrategyInitialPlanning>[0]["spec"],
-            requestedLeadCount: quota.requestedLeadCount,
-            companyVertical: cfIntent.job_search_spec.company_vertical
-              ? String(cfIntent.job_search_spec.company_vertical)
-              : null,
-            // The workspace's real ICP, so the strategist plans against it rather
-            // than guessing. Absent when the Brain is not enforced.
-            companyConstraints: brainEnforced
-              ? constraintsFromBrain(effectivePolicy.constraints as never, {
-                country: cfIntent.job_search_spec.location ?? null,
-                vertical: cfIntent.job_search_spec.company_vertical
-                  ? String(cfIntent.job_search_spec.company_vertical)
-                  : null,
-              })
-              : null,
-          })
+        // ══ RECONSTITUTED, NEVER RE-PLANNED ══════════════════════════════════
+        //
+        // run-agent used to INVOKE the GPT adapter here. It no longer holds a
+        // lead-planning call site at all: planning happens once, in
+        // `planQualifiedLeadBeforePersistence`, and what arrives here is the
+        // artifact that call produced.
+        //
+        // `gptStrategyFromPersistedPlan` rebuilds exactly the shape the eleven
+        // downstream readers below already expect — spec rewrite, source order,
+        // route, and the validated plan `gptAdaptiveStrategyBinding` consumes —
+        // with `model_requests: 0`, which is what distinguishes reusing a plan
+        // from making a second one.
+        //
+        // Null unless the artifact says GPT planned it, so a Claude-planned or
+        // deterministic task reads exactly as it did before.
+        const gptStrategy = (leadPlanArtifact?.plan_source === "gpt_validated")
+          ? gptStrategyFromPersistedPlan(
+            leadPlanArtifact,
+            cfIntent.job_search_spec as unknown as Record<string, unknown>,
+          )
           : null;
         // ── VALIDATED HIRING ROUTE ──────────────────────────────────────────
         // GPT chooses the route and the source order; this validates that
@@ -2635,24 +2661,18 @@ Deno.serve(async (req) => {
           }
         }
 
-        // THE SELECTED ADAPTER, NOT "WHATEVER GPT LEFT UNDONE".
+        // RECONSTITUTED FROM THE ARTIFACT. NO MODEL CALL LIVES HERE ANY MORE.
         //
-        // The old condition — `gptStrategy?.specRewritten ? null : await …` —
-        // asked whether the OTHER planner had succeeded, so an ordinary GPT
-        // fallback opened a second model call here. It now asks only whether the
-        // selector named this adapter, which no GPT outcome can change.
-        const claudeFirst = plannerSelection.owner === "persisted_plan_artifact_v1" && persistedPlan
-          ? claudeFirstFromPersistedPlan(persistedPlan, cfIntent.job_search_spec as unknown as Record<string, unknown>)
-          : plannerSelection.owner !== "claude_lead_planner_v1"
-          ? null
-          : await applyClaudeFirstLeadPlanning({
-          workspaceId: workspace_id,
-          originalInstruction: cfIntent.job_search_spec.original_query,
-          spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
-          missionId: `${task.id}:1`,
-          taskId: task.id,
-          requestedLeadCount: quota.requestedLeadCount,
-        });
+        // The chain of guards this replaces is worth remembering. First it was
+        // `gptStrategy?.specRewritten ? null : await apply…` — which asked
+        // whether the OTHER planner had succeeded, so an ordinary GPT fallback
+        // opened a second model call here. Then it asked whether the selector had
+        // named this adapter. Now it asks nothing: the adapter is not reachable
+        // from this function, and a Claude-planned task is rebuilt from the
+        // artifact the one call site produced, with `model_requests: 0`.
+        const claudeFirst = leadPlanArtifact
+          ? claudeFirstFromPersistedPlan(leadPlanArtifact, cfIntent.job_search_spec as unknown as Record<string, unknown>)
+          : null;
         const cfIntentPlanned = gptStrategy?.specRewritten
           ? { ...cfIntent, job_search_spec: gptStrategy.spec as unknown as typeof cfIntent.job_search_spec }
           : claudeFirst?.specRewritten
@@ -2738,13 +2758,15 @@ Deno.serve(async (req) => {
           },
           // ---- INITIAL ADAPTIVE STRATEGY -------------------------------------
           //
-          // NO SECOND MODEL CALL. `applyClaudeFirstLeadPlanning` above already made
-          // the one Claude-first planning request for this task, through its own
-          // gateway, prompt and parser, behind CLAUDE_FIRST_LEAD_PLANNING and the
-          // workspace allow-list. `adaptiveStrategyBinding` hands the strategy it
-          // ALREADY accepted to the adaptive adapter; when planning was disabled or
-          // fell back, the strategy is null and the sequential bridge keeps
-          // `deterministicOrderedPlan` with the exact reason.
+          // NO MODEL CALL AT ALL ON THIS PATH. The one planning request for this
+          // task was made in orchestrate, at the single planner call site, and
+          // what reaches here is the artifact it produced —
+          // `claudeFirstFromPersistedPlan` / `gptStrategyFromPersistedPlan` rebuild
+          // the adapter's accepted strategy with `model_requests: 0`.
+          // `adaptiveStrategyBinding` then hands that ALREADY-accepted strategy to
+          // the adaptive adapter; when the task was never planned, the strategy is
+          // null and the sequential bridge keeps `deterministicOrderedPlan` with
+          // the exact reason.
           //
           // Built by the gated seam rather than assembled here, so run-agent's
           // kernel surface stays the two modules test 32.E permits.
@@ -2777,7 +2799,7 @@ Deno.serve(async (req) => {
               strategyRouteOverride: { enabled: true, reason: "gpt_lead_strategy" },
             }
             : adaptiveStrategyBinding(claudeFirst ?? {
-            spec: cfIntent.job_search_spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
+            spec: cfIntent.job_search_spec as unknown as LeadPlanningBridgeInput["spec"],
             specRewritten: false, outcome: null, mission: null,
             enablement: { enabled: false, reason: "flag_off" }, environment: null,
           }, {
