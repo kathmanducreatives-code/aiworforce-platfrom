@@ -20,6 +20,7 @@
 // PURE. No network, model, database or environment access.
 
 import { canonicalJson, sha256Hex } from "../../planHash.ts";
+import type { LeadPlannerProvenance } from "../../leadOwnership.ts";
 import type { LeadInitialStrategy } from "./leadStrategy.ts";
 
 export const QUALIFIED_LEAD_PLAN_VERSION = "qualified-lead-visible-plan-1.0.0";
@@ -92,6 +93,14 @@ export interface QualifiedLeadPlanArtifact {
   // the plan row alone, including on a resume that carries no request body.
   planning_owner?: string;
   planned_at?: string;
+  /**
+   * How this plan was made — adapter, outcome, and the reason when it degraded.
+   *
+   * `plan_source` alone could not distinguish "the deterministic ladder was the
+   * intended planner" from "a model adapter ran and fell back". Both said
+   * `deterministic_registry`. This triple makes them structurally different.
+   */
+  planner_provenance?: LeadPlannerProvenance;
 }
 
 /** Stable identity for a persisted plan artifact. */

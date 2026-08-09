@@ -54,7 +54,7 @@ import { adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPla
 // ONE PLANNER, ONE EXECUTION OWNER — see _shared/leadOwnership.ts for what these
 // replace. The selector is pure and runs before any adapter is invoked, so a
 // flag combination can no longer put two planners on one task.
-import { createLeadOwnershipLedger } from "../_shared/leadOwnership.ts";
+import { createLeadOwnershipLedger, assertPlannerProvenance, describePlannerProvenance } from "../_shared/leadOwnership.ts";
 import { selectLeadPlannerAdapter } from "../_shared/leadPlannerInterface.ts";
 import { loadAuthoritativeLeadPlan } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
@@ -1365,11 +1365,34 @@ Deno.serve(async (req) => {
         });
         leadOwnership.claimPlanning(plannerSelection.owner, plannerSelection.reason);
         for (const n of plannerSelection.notSelected) leadOwnership.decline(n.owner, n.reason);
+
+        // ── HOW THE PLAN WAS MADE, NOT JUST THAT IT WAS REPLAYED ────────────
+        //
+        // `plannerSelection.owner` is `persisted_plan_artifact_v1` for every
+        // planned task, which is true but useless for debugging — it says the
+        // plan was reused and nothing about which adapter produced it, or
+        // whether that adapter succeeded or degraded.
+        //
+        // The artifact carries its own provenance, so a resumed run reports
+        // exactly what the run that planned it reported. A task planned before
+        // provenance existed, or never planned at all, records the ladder as
+        // having been selected directly — which for an unplanned task is the
+        // literal truth.
+        const planProvenance = leadPlanArtifact?.planner_provenance
+          ?? assertPlannerProvenance({
+            owner: leadPlanArtifact ? "persisted_plan_artifact_v1" : "deterministic_registry_v1",
+            adapter: "none",
+            outcome: "selected_directly",
+            fallback_reason: null,
+          });
+        leadOwnership.recordPlanProvenance(planProvenance);
         console.log("[run-agent][planner-owner]", {
           task_id: task.id,
           planning_owner: plannerSelection.owner,
           reason: plannerSelection.reason,
           not_selected: plannerSelection.notSelected,
+          plan_provenance: planProvenance,
+          provenance_description: describePlannerProvenance(planProvenance),
         });
 
         // AUTHORITATIVE INITIAL STRATEGY (gated path only).

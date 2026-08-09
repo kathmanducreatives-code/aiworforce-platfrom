@@ -44,6 +44,10 @@ import {
   applyLeadStrategyInitialPlanning, isGptLeadStrategyEnabled,
 } from "../../leadStrategyBridge.ts";
 import { selectLeadPlannerAdapter } from "../../leadPlannerInterface.ts";
+import {
+  adapterForOwner, assertPlannerProvenance, describePlannerProvenance,
+  type LeadPlannerProvenance,
+} from "../../leadOwnership.ts";
 import type { LeadStrategyModelFn } from "../../leadStrategyModels.ts";
 import { constraintsFromBrain } from "../../leadStrategistContext.ts";
 import {
@@ -260,6 +264,35 @@ export async function planQualifiedLeadBeforePersistence(
   // makes implicit re-planning impossible rather than merely discouraged.
   artifact.planning_owner = plannerSelection.owner;
   artifact.planned_at = new Date().toISOString();
+
+  // ── DEGRADED IS NOT THE SAME AS DETERMINISTIC-BY-DESIGN ──────────────────
+  //
+  // Reaching this line means an adapter WAS selected and DID run — a workspace
+  // with none enabled returned null far above. So a `deterministic_registry`
+  // plan_source here can only mean the adapter fell back, never that the ladder
+  // was the intended planner. That distinction was previously unrecoverable
+  // from the record; it is now the outcome field.
+  //
+  // `assertPlannerProvenance` refuses a fallback with no reason, so a degraded
+  // run cannot be persisted without saying what degraded it.
+  const modelValidated = artifact.plan_source !== "deterministic_registry";
+  const provenance: LeadPlannerProvenance = assertPlannerProvenance({
+    owner: plannerSelection.owner,
+    adapter: adapterForOwner(plannerSelection.owner),
+    outcome: modelValidated ? "model_validated" : "deterministic_fallback",
+    fallback_reason: modelValidated
+      ? null
+      // Never empty: the adapters always supply one, and this guarantees the
+      // assertion above can be satisfied even if a future adapter forgets.
+      : (artifact.fallback_reason ?? "adapter_fell_back_without_stating_a_reason"),
+  });
+  artifact.planner_provenance = provenance;
+  console.log("[lead-plan][provenance]", {
+    workspace_id: input.workspaceId,
+    plan_source: artifact.plan_source,
+    ...provenance,
+    description: describePlannerProvenance(provenance),
+  });
 
   const summary = buildQualifiedLeadPlanSummary(artifact.contract, artifact.plan_source);
   const steps = buildQualifiedLeadPlanSteps({
