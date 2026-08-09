@@ -21,6 +21,13 @@ import { classifyJobFamily, type JobFamily } from "./jobFamily.ts";
 import { inferRequestedVertical, type Vertical } from "./verticalQualification.ts";
 import { normalizeCountry, detectCountryInText } from "./locationMatch.ts";
 import { getJobFamily, inferFamilyKey } from "./jobFamilyRegistry.ts";
+// Reused, not reimplemented: this is the SAME "do not broaden" / "exactly N"
+// detector the generic sourcing path (sourcingRetry.ts / run-agent's adaptive
+// loop) already uses. The company-first path had no equivalent at all — a
+// request saying "strictly in Antarctica only. Do not broaden." compiled a spec
+// with no record that broadening had been forbidden, which is how the
+// constraint could be lost even before geography extraction is considered.
+import { parseStrictConstraints } from "./sourcingRetry.ts";
 
 export type JobSearchCompilationStatus = "compiled" | "insufficient" | "not_applicable";
 
@@ -41,6 +48,20 @@ export interface CompiledJobSearchSpec {
   compilation_status: JobSearchCompilationStatus;
   /** Why compilation failed, for an honest runtime error. */
   insufficient_reason: string | null;
+  /**
+   * The request said "do not broaden", "strictly", "exactly N", or named a
+   * geography with no escape hatch ("anywhere", "global"). Computed by
+   * `parseStrictConstraints` — reused, not reimplemented — and additive: it
+   * changes nothing about how this spec compiles, only what it now RECORDS.
+   *
+   * `sourcingConstraints.ts` folds this into the task's hard-constraint object,
+   * where the existing hash-comparison in `broadeningValidator.ts` already
+   * refuses any round whose hard constraints differ from the first round's —
+   * so once this is true, it cannot be loosened by a later round without
+   * already-existing validation catching it. No new enforcement was written for
+   * this field; it makes a signal visible to a check that already existed.
+   */
+  no_broadening_requested: boolean;
 }
 
 // ------------------------------------------------------------------ roles ----
@@ -87,10 +108,64 @@ const COUNTRY_PHRASES: Array<[RegExp, string]> = [
   [/\bnorth\s+america\b/i, "North America"],
 ];
 
-/** Deterministic location extraction: explicit country phrase, else a US state. */
+/**
+ * REGION PHRASES — no single country, so `country` carries the region label
+ * itself rather than an ISO code, exactly as `North America` already does above
+ * (`normalizeCountry` has no entry for a region, so `?? label` is what actually
+ * fires there too). Checked after COUNTRY_PHRASES so a request naming both a
+ * region and a specific country keeps the country.
+ *
+ * Kept to what real TEST requests actually asked for ("Find 5 AI workflow
+ * companies in Europe") rather than an attempt at exhaustive region coverage —
+ * this is a location parser fix, not the canonical geography system.
+ */
+const REGION_PHRASES: Array<[RegExp, string]> = [
+  [/\beurope\b/i, "Europe"],
+  [/\bemea\b/i, "EMEA"],
+  [/\bapac\b/i, "APAC"],
+];
+
+/**
+ * MAJOR CITIES — a small, reviewed table, not a fuzzy guess or an attempt at
+ * world coverage. Every entry here was pulled from a REAL TEST
+ * `task_plans.user_instruction` ("Find companies hiring GTM roles in London",
+ * "Find 5 React engineers located in Amsterdam", "find 5 React engineers in
+ * Berlin"), not invented. `location` keeps the CITY — more specific and more
+ * useful to a provider's location filter than collapsing it — while `country`
+ * carries the country the city resolves to, for whatever downstream code gates
+ * on country (mirroring how a US state already keeps the state as `location`
+ * and "United States" as `country`, below).
+ *
+ * Extend this list only from evidence (a real request that needed a city this
+ * table does not have), the same discipline `locationMatch.ts` already applies
+ * to its own region table.
+ */
+const MAJOR_CITIES: Array<[RegExp, string, string]> = [
+  [/\blondon\b/i, "London", "United Kingdom"],
+  [/\bberlin\b/i, "Berlin", "Germany"],
+  [/\bamsterdam\b/i, "Amsterdam", "Netherlands"],
+];
+
+/**
+ * Deterministic location extraction: explicit country phrase, else a city,
+ * else a region, else a US state, else whatever `detectCountryInText` can read.
+ *
+ * Cities are checked before the broader region/US-state passes so "London"
+ * resolves to the city (with the United Kingdom as its country) rather than to
+ * nothing — `detectCountryInText` (locationMatch.ts) is country-code-only and
+ * has no United Kingdom entry reachable from the bare word "London" at all, so
+ * every prior pass fell through this exact request to `{ location: null,
+ * country: null }`, silently discarding the one constraint the user stated.
+ */
 export function extractJobLocation(text: string): { location: string | null; country: string | null } {
   const t = text ?? "";
   for (const [re, label] of COUNTRY_PHRASES) {
+    if (re.test(t)) return { location: label, country: normalizeCountry(label) ?? label };
+  }
+  for (const [re, city, country] of MAJOR_CITIES) {
+    if (re.test(t)) return { location: city, country: normalizeCountry(country) ?? country };
+  }
+  for (const [re, label] of REGION_PHRASES) {
     if (re.test(t)) return { location: label, country: normalizeCountry(label) ?? label };
   }
   for (const st of US_STATES) {
@@ -273,10 +348,18 @@ export interface JobSearchCompileInput {
  */
 export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobSearchSpec {
   const text = input.text ?? "";
+  // Computed once, unconditionally — even a spec that never reaches
+  // "compiled" status can be asked to stop at "insufficient" or
+  // "not_applicable" without the caller losing the fact that the request
+  // demanded no broadening.
+  const strict = parseStrictConstraints(text);
+  const no_broadening_requested = strict.location || strict.industry || strict.stage || strict.count_exact;
+
   const base: CompiledJobSearchSpec = {
     job_families: [], keyword_queries: [], location: null, country: null,
     company_vertical: null, requested_person_roles: [], original_query: text,
     compilation_status: "not_applicable", insufficient_reason: null,
+    no_broadening_requested,
   };
 
   // A request with no employer-side hiring signal (pure person lookup, job seeker,
@@ -325,6 +408,7 @@ export function compileJobSearchSpec(input: JobSearchCompileInput): CompiledJobS
     job_families, keyword_queries, location, country, company_vertical,
     requested_person_roles, original_query: text,
     compilation_status: "compiled", insufficient_reason: null,
+    no_broadening_requested,
   };
 }
 

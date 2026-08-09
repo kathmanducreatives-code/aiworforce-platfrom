@@ -181,8 +181,21 @@ export function sanitizePlannerInput(
   };
 }
 
-/** Titles a planner could ever legitimately propose for this request. */
+/**
+ * Titles a planner could ever legitimately propose for this request.
+ *
+ * `hard.noBroadeningRequested` short-circuits to the same conservative path
+ * already used for an unknown family (literal requested titles only, no
+ * `def.exact`/`def.synonyms`/adjacent) — `def.exact` is itself a family of
+ * SEVERAL distinct titles (e.g. "VP Sales", "Head of Sales", "Sales Director"
+ * all live under one family's `exact`), not a normalized form of what the user
+ * typed, so including it for a "strictly X only, do not broaden" request would
+ * still let the planner propose titles the user never named. This is additive
+ * gating only — every existing call site whose hard constraints don't set
+ * `noBroadeningRequested` sees byte-identical behaviour to before.
+ */
 export function plannerApprovedTitleUniverse(hard: HardConstraints, soft: SoftConstraints): string[] {
+  if (hard.noBroadeningRequested) return [...new Set(hard.requestedTitles)];
   const def = getJobFamily(hard.jobFamilyKey);
   if (!def) return [...hard.requestedTitles];
   const universe = [...hard.requestedTitles, ...def.exact, ...def.synonyms];

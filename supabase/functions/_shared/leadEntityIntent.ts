@@ -202,6 +202,19 @@ const GEO_PATTERNS: Array<[RegExp, string]> = [
   [/\bcanada\b/i, "Canada"],
   [/\baustralia\b/i, "Australia"],
   [/\bremote\b/i, "Remote"],
+  // 2026-08-09: this list feeds evidenceContract.ts's geoConstrained check and
+  // leadMissionCompiler.ts's mission geography — unlike job_search_spec.location
+  // (jobSearchSpec.ts), it is computed for EVERY request, not just hiring-signal
+  // ones, so a pure person/company lookup naming one of these still preserves
+  // its geography. Same evidence-based entries as jobSearchSpec.ts's
+  // MAJOR_CITIES/REGION_PHRASES tables — extend both together, from evidence.
+  [/\bberlin\b/i, "Berlin"],
+  [/\bamsterdam\b/i, "Amsterdam"],
+  [/\bgermany\b/i, "Germany"],
+  [/\bnetherlands\b/i, "Netherlands"],
+  [/\beurope\b/i, "Europe"],
+  [/\bemea\b/i, "EMEA"],
+  [/\bapac\b/i, "APAC"],
 ];
 
 function firstMatch(re: RegExp, text: string): string | null {

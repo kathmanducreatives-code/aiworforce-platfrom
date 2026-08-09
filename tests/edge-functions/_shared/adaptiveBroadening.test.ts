@@ -6,7 +6,7 @@ import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0
 import { compileLeadEntityIntent } from "../../../supabase/functions/_shared/leadEntityIntent.ts";
 import { getJobFamily, validateTitleForFamily, inferFamilyKey } from "../../../supabase/functions/_shared/jobFamilyRegistry.ts";
 import { buildSourcingConstraints, hardConstraintsUnchanged } from "../../../supabase/functions/_shared/sourcingConstraints.ts";
-import { buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput, type PlannerProposal, type RoundPlan } from "../../../supabase/functions/_shared/broadeningPlan.ts";
+import { buildInitialPlan, deterministicRoundPlan, sanitizePlannerInput, plannerApprovedTitleUniverse, type PlannerProposal, type RoundPlan } from "../../../supabase/functions/_shared/broadeningPlan.ts";
 import { validateRoundPlan, detectInjection, scanProposalForInjection } from "../../../supabase/functions/_shared/broadeningValidator.ts";
 import { classifyBottleneck, emptyFunnelSummary } from "../../../supabase/functions/_shared/sourcingBottleneck.ts";
 import { forecastRoundCost, roundIdempotencyKey, newIdempotencyLedger, DEFAULT_COST_POLICY } from "../../../supabase/functions/_shared/sourcingCostForecast.ts";
@@ -60,6 +60,29 @@ Deno.test("initial plan is versioned, hashed and provider-independent", async ()
   assertEquals(plan.hard_constraint_hash, k.hardHash);
   assert(plan.plan_hash && plan.rounds[0].strategy_hash);
   assertFalse(JSON.stringify(plan).includes("linkedin.com"));   // no actor-native JSON
+});
+
+// ===================== 4. no-broadening title restriction ==================
+Deno.test("no_broadening_requested locks the title universe to the literal ask", async () => {
+  const k = await c("Find exactly 5 Sales Director leads. Do not broaden.");
+  assert(k.hard.noBroadeningRequested, "expected 'do not broaden' to set the flag");
+  const universe = plannerApprovedTitleUniverse(k.hard, k.soft);
+  assertEquals(universe, [...new Set(k.hard.requestedTitles)]);
+  // The family's exact/synonym variants must NOT leak in even though the
+  // family itself (sales leadership) is recognized and would normally
+  // approve "VP Sales" / "Head of Sales" style titles.
+  assertFalse(universe.some((t) => /vp sales|head of sales|chief revenue/i.test(t)));
+});
+Deno.test("without the flag, the same family still gets its normal universe", async () => {
+  const k = await c("Find Sales Director leads at Series B startups");
+  assertFalse(k.hard.noBroadeningRequested);
+  const universe = plannerApprovedTitleUniverse(k.hard, k.soft);
+  assert(universe.length > k.hard.requestedTitles.length, "expected family synonyms/adjacent titles to expand the universe");
+});
+Deno.test("unknown family stays literal-only regardless of the flag (unchanged prior behaviour)", async () => {
+  const k = await c("Find leads for a completely made-up nonexistent job title xyzzy");
+  const universe = plannerApprovedTitleUniverse(k.hard, k.soft);
+  assertEquals(universe, [...k.hard.requestedTitles]);
 });
 
 // ===================== 5. validator ========================================

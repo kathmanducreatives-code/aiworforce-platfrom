@@ -63,6 +63,68 @@ Deno.test("person-target OR explicit lead quota each independently trigger compa
   assertEquals(routeQualifiedLead("Find companies hiring engineers").executionMode, "fast");
 });
 
+// ---- PART 2a: LEAD_QUOTA_RE — widened count-to-"leads" window -------------
+// 2026-08-09: widened from a fixed vocabulary ("N qualified/contact-ready/
+// verified leads") to a 25-char, clause-bounded window so a short descriptive
+// phrase between the count and "leads" still matches.
+Deno.test("a short descriptive phrase between count and 'leads' still matches (the motivating case)", () => {
+  assertEquals(extractRequestedLeadCount("Find 5 SDR hiring leads in London"), 5);
+});
+Deno.test("a clause break still stops the match — the count does not leak across sentences", () => {
+  // The 100 quantifies companies, not leads; a clause break is between them.
+  assertEquals(extractRequestedLeadCount("Find 100 companies, then maybe get some leads eventually"), null);
+});
+Deno.test("KNOWN LIMITATION: an unrelated count within 25 chars of 'leads' can still false-positive", () => {
+  // Documented, not fixed: tightening this regex back to a fixed vocabulary
+  // reintroduces the original bug ("5 SDR hiring leads" not matching at all).
+  // This case is intentionally accepted as a rare, lower-severity tradeoff.
+  assertEquals(extractRequestedLeadCount("I need 2 lists of qualified leads"), 2);
+});
+
+// ---- PART 2b: explicit lead/contact/prospect/outreach intent --------------
+// 2026-08-09: a company-first hiring-signal request is NOT by itself proof the
+// user wants a contact — "Find companies hiring GTM roles in London" and
+// "Find companies hiring software engineers" compile to the identical
+// {target_entity: "company", execution_mode: "company_first",
+// hiring_signal_required: true} shape, yet only requests carrying EXPLICIT
+// lead/contact/prospect/outreach language should route to
+// qualified_lead_sourcing. Hiring signal alone stays evidence/qualification
+// context, never proof a contact was requested.
+const SHOULD_REROUTE = [
+  "Find 5 SDR hiring leads in London",
+  "Find companies hiring salespeople and the founders I should contact",
+  "Find prospects that are hiring their first salesperson",
+  "Give me 20 companies hiring GTM roles that I can reach out to",
+];
+for (const q of SHOULD_REROUTE) {
+  Deno.test(`explicit intent reroutes: ${q}`, () => {
+    assertEquals(routeQualifiedLead(q).workflowKind, "qualified_lead_sourcing");
+  });
+}
+const SHOULD_STAY_ACCOUNT_ONLY = [
+  "Which companies are hiring engineers in London?",
+  "Research companies currently expanding their engineering teams",
+  "Show me hiring trends among SaaS companies",
+  // The literal phrasing this whole distinction was found from — a company-
+  // first hiring-signal request with no lead/contact/prospect word.
+  "Find companies hiring GTM roles in London",
+];
+for (const q of SHOULD_STAY_ACCOUNT_ONLY) {
+  Deno.test(`hiring signal alone stays account-only: ${q}`, () => {
+    assertEquals(routeQualifiedLead(q).workflowKind, "account_opportunity_sourcing");
+  });
+}
+Deno.test("'prospects' alone is sufficient person-target evidence", () => {
+  const r = routeQualifiedLead("Find prospects at companies hiring SDRs");
+  assertEquals(r.workflowKind, "qualified_lead_sourcing");
+  assert(r.reasonCodes.some((c) => c.startsWith("person_target:prospects")));
+});
+Deno.test("'who should I contact' phrasing routes as an explicit ask", () => {
+  const r = routeQualifiedLead("Who should I contact at companies hiring GTM roles in London?");
+  assertEquals(r.workflowKind, "qualified_lead_sourcing");
+  assert(r.reasonCodes.includes("who_to_contact"));
+});
+
 // ---- BLAST RADIUS ----------------------------------------------------------
 const BLAST: Array<[string, string, string]> = [
   ["Find companies hiring software engineers", "engineering", "fast"],

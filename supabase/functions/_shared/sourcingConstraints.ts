@@ -22,6 +22,19 @@ export interface HardConstraints {
   requireCurrentEmployerVerification: boolean;
   requireEvidence: boolean;
   excludedTitles: string[];
+  /**
+   * The request said "do not broaden", "strictly", "exactly N", or similar —
+   * from `spec.no_broadening_requested` (jobSearchSpec.ts), which reuses
+   * `parseStrictConstraints` rather than re-detecting the phrase here.
+   *
+   * Being a field on `HardConstraints` is what does the enforcement: it
+   * participates in the same byte-identical hash comparison every other hard
+   * constraint already goes through in `broadeningValidator.ts`, so once true
+   * it cannot silently become false in a later round without the existing
+   * `hard_constraints_changed` violation catching it. No new validator logic
+   * was written for this field.
+   */
+  noBroadeningRequested: boolean;
 }
 
 export interface SoftConstraints {
@@ -60,6 +73,7 @@ export async function buildSourcingConstraints(
     requireCurrentEmployerVerification: intent.company_gate_required,
     requireEvidence: true,
     excludedTitles: [],
+    noBroadeningRequested: spec.no_broadening_requested,
   };
 
   const soft: SoftConstraints = {
@@ -81,6 +95,7 @@ export async function buildSourcingConstraints(
     requestedPersonRoles: spec.requested_person_roles.length ? "intent_inferred" : "policy_default",
     requireCurrentEmployerVerification: "policy_default",
     requireEvidence: "policy_default",
+    noBroadeningRequested: spec.no_broadening_requested ? "user_explicit" : "policy_default",
     maxRawJobs: "workflow_default",
     maxCompanies: "workflow_default",
     maxPeopleLookups: "workflow_default",

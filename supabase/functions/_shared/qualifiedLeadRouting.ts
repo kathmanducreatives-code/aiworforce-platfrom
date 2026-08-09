@@ -24,12 +24,30 @@ export interface QualifiedLeadRoute {
   quotaPolicy: "contact_only" | "account_only";
 }
 
-/** Signals that the user wants PEOPLE they can contact, not just companies. */
-const PERSON_TARGET_RE = /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?)\b/i;
+/**
+ * Signals that the user wants PEOPLE they can contact, not just companies.
+ *
+ * `prospects?` and the bare `who (should i|to|can i|do i) contact/reach out
+ * to/target/talk to/email/message` phrasing mirror `PERSON_NOUN_RE` /
+ * `WHO_TO_CONTACT_RE` in `leadEntityIntent.ts` — this module cannot import
+ * that file (the reverse import already exists, for
+ * `extractRequestedLeadCount`, so that would be a cycle), so the vocabulary
+ * is reproduced here rather than re-derived from scratch.
+ */
+const PERSON_TARGET_RE = /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?|prospects?)\b/i;
+const WHO_TO_CONTACT_RE = /\bwho (?:should i|to|can i|do i)\s+(?:contact|reach out to|target|talk to|email|message)\b/i;
 const QUALIFIED_LEAD_RE = /\b(qualified leads?|contact[-\s]?ready|verified contacts?|leads? i can contact|reach out to)\b/i;
 const EMPLOYER_VERIFY_RE = /\b(current employer|currently works?|verified employer|still (?:at|works))\b/i;
-/** "Return 5 qualified leads", "give me 10 leads", "5 contact-ready leads". */
-const LEAD_QUOTA_RE = /\b(\d{1,3})\s+(?:qualified|contact[-\s]?ready|verified)?\s*leads?\b/i;
+/**
+ * "Return 5 qualified leads", "give me 10 leads", "5 contact-ready leads" — and
+ * now "5 SDR hiring leads", where a short descriptive phrase sits between the
+ * count and "leads". Bounded to <=25 characters and stops at any clause break
+ * (. , ; ! ?), so this stays a quota match on ONE clause rather than an
+ * open-ended scan: "Find 100 companies, then maybe get some leads eventually"
+ * does not match — the 100 quantifies companies, not leads, and the clause
+ * break says so.
+ */
+const LEAD_QUOTA_RE = /\b(\d{1,3})\b[^.,;!?]{0,25}?\bleads?\b/i;
 /** Explicitly account-shaped asks. */
 const ACCOUNT_TARGET_RE = /\b(compan(?:y|ies)|accounts?|organi[sz]ations?|startups?|firms?)\b/i;
 
@@ -38,6 +56,7 @@ export function routeQualifiedLead(instruction: string | null | undefined): Qual
   const reasons: string[] = [];
 
   if (PERSON_TARGET_RE.test(text)) reasons.push(`person_target:${firstMatch(PERSON_TARGET_RE, text)}`);
+  if (WHO_TO_CONTACT_RE.test(text)) reasons.push("who_to_contact");
   if (QUALIFIED_LEAD_RE.test(text)) reasons.push(`qualified_lead_phrase:${firstMatch(QUALIFIED_LEAD_RE, text)}`);
   if (EMPLOYER_VERIFY_RE.test(text)) reasons.push("current_employer_required");
   const quota = LEAD_QUOTA_RE.exec(text);
@@ -166,9 +185,25 @@ const CONTACT_ENTITY_NOUN_SRC =
 /**
  * Ordered most-specific first. The number must be ATTACHED to the requested
  * output, either by the noun that follows it or by the verb that introduces it.
+ *
+ * The first pattern's gap allows up to 3 short role-phrase WORDS between the
+ * count and the noun — "5 SDR hiring leads" needs exactly that for the same
+ * reason `LEAD_QUOTA_RE` above does, and a request that routes to
+ * qualified_lead_sourcing on that phrasing but then silently defaults its OWN
+ * stated count would be a worse bug than the one this fixes.
+ *
+ * Deliberately word-bounded, not `LEAD_QUOTA_RE`'s character-bounded window:
+ * a character bound alone let "Find CEOs at Series 2 startups and return 5
+ * contacts." match on "2" (bridging all the way to "contacts" — regression
+ * caught by the existing qualifiedLeadMultiRoleParsing.test.ts). Excluding
+ * digits from the intervening words closes that specific bridge — a second
+ * number ends the search for a noun after the first one — while still
+ * reaching "leads" past two non-numeric words. "10-100 employees. Return 5
+ * leads." still resolves to 5: the clause break before "leads" ends "100"'s
+ * search the same as before.
  */
 const REQUESTED_COUNT_PATTERNS: RegExp[] = [
-  new RegExp(`\\b${NUM_SRC}\\s+${CONTACT_ENTITY_NOUN_SRC}\\b`, "i"),
+  new RegExp(`\\b${NUM_SRC}\\b(?:\\s+(?!\\d)[a-z-]+){0,3}\\s+${CONTACT_ENTITY_NOUN_SRC}\\b`, "i"),
   new RegExp(`\\b(?:return|give\\s+me|send\\s+me|get\\s+me|i\\s+need|i\\s+want|deliver|find\\s+me)\\s+${NUM_SRC}\\b`, "i"),
 ];
 
