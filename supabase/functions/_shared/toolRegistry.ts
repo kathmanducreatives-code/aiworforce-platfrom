@@ -18,6 +18,13 @@ import {
 } from "./providerResponseContract.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
 import { buildCuriousCoderLinkedInJobsInput } from "./curiousCoderJobsInput.ts";
+// ONE OBSERVABILITY LAYER for every paid lead-sourcing call. Observes only —
+// it never selects a provider, sets a budget, decides a retry or gates a result.
+import {
+  withExecutionAudit, createLedgerWriter, inferStage, logicalCallKey,
+  type ExecutionCallSpec, type ExecutionOutcome, type ExecutionStage,
+  type ExecutionReason, type LedgerDb,
+} from "./executionLedger.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
@@ -1500,12 +1507,77 @@ export async function runTool(
     return { ok: false, awaiting_approval: true, error: "awaiting_approval" };
   }
 
-  // Execute.
+  // ══ EXECUTE, UNDER THE EXECUTION LEDGER ═══════════════════════════════════
+  //
+  // ONE OBSERVABILITY LAYER, NOT ONE PER PATH. All three lead-sourcing entry
+  // points funnel through here — company-first `invokeJobs` and `invokePeople`,
+  // and the generic `runAdaptiveSourcing` attempt — so instrumenting this single
+  // seam covers both execution paths with the same schema. That is the property a
+  // future people-first migration needs in order to compare them.
+  //
+  // Scoped to `source_with_apify`: it is the paid provider boundary. Other tools
+  // keep exactly their existing `tool_calls` record and are untouched, which is
+  // why "auditing on" and "auditing off" are the same run for them.
+  //
+  // The ledger never alters `result`. It observes and finalizes in a `finally`,
+  // so a throw still leaves a terminal row.
   let result: ToolResult;
-  try {
-    result = await tool.execute(input, ctx);
-  } catch (e) {
-    result = { ok: false, error: `tool_threw:${String(e)}` };
+  const audited = tool.name === "source_with_apify" && ctx.workspace_id;
+  const auditInput = (input ?? {}) as Record<string, unknown>;
+  const auditSpec = audited
+    ? {
+      workspace_id: ctx.workspace_id,
+      task_id: ctx.task_id ?? null,
+      plan_id: ctx.plan_id ?? null,
+      execution_owner: (auditInput.execution_owner as string | undefined) ?? null,
+      planner_owner: (auditInput.planner_owner as string | undefined) ?? null,
+      stage: (auditInput.audit_stage as ExecutionStage | undefined)
+        ?? inferStage(
+          (auditInput.capability_key ?? auditInput.selected_actor_key) as string | null,
+          auditInput.source_type as string | null,
+        ),
+      capability: (auditInput.capability_key as string | undefined)
+        ?? (auditInput.selected_actor_key as string | undefined) ?? null,
+      reason: (auditInput.audit_reason as ExecutionReason | undefined)
+        ?? (auditInput.resume_run_id ? "resumed_run" : "unspecified"),
+      provider_id: tool.provider,
+      actor_id: (auditInput.actor_id as string | undefined) ?? null,
+      request_input: auditInput,
+      logical_call_key: logicalCallKey({
+        task_id: ctx.task_id ?? null,
+        capability: (auditInput.capability_key as string | undefined) ?? null,
+        stage: inferStage(
+          (auditInput.capability_key ?? auditInput.selected_actor_key) as string | null,
+          auditInput.source_type as string | null,
+        ),
+        input_hash: (auditInput.compiled_input_hash as string | undefined) ?? null,
+      }),
+      // Supplied by the caller when it knows it is retrying. Attempt 1 otherwise,
+      // and the unique index means a genuine second attempt that forgets to say so
+      // fails loudly rather than overwriting the first.
+      attempt_number: typeof auditInput.audit_attempt === "number" ? auditInput.audit_attempt : 1,
+    } satisfies ExecutionCallSpec
+    : null;
+
+  const executeOnce = async (): Promise<{ result: ToolResult; outcome: ExecutionOutcome }> => {
+    let r: ToolResult;
+    try {
+      r = await tool.execute(input, ctx);
+    } catch (e) {
+      r = { ok: false, error: `tool_threw:${String(e)}` };
+    }
+    return { result: r, outcome: outcomeFromToolResult(r, auditInput) };
+  };
+
+  if (auditSpec) {
+    const writer = createLedgerWriter(ctx.admin as unknown as LedgerDb);
+    result = await withExecutionAudit(writer, auditSpec, executeOnce);
+  } else {
+    try {
+      result = await tool.execute(input, ctx);
+    } catch (e) {
+      result = { ok: false, error: `tool_threw:${String(e)}` };
+    }
   }
 
   const status = result.ok ? "succeeded" : result.unavailable ? "unavailable" : "failed";
@@ -1583,6 +1655,64 @@ export async function runTool(
   });
 
   return result;
+}
+
+/**
+ * Translate a ToolResult into the ledger's outcome shape.
+ *
+ * COUNTS ARE ONLY REPORTED WHEN THEY ARE KNOWN. `raw` is the row count this call
+ * actually returned; `normalized` and the gate counts belong to stages further
+ * down and are deliberately left undefined here rather than guessed, because a
+ * `0` would read as "checked and found none" instead of "not measured at this
+ * layer".
+ *
+ * COST IS ALWAYS AN ESTIMATE AT THIS LAYER. Apify does not return a charge on the
+ * run object we poll, so nothing here may claim `provider_reported`. A per-actor
+ * price table can promote this later; until then the row says "estimated" and
+ * `actual_cost_usd` stays null.
+ */
+function outcomeFromToolResult(
+  r: ToolResult,
+  input: Record<string, unknown>,
+): ExecutionOutcome {
+  const d = (r.data ?? {}) as Record<string, unknown>;
+  const items = Array.isArray(d.items) ? d.items : null;
+  const runId = typeof d.run_id === "string" ? d.run_id : null;
+  const datasetId = typeof d.dataset_id === "string" ? d.dataset_id : null;
+  const resumed = typeof input.resume_run_id === "string" && input.resume_run_id.length > 0;
+
+  if (r.ok) {
+    return {
+      // A resumed run is a real, distinct state: the rows arrived without a
+      // second charge. Recording it as a plain success would make the ledger
+      // overstate what was spent.
+      status: resumed ? "reused" : "succeeded",
+      provider_run_id: runId,
+      dataset_id: datasetId,
+      counts: { raw: items ? items.length : null },
+      cost: { source: "unknown" },
+      metadata: {
+        actor_id: d.actor_id ?? null,
+        build_id: d.build_id ?? null,
+        build_number: d.build_number ?? null,
+        no_results: d.no_results ?? null,
+      },
+    };
+  }
+
+  const code = String(r.error ?? "unknown_error");
+  const pending = d.pending === true;
+  return {
+    // A RUNNING Apify run is not a failure — it exists and is billable. Recorded
+    // as timed_out so a later resume is visibly a resume, not a first attempt.
+    status: /timeout|timed[-_ ]?out/i.test(code) || pending ? "timed_out" : "failed",
+    provider_run_id: runId,
+    dataset_id: datasetId,
+    failure_code: code.split(":")[0],
+    failure_message: code,
+    cost: { source: "unknown" },
+    metadata: { resumable: d.resumable ?? null, status: d.status ?? null },
+  };
 }
 
 async function logToolCall(
