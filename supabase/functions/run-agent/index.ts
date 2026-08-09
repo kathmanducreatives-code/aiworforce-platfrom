@@ -262,11 +262,19 @@ import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
 import type { CompoundPersistencePlan } from "../_shared/runAgentCompoundPersistenceAdapter.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
-import { createBroadeningPlanner } from "../_shared/broadeningPlannerAdapter.ts";
-import { createLeadStrategyPlanner, leadStrategyOwnerApplies } from "../_shared/leadStrategyOwner.ts";
+// NOTE THE ABSENCE. `createBroadeningPlanner` (broadeningPlannerAdapter.ts) is
+// deliberately NOT imported: it reaches Gemini via Lovable and falls through to
+// Anthropic — Claude — whenever ANTHROPIC_API_KEY is set, which it is on TEST.
+// Broadening's unauthorized path must make zero model calls of any kind, so it
+// uses `deterministicOnlyBroadeningPlanner` instead. Re-adding this import
+// would reopen the Claude-fallback path the ownership fix closed.
+import {
+  createLeadStrategyPlanner, leadStrategyOwnerApplies,
+  isGptBroadeningAuthorized, deterministicOnlyBroadeningPlanner,
+} from "../_shared/leadStrategyOwner.ts";
 // Same absence, same reason: the GPT adapter is invoked in orchestrate, and only
 // its already-decided output is rebuilt here.
-import { gptStrategyFromPersistedPlan } from "../_shared/leadStrategyBridge.ts";
+import { gptStrategyFromPersistedPlan, isGptLeadStrategyEnabled } from "../_shared/leadStrategyBridge.ts";
 // The missing edge between the GPT strategy and the sequential runtime: without
 // it the strategist's separate query packs never reach the Actor calls.
 import { gptAdaptiveStrategyBinding } from "../_shared/leadStrategyAdaptiveBinding.ts";
@@ -1276,22 +1284,36 @@ Deno.serve(async (req) => {
           isLeadSourcingWorkflow: true,
         });
 
-        // SOURCING STRATEGY OWNER.
+        // ══ ROUND-TO-ROUND BROADENING OWNER — EXPLICITLY AUTHORIZED ══════════
         //
-        // On the gated path — workflow = qualified_lead_sourcing AND
-        // execution_mode = company_first — strategy belongs to ONE model family:
-        // OpenAI GPT-5.6 Luna (primary) escalating once to Terra, through
-        // Lovable's built-in AI gateway. Gemini is not reachable from that path.
-        // Every other workflow keeps the existing planner untouched.
+        // A separate capability from initial planning (which moved entirely to
+        // orchestrate; run-agent invokes no initial-planning adapter). This is a
+        // recovery decision made DURING execution — "quota is short, may another
+        // round of titles be proposed?" — and belongs to the execution owner.
+        //
+        // Authorization requires BOTH the workflow/execution-mode shape AND the
+        // same GPT_LEAD_STRATEGY flag + workspace allow-list initial planning
+        // already uses (no new flag invented). The shape check alone used to be
+        // treated as sufficient, and because `workflow` defaults to
+        // "qualified_lead_sourcing" here when the caller omits it, that was
+        // satisfied by nearly every company-first task regardless of whether the
+        // flag was ever turned on for the workspace.
+        //
+        // Unauthorized means ZERO model calls, not a fallback to a different
+        // model family: `deterministicOnlyBroadeningPlanner` never reaches
+        // Gemini or Claude, unlike the module it replaces here. See
+        // leadStrategyOwner.ts for why that mattered on TEST specifically.
         //
         // Either way the planner only PROPOSES titles: each proposal is
-        // re-validated deterministically and cost-approved before any paid call,
-        // and any failure falls back to the deterministic ladder.
-        const useLeadStrategyOwner = leadStrategyOwnerApplies({
+        // re-validated deterministically (`validateRoundPlan`, unchanged) and
+        // cost-approved before any paid call, and any failure falls back to the
+        // same deterministic ladder authorization would have landed on anyway.
+        const gptBroadeningAuthorized = isGptBroadeningAuthorized({
           workflow: (body.workflow_kind as string) ?? "qualified_lead_sourcing",
           executionMode: "company_first",
+          gptStrategyEnabled: isGptLeadStrategyEnabled(workspace_id).enabled,
         });
-        const broadeningPlanner = useLeadStrategyOwner
+        const broadeningPlanner = gptBroadeningAuthorized
           ? createLeadStrategyPlanner({
             workspaceId: workspace_id,
             agentSlug: agent_slug,
@@ -1306,10 +1328,10 @@ Deno.serve(async (req) => {
                 : null,
             },
           })
-          : createBroadeningPlanner({ workspaceId: workspace_id, agentSlug: agent_slug });
-        console.log("[run-agent][strategy-owner]", {
+          : deterministicOnlyBroadeningPlanner();
+        console.log("[run-agent][broadening-owner]", {
           task_id: task.id,
-          owner: useLeadStrategyOwner ? "openai_lead_strategy" : "legacy_broadening_planner",
+          owner: gptBroadeningAuthorized ? "openai_lead_strategy" : "deterministic_only",
         });
 
 

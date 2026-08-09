@@ -33,10 +33,23 @@ const noopPersist = async () => ({ ok: true, accountId: "a", contactId: null, le
 // ============ 1. real dependency construction includes the planner ==========
 Deno.test("1. run-agent's company-first construction passes proposeBroadening", async () => {
   const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assertStringIncludes(src, "createBroadeningPlanner");
   assertStringIncludes(src, "proposeBroadening: broadeningPlanner.plan");
   assertStringIncludes(src, "plannerMetadata: broadeningPlanner.lastMetadata");
   assertStringIncludes(src, "durableIdempotency: supabaseToolCallReader");
+
+  // THIS ASSERTION USED TO PIN THE BUG. `createBroadeningPlanner` reaches
+  // Gemini via Lovable and falls through to Anthropic — Claude — whenever
+  // ANTHROPIC_API_KEY is set, which it is on TEST, so it was a live
+  // Gemini/Claude planner for a capability meant to be GPT-only or nothing.
+  // It must no longer be CALLED (the name may still appear in a comment
+  // explaining its absence, which is worth keeping).
+  const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  assert(!code.includes("createBroadeningPlanner("),
+    "the unauthorized broadening path must not construct the Gemini/Claude-capable planner");
+  assert(code.includes("deterministicOnlyBroadeningPlanner()"),
+    "the unauthorized broadening path must make zero model calls");
+  assert(code.includes("isGptBroadeningAuthorized("),
+    "broadening must be gated by deterministic authorization, not the workflow-string shape check alone");
 });
 
 // ============ 2-9. proposal → validation → approved round ==================

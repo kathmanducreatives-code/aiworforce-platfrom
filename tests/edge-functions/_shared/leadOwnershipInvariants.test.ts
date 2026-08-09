@@ -277,7 +277,6 @@ Deno.test("wiring: run-agent contains NO lead-planning invocation at all", async
   for (const name of [
     "applyLeadStrategyInitialPlanning",
     "applyClaudeFirstLeadPlanning",
-    "isGptLeadStrategyEnabled",
     "isClaudeFirstLeadPlanningEnabled",
   ]) {
     assert(!code.includes(`${name}(`),
@@ -285,6 +284,18 @@ Deno.test("wiring: run-agent contains NO lead-planning invocation at all", async
     assert(!new RegExp(`import\\s*\\{[^}]*\\b${name}\\b`, "s").test(code),
       `run-agent must not import ${name}`);
   }
+
+  // isGptLeadStrategyEnabled IS legitimately imported and called now — but only
+  // for ROUND-TO-ROUND BROADENING authorization (isGptBroadeningAuthorized), a
+  // recovery decision made during execution, not for selecting an INITIAL
+  // planning adapter. The distinction matters: initial planning still has
+  // exactly one call site, in orchestrate.
+  assert(code.includes("isGptLeadStrategyEnabled(workspace_id).enabled"),
+    "broadening authorization must reuse the same flag+allowlist gate initial planning uses");
+  assert(code.includes("isGptBroadeningAuthorized({"),
+    "the reused flag must feed the dedicated broadening-authorization function, not an ad hoc check");
+  assert(!code.includes("applyLeadStrategyInitialPlanning("),
+    "isGptLeadStrategyEnabled's presence must not come with an initial-planning call");
 
   // What remains are reconstitution helpers, which cannot make a model request.
   assert(src.includes("gptStrategyFromPersistedPlan("),

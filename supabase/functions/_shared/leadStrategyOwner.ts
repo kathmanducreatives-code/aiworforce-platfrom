@@ -6,8 +6,32 @@
 //     Luna (primary) → Terra (escalation, at most once) → deterministic plan
 //
 // Gemini and Claude are NOT reachable from this path. Pilot chat, orchestration
-// planning, Scribe and Penn keep their existing routing — this owner is gated
-// strictly to workflow = qualified_lead_sourcing AND execution_mode = company_first.
+// planning, Scribe and Penn keep their existing routing.
+//
+// ── ROUND-TO-ROUND BROADENING WAS NOT ACTUALLY GATED ────────────────────────
+//
+// This module also backs round-to-round broadening in `run-agent` (a separate
+// capability from initial planning — the initial planner moved to one call site
+// in orchestrate; broadening is a recovery decision made during execution, and
+// stays here). Until this fix, "gated strictly to workflow + execution_mode"
+// was true of the PREDICATE but not of the actual behaviour: `run-agent`
+// defaults `workflow` to `"qualified_lead_sourcing"` whenever the caller omits
+// it, and hardcodes `executionMode: "company_first"` — so
+// `leadStrategyOwnerApplies` alone was satisfied by nearly every company-first
+// task, with no check on `GPT_LEAD_STRATEGY` or the workspace allow-list at all.
+//
+// Worse, the UNAUTHORIZED branch was not deterministic either.
+// `createBroadeningPlanner` (broadeningPlannerAdapter.ts) calls
+// `aiProvider.generateText`, which tries Gemini via Lovable first and falls
+// through to Anthropic — Claude — whenever `ANTHROPIC_API_KEY` is set, which it
+// is on TEST. So the "legacy" fallback was a live Gemini/Claude planner, not a
+// deterministic one, for a capability this file's own header claimed Claude
+// could never reach.
+//
+// `isGptBroadeningAuthorized` and `deterministicOnlyBroadeningPlanner` below
+// close both gaps: authorization now requires the SAME `GPT_LEAD_STRATEGY`
+// flag + workspace allow-list initial planning already uses (no new flag), and
+// the unauthorized path makes zero model calls of any kind.
 
 import type { BroadeningPlannerFn, PlannerInput, PlannerProposal } from "./broadeningPlan.ts";
 import type { PlannerMetadata } from "./broadeningPlannerAdapter.ts";
@@ -39,13 +63,65 @@ export interface LeadStrategyGateInput {
 }
 
 /**
- * The ONLY place that decides whether the OpenAI strategy owner runs.
- * Anything other than qualified_lead_sourcing + company_first keeps its existing
- * planner untouched.
+ * The workflow/execution-mode SHAPE check. On its own this is NOT
+ * authorization — see `isGptBroadeningAuthorized` below, which is what a
+ * caller deciding whether to spend a model call on broadening must use.
+ * Kept exported and unchanged because `leadStrategyOwner.test.ts` and the
+ * initial-planner selector both depend on this exact predicate in isolation.
  */
 export function leadStrategyOwnerApplies(input: LeadStrategyGateInput): boolean {
   return (input.workflow ?? "").trim().toLowerCase() === LEAD_STRATEGY_WORKFLOW
     && (input.executionMode ?? "").trim().toLowerCase() === LEAD_STRATEGY_EXECUTION_MODE;
+}
+
+export interface BroadeningAuthorizationInput extends LeadStrategyGateInput {
+  /**
+   * From `isGptLeadStrategyEnabled(workspaceId)` in leadStrategyBridge.ts — the
+   * same flag + workspace allow-list gate initial planning already uses.
+   *
+   * Passed in rather than resolved here: `leadStrategyBridge.ts` imports a
+   * type from THIS file, so importing `isGptLeadStrategyEnabled` (a value)
+   * back into this file would create a cycle. The caller (run-agent, which
+   * already imports both modules) computes it once and passes the boolean.
+   */
+  gptStrategyEnabled: boolean;
+}
+
+/**
+ * MAY GPT OWN ROUND-TO-ROUND BROADENING FOR THIS TASK?
+ *
+ * Both conditions are required. The shape check alone used to be treated as
+ * authorization, and because `run-agent` defaults `workflow` to
+ * `"qualified_lead_sourcing"` when the caller omits it, that was satisfied by
+ * nearly every company-first task regardless of whether `GPT_LEAD_STRATEGY`
+ * had ever been turned on for the workspace. Deterministic code — this
+ * function, called with a real enablement decision — now decides it instead
+ * of a string default.
+ */
+export function isGptBroadeningAuthorized(input: BroadeningAuthorizationInput): boolean {
+  return leadStrategyOwnerApplies(input) && input.gptStrategyEnabled === true;
+}
+
+/**
+ * The broadening "planner" used when GPT is not authorized. Makes ZERO model
+ * calls — not Gemini, not Claude, not a repair pass.
+ *
+ * `companyFirstQuotaController.ts` already runs `deterministicRoundPlan`
+ * whenever no AI proposal arrives (a rejected proposal, a timeout, or — as
+ * here — no proposal attempted at all); returning `null` unconditionally hands
+ * control straight to that existing ladder. This is not a new broadening
+ * architecture, it is the same fallback authorized GPT already lands on when
+ * it fails, reached directly instead of through an unauthorized model call
+ * that could reach Claude.
+ */
+export function deterministicOnlyBroadeningPlanner(): {
+  plan: BroadeningPlannerFn;
+  lastMetadata: () => PlannerMetadata | null;
+} {
+  return {
+    plan: () => Promise.resolve(null),
+    lastMetadata: () => null,
+  };
 }
 
 // ------------------------------------------------------------- resolution ---
