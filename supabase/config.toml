@@ -1,1 +1,18 @@
-project_id = "wqnigjhcwjxtmordrwno"
+# TEST is the checked-in default, deliberately.
+#
+# This file named the PRODUCTION project until Phase 0b. Every CLI command that
+# resolves its project from config — `db push`, `link`, `db pull`,
+# `migration list` — therefore aimed at production from an ordinary working
+# tree, and the only thing preventing a production write was that the CLI
+# account happened to lack access.
+#
+# Production is now reachable only through an explicit, deliberate override:
+#
+#   SUPABASE_TARGET=production npm run supabase:prod -- <args>
+#
+# Ordinary work uses:
+#
+#   npm run supabase:test -- <args>
+#
+# See docs/SUPABASE_TARGETING.md and scripts/supabase-target.mjs.
+project_id = "zbwsbnqqpkvdhqwavjke"

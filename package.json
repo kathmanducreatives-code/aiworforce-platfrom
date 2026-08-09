@@ -10,9 +10,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "verify:deploy-target": "node scripts/verify-deploy-target.mjs",
+    "supabase:test": "node scripts/supabase-target.mjs test --",
+    "supabase:prod": "node scripts/supabase-target.mjs production --",
+    "test:deploy-safety": "deno test --allow-read --allow-env --allow-run tests/infra/",
     "qa:lead-quality": "deno run --allow-read --allow-env --allow-write --allow-net scripts/lead-quality-benchmark/run.ts",
     "qa:lead-quality:test": "deno test --allow-read --allow-env scripts/lead-quality-benchmark/",
-    "test:edge": "deno test --allow-read --allow-env --no-check tests/edge-functions/"
+    "test:edge": "deno test --allow-read --allow-env --no-check tests/edge-functions/",
+    "test:ui": "deno test --allow-read --no-check tests/frontend/"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
