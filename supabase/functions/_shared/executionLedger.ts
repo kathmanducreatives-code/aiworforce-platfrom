@@ -219,7 +219,16 @@ export interface LedgerWriter {
  * and reproducible must not mean "contains the token".
  */
 const SECRET_KEY_PATTERNS: readonly RegExp[] = [
+  // ANY key ending in "token". The exact-match list missed `idToken`,
+  // `sessionToken` and `supabaseAccessToken` — three of the most likely names
+  // for a live Supabase credential. A suffix rule covers the whole family
+  // without guessing at prefixes, and matches nothing benign in a provider
+  // input: `dataset_id`, `run_id` and `identity` all normalize away from it.
+  /token$/i,
   /^(api)?token$/i,
+  /^jwt$/i,
+  // Plural too: `cookies` slipped past a `^cookie$` rule.
+  /^cookies?$/i,
   /^(api|access|secret|private|client)?key$/i,
   /^authorization$/i,
   /^auth$/i,
@@ -257,6 +266,22 @@ function redactUrlSecrets(value: string): string {
 const BARE_TOKEN = /^(apify_api_[A-Za-z0-9]+|sk-[A-Za-z0-9-_]{10,}|Bearer\s+\S+)$/;
 
 /**
+ * A JWT as a whole value, under any key name at all.
+ *
+ * Key-based redaction cannot help when the key is `auth_context` or `ctx`, and a
+ * Supabase JWT is a live credential carrying workspace scope — precisely what
+ * must never land in a column designed to be read.
+ *
+ * DELIBERATELY STRICT. Requiring the header segment to begin `eyJ` — the
+ * base64url of `{"`, which every JWT header starts with — is what keeps
+ * `example.com`, `version.1.2`, `1.2.3` and `some.nested.path` legible. A looser
+ * "three dotted segments" rule would redact ordinary provider inputs and destroy
+ * the reproducibility this column exists for, which is a worse failure than the
+ * rare non-standard token it would additionally catch.
+ */
+const JWT_VALUE = /^eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}$/;
+
+/**
  * Deep-copy an input with every secret removed.
  *
  * Depth- and size-bounded: a provider input is a request payload, not a dataset,
@@ -270,7 +295,8 @@ export function redactProviderInput(
   if (input === null || input === undefined) return null;
 
   if (typeof input === "string") {
-    if (BARE_TOKEN.test(input.trim())) return REDACTED;
+    const trimmed = input.trim();
+    if (BARE_TOKEN.test(trimmed) || JWT_VALUE.test(trimmed)) return REDACTED;
     const cleaned = redactUrlSecrets(input);
     return cleaned.length > 2000 ? `${cleaned.slice(0, 2000)}…[truncated]` : cleaned;
   }
