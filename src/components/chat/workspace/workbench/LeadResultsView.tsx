@@ -3,7 +3,6 @@ import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import LeadTable from './leadTable/LeadTable';
-import LockedCell from './leadTable/LockedCell';
 import RecommendationBanner from './leadTable/RecommendationBanner';
 import QualificationInsightsPanel from './leadTable/QualificationInsightsPanel';
 import { insightsFromResult, processingState } from '@/lib/qualifiedLead/insights';

@@ -242,7 +242,7 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                   {rowActions?.[r.id]?.kind === 'find_decision_makers' ? (
                     <RowActionCell a={rowActions[r.id]} kind="find_decision_makers" />
                   ) : contactLocked ? (
-                    <LockedCell label="Find decision-maker" credits={1} onUnlock={() => onUnlock('find_contacts', r.id)} />
+                    <LockedCell label="Find decision-maker" onUnlock={() => onUnlock('find_contacts', r.id)} />
                   ) : (
                     <div className="px-2 py-1.5">
                       <div className="text-[11.5px] text-[#F0F6FC] truncate">{r.contact_name ?? '—'}</div>
@@ -252,7 +252,7 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                 </td>
                 <td className={`${COL_W.contactInfo} border-b border-white/[0.05] align-top p-0`}>
                   {contactLocked ? (
-                    <LockedCell label="Enrich contact" credits={1} onUnlock={() => onUnlock('find_contacts', r.id)} />
+                    <LockedCell label="Enrich contact" onUnlock={() => onUnlock('find_contacts', r.id)} />
                   ) : (
                     (() => {
                       const dmView = rowActions?.[r.id]?.kind === 'find_decision_makers'
@@ -341,7 +341,6 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                   })() ?? (enrichLocked ? (
                     <LockedCell
                       label={r.domain_status === 'missing' ? 'Needs domain' : 'Research company'}
-                      credits={r.domain_status === 'missing' ? 0 : 1}
                       onUnlock={() => onUnlock('research_company', r.id)}
                       disabled={r.domain_status === 'missing'}
                     />
@@ -398,7 +397,6 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                       return (
                         <LockedCell
                           label={r.contact_status === 'needs_contact' ? 'Needs contact' : 'Generate outreach'}
-                          credits={r.contact_status === 'needs_contact' ? 0 : 2}
                           onUnlock={() => onUnlock('draft_outreach', r.id)}
                           disabled={r.contact_status === 'needs_contact'}
                         />
