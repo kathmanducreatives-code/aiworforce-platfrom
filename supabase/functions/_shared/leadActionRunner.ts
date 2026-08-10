@@ -14,10 +14,10 @@
 
 import {
   isEnrichmentEligible, planEnrichmentCrawl, extractCompanyEnrichment, emptyEnrichment,
-  resolveBaseUrl, type CompanyEnrichment, type CrawledPage,
+  type CompanyEnrichment, type CrawledPage,
 } from "./companyEnrichment.ts";
 import {
-  buildDecisionMakers, type DecisionMaker, type PosterHint, type PeopleSearchContact, type BuyerClue, type RejectedCandidate,
+  type DecisionMaker, type PosterHint,
 } from "./decisionMakers.ts";
 import {
   checkPersonalizationReadiness, buildOutreachDraft, type OutreachDraft, type PersonalizationInput,
@@ -109,12 +109,11 @@ export async function runCompanyEnrichment(
 }
 
 // ---------- 2) Find decision-makers ----------
-
-// Constrained title filter — the ONLY titles the per-company people search targets.
-export const DECISION_MAKER_TITLES = [
-  "Founder", "Co-Founder", "CEO", "Head of Growth", "VP Growth",
-  "Head of Revenue", "VP Sales", "Head of Sales", "Revenue Operations", "Sales Operations",
-];
+//
+// Decision-maker discovery itself lives in _shared/decisionMaker/pipeline.ts
+// (runDecisionMakerAction), reached only via the manual find_decision_makers
+// lead action. This module only defines the shared people-search input shape
+// consumed by leadActionExecutor.ts's query-building helper.
 
 export interface PeopleSearchInput {
   company: string;
@@ -123,86 +122,6 @@ export interface PeopleSearchInput {
   titles: string[];
   max_results: number;
   one_company: true;   // structural guarantee: never a multi-company query
-}
-
-export type PeopleSearchFn = (input: PeopleSearchInput) => Promise<PeopleSearchContact[]>;
-
-/**
- * Build a SINGLE-company, title-constrained people-search input — only when the
- * company's identity is verified (company LinkedIn URL or a real domain). Returns
- * null (→ skip live search) when identity is unverified.
- */
-export function buildPeopleSearchInput(lead: LeadRecord, opts: { maxResults?: number } = {}): PeopleSearchInput | null {
-  const company = str(lead.company_name);
-  if (!company) return null;
-  const companyLinkedin = str(lead.company_linkedin_url);
-  const base = resolveBaseUrl(lead.website ?? lead.company_website, lead.domain);
-  const domain = base ? base.replace(/^https?:\/\//, "") : null;
-  if (!companyLinkedin && !domain) return null;   // identity not verified → no live search
-  return {
-    company,
-    company_linkedin_url: companyLinkedin,
-    domain,
-    titles: DECISION_MAKER_TITLES,
-    max_results: Math.max(1, Math.min(10, opts.maxResults ?? 5)),
-    one_company: true,
-  };
-}
-
-export interface DiscoveryRunResult {
-  decision_makers: DecisionMaker[];
-  needs_manual_review: boolean;
-  buyer_clues: BuyerClue[];
-  rejected: RejectedCandidate[];
-  used_people_search: boolean;
-  people_search_input: PeopleSearchInput | null;
-}
-
-/**
- * Discover decision-makers for ONE company, evidence-first: job poster hint +
- * descriptionText clues + Firecrawl enrichment founders/execs. Runs the injected
- * per-company Apify people search ONLY when nothing confident surfaced AND the
- * company identity is verified. Never batches companies.
- */
-/**
- * @deprecated Superseded by _shared/decisionMaker/pipeline.ts. The live
- * find_decision_makers action now uses runDecisionMakerAction; this remains only
- * because its own tests still cover it. It accepts name-only and headline company
- * matches and cannot distinguish a provider failure from an empty result — do not
- * wire it into a runtime path again.
- */
-export async function runDecisionMakerDiscovery(
-  lead: LeadRecord,
-  opts: { peopleSearch?: PeopleSearchFn; maxResults?: number } = {},
-): Promise<DiscoveryRunResult> {
-  const enrichment = lead.company_enrichment ?? null;
-  const baseArgs = {
-    poster: lead.poster_contact_hint ?? null,
-    jobTitle: lead.job_title ?? null,
-    descriptionText: lead.job_description ?? null,
-    // Ground-truth company identity people-search candidates must match (Bug #1).
-    company: {
-      name: lead.company_name ?? null,
-      domain: lead.domain ?? null,
-      website: lead.website ?? lead.company_website ?? null,
-      companyLinkedinUrl: lead.company_linkedin_url ?? null,
-    },
-    enrichment: enrichment ? { founders: enrichment.founders, executives: enrichment.executives, public_contact_emails: enrichment.public_contact_emails } : null,
-  };
-  let result = buildDecisionMakers(baseArgs);
-  let usedPeople = false;
-  let psInput: PeopleSearchInput | null = null;
-
-  if (result.needs_manual_review && opts.peopleSearch) {
-    psInput = buildPeopleSearchInput(lead, { maxResults: opts.maxResults });
-    if (psInput) {
-      let people: PeopleSearchContact[] = [];
-      try { people = await opts.peopleSearch(psInput); } catch { people = []; }
-      usedPeople = true;
-      result = buildDecisionMakers({ ...baseArgs, peopleSearch: people });
-    }
-  }
-  return { ...result, used_people_search: usedPeople, people_search_input: psInput };
 }
 
 // ---------- 3) Generate outreach ----------
