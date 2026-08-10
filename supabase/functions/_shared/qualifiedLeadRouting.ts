@@ -36,7 +36,16 @@ export interface QualifiedLeadRoute {
  */
 const PERSON_TARGET_RE = /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?|prospects?)\b/i;
 const WHO_TO_CONTACT_RE = /\bwho (?:should i|to|can i|do i)\s+(?:contact|reach out to|target|talk to|email|message)\b/i;
-const QUALIFIED_LEAD_RE = /\b(qualified leads?|contact[-\s]?ready|verified contacts?|leads? i can contact|reach out to)\b/i;
+/**
+ * `draft outreach`/`for outbound` added 2026-08-09: "...and draft outreach"
+ * and "...hiring SDRs... for outbound" both named explicit contact/outreach
+ * intent that fell through every existing phrase here (which required the
+ * fuller "reach out to"). Phrase-bound, NOT bare "outreach"/"outbound" —
+ * `leadPlannerCallSite.test.ts`'s own NON_LEAD_REQUEST fixture is "write me a
+ * linkedin post about outbound", a content request with no lead-sourcing
+ * intent at all; a bare-word match would have wrongly rerouted it.
+ */
+const QUALIFIED_LEAD_RE = /\b(qualified leads?|contact[-\s]?ready|verified contacts?|leads? i can contact|reach out to|draft outreach|for outbound)\b/i;
 const EMPLOYER_VERIFY_RE = /\b(current employer|currently works?|verified employer|still (?:at|works))\b/i;
 /**
  * "Return 5 qualified leads", "give me 10 leads", "5 contact-ready leads" — and

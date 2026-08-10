@@ -35,6 +35,7 @@
 
 import { routeQualifiedLead } from "../../qualifiedLeadRouting.ts";
 import { compileLeadEntityIntent } from "../../leadEntityIntent.ts";
+import { extractRequiredSignalTerms, type CompiledJobSearchSpec } from "../../jobSearchSpec.ts";
 import { loadMissionContext } from "../missionContext.ts";
 import type { BrainDbClient } from "../../getCompiledCompanyBrainForWorkspace.ts";
 import {
@@ -144,7 +145,44 @@ export async function planQualifiedLeadBeforePersistence(
   if (plannerSelection.owner === "deterministic_registry_v1") return null;
 
   const intent = compileLeadEntityIntent(input.userInstruction);
-  const spec = intent.job_search_spec;
+
+  // ── COMPLETING THE CONTRACT FOR EVERY REQUEST SHAPE, NOT JUST HIRING-SIGNAL
+  // ONES ─────────────────────────────────────────────────────────────────────
+  //
+  // `job_search_spec` compiles ONLY when hiring_signal_required || jobFirst —
+  // by design, so a pure person/company lookup never gets an invented jobs
+  // search. But the CONTRACT (below) and the mission built from it are the
+  // authoritative record of what the user asked for, for EVERY request shape,
+  // and both were reading geography/decision-maker-roles from this same
+  // gated `location`/`requested_person_roles` — so a person-first request
+  // like "Find B2B SaaS founders currently hiring for RevOps — who should I
+  // contact this week?" reached GPT with `geography: null,
+  // decision_maker_roles: []`, even though `intent.geographies`/
+  // `intent.person_roles` (computed unconditionally, a few lines up) already
+  // had "London"/["Founder"] correctly. GPT cannot preserve a constraint it
+  // was never told; no downstream validator can catch that either, because
+  // there was nothing to compare against. This is additive-only: when
+  // `job_search_spec` DID compile (the hiring-signal case this always
+  // worked for), its own values win untouched.
+  const requiredSignalTerms = extractRequiredSignalTerms(input.userInstruction);
+  const spec: CompiledJobSearchSpec & { required_signal_terms: string[] } = {
+    ...intent.job_search_spec,
+    location: intent.job_search_spec.location ?? intent.geographies[0] ?? null,
+    requested_person_roles: intent.job_search_spec.requested_person_roles.length
+      ? intent.job_search_spec.requested_person_roles
+      : [...intent.person_roles],
+    // `keyword_queries` becomes `mission.requested_titles` (missionFromSpec)
+    // and `artifact.approved_titles` for the fallback path (below,
+    // `approved_titles = usedGpt ? ... : [...spec.keyword_queries]`) — the
+    // SAME gap as geography/persona: empty here means the no-broadening
+    // literal-title restriction (leadStrategyValidator.ts) has nothing to
+    // restrict TO, and the fallback plan's own titles never surface as what
+    // the task record says it searched for.
+    keyword_queries: intent.job_search_spec.keyword_queries.length
+      ? intent.job_search_spec.keyword_queries
+      : requiredSignalTerms,
+    required_signal_terms: requiredSignalTerms,
+  };
 
   const contract: QualifiedLeadPlanContract = {
     requestedCount: intent.requested_count ?? 5,

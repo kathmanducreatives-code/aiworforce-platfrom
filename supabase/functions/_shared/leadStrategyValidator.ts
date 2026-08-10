@@ -64,6 +64,23 @@ export function validateLeadStrategy(
   const proposedFamily = getRoleFamily(typeof o.role_family === "string" ? o.role_family : null);
   if (proposedFamily && proposedFamily.key !== fam.key) return { ok: false, problem: "role_family_changed" };
 
+  // ---- no-broadening: literal requested titles ONLY -------------------------
+  //
+  // `titleIsApproved` alone allows the whole family (exact + synonyms, and
+  // adjacent when the round permits it) — appropriate for an ordinary
+  // request, wrong for one that explicitly said "do not broaden": the family
+  // itself is a form of broadening beyond what was literally asked for. Same
+  // pattern as `plannerApprovedTitleUniverse` in broadeningPlan.ts (the
+  // round-to-round broadening validator's equivalent fix) — this is the
+  // initial-planning validator's own copy of the same invariant, since the
+  // two are separate systems with separate title-approval functions.
+  const noBroadening = mission.no_broadening_requested === true;
+  const literalTitles = new Set(mission.requested_titles.map((t) => t.toLowerCase()));
+  const isApproved = (t: string): boolean => {
+    if (noBroadening) return literalTitles.has(t.toLowerCase());
+    return titleIsApproved(fam, t, ctx.adjacent_titles_allowed);
+  };
+
   // ---- titles --------------------------------------------------------------
   const rawTitles = Array.isArray(o.title_queries) ? o.title_queries : [];
   if (rawTitles.length === 0) return { ok: false, problem: "missing_title_queries" };
@@ -73,10 +90,12 @@ export function validateLeadStrategy(
   for (const raw of rawTitles as string[]) {
     const t = clean(raw, 80);
     if (!t) continue;
-    if (!titleIsApproved(fam, t, ctx.adjacent_titles_allowed)) { dropped.push(`title:${t}`); continue; }
+    if (!isApproved(t)) { dropped.push(`title:${t}`); continue; }
     if (!titles.some((x) => x.toLowerCase() === t.toLowerCase())) titles.push(t);
   }
-  if (titles.length === 0) return { ok: false, problem: "all_titles_out_of_universe" };
+  if (titles.length === 0) {
+    return { ok: false, problem: noBroadening ? "broadening_prohibited_but_no_literal_title_survived" : "all_titles_out_of_universe" };
+  }
   const finalTitles = titles.slice(0, MAX_TITLES);
 
   // ---- query packs: separate intents, eligible rounds only -----------------
@@ -97,20 +116,35 @@ export function validateLeadStrategy(
     for (const q of proposed) {
       const s = clean(q, 80);
       if (!s) continue;
-      if (!titleIsApproved(fam, s, ctx.adjacent_titles_allowed)) { dropped.push(`query:${s}`); continue; }
-      if (allowed.size > 0 && !allowed.has(s.toLowerCase()) && !finalTitles.some((t) => t.toLowerCase() === s.toLowerCase())) {
+      if (!isApproved(s)) { dropped.push(`query:${s}`); continue; }
+      if (!noBroadening && allowed.size > 0 && !allowed.has(s.toLowerCase()) && !finalTitles.some((t) => t.toLowerCase() === s.toLowerCase())) {
         dropped.push(`query_off_pack:${s}`);
         continue;
       }
       if (!queries.some((x) => x.toLowerCase() === s.toLowerCase())) queries.push(s);
     }
-    const resolved = queries.length > 0 ? queries : buildQueryPack(id, fam, ctx.adjacent_titles_allowed);
+    const resolved = queries.length > 0 ? queries : (noBroadening ? [] : buildQueryPack(id, fam, ctx.adjacent_titles_allowed));
     if (resolved.length === 0) { dropped.push(`pack_empty:${id}`); continue; }
     seenPacks.add(id);
     packs.push({ pack_id: id, queries: resolved.slice(0, MAX_QUERIES_PER_PACK), rationale: clean(rec.rationale) });
     if (packs.length >= MAX_PACKS) break;
   }
   if (packs.length === 0) return { ok: false, problem: "no_valid_query_packs" };
+
+  // ---- required signal: must be represented, not silently dropped ----------
+  //
+  // `mission.required_signal_terms` is the literal role/signal the user named
+  // (e.g. "RevOps"), computed regardless of hiring_signal_required. A plan
+  // whose approved titles/queries relate to none of them has quietly
+  // substituted a broader or different signal for the one actually requested
+  // — reject it here rather than let it become `model_validated`.
+  const signalTerms = (mission.required_signal_terms ?? []).map((s) => s.toLowerCase()).filter(Boolean);
+  if (signalTerms.length > 0) {
+    const haystack = [...finalTitles, ...packs.flatMap((p) => p.queries)]
+      .map((s) => s.toLowerCase());
+    const represented = signalTerms.some((term) => haystack.some((h) => h.includes(term) || term.includes(h)));
+    if (!represented) return { ok: false, problem: "required_signal_not_represented" };
+  }
 
   // A pack must not be a copy of another pack — separation is the whole point.
   //
@@ -215,6 +249,33 @@ export function deterministicLeadStrategy(
   ctx: LeadStrategyRoundContext,
   fam: RoleFamilyDef,
 ): LeadStrategyPlan {
+  // NO-BROADENING: the fallback the user is told is "safe" was itself always
+  // building the full family's query packs — every bit as much a broadening
+  // of "SDR" into "Sales Operations, Revenue Operations, GTM Operations" as
+  // an unvalidated model plan would have been. When the mission says do not
+  // broaden and named a literal title, the fallback must honour that too, not
+  // just the model-facing validator.
+  const noBroadening = mission.no_broadening_requested === true && mission.requested_titles.length > 0;
+  if (noBroadening) {
+    const literal = [...new Set(mission.requested_titles)].slice(0, MAX_TITLES);
+    const signals = deriveSourceOrderingSignals(mission, ctx, { unusedQueryPacks: [] });
+    const scoredPlan = buildSourcePlan(signals);
+    const unattempted = scoredPlan.filter((s) => !ctx.attempted_sources.includes(s.source_key));
+    const plan = (unattempted.length > 0 ? unattempted : scoredPlan).map((s, i) => ({ ...s, priority: i + 1 }));
+    return {
+      schema_version: LEAD_STRATEGY_SCHEMA_VERSION,
+      role_family: fam.key,
+      title_queries: literal,
+      excluded_titles: [...fam.negatives],
+      query_packs: [{ pack_id: "exact_titles" as QueryPackId, queries: literal, rationale: "no-broadening: literal request only" }],
+      source_plan: plan,
+      next_action: ctx.remaining_quota <= 0 ? "stop_quota_reached" : "run_query_packs",
+      stop_conditions: ["quota_reached", "budget_exhausted", "sources_exhausted", "no_broadening_requested"],
+      rationale: `deterministic strategy honouring an explicit no-broadening request (round ${ctx.round})`,
+      confidence: 0.4,
+    };
+  }
+
   const packIds = eligiblePackIds(ctx.round, ctx.adjacent_titles_allowed)
     .filter((id) => !ctx.attempted_query_packs.includes(id))
     .slice(0, MAX_PACKS);
@@ -222,7 +283,28 @@ export function deterministicLeadStrategy(
   const packs = chosen
     .map((id) => ({ pack_id: id, queries: buildQueryPack(id, fam, ctx.adjacent_titles_allowed), rationale: "deterministic pack" }))
     .filter((p) => p.queries.length > 0);
-  const titles = [...new Set(packs.flatMap((p) => p.queries))].slice(0, MAX_TITLES);
+  let titles = [...new Set(packs.flatMap((p) => p.queries))].slice(0, MAX_TITLES);
+
+  // REQUIRED SIGNAL, EVEN OUTSIDE A NO-BROADENING REQUEST. The family-based
+  // packs above have no idea "RevOps" or "GTM roles" was the literal signal
+  // named — they only know the (possibly wrong-default, per
+  // resolveMissionFamily) family. If the family's own generic titles happen
+  // not to mention it, the signal silently becomes optional in the one plan
+  // nothing downstream re-validates. Merged into the existing pack set
+  // (never a new pack_id) so this stays inside the same taxonomy the rest of
+  // the plan already uses, broad where the request allows broadening and
+  // precise where it named something specific.
+  const signalTerms = (mission.required_signal_terms ?? []).filter(Boolean);
+  const represented = signalTerms.length === 0 || signalTerms.some((term) =>
+    titles.some((t) => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase())));
+  const finalPacks = packs.length > 0
+    ? packs
+    : [{ pack_id: "exact_titles" as QueryPackId, queries: [...fam.exact], rationale: "deterministic pack" }];
+  if (!represented) {
+    finalPacks[0] = { ...finalPacks[0], queries: [...new Set([...signalTerms, ...finalPacks[0].queries])] };
+    titles = [...new Set([...signalTerms, ...titles])].slice(0, MAX_TITLES);
+  }
+
   const signals = deriveSourceOrderingSignals(mission, ctx, { unusedQueryPacks: packIds });
   const scoredPlan = buildSourcePlan(signals);
   const unattempted = scoredPlan.filter((s) => !ctx.attempted_sources.includes(s.source_key));
@@ -234,9 +316,7 @@ export function deterministicLeadStrategy(
     role_family: fam.key,
     title_queries: titles.length > 0 ? titles : [...fam.exact],
     excluded_titles: [...fam.negatives],
-    query_packs: packs.length > 0
-      ? packs
-      : [{ pack_id: "exact_titles" as QueryPackId, queries: [...fam.exact], rationale: "deterministic pack" }],
+    query_packs: finalPacks,
     source_plan: plan,
     next_action: ctx.remaining_quota <= 0 ? "stop_quota_reached" : "run_query_packs",
     stop_conditions: ["quota_reached", "budget_exhausted", "sources_exhausted"],

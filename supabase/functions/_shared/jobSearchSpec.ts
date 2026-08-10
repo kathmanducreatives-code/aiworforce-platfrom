@@ -318,6 +318,59 @@ export function extractHiringRolePhrase(text: string): string | null {
   return extractHiringRolePhrases(text)[0] ?? null;
 }
 
+/**
+ * A role/signal term named next to a hiring verb, in EITHER word order —
+ * "hiring for RevOps" (already covered by `extractHiringRolePhrases`) or
+ * "SDR hiring" (the reverse — deliberately NOT read by that function, since it
+ * exists to compile an actual bounded jobs-actor query, scoped to the
+ * after-the-verb order only). This is a smaller, separate job: give the
+ * mission ONE literal term the initial-planning validator can check a GPT
+ * proposal against, not a query to send to a provider. UNGATED — callable
+ * regardless of hiring_signal_required/jobFirst, unlike compileJobSearchSpec.
+ */
+const ROLE_BEFORE_HIRING_RE = /\b([a-z][a-z&/-]*(?:\s+[a-z][a-z&/-]*){0,3})\s+(?:hiring|recruiting)\b/i;
+
+/**
+ * The leading run of clean word-tokens (letters/digits/&/-/ only), up to 3,
+ * or null. `extractHiringRolePhrases`'s own cleanup targets a BOUNDED role
+ * LIST ("X, Y or Z roles") and can leave trailing prose attached ("RevOps —
+ * who should I contact this week?") when the sentence continues past the role
+ * instead of ending there — harmless for its own purpose (a >5-word segment
+ * is already rejected as prose there), but a required_signal_term must be the
+ * clean role itself, not the role plus whatever clause follows a stray dash.
+ * Truncating (not rejecting outright) recovers "RevOps" from exactly that
+ * case rather than losing the term entirely.
+ */
+function leadingCleanTerm(phrase: string): string | null {
+  const clean: string[] = [];
+  for (const w of phrase.split(/\s+/)) {
+    if (!/^[a-z0-9&/-]+$/i.test(w)) break;
+    clean.push(w);
+    if (clean.length >= 3) break;
+  }
+  return clean.length ? clean.join(" ") : null;
+}
+
+export function extractRequiredSignalTerms(text: string): string[] {
+  const t = (text ?? "").trim();
+
+  const before = ROLE_BEFORE_HIRING_RE.exec(t);
+  if (before) {
+    const raw = singularizeHead(titleCasePhrase(trimRoleTail(before[1].trim())));
+    const phrase = raw ? leadingCleanTerm(raw) : null;
+    if (phrase && isRecognisedRolePhrase(phrase)) return [phrase];
+  }
+
+  const out: string[] = [];
+  for (const raw of extractHiringRolePhrases(t)) {
+    const phrase = leadingCleanTerm(raw);
+    if (phrase && isRecognisedRolePhrase(phrase) && !out.some((x) => x.toLowerCase() === phrase.toLowerCase())) {
+      out.push(phrase);
+    }
+  }
+  return out;
+}
+
 /** A pure job-keyword ask ("Sales Operations jobs in the US") — role phrase sits
  * BEFORE the job noun rather than after a hiring verb. */
 const JOB_NOUN_LEAD_RE = /^(.{2,60}?)\s+\b(?:jobs?|job\s+openings?|openings?|job\s+postings?|roles?|positions?|vacanc(?:y|ies))\b/i;

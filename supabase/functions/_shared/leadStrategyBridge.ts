@@ -246,6 +246,12 @@ export function missionFromSpec(input: LeadStrategyInitialInput): LeadStrategyMi
     maturity_stages: input.maturityStages?.length
       ? [...input.maturityStages]
       : [...(input.companyConstraints?.company_stages ?? [])],
+    // Additive: present only when the caller's spec carries them (the
+    // orchestrate call site enriches `spec` before it reaches here; a caller
+    // that does not sends `undefined`, and validateLeadStrategy treats that
+    // exactly like `false`/`[]` — no behaviour change for anyone who omits it).
+    no_broadening_requested: input.spec.no_broadening_requested as boolean | undefined,
+    required_signal_terms: input.spec.required_signal_terms as string[] | undefined,
   };
 }
 

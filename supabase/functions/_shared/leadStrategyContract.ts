@@ -28,6 +28,25 @@ export interface LeadStrategyMission {
   company_vertical: string | null;
   company_size: { min?: number | null; max?: number | null } | null;
   maturity_stages: string[];
+  /**
+   * The user said "do not broaden" / "strictly" / "exactly N" / named a
+   * geography with no escape hatch — from `spec.no_broadening_requested`
+   * (jobSearchSpec.ts's parseStrictConstraints). Optional so every existing
+   * constructor (round-to-round broadening's `missionFromPlannerInput`, every
+   * test fixture) stays byte-identical; `validateLeadStrategy` reads it as
+   * `?? false`.
+   */
+  no_broadening_requested?: boolean;
+  /**
+   * The literal hiring/role signal term the user named (e.g. "RevOps", "SDR"),
+   * from `jobSearchSpec.ts`'s `extractRequiredSignalTerms` — computed
+   * regardless of hiring_signal_required, unlike `requested_titles`. When
+   * non-empty, `validateLeadStrategy` requires at least one final title or
+   * pack query to relate to it; a plan that drifts entirely away from a named
+   * signal is rejected rather than silently accepted. Optional for the same
+   * backward-compatibility reason as `no_broadening_requested`.
+   */
+  required_signal_terms?: string[];
 }
 
 export interface LeadStrategyFunnel {

@@ -122,8 +122,14 @@ export async function runPlanner(
   }
   const latencyMs = Math.round(performance.now() - started);
 
-  // The compiled intent is the deterministic reading of the request, and is what
-  // the plan is measured against for personas/geography — not a model opinion.
+  // The compiled intent is the deterministic reading of the request — used as
+  // a fallback ONLY when nothing was ever planned (a === undefined). When a
+  // plan WAS produced, personas/geography are read from `a.contract`
+  // (STEP 3B, 2026-08-09): the contract is the enriched, authoritative record
+  // (leadPlanOrchestration.ts backfills geography/decision-maker-roles from
+  // intent.geographies/intent.person_roles when job_search_spec didn't
+  // compile) — recomputing `intent.job_search_spec` fresh here bypassed that
+  // fix entirely and reported the pre-fix gap as if it still existed.
   const intent = compileLeadEntityIntent(c.query);
   const a = outcome?.artifact;
 
@@ -132,8 +138,8 @@ export async function runPlanner(
     produced: outcome !== null,
     planSource: a?.plan_source ?? null,
     approvedTitles: a?.approved_titles ? [...a.approved_titles] : [],
-    personas: [...(intent.job_search_spec.requested_person_roles ?? [])],
-    geography: intent.job_search_spec.location ?? null,
+    personas: a ? [...a.contract.decisionMakerRoles] : [...(intent.job_search_spec.requested_person_roles ?? [])],
+    geography: a ? a.contract.geography : (intent.job_search_spec.location ?? null),
     companyVertical: intent.job_search_spec.company_vertical
       ? String(intent.job_search_spec.company_vertical) : null,
     requestedCount: a?.contract.requestedCount ?? intent.requested_count ?? null,
