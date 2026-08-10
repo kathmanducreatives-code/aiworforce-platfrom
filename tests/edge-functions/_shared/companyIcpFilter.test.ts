@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   filterByIcp, parseEmployeeCount, sizeBandToBounds, icpTopRejectReasons,
+  DEFAULT_EXCLUDED_INDUSTRIES, matchedExcludedIndustries,
   type IcpCandidate,
 } from "../../../supabase/functions/_shared/companyIcpFilter.ts";
 
@@ -73,6 +74,70 @@ Deno.test("strict_industry off → non-ICP-industry rows kept if not otherwise e
   const icp = { positive_industries: ["SaaS"], strict_industry: false, max_employees: 150 };
   const r = filterByIcp([{ company: "Neutral Startup", industry: "Consumer App", team_size: "20" }], icp);
   assertEquals(r.accepted.length, 1);
+});
+
+// ---- Phase 1B merge parity: companyIcpFilter's DEFAULT_EXCLUDED_INDUSTRIES and
+// leadQualityGate's now-deleted DEFAULT_DISQUALIFIERS were merged into one
+// canonical list. Every company either original list excluded must still be
+// excluded by the merged one. ----
+
+// Companies that only companyIcpFilter's pre-merge list excluded.
+Deno.test("merge parity: pre-merge companyIcpFilter-only exclusions still reject", () => {
+  const icp = { positive_industries: ["SaaS"], max_employees: 150 };
+  const r = filterByIcp([
+    { company: "Acme SaaS", industry: "B2B SaaS", team_size: "40" },
+    { company: "Petro Refining Co", industry: "Petroleum Refinery", team_size: "9000" },
+    { company: "State University", industry: "Universities", team_size: "5000" },
+    { company: "Downtown Law Firm", industry: "Legal Services", team_size: "60" },
+    { company: "Grand Resort & Casino", industry: "Hospitality", team_size: "800" },
+  ], icp);
+  const names = r.accepted.map((c) => c.company);
+  assertEquals(names, ["Acme SaaS"]);
+});
+
+// Companies that only leadQualityGate's pre-merge DEFAULT_DISQUALIFIERS list
+// excluded (bare "manufacturing", "plant operations", "construction",
+// "staffing agency", "recruiting agency") — the merge's whole point was that
+// companyIcpFilter's list did NOT reject these before, so this proves the
+// union actually landed, not just that nothing regressed.
+Deno.test("merge parity: pre-merge leadQualityGate-only exclusions now also reject via companyIcpFilter", () => {
+  const icp = { positive_industries: ["SaaS"], max_employees: 500 };
+  const r = filterByIcp([
+    { company: "Acme SaaS", industry: "B2B SaaS", team_size: "40" },
+    { company: "Riverside Manufacturing Co", industry: "Consumer Goods Manufacturing", team_size: "200" },
+    { company: "Site Plant Operations LLC", industry: "Plant Operations", team_size: "150" },
+    { company: "BuildRight Construction", industry: "Construction", team_size: "300" },
+    { company: "Apex Staffing Agency", industry: "Staffing Agency", team_size: "80" },
+    { company: "Talent Bridge Recruiting Agency", industry: "Recruiting Agency", team_size: "50" },
+  ], icp);
+  const names = r.accepted.map((c) => c.company);
+  assertEquals(names, ["Acme SaaS"]);
+});
+
+// The Brain-override behavior (a Brain that positively targets a bucket keeps
+// it) must still work identically for the newly-merged terms, exactly as it
+// already did for the pre-existing "heavy manufacturing" entry (Case C above).
+Deno.test("merge parity: Brain override still un-suppresses the newly-merged terms", () => {
+  const constructionIcp = { positive_industries: ["Construction", "Contractor"], max_employees: 2000 };
+  const r1 = filterByIcp([{ company: "BuildRight Construction", industry: "Construction", team_size: "800" }], constructionIcp);
+  assert(r1.accepted.map((c) => c.company).includes("BuildRight Construction"), "construction allowed when ICP targets it");
+
+  const staffingIcp = { positive_industries: ["Staffing", "Recruiting"], max_employees: 500 };
+  const r2 = filterByIcp([
+    { company: "Apex Staffing Agency", industry: "Staffing Agency", team_size: "80" },
+    { company: "Talent Bridge Recruiting Agency", industry: "Recruiting Agency", team_size: "50" },
+  ], staffingIcp);
+  assertEquals(r2.accepted.map((c) => c.company).sort(), ["Apex Staffing Agency", "Talent Bridge Recruiting Agency"]);
+});
+
+Deno.test("matchedExcludedIndustries: the shared matcher used by both former list owners", () => {
+  assertEquals(matchedExcludedIndustries("A Staffing Agency in Chicago"), ["staffing agency"]);
+  assertEquals(matchedExcludedIndustries("Nothing off-ICP here"), []);
+  assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("manufacturing"));
+  assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("construction"));
+  assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("staffing agency"));
+  assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("recruiting agency"));
+  assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("plant operations"));
 });
 
 // ---- helpers ----

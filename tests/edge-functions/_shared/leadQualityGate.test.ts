@@ -62,6 +62,29 @@ Deno.test("Test 4: manufacturing disqualifier → reject, disqualifiersHit inclu
   assertEquals(g.scoreCaps.maxOverallFit, 0);
 });
 
+// Phase 1B merge parity — leadQualityGate's own DEFAULT_DISQUALIFIERS was
+// deleted; the default fallback (no explicit workflowIntent.disqualifiers) now
+// sources companyIcpFilter.ts's merged DEFAULT_EXCLUDED_INDUSTRIES instead.
+Deno.test("merge parity: default fallback (no explicit disqualifiers) still rejects leadQualityGate's original terms", () => {
+  const g = applyLeadQualityGate(cand({
+    companyName: "Riverside Manufacturing Co", companyDescription: "Consumer goods manufacturing",
+    industryEvidence: ["Manufacturing"], jobUrl: "https://li/jobs/1",
+    sourceProof: [{ url: "https://li/jobs/1", type: "job_posting", confidence: 90 }],
+  }));
+  assertEquals(g.decision, "reject");
+  assert(g.disqualifiersHit.includes("manufacturing"));
+});
+
+Deno.test("merge parity: default fallback now ALSO rejects companyIcpFilter-only terms leadQualityGate's old list lacked", () => {
+  const g = applyLeadQualityGate(cand({
+    companyName: "Downtown Law Firm", companyDescription: "Legal services for growing companies",
+    industryEvidence: ["Legal Services"], jobUrl: "https://li/jobs/2",
+    sourceProof: [{ url: "https://li/jobs/2", type: "job_posting", confidence: 90 }],
+  }));
+  assertEquals(g.decision, "reject");
+  assert(g.disqualifiersHit.includes("law firm"));
+});
+
 // Test 5 — generic Operations Manager is not RevOps.
 Deno.test("Test 5: generic Operations Manager for RevOps intent + non-SaaS company → capped/rejected", () => {
   const g = applyLeadQualityGate(cand({

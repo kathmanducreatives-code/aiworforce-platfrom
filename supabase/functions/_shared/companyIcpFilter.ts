@@ -127,9 +127,37 @@ const SAAS_SUPPORT_TOKENS = [
 
 // Default off-ICP industry/type exclusions — applied UNLESS the Brain positively
 // targets that space. These are the "huge irrelevant company" buckets.
+//
+// This is the canonical, merged list. It used to be two independently-authored
+// lists — this one and leadQualityGate.ts's DEFAULT_DISQUALIFIERS — that agreed
+// on most entries but not all. Merged as a reviewed union, not an automatic
+// set union: every entry below that came from only one of the two original
+// lists is kept deliberately, because dropping it would silently change which
+// companies that list's caller used to reject by default.
+//
+// Entries added from leadQualityGate.ts's list that were NOT already here:
+//   - "manufacturing"          (leadQualityGate's was broader than this list's
+//                                pre-merge "heavy manufacturing" — kept both;
+//                                the bare term was already rejecting ordinary
+//                                manufacturers by default on the quality-gate
+//                                path, not just heavy industry)
+//   - "plant operations"       (leadQualityGate-only; a distinct off-ICP signal
+//                                from "heavy manufacturing")
+//   - "construction"           (leadQualityGate-only; this list previously had
+//                                no construction exclusion at all)
+//   - "staffing agency"        (leadQualityGate-only; already excluding
+//                                staffing agencies by default on that path)
+//   - "recruiting agency"      (leadQualityGate-only; same reasoning)
+// Both original lists' Brain-override behavior is unaffected: filterByIcp's
+// activeDefaults suppression already matches on substring containment against
+// `positive_industries`, so a Brain that targets "Staffing"/"Recruiting"/
+// "Manufacturing"/"Construction" still un-suppresses the matching new entries
+// exactly as it did for the pre-existing ones (see companyIcpFilter.test.ts
+// Case B/C).
 export const DEFAULT_EXCLUDED_INDUSTRIES: string[] = [
   "oil", "gas", "petroleum", "refinery", "refineries", "mining", "coal",
-  "heavy manufacturing", "steel", "cement", "chemicals plant",
+  "heavy manufacturing", "manufacturing", "plant operations", "construction",
+  "steel", "cement", "chemicals plant",
   "government", "federal", "ministry", "public sector", "municipal",
   "military", "defense", "defence", "armed forces",
   "university", "universities", "college", "school district", "k-12", "k12",
@@ -138,7 +166,19 @@ export const DEFAULT_EXCLUDED_INDUSTRIES: string[] = [
   "accounting firm", "audit firm", "law firm", "legal services",
   "restaurant", "hotel", "hospitality", "casino", "resort",
   "utility", "power plant", "oilfield",
+  "staffing agency", "recruiting agency",
 ];
+
+/**
+ * Every canonical exclusion term a haystack of free text contains, in list
+ * order. The one shared matcher for industry/type disqualification — replaces
+ * filterByIcp's and (formerly) leadQualityGate's independently-implemented
+ * substring scans.
+ */
+export function matchedExcludedIndustries(text: string, list: string[] = DEFAULT_EXCLUDED_INDUSTRIES): string[] {
+  const h = lc(text);
+  return list.filter((term) => { const t = lc(term).trim(); return !!t && h.includes(t); });
+}
 
 // Well-known mega-cap companies — rejected when the ICP is size-capped and does
 // not allow enterprise.
@@ -198,8 +238,7 @@ export function filterByIcp(candidates: IcpCandidate[], c: IcpConstraints): IcpR
   const activeDefaults = DEFAULT_EXCLUDED_INDUSTRIES.filter((d) => !hasAny(positives.join(" "), [d]) && !positives.some((p) => lc(d).includes(lc(p)) || lc(p).includes(lc(d))));
   let r1: Record<string, number> = {};
   let kept = pool.filter((cand) => {
-    const h = hay(cand);
-    const hit = activeDefaults.find((d) => h.includes(d));
+    const hit = matchedExcludedIndustries(hay(cand), activeDefaults)[0];
     if (hit) { r1[`off-ICP industry (${hit})`] = (r1[`off-ICP industry (${hit})`] ?? 0) + 1; rejected.push({ item: cand, reason: `off-ICP industry: ${hit}` }); return false; }
     return true;
   });

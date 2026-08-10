@@ -6,7 +6,10 @@
 // SCORE CAPS so weak / proofless / off-ICP companies do not enter Workbench as
 // strong opportunities. Scout casts a wide net; the gate rejects aggressively.
 //
-// Pure / import-free so it is fully unit-testable. Never invents data or URLs.
+// Pure / import-free (besides the shared ICP exclusion list) so it is fully
+// unit-testable. Never invents data or URLs.
+
+import { DEFAULT_EXCLUDED_INDUSTRIES, matchedExcludedIndustries } from "./companyIcpFilter.ts";
 
 // ---------- Phase 2: normalized candidate contract ----------
 export interface SourceProof {
@@ -98,14 +101,6 @@ export interface CandidateGateResult {
   disqualifiersHit: string[];
 }
 
-// Safe default disqualifier buckets — used only when the Company Brain does not
-// supply its own. Broad, obviously-off-ICP giants.
-export const DEFAULT_DISQUALIFIERS = [
-  "manufacturing", "plant operations", "refinery", "oil", "gas", "mining", "steel",
-  "bank", "banking", "insurance", "university", "college", "school district",
-  "government", "federal", "military", "defense", "construction", "hospital",
-  "staffing agency", "recruiting agency",
-];
 // Generic operations titles that are NOT a RevOps/GTM/Growth-Ops signal.
 const GENERIC_OPS_TITLE = /\b(operations manager|general manager|plant operations|production operations|office operations|facilities? (?:manager|operations)|branch operations|store operations|warehouse operations)\b/i;
 // RevOps/GTM intent detector.
@@ -130,9 +125,10 @@ export function applyLeadQualityGate(candidate: NormalizedCompanyCandidate, work
 
   const hay = lc(`${candidate.companyName} ${candidate.companyDescription ?? ""} ${candidate.industryEvidence.join(" ")} ${candidate.jobTitle ?? ""}`);
 
-  // Rule 5 — hard disqualifier (Company Brain, else safe defaults). Reject wins.
-  const disquals = (workflowIntent.disqualifiers && workflowIntent.disqualifiers.length ? workflowIntent.disqualifiers : DEFAULT_DISQUALIFIERS).map(lc).filter(Boolean);
-  for (const d of disquals) if (d && hay.includes(d)) disqualifiersHit.push(d);
+  // Rule 5 — hard disqualifier (Company Brain, else the canonical shared
+  // exclusion list from companyIcpFilter.ts). Reject wins.
+  const disqualSource = (workflowIntent.disqualifiers && workflowIntent.disqualifiers.length ? workflowIntent.disqualifiers : DEFAULT_EXCLUDED_INDUSTRIES).map(lc).filter(Boolean);
+  disqualifiersHit.push(...matchedExcludedIndustries(hay, disqualSource));
   if (disqualifiersHit.length) {
     decision = "reject"; capFit(0);
     reasons.push(`Rejected because company evidence indicates ${disqualifiersHit[0]}, which is disqualified by the Company Brain.`);
