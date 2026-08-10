@@ -17,7 +17,7 @@ import {
 } from "../../../supabase/functions/_shared/decisionMaker/providerAdapter.ts";
 import { planPeopleSearch } from "../../../supabase/functions/_shared/decisionMaker/searchPlanner.ts";
 import { normalizeProviderProfile } from "../../../supabase/functions/_shared/decisionMaker/personProfile.ts";
-import { resolveCompanyIdentity } from "../../../supabase/functions/_shared/decisionMaker/companyIdentity.ts";
+import { resolveDecisionMakerCompanyIdentity } from "../../../supabase/functions/_shared/decisionMaker/companyIdentity.ts";
 import * as F from "../../../supabase/functions/_shared/decisionMaker/fixtures.ts";
 
 const WS = "00000000-0000-4000-8000-000000000001";
@@ -82,7 +82,7 @@ Deno.test("17-18. timeout and generic errors stay distinct", () => {
 Deno.test("20. raw provider error text is never propagated", async () => {
   const secret = "https://api.apify.com/v2/runs?token=SECRET_TOKEN_VALUE";
   const runTool = async (): Promise<ToolResultLike> => ({ ok: false, error: `failed calling ${secret}` });
-  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  const plan = planPeopleSearch(resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
   assert(plan.ok);
   if (!plan.ok) return;
   const r = await runProviderPlan(plan.plan, runTool, {});
@@ -93,7 +93,7 @@ Deno.test("20. raw provider error text is never propagated", async () => {
 
 Deno.test("a thrown tool becomes failed, not an empty success", async () => {
   const runTool = async (): Promise<ToolResultLike> => { throw new Error("socket hang up"); };
-  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  const plan = planPeopleSearch(resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
   assert(plan.ok);
   if (!plan.ok) return;
   const r = await runProviderPlan(plan.plan, runTool, {});
@@ -115,7 +115,7 @@ Deno.test("profile arrays are located across common envelopes", () => {
 });
 
 Deno.test("the tool input never auto-persists raw people", () => {
-  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  const plan = planPeopleSearch(resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
   assert(plan.ok);
   if (!plan.ok) return;
   const input = planToToolInput(plan.plan);
@@ -127,7 +127,7 @@ Deno.test("the tool input never auto-persists raw people", () => {
 Deno.test("makePeopleSearchProvider maps a tool result into the pipeline contract", async () => {
   const runTool = async (): Promise<ToolResultLike> => ({ ok: true, data: { items: [F.VERIFIED_FOUNDER], run_id: "r1" } });
   const provider = makePeopleSearchProvider(runTool, {});
-  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  const plan = planPeopleSearch(resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
   assert(plan.ok);
   if (!plan.ok) return;
   const res = await provider(plan.plan);
@@ -141,7 +141,7 @@ Deno.test("makePeopleSearchProvider maps a tool result into the pipeline contrac
 // ===========================================================================
 
 Deno.test("9. a real lead record maps to a strong identity", () => {
-  const id = resolveCompanyIdentity(identityInputFromLead(LEAD_RECORD));
+  const id = resolveDecisionMakerCompanyIdentity(identityInputFromLead(LEAD_RECORD));
   assertEquals(id.identity_strength, "strong");
   assertEquals(id.domain, "nimbusforge.example");
 });
@@ -449,7 +449,7 @@ Deno.test("HOTFIX: every planned actor_key actually exists in the actor registry
   // failed as unconfigured, and — because unavailable short-circuited — masked
   // the working apify_people_search stage. Result: every strong-identity lead
   // reported "people search is disabled" without ever searching.
-  const identity = resolveCompanyIdentity(F.TARGET_COMPANY);
+  const identity = resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY);
   for (const stage of ["company_employee_search", "domain_people_search"] as const) {
     const planned = planPeopleSearch(identity, stage);
     assert(planned.ok, `${stage} should plan for a strong identity`);
@@ -512,7 +512,7 @@ Deno.test("HOTFIX: the company-employees plan carries a target the actor can rea
   // user_input.companyUrl / a query containing a company URL. Sending only
   // `company_linkedin_url` left it with nothing to scrape, so the actor
   // succeeded with an empty dataset on every call.
-  const plan = planPeopleSearch(resolveCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
+  const plan = planPeopleSearch(resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY), "company_employee_search");
   assert(plan.ok);
   if (!plan.ok) return;
   const input = planToToolInput(plan.plan) as Record<string, unknown>;
@@ -529,7 +529,7 @@ Deno.test("HOTFIX: the company-employees plan carries a target the actor can rea
 });
 
 Deno.test("HOTFIX: no company URL → no fabricated company targeting", () => {
-  const domainOnly = resolveCompanyIdentity({ company_name: "Nimbus Forge", website: "https://nimbusforge.example" });
+  const domainOnly = resolveDecisionMakerCompanyIdentity({ company_name: "Nimbus Forge", website: "https://nimbusforge.example" });
   const plan = planPeopleSearch(domainOnly, "domain_people_search");
   assert(plan.ok);
   if (!plan.ok) return;

@@ -16,7 +16,7 @@ export interface IdentitySource {
   origin: string;
 }
 
-export interface CompanyIdentity {
+export interface DecisionMakerCompanyIdentity {
   company_name: string | null;
   normalized_company_name: string | null;
   company_linkedin_url: string | null;
@@ -29,7 +29,7 @@ export interface CompanyIdentity {
   search_ready: boolean;
 }
 
-export interface CompanyIdentityInput {
+export interface DecisionMakerCompanyIdentityInput {
   company_name?: unknown;
   company_linkedin_url?: unknown;
   domain?: unknown;
@@ -63,7 +63,7 @@ const NON_COMPANY_DOMAINS = new Set([
  */
 const LEGAL_SUFFIX_RE = /\b(inc|llc|l\.l\.c|ltd|limited|corp|corporation|co|company|gmbh|s\.a|sa|b\.v|bv|llp|plc|pty|ab|oy|as|nv)\b/g;
 
-export function normalizeCompanyName(value: unknown): string | null {
+export function normalizeCompanyNameForMatching(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value
     .toLowerCase()
@@ -136,7 +136,7 @@ export function isJobBoardDomain(value: unknown): boolean {
  * Only strong/medium are search_ready. A weak identity cannot verify a returned
  * profile, so searching on it can only produce unverifiable guesses.
  */
-export function resolveCompanyIdentity(input: CompanyIdentityInput): CompanyIdentity {
+export function resolveDecisionMakerCompanyIdentity(input: DecisionMakerCompanyIdentityInput): DecisionMakerCompanyIdentity {
   const sources: IdentitySource[] = [];
 
   let linkedin = normalizeCompanyLinkedInUrl(input.company_linkedin_url);
@@ -164,7 +164,7 @@ export function resolveCompanyIdentity(input: CompanyIdentityInput): CompanyIden
     : (typeof input.job_post_company_name === "string" && input.job_post_company_name.trim()
       ? input.job_post_company_name.trim()
       : null);
-  const normalizedName = normalizeCompanyName(rawName);
+  const normalizedName = normalizeCompanyNameForMatching(rawName);
   if (normalizedName) {
     sources.push({
       field: "company_name",

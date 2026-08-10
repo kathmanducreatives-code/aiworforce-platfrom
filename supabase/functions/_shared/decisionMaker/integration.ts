@@ -13,7 +13,7 @@
 import { findDecisionMakers, type DecisionMakerOutcome, type PeopleSearchProvider } from "./pipeline.ts";
 import { decidePersistence, type PersistenceCandidate } from "./persistenceGuard.ts";
 import { normalizePersonLinkedInUrl } from "./personProfile.ts";
-import type { CompanyIdentityInput } from "./companyIdentity.ts";
+import type { DecisionMakerCompanyIdentityInput } from "./companyIdentity.ts";
 import type { RawProviderProfile } from "./personProfile.ts";
 
 /** Subset of the executor's LeadRecord this integration reads. */
@@ -100,7 +100,7 @@ export interface IntegrationResult {
  * absent fields stay absent so the resolver can grade the identity honestly and
  * refuse an unverifiable search.
  */
-export function identityInputFromLead(lead: LeadRecordLike): CompanyIdentityInput {
+export function identityInputFromLead(lead: LeadRecordLike): DecisionMakerCompanyIdentityInput {
   return {
     company_name: lead.company_name ?? undefined,
     company_linkedin_url: lead.company_linkedin_url ?? undefined,

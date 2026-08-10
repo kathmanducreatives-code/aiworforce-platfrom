@@ -5,7 +5,7 @@
 // people search is how a "find the decision-maker" action turns into a bill and
 // a list of strangers.
 
-import type { CompanyIdentity } from "./companyIdentity.ts";
+import type { DecisionMakerCompanyIdentity } from "./companyIdentity.ts";
 import { TARGET_ROLE_FAMILIES, type DecisionMakerRoleFamily } from "./roleFamily.ts";
 
 export type SearchStage =
@@ -24,7 +24,7 @@ export interface PeopleSearchPlan {
   geography_filters: string[];
   maximum_results: number;
   reason: string;
-  identity_strength: CompanyIdentity["identity_strength"];
+  identity_strength: DecisionMakerCompanyIdentity["identity_strength"];
 }
 
 /** Hard ceiling. A single lead never justifies a larger crawl. */
@@ -60,7 +60,7 @@ export type PlanResult =
  * whoever came back, so the honest answer is missing_company_identity.
  */
 export function planPeopleSearch(
-  identity: CompanyIdentity,
+  identity: DecisionMakerCompanyIdentity,
   stage: Exclude<SearchStage, "direct_known_person" | "stop">,
   opts: { maxResults?: number; geography?: string[] } = {},
 ): PlanResult {
@@ -135,7 +135,7 @@ export function planPeopleSearch(
  * The bounded stage sequence for an identity. At most two provider attempts, in
  * strength order, then stop.
  */
-export function fallbackStages(identity: CompanyIdentity): SearchStage[] {
+export function fallbackStages(identity: DecisionMakerCompanyIdentity): SearchStage[] {
   const stages: SearchStage[] = ["direct_known_person"];
   if (identity.company_linkedin_url) stages.push("company_employee_search");
   if (identity.domain) stages.push("domain_people_search");

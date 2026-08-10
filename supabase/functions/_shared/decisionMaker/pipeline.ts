@@ -5,7 +5,7 @@
 // a network call. The pipeline never widens a search to avoid an empty result:
 // an honest no_match is a better answer than a plausible stranger.
 
-import { resolveCompanyIdentity, type CompanyIdentity, type CompanyIdentityInput } from "./companyIdentity.ts";
+import { resolveDecisionMakerCompanyIdentity, type DecisionMakerCompanyIdentity, type DecisionMakerCompanyIdentityInput } from "./companyIdentity.ts";
 import {
   normalizeProviderProfile,
   dedupeProfiles,
@@ -13,7 +13,7 @@ import {
   type NormalizedPersonProfile,
   type RawProviderProfile,
 } from "./personProfile.ts";
-import { verifyCurrentEmployer, type EmployerVerification } from "./employerVerification.ts";
+import { verifyDecisionMakerEmployer, type EmployerVerificationRecord } from "./employerVerification.ts";
 import { classifyDecisionMakerRole, isTargetRoleFamily, type DecisionMakerRoleFamily } from "./roleFamily.ts";
 import { rankCandidates, companySizeBand, type CompanySizeBand, type RankComponents } from "./ranking.ts";
 import { planPeopleSearch, fallbackStages, type PeopleSearchPlan, type SearchStage } from "./searchPlanner.ts";
@@ -33,8 +33,8 @@ export interface AcceptedDecisionMaker {
   current_title: string | null;
   current_company_name: string | null;
   role_family: DecisionMakerRoleFamily;
-  verification_status: EmployerVerification["status"];
-  verification_methods: EmployerVerification["match_methods"];
+  verification_status: EmployerVerificationRecord["status"];
+  verification_methods: EmployerVerificationRecord["match_methods"];
   confidence: "high" | "medium" | "low";
   rank: number;
   rank_reasons: string[];
@@ -60,7 +60,7 @@ export interface RejectionSummary {
 
 export interface DecisionMakerObservability {
   request_mode: "direct_lead_action";
-  identity_strength: CompanyIdentity["identity_strength"];
+  identity_strength: DecisionMakerCompanyIdentity["identity_strength"];
   stage_run: SearchStage | null;
   actor_selected: string | null;
   provider_attempted: string | null;
@@ -83,7 +83,7 @@ export interface DecisionMakerResult {
   status: DecisionMakerOutcome;
   reason_code: string;
   retryable: boolean;
-  company_identity: CompanyIdentity;
+  company_identity: DecisionMakerCompanyIdentity;
   provider_attempted: string | null;
   provider_run_id: string | null;
   returned_profile_count: number;
@@ -110,7 +110,7 @@ export type PeopleSearchProvider = (plan: PeopleSearchPlan) => Promise<ProviderR
 
 export interface PipelineInput {
   lead_candidate_id: string;
-  identity_input: CompanyIdentityInput;
+  identity_input: DecisionMakerCompanyIdentityInput;
   employee_count?: unknown;
   /** Credible person already attached to the lead (job poster, founder metadata). */
   known_person?: RawProviderProfile | null;
@@ -127,7 +127,7 @@ function completeness(p: NormalizedPersonProfile): number {
 
 interface Evaluated {
   profile: NormalizedPersonProfile;
-  verification: EmployerVerification;
+  verification: EmployerVerificationRecord;
   role_family: DecisionMakerRoleFamily;
   seniority: string;
   from_direct_source: boolean;
@@ -145,7 +145,7 @@ function emptyRejections(): RejectionSummary {
  */
 function evaluate(
   profile: NormalizedPersonProfile,
-  identity: CompanyIdentity,
+  identity: DecisionMakerCompanyIdentity,
   fromDirect: boolean,
   rejections: RejectionSummary,
   rejected: RejectedProfile[],
@@ -166,7 +166,7 @@ function evaluate(
     return drop("invalid_profile_url");
   }
 
-  const verification = verifyCurrentEmployer(profile, identity);
+  const verification = verifyDecisionMakerEmployer(profile, identity);
   if (verification.status === "rejected") {
     if (verification.rejection_reasons.includes("target_company_only_in_past_experience")) {
       rejections.former_employee += 1;
@@ -221,7 +221,7 @@ export async function findDecisionMakers(
   input: PipelineInput,
   provider: PeopleSearchProvider,
 ): Promise<DecisionMakerResult> {
-  const identity = resolveCompanyIdentity(input.identity_input);
+  const identity = resolveDecisionMakerCompanyIdentity(input.identity_input);
   const band: CompanySizeBand = companySizeBand(input.employee_count);
   const rejections = emptyRejections();
   const rejected_profiles: RejectedProfile[] = [];

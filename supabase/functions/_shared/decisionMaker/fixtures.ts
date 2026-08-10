@@ -3,9 +3,9 @@
 // production identifiers.
 
 import type { RawProviderProfile } from "./personProfile.ts";
-import type { CompanyIdentityInput } from "./companyIdentity.ts";
+import type { DecisionMakerCompanyIdentityInput } from "./companyIdentity.ts";
 
-export const TARGET_COMPANY: CompanyIdentityInput = {
+export const TARGET_COMPANY: DecisionMakerCompanyIdentityInput = {
   company_name: "Nimbus Forge",
   company_linkedin_url: "https://www.linkedin.com/company/nimbus-forge/?trk=abc",
   website: "https://nimbusforge.example/careers",

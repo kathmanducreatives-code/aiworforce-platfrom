@@ -13,9 +13,9 @@
 
 import {
   companyLinkedInSlug,
-  normalizeCompanyName,
+  normalizeCompanyNameForMatching,
   normalizeDomain,
-  type CompanyIdentity,
+  type DecisionMakerCompanyIdentity,
 } from "./companyIdentity.ts";
 import type { NormalizedPersonProfile } from "./personProfile.ts";
 
@@ -26,7 +26,7 @@ export type MatchMethod =
   | "company_domain"
   | "company_name_with_corroboration";
 
-export interface EmployerVerification {
+export interface EmployerVerificationRecord {
   status: EmployerVerificationStatus;
   match_methods: MatchMethod[];
   confidence: "high" | "medium" | "low";
@@ -46,8 +46,8 @@ function sameDomain(a: unknown, b: unknown): boolean {
 }
 
 function sameName(a: unknown, b: unknown): boolean {
-  const x = normalizeCompanyName(a);
-  const y = normalizeCompanyName(b);
+  const x = normalizeCompanyNameForMatching(a);
+  const y = normalizeCompanyNameForMatching(b);
   return !!x && !!y && x === y;
 }
 
@@ -56,7 +56,7 @@ function sameName(a: unknown, b: unknown): boolean {
  * Distinguishing this from "no evidence at all" matters: a former employee is a
  * confident rejection, not an inconclusive one.
  */
-function targetOnlyInPast(profile: NormalizedPersonProfile, target: CompanyIdentity): boolean {
+function targetOnlyInPast(profile: NormalizedPersonProfile, target: DecisionMakerCompanyIdentity): boolean {
   const past = profile.experience.filter((e) => !e.is_current);
   const matchesTarget = (e: { company_linkedin_url: string | null; company_domain: string | null; company_name: string | null }) =>
     sameSlug(e.company_linkedin_url, target.company_linkedin_url) ||
@@ -78,10 +78,10 @@ function targetOnlyInPast(profile: NormalizedPersonProfile, target: CompanyIdent
  *             target appears only in past experience)
  * unverified→ no usable current-employment evidence either way
  */
-export function verifyCurrentEmployer(
+export function verifyDecisionMakerEmployer(
   profile: NormalizedPersonProfile,
-  target: CompanyIdentity,
-): EmployerVerification {
+  target: DecisionMakerCompanyIdentity,
+): EmployerVerificationRecord {
   const rejection_reasons: string[] = [];
   const match_methods: MatchMethod[] = [];
 
@@ -139,7 +139,7 @@ export function verifyCurrentEmployer(
       ) ||
       (!!profile.headline &&
         !!target.normalized_company_name &&
-        normalizeCompanyName(profile.headline)?.includes(target.normalized_company_name) === true);
+        normalizeCompanyNameForMatching(profile.headline)?.includes(target.normalized_company_name) === true);
 
     if (corroborated) {
       match_methods.push("company_name_with_corroboration");

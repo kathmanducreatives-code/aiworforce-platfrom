@@ -6,7 +6,7 @@
 // marked CONTACT regardless of any AI score — the exact production failure.
 
 import type { LeadEntityIntent } from "./leadEntityIntent.ts";
-import type { EmployerVerification } from "./employerVerification.ts";
+import type { EmployerMatchOutcome } from "./employerVerification.ts";
 
 /** True when the request must be sourced company-first (verify the company + its
  *  signal, then find the person inside it). */
@@ -21,7 +21,7 @@ export interface CompoundGateInput {
   /** A canonical account/company identity is bound to the candidate. */
   hasVerifiedAccount: boolean;
   /** Deterministic current-employer verification result (null = not evaluated). */
-  employer: EmployerVerification | null;
+  employer: EmployerMatchOutcome | null;
   /** The attached hiring-evidence URL (required for a company-signal request). */
   jobEvidenceUrl: string | null | undefined;
   /** Whether the person's role matches the requested role (true/false/unknown). */

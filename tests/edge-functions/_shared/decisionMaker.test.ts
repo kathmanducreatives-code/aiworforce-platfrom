@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  resolveCompanyIdentity,
-  normalizeCompanyName,
+  resolveDecisionMakerCompanyIdentity,
+  normalizeCompanyNameForMatching,
   normalizeCompanyLinkedInUrl,
   normalizeDomain,
   isJobBoardDomain,
@@ -12,7 +12,7 @@ import {
   normalizePersonLinkedInUrl,
   dedupeProfiles,
 } from "../../../supabase/functions/_shared/decisionMaker/personProfile.ts";
-import { verifyCurrentEmployer } from "../../../supabase/functions/_shared/decisionMaker/employerVerification.ts";
+import { verifyDecisionMakerEmployer } from "../../../supabase/functions/_shared/decisionMaker/employerVerification.ts";
 import { companySizeBand, rankCandidates, scoreCandidate } from "../../../supabase/functions/_shared/decisionMaker/ranking.ts";
 import { planPeopleSearch, fallbackStages, MAX_RESULTS_PER_LEAD } from "../../../supabase/functions/_shared/decisionMaker/searchPlanner.ts";
 import { findDecisionMakers, type ProviderResponse } from "../../../supabase/functions/_shared/decisionMaker/pipeline.ts";
@@ -22,7 +22,7 @@ import * as F from "../../../supabase/functions/_shared/decisionMaker/fixtures.t
 const WS = "00000000-0000-4000-8000-000000000001";
 const LEAD = "00000000-0000-4000-8000-000000000002";
 
-const identity = () => resolveCompanyIdentity(F.TARGET_COMPANY);
+const identity = () => resolveDecisionMakerCompanyIdentity(F.TARGET_COMPANY);
 const norm = (raw: Record<string, unknown>) => normalizeProviderProfile(raw);
 
 /** Provider stub — no network, ever. */
@@ -45,13 +45,13 @@ Deno.test("1. LinkedIn URL + domain → strong identity, search ready", () => {
 });
 
 Deno.test("2. domain + name → medium identity", () => {
-  const id = resolveCompanyIdentity({ company_name: "Nimbus Forge", website: "https://nimbusforge.example" });
+  const id = resolveDecisionMakerCompanyIdentity({ company_name: "Nimbus Forge", website: "https://nimbusforge.example" });
   assertEquals(id.identity_strength, "medium");
   assert(id.search_ready);
 });
 
 Deno.test("3. company name alone is weak and NOT search-ready", () => {
-  const id = resolveCompanyIdentity({ company_name: "Nimbus Forge" });
+  const id = resolveDecisionMakerCompanyIdentity({ company_name: "Nimbus Forge" });
   assertEquals(id.identity_strength, "weak");
   assertEquals(id.search_ready, false);
   const planned = planPeopleSearch(id, "domain_people_search");
@@ -65,7 +65,7 @@ Deno.test("4. job-board / social domains are rejected as company domains", () =>
     assertEquals(normalizeDomain(bad), null, `${bad} must not be a company domain`);
     assert(isJobBoardDomain(bad));
   }
-  const id = resolveCompanyIdentity({ company_name: "Nimbus Forge", website: "https://jobs.lever.co/nimbus" });
+  const id = resolveDecisionMakerCompanyIdentity({ company_name: "Nimbus Forge", website: "https://jobs.lever.co/nimbus" });
   assertEquals(id.domain, null);
   assertEquals(id.search_ready, false);
 });
@@ -86,9 +86,9 @@ Deno.test("6. identity provenance is preserved per field", () => {
 
 Deno.test("6b. industry words are NOT stripped — Acme AI ≠ Acme Labs", () => {
   // The old normalizer collapsed both to "acme", manufacturing false matches.
-  assert(normalizeCompanyName("Acme AI") !== normalizeCompanyName("Acme Labs"));
+  assert(normalizeCompanyNameForMatching("Acme AI") !== normalizeCompanyNameForMatching("Acme Labs"));
   // Legal suffixes still normalize away.
-  assertEquals(normalizeCompanyName("Nimbus Forge Inc."), normalizeCompanyName("Nimbus Forge LLC"));
+  assertEquals(normalizeCompanyNameForMatching("Nimbus Forge Inc."), normalizeCompanyNameForMatching("Nimbus Forge LLC"));
 });
 
 // ===========================================================================
@@ -180,25 +180,25 @@ Deno.test("20. missing fields stay missing rather than being invented", () => {
 // ===========================================================================
 
 Deno.test("21. matching company LinkedIn URL verifies", () => {
-  const v = verifyCurrentEmployer(norm(F.VERIFIED_FOUNDER), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.VERIFIED_FOUNDER), identity());
   assertEquals(v.status, "verified");
   assert(v.match_methods.includes("company_linkedin_url"));
 });
 
 Deno.test("22. matching domain verifies", () => {
-  const v = verifyCurrentEmployer(norm(F.VERIFIED_CRO), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.VERIFIED_CRO), identity());
   assertEquals(v.status, "verified");
   assert(v.match_methods.includes("company_domain"));
 });
 
 Deno.test("23. corroborated name-only evidence is PROBABLE, never verified", () => {
-  const v = verifyCurrentEmployer(norm(F.PROBABLE_EMPLOYEE), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.PROBABLE_EMPLOYEE), identity());
   assertEquals(v.status, "probable");
   assertEquals(v.confidence, "medium");
 });
 
 Deno.test("24. target company only in past experience does not verify", () => {
-  const v = verifyCurrentEmployer(norm(F.FORMER_FOUNDER), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.FORMER_FOUNDER), identity());
   assertEquals(v.status, "rejected");
   assert(
     v.rejection_reasons.includes("target_company_only_in_past_experience") ||
@@ -207,19 +207,19 @@ Deno.test("24. target company only in past experience does not verify", () => {
 });
 
 Deno.test("25. a different current employer is rejected", () => {
-  const v = verifyCurrentEmployer(norm(F.UNRELATED_CRO), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.UNRELATED_CRO), identity());
   assertEquals(v.status, "rejected");
   assert(v.rejection_reasons.includes("current_employer_is_another_company"));
 });
 
 Deno.test("26. same name + different domain is rejected as an impostor", () => {
-  const v = verifyCurrentEmployer(norm(F.LOOKALIKE_COMPANY_PERSON), identity());
+  const v = verifyDecisionMakerEmployer(norm(F.LOOKALIKE_COMPANY_PERSON), identity());
   assertEquals(v.status, "rejected");
   assert(v.rejection_reasons.includes("similar_name_different_domain"));
 });
 
 Deno.test("27. no current-employment evidence stays unverified, not verified", () => {
-  const v = verifyCurrentEmployer(
+  const v = verifyDecisionMakerEmployer(
     norm({ full_name: "Jo Ash", linkedin_url: "https://www.linkedin.com/in/jo-ash-synthetic", current_title: "CEO" }),
     identity(),
   );
@@ -248,7 +248,7 @@ Deno.test("12-13. domain fallback is bounded and the cap is enforced", () => {
 });
 
 Deno.test("14. weak identity blocks the search entirely", () => {
-  const weak = resolveCompanyIdentity({ company_name: "Nimbus Forge" });
+  const weak = resolveDecisionMakerCompanyIdentity({ company_name: "Nimbus Forge" });
   for (const stage of ["company_employee_search", "domain_people_search"] as const) {
     const p = planPeopleSearch(weak, stage);
     assert(!p.ok, `${stage} must be refused on a weak identity`);

@@ -11,7 +11,7 @@ import {
 } from "./companyIdentity.ts";
 import { normalizeCompanyName, differsOnlyByCohortLabel } from "./companyIdentity.ts";
 
-export type EmployerVerification =
+export type EmployerMatchOutcome =
   | "verified_match"
   | "verified_mismatch"
   | "historical_only"
@@ -32,7 +32,7 @@ export interface PersonEmployment {
 }
 
 export interface EmployerVerifyResult {
-  outcome: EmployerVerification;
+  outcome: EmployerMatchOutcome;
   reason: string;
   matchedBy: "domain" | "linkedin" | "name" | "none";
 }
@@ -110,11 +110,11 @@ export function verifyCurrentEmployer(
 }
 
 /** Does this verification satisfy the CONTACT hard gate? Only a proven current match. */
-export function employerGatePasses(outcome: EmployerVerification): boolean {
+export function employerGatePasses(outcome: EmployerMatchOutcome): boolean {
   return outcome === "verified_match";
 }
 /** Ambiguous/insufficient → review; explicit mismatch/historical → reject. */
-export function employerGateDisposition(outcome: EmployerVerification): "pass" | "review" | "reject" {
+export function employerGateDisposition(outcome: EmployerMatchOutcome): "pass" | "review" | "reject" {
   if (outcome === "verified_match") return "pass";
   if (outcome === "ambiguous" || outcome === "insufficient_evidence") return "review";
   return "reject"; // verified_mismatch | historical_only
