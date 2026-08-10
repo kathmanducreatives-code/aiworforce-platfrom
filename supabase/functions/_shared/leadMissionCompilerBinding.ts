@@ -15,9 +15,37 @@
 //   * ONE call per mission. Compilation is a single interpretive act; a retry
 //     loop here would be a budget with no ceiling.
 //   * NO ESCALATION. Interpreting a sentence never justifies the expensive tier.
-//   * FAILS TO THE DETERMINISTIC PARSER, never to an error. A model that is
-//     down, slow or wrong must cost the user nothing but a less precise mission.
 //   * Nothing here reads a credential, and no provider name is ever sent.
+//
+// ── ON FAILING TO THE DETERMINISTIC PARSER ───────────────────────────────────
+//
+// THE ARCHITECTURAL RULE, which this module does not yet implement:
+//
+//     new lead request → GPT raw-query Mission compiler → canonical Mission
+//                      → execution
+//
+//     compilation fails or returns invalid output → RETRY, then an explicit
+//     compilation failure. Never a silent fall back to regex interpretation of
+//     the user's sentence.
+//
+// Today a null proposal degrades to `parseLeadMissionDeterministic`, and this
+// comment used to call that a safety property — "fails to the deterministic
+// parser, never to an error". It is not one. Regex interpretation of a raw
+// sentence is a DIFFERENT reading of the request, not a lower-resolution copy of
+// the same one: R1's gold fixtures showed it inventing personas the user never
+// named and discarding companies the user supplied. Serving that silently under
+// an outage means answering a question nobody asked, with the user's money, and
+// reporting success.
+//
+// So the current degradation is MIGRATION-ERA BEHAVIOUR, kept only because the
+// compiler is off by default and nothing else answers yet. It is not the target
+// and must not be defended as one. The deterministic parsers may remain during
+// migration for shadow comparison, historical compatibility and migration
+// verification — never as the final semantic authority, and never as the outage
+// fallback for a new request.
+//
+// Replacing it with retry-then-explicit-failure is R2's job. Nothing in this
+// commit changes behaviour.
 //
 // Pure apart from the injected facade. No provider import, no network.
 
@@ -131,15 +159,22 @@ export function buildMissionCompilerBinding(input: {
             content: JSON.stringify(buildMissionCompilerPayload(ctx)),
           }],
         } as never);
-        // The facade reports failure in-band. A null here is a SAFE outcome:
-        // `compileLeadMission` reads it as "no proposal" and the deterministic
-        // parser answers, which is exactly the intended degradation.
+        // The facade reports failure in-band. `compileLeadMission` reads a null
+        // as "no proposal" and the deterministic parser answers.
+        //
+        // MIGRATION-ERA, NOT THE TARGET — see the doctrine block at the top of
+        // this file. Under the architectural rule a failed compilation must
+        // retry and then fail explicitly; it must not hand the request to a
+        // different, regex-derived reading of the sentence. R2 replaces this.
         return (result as { ok?: boolean; json?: unknown })?.ok
           ? (result as { json?: unknown }).json
           : null;
       } catch {
-        // A THROW MUST NOT COST A WORKFLOW. Interpreting the query is an
-        // enhancement; the run is still perfectly capable without it.
+        // A throw is reported as "no proposal" for the same migration-era reason
+        // as above. "Interpreting the query is an enhancement; the run is
+        // perfectly capable without it" was the old justification and it is
+        // wrong: without the interpretation the run answers a differently-read
+        // request. Retry-then-explicit-failure replaces this in R2.
         return null;
       }
     },

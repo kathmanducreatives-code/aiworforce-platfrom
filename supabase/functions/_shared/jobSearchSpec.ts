@@ -21,13 +21,20 @@
 //
 // This module does two different jobs and they retire on different schedules.
 //
-//   FALLBACK (superseded by the Mission as of R1):
+//   SUPERSEDED — MIGRATION-ONLY (as of R1):
 //     `extractRequiredSignalTerms()` and the `no_broadening_requested` flag from
 //     `parseStrictConstraints()`. `LeadMissionV1` now carries both directly
 //     (`required_signal_terms`, `no_broadening_requested`), sourced from the model
-//     reading the raw sentence. These stay as the answer when no model proposal
-//     exists — that is what fallback means — but they are no longer the only place
-//     the constraint can live. DELETE-LATER, once leadStrategyBridge.ts reads them
+//     reading the raw sentence.
+//
+//     These are NOT a permanent runtime fallback, and an earlier version of this
+//     header wrongly said they were ("they stay as the answer when no model
+//     proposal exists — that is what fallback means"). The architectural rule is
+//     that a new request compiles to a Mission, and a failed compilation retries
+//     and then fails explicitly; it never silently reverts to regex semantics,
+//     because that answers a differently-read request. These extractors survive
+//     only for shadow comparison, historical compatibility and migration
+//     verification. DELETE-LATER, once leadStrategyBridge.ts reads the constraints
 //     from the Mission instead of from a spec (R2).
 //
 //   COMPATIBILITY (not superseded, not scheduled for removal):

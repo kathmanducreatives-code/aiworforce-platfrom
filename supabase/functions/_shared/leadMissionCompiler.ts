@@ -27,6 +27,15 @@
 // `memo23/y-combinator-scraper`, and if it invents one anyway, `UNSAFE_VALUE`
 // below rejects the whole proposal and the deterministic parser answers instead.
 //
+// THAT LAST CLAUSE IS MIGRATION-ERA BEHAVIOUR, NOT THE TARGET. The rule is:
+// a new request compiles to a canonical Mission, and a compilation that fails or
+// returns invalid output RETRIES and then fails explicitly. It never silently
+// falls back to regex interpretation of the sentence, because that is a
+// different reading of the request rather than a coarser copy of the same one.
+// The deterministic path survives here only for shadow comparison, historical
+// compatibility and migration verification. See the doctrine block in
+// leadMissionCompilerBinding.ts; R2 implements it.
+//
 // PURE. No network, provider, model or database access — the caller injects the
 // model call and passes its raw output in.
 
@@ -197,10 +206,15 @@ function normKey(k: string): string {
  * Walk the raw model output for anything it had no authority to say.
  *
  * Checks KEYS and STRING VALUES, at every depth. A violation is fatal — see
- * {@link compileLeadMission}, which falls back to the deterministic parser rather
- * than trying to sanitise a proposal that was reaching outside its remit. A
- * proposal that names an Actor is not a good proposal with one bad field; it is
+ * {@link compileLeadMission}, which today degrades to the deterministic parser
+ * rather than trying to sanitise a proposal that was reaching outside its remit.
+ * A proposal that names an Actor is not a good proposal with one bad field; it is
  * evidence the model misunderstood what it was being asked for.
+ *
+ * REFUSING THE PROPOSAL IS PERMANENT; DEGRADING TO REGEX IS NOT. Under the
+ * architectural rule the correct response to a refused proposal is retry, then
+ * an explicit compilation failure — not a second, regex-derived reading of the
+ * user's sentence. Migration-era only; see leadMissionCompilerBinding.ts.
  */
 export function scanProposalForViolations(raw: unknown): ProposalViolation[] {
   const found: ProposalViolation[] = [];

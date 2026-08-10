@@ -576,8 +576,13 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
     // Gated OFF by default; both a flag and a workspace allow-list must pass.
     // Disabled, `proposeMission` is null and the deterministic parser answers —
     // which is exactly what happens today, so this is inert until switched on.
-    // A model failure returns null and degrades the same way: a less precise
-    // mission, never a failed workflow.
+    //
+    // A model failure currently degrades the same way. That is MIGRATION-ERA
+    // behaviour, not the design: the rule is retry, then an explicit compilation
+    // failure, because a regex reading of the sentence answers a differently-read
+    // request rather than a less precise version of the same one. Calling it "a
+    // less precise mission, never a failed workflow" understated what changes.
+    // See the doctrine block in _shared/leadMissionCompilerBinding.ts; R2 owns it.
     const compilerBinding = buildMissionCompilerBinding({ workspaceId });
     const gptProposal = compilerBinding.proposeMission
       ? await compilerBinding.proposeMission({
