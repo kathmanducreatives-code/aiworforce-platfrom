@@ -73,15 +73,15 @@ Deno.test("failed fetch on every page → failed status, nothing invented", asyn
   assertEquals(r.enrichment.founders.length, 0);
 });
 
-// ---- Find decision-makers ----
+// ---- Find decision-makers: deliberately not covered here ----
 //
-// Decision-maker discovery itself (runDecisionMakerDiscovery, the deprecated
-// wrapper around buildDecisionMakers) was deleted from leadActionRunner.ts —
-// zero live callers (grep-confirmed against supabase/ and tests/). The live
-// find_decision_makers action uses runDecisionMakerAction
-// (_shared/decisionMaker/pipeline.ts), covered by integration.test.ts and
-// decisionMaker/*.test.ts. buildDecisionMakers itself remains live via
-// memoryWriter.ts's ingest-time call and is covered by decisionMakers.test.ts.
+// leadActionRunner.ts owns company enrichment and outreach only. Decision-maker
+// work lives in two other places, each with its own tests:
+//   - the live find_decision_makers action → runDecisionMakerAction
+//     (_shared/decisionMaker/pipeline.ts), covered by integration.test.ts and
+//     decisionMaker/*.test.ts;
+//   - ingest-time extraction → buildDecisionMakers (_shared/decisionMakers.ts),
+//     called by memoryWriter.ts, covered by decisionMakers.test.ts.
 
 // ---- Generate outreach ----
 

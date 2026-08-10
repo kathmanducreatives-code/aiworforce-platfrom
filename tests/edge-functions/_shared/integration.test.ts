@@ -385,21 +385,40 @@ Deno.test("53-54. no real database write or outreach occurs in these tests", asy
 // ===========================================================================
 
 const EXECUTOR_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadActionExecutor.ts", import.meta.url));
+const RUNNER_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadActionRunner.ts", import.meta.url));
 
 Deno.test("1-2. the live action uses the new engine and NOT the legacy verifier", () => {
   assert(
     /runDecisionMakerAction\(/.test(EXECUTOR_SRC),
     "find_decision_makers must call runDecisionMakerAction",
   );
-  // The legacy discovery entrypoint must not be re-wired into the runtime.
-  assert(
-    !/await\s+runDecisionMakerDiscovery\(/.test(EXECUTOR_SRC),
-    "the legacy runDecisionMakerDiscovery path must not return",
-  );
+  // peopleContactsToDecisionMakers is STILL LIVE — decisionMakers.ts exports it
+  // and buildDecisionMakers() calls it at ingest time via memoryWriter.ts. This
+  // asserts the executor does not reach for it, not that it is gone.
   assert(
     !/peopleContactsToDecisionMakers\(/.test(EXECUTOR_SRC),
     "the legacy verifier must not be called from the executor",
   );
+});
+
+// Phase 1A deleted runDecisionMakerDiscovery, the @deprecated wrapper around
+// buildDecisionMakers, from leadActionRunner.ts. The guard that used to live in
+// the test above ("the executor must not call it") went vacuous the moment the
+// symbol stopped existing: you cannot wire up what is not there, so it passed
+// for the wrong reason.
+//
+// The invariant that IS still real is the deletion itself. leadActionRunner.ts
+// was its only home, so that is the file a revert would put it back into.
+Deno.test("1-2b. the deleted legacy discovery wrapper stays deleted", () => {
+  assert(
+    !/runDecisionMakerDiscovery/.test(RUNNER_SRC),
+    "runDecisionMakerDiscovery was deleted as proven-dead code; reintroducing it " +
+    "re-creates a second decision-maker authority alongside runDecisionMakerAction",
+  );
+  // Its live replacement and the ingest-time function it wrapped are both
+  // untouched by that deletion — named here so this guard cannot be "fixed" by
+  // deleting the wrong thing.
+  assert(/runDecisionMakerAction\(/.test(EXECUTOR_SRC), "the live replacement must remain wired");
 });
 
 Deno.test("the provider failure mode that caused the bug cannot come back", () => {
