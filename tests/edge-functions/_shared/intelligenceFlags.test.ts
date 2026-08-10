@@ -68,7 +68,7 @@ Deno.test("31.A the geography gate is documented and names the planning flags", 
   assert(GEOGRAPHY_GATE_NOTE.includes("us"));
   assert(GEOGRAPHY_GATE_NOTE.includes("claude_first_lead_planning"));
   assert(isGeographyGated("CLAUDE_FIRST_LEAD_PLANNING"));
-  assert(isGeographyGated("GLOBAL_ROLE_PLANNING"));
+  assert(isGeographyGated("CLAUDE_LEAD_REPLANNING"));
   assertFalse(isGeographyGated("CONTENT_INTELLIGENCE_KERNEL"));
   for (const f of GEOGRAPHY_GATED_FLAGS) assert((INTELLIGENCE_FLAGS as readonly string[]).includes(f));
 });
@@ -272,9 +272,11 @@ Deno.test("33.F approval requirements are visible in diagnostics", () => {
 Deno.test("34.A every intelligence flag is declared", () => {
   // PR #106 added DYNAMIC_HIRING_SOURCE_PLANNING through this same resolver
   // rather than a second parser, so the list grows here by design.
+  // SEMANTIC_TITLE_VALIDATION, GLOBAL_ROLE_PLANNING and LEAD_STRATEGY_MEMORY were
+  // deleted as never-shipped: each was declared here and snapshotted, and no code
+  // anywhere ever read one. A flag with no reader reserves nothing.
   const expected: IntelligenceFlag[] = [
-    "CLAUDE_FIRST_LEAD_PLANNING", "CLAUDE_LEAD_REPLANNING", "SEMANTIC_TITLE_VALIDATION",
-    "GLOBAL_ROLE_PLANNING", "LEAD_STRATEGY_MEMORY", "SIGNAL_INTELLIGENCE_KERNEL",
+    "CLAUDE_FIRST_LEAD_PLANNING", "CLAUDE_LEAD_REPLANNING", "SIGNAL_INTELLIGENCE_KERNEL",
     "CONTENT_INTELLIGENCE_KERNEL", "CROSS_DEPARTMENT_INTELLIGENCE",
     "DYNAMIC_HIRING_SOURCE_PLANNING", "CLAUDE_SOURCE_FEEDBACK",
   ];

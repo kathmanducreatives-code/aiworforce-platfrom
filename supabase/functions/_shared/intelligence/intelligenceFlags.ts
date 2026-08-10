@@ -30,12 +30,6 @@ export const INTELLIGENCE_FLAGS = [
   "CLAUDE_FIRST_LEAD_PLANNING",
   /** Phase 2. Claude re-plans between sourcing rounds. */
   "CLAUDE_LEAD_REPLANNING",
-  /** Phase 3. Semantic (rather than registry-literal) title validation. */
-  "SEMANTIC_TITLE_VALIDATION",
-  /** Phase 4. Worldwide role/geography planning. Gated on the geography fix. */
-  "GLOBAL_ROLE_PLANNING",
-  /** Phase 3. Persist and reuse strategies that worked. */
-  "LEAD_STRATEGY_MEMORY",
   /** Phase 5. Signals department planner. */
   "SIGNAL_INTELLIGENCE_KERNEL",
   /** Phase 5. Content department planner. */
@@ -77,9 +71,6 @@ export function isIntelligenceFlagEnabled(flag: IntelligenceFlag, read?: EnvRead
 export interface IntelligenceFlagState {
   claude_first_lead_planning: boolean;
   claude_lead_replanning: boolean;
-  semantic_title_validation: boolean;
-  global_role_planning: boolean;
-  lead_strategy_memory: boolean;
   signal_intelligence_kernel: boolean;
   content_intelligence_kernel: boolean;
   cross_department_intelligence: boolean;
@@ -92,9 +83,6 @@ export function readIntelligenceFlags(read?: EnvReader): IntelligenceFlagState {
   return {
     claude_first_lead_planning: isIntelligenceFlagEnabled("CLAUDE_FIRST_LEAD_PLANNING", read),
     claude_lead_replanning: isIntelligenceFlagEnabled("CLAUDE_LEAD_REPLANNING", read),
-    semantic_title_validation: isIntelligenceFlagEnabled("SEMANTIC_TITLE_VALIDATION", read),
-    global_role_planning: isIntelligenceFlagEnabled("GLOBAL_ROLE_PLANNING", read),
-    lead_strategy_memory: isIntelligenceFlagEnabled("LEAD_STRATEGY_MEMORY", read),
     signal_intelligence_kernel: isIntelligenceFlagEnabled("SIGNAL_INTELLIGENCE_KERNEL", read),
     content_intelligence_kernel: isIntelligenceFlagEnabled("CONTENT_INTELLIGENCE_KERNEL", read),
     cross_department_intelligence: isIntelligenceFlagEnabled("CROSS_DEPARTMENT_INTELLIGENCE", read),
@@ -130,8 +118,10 @@ export function allIntelligenceFlagsOff(read?: EnvReader): boolean {
 //
 // STILL TRUE, and NOT what this gate covered: the parser remains US-only, so a
 // non-US location resolves to []. That is now honest rather than wrong — it reports
-// "nothing I understand" instead of asserting the wrong country. Full worldwide
-// normalization is Phase 4 and is gated separately by GLOBAL_ROLE_PLANNING.
+// "nothing I understand" instead of asserting the wrong country. Worldwide
+// normalization remains unbuilt; the GLOBAL_ROLE_PLANNING flag that used to reserve
+// a place for it was deleted as never-shipped, because a flag nothing reads does not
+// reserve anything.
 //
 // Clearing the gate does NOT enable anything. Every flag still defaults OFF.
 
@@ -146,15 +136,13 @@ export const GEOGRAPHY_GATE_CLEARED = true;
 /**
  * Flags that were blocked on the geography defect.
  *
- * Kept as a record of WHY these three were gated, and still consulted by
+ * Kept as a record of WHY these were gated, and still consulted by
  * `isGeographyGated`. With the gate cleared this is history rather than a live
- * restriction — but the list stays, because GLOBAL_ROLE_PLANNING has its own,
- * separate Phase 4 dependency on worldwide normalization.
+ * restriction.
  */
 export const GEOGRAPHY_GATED_FLAGS: readonly IntelligenceFlag[] = [
   "CLAUDE_FIRST_LEAD_PLANNING",
   "CLAUDE_LEAD_REPLANNING",
-  "GLOBAL_ROLE_PLANNING",
 ];
 
 export function isGeographyGated(flag: IntelligenceFlag): boolean {
