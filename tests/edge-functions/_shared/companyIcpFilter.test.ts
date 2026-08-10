@@ -140,6 +140,66 @@ Deno.test("matchedExcludedIndustries: the shared matcher used by both former lis
   assert(DEFAULT_EXCLUDED_INDUSTRIES.includes("plant operations"));
 });
 
+// ---- Phase 1B follow-up: vertical-ambiguity containment.
+// The merge put bare "manufacturing" and "construction" into filterByIcp's
+// default exclusions, which had neither before. Both name a VERTICAL, so as
+// bare substrings they reject software vendors SELLING INTO that vertical
+// ("Construction Software") — precisely the B2B SaaS companies the ICP wants.
+// They are now skipped when the text carries software-business evidence. ----
+
+Deno.test("vertical ambiguity: construction/manufacturing SOFTWARE vendors are not default-excluded", () => {
+  const icp = { positive_industries: ["Software"], max_employees: 500 };
+  const r = filterByIcp([
+    { company: "Procore", industry: "Construction Software", team_size: "300" },
+    { company: "Tulip Interfaces", industry: "Manufacturing Software", team_size: "200" },
+  ], icp);
+  assertEquals(r.accepted.map((c) => c.company).sort(), ["Procore", "Tulip Interfaces"]);
+});
+
+Deno.test("vertical ambiguity: real construction/manufacturing OPERATORS are still default-excluded", () => {
+  const icp = { positive_industries: ["Software"], max_employees: 500 };
+  const r = filterByIcp([
+    { company: "BuildRight Construction", industry: "Construction", team_size: "300" },
+    { company: "Riverside Manufacturing Co", industry: "Consumer Goods Manufacturing", team_size: "200" },
+  ], icp);
+  assertEquals(r.accepted.length, 0);
+  // Rejected at the default-exclusion stage specifically, not merely dropped
+  // later by the positive-industry gate.
+  const reasons = r.rejected.map((x) => x.reason).sort();
+  assertEquals(reasons, ["off-ICP industry: construction", "off-ICP industry: manufacturing"]);
+});
+
+Deno.test("vertical ambiguity: only the two ambiguous terms are suppressible", () => {
+  // Suppressed when software evidence is present…
+  assertEquals(matchedExcludedIndustries("Procore — Construction Software"), []);
+  assertEquals(matchedExcludedIndustries("Tulip, cloud manufacturing platform"), []);
+  // …but never suppressed without it.
+  assertEquals(matchedExcludedIndustries("BuildRight Construction, general contractor"), ["construction"]);
+
+  // The unambiguous operator terms stay hard, software evidence or not.
+  assertEquals(matchedExcludedIndustries("Heavy Manufacturing Software Ltd"), ["heavy manufacturing"]);
+  assertEquals(matchedExcludedIndustries("Apex Staffing Agency, a SaaS-enabled marketplace"), ["staffing agency"]);
+  assertEquals(matchedExcludedIndustries("Site Plant Operations LLC, cloud tooling"), ["plant operations"]);
+  assertEquals(matchedExcludedIndustries("Talent Bridge Recruiting Agency software"), ["recruiting agency"]);
+});
+
+Deno.test("vertical ambiguity: an EXPLICIT disqualifier list is honoured literally", () => {
+  // A Brain that says "disqualify construction" means it, even for a vendor.
+  assertEquals(
+    matchedExcludedIndustries("Procore — Construction Software", ["construction"], { suppressVerticalAmbiguity: false }),
+    ["construction"],
+  );
+  // Default (suppression on) would have skipped it.
+  assertEquals(matchedExcludedIndustries("Procore — Construction Software", ["construction"]), []);
+});
+
+Deno.test("vertical ambiguity: software evidence is word-boundary anchored, not substring", () => {
+  // "repair" contains "ai", "barrel" contains "arr", "techniques" contains
+  // "tech" — none is software evidence, so the exclusion must still fire.
+  assertEquals(matchedExcludedIndustries("Riverside Manufacturing: repair, barrel works, welding techniques"), ["manufacturing"]);
+  assertEquals(matchedExcludedIndustries("Construction firm using modern techniques"), ["construction"]);
+});
+
 // ---- helpers ----
 Deno.test("parseEmployeeCount: ranges, plus, single, string", () => {
   assertEquals(parseEmployeeCount("5-150"), 150);

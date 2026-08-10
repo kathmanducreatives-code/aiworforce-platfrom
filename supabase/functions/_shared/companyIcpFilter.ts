@@ -154,6 +154,19 @@ const SAAS_SUPPORT_TOKENS = [
 // "Manufacturing"/"Construction" still un-suppresses the matching new entries
 // exactly as it did for the pre-existing ones (see companyIcpFilter.test.ts
 // Case B/C).
+//
+// The merge widened BOTH callers, not just leadQualityGate's:
+//   - leadQualityGate's default-fallback path gained every companyIcpFilter-only
+//     entry it previously lacked ("law firm", "casino", "credit union", …).
+//   - filterByIcp gained the five leadQualityGate-only entries above — and it had
+//     NO construction, bare-manufacturing, plant-operations or staffing-agency
+//     exclusion at all before the merge.
+// The second direction is the riskier one: "manufacturing" and "construction"
+// name a VERTICAL, not a business model, so as bare substrings they match a
+// software vendor selling INTO that vertical ("Construction Software",
+// "Manufacturing ERP") exactly as readily as an operator in it — i.e. they
+// reject the B2B SaaS companies the ICP is actually looking for. See
+// SOFTWARE_BUSINESS_EVIDENCE_RE below for how that is contained.
 export const DEFAULT_EXCLUDED_INDUSTRIES: string[] = [
   "oil", "gas", "petroleum", "refinery", "refineries", "mining", "coal",
   "heavy manufacturing", "manufacturing", "plant operations", "construction",
@@ -170,14 +183,61 @@ export const DEFAULT_EXCLUDED_INDUSTRIES: string[] = [
 ];
 
 /**
+ * Word-boundary-anchored evidence that a company SELLS software, used only to
+ * suppress the vertical-ambiguous exclusions below.
+ *
+ * Deliberately a `\b`-anchored regex, and deliberately NOT reusing
+ * SAAS_SUPPORT_TOKENS or INDUSTRY_FAMILIES: both are substring-matched and
+ * contain short tokens ("ai", "arr", "tech") that fire inside unrelated words
+ * — "repair" contains "ai", "barrel" contains "arr" — which would suppress
+ * genuine off-ICP rejections. Nothing here may be a substring of a common
+ * English word.
+ */
+const SOFTWARE_BUSINESS_EVIDENCE_RE =
+  /\b(saas|software as a service|software|computer software|b2b software|erp|crm|api|cloud|tech|information technology|it services|developer tools|devops|cybersecurity|fintech|martech|proptech|contech|web app|mobile app|paas|platform as a service)\b/i;
+
+/**
+ * Exclusion terms that name a VERTICAL rather than a business model. As bare
+ * substrings they match software vendors serving the vertical just as readily
+ * as operators inside it, so they are skipped when the same text carries
+ * software-business evidence.
+ *
+ * "heavy manufacturing", "plant operations", "staffing agency" and "recruiting
+ * agency" are deliberately NOT here: each names an operator directly and does
+ * not read as a software category, so they stay unconditional. A text that
+ * says "heavy manufacturing" is still rejected even alongside "software".
+ */
+const VERTICAL_AMBIGUOUS_EXCLUSIONS = new Set(["manufacturing", "construction"]);
+
+export interface ExcludedIndustryMatchOptions {
+  /**
+   * Apply the vertical-ambiguity suppression above. TRUE for the DEFAULT list
+   * (a default is our guess and should not reject construction-tech SaaS);
+   * FALSE when `list` came from an explicit Company Brain disqualifier set,
+   * where "disqualify construction" is a stated instruction to be honoured
+   * literally, not second-guessed.
+   */
+  suppressVerticalAmbiguity?: boolean;
+}
+
+/**
  * Every canonical exclusion term a haystack of free text contains, in list
  * order. The one shared matcher for industry/type disqualification — replaces
  * filterByIcp's and (formerly) leadQualityGate's independently-implemented
  * substring scans.
  */
-export function matchedExcludedIndustries(text: string, list: string[] = DEFAULT_EXCLUDED_INDUSTRIES): string[] {
+export function matchedExcludedIndustries(
+  text: string,
+  list: string[] = DEFAULT_EXCLUDED_INDUSTRIES,
+  opts: ExcludedIndustryMatchOptions = {},
+): string[] {
   const h = lc(text);
-  return list.filter((term) => { const t = lc(term).trim(); return !!t && h.includes(t); });
+  const suppress = (opts.suppressVerticalAmbiguity ?? true) && SOFTWARE_BUSINESS_EVIDENCE_RE.test(h);
+  return list.filter((term) => {
+    const t = lc(term).trim();
+    if (!t || !h.includes(t)) return false;
+    return !(suppress && VERTICAL_AMBIGUOUS_EXCLUSIONS.has(t));
+  });
 }
 
 // Well-known mega-cap companies — rejected when the ICP is size-capped and does

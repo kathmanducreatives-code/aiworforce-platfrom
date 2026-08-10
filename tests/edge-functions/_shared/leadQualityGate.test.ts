@@ -85,6 +85,33 @@ Deno.test("merge parity: default fallback now ALSO rejects companyIcpFilter-only
   assert(g.disqualifiersHit.includes("law firm"));
 });
 
+// Phase 1B follow-up — vertical-ambiguity containment on the default fallback.
+Deno.test("vertical ambiguity: default fallback does NOT disqualify a construction-software vendor", () => {
+  const g = applyLeadQualityGate(cand({
+    companyName: "Procore", companyDescription: "Construction management software platform",
+    industryEvidence: ["Software Development"], website: "https://procore.com", domain: "procore.com",
+    jobTitle: "Head of Revenue Operations", jobUrl: "https://li/jobs/11",
+    sourceProof: [{ url: "https://li/jobs/11", type: "job_posting", confidence: 90 }],
+    employeeCount: 400,
+  }), { isHiring: true, roleQuery: "RevOps" });
+  assertEquals(g.disqualifiersHit.length, 0);
+  assert(g.decision !== "reject");
+});
+
+// The suppression is a default-list courtesy only — an explicit Brain
+// disqualifier is a stated instruction and still wins.
+Deno.test("vertical ambiguity: an EXPLICIT construction disqualifier still rejects the same vendor", () => {
+  const g = applyLeadQualityGate(cand({
+    companyName: "Procore", companyDescription: "Construction management software platform",
+    industryEvidence: ["Software Development"], website: "https://procore.com", domain: "procore.com",
+    jobTitle: "Head of Revenue Operations", jobUrl: "https://li/jobs/11",
+    sourceProof: [{ url: "https://li/jobs/11", type: "job_posting", confidence: 90 }],
+    employeeCount: 400,
+  }), { isHiring: true, roleQuery: "RevOps", disqualifiers: ["construction"] });
+  assertEquals(g.decision, "reject");
+  assert(g.disqualifiersHit.includes("construction"));
+});
+
 // Test 5 — generic Operations Manager is not RevOps.
 Deno.test("Test 5: generic Operations Manager for RevOps intent + non-SaaS company → capped/rejected", () => {
   const g = applyLeadQualityGate(cand({

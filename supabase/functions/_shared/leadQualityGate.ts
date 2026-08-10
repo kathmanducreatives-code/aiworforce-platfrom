@@ -127,8 +127,13 @@ export function applyLeadQualityGate(candidate: NormalizedCompanyCandidate, work
 
   // Rule 5 — hard disqualifier (Company Brain, else the canonical shared
   // exclusion list from companyIcpFilter.ts). Reject wins.
-  const disqualSource = (workflowIntent.disqualifiers && workflowIntent.disqualifiers.length ? workflowIntent.disqualifiers : DEFAULT_EXCLUDED_INDUSTRIES).map(lc).filter(Boolean);
-  disqualifiersHit.push(...matchedExcludedIndustries(hay, disqualSource));
+  //
+  // Vertical-ambiguity suppression applies ONLY to the default fallback. An
+  // explicit Brain disqualifier ("construction") is a stated instruction and is
+  // honoured literally, even for a construction-software vendor.
+  const brainDisquals = workflowIntent.disqualifiers?.length ? workflowIntent.disqualifiers : null;
+  const disqualSource = (brainDisquals ?? DEFAULT_EXCLUDED_INDUSTRIES).map(lc).filter(Boolean);
+  disqualifiersHit.push(...matchedExcludedIndustries(hay, disqualSource, { suppressVerticalAmbiguity: !brainDisquals }));
   if (disqualifiersHit.length) {
     decision = "reject"; capFit(0);
     reasons.push(`Rejected because company evidence indicates ${disqualifiersHit[0]}, which is disqualified by the Company Brain.`);
