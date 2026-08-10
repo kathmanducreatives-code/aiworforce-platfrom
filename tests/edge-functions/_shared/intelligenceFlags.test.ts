@@ -68,7 +68,6 @@ Deno.test("31.A the geography gate is documented and names the planning flags", 
   assert(GEOGRAPHY_GATE_NOTE.includes("us"));
   assert(GEOGRAPHY_GATE_NOTE.includes("claude_first_lead_planning"));
   assert(isGeographyGated("CLAUDE_FIRST_LEAD_PLANNING"));
-  assert(isGeographyGated("CLAUDE_LEAD_REPLANNING"));
   assertFalse(isGeographyGated("CONTENT_INTELLIGENCE_KERNEL"));
   for (const f of GEOGRAPHY_GATED_FLAGS) assert((INTELLIGENCE_FLAGS as readonly string[]).includes(f));
 });
@@ -275,8 +274,13 @@ Deno.test("34.A every intelligence flag is declared", () => {
   // SEMANTIC_TITLE_VALIDATION, GLOBAL_ROLE_PLANNING and LEAD_STRATEGY_MEMORY were
   // deleted as never-shipped: each was declared here and snapshotted, and no code
   // anywhere ever read one. A flag with no reader reserves nothing.
+  // CLAUDE_LEAD_REPLANNING went the same way, for the same reason.
+  // CLAUDE_FIRST_LEAD_PLANNING and CLAUDE_SOURCE_FEEDBACK deliberately REMAIN:
+  // both are wired to live code (orchestrate -> leadPlanOrchestration, and
+  // sequentialSourceBridge -> sourceFeedbackRuntime respectively). Legacy is not
+  // the same as dead.
   const expected: IntelligenceFlag[] = [
-    "CLAUDE_FIRST_LEAD_PLANNING", "CLAUDE_LEAD_REPLANNING", "SIGNAL_INTELLIGENCE_KERNEL",
+    "CLAUDE_FIRST_LEAD_PLANNING", "SIGNAL_INTELLIGENCE_KERNEL",
     "CONTENT_INTELLIGENCE_KERNEL", "CROSS_DEPARTMENT_INTELLIGENCE",
     "DYNAMIC_HIRING_SOURCE_PLANNING", "CLAUDE_SOURCE_FEEDBACK",
   ];

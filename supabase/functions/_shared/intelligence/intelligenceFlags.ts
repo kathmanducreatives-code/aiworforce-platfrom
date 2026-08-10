@@ -28,8 +28,6 @@ export type { EnvReader };
 export const INTELLIGENCE_FLAGS = [
   /** Phase 2. Claude produces the lead sourcing strategy instead of the deterministic compiler. */
   "CLAUDE_FIRST_LEAD_PLANNING",
-  /** Phase 2. Claude re-plans between sourcing rounds. */
-  "CLAUDE_LEAD_REPLANNING",
   /** Phase 5. Signals department planner. */
   "SIGNAL_INTELLIGENCE_KERNEL",
   /** Phase 5. Content department planner. */
@@ -70,7 +68,6 @@ export function isIntelligenceFlagEnabled(flag: IntelligenceFlag, read?: EnvRead
 
 export interface IntelligenceFlagState {
   claude_first_lead_planning: boolean;
-  claude_lead_replanning: boolean;
   signal_intelligence_kernel: boolean;
   content_intelligence_kernel: boolean;
   cross_department_intelligence: boolean;
@@ -82,7 +79,6 @@ export interface IntelligenceFlagState {
 export function readIntelligenceFlags(read?: EnvReader): IntelligenceFlagState {
   return {
     claude_first_lead_planning: isIntelligenceFlagEnabled("CLAUDE_FIRST_LEAD_PLANNING", read),
-    claude_lead_replanning: isIntelligenceFlagEnabled("CLAUDE_LEAD_REPLANNING", read),
     signal_intelligence_kernel: isIntelligenceFlagEnabled("SIGNAL_INTELLIGENCE_KERNEL", read),
     content_intelligence_kernel: isIntelligenceFlagEnabled("CONTENT_INTELLIGENCE_KERNEL", read),
     cross_department_intelligence: isIntelligenceFlagEnabled("CROSS_DEPARTMENT_INTELLIGENCE", read),
@@ -136,13 +132,13 @@ export const GEOGRAPHY_GATE_CLEARED = true;
 /**
  * Flags that were blocked on the geography defect.
  *
- * Kept as a record of WHY these were gated, and still consulted by
+ * Kept as a record of WHY this was gated, and still consulted by
  * `isGeographyGated`. With the gate cleared this is history rather than a live
- * restriction.
+ * restriction. CLAUDE_LEAD_REPLANNING was the second entry and was deleted as
+ * never-read; CLAUDE_FIRST_LEAD_PLANNING remains because it is still wired.
  */
 export const GEOGRAPHY_GATED_FLAGS: readonly IntelligenceFlag[] = [
   "CLAUDE_FIRST_LEAD_PLANNING",
-  "CLAUDE_LEAD_REPLANNING",
 ];
 
 export function isGeographyGated(flag: IntelligenceFlag): boolean {
