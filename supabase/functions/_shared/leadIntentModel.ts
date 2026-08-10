@@ -8,6 +8,14 @@
 // resolve the decision maker). Profile-first is allowed only for a direct
 // named-company lookup.
 
+// ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
+//
+// Live non-test callers: run-agent/index.ts, orchestrate/index.ts. Same split as
+// leadIntent.ts: the persona/target extraction duplicates what the Mission now
+// carries, while the source-strategy routing is code's own decision and stays.
+//
+// DELETE-LATER applies to the extraction half only, after R2. Not dead today.
+
 import { requestedRoleFamily, type RoleFamily } from "./roleFamilyMatcher.ts";
 
 export type SourceStrategy = "account_first" | "profile_first";

@@ -10,6 +10,21 @@
 // contact, or a final lead quota, is a qualified-lead request — never an
 // account-only signal scan.
 
+// ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
+//
+// Answers a question the Mission compiler does not: IS this request a lead request
+// at all? That decision runs UPSTREAM of mission compilation, in pilot-chat and
+// orchestrate, and decides whether a mission is compiled in the first place. It
+// cannot be replaced by the thing it gates.
+//
+// Live non-test callers: pilot-chat/index.ts, orchestrate/index.ts,
+// qualifiedLeadRunContext.ts, leadEntityIntent.ts,
+// intelligence/leads/{leadMission,leadPlanOrchestration}.ts.
+//
+// Not a fallback and not delete-later. Routing may eventually become a model
+// decision, but that is a separate design question from mission compilation and is
+// not scheduled by the current cleanup/rebuild plan.
+
 import { inferVertical, type CompanyVertical as TaxonomyVertical } from "./jobIntentTaxonomy.ts";
 
 export type WorkflowKind = "account_opportunity_sourcing" | "qualified_lead_sourcing";

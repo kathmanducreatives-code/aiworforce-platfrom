@@ -198,6 +198,50 @@ export interface LeadMissionV1 {
    * was asked.
    */
   mission_parser_source?: "gpt_validated" | "gpt_repaired" | "deterministic_fallback";
+
+  // ── R1: CONSTRAINTS THE MISSION PREVIOUSLY COULD NOT CARRY ─────────────────
+  //
+  // Each of these existed only as regex output on the OTHER mission shape
+  // (`LeadStrategyMission` in leadStrategyContract.ts, populated from
+  // jobSearchSpec.ts). A request's hardest constraints therefore never reached
+  // the canonical, persisted, spend-gating mission at all.
+  //
+  // All optional: every existing constructor and persisted row stays valid, and
+  // readers treat absent as "not stated" rather than as false.
+
+  /**
+   * The request explicitly forbade widening — "exactly N", "strictly", "only",
+   * "do not broaden". A broadening round that ignores this is not a style
+   * difference; it answers a different question than the one asked.
+   */
+  no_broadening_requested?: boolean;
+  /**
+   * The literal role/signal words the user typed ("RevOps", "SDR"), verbatim
+   * rather than mapped to a taxonomy key — the mapping is exactly where the
+   * user's actual words were being lost.
+   */
+  required_signal_terms?: string[];
+  /**
+   * Actions the request forbids, in its own words: "do not send outreach", "do
+   * not invent contacts". About what may be DONE, not what to look for.
+   */
+  prohibitions?: string[];
+  /**
+   * The geography was STATED by the user rather than inferred from workspace
+   * context. A hard geography may never be widened; a soft one may.
+   */
+  geography_is_hard?: boolean;
+  /**
+   * What the interpreting model believed the user asked to RECEIVE.
+   *
+   * RECORDED, NOT AUTHORITATIVE. `validateLeadMission` overwrites
+   * requested_output/target_entity/mission_type from the deterministic reading
+   * unconditionally (see the override at the end of that function), so this
+   * cannot steer a run today. It is carried so the disagreement between the two
+   * readings is visible and measurable. Making it authoritative is the R2
+   * cutover — do not quietly start reading it instead of `requested_output`.
+   */
+  proposed_output_intent?: RequestedOutput;
 }
 
 /** Structural guard. Used to decide mission-path vs legacy-carrier path. */
@@ -283,11 +327,26 @@ function allMatches(t: string, table: ReadonlyArray<[RegExp, string]>): string[]
   return [...new Set(out)];
 }
 
-/** Explicit counts only. An absent count is a system default, not a guess. */
+/**
+ * Explicit counts only. An absent count is a system default, not a guess.
+ *
+ * The entity noun may sit a few words after the number: "5 SDR hiring leads"
+ * states a count just as plainly as "5 leads". The original pattern required
+ * them to be adjacent, so "Find exactly 5 SDR hiring leads in London" resolved
+ * to NO explicit count — the leading "exactly" also defeated the `find <n>`
+ * fallback. The mission still carried 5, but `field_provenance.requested_count`
+ * recorded it as `system_default`: a count the user had said "exactly" about,
+ * attributed to us rather than to them. Found by the R1 gold fixtures
+ * (tests/planner-eval/goldMissions.ts), which read the sentence rather than
+ * this table.
+ *
+ * Intervening words are capped at three and must be bare words — no commas, no
+ * digits — so "enrich the top 5, and draft ... outreach" still states nothing.
+ */
 export function extractRequestedCount(query: string): number | null {
-  const m = query.match(/\b(\d{1,3})\s+(?:qualified\s+)?(?:leads?|companies|contacts?|founders?|people|jobs?|listings?)\b/i)
+  const m = query.match(/\b(\d{1,3})\s+(?:[a-z][a-z-]*\s+){0,3}(?:qualified\s+)?(?:leads?|companies|contacts?|founders?|people|jobs?|listings?)\b/i)
     ?? query.match(/\breturn\s+(\d{1,3})\b/i)
-    ?? query.match(/\bfind\s+(\d{1,3})\b/i);
+    ?? query.match(/\b(?:find|get|give me)\s+(?:exactly\s+|about\s+|around\s+|up to\s+)?(\d{1,3})\b/i);
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) && n > 0 && n <= 500 ? n : null;
@@ -425,7 +484,7 @@ const TARGET_ENTITIES: readonly TargetEntity[] = ["company", "person", "job"];
 const MISSION_TYPES: readonly MissionType[] = [
   "qualified_lead_sourcing", "company_research", "job_research", "known_company_enrichment",
 ];
-const REQUESTED_OUTPUTS: readonly RequestedOutput[] = [
+export const REQUESTED_OUTPUTS: readonly RequestedOutput[] = [
   "contact_ready_leads", "qualified_companies", "job_listings", "enriched_companies",
 ];
 
@@ -556,6 +615,17 @@ export function validateLeadMission(
     field_provenance: prov,
     confidence: Number.isFinite(Number(c.confidence))
       ? Math.min(1, Math.max(0, Number(c.confidence))) : 0.7,
+
+    // R1 constraint carry-through. Omitted rather than defaulted when the
+    // candidate did not state them: absent means "not stated", and writing
+    // `false` would turn silence into a claim the request never made.
+    ...(c.no_broadening_requested === true ? { no_broadening_requested: true } : {}),
+    ...(strArray(c.required_signal_terms).length
+      ? { required_signal_terms: strArray(c.required_signal_terms) } : {}),
+    ...(strArray(c.prohibitions).length ? { prohibitions: strArray(c.prohibitions) } : {}),
+    ...(c.geography_is_hard === true ? { geography_is_hard: true } : {}),
+    ...(REQUESTED_OUTPUTS.includes(c.proposed_output_intent)
+      ? { proposed_output_intent: c.proposed_output_intent as RequestedOutput } : {}),
   };
 
   // A mission whose OUTPUT contradicts the user's own words is not repaired

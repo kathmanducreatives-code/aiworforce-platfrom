@@ -34,8 +34,9 @@ import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
   EXECUTION_PREFERENCES,
+  REQUESTED_OUTPUTS,
   type BrainMergeInput, type ExecutionPreference, type LeadMissionV1,
-  type MissionDirectives,
+  type MissionDirectives, type RequestedOutput,
 } from "./leadMission.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
@@ -91,6 +92,52 @@ export interface GptMissionProposal {
   founder_unlock_recommended: boolean;
   confidence: number;
   unknowns: string[];
+
+  // ── R1 ADDITIONS ───────────────────────────────────────────────────────────
+  //
+  // Everything above was already asked for. Everything below existed ONLY as
+  // regex output before R1, which meant the model was never even asked for it —
+  // so a model reading the raw sentence could not contribute the very fields
+  // most often got wrong. Each is carried onto LeadMissionV1; see
+  // `proposalToMissionCandidate`.
+
+  /**
+   * Companies the USER SUPPLIED by name or domain. Non-empty means discovery
+   * must be skipped entirely.
+   *
+   * The deterministic `extractKnownCompanies` matches DOMAINS only, so a request
+   * naming "Fireworks AI, Notch, 1Commerce" resolved to zero supplied companies
+   * and the mission compiled as ordinary sourcing — measured, not assumed.
+   */
+  known_companies: string[];
+  /** Recency window the request implies, in days. Null when it implies none. */
+  signal_recency_days: number | null;
+  /**
+   * The literal role/signal words the user typed ("RevOps", "SDR"), preserved
+   * verbatim rather than mapped to a taxonomy key. A plan that drifts entirely
+   * away from these is rejected downstream.
+   */
+  required_signal_terms: string[];
+  /** The request explicitly forbade widening ("exactly", "strictly", "only"). */
+  no_broadening_requested: boolean;
+  /** The geography was STATED by the user, not inferred from workspace context. */
+  geography_is_hard: boolean;
+  /**
+   * Actions the request forbids in its own words — "do not send outreach", "do
+   * not invent contacts". Distinct from `excluded_signals`, which is about what
+   * to look for; this is about what may be DONE.
+   */
+  prohibitions: string[];
+  /**
+   * What the model believes the user asked to RECEIVE.
+   *
+   * RECORDED, NOT AUTHORITATIVE. `validateLeadMission` overwrites
+   * requested_output/target_entity/mission_type from the deterministic reading
+   * unconditionally, so this cannot yet steer a run. It is carried so the
+   * disagreement is visible and measurable; making it authoritative is R2's
+   * cutover, not R1's.
+   */
+  output_intent: RequestedOutput | null;
 }
 
 /**
@@ -219,6 +266,16 @@ export const MISSION_COMPILER_SYSTEM_PROMPT = [
   "A constraint the user stated explicitly is HARD. Anything you inferred is SOFT.",
   "Never widen an explicit geography or business model.",
   "State what you are unsure about in 'unknowns' rather than guessing.",
+  // ── R1: the fields the model was previously never asked for ────────────────
+  "Copy the user's own role and signal words into 'required_signal_terms' verbatim —",
+  "do not translate them into a category. Set 'no_broadening_requested' true when the",
+  "request says exactly, strictly, only, or do not broaden. Set 'geography_is_hard'",
+  "true only when the user themselves named the place. List every company the request",
+  "names in 'known_companies', by name or domain, exactly as written; leave it empty",
+  "when the request names none. Put actions the request forbids — sending outreach,",
+  "inventing contacts — in 'prohibitions'. Say what the user asked to RECEIVE in",
+  "'output_intent'. Report only what the request states: an empty list is the correct",
+  "answer whenever it states nothing, and is always better than a plausible guess.",
   "Return only the requested JSON object.",
 ].join(" ");
 
@@ -300,6 +357,13 @@ export function buildMissionCompilerPayload(
       founder_unlock_recommended: "boolean",
       confidence: "number 0..1",
       unknowns: "string[]",
+      known_companies: "string[] — companies the request NAMES; empty if it names none",
+      signal_recency_days: "number|null",
+      required_signal_terms: "string[] — the user's own role/signal words, verbatim",
+      no_broadening_requested: "boolean",
+      geography_is_hard: "boolean",
+      prohibitions: "string[] — actions the request forbids",
+      output_intent: REQUESTED_OUTPUTS,
     },
   };
 }
@@ -454,10 +518,46 @@ export function parseMissionProposal(raw: unknown): ParsedProposal {
       founder_unlock_recommended: c.founder_unlock_recommended === true,
       confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.5,
       unknowns: strArray(c.unknowns),
+
+      // ── R1 additions ────────────────────────────────────────────────────────
+      // Read defensively, exactly like every field above: a model that omits one
+      // gets the empty/false reading, never a fabricated constraint.
+      known_companies: strArray(c.known_companies),
+      signal_recency_days: recencyDays(c.signal_recency_days, repairs),
+      required_signal_terms: strArray(c.required_signal_terms),
+      no_broadening_requested: c.no_broadening_requested === true,
+      geography_is_hard: c.geography_is_hard === true,
+      prohibitions: strArray(c.prohibitions),
+      output_intent: (REQUESTED_OUTPUTS as readonly string[])
+          .includes(String(c.output_intent ?? ""))
+        ? String(c.output_intent) as RequestedOutput
+        : null,
     },
     violations: [],
     repairs,
   };
+}
+
+/** The recency ceiling. Beyond this a "recent" signal is not a signal. */
+export const MAX_SIGNAL_RECENCY_DAYS = 730;
+
+/**
+ * A recency window in days, or null.
+ *
+ * Clamped rather than rejected: a model saying "recently funded" as 3650 days
+ * has understood the request and misjudged the number, and the safe reading of
+ * an over-long window is the longest one the product supports — not a mission
+ * with no recency constraint at all.
+ */
+function recencyDays(x: unknown, repairs: string[]): number | null {
+  const n = numOrNull(x);
+  if (n === null) return null;
+  if (n <= 0) { repairs.push(`signal_recency_days_dropped:${n}`); return null; }
+  if (n > MAX_SIGNAL_RECENCY_DAYS) {
+    repairs.push(`signal_recency_days_capped:${n}->${MAX_SIGNAL_RECENCY_DAYS}`);
+    return MAX_SIGNAL_RECENCY_DAYS;
+  }
+  return n;
 }
 
 // -------------------------------------------------------------- compiling ----
@@ -587,6 +687,24 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
         mission.company_profile.verticals);
       overridden("geographies", parsed.proposal.geographies,
         mission.company_profile.locations);
+
+      // ── OUTPUT INTENT: RECORDED, NOT OBEYED ──────────────────────────────
+      //
+      // validateLeadMission overwrites requested_output/target_entity/
+      // mission_type from the deterministic reading unconditionally, so the
+      // model's reading cannot steer the run. That precedence is R2's to
+      // change. What R1 fixes is that the disagreement used to be invisible:
+      // a model correctly reading "at these companies: ..." as an enrichment
+      // request looked identical to one that agreed it was fresh sourcing.
+      if (
+        parsed.proposal.output_intent &&
+        parsed.proposal.output_intent !== mission.requested_output
+      ) {
+        changes.push(
+          `output_intent_proposed_not_authoritative:${parsed.proposal.output_intent}` +
+          `->${mission.requested_output}`,
+        );
+      }
       source = validated.repairs.length || parsed.repairs.length
         ? "gpt_repaired" : "gpt_validated";
     }
@@ -754,8 +872,18 @@ function proposalToMissionCandidate(
         ...(p.employee_range.min != null ? { min: p.employee_range.min } : {}),
         ...(p.employee_range.max != null ? { max: p.employee_range.max } : {}),
       },
+      // SUPPLIED ENTITIES. `validateLeadMission` prefers the deterministic
+      // reading when it found any, and takes this otherwise — which is the
+      // realistic case, because extractKnownCompanies matches domains only and
+      // returns nothing for a request naming companies in prose.
+      known_companies: p.known_companies,
     },
-    required_signals: p.preferred_signals.map((s) => ({ type: s })),
+    // RECENCY travels ON the signal, which is the only place it means anything:
+    // "recently funded" constrains the funding signal, not the mission at large.
+    required_signals: p.preferred_signals.map((s) => ({
+      type: s,
+      ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
+    })),
     decision_makers: {
       roles: p.decision_maker_roles,
       current_employment_required: true,
@@ -763,6 +891,13 @@ function proposalToMissionCandidate(
     required_capabilities: internal,
     prohibited_capabilities: [],
     confidence: p.confidence,
+
+    // R1 constraints, carried whole onto the mission.
+    no_broadening_requested: p.no_broadening_requested,
+    required_signal_terms: p.required_signal_terms,
+    prohibitions: p.prohibitions,
+    geography_is_hard: p.geography_is_hard,
+    ...(p.output_intent ? { proposed_output_intent: p.output_intent } : {}),
   };
 }
 

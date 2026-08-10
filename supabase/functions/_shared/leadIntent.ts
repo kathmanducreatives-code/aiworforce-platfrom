@@ -10,6 +10,19 @@
 //
 // Deterministic + import-free (except role library) so it is fully unit-testable.
 
+// ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
+//
+// Live non-test callers: pilot-chat/index.ts, run-agent/index.ts,
+// leadSearchIntent.ts. Overlaps the Mission on intent extraction, but also owns
+// source routing and actor-input planning, which the Mission deliberately does NOT
+// express — the Mission's containment property is that no model-facing field can
+// name a provider, so routing has to stay in code.
+//
+// Retire the OVERLAPPING extraction only, and only after R2's cutover proves the
+// Mission carries the same information. The routing half stays.
+//
+// DO NOT extend the intent-extraction half. New semantics belong in the Mission.
+
 import {
   classifyRoleFamily, roleFamilyAliases, hiringExcludeTitles,
   roleMatchesFamily, isProfileOrEquityTitle, type RoleFamily,

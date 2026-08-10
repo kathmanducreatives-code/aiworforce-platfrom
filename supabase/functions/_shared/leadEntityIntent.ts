@@ -9,6 +9,23 @@
 // to the jobs actor (live Q1 plan da79cba3). Signals (hiring/funding/…) qualify the
 // people/companies but NEVER set the entity.
 
+// ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
+//
+// NOT primary, NOT deletable. Fresh caller grep found 8+ live non-test importers
+// (runAgentCompanyEnrichment, compoundSourcingPipeline, runAgentCompoundBridge,
+// runAgentCompoundExecution, companyFirstQuotaController, qualificationObservability,
+// qualifiedLeadRouting, q1PersonReplayFixture) — most of them in the SOURCING and
+// EXECUTION path, not the planning path.
+//
+// R1 made `LeadMissionV1` able to carry what this module extracts (persona,
+// geography, signals, supplied companies, no-broadening, prohibitions). That makes
+// this a second reading of the same sentence, but it does not make it dead: its
+// consumers still read this shape, not the Mission. It is retired only when they
+// have been migrated, which is R2's cutover followed by R8's parser removal.
+//
+// DO NOT extend this module to cover new query semantics. New semantics belong in
+// the Mission compiler schema; adding them here widens the drift R2 has to close.
+
 import { parsePersonRoles, parseMarketTerms } from "./peopleSearchQueryBuilder.ts";
 import type { ExplicitTimingWindow } from "./timingFreshnessPolicy.ts";
 import { compileJobSearchSpec, type CompiledJobSearchSpec } from "./jobSearchSpec.ts";

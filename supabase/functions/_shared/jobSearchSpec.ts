@@ -17,6 +17,26 @@
 // No LLM: role dictionaries, the shared job-family classifier, and deterministic
 // location parsing only.
 
+// ── R1 CLASSIFICATION: SPLIT — FALLBACK + COMPATIBILITY ─────────────────────
+//
+// This module does two different jobs and they retire on different schedules.
+//
+//   FALLBACK (superseded by the Mission as of R1):
+//     `extractRequiredSignalTerms()` and the `no_broadening_requested` flag from
+//     `parseStrictConstraints()`. `LeadMissionV1` now carries both directly
+//     (`required_signal_terms`, `no_broadening_requested`), sourced from the model
+//     reading the raw sentence. These stay as the answer when no model proposal
+//     exists — that is what fallback means — but they are no longer the only place
+//     the constraint can live. DELETE-LATER, once leadStrategyBridge.ts reads them
+//     from the Mission instead of from a spec (R2).
+//
+//   COMPATIBILITY (not superseded, not scheduled for removal):
+//     the provider-input shaping consumed by jobsProviderInput.ts and
+//     sourcingConstraints.ts. Turning a mission into an actor query is deterministic
+//     code doing deterministic work, which R1 explicitly keeps.
+//
+// DO NOT add new query-semantics extraction here. It belongs in the Mission schema.
+
 import { classifyJobFamily, type JobFamily } from "./jobFamily.ts";
 import { inferRequestedVertical, type Vertical } from "./verticalQualification.ts";
 import { normalizeCountry, detectCountryInText } from "./locationMatch.ts";
