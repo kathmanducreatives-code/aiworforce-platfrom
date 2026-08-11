@@ -76,7 +76,8 @@ export interface ProposalPreference {
 
 /** Exactly what the model is asked to return. Nothing here names a provider. */
 export interface GptMissionProposal {
-  requested_opportunity_count: number;
+  /** NULL when the request names no number. See `parseMissionProposal`. */
+  requested_opportunity_count: number | null;
   requested_contact_ready_count: number | null;
   company_types: string[];
   geographies: string[];
@@ -288,7 +289,9 @@ export const MISSION_COMPILER_SYSTEM_PROMPT = [
   "names in 'known_companies', by name or domain, exactly as written; leave it empty",
   "when the request names none. Put actions the request forbids — sending outreach,",
   "inventing contacts — in 'prohibitions'. Say what the user asked to RECEIVE in",
-  "'output_intent'. Report only what the request states: an empty list is the correct",
+  "'output_intent'. Set 'requested_opportunity_count' to null when the request names no",
+  "number — null is the correct answer there, not a guess at what they might want.",
+  "Report only what the request states: an empty list is the correct",
   "answer whenever it states nothing, and is always better than a plausible guess.",
   "Return only the requested JSON object.",
 ].join(" ");
@@ -348,7 +351,7 @@ export function buildMissionCompilerPayload(
       "People information is only ever offered, never performed.",
     ],
     response_shape: {
-      requested_opportunity_count: "number",
+      requested_opportunity_count: "number|null — null when the request names no number",
       requested_contact_ready_count: "number|null",
       company_types: "string[]",
       geographies: "string[]",
@@ -434,29 +437,53 @@ export function parseMissionProposal(raw: unknown): ParsedProposal {
   const c = raw as Record<string, unknown>;
   const repairs: string[] = [];
 
-  // THE ONE REQUIRED FIELD. `requested_opportunity_count` shapes the whole run,
-  // and a proposal that cannot state it as a number has not understood the
-  // schema. Defaulting it would produce a confident mission built on a value
-  // nobody supplied, so this is malformed rather than repairable.
-  const rawCount = numOrNull(c.requested_opportunity_count);
-  if (rawCount === null) {
-    return {
-      proposal: null,
-      violations: [{
-        path: "requested_opportunity_count", kind: "not_an_object",
-        detail: `expected a number, got ${JSON.stringify(c.requested_opportunity_count)}`,
-      }],
-      repairs: [],
-    };
-  }
-  let count = rawCount;
-  if (count > MAX_REQUESTED_OPPORTUNITIES) {
-    repairs.push(`requested_opportunity_count_capped:${count}->${MAX_REQUESTED_OPPORTUNITIES}`);
-    count = MAX_REQUESTED_OPPORTUNITIES;
-  }
-  if (count < MIN_REQUESTED_OPPORTUNITIES) {
-    repairs.push(`requested_opportunity_count_raised:${count}->${MIN_REQUESTED_OPPORTUNITIES}`);
-    count = MIN_REQUESTED_OPPORTUNITIES;
+  // THE COUNT: A NUMBER, AN EXPLICIT NULL, OR A MALFORMED PROPOSAL.
+  //
+  // Three cases, and the middle one is new. `requested_opportunity_count`
+  // shapes the whole run, so a proposal that cannot state it has not understood
+  // the schema and is malformed rather than repairable — defaulting it would
+  // build a confident mission on a value nobody supplied.
+  //
+  // But an EXPLICIT null is not a failure to state it. It is the model saying
+  // the request named no number, which several eval cases genuinely do
+  // (tight-01, tight-02, geo-02, enrich-01). Before this, the model had no way
+  // to say so: the field was required, so it had to invent a count, and the
+  // invention was indistinguishable from a count the user gave.
+  //
+  // `undefined`, "", true, "abc" and {} all remain malformed. Only a literal
+  // null is the statement.
+  let count: number | null;
+  if (c.requested_opportunity_count === null) {
+    count = null;
+  } else {
+    // `numOrNull` is deliberately lenient — it serves fields where a numeric
+    // string is a fine answer. It is TOO lenient here: `Number([])` is 0, so an
+    // empty array read as a count of 0 and was then raised to the minimum, i.e.
+    // a malformed proposal quietly became "find 1". Only a number or a numeric
+    // string may state a count.
+    const t = typeof c.requested_opportunity_count;
+    const rawCount = (t === "number" || t === "string")
+      ? numOrNull(c.requested_opportunity_count)
+      : null;
+    if (rawCount === null) {
+      return {
+        proposal: null,
+        violations: [{
+          path: "requested_opportunity_count", kind: "not_an_object",
+          detail: `expected a number or an explicit null, got ${JSON.stringify(c.requested_opportunity_count)}`,
+        }],
+        repairs: [],
+      };
+    }
+    count = rawCount;
+    if (count > MAX_REQUESTED_OPPORTUNITIES) {
+      repairs.push(`requested_opportunity_count_capped:${count}->${MAX_REQUESTED_OPPORTUNITIES}`);
+      count = MAX_REQUESTED_OPPORTUNITIES;
+    }
+    if (count < MIN_REQUESTED_OPPORTUNITIES) {
+      repairs.push(`requested_opportunity_count_raised:${count}->${MIN_REQUESTED_OPPORTUNITIES}`);
+      count = MIN_REQUESTED_OPPORTUNITIES;
+    }
   }
 
   const caps: PublicCapabilityId[] = [];
@@ -880,6 +907,8 @@ function proposalToMissionCandidate(
     mission_type: base.mission_type,
     target_entity: base.target_entity,
     requested_output: base.requested_output,
+    // Null travels intact: LeadMissionV1.requested_count is nullable as of R2-1,
+    // and validateLeadMission reads an explicit null as a statement.
     requested_count: p.requested_opportunity_count,
     company_profile: {
       verticals: p.company_types,
