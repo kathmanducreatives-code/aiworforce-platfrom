@@ -37,6 +37,7 @@ import { routeQualifiedLead } from "../../qualifiedLeadRouting.ts";
 import { compileLeadEntityIntent } from "../../leadEntityIntent.ts";
 import { extractRequiredSignalTerms, type CompiledJobSearchSpec } from "../../jobSearchSpec.ts";
 import { loadMissionContext } from "../missionContext.ts";
+import type { LeadMissionV1 } from "../../leadMission.ts";
 import type { BrainDbClient } from "../../getCompiledCompanyBrainForWorkspace.ts";
 import {
   applyClaudeFirstLeadPlanning, isClaudeFirstLeadPlanningEnabled,
@@ -98,6 +99,14 @@ export interface PlanQualifiedLeadInput {
   callModel?: LeadStrategyModelFn;
   readEnv?: EnvReader;
   missionId?: string;
+  /**
+   * The canonical compiled Mission for this request, when one exists.
+   *
+   * Threaded so the GPT strategy adapter reads its semantic constraints from
+   * the Mission instead of re-deriving them from the regex spec. Null on the
+   * deterministic-workspace path, which orchestrate gates separately.
+   */
+  leadMission?: LeadMissionV1 | null;
 }
 
 /**
@@ -240,6 +249,7 @@ export async function planQualifiedLeadBeforePersistence(
       requestedLeadCount: contract.requestedCount,
       companyVertical: contract.companyVertical,
       companyConstraints,
+      mission: input.leadMission ?? null,
       callModel: input.callModel,
       readEnv: input.readEnv,
     });

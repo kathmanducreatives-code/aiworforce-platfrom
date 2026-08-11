@@ -1223,6 +1223,12 @@ Return ONLY valid JSON, no prose, no markdown:
       toolInput: (tool_input as Record<string, unknown> | null) ?? null,
       fallbackSteps: parsed!.steps as unknown as Array<Record<string, unknown>>,
       fallbackSummary: parsed!.plan_summary,
+      // R2: the compiled Mission is the semantic authority for the strategy
+      // adapter's constraints. Without this the adapter re-derived
+      // no-broadening and the required signal terms from jobSearchSpec's regex
+      // reading — a second answer to a question the compiler had already
+      // settled from the raw sentence.
+      leadMission: isLeadMissionV1(lead_mission) ? lead_mission : null,
     });
 
     // WHAT THE USER IS TOLD MUST BE WHAT WAS PLANNED.

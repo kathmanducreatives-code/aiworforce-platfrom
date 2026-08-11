@@ -29,6 +29,7 @@ import type { EnablementDecision } from "./intelligence/leads/leadPlanningBridge
 import type { LeadStrategyResolution } from "./leadStrategyOwner.ts";
 import { createQualifiedLeadStrategist } from "./leadStrategy/strategist.ts";
 import type { LeadStrategyMission, LeadStrategyRoundContext } from "./leadStrategyContract.ts";
+import type { LeadMissionV1 } from "./leadMission.ts";
 import type { LeadStrategyModelFn } from "./leadStrategyModels.ts";
 import type { QualifiedLeadStrategistProvider } from "./leadStrategy/provider.ts";
 import type { StrategistCompanyConstraints } from "./leadStrategistContext.ts";
@@ -151,6 +152,23 @@ export interface LeadStrategyInitialInput {
    * had never been told. Optional so every existing caller stays valid.
    */
   companyConstraints?: StrategistCompanyConstraints | null;
+  /**
+   * THE CANONICAL MISSION, when one was compiled for this request.
+   *
+   * R2: the semantic constraints below (`no_broadening_requested`,
+   * `required_signal_terms`) used to be read off `input.spec` — i.e. off
+   * jobSearchSpec's regex reading of the raw sentence, computed a second time,
+   * downstream of the compiler that had already answered the same question.
+   * When a Mission is present it is the authority and the spec is not consulted
+   * for them.
+   *
+   * Optional because the deterministic-workspace path has no Mission to supply.
+   * That is a migration state governed by orchestrate's intelligence-mode gate,
+   * not a semantic fallback for a compiled request: a workspace in
+   * `new_architecture` mode never reaches here without one, because orchestrate
+   * returns 422 `mission_not_compiled` first.
+   */
+  mission?: LeadMissionV1 | null;
   /** Injected in tests. Production uses the configured adapter. */
   callModel?: LeadStrategyModelFn;
   provider?: QualifiedLeadStrategistProvider;
@@ -246,13 +264,32 @@ export function missionFromSpec(input: LeadStrategyInitialInput): LeadStrategyMi
     maturity_stages: input.maturityStages?.length
       ? [...input.maturityStages]
       : [...(input.companyConstraints?.company_stages ?? [])],
-    // Additive: present only when the caller's spec carries them (the
-    // orchestrate call site enriches `spec` before it reaches here; a caller
-    // that does not sends `undefined`, and validateLeadStrategy treats that
-    // exactly like `false`/`[]` — no behaviour change for anyone who omits it).
-    no_broadening_requested: input.spec.no_broadening_requested as boolean | undefined,
-    required_signal_terms: input.spec.required_signal_terms as string[] | undefined,
+    // ── ONE READING OF THE SENTENCE, NOT TWO ────────────────────────────────
+    //
+    // The Mission wins whenever there is one. Both fields were computed by the
+    // GPT compiler from the raw query and carried on `LeadMissionV1` as of R1;
+    // reading them off `input.spec` here meant jobSearchSpec's regex answered
+    // the same question a second time, downstream of the authority.
+    //
+    // `?? undefined` and not `?? spec`: when a Mission is present and says
+    // nothing, that IS the answer. Falling through to the regex reading for a
+    // field the compiler left empty would reintroduce the second opinion this
+    // removes. The spec is consulted only when no Mission exists at all — the
+    // deterministic-workspace path, which orchestrate gates separately.
+    no_broadening_requested: input.mission
+      ? input.mission.no_broadening_requested
+      : input.spec.no_broadening_requested as boolean | undefined,
+    required_signal_terms: input.mission
+      ? input.mission.required_signal_terms
+      : input.spec.required_signal_terms as string[] | undefined,
   };
+}
+
+/** Where each semantic constraint on the strategy mission came from. Diagnostics only. */
+export function missionConstraintSource(
+  input: Pick<LeadStrategyInitialInput, "mission">,
+): "lead_mission_v1" | "job_search_spec_regex" {
+  return input.mission ? "lead_mission_v1" : "job_search_spec_regex";
 }
 
 function initialContext(input: LeadStrategyInitialInput): LeadStrategyRoundContext {
