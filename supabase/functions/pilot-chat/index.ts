@@ -31,7 +31,10 @@ import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
 } from "../_shared/leadRuntimeIdentity.ts";
-import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
+import {
+  buildMissionCompilerBinding, MissionCompilationFailedError,
+} from "../_shared/leadMissionCompilerBinding.ts";
+import { getLeadIntelligenceCapabilities } from "../_shared/leadIntelligencePolicy.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
 import {
   buildPaidExecutionPreflight, preflightDryRun,
@@ -502,11 +505,12 @@ async function compileCanonicalLeadMission(i: {
   });
   if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
 
-  // ── THE ONE INTERPRETIVE MODEL CALL ──────────────────────────────────────
-  // Gated by flag AND workspace allow-list. Disabled, `proposeMission` is null
-  // and `compileLeadMission` answers deterministically — which is a mission
-  // without directives, and which the downstream preflight will refuse to spend
-  // against under `new_architecture`. That refusal is the intended behaviour.
+  // ── THE INTERPRETIVE MODEL CALL ──────────────────────────────────────────
+  // Gated by flag AND workspace allow-list, and bounded at
+  // MAX_COMPILATION_ATTEMPTS tries. Disabled, `proposeMission` is null and
+  // `compileLeadMission` answers deterministically — correct for a workspace
+  // that has deliberately not adopted the compiler, and refused below for one
+  // that has.
   const compilerBinding = buildMissionCompilerBinding({ workspaceId: i.workspaceId });
   const gptProposal = compilerBinding.proposeMission
     ? await compilerBinding.proposeMission({
@@ -524,7 +528,33 @@ async function compileCanonicalLeadMission(i: {
     ...compilerBinding.diagnostics,
     proposal_received: gptProposal != null,
   });
-  return buildMissionForPrompt(i.prompt, i.requestedCount, intent, gptProposal);
+
+  const mission = buildMissionForPrompt(i.prompt, i.requestedCount, intent, gptProposal);
+
+  // ── NO SILENT REGEX SUBSTITUTION FOR A COMPILED-MISSION WORKSPACE ────────
+  //
+  // Every attempt failed, or the proposal was refused. For a workspace running
+  // the compiled-mission architecture, `mission` at this point is a REGEX
+  // READING of the sentence wearing the compiler's output shape — it validates,
+  // it carries a mission_parser_source, and nothing downstream would have told
+  // the user which reading it answered.
+  //
+  // That is the substitution the architectural rule forbids. Refuse instead.
+  // This mirrors orchestrate's 422 `mission_not_compiled`; both exist because
+  // the check has to happen wherever a mission is produced, not only where one
+  // is transported.
+  //
+  // A workspace NOT in `new_architecture` mode is unaffected: there the
+  // deterministic reading is the intended planner, not error recovery.
+  const intelligence = getLeadIntelligenceCapabilities(i.workspaceId);
+  if (
+    intelligence.mode === "new_architecture" &&
+    mission.mission_parser_source === "deterministic_fallback"
+  ) {
+    throw new MissionCompilationFailedError(i.workspaceId, compilerBinding.enablement.reason);
+  }
+
+  return mission;
 }
 
 /**
