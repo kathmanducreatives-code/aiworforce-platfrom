@@ -272,6 +272,7 @@ import {
   createLeadStrategyPlanner, leadStrategyOwnerApplies,
   isGptBroadeningAuthorized, deterministicOnlyBroadeningPlanner,
 } from "../_shared/leadStrategyOwner.ts";
+import { projectStrategyMissionSemantics } from "../_shared/leadStrategyContract.ts";
 // Same absence, same reason: the GPT adapter is invoked in orchestrate, and only
 // its already-decided output is rebuilt here.
 import { gptStrategyFromPersistedPlan, isGptLeadStrategyEnabled } from "../_shared/leadStrategyBridge.ts";
@@ -1317,7 +1318,16 @@ Deno.serve(async (req) => {
           ? createLeadStrategyPlanner({
             workspaceId: workspace_id,
             agentSlug: agent_slug,
-            mission: {
+            // R2: the SEMANTIC constraints are projected from the canonical
+            // mission, not re-read from the spec. Everything else here is still
+            // the spec's structural shape (titles, geography, vertical), which
+            // is what the strategist prompt needs.
+            //
+            // `readPersistedLeadMission` is pure and reads data already on the
+            // request, so calling it here — before the main read at ~1535 —
+            // costs nothing and closes the ordering gap that left this call site
+            // without a mission to project from.
+            mission: projectStrategyMissionSemantics({
               original_query: String(cfIntent.job_search_spec.original_query ?? ""),
               requested_lead_count: quota.requestedLeadCount,
               requested_titles: cfIntent.job_search_spec.keyword_queries ?? [],
@@ -1326,7 +1336,9 @@ Deno.serve(async (req) => {
               company_vertical: cfIntent.job_search_spec.company_vertical
                 ? String(cfIntent.job_search_spec.company_vertical)
                 : null,
-            },
+              company_size: null,
+              maturity_stages: [],
+            }, readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission)),
           })
           : deterministicOnlyBroadeningPlanner();
         console.log("[run-agent][broadening-owner]", {

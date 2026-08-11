@@ -49,6 +49,38 @@ export interface LeadStrategyMission {
   required_signal_terms?: string[];
 }
 
+/**
+ * THE ONLY SANCTIONED WAY TO PUT SEMANTICS ON A `LeadStrategyMission`.
+ *
+ * `LeadStrategyMission` is a PROJECTION of the canonical `LeadMissionV1` for the
+ * strategist prompt and its validator — not a second place a request is
+ * interpreted. Its two semantic fields must come from the canonical mission and
+ * from nowhere else; re-deriving them from raw text or from a regex spec is the
+ * duplication R2 exists to remove.
+ *
+ * Takes the canonical mission structurally rather than by import so this module
+ * stays free of a dependency on `leadMission.ts` — the contract is serialized
+ * and shipped to a model, and it must not grow a compile-time edge to the
+ * compiler.
+ *
+ * A null canonical mission leaves the projection untouched: that is the
+ * deterministic-workspace path, which orchestrate gates separately.
+ */
+export function projectStrategyMissionSemantics<T extends LeadStrategyMission>(
+  base: T,
+  canonical: {
+    no_broadening_requested?: boolean;
+    required_signal_terms?: string[];
+  } | null | undefined,
+): T {
+  if (!canonical) return base;
+  return {
+    ...base,
+    no_broadening_requested: canonical.no_broadening_requested,
+    required_signal_terms: canonical.required_signal_terms,
+  };
+}
+
 export interface LeadStrategyFunnel {
   raw_results: number;
   normalized_jobs: number;

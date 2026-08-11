@@ -280,6 +280,20 @@ function missionFromPlannerInput(
     company_vertical: overrides?.company_vertical ?? input.intent_summary.company_vertical,
     company_size: overrides?.company_size ?? null,
     maturity_stages: overrides?.maturity_stages ?? [],
+    // ── THE CONSTRAINTS THE BROADENING PATH USED TO DROP ────────────────────
+    //
+    // These were absent from this constructor entirely, so `validateLeadStrategy`
+    // read them as `?? false` / `[]` — and the user's "do not broaden" vanished
+    // at exactly the moment broadening was being decided. The initial-planning
+    // constructor (`missionFromSpec`) carried them; this one did not, and nothing
+    // compared the two.
+    //
+    // Sourced ONLY from `overrides`, which the caller projects from the canonical
+    // mission via `projectStrategyMissionSemantics`. There is deliberately no
+    // fallback to `input` here: PlannerInput carries no reading of the user's
+    // sentence, and inventing one would be the duplication R2 removes.
+    no_broadening_requested: overrides?.no_broadening_requested,
+    required_signal_terms: overrides?.required_signal_terms,
   };
 }
 

@@ -43,8 +43,8 @@ import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
   EXECUTION_PREFERENCES,
-  REQUESTED_OUTPUTS,
-  type BrainMergeInput, type ExecutionPreference, type LeadMissionV1,
+  REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy,
+  type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
   type MissionDirectives, type RequestedOutput,
 } from "./leadMission.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
@@ -148,6 +148,15 @@ export interface GptMissionProposal {
    * cutover, not R1's.
    */
   output_intent: RequestedOutput | null;
+
+  // ── R2 ──────────────────────────────────────────────────────────────────
+  /**
+   * How the opportunity should be discovered and proven. Closed vocabulary —
+   * see MISSION_STRATEGIES. Unknown values are dropped and named by
+   * `validateLeadMission`; a strategy the executor cannot route is a plan for
+   * work that will not happen.
+   */
+  strategies: MissionStrategy[];
 }
 
 /**
@@ -381,6 +390,7 @@ export function buildMissionCompilerPayload(
       geography_is_hard: "boolean",
       prohibitions: "string[] — actions the request forbids",
       output_intent: REQUESTED_OUTPUTS,
+      strategies: MISSION_STRATEGIES,
     },
   };
 }
@@ -569,6 +579,18 @@ export function parseMissionProposal(raw: unknown): ParsedProposal {
       no_broadening_requested: c.no_broadening_requested === true,
       geography_is_hard: c.geography_is_hard === true,
       prohibitions: strArray(c.prohibitions),
+      // Dropped AND NAMED here, not silently filtered. `validateLeadMission`
+      // has the same guard, but by the time it runs an unknown value has
+      // already been removed — so without this the drop would never be
+      // recorded anywhere, and a model proposing work the executor cannot
+      // route would look identical to one that proposed nothing.
+      strategies: (() => {
+        const raw = strArray(c.strategies);
+        for (const s of raw) {
+          if (!isMissionStrategy(s)) repairs.push(`unknown_strategy_dropped:${s}`);
+        }
+        return raw.filter(isMissionStrategy);
+      })(),
       output_intent: (REQUESTED_OUTPUTS as readonly string[])
           .includes(String(c.output_intent ?? ""))
         ? String(c.output_intent) as RequestedOutput
@@ -945,6 +967,7 @@ function proposalToMissionCandidate(
     prohibitions: p.prohibitions,
     geography_is_hard: p.geography_is_hard,
     ...(p.output_intent ? { proposed_output_intent: p.output_intent } : {}),
+    strategies: p.strategies,
   };
 }
 
