@@ -2,7 +2,10 @@
 // live Scout sourcing path (Parts 3/5). Pure / import-free (except the sibling
 // pure modules) so run-agent's change stays thin and this stays fully testable.
 
-import { extractLeadSearchIntent, type BrainForIntent, type LeadSearchIntent } from "./leadSearchIntent.ts";
+import {
+  extractLeadSearchIntent, leadSearchIntentFromMission,
+  type BrainForIntent, type LeadSearchIntent, type MissionForSearchIntent,
+} from "./leadSearchIntent.ts";
 import { buildProviderQueries, type ProviderQuery } from "./leadProviderQueryBuilder.ts";
 import { classifyLeadTier, summarizeShortage, type CandidateForTier, type TierResult } from "./leadMatchTier.ts";
 
@@ -35,8 +38,23 @@ export function brainToIntent(brain: unknown): BrainForIntent | null {
  * generic searches unchanged. Never a mega keyword string; never an ambiguous
  * "US + EU" location.
  */
-export function planScoutQueries(opts: { instruction: string; brain?: unknown }): ScoutQueryPlan | null {
-  const intent = extractLeadSearchIntent({ message: opts.instruction ?? "", brain: brainToIntent(opts.brain) });
+export function planScoutQueries(opts: {
+  instruction: string;
+  brain?: unknown;
+  /**
+   * The canonical Mission for this request, when the task carries one.
+   *
+   * With it, the search intent is PROJECTED from decided fields. Without it —
+   * a missionless legacy task — the instruction is parsed, which is the only
+   * reading available there. The plan's output overwrites the jobs actor's
+   * query and location and feeds the lead tiering, so this is the difference
+   * between the Mission deciding what gets searched and a regex deciding it.
+   */
+  mission?: MissionForSearchIntent | null;
+}): ScoutQueryPlan | null {
+  const intent = opts.mission
+    ? leadSearchIntentFromMission(opts.mission, brainToIntent(opts.brain))
+    : extractLeadSearchIntent({ message: opts.instruction ?? "", brain: brainToIntent(opts.brain) });
   if (intent.must_have_categories.length === 0 && intent.role_terms.length === 0) return null; // legacy path
   const provider_queries = buildProviderQueries(intent);
   if (provider_queries.length === 0) return null;

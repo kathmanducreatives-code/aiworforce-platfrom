@@ -3716,7 +3716,18 @@ Deno.serve(async (req) => {
         if (source_type === "jobs") {
           try {
             scoutPlanMod = await import("../_shared/scoutSourcingPlan.ts");
-            scoutPlan = scoutPlanMod.planScoutQueries({ instruction: instruction ?? normalizedQuery, brain });
+            // THE MISSION DECIDES WHAT IS SEARCHED FOR. This plan overwrites the
+            // jobs actor's query and location below and feeds the lead tiering,
+            // and it used to be compiled by parsing `instruction` with a
+            // category/role/geography/funding table — a regex deciding what to
+            // buy and which results counted, after the Mission had decided both
+            // from the same words. Missionless legacy tasks still parse, which
+            // is the only reading available there.
+            scoutPlan = scoutPlanMod.planScoutQueries({
+              instruction: instruction ?? normalizedQuery,
+              brain,
+              mission: separationMission,
+            });
             if (scoutPlan) {
               // Structured: PRECISE keywords + ONE concrete LinkedIn location
               // (split from any "US + EU") — never the mega keyword blob.

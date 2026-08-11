@@ -245,3 +245,160 @@ export function extractLeadSearchIntent(opts: { message: string; brain?: BrainFo
     },
   };
 }
+
+// ── THE SAME DTO, PROJECTED FROM THE CANONICAL MISSION ──────────────────────
+//
+// `extractLeadSearchIntent` above reads the user's sentence with a category
+// table, a role table, a motion table, a trigger table, a geography table and a
+// size table. run-agent then let its output OVERWRITE the provider query and the
+// location for a jobs search (`planScoutQueries` → `normalizedQuery`/`location`),
+// and hand its `funding_required` and category set to the lead TIERING — so a
+// regex decided what was searched for and which results counted, after the
+// Mission had decided both from the same words.
+//
+// This projection answers the same questions from decided Mission fields. What
+// it still does is FORMATTING: turning "United States" into the query builder's
+// `US` group is provider-input shaping of an already-decided value, not a
+// reading of the request.
+
+export interface MissionForSearchIntent {
+  original_user_query?: string;
+  requested_count?: number | null;
+  company_profile?: {
+    verticals?: string[];
+    stages?: string[];
+    locations?: string[];
+    employee_range?: { min?: number; max?: number };
+  };
+  required_signals?: Array<{ type?: string; role_families?: string[] } | null>;
+  required_signal_terms?: string[];
+  geography_is_hard?: boolean;
+  no_broadening_requested?: boolean;
+}
+
+/** Split decided locations into the query builder's groups and single locations. */
+function locationsForQueryBuilder(
+  decided: string[],
+): { locations: string[]; groups: string[] } {
+  const groups: string[] = [];
+  const locations: string[] = [];
+  for (const raw of decided) {
+    const v = lc(String(raw ?? "").trim());
+    if (!v) continue;
+    if (/^(us|usa|u\.s\.?a?\.?|united states|america|north america)$/.test(v)) groups.push("US");
+    else if (/^(eu|europe|emea)$/.test(v)) groups.push("EU");
+    else locations.push(String(raw).trim());
+  }
+  return { locations: [...new Set(locations)], groups: [...new Set(groups)] };
+}
+
+/**
+ * Project the Scout search intent out of a decided Mission.
+ *
+ * Mission fields answer WHAT to search for; the Company Brain answers what this
+ * workspace excludes, which is where `extractLeadSearchIntent` read it from too.
+ *
+ * A disqualifier that collides with the Mission's OWN target vertical is dropped,
+ * for the same reason the text version dropped one that collided with an explicit
+ * "find recruitment agencies": a safety default must not sabotage the exact
+ * search that was asked for. The difference is that the collision is now judged
+ * against a decided field rather than against the sentence.
+ */
+export function leadSearchIntentFromMission(
+  mission: MissionForSearchIntent, brainInput?: BrainForIntent | null,
+): LeadSearchIntent {
+  const brain = brainInput ?? null;
+
+  const verticals = (mission.company_profile?.verticals ?? [])
+    .map((v) => String(v ?? "").trim()).filter(Boolean);
+  const company_categories = verticals.length
+    ? [...verticals]
+    : [...(brain?.industries ?? [])];
+  const must_have_categories = verticals.length ? [verticals[0]] : [];
+
+  const signals = (mission.required_signals ?? []).filter(Boolean);
+  const roleTerms = [
+    ...(mission.required_signal_terms ?? []),
+    ...signals.flatMap((s) => s?.role_families ?? []),
+  ].map((t) => String(t ?? "").replace(/[_-]+/g, " ").trim()).filter(Boolean);
+  const role_terms = roleTerms.length ? [...new Set(roleTerms)] : [...(brain?.buyer_roles ?? [])];
+  const must_have_roles = roleTerms.length ? [roleTerms[0]] : [];
+
+  const trigger_terms = [...new Set(
+    signals.map((s) => String(s?.type ?? "").trim()).filter(Boolean),
+  )];
+  const funding_required = trigger_terms.includes("funding");
+
+  const decidedLocations = (mission.company_profile?.locations ?? [])
+    .map((l) => String(l ?? "").trim()).filter(Boolean);
+  const loc = decidedLocations.length
+    ? locationsForQueryBuilder(decidedLocations)
+    : (() => {
+      // Brain backfill, exactly as before: a workspace geography is not an
+      // explicit request and stays relaxable.
+      const g = brain?.geography
+        ? (Array.isArray(brain.geography) ? brain.geography : [brain.geography])
+        : [];
+      return locationsForQueryBuilder(g);
+    })();
+  const location_explicit = decidedLocations.length > 0 &&
+    (mission.geography_is_hard ?? true);
+
+  const range = mission.company_profile?.employee_range;
+  const company_size_preference: CompanySizePreference | undefined = range
+    ? {
+      ...(typeof range.min === "number" ? { min: range.min } : {}),
+      ...(typeof range.max === "number" ? { max: range.max } : {}),
+      strict: mission.no_broadening_requested === true,
+    }
+    : undefined;
+
+  const collidesWithTarget = (term: string): boolean => {
+    const t = lc(term);
+    return company_categories.some((c) => {
+      const v = lc(c);
+      return !!v && (v.includes(t) || t.includes(v));
+    });
+  };
+  const hard_disqualifiers = [...new Set([
+    ...(brain?.disqualifiers ?? []),
+    ...(brain?.excluded_industries ?? []),
+    ...((brain?.disqualifiers?.length || brain?.excluded_industries?.length)
+      ? [] : DEFAULT_DISQUALIFIERS),
+  ])].filter((d) => !collidesWithTarget(d));
+
+  const stages = (mission.company_profile?.stages ?? [])
+    .map((s) => String(s ?? "").trim()).filter(Boolean);
+  const soft_preferences = stages.some((s) => /startup|seed|early/i.test(s))
+    ? ["early-stage"] : [];
+
+  const noBroadening = mission.no_broadening_requested === true;
+
+  return {
+    original_query: String(mission.original_user_query ?? ""),
+    requested_count: Math.max(1, Math.min(50, mission.requested_count ?? 5)),
+    company_categories,
+    must_have_categories,
+    role_terms,
+    must_have_roles,
+    // The Mission carries no GTM-motion concept. Empty is the honest answer;
+    // inventing one would mean reading the sentence again to find it.
+    motion_terms: [],
+    trigger_terms,
+    funding_required,
+    funding_preferred: false,
+    locations: loc.locations,
+    location_groups: loc.groups,
+    location_explicit,
+    company_size_preference,
+    hard_disqualifiers,
+    soft_preferences,
+    relaxation_allowed: {
+      location: !location_explicit && !noBroadening,
+      exact_role: !noBroadening,
+      funding: true,
+      size: !noBroadening && !(company_size_preference?.strict),
+      category: false,
+    },
+  };
+}
