@@ -21,7 +21,7 @@
 // A green suite here therefore does NOT mean the pipeline is correct. It means
 // the pipeline behaves exactly as measured, and every deviation is deliberate.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { EVAL_SET } from "../../planner-eval/dataset.ts";
 import { GOLD_BY_ID, GOLD_MISSIONS, type GoldMission } from "../../planner-eval/goldMissions.ts";
@@ -260,18 +260,36 @@ Deno.test("R2 GAP: an empty persona is overwritten by a default founder set", ()
   );
 });
 
-Deno.test("R2 GAP: output intent is recorded but never obeyed", () => {
-  // validateLeadMission overwrites requested_output/target_entity/mission_type
-  // from the deterministic reading unconditionally. Two cases disagree today.
+Deno.test("PRESERVED: output intent is obeyed — R2's cutover has landed", () => {
+  // Was `R2 GAP: output intent is recorded but never obeyed`.
+  //
+  // `validateLeadMission` used to overwrite requested_output / target_entity /
+  // mission_type from the deterministic reading unconditionally, so the marker
+  // table decided what the run was FOR while the model interpreted everything
+  // else. These two cases are where the two readings differ, and the model's
+  // now stands.
   const DISAGREES = ["persona-02", "multi-02"];
   for (const id of DISAGREES) {
     const { gold, result } = compileGold(id);
     assertEquals(result.final_mission.proposed_output_intent, gold.output_intent);
+    assertEquals(
+      result.final_mission.requested_output, gold.output_intent,
+      `${id}: the reviewer's reading of what was asked for must now be the mission's`,
+    );
+    // The disagreement is still visible — a run whose two readings differ is
+    // exactly the run worth looking at.
     assert(
-      result.final_mission.requested_output !== gold.output_intent,
-      `${id}: pinned loss — if these now agree, R2's cutover has landed`,
+      result.validator_changes.some((c) => c.startsWith("output_intent_model_authoritative:")),
+      `${id}: the disagreement with the deterministic reading must still be recorded`,
     );
   }
+
+  // Everywhere else the two agree, and nothing is recorded.
+  const { result: agrees } = compileGold("simple-01");
+  assertFalse(
+    agrees.validator_changes.some((c) => c.startsWith("output_intent_model_authoritative:")),
+    "agreement must stay silent, or the record means nothing",
+  );
 });
 
 Deno.test("R2 GAP: the contract has no output value meaning 'social posts'", () => {

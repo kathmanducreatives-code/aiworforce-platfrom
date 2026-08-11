@@ -121,16 +121,37 @@ Deno.test("2. a planner rewrite cannot alter the stored mission", () => {
     decision_makers: { roles: [] },
   }, { originalUserQuery: CANONICAL, isCapabilityId });
 
+  // ── WHAT IS STILL DEFENDED ────────────────────────────────────────────────
+  // The defence that closes the 8af17651 failure is that the model may not
+  // restate the GOAL. It cannot, and this is the assertion that says so.
   assertEquals(v.mission.original_user_query, CANONICAL,
     "the user's query is immutable and never taken from the model");
-  assertEquals(v.mission.requested_output, "contact_ready_leads",
-    "the user's own words outrank the model's restatement");
-  assertEquals(v.mission.target_entity, "person");
-  assert(v.repairs.some((r) => r.startsWith("requested_output_overridden_by_user_words")),
-    "the disagreement must be recorded, not silent");
 
-  // And the graph built from it still starts at startups, not job boards.
-  assertEquals(buildCapabilityGraph(v.mission).entry_capability, "startup_company_discovery");
+  // ── WHAT R2's CUTOVER CHANGED ─────────────────────────────────────────────
+  //
+  // `requested_output` / `target_entity` / `mission_type` used to be overwritten
+  // from the deterministic reading whenever the two differed, so a keyword scan
+  // — "lead"/"contact"/a founder word in the sentence — decided what the run was
+  // FOR, outranking a model that had read it. Those three now stand as the model
+  // stated them, and the disagreement is recorded instead of resolved.
+  //
+  // This is a REAL trade. Here it means a model that answers `job_listings` for
+  // a founders query is obeyed, where the marker table used to catch it. What
+  // makes that the right side of the trade is that the model reads the user's
+  // own sentence (immutable, above) rather than a rewrite, gets bounded retries,
+  // and refuses rather than degrading — so a wrong answer here is a model
+  // failure to fix, not a second interpreter to keep.
+  assertEquals(v.mission.requested_output, "job_listings",
+    "the model's reading of what was asked for now stands");
+  assertEquals(v.mission.target_entity, "job");
+  assert(v.repairs.some((r) => r.startsWith("output_intent_disagreement:")),
+    "and the disagreement with the deterministic reading is recorded, not silent");
+  assert(v.repairs.some((r) => r.startsWith("target_entity_disagreement:")));
+
+  // The CONSTRAINT half of the mission is untouched by that change: a model
+  // cannot widen or substitute a target the user's words state (tests 7 and 24
+  // in leadMissionCompiler.test.ts), and a mission that names startups still
+  // enters at startup discovery.
   assertEquals(buildCapabilityGraph(m).entry_capability, "startup_company_discovery");
 });
 

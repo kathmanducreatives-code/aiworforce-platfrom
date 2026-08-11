@@ -306,12 +306,19 @@ export interface LeadMissionV1 {
   /**
    * What the interpreting model believed the user asked to RECEIVE.
    *
-   * RECORDED, NOT AUTHORITATIVE. `validateLeadMission` overwrites
-   * requested_output/target_entity/mission_type from the deterministic reading
-   * unconditionally (see the override at the end of that function), so this
-   * cannot steer a run today. It is carried so the disagreement between the two
-   * readings is visible and measurable. Making it authoritative is the R2
-   * cutover — do not quietly start reading it instead of `requested_output`.
+   * AUTHORITATIVE as of R2's cutover, and therefore usually EQUAL to
+   * `requested_output` — `proposalToMissionCandidate` supplies one from the
+   * other, and `target_entity` / `mission_type` are derived from it rather than
+   * parsed again. It used to be recorded and ignored while a marker table in
+   * this file overwrote all three, which meant the model interpreted every
+   * field except the ones that decide what the run is for.
+   *
+   * It is still carried separately because the two are not the same claim:
+   * this is what the MODEL said, `requested_output` is what the mission
+   * EXECUTES, and a mission compiled without a model (the deterministic
+   * workspace path) has the second and not the first.
+   *
+   * READ `requested_output`. This field is provenance.
    */
   proposed_output_intent?: RequestedOutput;
 }
@@ -675,7 +682,21 @@ export function validateLeadMission(
     requested_count,
     company_profile: {
       business_models: strArray(cp.business_models),
-      // The user's own words win over the model's restatement.
+      // CONSTRAINT ENFORCEMENT, NOT REINTERPRETATION — SO THIS PRECEDENCE STAYS.
+      //
+      // A marker the user's own sentence literally contains ("b2b saas",
+      // "united states") outranks the model's restatement of the same field.
+      // That is deliberately NOT the same thing as the output-intent override
+      // removed below: this cannot decide what the run is FOR, it can only stop
+      // the model widening or substituting a target the user stated — "United
+      // States" becoming "North America, Canada, Mexico", or "B2B SaaS"
+      // becoming "recruiting agencies in India" (tests 7 and 24 in
+      // leadMissionCompiler.test.ts are those two cases).
+      //
+      // Its known cost is recorded rather than hidden: when the table matches a
+      // sibling term the model stated more precisely, the model's term is
+      // dropped and the compiler emits `company_types_overridden_by_user_words`
+      // (leadMissionR1Contract.test.ts pins persona-01 as exactly that).
       verticals: base.company_profile.verticals.length
         ? base.company_profile.verticals : strArray(cp.verticals),
       stages: base.company_profile.stages.length
@@ -725,13 +746,36 @@ export function validateLeadMission(
       ? { proposed_output_intent: c.proposed_output_intent as RequestedOutput } : {}),
   };
 
-  // A mission whose OUTPUT contradicts the user's own words is not repaired
-  // quietly: the deterministic reading wins and the disagreement is recorded.
+  // ── THE DISAGREEMENT IS RECORDED. IT IS NO LONGER RESOLVED BY THE REGEX ───
+  //
+  // This block used to overwrite `requested_output`, `target_entity` and
+  // `mission_type` from the deterministic reading whenever the two differed —
+  // the three fields that decide what the run is FOR, and the three every
+  // downstream projection reads. So the model could be the interpreter of every
+  // field except the ones that mattered most, and a marker table in this file
+  // silently answered "what did the user ask to receive?" instead.
+  //
+  // `parseLeadMissionDeterministic` decides `wantsPeople` from the presence of
+  // the substring "lead", "contact" or a founder word. "Find companies hiring
+  // SDRs so I can build a target LIST" contains none; "show me the job listings
+  // for my leads" contains two. It is a keyword scan, and it was outranking a
+  // model that had read the sentence.
+  //
+  // The disagreement is worth SEEING — it is the single most useful signal that
+  // one of the two readings is wrong — so it is still recorded as a repair, and
+  // `proposed_output_intent` still carries what the model proposed. What changed
+  // is that the model's answer now stands. Schema validity is still enforced
+  // above: an unrecognised value already falls back to the deterministic base,
+  // so this can only ever hand through a value the contract permits.
   if (base.requested_output !== mission.requested_output) {
-    repairs.push(`requested_output_overridden_by_user_words:${mission.requested_output}->${base.requested_output}`);
-    mission.requested_output = base.requested_output;
-    mission.target_entity = base.target_entity;
-    mission.mission_type = base.mission_type;
+    repairs.push(
+      `output_intent_disagreement:deterministic=${base.requested_output}:model=${mission.requested_output}`,
+    );
+  }
+  if (base.target_entity !== mission.target_entity) {
+    repairs.push(
+      `target_entity_disagreement:deterministic=${base.target_entity}:model=${mission.target_entity}`,
+    );
   }
 
   return {

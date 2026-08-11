@@ -45,7 +45,7 @@ import {
   EXECUTION_PREFERENCES,
   REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy,
   type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
-  type MissionDirectives, type RequestedOutput,
+  type MissionDirectives, type RequestedOutput, type TargetEntity, type MissionType,
 } from "./leadMission.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
@@ -141,11 +141,13 @@ export interface GptMissionProposal {
   /**
    * What the model believes the user asked to RECEIVE.
    *
-   * RECORDED, NOT AUTHORITATIVE. `validateLeadMission` overwrites
-   * requested_output/target_entity/mission_type from the deterministic reading
-   * unconditionally, so this cannot yet steer a run. It is carried so the
-   * disagreement is visible and measurable; making it authoritative is R2's
-   * cutover, not R1's.
+   * AUTHORITATIVE as of R2's cutover. It supplies the mission's
+   * `requested_output`, and `target_entity` / `mission_type` are derived from
+   * it — see `proposalToMissionCandidate`. It used to be recorded and ignored
+   * while the deterministic marker table decided all three, which meant the
+   * model interpreted every field except the ones that decide what the run is
+   * for. NULL is the model declining to answer, and only then does the
+   * deterministic reading fill them.
    */
   output_intent: RequestedOutput | null;
 
@@ -751,21 +753,23 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
       overridden("geographies", parsed.proposal.geographies,
         mission.company_profile.locations);
 
-      // ── OUTPUT INTENT: RECORDED, NOT OBEYED ──────────────────────────────
+      // ── OUTPUT INTENT: OBEYED, AND THE DISAGREEMENT STILL RECORDED ───────
       //
-      // validateLeadMission overwrites requested_output/target_entity/
-      // mission_type from the deterministic reading unconditionally, so the
-      // model's reading cannot steer the run. That precedence is R2's to
-      // change. What R1 fixes is that the disagreement used to be invisible:
-      // a model correctly reading "at these companies: ..." as an enrichment
-      // request looked identical to one that agreed it was fresh sourcing.
+      // R1 could only make the disagreement visible: `validateLeadMission`
+      // overwrote requested_output/target_entity/mission_type from the
+      // deterministic reading unconditionally, so a model correctly reading
+      // "at these companies: ..." as an enrichment request looked identical to
+      // one that agreed it was fresh sourcing. R2's cutover makes the model's
+      // answer the mission's — the recording stays, because a run whose two
+      // readings differ is exactly the run worth looking at.
+      const deterministicOutput = deterministic().requested_output;
       if (
         parsed.proposal.output_intent &&
-        parsed.proposal.output_intent !== mission.requested_output
+        parsed.proposal.output_intent !== deterministicOutput
       ) {
         changes.push(
-          `output_intent_proposed_not_authoritative:${parsed.proposal.output_intent}` +
-          `->${mission.requested_output}`,
+          `output_intent_model_authoritative:${parsed.proposal.output_intent}` +
+          `:deterministic_would_have_said:${deterministicOutput}`,
         );
       }
       source = validated.repairs.length || parsed.repairs.length
@@ -915,20 +919,62 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
  * typed objects. Only PREFERRED signals become required — an adjacent signal is
  * by definition one the mission will accept, not one it demands.
  */
+/**
+ * The entity and mission type each requested output implies.
+ *
+ * A TRANSLATION between two internal shapes, not a decision: the model is asked
+ * one question about what the user wants to receive, and these two fields are
+ * restatements of that same answer for readers that speak the older vocabulary.
+ * Keeping them derived is what stops a third value drifting away from the first.
+ */
+const TARGET_ENTITY_FOR_OUTPUT: Record<RequestedOutput, TargetEntity> = {
+  contact_ready_leads: "person",
+  qualified_companies: "company",
+  enriched_companies: "company",
+  job_listings: "job",
+  // A social post is not a company, a person or a job. `person` is the closest
+  // the enum can say, and it is the value the deterministic reading also lands
+  // on for a "find posts where founders complain" request — R3 owns making the
+  // artefact expressible; nothing here may pretend it already is.
+  social_posts: "person",
+};
+
+const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
+  contact_ready_leads: "qualified_lead_sourcing",
+  qualified_companies: "company_research",
+  enriched_companies: "known_company_enrichment",
+  job_listings: "job_research",
+  social_posts: "qualified_lead_sourcing",
+};
+
 function proposalToMissionCandidate(
   p: GptMissionProposal, internal: CapabilityId[], base: LeadMissionV1,
 ): Record<string, unknown> {
   return {
-    // CARRIED FROM THE DETERMINISTIC READING, not left absent.
+    // ── WHAT THE USER ASKED TO RECEIVE: THE MODEL'S ANSWER, WHEN IT GAVE ONE ──
     //
-    // The proposal schema has no `mission_type` / `target_entity` /
-    // `requested_output` — those are internal shapes the model is deliberately
-    // not asked about. Omitting them made `validateLeadMission` "repair" all
-    // three on every proposal, so a perfectly good compilation reported itself
-    // as `gpt_repaired` and the field stopped distinguishing anything.
-    mission_type: base.mission_type,
-    target_entity: base.target_entity,
-    requested_output: base.requested_output,
+    // The proposal schema asks the model exactly one question about this shape —
+    // `output_intent` — and its answer used to reach the mission only as
+    // `proposed_output_intent`, a recorded opinion nothing obeyed. All three
+    // internal fields were carried from the deterministic reading instead, so a
+    // marker table decided what the run was FOR.
+    //
+    // Now `output_intent` supplies `requested_output`, and the entity and
+    // mission type are DERIVED from it rather than parsed again. The
+    // deterministic reading still fills all three when the model named no
+    // output intent — a null there is the model declining to answer, not a
+    // licence to guess.
+    ...(p.output_intent
+      ? {
+        requested_output: p.output_intent,
+        target_entity: TARGET_ENTITY_FOR_OUTPUT[p.output_intent],
+        mission_type: MISSION_TYPE_FOR_OUTPUT[p.output_intent],
+      }
+      : {
+        mission_type: base.mission_type,
+        target_entity: base.target_entity,
+        requested_output: base.requested_output,
+      }),
     // Null travels intact: LeadMissionV1.requested_count is nullable as of R2-1,
     // and validateLeadMission reads an explicit null as a statement.
     requested_count: p.requested_opportunity_count,
