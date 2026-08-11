@@ -1299,8 +1299,20 @@ Deno.serve(async (req) => {
         // default. Deliberately NOT DEFAULT_COMPOUND_LIMITS.rawJobs: that is a
         // provider fetch cap, and conflating the two is what made a 25-raw-job
         // batch look like a satisfied 25-lead request.
+        //
+        // THE LAST RESORT IS THE MISSION, NOT A RE-READ OF THE SENTENCE. The
+        // final carrier here used to be `cfIntent.requested_count`, which is
+        // `resolveRequestedCount(text)` — a regex scanning the instruction for a
+        // number, one layer below the threaded quota. It could quietly disagree
+        // with the count the Mission recorded from the same words. The Mission's
+        // `requested_count` is nullable on purpose: null means the user asked
+        // for no number, and `resolveRequestedLeadCount` then applies the ONE
+        // lead-sourcing default rather than anything inventing its own.
+        const quotaMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
         const quota = resolveRequestedLeadCount({
-          explicit: (body.requested_lead_count ?? tool_input_body?.requested_lead_count ?? cfIntent.requested_count) as number | null | undefined,
+          explicit: (body.requested_lead_count ?? tool_input_body?.requested_lead_count
+            ?? quotaMission?.requested_count) as number | null | undefined,
           isLeadSourcingWorkflow: true,
         });
 

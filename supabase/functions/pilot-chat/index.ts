@@ -21,10 +21,11 @@ import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, c
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
-import { routeQualifiedLead, extractRequestedLeadCount, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
+import { routeQualifiedLead, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
 import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
+  effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
@@ -339,9 +340,28 @@ function buildHiringConfirmation(
   // contact or a final lead quota is company-first qualified-lead sourcing, not an
   // account-only signal scan (the 2026-07-26 manual-run corruption).
   const route = routeQualifiedLead(prompt);
-  const requestedLeadCount = extractRequestedLeadCount(prompt) ?? intent.count;
   const isQualifiedLead = route.workflowKind === "qualified_lead_sourcing";
   const personRoles = isQualifiedLead ? ["Founder", "Co-Founder", "CEO"] : [];
+
+  // ── THE CANONICAL MISSION, COMPILED BEFORE THE CARD IS DESCRIBED ─────────
+  // Interpreted ONCE, here, from the user's own prompt. Everything downstream
+  // — the preview card, orchestrate's plan, run-agent's capability graph —
+  // reads THIS object rather than re-deriving intent from whichever string it
+  // happened to receive. `original_user_query` is immutable; the planner's
+  // rewritten step instruction never replaces it.
+  //
+  // It is built FIRST because the card's own count now comes out of it.
+  const mission = buildMissionForPrompt(prompt, null, brain, gptProposal);
+
+  // ── THE COUNT IS THE MISSION'S, AND THE DEFAULT IS THE ONE DEFAULT ───────
+  //
+  // This used to be `extractRequestedLeadCount(prompt) ?? intent.count`, and
+  // the same number was then handed BACK into mission compilation as
+  // `requestedCount`, where it overrode what the model read. So a regex both
+  // decided what the card showed and re-anchored the interpreter that was
+  // supposed to decide it. The Mission states the count the user asked for, or
+  // states null; `effectiveRequestedCount` applies the single runtime default.
+  const requestedLeadCount = effectiveRequestedCount(mission);
 
   return {
     workflow_id: isQualifiedLead ? "find_qualified_leads" : "find_hiring_signal_accounts",
@@ -370,13 +390,9 @@ function buildHiringConfirmation(
       location,
       user_product: intent.user_product?.category, // shown as product, not industry
     },
-    // ── THE CANONICAL MISSION ────────────────────────────────────────────────
-    // Interpreted ONCE, here, from the user's own prompt. Everything downstream
-    // — the preview card, orchestrate's plan, run-agent's capability graph —
-    // reads THIS object rather than re-deriving intent from whichever string it
-    // happened to receive. `original_user_query` is immutable; the planner's
-    // rewritten step instruction never replaces it.
-    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, brain, gptProposal),
+    // THE CANONICAL MISSION, compiled above so the card's fields can be read
+    // off it rather than re-derived beside it.
+    lead_mission: mission,
     output: isQualifiedLead
       ? "Qualified company + verified decision-maker leads in Workbench"
       : "Account opportunities in Workbench",
@@ -2344,9 +2360,6 @@ Deno.serve(async (req) => {
     // deterministic apify_jobs behavior.
     const qlRoute = routeQualifiedLead(message);
     const isQualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
-    const requestedLeadCount = isQualifiedLead
-      ? (extractRequestedLeadCount(message) ?? Math.max(1, Math.min(50, decision.max_results ?? 5)))
-      : undefined;
 
     // ── COMPILE THE CANONICAL MISSION FOR THE RUN THAT IS ABOUT TO HAPPEN ──
     //
@@ -2361,6 +2374,17 @@ Deno.serve(async (req) => {
         brain: brainProfile,
         requestedCount: null,
       }));
+
+    // THE QUOTA IS THE MISSION'S. It used to be
+    // `extractRequestedLeadCount(message) ?? clamp(decision.max_results ?? 5)`:
+    // a regex reading of the same sentence the Mission had just been compiled
+    // from, followed by the CLASSIFIER's number — two more answers to a question
+    // already answered. `effectiveRequestedCount` applies the one default.
+    const requestedLeadCount = isQualifiedLead
+      ? (compiledLeadMission
+        ? effectiveRequestedCount(compiledLeadMission)
+        : DEFAULT_REQUESTED_COUNT)
+      : undefined;
     console.log("[pilot-chat][canonical-mission]", {
       workspace_id: workspaceId,
       qualified_lead: isQualifiedLead,

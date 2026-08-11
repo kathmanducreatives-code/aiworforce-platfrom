@@ -14,7 +14,6 @@
 // PURE. No network, no database, no environment reads, no provider calls.
 
 import { resolveJobIntent, type ResolvedJobIntent } from "../../jobFamilyRegistry.ts";
-import { extractRequestedLeadCount } from "../../qualifiedLeadRouting.ts";
 import { buildMission, type AgentoryMission, type MissionGeographyContext, type AgentoryEnvironmentMode } from "../mission.ts";
 import { emptyMissionContext, type MissionContext } from "../missionContext.ts";
 import { buildLeadGeographyContext } from "./leadGeography.ts";
@@ -99,8 +98,9 @@ export interface BuildLeadMissionInput {
  * Build a Lead mission.
  *
  * Authority is applied in the Phase 1 order: explicit workflow configuration may
- * override a derived default, but nothing overrides `original_instruction`, and
- * the requested count comes from the user's own sentence before any default.
+ * override a derived default, and nothing overrides `original_instruction`. The
+ * requested count is CONFIGURATION here — it reaches this function already
+ * resolved from the canonical Mission, and is never re-read from the sentence.
  */
 export function buildLeadMission(input: BuildLeadMissionInput): LeadSourcingMission {
   const instruction = input.originalInstruction;
@@ -108,11 +108,16 @@ export function buildLeadMission(input: BuildLeadMissionInput): LeadSourcingMiss
   const context = input.context ?? emptyMissionContext(input.workspaceId);
   const geography = buildLeadGeographyContext(instruction);
 
-  // The count the USER asked for outranks any workflow default.
-  const requestedCount =
-    extractRequestedLeadCount(instruction)
-    ?? input.workflow?.requested_count
-    ?? DEFAULT_REQUESTED_LEAD_COUNT;
+  // ── THE COUNT ARRIVES; IT IS NOT RE-READ ────────────────────────────────
+  //
+  // This used to be `extractRequestedLeadCount(instruction) ?? workflow ??
+  // default`, on the theory that "the count the USER asked for outranks any
+  // workflow default". The theory was right and the mechanism was wrong: by the
+  // time this runs, the count the user asked for has already been resolved from
+  // the canonical Mission and handed in as `workflow.requested_count`. A regex
+  // re-reading the same sentence could only ever agree with that, or silently
+  // overrule it — and it is the second case this whole cleanup is about.
+  const requestedCount = input.workflow?.requested_count ?? DEFAULT_REQUESTED_LEAD_COUNT;
 
   const base = buildMission({
     missionId: input.missionId,

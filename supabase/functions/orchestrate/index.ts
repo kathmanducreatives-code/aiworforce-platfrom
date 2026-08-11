@@ -4,7 +4,7 @@
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { routeQualifiedLead, extractRequestedLeadCount } from "../_shared/qualifiedLeadRouting.ts";
+import { routeQualifiedLead } from "../_shared/qualifiedLeadRouting.ts";
 import {
   planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
 } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
@@ -19,6 +19,7 @@ import { separatedIntentFromMission } from "../_shared/leadIntentModel.ts";
 import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 import {
   isLeadMissionV1, parseLeadMissionDeterministic,
+  effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
 import {
   getLeadIntelligenceCapabilities,
@@ -1355,7 +1356,15 @@ Return ONLY valid JSON, no prose, no markdown:
     // planner/template, exactly as pilot-chat decides it.
     const qlRoute = routeQualifiedLead(user_instruction ?? "");
     const qualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
-    const qualifiedLeadCount = extractRequestedLeadCount(user_instruction ?? "") ?? 5;
+    // THE COUNT COMES FROM THE MISSION, NOT FROM A SECOND READING OF THE
+    // SENTENCE. This used to be `extractRequestedLeadCount(user_instruction) ?? 5`
+    // — a regex quota that could differ from the count the Mission recorded, on
+    // the same words, with the run then executing to the regex's number.
+    // `effectiveRequestedCount` is the ONE place a default is applied, and the
+    // Mission keeps the honest answer about whether the user asked for a number.
+    const qualifiedLeadCount = missionForRouting
+      ? effectiveRequestedCount(missionForRouting)
+      : DEFAULT_REQUESTED_COUNT;
 
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",

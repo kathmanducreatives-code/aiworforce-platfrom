@@ -376,12 +376,20 @@ Deno.test("M20 a budget increase attempt is blocked", async () => {
 });
 
 Deno.test("M21 the requested count cannot be changed by the planner", () => {
+  // The count is CONFIGURATION on the mission — resolved upstream from the
+  // canonical LeadMissionV1 and handed in — and the strategy contract has no
+  // field through which a planner could restate it.
+  //
+  // It used to be re-read from the instruction here (`extractRequestedLeadCount`),
+  // which is why "Return 10 qualified leads" below used to resolve to 10 with no
+  // configuration at all. That reading is gone: a sentence full of numbers now
+  // changes nothing, and only the resolved count does.
   const m = mission(PRIMARY);
-  // The count lives in the MISSION and is read from the user's sentence — the
-  // strategy contract has no field through which it could be restated.
-  assertEquals(m.output.requested_count, 5);
-  const m10 = mission("Find founders of SaaS startups hiring Sales Operations in the United States. Return 10 qualified leads.");
-  assertEquals(m10.output.requested_count, 10);
+  assertEquals(m.output.requested_count, 5, "no configured count ⇒ the one default");
+  const loud = mission("Find founders of SaaS startups hiring Sales Operations in the United States. Return 10 qualified leads.");
+  assertEquals(loud.output.requested_count, 5, "the sentence may not set the quota");
+  const m10 = mission(PRIMARY, { requested_count: 10 });
+  assertEquals(m10.output.requested_count, 10, "the resolved count does");
 });
 
 Deno.test("M22 an ADJACENT role is never executed autonomously", async () => {
