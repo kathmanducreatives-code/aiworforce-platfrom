@@ -1980,11 +1980,27 @@ Deno.serve(async (req) => {
         }
       }
       const intakeInstruction = leadRequestToInstruction(req);
+      // ── THE MISSION IS COMPILED FROM THE USER'S OWN SENTENCE ───────────────
+      //
       // Same rule as the submitted-brief path above: a lead-sourcing branch
       // carries the canonical mission rather than letting orchestrate infer one.
+      //
+      // But it is compiled from `req.original_user_request`, NOT from
+      // `intakeInstruction`. That instruction is a machine rewrite: this branch
+      // ran `extractLeadDetails(message)` — a regex reading of role, industry,
+      // location, category and count — and `leadRequestToInstruction` reassembles
+      // those fields into a synthetic sentence. Compiling from it meant a regex
+      // decided the semantics and the model only re-read its summary, and the
+      // Mission's `original_user_query` — the field the whole contract calls
+      // immutable — held a rewrite rather than what the user typed.
+      //
+      // The rewrite is still what EXECUTES as the step instruction, and `ti` is
+      // still the provider input the parse produced. Only the interpretation
+      // moves back to the user's words.
       const intakeMission = canonicalMissionForTransport(
         await compileCanonicalLeadMission({
-          prompt: intakeInstruction, workspaceId, brain: brainProfile,
+          prompt: req.original_user_request || intakeInstruction,
+          workspaceId, brain: brainProfile,
           requestedCount: null,
         }));
       return await delegateToOrchestrate({
