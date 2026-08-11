@@ -30,7 +30,7 @@ import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_sh
 import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
-import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+import { compileLeadEntityIntent, applyMissionEntityAuthority, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 // Compound-intent bridge: detect a company-first request + enforce the
 // verified-company CONTACT ceiling. Deterministic company-first sourcing +
 // verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
@@ -1134,7 +1134,16 @@ Deno.serve(async (req) => {
         // can never flip a founder (person) request to the jobs actor (plan da79cba3).
         // `input` carries the original user_instruction (orchestrate threads it);
         // fall back to `instruction` only for a direct run-agent call.
-        const entityIntent = compileLeadEntityIntent(input ?? instruction ?? "");
+        // The DTO's provider-input half is still compiled from the instruction —
+        // bounding a provider query is deterministic work this architecture
+        // keeps. Its SEMANTIC half is not: `target_entity` decides the actor and
+        // the persistable artifact, and the canonical Mission already answered
+        // that from the same sentence. `applyMissionEntityAuthority` overlays the
+        // Mission's answer, so execution stops re-interpreting the query.
+        const entityIntent = applyMissionEntityAuthority(
+          compileLeadEntityIntent(input ?? instruction ?? ""),
+          readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission),
+        );
         routingEntityIntent = entityIntent;
         const ENTITY_SOURCE: Record<string, { source_type: string; actor_key: string }> = {
           person: { source_type: "people_profiles", actor_key: "apify_people_search" },

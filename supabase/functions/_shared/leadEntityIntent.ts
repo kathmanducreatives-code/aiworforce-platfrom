@@ -484,3 +484,34 @@ export function detectRoutingConflict(intent: LeadEntityIntent, selectedActorKey
 export function artifactMayPersist(intent: LeadEntityIntent, candidateArtifactType: ArtifactType | null | undefined): boolean {
   return candidateArtifactType === expectedArtifactType(intent.target_entity);
 }
+
+// ── MISSION AUTHORITY OVER THE ENTITY DECISION ──────────────────────────────
+//
+// `compileLeadEntityIntent` reads the raw sentence. That is acceptable for the
+// PROVIDER-INPUT half of this DTO (job keywords, location filters) — bounding a
+// provider query is deterministic work the architecture keeps. It is NOT
+// acceptable for the SEMANTIC half: `target_entity` decides which actor is
+// selected and which artifact may be persisted, and the canonical Mission has
+// already answered that question from the same sentence, once, in one place.
+//
+// So when a Mission exists it wins. This is a PROJECTION, not a second reading:
+// it copies a decided field onto a DTO that other code still consumes, and it
+// contains no parsing of its own.
+
+/**
+ * Overlay the canonical Mission's entity decision onto a compiled entity intent.
+ *
+ * Returns the intent unchanged when no Mission exists — the deterministic
+ * workspace path, gated separately by orchestrate.
+ */
+export function applyMissionEntityAuthority<T extends { target_entity: string; clarification_required?: boolean }>(
+  intent: T,
+  mission: { target_entity?: string } | null | undefined,
+): T {
+  const decided = mission?.target_entity;
+  if (!decided) return intent;
+  // A decided mission also resolves ambiguity: the model read the sentence and
+  // committed. Leaving `clarification_required` set would send a resolved
+  // request down the "ask the user" branch on the strength of a regex's doubt.
+  return { ...intent, target_entity: decided, clarification_required: false };
+}
