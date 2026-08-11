@@ -229,7 +229,7 @@ function companyBrainContextForCompiler(brain: any): CompilerBrainContext {
 }
 
 function buildMissionForPrompt(
-  prompt: string, requestedCount: number, brain: CompilerBrainContext,
+  prompt: string, requestedCount: number | null, brain: CompilerBrainContext,
   /**
    * The model's raw proposal, already fetched by the async caller.
    *
@@ -513,7 +513,15 @@ async function compileCanonicalLeadMission(i: {
   prompt: string;
   workspaceId: string;
   brain: any;
-  requestedCount: number;
+  /**
+   * DEPRECATED AS A SEMANTIC INPUT — always null from the lead paths.
+   *
+   * It used to be `extractRequestedLeadCount(sentence)`, a regex reading handed
+   * to `compileLeadMission` as `opts.requestedCount`, where it OVERRODE what the
+   * model read. The count is a semantic field like any other: the Mission states
+   * it, or states null, and execution applies `effectiveRequestedCount()`.
+   */
+  requestedCount: number | null;
 }): Promise<ReturnType<typeof buildMissionForPrompt> | null> {
   // ── NO REGEX MAY DECIDE WHETHER THE MODEL GETS TO READ THE SENTENCE ──────
   //
@@ -1842,7 +1850,9 @@ Deno.serve(async (req) => {
     const briefMission = canonicalMissionForTransport(
       await compileCanonicalLeadMission({
         prompt: instruction, workspaceId, brain: brainProfile,
-        requestedCount: extractRequestedLeadCount(instruction) ?? count ?? 10,
+        // NO REGEX COUNT. The Mission states the count the user asked for, or
+        // states null; nothing here re-reads the sentence to second-guess it.
+        requestedCount: null,
       }));
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
@@ -1898,7 +1908,7 @@ Deno.serve(async (req) => {
       const intakeMission = canonicalMissionForTransport(
         await compileCanonicalLeadMission({
           prompt: intakeInstruction, workspaceId, brain: brainProfile,
-          requestedCount: extractRequestedLeadCount(intakeInstruction) ?? 10,
+          requestedCount: null,
         }));
       return await delegateToOrchestrate({
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
@@ -2349,7 +2359,7 @@ Deno.serve(async (req) => {
         prompt: message,
         workspaceId,
         brain: brainProfile,
-        requestedCount: requestedLeadCount ?? Math.max(1, Math.min(50, decision.max_results ?? 5)),
+        requestedCount: null,
       }));
     console.log("[pilot-chat][canonical-mission]", {
       workspace_id: workspaceId,
