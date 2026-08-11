@@ -203,8 +203,33 @@ function roleFamilyLabel(fam: RoleFamily): string {
  * `required_capabilities` is filled from the graph the mission itself implies,
  * so the preview and run-agent cannot disagree about what will run.
  */
+/**
+ * The workspace ICP the compiler may show the model.
+ *
+ * Read from the Company Brain profile ONLY. It must never be derived from the
+ * user's sentence: doing so hands a regex reading back to the model as though
+ * it were configuration, and the model then agrees with it.
+ */
+export interface CompilerBrainContext {
+  industries: string[];
+  stages: string[];
+  locations: string[];
+}
+
+function companyBrainContextForCompiler(brain: any): CompilerBrainContext {
+  const icp = brain?.icp ?? {};
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((x) => String(x ?? "").trim()).filter(Boolean)
+    : (typeof v === "string" && v.trim() ? [v.trim()] : []);
+  return {
+    industries: arr(icp.industries ?? icp.industry ?? icp.target_industry),
+    stages: arr(icp.company_stage ?? icp.stages ?? icp.funding_stage),
+    locations: arr(icp.geography ?? icp.locations ?? icp.location),
+  };
+}
+
 function buildMissionForPrompt(
-  prompt: string, requestedCount: number, intent: LeadIntent,
+  prompt: string, requestedCount: number, brain: CompilerBrainContext,
   /**
    * The model's raw proposal, already fetched by the async caller.
    *
@@ -219,11 +244,6 @@ function buildMissionForPrompt(
   preflight_dry_run: unknown;
   query_interpretation: unknown;
 } {
-  const brain = {
-    industries: intent.target_industry ?? [],
-    stages: intent.company_stage ?? [],
-    locations: intent.target_geography ?? [],
-  };
   // ONE INTERPRETATION, HERE. The model proposes, `compileLeadMission`
   // validates and repairs, the Company Brain fills what is still open, and the
   // user's own words outrank both. Everything downstream reads the result.
@@ -305,6 +325,7 @@ function buildMissionForPrompt(
 
 function buildHiringConfirmation(
   prompt: string, intent: LeadIntent, company: any, gptProposal?: unknown,
+  brain: CompilerBrainContext = { industries: [], stages: [], locations: [] },
 ): any {
   const fam = intent.hiring_signal.role_family;
   const job = planJobsActorInput(intent);
@@ -355,7 +376,7 @@ function buildHiringConfirmation(
     // reads THIS object rather than re-deriving intent from whichever string it
     // happened to receive. `original_user_query` is immutable; the planner's
     // rewritten step instruction never replaces it.
-    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, intent, gptProposal),
+    lead_mission: buildMissionForPrompt(prompt, requestedLeadCount, brain, gptProposal),
     output: isQualifiedLead
       ? "Qualified company + verified decision-maker leads in Workbench"
       : "Account opportunities in Workbench",
@@ -494,16 +515,24 @@ async function compileCanonicalLeadMission(i: {
   brain: any;
   requestedCount: number;
 }): Promise<ReturnType<typeof buildMissionForPrompt> | null> {
-  const intent = extractLeadIntent({
-    message: i.prompt,
-    brain: {
-      icp: i.brain?.icp,
-      company: i.brain?.company,
-      competitors: i.brain?.competitors,
-      positioning: i.brain?.positioning,
-    },
-  });
-  if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
+  // ── NO REGEX MAY DECIDE WHETHER THE MODEL GETS TO READ THE SENTENCE ──────
+  //
+  // This used to begin with `extractLeadIntent(i.prompt)` and return null
+  // unless it recognised a hiring signal WITH a role family. A regex therefore
+  // decided whether the request reached the interpreter at all: "Find 5 AI
+  // workflow companies in Europe" names no hiring signal, so it compiled no
+  // mission, and everything downstream ran on the legacy carrier union instead.
+  // GPT was authoritative only over requests a regex had already recognised.
+  //
+  // The gate was also redundant as ROUTING. All three callers are already on a
+  // lead-sourcing branch — the submitted brief, the lead intake, and the
+  // confirmed start — so "is this a lead request?" was answered before this
+  // function was reached. Its only remaining effect was to suppress lead
+  // requests whose shape the regex table did not happen to contain.
+  //
+  // Nothing replaces it. That is the point: a lead request now reaches the
+  // compiler directly, and what the sentence means is the model's answer.
+  const brainContext = companyBrainContextForCompiler(i.brain);
 
   // ── THE INTERPRETIVE MODEL CALL ──────────────────────────────────────────
   // Gated by flag AND workspace allow-list, and bounded at
@@ -515,12 +544,17 @@ async function compileCanonicalLeadMission(i: {
   const gptProposal = compilerBinding.proposeMission
     ? await compilerBinding.proposeMission({
       originalUserQuery: i.prompt,
-      companyBrain: {
-        industries: intent.target_industry ?? [],
-        stages: intent.company_stage ?? [],
-        locations: intent.target_geography ?? [],
-      },
-      requestedCount: intent.count ?? null,
+      // THE WORKSPACE PROFILE, AND ONLY THE WORKSPACE PROFILE.
+      //
+      // This used to be built from `extractLeadIntent`, whose target_geography
+      // is `extractGeo(message)` UNIONED with the Brain's ICP geography. So a
+      // regex reading of the user's sentence was handed to the model labelled
+      // as workspace configuration — the regex got to influence the model's own
+      // reading of the same sentence, under a name that hid it.
+      companyBrain: brainContext,
+      // No count hint from a regex either. The model reads the sentence; if it
+      // names no number the model answers null, which the schema now permits.
+      requestedCount: null,
     })
     : undefined;
   console.log("[pilot-chat][mission-compiler]", {
@@ -529,7 +563,7 @@ async function compileCanonicalLeadMission(i: {
     proposal_received: gptProposal != null,
   });
 
-  const mission = buildMissionForPrompt(i.prompt, i.requestedCount, intent, gptProposal);
+  const mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal);
 
   // ── NO SILENT REGEX SUBSTITUTION FOR A COMPILED-MISSION WORKSPACE ────────
   //
@@ -600,6 +634,9 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
       positioning: profile?.positioning,
     },
   });
+  // Brain-only ICP context for the compiler. Derived from the Company Brain
+  // profile, never from the sentence — see `companyBrainContextForCompiler`.
+  const cardBrainContext = companyBrainContextForCompiler({ icp });
   if (lieIntent.hiring_signal.requested && lieIntent.hiring_signal.role_family) {
     // ── THE ONE INTERPRETIVE MODEL CALL, BEFORE ANYTHING IS PLANNED ────────
     //
@@ -617,12 +654,11 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
     const gptProposal = compilerBinding.proposeMission
       ? await compilerBinding.proposeMission({
         originalUserQuery: prompt,
-        companyBrain: {
-          industries: lieIntent.target_industry ?? [],
-          stages: lieIntent.company_stage ?? [],
-          locations: lieIntent.target_geography ?? [],
-        },
-        requestedCount: lieIntent.count ?? null,
+        // Brain-only, for the same reason as compileCanonicalLeadMission: a
+        // regex reading of the sentence must not be handed to the model as
+        // workspace configuration.
+        companyBrain: cardBrainContext,
+        requestedCount: null,
       })
       : undefined;
     console.log("[pilot-chat][mission-compiler]", {
@@ -630,7 +666,7 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
       ...compilerBinding.diagnostics,
       proposal_received: gptProposal != null,
     });
-    return buildHiringConfirmation(prompt, lieIntent, company, gptProposal);
+    return buildHiringConfirmation(prompt, lieIntent, company, gptProposal, cardBrainContext);
   }
 
   const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.
