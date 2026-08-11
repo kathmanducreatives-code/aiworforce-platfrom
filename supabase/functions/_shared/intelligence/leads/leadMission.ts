@@ -92,6 +92,24 @@ export interface BuildLeadMissionInput {
   budget?: { maximum_calls?: number; maximum_estimated_cost_usd?: number; maximum_rounds?: number } | null;
   /** Titles the user typed verbatim, if the caller extracted any. */
   explicitTitles?: string[] | null;
+  /**
+   * THE CANONICAL MISSION, WHEN THE REQUEST CARRIES ONE.
+   *
+   * `resolveJobIntent` and `buildLeadGeographyContext` below read the user's
+   * sentence. Compiling the planner's envelope that way was the only option
+   * before LeadMissionV1 existed; with one threaded in it is a second reading of
+   * a sentence already interpreted, and the two could disagree about WHO to
+   * contact and WHERE — the exact pair this envelope exists to keep separate.
+   *
+   * Structurally typed, so this module stays free of a dependency on the
+   * canonical schema and depends only on the four fields it names.
+   */
+  canonicalMission?: {
+    company_profile?: { verticals?: string[]; stages?: string[]; locations?: string[] };
+    required_signals?: Array<{ type?: string } | null>;
+    required_signal_terms?: string[];
+    decision_makers?: { roles?: string[]; current_employment_required?: boolean };
+  } | null;
 }
 
 /**
@@ -106,7 +124,34 @@ export function buildLeadMission(input: BuildLeadMissionInput): LeadSourcingMiss
   const instruction = input.originalInstruction;
   const intent: ResolvedJobIntent = resolveJobIntent(instruction);
   const context = input.context ?? emptyMissionContext(input.workspaceId);
-  const geography = buildLeadGeographyContext(instruction);
+  const canonical = input.canonicalMission ?? null;
+
+  // ── THE CANONICAL MISSION OUTRANKS THE PARSER, FIELD BY FIELD ────────────
+  //
+  // Only where it has an answer. A Mission that named no geography does not
+  // erase one the parser found; a Mission that named one replaces it, because
+  // both are readings of the same sentence and only one of them is what every
+  // other stage executes.
+  const missionRoles = (canonical?.decision_makers?.roles ?? []).filter(Boolean);
+  const missionLocations = (canonical?.company_profile?.locations ?? []).filter(Boolean);
+  const missionVerticals = (canonical?.company_profile?.verticals ?? []).filter(Boolean);
+  const missionStages = (canonical?.company_profile?.stages ?? []).filter(Boolean);
+  const missionSignalTypes = (canonical?.required_signals ?? [])
+    .map((s) => String(s?.type ?? "").trim()).filter(Boolean);
+  const missionSignalTerms = (canonical?.required_signal_terms ?? []).filter(Boolean);
+
+  const geography = missionLocations.length
+    ? {
+      // The Mission's locations ARE the user's own wording — `original_user_query`
+      // is immutable and these were read from it once.
+      explicit_raw_locations: [...missionLocations],
+      normalized_locations: [...missionLocations],
+      parser_locations: [...buildLeadGeographyContext(instruction).parser_locations],
+      unresolved_locations: [],
+      source: "explicit_user" as const,
+      confidence: 1,
+    }
+    : buildLeadGeographyContext(instruction);
 
   // ── THE COUNT ARRIVES; IT IS NOT RE-READ ────────────────────────────────
   //
@@ -176,7 +221,8 @@ export function buildLeadMission(input: BuildLeadMissionInput): LeadSourcingMiss
     target_entity: input.workflow?.target_entity ?? "company_and_person",
 
     signal: {
-      types: input.workflow?.signal_types ?? ["hiring"],
+      types: input.workflow?.signal_types
+        ?? (missionSignalTypes.length ? missionSignalTypes : ["hiring"]),
       required: input.workflow?.signal_required ?? true,
       ...(input.workflow?.recency_days !== undefined ? { recency_days: input.workflow.recency_days } : {}),
     },
@@ -188,24 +234,30 @@ export function buildLeadMission(input: BuildLeadMissionInput): LeadSourcingMiss
       ...(intent.hiring_role.department ? { department: intent.hiring_role.department } : {}),
       seniority: [...intent.hiring_role.seniority],
       ...(intent.hiring_role.teamStage ? { team_stage: intent.hiring_role.teamStage } : {}),
-      explicit_titles: [...(input.explicitTitles ?? [])],
+      // The Mission preserves the role words the user typed verbatim, which is
+      // exactly what `explicit_titles` means here.
+      explicit_titles: [...(input.explicitTitles ?? missionSignalTerms)],
       resolved_titles: [...intent.titles],
       ...(intent.family_key ? { canonical_family: intent.family_key } : {}),
       industry_context: [...context.icp.industries],
     },
 
-    // ---- the person to contact. Reads ONLY from the person clause. ----
+    // ---- the person to contact. The Mission decided this; the parser's
+    // person clause answers only when no Mission was threaded. ----
     decision_maker: {
-      roles: [...intent.decision_maker.roles],
+      roles: missionRoles.length ? [...missionRoles] : [...intent.decision_maker.roles],
       seniority: [...intent.decision_maker.seniority],
-      current_employer_required: intent.decision_maker.currentEmployerRequired,
+      current_employer_required: canonical?.decision_makers?.current_employment_required
+        ?? intent.decision_maker.currentEmployerRequired,
     },
 
     company_target: {
-      verticals: intent.vertical ? [intent.vertical] : [...context.icp.company_verticals],
+      verticals: missionVerticals.length
+        ? [...missionVerticals]
+        : (intent.vertical ? [intent.vertical] : [...context.icp.company_verticals]),
       company_types: [...context.icp.company_types],
       ...(context.icp.employee_range ? { employee_range: context.icp.employee_range } : {}),
-      company_stages: [...context.icp.company_stages],
+      company_stages: missionStages.length ? [...missionStages] : [...context.icp.company_stages],
       geography,
     },
 

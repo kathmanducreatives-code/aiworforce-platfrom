@@ -107,6 +107,15 @@ export interface LeadPlanningBridgeInput {
   taskId?: string | null;
   context?: MissionContext | null;
   requestedLeadCount?: number | null;
+  /**
+   * The canonical compiled Mission for this request, when one exists.
+   *
+   * Threaded for the same reason the GPT adapter receives one: the envelope this
+   * bridge builds used to re-read the instruction for WHO to contact and WHERE,
+   * beside a Mission that had already decided both. Null on the
+   * deterministic-workspace path, where the parser's reading is the only one.
+   */
+  canonicalMission?: Parameters<typeof buildLeadMission>[0]["canonicalMission"];
   generate?: GenerateJsonFn;
   evidence?: EvidenceItem[] | null;
   /** Injected in tests; production reads the real environment. */
@@ -180,6 +189,7 @@ export async function applyClaudeFirstLeadPlanning(
     originalInstruction: input.originalInstruction,
     context: input.context ?? null,
     environmentMode,
+    canonicalMission: input.canonicalMission ?? null,
     workflow: input.requestedLeadCount ? { requested_count: input.requestedLeadCount } : null,
   });
 

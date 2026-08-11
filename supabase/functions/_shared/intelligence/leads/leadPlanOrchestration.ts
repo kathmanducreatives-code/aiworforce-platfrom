@@ -244,8 +244,11 @@ export async function planQualifiedLeadBeforePersistence(
       : (intent.requested_count ?? DEFAULT_REQUESTED_COUNT),
     decisionMakerRoles: [...spec.requested_person_roles],
     hiringRoles: [...spec.keyword_queries],
+    // Mission-only when a Mission exists: if it named no vertical, there is no
+    // vertical, and falling back to the compiled spec's would let the sentence
+    // decide after all.
     companyVertical: mission
-      ? (normalizeCompanyVertical(...(mission.company_profile?.verticals ?? [])) ?? spec.company_vertical)
+      ? normalizeCompanyVertical(...(mission.company_profile?.verticals ?? []))
       : spec.company_vertical,
     companyStage: mission
       ? missionStage
@@ -333,6 +336,10 @@ export async function planQualifiedLeadBeforePersistence(
       spec: spec as unknown as Parameters<typeof applyClaudeFirstLeadPlanning>[0]["spec"],
       missionId: input.missionId ?? `orchestrate:${input.workspaceId}`,
       context,
+      // The Claude adapter builds its own planning envelope from the
+      // instruction; the canonical Mission outranks that reading, exactly as it
+      // does for the GPT adapter above.
+      canonicalMission: mission,
       requestedLeadCount: contract.requestedCount,
       generate: input.generate,
       readEnv: input.readEnv,
