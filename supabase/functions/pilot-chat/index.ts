@@ -19,9 +19,9 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
-import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shared/leadIntent.ts";
+import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
-import { routeQualifiedLead, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
+import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
 import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
@@ -324,10 +324,28 @@ function buildMissionForPrompt(
   };
 }
 
+/**
+ * THE PREVIEW CARD, DESCRIBED FROM THE MISSION.
+ *
+ * Every semantic field here used to come from `extractLeadIntent(prompt)`: the
+ * role family, the persona, the industry, the geography, the stage, the count,
+ * and — through `routeQualifiedLead(prompt)` — whether this was a qualified-lead
+ * mission at all. So the card described a regex's reading of the sentence while
+ * the run executed the Mission's reading of the same sentence, and nothing
+ * compared them. The card is what the user APPROVES; a preview that describes a
+ * different interpretation than the one that runs is the worst place of all for
+ * a second opinion.
+ *
+ * `intent` is now a PROJECTION of the Mission (`leadIntentFromMission`), and the
+ * Mission is compiled by the caller. The remaining deterministic work — alias
+ * expansion, registry titles, canonical vertical/stage vocabulary — is display
+ * and provider-input formatting over already-decided fields.
+ */
 function buildHiringConfirmation(
-  prompt: string, intent: LeadIntent, company: any, gptProposal?: unknown,
-  brain: CompilerBrainContext = { industries: [], stages: [], locations: [] },
+  prompt: string, mission: ReturnType<typeof buildMissionForPrompt>, company: any,
+  brainLite?: BrainLite | null,
 ): any {
+  const intent = leadIntentFromMission(mission, brainLite);
   const fam = intent.hiring_signal.role_family;
   const job = planJobsActorInput(intent);
   const roleDisplay = (job.role_keywords.length ? job.role_keywords : roleFamilyAliases(fam)).slice(0, 6).join(", ");
@@ -335,32 +353,20 @@ function buildHiringConfirmation(
   const industry = intent.target_industry.join(", ");
   const location = intent.target_geography[0] ?? company?.location ?? "USA";
 
-  // DETERMINISTIC ROUTE — decided from the user's own words, before any template
-  // or model output, and authoritative over both. A request naming people to
-  // contact or a final lead quota is company-first qualified-lead sourcing, not an
-  // account-only signal scan (the 2026-07-26 manual-run corruption).
-  const route = routeQualifiedLead(prompt);
+  // THE ROUTE THE MISSION IMPLIES. This used to be `routeQualifiedLead(prompt)`
+  // — a phrase table deciding, after compilation, whether the user had asked for
+  // people to contact. The Mission states what the user asked to receive, so the
+  // route is read off it.
+  const route = qualifiedLeadRouteFromMission(mission);
   const isQualifiedLead = route.workflowKind === "qualified_lead_sourcing";
-  const personRoles = isQualifiedLead ? ["Founder", "Co-Founder", "CEO"] : [];
+  // WHO to contact, as the Mission decided. The hard-coded founder set survives
+  // only as the fallback for a mission that named no decision maker.
+  const personRoles = isQualifiedLead
+    ? (intent.target_buyer.length ? intent.target_buyer : ["Founder", "Co-Founder", "CEO"])
+    : [];
 
-  // ── THE CANONICAL MISSION, COMPILED BEFORE THE CARD IS DESCRIBED ─────────
-  // Interpreted ONCE, here, from the user's own prompt. Everything downstream
-  // — the preview card, orchestrate's plan, run-agent's capability graph —
-  // reads THIS object rather than re-deriving intent from whichever string it
-  // happened to receive. `original_user_query` is immutable; the planner's
-  // rewritten step instruction never replaces it.
-  //
-  // It is built FIRST because the card's own count now comes out of it.
-  const mission = buildMissionForPrompt(prompt, null, brain, gptProposal);
-
-  // ── THE COUNT IS THE MISSION'S, AND THE DEFAULT IS THE ONE DEFAULT ───────
-  //
-  // This used to be `extractRequestedLeadCount(prompt) ?? intent.count`, and
-  // the same number was then handed BACK into mission compilation as
-  // `requestedCount`, where it overrode what the model read. So a regex both
-  // decided what the card showed and re-anchored the interpreter that was
-  // supposed to decide it. The Mission states the count the user asked for, or
-  // states null; `effectiveRequestedCount` applies the single runtime default.
+  // The count is the Mission's; `effectiveRequestedCount` applies the single
+  // runtime default when the request named no number.
   const requestedLeadCount = effectiveRequestedCount(mission);
 
   return {
@@ -410,14 +416,21 @@ function buildHiringConfirmation(
           // sales roles for a Sales-Operations request. The backend registry wins
           // when it recognises the request, because the UI families are coarser
           // (gtm_sales leads with SDR/BDR, which is wrong for a first salesperson).
+          // The registry is consulted with the terms the MISSION recorded, not
+          // with the raw sentence: `inferFamilyKey([], [prompt, …])` scanned the
+          // user's words a second time to pick a title set.
           job_titles: contractJobTitles(
             roleFamilyAliases(fam),
-            getJobFamily(inferFamilyKey([], [prompt, ...job.role_keywords]))?.exact,
+            getJobFamily(inferFamilyKey([], [
+              ...(mission.required_signal_terms ?? []), ...job.role_keywords,
+            ]))?.exact,
           ),
           // CANONICAL vocabulary, not whatever wording the industry string had:
-          // the preview renders from this contract, so it must be stable.
-          company_vertical: normalizeCompanyVertical(industry, ...(intent.target_industry ?? []), prompt),
-          company_stage: inferCompanyStage(...(intent.company_stage ?? []), prompt),
+          // the preview renders from this contract, so it must be stable. The
+          // sources are the Mission's decided verticals and stages — `prompt`
+          // used to be passed here as one more thing to pattern-match.
+          company_vertical: normalizeCompanyVertical(industry, ...(intent.target_industry ?? [])),
+          company_stage: inferCompanyStage(...(intent.company_stage ?? [])),
           geography: intent.target_geography?.length ? intent.target_geography : [location],
           requested_person_roles: personRoles,
           current_employer_required: true,
@@ -485,11 +498,19 @@ function icpExcludedSummary(intent: LeadIntent): string[] {
   ].filter(Boolean).slice(0, 8);
 }
 
-// Re-derive the Lead Intelligence Engine hiring intent at delegation time so the
-// scout step (run-agent) receives role_family + aliases + excludes without
-// re-parsing the message. Deterministic — matches the card's lead_intent.
-function leadIntentForToolInput(message: string, brain: any): any {
-  const intent = extractLeadIntent({ message, brain: { icp: brain?.icp, company: brain?.company, competitors: brain?.competitors, positioning: brain?.positioning } });
+// The Lead Intelligence Engine hiring intent threaded to run-agent, so the scout
+// step receives role_family + aliases + excludes. PROJECTED FROM THE MISSION, not
+// re-parsed: this used to call `extractLeadIntent(message)` at delegation time,
+// which meant the run's role family came from a regex reading of the sentence
+// while the Mission — compiled from the same sentence, in the same request —
+// carried its own. Null when the Mission names no hiring role family, which is
+// the same condition the regex version declined on.
+function leadIntentForToolInput(mission: LeadMissionV1 | null, brain: any): any {
+  if (!mission) return null;
+  const intent = leadIntentFromMission(mission, {
+    icp: brain?.icp, company: brain?.company,
+    competitors: brain?.competitors, positioning: brain?.positioning,
+  });
   if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
   const job = planJobsActorInput(intent);
   return {
@@ -633,7 +654,23 @@ function canonicalMissionForTransport(
   return mission as LeadMissionV1;
 }
 
-async function generateWorkflowConfirmation(prompt: string, workspaceId: string, admin: any): Promise<any> {
+/**
+ * Workflow categories whose confirmation card is a LEAD card.
+ *
+ * The classifier already decided this upstream, before any card is built, so the
+ * lead branch reads a decided field. It is deliberately NOT a second question
+ * asked of the sentence — which is what the removed
+ * `lieIntent.hiring_signal.requested && role_family` gate was: a regex deciding
+ * whether a lead request got a lead card, so "Find 5 AI workflow companies in
+ * Europe" (no hiring words) fell through to the generic template.
+ */
+const LEAD_CONFIRMATION_CATEGORIES = new Set([
+  "company_hiring_sourcing", "people_sourcing", "signal_sourcing",
+]);
+
+async function generateWorkflowConfirmation(
+  prompt: string, workspaceId: string, admin: any, category: string,
+): Promise<any> {
   const { data: cbRow } = await admin
     .from("company_brain")
     .select("profile")
@@ -643,25 +680,21 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
   const company = profile?.company ?? {};
   const icp = profile?.icp ?? {};
 
-  // Lead Intelligence Engine: for HIRING requests, build the confirmation
-  // deterministically from extractLeadIntent so the card SEPARATES what the user
+  // The Company Brain, in the shape the LeadIntent projection reads its ICP
+  // from. Never derived from the sentence — the card SEPARATES what the user
   // sells (user_product) from who they target (target_buyer) from the hiring
-  // signal (role family) — and never leaks the product into industry/persona
-  // (e.g. "AI SaaS" stays the product, not the industry; persona is never
-  // "Founder / Head of Growth" for an assistant-role search).
-  const lieIntent = extractLeadIntent({
-    message: prompt,
-    brain: {
-      icp,
-      company: { category: company?.category, industry: company?.industry },
-      competitors: profile?.competitors ?? profile?.positioning?.competitors,
-      positioning: profile?.positioning,
-    },
-  });
+  // signal (role family), and every one of those now has a non-textual source:
+  // the Brain for the first, the Mission for the rest.
+  const cardBrainLite: BrainLite = {
+    icp,
+    company: { category: company?.category, industry: company?.industry },
+    competitors: profile?.competitors ?? profile?.positioning?.competitors,
+    positioning: profile?.positioning,
+  };
   // Brain-only ICP context for the compiler. Derived from the Company Brain
   // profile, never from the sentence — see `companyBrainContextForCompiler`.
   const cardBrainContext = companyBrainContextForCompiler({ icp });
-  if (lieIntent.hiring_signal.requested && lieIntent.hiring_signal.role_family) {
+  if (LEAD_CONFIRMATION_CATEGORIES.has(category)) {
     // ── THE ONE INTERPRETIVE MODEL CALL, BEFORE ANYTHING IS PLANNED ────────
     //
     // Gated OFF by default; both a flag and a workspace allow-list must pass.
@@ -690,7 +723,18 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
       ...compilerBinding.diagnostics,
       proposal_received: gptProposal != null,
     });
-    return buildHiringConfirmation(prompt, lieIntent, company, gptProposal, cardBrainContext);
+    // THE MISSION IS COMPILED HERE AND THE CARD IS DESCRIBED FROM IT. Same
+    // refusal rule as `compileCanonicalLeadMission`: a workspace running the
+    // compiled-mission architecture may not be shown a card built from a
+    // deterministic reading wearing the compiler's shape.
+    const cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal);
+    if (
+      getLeadIntelligenceCapabilities(workspaceId).mode === "new_architecture" &&
+      cardMission.mission_parser_source === "deterministic_fallback"
+    ) {
+      throw new MissionCompilationFailedError(workspaceId, compilerBinding.enablement.reason);
+    }
+    return buildHiringConfirmation(prompt, cardMission, company, cardBrainLite);
   }
 
   const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.
@@ -840,7 +884,7 @@ async function showWorkflowConfirmation(
   category: string
 ): Promise<Response> {
   console.log("[pilot-chat] showWorkflowConfirmation: showing card", { category, message });
-  const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
+  const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin, category);
   const confirmContent = buildWorkflowHandoffMessage(confirmation);
   const { data: saved } = await admin
     .from("messages")
@@ -2306,7 +2350,8 @@ Deno.serve(async (req) => {
 
   if (needsConfirmation) {
     console.log("[pilot-chat] workflow_confirmation_gate: showing card", { category: decision.workflow_category, actionSource });
-    const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
+    const confirmation = await generateWorkflowConfirmation(
+      message, workspaceId, admin, decision.workflow_category);
     const confirmContent = buildWorkflowHandoffMessage(confirmation);
     const { data: saved } = await admin
       .from("messages")
@@ -2335,38 +2380,14 @@ Deno.serve(async (req) => {
   }
 
   if (decision.workflow_category === "company_hiring_sourcing") {
-    // Lead Intelligence Engine: prefer the lead_intent the confirmation card
-    // threaded back on Start (the ORIGINAL request's role family + aliases +
-    // excludes); only fall back to re-deriving from the command string when the
-    // request didn't come from a confirmed card.
-    const leadIntent = confirmedLeadIntent ?? leadIntentForToolInput(message, brainProfile);
-    const li = leadIntent as Record<string, unknown> | null;
-    const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
-    const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
-
-    // ROUTING PRECEDENCE — deterministic qualified-Lead detection wins over the
-    // legacy jobs-actor pin. When `routeQualifiedLead` classifies the ORIGINAL
-    // user message as a person/CONTACT-ready mission (e.g. "find 5 founders of
-    // SaaS startups hiring Sales Operations"), we MUST NOT hardcode
-    // `selected_actor_key: "apify_jobs"` / `source_type: "jobs"` here: doing so
-    // pins the request to the legacy fast/account_first branch in run-agent
-    // (index.ts:638 gate `!raw_source_type && !planned_actor_key`) and the
-    // whole company-first sourcing stack (Company Brain gate → founder/CEO
-    // search → CONTACT-only quota) becomes unreachable. Instead we leave both
-    // fields unset so run-agent's deterministic entity-intent router picks the
-    // correct actor from the original instruction, and we flip execution_mode
-    // to "company_first" so orchestrate + run-agent both recognise the
-    // contract. Non-qualified account/job-only requests keep the previous
-    // deterministic apify_jobs behavior.
-    const qlRoute = routeQualifiedLead(message);
-    const isQualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
-
     // ── COMPILE THE CANONICAL MISSION FOR THE RUN THAT IS ABOUT TO HAPPEN ──
     //
     // Once, here, on the Start request. The confirmation card compiled one for
     // the PREVIEW, but that was a different HTTP request and its result was
     // never carried forward — which is why execution had been running on
     // `planToolInput()` output alone.
+    //
+    // It is compiled FIRST because everything below is now derived from it.
     const compiledLeadMission = canonicalMissionForTransport(
       await compileCanonicalLeadMission({
         prompt: message,
@@ -2374,6 +2395,37 @@ Deno.serve(async (req) => {
         brain: brainProfile,
         requestedCount: null,
       }));
+
+    // Lead Intelligence Engine: prefer the lead_intent the confirmation card
+    // threaded back on Start (the ORIGINAL request's role family + aliases +
+    // excludes); otherwise project it from the Mission just compiled. It used to
+    // be re-derived with `extractLeadIntent(message)` — a regex reading of the
+    // same sentence, deciding the run's role family beside the Mission.
+    const leadIntent = confirmedLeadIntent ?? leadIntentForToolInput(compiledLeadMission, brainProfile);
+    const li = leadIntent as Record<string, unknown> | null;
+    const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
+    const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
+
+    // ROUTING PRECEDENCE — the Mission's qualified-Lead decision wins over the
+    // legacy jobs-actor pin. When the Mission says the user asked for people to
+    // contact (e.g. "find 5 founders of SaaS startups hiring Sales Operations"),
+    // we MUST NOT hardcode `selected_actor_key: "apify_jobs"` / `source_type:
+    // "jobs"` here: doing so pins the request to the legacy fast/account_first
+    // branch in run-agent (index.ts:638 gate `!raw_source_type &&
+    // !planned_actor_key`) and the whole company-first sourcing stack (Company
+    // Brain gate → founder/CEO search → CONTACT-only quota) becomes
+    // unreachable. Instead we leave both fields unset so run-agent's entity
+    // router picks the actor from the Mission's decided entity, and we flip
+    // execution_mode to "company_first" so orchestrate + run-agent both
+    // recognise the contract. Non-qualified account/job-only requests keep the
+    // previous deterministic apify_jobs behavior.
+    //
+    // This used to be `routeQualifiedLead(message)`, a phrase table re-reading
+    // the sentence the Mission had just been compiled from.
+    const qlRoute = compiledLeadMission
+      ? qualifiedLeadRouteFromMission(compiledLeadMission)
+      : routeQualifiedLead(message);
+    const isQualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
 
     // THE QUOTA IS THE MISSION'S. It used to be
     // `extractRequestedLeadCount(message) ?? clamp(decision.max_results ?? 5)`:

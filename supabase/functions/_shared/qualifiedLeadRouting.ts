@@ -106,6 +106,61 @@ export function routeQualifiedLead(instruction: string | null | undefined): Qual
   };
 }
 
+// ── THE SAME ROUTE, DECIDED BY THE MISSION ──────────────────────────────────
+//
+// `routeQualifiedLead` answers "is this a lead request, and of which shape?" from
+// the sentence. That is legitimate BEFORE a Mission exists — it is what decides
+// whether one is compiled at all — and it is a second semantic reading AFTER one
+// does, because the Mission has already answered the same question: it states
+// what the user asked to RECEIVE.
+//
+// So every post-compilation caller uses this instead. It is a projection: two
+// decided fields in, a route out, no text touched.
+
+export interface MissionForRoute {
+  target_entity?: string;
+  requested_output?: string;
+}
+
+/**
+ * The qualified-lead route implied by a decided Mission.
+ *
+ * A request is qualified-lead sourcing when the Mission says the user asked for
+ * PEOPLE they can contact — `contact_ready_leads`, or a person target entity.
+ * Anything else is account/opportunity sourcing, which is what the quota policy
+ * and count entity then describe.
+ *
+ * The reason codes name the Mission field that decided it, so a run's routing is
+ * traceable to a decision rather than to a phrase that happened to match.
+ */
+export function qualifiedLeadRouteFromMission(m: MissionForRoute): QualifiedLeadRoute {
+  const reasons: string[] = [];
+  if (m.requested_output === "contact_ready_leads") {
+    reasons.push("mission_requested_output:contact_ready_leads");
+  }
+  if (m.target_entity === "person") reasons.push("mission_target_entity:person");
+
+  if (reasons.length > 0) {
+    return {
+      workflowKind: "qualified_lead_sourcing",
+      executionMode: "company_first",
+      reasonCodes: reasons,
+      countEntity: "contact_ready_lead",
+      quotaPolicy: "contact_only",
+    };
+  }
+  return {
+    workflowKind: "account_opportunity_sourcing",
+    executionMode: "fast",
+    reasonCodes: [
+      `mission_requested_output:${m.requested_output ?? "unstated"}`,
+      `mission_target_entity:${m.target_entity ?? "unstated"}`,
+    ],
+    countEntity: "account_opportunity",
+    quotaPolicy: "account_only",
+  };
+}
+
 // --------------------------------------------------------- contract vocabulary
 //
 // The preview renders from the CONTRACT, never from the generated workflow title,

@@ -12,14 +12,16 @@
 
 // ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
 //
-// Live non-test callers: pilot-chat/index.ts, run-agent/index.ts,
-// leadSearchIntent.ts. Overlaps the Mission on intent extraction, but also owns
-// source routing and actor-input planning, which the Mission deliberately does NOT
-// express — the Mission's containment property is that no model-facing field can
-// name a provider, so routing has to stay in code.
+// `extractLeadIntent` HAS NO LIVE CALLERS. pilot-chat was the last one — the
+// confirmation card, the card's threaded `lead_intent`, and the Start path all
+// read `leadIntentFromMission` (below) now. What remains here is exercised only
+// by leadIntent.test.ts, kept as the executable record of the reading this
+// projection replaced.
 //
-// Retire the OVERLAPPING extraction only, and only after R2's cutover proves the
-// Mission carries the same information. The routing half stays.
+// The rest of this module IS live and stays: `planJobsActorInput` (provider-input
+// formatting), `filterHiringCandidates` (post-source filtering) and the source
+// router. The Mission deliberately expresses no provider, so that half cannot
+// move into it.
 //
 // DO NOT extend the intent-extraction half. New semantics belong in the Mission.
 
@@ -247,6 +249,154 @@ export function extractLeadIntent(opts: { message: string; brain?: BrainLite | n
       : undefined,
   };
 }
+
+// ── THE SAME DTO, PROJECTED FROM THE CANONICAL MISSION ──────────────────────
+//
+// `extractLeadIntent` above reads the user's sentence. pilot-chat used its answer
+// to fill the confirmation card AND to decide whether a lead card was shown at
+// all — so a regex both interpreted the request and gated the interpreter that
+// was supposed to interpret it.
+//
+// This projection fills the same DTO from a decided Mission plus the Company
+// Brain. It parses nothing: every semantic field reads a Mission field, and every
+// ICP field reads the Brain, exactly as before. The only text it touches are
+// already-decided taxonomy terms handed to the role library — the same library
+// call `extractLeadIntent` made after its own regex had chosen the phrase.
+
+export interface MissionForLeadIntent {
+  original_user_query?: string;
+  target_entity?: string;
+  requested_output?: string;
+  requested_count?: number | null;
+  confidence?: number;
+  company_profile?: {
+    verticals?: string[];
+    stages?: string[];
+    locations?: string[];
+    known_companies?: string[];
+  };
+  required_signals?: Array<{ type?: string; role_families?: string[] } | null>;
+  required_signal_terms?: string[];
+  decision_makers?: { roles?: string[] };
+  no_broadening_requested?: boolean;
+}
+
+/** The lead workflow kind, from the Mission's decided entity and signals. */
+function workflowTypeFor(m: MissionForLeadIntent): WorkflowType {
+  if (!m.target_entity) return "unknown";
+  if (m.requested_output === "social_posts") return "linkedin_intent_sourcing";
+  if (m.target_entity === "person") return "people_sourcing";
+  const hiring = (m.required_signals ?? []).some((s) => String(s?.type ?? "").includes("hiring"));
+  if (m.target_entity === "job" || hiring) return "company_hiring_sourcing";
+  return "company_icp_sourcing";
+}
+
+/** The provider family each workflow kind sources from. Routing, not reading. */
+const SOURCE_FOR_WORKFLOW: Record<WorkflowType, SourceType> = {
+  company_hiring_sourcing: "jobs",
+  company_icp_sourcing: "company_search",
+  people_sourcing: "people",
+  decision_maker_discovery: "people",
+  linkedin_intent_sourcing: "linkedin_posts",
+  competitor_signal_sourcing: "comments",
+  unknown: "company_search",
+};
+
+/**
+ * Project a LeadIntent out of a decided Mission and the Company Brain.
+ *
+ * Semantic fields — workflow kind, source, persona, industry, geography, stage,
+ * hiring signal, role family, count, strictness — come from the Mission.
+ * ICP fields — negatives, disqualifiers, competitors, sizes, enterprise policy —
+ * come from the Brain, which is where `extractLeadIntent` read them too.
+ *
+ * `clarification_needed` is always false: a Mission exists, so the request was
+ * already interpreted, and asking the user to disambiguate a decided request is
+ * the regex's doubt outliving the decision that resolved it.
+ */
+export function leadIntentFromMission(
+  mission: MissionForLeadIntent, brainInput?: BrainLite | null,
+): LeadIntent {
+  const brain = brainInput ?? {};
+  const workflow_type = workflowTypeFor(mission);
+  const source_type = SOURCE_FOR_WORKFLOW[workflow_type];
+
+  const signals = (mission.required_signals ?? []).filter(Boolean);
+  const hiringRequested = signals.some((s) => String(s?.type ?? "").includes("hiring"));
+
+  // The family the Mission named, from its own record of it: the taxonomy keys
+  // it attached to a signal, then the literal terms it preserved verbatim.
+  // Underscored keys are normalised into the phrases the role library matches —
+  // punctuation handling on a decided field, not a reading of free text.
+  let role_family: RoleFamily = null;
+  for (const term of [
+    ...signals.flatMap((s) => s?.role_families ?? []),
+    ...(mission.required_signal_terms ?? []),
+  ]) {
+    const fam = classifyRoleFamily(String(term ?? "").replace(/[_-]+/g, " "));
+    if (fam) { role_family = fam; break; }
+  }
+  const role_keywords = hiringRequested ? roleFamilyAliases(role_family) : [];
+  const exclude_role_keywords = hiringRequested ? hiringExcludeTitles(role_family) : [];
+
+  const verticals = uniq(mission.company_profile?.verticals ?? []);
+  const target_industry = uniq([...verticals, ...(brain.icp?.industries ?? [])]);
+  const missionLocations = uniq(mission.company_profile?.locations ?? []);
+  const target_geography = missionLocations.length
+    ? missionLocations
+    : uniq(brain.icp?.geography ? [brain.icp.geography] : []);
+  const target_stage = uniq(mission.company_profile?.stages ?? []);
+
+  return {
+    workflow_type,
+    source_type,
+    // What the workspace SELLS is workspace configuration. `extractLeadIntent`
+    // mined it out of "my … product" phrasing; the Brain simply knows it.
+    ...(brain.company?.category ? { user_product: { category: brain.company.category } } : {}),
+    target_buyer: uniq(mission.decision_makers?.roles ?? []),
+    target_company_type: verticals,
+    target_industry,
+    target_geography,
+    target_company_size: brain.icp?.company_size ? [brain.icp.company_size] : [],
+    target_stage,
+    hiring_signal: { requested: hiringRequested, role_family, role_keywords, exclude_role_keywords },
+    pain_points: [],
+    competitors: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
+    keywords: [],
+    disqualifiers: uniq(brain.icp?.disqualifiers ?? []),
+    count: mission.requested_count ?? DEFAULT_LEAD_INTENT_COUNT,
+    // "exactly N", "only", "do not broaden" — the Mission carries this as a
+    // decided flag rather than as a phrase list to re-match.
+    strictness: mission.no_broadening_requested ? "strict" : "balanced",
+    confidence: typeof mission.confidence === "number" ? mission.confidence : 0.85,
+    positive_industries: target_industry,
+    negative_industries: uniq([...(brain.icp?.negative_industries ?? []), ...(brain.icp?.avoid_industries ?? [])]),
+    positive_keywords: uniq(brain.icp?.keywords ?? []),
+    negative_keywords: uniq(brain.icp?.negative_keywords ?? []),
+    excluded_company_types: uniq([...(brain.icp?.excluded_company_types ?? []), ...(brain.icp?.avoid_company_types ?? [])]),
+    preferred_company_types: uniq(brain.icp?.company_types ?? []),
+    target_regions: target_geography,
+    excluded_regions: uniq(brain.icp?.excluded_regions ?? []),
+    funding_stage: uniq(brain.icp?.funding_stage ?? []),
+    company_stage: uniq([...(brain.icp?.company_stage ?? []), ...target_stage]),
+    company_model: uniq(brain.icp?.company_model ?? []),
+    remote_preference: brain.icp?.remote_preference ?? null,
+    tech_stack: uniq(brain.icp?.tech_stack ?? []),
+    competitor_keywords: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
+    buyer_roles: uniq(brain.icp?.buyer_roles ?? []),
+    allow_enterprise: brain.icp?.allow_enterprise ?? false,
+    clarification_needed: false,
+  };
+}
+
+/**
+ * The count this DTO shows when the Mission recorded none.
+ *
+ * Deliberately the same number as `leadMission.DEFAULT_REQUESTED_COUNT`, and
+ * deliberately not an import: this module is import-free apart from the role
+ * library, and the value is asserted equal by the projection's tests.
+ */
+export const DEFAULT_LEAD_INTENT_COUNT = 5;
 
 // ---------- SourceRouter ----------
 

@@ -56,12 +56,12 @@ Deno.test("the count readers were replaced by the Mission, not by another number
 });
 
 Deno.test("the card compiles its Mission with no count hint, then reads the count off it", () => {
+  assert(
+    /buildMissionForPrompt\(prompt,\s*null,/.test(PILOT),
+    "the card path must not feed a count back into compilation",
+  );
   const card = PILOT.slice(PILOT.indexOf("function buildHiringConfirmation"));
   const body = card.slice(0, card.indexOf("\n}\n") + 3);
-  assert(
-    /buildMissionForPrompt\(prompt,\s*null,/.test(body),
-    "the card must not feed a count back into compilation",
-  );
   assert(
     /effectiveRequestedCount\(mission\)/.test(body),
     "and must take its displayed count from the compiled Mission",
