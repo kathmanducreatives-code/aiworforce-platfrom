@@ -4,7 +4,7 @@
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { routeQualifiedLead } from "../_shared/qualifiedLeadRouting.ts";
+import { routeQualifiedLead, qualifiedLeadRouteFromMission } from "../_shared/qualifiedLeadRouting.ts";
 import {
   planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
 } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
@@ -1354,7 +1354,15 @@ Return ONLY valid JSON, no prose, no markdown:
     const firstStep = parsed!.steps[0];
     // DETERMINISTIC route from the user's own words — authoritative over the
     // planner/template, exactly as pilot-chat decides it.
-    const qlRoute = routeQualifiedLead(user_instruction ?? "");
+    // THE MISSION DECIDES THE ROUTE. This used to be
+    // `routeQualifiedLead(user_instruction)` — a phrase table re-reading the
+    // sentence to decide whether the user had asked for people to contact, after
+    // the Mission had already stated what they asked to RECEIVE. The two could
+    // disagree on the same words, and the kickoff body then carried the phrase
+    // table's answer as `workflow_kind` / `count_entity` / `quota_policy`.
+    const qlRoute = missionForRouting
+      ? qualifiedLeadRouteFromMission(missionForRouting)
+      : routeQualifiedLead(user_instruction ?? "");
     const qualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
     // THE COUNT COMES FROM THE MISSION, NOT FROM A SECOND READING OF THE
     // SENTENCE. This used to be `extractRequestedLeadCount(user_instruction) ?? 5`

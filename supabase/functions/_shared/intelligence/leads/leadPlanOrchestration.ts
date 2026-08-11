@@ -15,9 +15,11 @@
 // WHAT IT DOES NOT DO. It is not a planner, a router or a validator — it calls
 // the existing ones:
 //
-//   routeQualifiedLead            is this a qualified-Lead mission?
+//   qualifiedLeadRouteFromMission is this a qualified-Lead mission? (the
+//                                 phrase-table router only when no Mission)
 //   selectLeadPlannerAdapter      which ONE adapter owns this task
-//   compileLeadEntityIntent       the canonical Lead contract
+//   compileLeadEntityIntent       provider input (job keywords); its SEMANTIC
+//                                 half is overridden by the Mission below
 //   loadMissionContext            the bounded Company Brain projection
 //   applyLeadStrategyInitialPlanning  the GPT adapter, with its own schema,
 //                                 validator, escalation and fallback
@@ -33,11 +35,15 @@
 // plan it would have built before — which is what keeps every other workflow, and
 // every workspace that has not opted in, byte-identical.
 
-import { routeQualifiedLead } from "../../qualifiedLeadRouting.ts";
+import {
+  routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical,
+} from "../../qualifiedLeadRouting.ts";
 import { compileLeadEntityIntent } from "../../leadEntityIntent.ts";
 import { extractRequiredSignalTerms, type CompiledJobSearchSpec } from "../../jobSearchSpec.ts";
 import { loadMissionContext } from "../missionContext.ts";
-import type { LeadMissionV1 } from "../../leadMission.ts";
+import {
+  effectiveRequestedCount, DEFAULT_REQUESTED_COUNT, type LeadMissionV1,
+} from "../../leadMission.ts";
 import type { BrainDbClient } from "../../getCompiledCompanyBrainForWorkspace.ts";
 import {
   applyClaudeFirstLeadPlanning, isClaudeFirstLeadPlanningEnabled,
@@ -120,7 +126,14 @@ export interface PlanQualifiedLeadInput {
 export async function planQualifiedLeadBeforePersistence(
   input: PlanQualifiedLeadInput,
 ): Promise<QualifiedLeadPlanOutcome | null> {
-  const route = routeQualifiedLead(input.userInstruction);
+  // IS THIS A QUALIFIED-LEAD MISSION? The Mission answers it when one exists —
+  // it states what the user asked to RECEIVE. `routeQualifiedLead` reads the
+  // sentence, which is the right thing to do only BEFORE a Mission exists (it is
+  // what decides whether one is compiled) and a second opinion after.
+  const mission = input.leadMission ?? null;
+  const route = mission
+    ? qualifiedLeadRouteFromMission(mission)
+    : routeQualifiedLead(input.userInstruction);
   if (route.workflowKind !== "qualified_lead_sourcing") return null;
 
   // ══ THE ONE PLANNER CALL SITE ════════════════════════════════════════════
@@ -173,13 +186,32 @@ export async function planQualifiedLeadBeforePersistence(
   // there was nothing to compare against. This is additive-only: when
   // `job_search_spec` DID compile (the hiring-signal case this always
   // worked for), its own values win untouched.
-  const requiredSignalTerms = extractRequiredSignalTerms(input.userInstruction);
+  // ── THE MISSION'S OWN TERMS, WHEN IT HAS THEM ────────────────────────────
+  //
+  // `required_signal_terms` is the Mission's verbatim record of the role/signal
+  // words the user typed — the field that exists precisely because the mapping
+  // to a taxonomy key is where those words were being lost.
+  // `extractRequiredSignalTerms(userInstruction)` is a regex answering the same
+  // question, and survives only for a task carrying no Mission.
+  const missionSignalTerms = (mission?.required_signal_terms ?? []).filter(Boolean);
+  const missionRoles = (mission?.decision_makers?.roles ?? []).filter(Boolean);
+  const missionLocation = (mission?.company_profile?.locations ?? []).filter(Boolean)[0] ?? null;
+  const missionStage = (mission?.company_profile?.stages ?? []).filter(Boolean)[0] ?? null;
+
+  const requiredSignalTerms = missionSignalTerms.length
+    ? missionSignalTerms
+    : extractRequiredSignalTerms(input.userInstruction);
   const spec: CompiledJobSearchSpec & { required_signal_terms: string[] } = {
     ...intent.job_search_spec,
-    location: intent.job_search_spec.location ?? intent.geographies[0] ?? null,
-    requested_person_roles: intent.job_search_spec.requested_person_roles.length
-      ? intent.job_search_spec.requested_person_roles
-      : [...intent.person_roles],
+    // The Mission's geography and persona OUTRANK the compiled spec's: both are
+    // readings of the same sentence, and the Mission's is the one that was
+    // interpreted once and is executed everywhere else.
+    location: missionLocation ?? intent.job_search_spec.location ?? intent.geographies[0] ?? null,
+    requested_person_roles: missionRoles.length
+      ? missionRoles
+      : (intent.job_search_spec.requested_person_roles.length
+        ? intent.job_search_spec.requested_person_roles
+        : [...intent.person_roles]),
     // `keyword_queries` becomes `mission.requested_titles` (missionFromSpec)
     // and `artifact.approved_titles` for the fallback path (below,
     // `approved_titles = usedGpt ? ... : [...spec.keyword_queries]`) — the
@@ -193,14 +225,35 @@ export async function planQualifiedLeadBeforePersistence(
     required_signal_terms: requiredSignalTerms,
   };
 
+  // ── THE PERSISTED CONTRACT IS THE MISSION'S, NOT THE COMPILER'S ──────────
+  //
+  // This is the record run-agent executes and the plan row shows, and every
+  // semantic field in it used to come from `compileLeadEntityIntent(instruction)`
+  // — a second reading of the sentence, made in orchestrate, after pilot-chat had
+  // compiled a Mission from the same words and threaded it in. The count, the
+  // persona, the vertical, the stage, the geography and the employer requirement
+  // could all differ from what the Mission recorded, and the plan would then be
+  // planned and executed against the difference.
+  //
+  // The compiled intent still supplies what the Mission deliberately does not
+  // express: `keyword_queries` is provider input, and its own fallback is the
+  // Mission's verbatim signal terms.
   const contract: QualifiedLeadPlanContract = {
-    requestedCount: intent.requested_count ?? 5,
+    requestedCount: mission
+      ? effectiveRequestedCount(mission)
+      : (intent.requested_count ?? DEFAULT_REQUESTED_COUNT),
     decisionMakerRoles: [...spec.requested_person_roles],
     hiringRoles: [...spec.keyword_queries],
-    companyVertical: spec.company_vertical,
-    companyStage: intent.company_categories.find((c) => /seed|early|series|growth/i.test(c)) ?? null,
+    companyVertical: mission
+      ? (normalizeCompanyVertical(...(mission.company_profile?.verticals ?? [])) ?? spec.company_vertical)
+      : spec.company_vertical,
+    companyStage: mission
+      ? missionStage
+      : (intent.company_categories.find((c) => /seed|early|series|growth/i.test(c)) ?? null),
     geography: spec.location,
-    currentEmployerRequired: intent.company_gate_required,
+    currentEmployerRequired: mission
+      ? mission.decision_makers.current_employment_required
+      : intent.company_gate_required,
   };
 
   // The Company Brain the planner is allowed to see. A failure here is not fatal:
