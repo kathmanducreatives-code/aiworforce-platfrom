@@ -59,6 +59,11 @@ Deno.test("run-agent routes through the projection, from the persisted Mission",
   ).replace(/^[ \t]*\/\/.*$/gm, "");
   assert(/applyMissionEntityAuthority\(\s*compileLeadEntityIntent\(/.test(src),
     "the compiled DTO must be overlaid with the Mission before it is used for routing");
-  assert(/applyMissionEntityAuthority\([\s\S]{0,400}?readPersistedLeadMission\(/.test(src),
-    "and the overlay's source must be the persisted canonical Mission");
+  // The mission is now read ONCE into `routingMission` and shared with the
+  // provider-ambiguity guard, so the overlay's source is that binding rather
+  // than an inline call. Both must still trace to readPersistedLeadMission.
+  assert(/const routingMission = readPersistedLeadMission\(/.test(src),
+    "the routing mission must come from the persisted canonical Mission");
+  assert(/applyMissionEntityAuthority\([\s\S]{0,200}?routingMission,/.test(src),
+    "and the overlay must use it");
 });

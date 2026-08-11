@@ -30,7 +30,7 @@ import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_sh
 import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
-import { compileLeadEntityIntent, applyMissionEntityAuthority, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+import { compileLeadEntityIntent, applyMissionEntityAuthority, workflowTypeFromMission, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 // Compound-intent bridge: detect a company-first request + enforce the
 // verified-company CONTACT ceiling. Deterministic company-first sourcing +
 // verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
@@ -1140,9 +1140,11 @@ Deno.serve(async (req) => {
         // the persistable artifact, and the canonical Mission already answered
         // that from the same sentence. `applyMissionEntityAuthority` overlays the
         // Mission's answer, so execution stops re-interpreting the query.
+        const routingMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
         const entityIntent = applyMissionEntityAuthority(
           compileLeadEntityIntent(input ?? instruction ?? ""),
-          readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission),
+          routingMission,
         );
         routingEntityIntent = entityIntent;
         const ENTITY_SOURCE: Record<string, { source_type: string; actor_key: string }> = {
@@ -1154,8 +1156,16 @@ Deno.serve(async (req) => {
         if (byEntity && !entityIntent.clarification_required) {
           source_type = byEntity.source_type;
           derivedActorKey = byEntity.actor_key;
-        } else {
-          // Ambiguous entity — best-effort resolver on the ORIGINAL instruction.
+        } else if (!routingMission) {
+          // AMBIGUITY RESOLUTION, LEGACY PATH ONLY.
+          //
+          // This re-reads the instruction to guess a provider source. With a
+          // Mission that can no longer happen, and not by convention: the
+          // Mission decides `target_entity`, ENTITY_SOURCE has an entry for all
+          // three of its values, and `applyMissionEntityAuthority` clears
+          // `clarification_required` — so the branch above always takes it. The
+          // `!routingMission` guard makes that a rule rather than a coincidence
+          // that a future edit could quietly break.
           const resolvedSource = resolveProviderSource(input ?? instruction ?? "");
           if (resolvedSource) { source_type = resolvedSource.source_type; derivedActorKey = resolvedSource.actor_key; }
         }
@@ -4021,15 +4031,17 @@ Deno.serve(async (req) => {
             // Prefer the threaded LIE intent; else re-extract from the instruction so
             // gating still works when the confirmation card didn't thread an intent.
             const threadedIntent = (tool_input_body?.lead_intent ?? null) as { workflow_type?: string; source_type?: string; competitors?: string[]; target_company_type?: string[] } | null;
-            let reIntent: any = null;
-            if (!threadedIntent?.workflow_type) {
-              try {
-                const { extractLeadIntent } = await import("../_shared/leadIntent.ts");
-                reIntent = extractLeadIntent({ message: instruction ?? "", brain: brain ? { icp: (brain as any).icp, company: (brain as any).company } : null });
-              } catch { /* deterministic gate-kind fallback below */ }
-            }
+            // THE MISSION DECIDES THE WORKFLOW KIND, NOT A RE-READ.
+            //
+            // This used to re-run `extractLeadIntent` on the instruction when the
+            // confirmation card had threaded no intent — a third reading of the
+            // sentence, choosing which evidence gate applies to the run.
+            // `workflowTypeFromMission` projects it from fields the Mission has
+            // already decided and parses nothing.
+            const missionWorkflowType = workflowTypeFromMission(
+              readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission));
             const gateKind = sg.resolveGateKind({
-              workflow_type: threadedIntent?.workflow_type ?? reIntent?.workflow_type ?? null,
+              workflow_type: threadedIntent?.workflow_type ?? missionWorkflowType ?? null,
               raw_source_type,
               normalized_source_type: source_type,
               selected_actor_key: planned_actor_key,
@@ -4074,7 +4086,11 @@ Deno.serve(async (req) => {
             const back = (ok: Set<string>) => gatePool.filter((a: any) => ok.has(u(a.source_url)));
 
             const competitors: string[] = Array.isArray(tool_input_body?.competitors) ? (tool_input_body!.competitors as string[])
-              : (threadedIntent?.competitors ?? reIntent?.competitors ?? []);
+              // No re-extraction fallback: competitors came from a regex reading
+              // of the sentence, and the Mission has no competitor concept to
+              // project. An absent list is the honest answer, and the gate treats
+              // it as "no competitor constraint" rather than inventing one.
+              : (threadedIntent?.competitors ?? []);
             const topics = sg.topicTokens(`${apifyInput.query ?? ""} ${criteria.industry ?? ""}`, []);
             // Category is a HARD reject only when we have a clean, SPECIFIC term.
             // extractLeadIntent emits generic placeholders like "Companies" for
@@ -4083,7 +4099,12 @@ Deno.serve(async (req) => {
             // when nothing specific remains, rely on proof + role + dedupe (the
             // actor query already encodes the category, e.g. "recruiting agencies").
             const GENERIC_CAT = new Set(["companies", "company", "business", "businesses", "org", "orgs", "organization", "organizations", "organisation", "organisations", "people", "person", "leads", "prospects"]);
-            const categoryTerms = [criteria.category, criteria.industry, ...(threadedIntent?.target_company_type ?? reIntent?.target_company_type ?? [])]
+            // Company type from the MISSION's decided verticals, not from a
+            // re-read of the sentence.
+            const missionVerticals = readPersistedLeadMission(
+              tool_input_body, (body as Record<string, unknown>).lead_mission,
+            )?.company_profile?.verticals ?? [];
+            const categoryTerms = [criteria.category, criteria.industry, ...(threadedIntent?.target_company_type ?? missionVerticals)]
               .filter((c): c is string => !!c && !GENERIC_CAT.has(String(c).toLowerCase().trim()));
 
             if (gateKind === "people") {

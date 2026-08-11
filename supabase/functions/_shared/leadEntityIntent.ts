@@ -515,3 +515,28 @@ export function applyMissionEntityAuthority<T extends { target_entity: string; c
   // request down the "ask the user" branch on the strength of a regex's doubt.
   return { ...intent, target_entity: decided, clarification_required: false };
 }
+
+/**
+ * The lead workflow kind, PROJECTED from a decided Mission.
+ *
+ * `resolveGateKind` needs a workflow_type. run-agent used to obtain one by
+ * re-running `extractLeadIntent` on the instruction whenever the confirmation
+ * card had not threaded one — a third reading of the sentence, deciding which
+ * evidence gate applies.
+ *
+ * This derives it from fields the Mission has already decided. It contains no
+ * parsing: every branch reads a typed field, never text.
+ *
+ * Returns null when there is no Mission, so the caller keeps its existing
+ * behaviour on the deterministic-workspace path.
+ */
+export function workflowTypeFromMission(
+  mission: { target_entity?: string; requested_output?: string; required_signals?: Array<{ type: string }> } | null | undefined,
+): string | null {
+  if (!mission?.target_entity) return null;
+  if (mission.requested_output === "social_posts") return "linkedin_intent_sourcing";
+  if (mission.target_entity === "person") return "people_sourcing";
+  const hiring = (mission.required_signals ?? []).some((s) => String(s?.type ?? "").includes("hiring"));
+  if (mission.target_entity === "job" || hiring) return "company_hiring_sourcing";
+  return "company_icp_sourcing";
+}
