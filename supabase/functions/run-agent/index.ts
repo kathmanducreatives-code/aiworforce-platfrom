@@ -102,6 +102,9 @@ import {
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 import { missionHash } from "../_shared/leadMission.ts";
+import {
+  selectResearchPlaybooks, playbookSelectionSummary,
+} from "../_shared/leadResearchPlaybooks.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -1591,6 +1594,25 @@ Deno.serve(async (req) => {
           // detail: it is the only way carrier inference can still run.
           authority: persistedMission ? "lead_mission_v1" : "legacy_carrier_union",
         });
+
+        // ── WHICH RESEARCH PLAYBOOK THIS MISSION ASKS FOR ───────────────────
+        //
+        // OBSERVABILITY ONLY IN THIS PHASE. Nothing below routes on it: the
+        // capability graph above is still what executes. It is emitted here
+        // because `mission.strategies` — the model's declared research shape —
+        // had no consumer at all, so a mission asking to be researched through
+        // social posts or news was indistinguishable in the logs from one that
+        // asked for a company-profile search, and the shape that was never
+        // attempted left no trace.
+        //
+        // `unsupported` is the field to watch: it names the shapes this build
+        // cannot research yet, which is the input to the next phase.
+        if (persistedMission) {
+          console.log("[run-agent][playbook-selection]", {
+            task_id: task.id,
+            ...playbookSelectionSummary(selectResearchPlaybooks(persistedMission)),
+          });
+        }
 
         const routeUserRequest: string | null = persistedMission
           ? persistedMission.original_user_query
