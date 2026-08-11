@@ -105,6 +105,9 @@ import { missionHash } from "../_shared/leadMission.ts";
 import {
   selectResearchPlaybooks, playbookSelectionSummary,
 } from "../_shared/leadResearchPlaybooks.ts";
+import {
+  authorizePlaybookExecution, playbookAuthorizationSummary,
+} from "../_shared/leadPlaybookExecution.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -1597,20 +1600,31 @@ Deno.serve(async (req) => {
 
         // ── WHICH RESEARCH PLAYBOOK THIS MISSION ASKS FOR ───────────────────
         //
-        // OBSERVABILITY ONLY IN THIS PHASE. Nothing below routes on it: the
-        // capability graph above is still what executes. It is emitted here
-        // because `mission.strategies` — the model's declared research shape —
-        // had no consumer at all, so a mission asking to be researched through
-        // social posts or news was indistinguishable in the logs from one that
-        // asked for a company-profile search, and the shape that was never
-        // attempted left no trace.
+        // `mission.strategies` — the model's declared research shape — had no
+        // consumer at all before the playbook boundary, so a mission asking to
+        // be researched through social posts or news was indistinguishable in
+        // the logs from one asking for a company-profile search, and the shape
+        // that was never attempted left no trace.
         //
-        // `unsupported` is the field to watch: it names the shapes this build
-        // cannot research yet, which is the input to the next phase.
-        if (persistedMission) {
+        // The selection is computed once here and travels to the paid preflight
+        // as an AUTHORIZATION. See `authorizePlaybookExecution` for what it
+        // governs: a hiring-only selection, and nothing else in this phase.
+        const playbookSelection = persistedMission
+          ? selectResearchPlaybooks(persistedMission)
+          : null;
+        const playbookAuthorization = (persistedMission && playbookSelection)
+          ? authorizePlaybookExecution(playbookSelection, missionPlan, persistedMission)
+          : null;
+        if (playbookSelection) {
           console.log("[run-agent][playbook-selection]", {
             task_id: task.id,
-            ...playbookSelectionSummary(selectResearchPlaybooks(persistedMission)),
+            ...playbookSelectionSummary(playbookSelection),
+          });
+        }
+        if (playbookAuthorization) {
+          console.log("[run-agent][playbook-authorization]", {
+            task_id: task.id,
+            ...playbookAuthorizationSummary(playbookAuthorization),
           });
         }
 
@@ -1848,6 +1862,10 @@ Deno.serve(async (req) => {
             ? firstCall.compiled.errors : [],
           intelligence,
           contract: contractCheck,
+          // THE PLAYBOOK IS THE BOUNDARY. Inert for every mission the boundary
+          // does not govern — `applies:false` — which in this phase is
+          // everything except a hiring-only selection.
+          playbook: playbookAuthorization,
         });
         console.log("[run-agent][paid-preflight]", {
           task_id: task.id,

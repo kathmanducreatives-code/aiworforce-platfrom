@@ -30,6 +30,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { LeadMissionV1 } from "./leadMission.ts";
+import type { PlaybookAuthorization } from "./leadPlaybookExecution.ts";
 import type { LeadIntelligenceCapabilities } from "./leadIntelligencePolicy.ts";
 import type { ContractCompatibility } from "./leadRuntimeIdentity.ts";
 import {
@@ -73,7 +74,12 @@ export type PreflightBlockCode =
   | "inconsistent_intelligence_configuration"
   | "mission_compilation_failed"
   | "incompatible_planner_contract"
-  | "mission_not_model_compiled";
+  | "mission_not_model_compiled"
+  /**
+   * The scheduled plan does not execute the research playbook that was
+   * selected from the Mission. See `authorizePlaybookExecution`.
+   */
+  | "playbook_not_authorized";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -128,6 +134,15 @@ export interface BuildPreflightInput {
    * compatibility check simply does not apply.
    */
   contract?: ContractCompatibility | null;
+  /**
+   * The playbook boundary's verdict on this plan.
+   *
+   * Optional so every existing caller and test keeps working unchanged; absent
+   * means the boundary was not consulted and this check does not apply. When
+   * present and `applies: false` — every non-hiring mission in this phase — it
+   * is inert by construction.
+   */
+  playbook?: PlaybookAuthorization | null;
 }
 
 function isStartupMission(m: LeadMissionV1): boolean {
@@ -338,6 +353,20 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
       block("startup_mission_requires_memo23",
         `a startup mission's first paid provider must be apify_yc_companies_memo23, not "${provider}"`);
     }
+  }
+
+  // ── THE SELECTED PLAYBOOK MUST BE THE ONE ABOUT TO RUN ──────────────────
+  //
+  // `buildCapabilityGraph` chooses its entry from a mix of mission fields that
+  // predates the playbook vocabulary, so the two can disagree — and the shape
+  // of that disagreement is a run that reports success having discovered
+  // nothing, because the capability it entered at is one the engine skips.
+  //
+  // Inert unless the boundary GOVERNS the run, which in this phase means a
+  // hiring-only selection. Every other mission returns `applies: false` and
+  // reaches this line unchanged.
+  if (i.playbook?.applies && !i.playbook.authorized) {
+    block("playbook_not_authorized", i.playbook.reason);
   }
 
   const inputValid = i.firstProviderCompileOk !== false;

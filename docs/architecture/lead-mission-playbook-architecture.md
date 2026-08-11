@@ -1,10 +1,12 @@
 # Lead Mission → Research Playbook Architecture
 
-**Phase 2.5 — contract hardening. No execution behaviour changed.** The playbook
-boundary exists, is fully specified and is logged; nothing routes on it yet.
-Phase 3 owns the wiring.
+**Phase 3a — the supported hiring playbook is wired.** The playbook is now the
+explicit boundary between `LeadMissionV1` and execution, for the hiring shape
+only. `funding`, `social`, `news` and `multi_signal` are untouched: the boundary
+returns `applies: false` for them and their execution behaves exactly as before.
 
-Base: `a1dc649e` (Phase 2 playbook boundary) on `feat/lead-mission-v1`.
+Base: `a1dc649e` (Phase 2) → `c86df417` (Phase 2.5 hardening) on
+`feat/lead-mission-v1`.
 
 ---
 
@@ -25,9 +27,13 @@ PLAYBOOK CONTRACT (ResearchPlaybookSelection)
       ↓
 CAPABILITY REQUIREMENTS                  leadCapabilityGraph.ts
       ↓
-PROVIDER / ACTOR COVERAGE                leadCapabilityEngine.ts
+PLAYBOOK AUTHORIZATION                   leadPlaybookExecution.ts
+      ↓                                  (hiring only — see §6)
+PAID EXECUTION PREFLIGHT                 leadPaidExecutionPreflight.ts
       ↓
-READY FOR EXECUTION                      [Phase 3 — not wired]
+CAPABILITY EXECUTION                     leadCapabilityEngine.ts
+      ↓
+PROVIDER / ACTOR                         hiringActorCatalog.ts
 ```
 
 Four rules hold throughout, and each has a test:
@@ -237,10 +243,60 @@ neither its output entity nor its research shape can be executed.
 
 ---
 
-## 6. What this phase deliberately did not do
+## 6. The execution boundary (Phase 3a)
 
-- No playbook → execution wiring. The single call site in `run-agent` is a
-  `console.log`, and a test asserts no control flow depends on the selection.
+```
+LeadMissionV1
+     ↓
+selectResearchPlaybooks(mission)        → ResearchPlaybookSelection
+     ↓                                     buildCapabilityGraph(mission) → CapabilityPlan
+     ↓                                     ↓
+authorizePlaybookExecution(selection, plan, mission)
+     ↓
+PlaybookAuthorization  → buildPaidExecutionPreflight({ …, playbook })
+     ↓
+assertPaidExecutionAllowed → runCapabilityPlan
+```
+
+`authorizePlaybookExecution` (`leadPlaybookExecution.ts`) answers the last
+question before money moves: **is the plan about to execute the research shape
+that was selected?** It authorises; it does not route. The graph still builds the
+plan.
+
+### What it governs
+
+`applies: true` only for a **hiring-only** selection — `runnable === ["hiring"]`
+with nothing blocked. Every other mission gets `applies: false` and is inert.
+A *mixed* selection (hiring alongside an unsupported shape) is deliberately not
+governed either: deciding what to do about a half-answerable request is the next
+phase's question.
+
+### What it authorises
+
+| Plan entry | Verdict |
+|---|---|
+| `startup_company_discovery` / `general_company_discovery` | `playbook_discovery` — the playbook's own |
+| `known_company_resolution` when `known_companies` is non-empty | `mission_forced` — the mission demanded it |
+| `job_discovery` when `requested_output === "job_listings"` | `mission_forced` — postings are the answer |
+| anything else | **unauthorized** |
+
+Plus: every capability the playbook requires *and the plan schedules* must be
+engine-driven.
+
+### The divergence it catches
+
+A mission with `strategies: ["hiring"]` that also carries a funding signal and no
+compiled capabilities enters at `funding_signal_discovery` — which the engine
+**skips**. Before this boundary that run reported success having discovered
+nothing. It is now refused at the paid gate with `playbook_not_authorized`.
+
+That is a hiring-strategy mission being misrouted, not a change to funding
+execution: a mission whose *strategy* is funding is not governed at all.
+
+## 7. What this phase deliberately did not do
+
+- No execution for `funding`, `social`, `news` or `multi_signal`. A test asserts
+  the boundary adds no preflight block for any of them.
 - No change to `buildCapabilityGraph`. Its use of `job_signal_first` is recorded
   as a conflict, not removed — removing it changes execution.
 - No new capability, provider or Actor. Nothing was marked supported to make a
@@ -248,7 +304,7 @@ neither its output entity nor its research shape can be executed.
 
 ---
 
-## 7. Remaining decisions before Phase 3
+## 8. Remaining decisions before the next phase
 
 1. **Which shapes does Phase 3 make executable first?** Only `hiring` runs today.
    `supplied_company` is the cheapest to close (resolution of a supplied list is

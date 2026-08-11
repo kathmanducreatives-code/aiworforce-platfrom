@@ -504,22 +504,34 @@ Deno.test("selection performs no execution", () => {
   }
 });
 
-Deno.test("no execution behaviour is wired to the selection", () => {
+Deno.test("the selection reaches execution ONLY through the authorization boundary", () => {
+  // Phase 3a wired the supported hiring playbook in. The invariant is no longer
+  // "nothing consumes the selection" — it is that the ONE thing that consumes it
+  // is the boundary, and the boundary is what the paid gate reads.
   const RUN = Deno.readTextFileSync(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
-  const calls = [...RUN.matchAll(/selectResearchPlaybooks\(/g)].length;
-  assertEquals(calls, 1, "exactly one call site");
-  const i = RUN.indexOf("selectResearchPlaybooks(");
-  const context = RUN.slice(Math.max(0, i - 400), i + 200);
-  assert(
-    /console\.log\("\[run-agent\]\[playbook-selection\]"/.test(context),
-    "the only call site must be a log — Phase 3 owns the wiring",
+  assertEquals(
+    [...RUN.matchAll(/selectResearchPlaybooks\(/g)].length, 1,
+    "exactly one selection call site",
   );
-  // Nothing may branch on the selection yet.
+  assertEquals(
+    [...RUN.matchAll(/authorizePlaybookExecution\(/g)].length, 1,
+    "exactly one authorization call site",
+  );
+  assert(
+    /authorizePlaybookExecution\(playbookSelection, missionPlan, persistedMission\)/.test(RUN),
+    "the boundary compares the SELECTION against the PLAN the graph built",
+  );
+  assert(
+    /playbook: playbookAuthorization,/.test(RUN),
+    "and its verdict is what the paid preflight reads",
+  );
+  // The selection itself still routes nothing directly: no branch reads a
+  // playbook id out of it to pick a provider, capability or actor.
   assertFalse(
-    /if \([^)]*selectResearchPlaybooks/.test(RUN),
-    "no control flow may depend on the selection in this phase",
+    /if \([^)]*playbookSelection\.(runnable|playbooks)/.test(RUN),
+    "run-agent must not route on the selection directly — the boundary decides",
   );
 });
 
