@@ -15,7 +15,7 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
-import { separateIntent } from "../_shared/leadIntentModel.ts";
+import { separatedIntentFromMission } from "../_shared/leadIntentModel.ts";
 import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 import {
   isLeadMissionV1, parseLeadMissionDeterministic,
@@ -1289,13 +1289,29 @@ Return ONLY valid JSON, no prose, no markdown:
       return json({ error: "task_plan_insert_failed", details: planError?.message }, 500);
     }
 
-    // Phase A routing — for sourcing/lead intents, separate the request into
-    // persona / company profile / signal / role family and decide account_first vs
-    // profile_first. Threaded to run-agent as `lead_routing` (authoritative), and
-    // recorded on the plan for traceability. Pure / no provider call.
-    const leadRouting = (intent === "sourcing" || intent === "extraction")
+    // Phase A routing — persona / company profile / signal / role family, and
+    // account_first vs profile_first. Threaded to run-agent as `lead_routing`
+    // (authoritative), and recorded on the plan for traceability. Pure / no
+    // provider call.
+    //
+    // ── PROJECTED FROM THE MISSION, NOT RE-READ FROM THE SENTENCE ──────────
+    //
+    // This used to call `separateIntent(user_instruction)`, which ran its own
+    // persona table, signal phrase list and role-family matcher over the user's
+    // words — a second semantic reading of a sentence the Mission had already
+    // interpreted, whose answer then travelled downstream as "authoritative"
+    // routing. `separatedIntentFromMission` produces the same DTO from fields
+    // the Mission decided and parses nothing.
+    //
+    // `lead_mission` is always a LeadMissionV1 here: either the compiled one
+    // that arrived, or — for an explicitly deterministic workspace — the one
+    // derived above. There is no branch in which this re-reads the sentence.
+    const missionForRouting = isLeadMissionV1(lead_mission) ? lead_mission : null;
+    const leadRouting = ((intent === "sourcing" || intent === "extraction") && missionForRouting)
       ? (() => {
-          const si = separateIntent({ message: user_instruction, hardExclusions: (tool_input as { disqualifiers?: string[] } | null)?.disqualifiers ?? undefined });
+          const si = separatedIntentFromMission(missionForRouting, {
+            hardExclusions: (tool_input as { disqualifiers?: string[] } | null)?.disqualifiers ?? undefined,
+          });
           return {
             source_strategy: si.source_strategy,
             decision_maker_strategy: si.decision_maker_strategy,

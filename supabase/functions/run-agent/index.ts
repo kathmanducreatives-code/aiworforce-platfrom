@@ -20,7 +20,7 @@ import {
   type DirectLeadActionRequest,
 } from "../_shared/leadActionRequestContract.ts";
 import { classifyLeadOutcome, summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
-import { separateIntent } from "../_shared/leadIntentModel.ts";
+import { separateIntent, separatedIntentFromMission } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
@@ -3651,19 +3651,38 @@ Deno.serve(async (req) => {
           roleKeywords = leadIntentBody.role_keywords;
         }
 
-        // Phase A wiring — separate the request into persona / company profile /
-        // signal / role family and route it (account_first vs profile_first). Used
-        // to stamp per-lead run-trace + role exactness below; NEVER a provider call.
-        // orchestrate may thread an authoritative routing decision (lead_routing);
-        // otherwise we derive it here so gating still works without upstream wiring.
+        // Phase A wiring — persona / company profile / signal / role family, and
+        // the account_first vs profile_first route. Used to stamp per-lead
+        // run-trace + role exactness below; NEVER a provider call. orchestrate
+        // may thread an authoritative routing decision (lead_routing).
+        //
+        // ── PROJECTED FROM THE MISSION WHEN THERE IS ONE ────────────────────
+        //
+        // This used to call `separateIntent(instruction ?? normalizedQuery)`,
+        // which re-read the request — and worse, read `normalizedQuery`, the
+        // PLANNER-REWRITTEN string, whenever no instruction was set. That is the
+        // 8af17651 failure shape exactly: a rewrite deciding what the user meant.
+        // With a Mission the DTO is a projection of decided fields.
+        //
+        // The text path survives only for a task carrying NO mission at all — a
+        // direct legacy invocation. Under `new_architecture` that cannot happen:
+        // the paid preflight refuses to spend on a missionless run.
         const threadedRouting = (body as { lead_routing?: { source_strategy?: string; requested_role_family?: string | null } }).lead_routing ?? null;
-        const separatedIntent = separateIntent({
-          message: instruction ?? normalizedQuery ?? "",
-          brain: (brain as any)?.icp
-            ? { industries: (brain as any).icp.industries, disqualifiers: (brain as any).icp.disqualifiers, geography: (brain as any).icp.geography, buyer_roles: (brain as any).icp.buyer_roles }
-            : null,
-          hardExclusions: leadIntentBody?.disqualifiers ?? undefined,
-        });
+        const routingBrain = (brain as any)?.icp
+          ? { industries: (brain as any).icp.industries, disqualifiers: (brain as any).icp.disqualifiers, geography: (brain as any).icp.geography, buyer_roles: (brain as any).icp.buyer_roles }
+          : null;
+        const separationMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        const separatedIntent = separationMission
+          ? separatedIntentFromMission(separationMission, {
+            brain: routingBrain,
+            hardExclusions: leadIntentBody?.disqualifiers ?? undefined,
+          })
+          : separateIntent({
+            message: instruction ?? normalizedQuery ?? "",
+            brain: routingBrain,
+            hardExclusions: leadIntentBody?.disqualifiers ?? undefined,
+          });
         // Requested hiring role family: prefer the threaded lead_intent (explicit),
         // else the separated intent's detection. Drives per-lead role exactness.
         const threadedFamily: RoleFamily | null = (() => {

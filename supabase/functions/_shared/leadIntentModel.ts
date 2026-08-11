@@ -10,13 +10,20 @@
 
 // ── R1 CLASSIFICATION: COMPATIBILITY ────────────────────────────────────────
 //
-// Live non-test callers: run-agent/index.ts, orchestrate/index.ts. Same split as
-// leadIntent.ts: the persona/target extraction duplicates what the Mission now
-// carries, while the source-strategy routing is code's own decision and stays.
+// `separateIntent` READS THE USER'S SENTENCE. Under the compiled-mission
+// architecture that is no longer allowed to decide anything: the canonical
+// LeadMissionV1 already answers persona, signal and role family, once, from the
+// same sentence. `separatedIntentFromMission` below PROJECTS this same DTO out
+// of those decided fields, and both live callers (orchestrate, run-agent) use
+// the projection whenever a Mission exists.
 //
-// DELETE-LATER applies to the extraction half only, after R2. Not dead today.
+// The text-reading function survives for tasks that carry NO Mission at all —
+// a direct legacy run-agent invocation, or a workspace deliberately on the
+// deterministic path before orchestrate derives one. It is never a fallback for
+// a FAILED compilation: that case refuses (pilot-chat) or 422s (orchestrate).
 
-import { requestedRoleFamily, type RoleFamily } from "./roleFamilyMatcher.ts";
+import { requestedRoleFamily, classifyRoleFamily, type RoleFamily } from "./roleFamilyMatcher.ts";
+import { effectiveRequestedCount } from "./leadMission.ts";
 
 export type SourceStrategy = "account_first" | "profile_first";
 export type DecisionMakerStrategy = "resolve_after_account" | "direct_lookup" | "none";
@@ -131,3 +138,157 @@ export function separateIntent(opts: { message: string; brain?: BrainForIntent |
     },
   };
 }
+
+// ── THE SAME DTO, PROJECTED FROM THE CANONICAL MISSION ──────────────────────
+//
+// Every semantic field below reads a field the Mission ALREADY DECIDED. There is
+// no parsing here: no regular expression, no keyword table, and the user's
+// sentence is touched only to be copied onto `original_query`, which exists so a
+// run trace can show what was asked — never so this module can re-read it.
+//
+// Structurally typed rather than importing `LeadMissionV1`, matching
+// `workflowTypeFromMission` in leadEntityIntent.ts: the projection depends on the
+// four fields it names and on nothing else about the mission's shape.
+
+export interface MissionForSeparation {
+  original_user_query?: string;
+  mission_type?: string;
+  requested_count?: number | null;
+  company_profile?: {
+    verticals?: string[];
+    locations?: string[];
+    employee_range?: { min?: number; max?: number };
+    known_companies?: string[];
+  };
+  required_signals?: Array<{ type?: string; role_families?: string[] } | null>;
+  required_signal_terms?: string[];
+  decision_makers?: { roles?: string[] };
+  strategies?: string[];
+  geography_is_hard?: boolean;
+  no_broadening_requested?: boolean;
+}
+
+/**
+ * A taxonomy key ("sales_ops", "rev-ops") in the words the matcher speaks.
+ *
+ * `classifyRoleFamily` matches title PHRASES, so an underscored key never hits
+ * its patterns. This normalises punctuation in an already-decided key; it does
+ * not interpret free text.
+ */
+function familyKeyAsPhrase(key: string): string {
+  return String(key ?? "").replace(/[_-]+/g, " ").trim();
+}
+
+/**
+ * Project the SeparatedIntent DTO out of a decided Mission.
+ *
+ * Field-by-field authority:
+ *   target_personas            ← decision_makers.roles
+ *   requested_signal           ← required_signals (present ⇒ required)
+ *   requested_role_family      ← required_signals[].role_families,
+ *                                then required_signal_terms
+ *   geography                  ← company_profile.locations + geography_is_hard
+ *   source_strategy            ← whether the request SUPPLIED its companies
+ *                                (known_companies / known_company_enrichment /
+ *                                the supplied_company strategy), which is the
+ *                                mission's way of saying discovery is skipped
+ *   decision_maker_strategy    ← source_strategy + target_personas
+ *   relaxation_policy          ← geography_is_hard, the role family, and the
+ *                                mission's own no_broadening_requested
+ *   result_limit               ← effectiveRequestedCount(), the ONE runtime
+ *                                default; no sentence is re-read for a count
+ *
+ * `hardExclusions` and `brain` are workspace/step configuration, not readings of
+ * the request, and are carried through exactly as `separateIntent` carries them.
+ */
+export function separatedIntentFromMission(
+  mission: MissionForSeparation,
+  opts: { brain?: BrainForIntent | null; hardExclusions?: string[] } = {},
+): SeparatedIntent {
+  const brain = opts.brain ?? null;
+
+  const target_personas = [...new Set(
+    (mission.decision_makers?.roles ?? []).map((r) => String(r ?? "").trim()).filter(Boolean),
+  )];
+
+  const signals = (mission.required_signals ?? []).filter(Boolean);
+  const requested_signal: SeparatedIntent["requested_signal"] =
+    signals.length > 0 ? "required" : "none";
+
+  // The role family the request named, from the mission's own record of it:
+  // the taxonomy keys it attached to a signal first, then the literal words the
+  // user typed which the mission preserved verbatim.
+  const familyCandidates = [
+    ...signals.flatMap((s) => s?.role_families ?? []),
+    ...(mission.required_signal_terms ?? []),
+  ];
+  let requested_role_family: RoleFamily | null = null;
+  for (const candidate of familyCandidates) {
+    const f = classifyRoleFamily(familyKeyAsPhrase(candidate));
+    if (f !== "other") { requested_role_family = f; break; }
+  }
+  const role_exactness: SeparatedIntent["role_exactness"] =
+    requested_role_family ? "hard" : "none";
+
+  const locations = [...new Set(
+    (mission.company_profile?.locations ?? []).map((l) => String(l ?? "").trim()).filter(Boolean),
+  )];
+  // Absent, `geography_is_hard` is unstated rather than false: a named location
+  // that no one marked soft is still a constraint, which is what `separateIntent`
+  // concluded too.
+  const geoHard = mission.geography_is_hard ?? locations.length > 0;
+
+  // DISCOVERY SKIPPED ⇒ profile-first. This is the mission's version of the
+  // "profiles of the founders at Acme and Globex" lookup: the companies came
+  // with the request, so there is no account search to run first.
+  const suppliedCompanies =
+    (mission.company_profile?.known_companies ?? []).length > 0 ||
+    mission.mission_type === "known_company_enrichment" ||
+    (mission.strategies ?? []).includes("supplied_company");
+  const source_strategy: SourceStrategy = suppliedCompanies ? "profile_first" : "account_first";
+  const decision_maker_strategy: DecisionMakerStrategy = suppliedCompanies
+    ? "direct_lookup"
+    : (target_personas.length ? "resolve_after_account" : "none");
+
+  const evidence_requirements = ["company_identity", "source_url"];
+  if (requested_signal === "required") {
+    evidence_requirements.push("company_level_signal", "signal_evidence_url");
+  }
+  if (requested_role_family) evidence_requirements.push("exact_role_family_job_post");
+  if (decision_maker_strategy !== "none") evidence_requirements.push("decision_maker_profile_url");
+
+  const hard_exclusions = [...new Set([
+    ...(opts.hardExclusions ?? []), ...(brain?.disqualifiers ?? []),
+  ])];
+
+  const verticals = (mission.company_profile?.verticals ?? []).filter(Boolean);
+  const employeeRange = mission.company_profile?.employee_range;
+
+  const noBroadening = mission.no_broadening_requested === true;
+
+  return {
+    original_query: String(mission.original_user_query ?? ""),
+    target_personas,
+    target_company_profile: {
+      categories: verticals.length ? verticals : (brain?.industries ?? []),
+      ...(employeeRange ? { company_size: employeeRange } : {}),
+    },
+    requested_signal,
+    requested_role_family,
+    role_exactness,
+    geography: { values: locations, hard: geoHard },
+    hard_exclusions,
+    evidence_requirements,
+    source_strategy,
+    decision_maker_strategy,
+    result_limit: Math.max(1, Math.min(50, effectiveRequestedCount({
+      requested_count: mission.requested_count ?? null,
+    }))),
+    relaxation_policy: {
+      geography: (noBroadening || geoHard) ? "never" : "last_resort",
+      role_family: (requested_role_family && !noBroadening) ? "adjacent_watch_only" : "never",
+      size: noBroadening ? "hard" : "soft",
+    },
+  };
+}
+
