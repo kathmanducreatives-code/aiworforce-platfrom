@@ -213,3 +213,53 @@ export async function runAdaptiveSourcing(opts: {
     needs_permission_to_broaden: ev.status === "partial" && lastTerminalStrict,
   };
 }
+
+// ── THE SAME FLAGS, FROM THE MISSION'S DECIDED FIELDS ───────────────────────
+//
+// `parseStrictConstraints` scans the sentence for "only", "strictly", "do not
+// broaden" and a location-token list to decide whether the geography, the
+// industry and the stage are HARD filters. Those are constraints the canonical
+// Mission already carries — `geography_is_hard` and `no_broadening_requested`
+// exist precisely so this stops being a phrase-matching question — and the two
+// readings could disagree on the same words while the gates enforced the
+// regex's answer.
+
+export interface MissionForStrictConstraints {
+  company_profile?: { locations?: string[]; verticals?: string[]; stages?: string[] };
+  geography_is_hard?: boolean;
+  no_broadening_requested?: boolean;
+}
+
+/**
+ * Hard-filter flags projected from a decided Mission.
+ *
+ * A geography the Mission STATED is hard unless it explicitly said otherwise —
+ * the same rule the text version applied to a named geography, decided once
+ * upstream instead of re-matched here. An explicit "do not broaden" locks
+ * industry and stage as well, and makes the count exact.
+ */
+export function strictConstraintsFromMission(
+  mission: MissionForStrictConstraints,
+): StrictConstraints {
+  const noBroaden = mission.no_broadening_requested === true;
+  const locations = (mission.company_profile?.locations ?? [])
+    .map((l) => String(l ?? "").trim()).filter(Boolean);
+  return {
+    location: noBroaden || (locations.length > 0 && (mission.geography_is_hard ?? true)),
+    industry: noBroaden,
+    stage: noBroaden,
+    count_exact: noBroaden,
+  };
+}
+
+/**
+ * Attempt budget from the flags alone.
+ *
+ * `resolveMaxAttempts` also re-scans the message for "high quality"/"exact
+ * fill"; with a Mission the exactness question is already answered by
+ * `count_exact`, and re-reading the sentence to second-guess it is the pattern
+ * this cleanup removes.
+ */
+export function maxAttemptsFromStrict(strict: StrictConstraints): number {
+  return strict.count_exact ? 5 : 3;
+}

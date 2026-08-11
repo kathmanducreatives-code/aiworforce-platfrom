@@ -3536,6 +3536,22 @@ Deno.serve(async (req) => {
       }
 
       if (shouldRun) {
+        // THE MISSION FOR THIS SOURCING RUN, READ ONCE.
+        //
+        // Everything below that used to fall back to a regex over the
+        // instruction — the geography, the role keywords, the strict-constraint
+        // flags, the Scout query plan, the separated routing intent — reads this
+        // instead when the task carries one. Null means a legacy missionless
+        // task, where parsing the instruction is the only reading available.
+        const sourcingMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        const missionLocations = (sourcingMission?.company_profile?.locations ?? [])
+          .map((l) => String(l ?? "").trim()).filter(Boolean);
+        const missionRoleTerms = [
+          ...(sourcingMission?.required_signal_terms ?? []),
+          ...(sourcingMission?.required_signals ?? []).flatMap((sg) => sg?.role_families ?? []),
+        ].map((t) => String(t ?? "").replace(/[_-]+/g, " ").trim()).filter(Boolean);
+
         let location: string | null = tool_input_body?.location ?? null;
         // Structured Scout query plan (Parts 3/5): precise multi-queries + split
         // locations + match tiers. Null for vague requests → legacy keyword path.
@@ -3547,10 +3563,22 @@ Deno.serve(async (req) => {
           : 5; // QA-safe default — never silently source 25.
 
         if (!location) {
+          // The Mission's decided geography first. The `in <Place>` scan below is
+          // a reading of the sentence and answers only for a missionless task.
+          location = missionLocations[0] ?? null;
+        }
+        if (!location && !sourcingMission) {
           const locMatch = (instruction ?? "").match(/\bin\s+([A-Z][A-Za-z\s\-]+?)(?:[.,]|$)/);
           location = locMatch?.[1]?.trim() ?? null;
         }
-        if (roleKeywords.length === 0) {
+        if (roleKeywords.length === 0 && missionRoleTerms.length > 0) {
+          // WHAT ROLE TO SEARCH FOR, AS THE MISSION RECORDED IT — its verbatim
+          // signal terms and the role families it attached to a signal. The
+          // keyword scan below reads the sentence for the same thing and answers
+          // only for a missionless task.
+          roleKeywords = [...new Set(missionRoleTerms)];
+        }
+        if (roleKeywords.length === 0 && !sourcingMission) {
           // Multi-word assistant/support tokens are listed before bare
           // "assistant"/"admin" so "executive assistant" is captured as one
           // phrase. roleAliases() then expands any support role to the full
@@ -3590,8 +3618,11 @@ Deno.serve(async (req) => {
           const plannerSchema = getActorInputSchema(planned_actor_key);
           if (plannerSchema) {
             const { planActorInput } = await import("../_shared/actorInputPlanner.ts");
-            const { parseStrictConstraints: _psc } = await import("../_shared/sourcingRetry.ts");
-            const strictForPlan = _psc(instruction ?? "");
+            const { parseStrictConstraints: _psc, strictConstraintsFromMission: _scfm } =
+              await import("../_shared/sourcingRetry.ts");
+            const strictForPlan = sourcingMission
+              ? _scfm(sourcingMission)
+              : _psc(instruction ?? "");
             const postUrls = Array.isArray((plannedUserInput?.postUrls)) ? plannedUserInput!.postUrls as string[]
               : ((instruction ?? "").match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/[^\s)"']+/ig) ?? []);
             const planRes = await planActorInput({
@@ -3683,8 +3714,7 @@ Deno.serve(async (req) => {
         const routingBrain = (brain as any)?.icp
           ? { industries: (brain as any).icp.industries, disqualifiers: (brain as any).icp.disqualifiers, geography: (brain as any).icp.geography, buyer_roles: (brain as any).icp.buyer_roles }
           : null;
-        const separationMission = readPersistedLeadMission(
-          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        const separationMission = sourcingMission;
         const separatedIntent = separationMission
           ? separatedIntentFromMission(separationMission, {
             brain: routingBrain,
@@ -3802,9 +3832,24 @@ Deno.serve(async (req) => {
         // relax stage/location and retry until the requested count is met (or
         // caps / strict constraints / a tool failure stop it). Items are
         // validated, deduped across attempts, and capped at the requested count.
-        const { runAdaptiveSourcing, parseStrictConstraints, resolveMaxAttempts } = await import("../_shared/sourcingRetry.ts");
-        const strict = parseStrictConstraints(instruction ?? "");
-        const maxAttempts = resolveMaxAttempts(instruction ?? "", strict);
+        const {
+          runAdaptiveSourcing, parseStrictConstraints, resolveMaxAttempts,
+          strictConstraintsFromMission, maxAttemptsFromStrict,
+        } = await import("../_shared/sourcingRetry.ts");
+        // HARD FILTERS COME FROM DECIDED FLAGS, NOT FROM PHRASES.
+        //
+        // `parseStrictConstraints` scans the sentence for "only", "strictly",
+        // "do not broaden" and a location-token list to decide whether the
+        // geography, the industry and the stage are hard filters — constraints
+        // the Mission already carries as `geography_is_hard` and
+        // `no_broadening_requested`. Those flags exist precisely so this stops
+        // being a phrase-matching question.
+        const strict = sourcingMission
+          ? strictConstraintsFromMission(sourcingMission)
+          : parseStrictConstraints(instruction ?? "");
+        const maxAttempts = sourcingMission
+          ? maxAttemptsFromStrict(strict)
+          : resolveMaxAttempts(instruction ?? "", strict);
         const criteria = {
           requested: max_results,
           role: roleKeywords[0] ?? null,
