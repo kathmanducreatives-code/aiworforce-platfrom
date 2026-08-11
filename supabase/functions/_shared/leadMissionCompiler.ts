@@ -728,12 +728,16 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   // `validateLeadMission` accepts up to 500 because it also serves other callers.
   // This product supports 100, and a mission that says otherwise would spend a
   // whole run discovering the limit.
-  if (mission.requested_count > MAX_REQUESTED_OPPORTUNITIES) {
+  // Null means the request stated no count — there is nothing to cap, and
+  // substituting the default here would re-erase the distinction the nullable
+  // field exists to preserve. Execution applies the default via
+  // `effectiveRequestedCount`.
+  if (mission.requested_count != null && mission.requested_count > MAX_REQUESTED_OPPORTUNITIES) {
     changes.push(
       `requested_count_capped:${mission.requested_count}->${MAX_REQUESTED_OPPORTUNITIES}`);
     mission = { ...mission, requested_count: MAX_REQUESTED_OPPORTUNITIES };
   }
-  if (mission.requested_count < MIN_REQUESTED_OPPORTUNITIES) {
+  if (mission.requested_count != null && mission.requested_count < MIN_REQUESTED_OPPORTUNITIES) {
     changes.push(
       `requested_count_raised:${mission.requested_count}->${MIN_REQUESTED_OPPORTUNITIES}`);
     mission = { ...mission, requested_count: MIN_REQUESTED_OPPORTUNITIES };

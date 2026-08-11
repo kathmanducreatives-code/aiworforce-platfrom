@@ -78,7 +78,64 @@ export type RequestedOutput =
   | "contact_ready_leads"
   | "qualified_companies"
   | "job_listings"
-  | "enriched_companies";
+  | "enriched_companies"
+  /**
+   * Social posts/comments as the requested artefact — "find LinkedIn posts
+   * where founders complain about outbound".
+   *
+   * R1's gold fixture `social-01` had to record `output_intent: null` because
+   * the contract could not express this, and noted that picking the nearest
+   * wrong value is how a request with no executable provider becomes a
+   * confident plan. The value exists now so the mission can state the request
+   * honestly. It does NOT imply a provider exists: discovery for it is R3.
+   */
+  | "social_posts";
+
+/**
+ * HOW an opportunity is discovered and proven — not where the pipeline starts.
+ *
+ * Deliberately NOT `company_first`/`person_first`/`job_first`. That enum
+ * described which entity the pipeline happened to touch first, which is an
+ * implementation detail of one execution path; these describe the RESEARCH
+ * SHAPE, which is what the user's sentence actually determines and what the
+ * model can reason about.
+ *
+ * `multi_signal` is not a catch-all: it means the request requires two or more
+ * of the others to hold TOGETHER (eval case `multi-01`, "recently funded AND
+ * hiring SDRs"), which is a different question from either alone.
+ *
+ * Final output is always normalised to a COMPANY regardless of strategy.
+ */
+export const MISSION_STRATEGIES = [
+  "hiring",
+  "funding",
+  "social",
+  "news",
+  "supplied_company",
+  "multi_signal",
+] as const;
+export type MissionStrategy = typeof MISSION_STRATEGIES[number];
+
+export function isMissionStrategy(s: string): s is MissionStrategy {
+  return (MISSION_STRATEGIES as readonly string[]).includes(s);
+}
+
+/**
+ * The count used for execution when the request states none.
+ *
+ * Separate from `requested_count` on purpose: the mission records what the USER
+ * asked for, and null means they asked for nothing. Execution still needs a
+ * number, so it applies this — see {@link effectiveRequestedCount}. Collapsing
+ * the two is what made "the user said 5" indistinguishable from "we assumed 5".
+ */
+export const DEFAULT_REQUESTED_COUNT = 5;
+
+/** The number execution should use. Applies the default only when none was asked for. */
+export function effectiveRequestedCount(
+  m: Pick<LeadMissionV1, "requested_count">,
+): number {
+  return m.requested_count ?? DEFAULT_REQUESTED_COUNT;
+}
 
 export interface MissionSignal {
   /** e.g. "hiring", "funding", "expansion", "leadership_change", "technology". */
@@ -154,11 +211,26 @@ export interface LeadMissionV1 {
   mission_type: MissionType;
   target_entity: TargetEntity;
   requested_output: RequestedOutput;
-  requested_count: number;
+  /**
+   * What the USER asked for. NULL means they asked for no particular number.
+   *
+   * Was non-nullable, which made "the user said 5" and "we assumed 5"
+   * indistinguishable in the contract — `field_provenance.requested_count` was
+   * the only place the difference survived, and nothing downstream read it.
+   * Execution applies {@link DEFAULT_REQUESTED_COUNT} via
+   * {@link effectiveRequestedCount}; the mission keeps the honest answer.
+   */
+  requested_count: number | null;
 
   company_profile: MissionCompanyProfile;
   required_signals: MissionSignal[];
   decision_makers: MissionDecisionMakers;
+  /**
+   * How this opportunity is to be discovered and proven. Empty means the model
+   * proposed none and execution falls back to whatever the capability graph
+   * derives from signals — the pre-R2 behaviour, unchanged.
+   */
+  strategies?: MissionStrategy[];
 
   hard_constraints: Record<string, unknown>;
   soft_preferences: Record<string, unknown>;
@@ -450,7 +522,10 @@ export function parseLeadMissionDeterministic(
     mission_type,
     target_entity,
     requested_output,
-    requested_count: explicitCount ?? 5,
+    // NULL when the request stated no count. Execution applies
+    // DEFAULT_REQUESTED_COUNT via effectiveRequestedCount(); baking it in here
+    // would report a number the user never asked for as though they had.
+    requested_count: explicitCount,
     company_profile: {
       business_models: [],
       verticals,
@@ -486,6 +561,7 @@ const MISSION_TYPES: readonly MissionType[] = [
 ];
 export const REQUESTED_OUTPUTS: readonly RequestedOutput[] = [
   "contact_ready_leads", "qualified_companies", "job_listings", "enriched_companies",
+  "social_posts",
 ];
 
 function strArray(x: unknown): string[] {
@@ -529,10 +605,19 @@ export function validateLeadMission(
   const requested_output = REQUESTED_OUTPUTS.includes(c.requested_output) ? c.requested_output : base.requested_output;
   if (requested_output !== c.requested_output) repairs.push(`requested_output_repaired:${String(c.requested_output)}->${requested_output}`);
 
-  const nRaw = Number(c.requested_count);
-  const requested_count = Number.isFinite(nRaw) && nRaw > 0 && nRaw <= 500
-    ? Math.trunc(nRaw) : base.requested_count;
-  if (requested_count !== nRaw) repairs.push(`requested_count_repaired:${String(c.requested_count)}->${requested_count}`);
+  // An explicit null is a STATEMENT ("no count requested"), not a malformed
+  // number, and must pass through without a repair entry.
+  let requested_count: number | null;
+  if (c.requested_count === null) {
+    requested_count = null;
+  } else {
+    const nRaw = Number(c.requested_count);
+    requested_count = Number.isFinite(nRaw) && nRaw > 0 && nRaw <= 500
+      ? Math.trunc(nRaw) : base.requested_count;
+    if (requested_count !== nRaw) {
+      repairs.push(`requested_count_repaired:${String(c.requested_count)}->${requested_count}`);
+    }
+  }
 
   // CAPABILITIES: names only, never provider ids.
   const rawCaps = strArray(c.required_capabilities);
@@ -615,6 +700,18 @@ export function validateLeadMission(
     field_provenance: prov,
     confidence: Number.isFinite(Number(c.confidence))
       ? Math.min(1, Math.max(0, Number(c.confidence))) : 0.7,
+
+    // R2: research strategies. Unknown values are DROPPED and named rather than
+    // passed through — a strategy the executor cannot route is a plan for work
+    // that will not happen.
+    ...(() => {
+      const raw = strArray(c.strategies);
+      const kept = raw.filter(isMissionStrategy);
+      for (const s of raw) {
+        if (!isMissionStrategy(s)) repairs.push(`unknown_strategy_dropped:${s}`);
+      }
+      return kept.length ? { strategies: kept } : {};
+    })(),
 
     // R1 constraint carry-through. Omitted rather than defaulted when the
     // candidate did not state them: absent means "not stated", and writing

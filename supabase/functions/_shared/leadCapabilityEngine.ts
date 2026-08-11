@@ -107,7 +107,7 @@ import { guardedInvoker } from "./leadMissionRuntime.ts";
 import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
-import { missionHash, type LeadMissionV1 } from "./leadMission.ts";
+import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./leadMission.ts";
 
 export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1" as const;
 
@@ -1025,7 +1025,7 @@ export async function runCapabilityPlan(
       applyPrequalification(state, companies, rawYcRows, {
         min: opts.brain?.employee_min ?? null,
         max: opts.brain?.employee_max ?? null,
-      }, opts.mission.requested_count,
+      }, effectiveRequestedCount(opts.mission),
         // STAGE 2 CAN USE MORE COMPANIES, so it is allowed to pay to resolve
         // more. Bounded by the evaluation ceiling, and unchanged when Stage 2
         // is off — every identity and enrichment call comes out of this number.
@@ -1964,7 +1964,7 @@ export async function runCapabilityPlan(
       if (!outOfTime) {
         try {
           ranking = await deps.rankPool({
-            summaries, requestedCount: opts.mission.requested_count,
+            summaries, requestedCount: effectiveRequestedCount(opts.mission),
             unevaluatedCount: unevaluated,
           });
         } catch (e) {
@@ -1991,7 +1991,7 @@ export async function runCapabilityPlan(
         ? "ranking computed in shadow mode; deterministic order shipped"
         : "shadow mode; no ranking was produced to compare")
       : ranking ?? validatePoolRanking({
-        raw: null, summaries, requestedCount: opts.mission.requested_count,
+        raw: null, summaries, requestedCount: effectiveRequestedCount(opts.mission),
       });
     // Computed in shadow only. Under enforce the ranking IS the order, so a
     // comparison against a hypothetical deterministic one would describe
@@ -1999,7 +1999,7 @@ export async function runCapabilityPlan(
     const rankingShadow = shadowing
       ? buildRankingShadowComparison({
         proposed: ranking, deterministic: validated, summaries,
-        requestedCount: opts.mission.requested_count,
+        requestedCount: effectiveRequestedCount(opts.mission),
       })
       : null;
     if (rankingShadow) {
@@ -2022,7 +2022,7 @@ export async function runCapabilityPlan(
       composition_changed: compositionChanged,
       delivery: applyPortfolioPolicy({
         ranking: validated, summaries,
-        requestedCount: opts.mission.requested_count,
+        requestedCount: effectiveRequestedCount(opts.mission),
         eligibleCount: poolState.pool.eligible.length,
         unevaluatedCount: unevaluated,
       }),
