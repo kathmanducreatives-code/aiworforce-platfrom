@@ -167,6 +167,23 @@ export interface GptMissionProposal {
  * "Prefer the startup cohort" is a judgement about the query. "Prefer memo23" is
  * a procurement decision, and the model does not make those. Anything outside
  * this list is dropped and named.
+ *
+ * ── NOT THE RESEARCH SHAPE. THAT IS `MISSION_STRATEGIES`. ──────────────────
+ *
+ * This is an EXECUTION PREFERENCE: which approved source to reach for first,
+ * for a shape that has already been chosen. Three of the five values imply no
+ * shape at all, which is what an execution hint should look like.
+ *
+ * The other two are close enough to a shape to be mistaken for one, and one of
+ * them — `job_signal_first` — is read by `buildCapabilityGraph` when it picks an
+ * entry capability. That is the second routing authority the playbook phase
+ * exists to retire: a mission may declare `strategies: ["funding"]` while its
+ * directives say `job_signal_first`, and the graph would route the hiring shape
+ * with nothing recording the disagreement.
+ *
+ * `selectResearchPlaybooks` does NOT read this to select. It reports the
+ * disagreement as a `routing_conflicts` entry so the graph's use of it can be
+ * retired against measured data. See `SOURCE_STRATEGY_IMPLIED_SHAPE`.
  */
 export const SOURCE_STRATEGIES = [
   "startup_cohort_first",

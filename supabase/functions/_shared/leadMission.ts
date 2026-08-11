@@ -105,6 +105,24 @@ export type RequestedOutput =
  * hiring SDRs"), which is a different question from either alone.
  *
  * Final output is always normalised to a COMPANY regardless of strategy.
+ *
+ * ── THIS IS THE CANONICAL RESEARCH VOCABULARY ──────────────────────────────
+ *
+ * `leadResearchPlaybooks.selectResearchPlaybooks` dispatches on it, one strategy
+ * to one playbook, and two neighbouring vocabularies are deliberately NOT this
+ * one:
+ *
+ *   `required_signals[].type` is OPEN and larger. A signal is a research shape
+ *   only when there is a source you can search to ENUMERATE companies that have
+ *   it — hiring and funding. `expansion`, `leadership_change` and `technology`
+ *   are QUALIFIERS: things you prove about companies discovered some other way,
+ *   which is why the registry gives expansion a *_verification stage. Promoting
+ *   every signal type to a strategy is the thirty-name taxonomy
+ *   `leadCapabilityGraph`'s header rejects. See `SIGNAL_RESEARCH_ROLES`.
+ *
+ *   `directives.source_strategy` is an EXECUTION PREFERENCE — which approved
+ *   source to reach for first — not a research shape. See
+ *   `SOURCE_STRATEGY_IMPLIED_SHAPE`.
  */
 export const MISSION_STRATEGIES = [
   "hiring",
