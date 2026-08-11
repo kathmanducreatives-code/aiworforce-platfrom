@@ -369,11 +369,21 @@ function buildHiringConfirmation(
   // runtime default when the request named no number.
   const requestedLeadCount = effectiveRequestedCount(mission);
 
+  // The title says "hiring X" only when the Mission actually carries a hiring
+  // signal. It used to say it unconditionally, because a card was only ever
+  // built for a request a hiring regex had recognised; now that a lead request
+  // with no hiring signal reaches this card too, `roleFamilyLabel(null)`
+  // would have previewed the words "companies hiring Hiring".
+  const hiringClause = intent.hiring_signal.requested
+    ? ` hiring ${roleFamilyLabel(fam)}` : "";
+
   return {
     workflow_id: isQualifiedLead ? "find_qualified_leads" : "find_hiring_signal_accounts",
     workflow_name: isQualifiedLead
-      ? `Find ${personRoles[0].toLowerCase()}s at ${industry || "target"} companies hiring ${roleFamilyLabel(fam)}`
-      : `Find ${roleFamilyLabel(fam)} hiring-signal accounts`,
+      ? `Find ${personRoles[0].toLowerCase()}s at ${industry || "target"} companies${hiringClause}`
+      : (intent.hiring_signal.requested
+        ? `Find ${roleFamilyLabel(fam)} hiring-signal accounts`
+        : `Find ${industry || "target"} companies`),
     // ROUTE CONTRACT — the frontend renders from these, and run-agent routes on them.
     workflow_kind: route.workflowKind,
     execution_mode: route.executionMode,
@@ -410,7 +420,9 @@ function buildHiringConfirmation(
           workflow_kind: "qualified_lead_sourcing",
           execution_mode: "company_first",
           target_entity: "company_and_person",
-          signal_type: "hiring",
+          // The signal the MISSION carries. Hard-coded "hiring" was safe only
+          // while a hiring regex gated the card into existence.
+          signal_type: mission.required_signals?.[0]?.type ?? "hiring",
           job_family: fam,
           // The family's canonical titles — never widened into quota-carrying
           // sales roles for a Sales-Operations request. The backend registry wins
@@ -664,8 +676,13 @@ function canonicalMissionForTransport(
  * whether a lead request got a lead card, so "Find 5 AI workflow companies in
  * Europe" (no hiring words) fell through to the generic template.
  */
+// `signal_sourcing` is deliberately NOT here: that branch is LinkedIn
+// engagement/post sourcing, which executes through orchestrate's staged social
+// plan and has no Mission provider yet (the Mission can SAY `social_posts`; R3
+// owns discovery for it). Giving it a lead card would preview a run that does
+// not exist.
 const LEAD_CONFIRMATION_CATEGORIES = new Set([
-  "company_hiring_sourcing", "people_sourcing", "signal_sourcing",
+  "company_hiring_sourcing", "people_sourcing",
 ]);
 
 async function generateWorkflowConfirmation(
@@ -2488,7 +2505,38 @@ Deno.serve(async (req) => {
   }
 
   if (decision.workflow_category === "people_sourcing") {
+    // ── A LEAD PATH, SO IT CARRIES THE CANONICAL MISSION ────────────────────
+    //
+    // This branch delegated with NO mission at all, and with the CLASSIFIER's
+    // reading of the sentence — `decision.query`, `decision.role_keywords`,
+    // `decision.location`, `decision.max_results` — as the run's semantics. So
+    // for a people request the regex-first workflow classifier WAS the
+    // interpreter, and under `new_architecture` orchestrate then refused the
+    // task outright (422 `mission_not_compiled`) because no mission arrived.
+    //
+    // The classifier still answers the question it owns — WHICH branch this is —
+    // and its fields survive only as the fallback for a workspace with no
+    // compiler enabled.
+    const peopleMission = canonicalMissionForTransport(
+      await compileCanonicalLeadMission({
+        prompt: message, workspaceId, brain: brainProfile, requestedCount: null,
+      }));
+    const peopleBrain = brainProfile as any;
+    const peopleIntent = peopleMission
+      ? leadIntentFromMission(peopleMission, {
+        icp: peopleBrain?.icp, company: peopleBrain?.company,
+        competitors: peopleBrain?.competitors, positioning: peopleBrain?.positioning,
+      })
+      : null;
+    console.log("[pilot-chat][canonical-mission]", {
+      workspace_id: workspaceId,
+      branch: "people_sourcing",
+      compiled: peopleMission != null,
+      has_directives: peopleMission?.directives != null,
+    });
+
     return await delegateToOrchestrate({
+      leadMission: peopleMission,
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
@@ -2497,15 +2545,22 @@ Deno.serve(async (req) => {
         selected_actor_key: decision.selected_actor_key ?? "apify_people_search",
         source_type: "people_profiles",
         query: decision.query ?? message,
-        role_keywords: decision.role_keywords ?? [],
-        location: decision.location ?? null,
-        max_results: Math.max(1, Math.min(25, decision.max_results ?? 5)),
+        // WHO to look for is the Mission's decision-maker set; the classifier's
+        // keyword list is what it fell back to before a mission existed.
+        role_keywords: peopleIntent?.target_buyer?.length
+          ? peopleIntent.target_buyer
+          : (decision.role_keywords ?? []),
+        location: peopleIntent?.target_geography?.[0] ?? decision.location ?? null,
+        // The Mission's count, through the one runtime default; still clamped to
+        // this branch's provider ceiling.
+        max_results: Math.max(1, Math.min(25,
+          peopleMission ? effectiveRequestedCount(peopleMission) : (decision.max_results ?? 5))),
         needs_enrichment: false,
         needs_outreach: !!decision.needs_outreach,
         execution_mode: decision.needs_outreach ? "outreach" : "fast",
         confidence: decision.confidence,
         missing_fields: [],
-        reason: "classifier: people_sourcing → people search (deterministic, no legacy round-trip)",
+        reason: "classifier: people_sourcing → people search (mission-carried)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
       workflowInputs: actionMetadata?.workflow_inputs,

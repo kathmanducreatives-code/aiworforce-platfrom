@@ -206,12 +206,17 @@ Deno.test("E. a deterministic workspace still parses deterministically", () => {
 Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail closed", async () => {
   const src = await Deno.readTextFile(PILOT);
 
-  // The three lead-sourcing branches each supply one.
+  // The four lead-sourcing branches each supply one.
   const supplied = [...src.matchAll(/leadMission:\s*(\w+)/g)].map((m) => m[1]);
   assert(supplied.includes("compiledLeadMission"), "qualified-lead branch supplies a mission");
   assert(supplied.includes("briefMission"), "submitted lead brief supplies a mission");
   assert(supplied.includes("intakeMission"), "lead intake supplies a mission");
-  assertEquals(new Set(supplied).size, 3, "exactly three lead paths supply a mission");
+  // `people_sourcing` used to delegate with NO mission and with the workflow
+  // classifier's reading of the sentence as the run's semantics — so for a
+  // people request the regex-first classifier WAS the interpreter, and under
+  // new_architecture orchestrate refused the task outright.
+  assert(supplied.includes("peopleMission"), "people sourcing supplies a mission");
+  assertEquals(new Set(supplied).size, 4, "exactly four lead paths supply a mission");
 
   // ANY OTHER BRANCH THAT REACHES ORCHESTRATE WITH LEAD INTENT IS STILL SAFE,
   // because orchestrate is the chokepoint: under new_architecture a request
