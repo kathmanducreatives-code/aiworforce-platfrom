@@ -110,6 +110,7 @@ import {
 } from "../_shared/leadPlaybookExecution.ts";
 import {
   projectMissionCompanyRows, missionPersistenceSummary,
+  MISSION_PERSISTENCE_PROJECTION_VERSION,
 } from "../_shared/leadMissionPersistenceProjection.ts";
 
 /**
@@ -2426,8 +2427,17 @@ Deno.serve(async (req) => {
             // a partial write is visible rather than silent. The two views are
             // built from the same `capabilityRun.companies`, so they cannot
             // disagree about what the run found.
-            const missionPersistence = projectMissionCompanyRows(
-              capabilityRun.companies, workspace_id);
+            // GATED ON THE PLAYBOOK BOUNDARY, NOT MERELY PLACED AFTER IT.
+            //
+            // The engine still runs for a mission whose shape this build cannot
+            // research — that behaviour is unchanged and deliberate — so an
+            // ungated write here would give `social`, `news` and `funding`
+            // missions Lead Library records they have never had. The boundary
+            // decides what executes; it therefore decides what persists.
+            const missionPersistence = (playbookAuthorization?.applies &&
+                playbookAuthorization.authorized)
+              ? projectMissionCompanyRows(capabilityRun.companies, workspace_id)
+              : { version: MISSION_PERSISTENCE_PROJECTION_VERSION, rows: [], skipped: [] };
             const missionPersistPlan = createPersistPlan({
               db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,
             });
