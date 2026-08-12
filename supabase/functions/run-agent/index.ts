@@ -1137,7 +1137,27 @@ Deno.serve(async (req) => {
         execution_mode_body === "company_first" ||
         tool_input_body?.workflow_kind === "qualified_lead_sourcing" ||
         tool_input_body?.execution_mode === "company_first";
-      if (bodyDeclaresCompanyFirst || (!raw_source_type && !planned_actor_key)) {
+      // ── THE MISSION IS ITSELF A ROUTING DECISION ───────────────────────────
+      //
+      // Read BEFORE the gate, because its PRESENCE is what decides the route.
+      //
+      // This is the defect the 2026-08-12 forensic run exposed (plan
+      // 16952bd6, mission_parser_source "gpt_validated", confidence 0.99).
+      // pilot-chat's deterministic classifier pinned
+      // `source_type: "jobs"` + `selected_actor_key: "apify_jobs"` and
+      // `execution_mode: "fast"`, so every disjunct below was false:
+      // `bodyDeclaresCompanyFirst` because "fast" is not "company_first", and
+      // `(!raw_source_type && !planned_actor_key)` because both were pinned.
+      // `routingEntityIntent` stayed null, the company-first branch was
+      // unreachable, and a valid Mission sat unused in the plan record while
+      // the legacy Claude planner sourced and the legacy Brain ICP qualified.
+      //
+      // A compiled LeadMissionV1 is the semantic authority for the run. An
+      // actor a classifier pinned upstream is a suggestion; it must not be
+      // able to route the Mission out of its own architecture.
+      const routingMission = readPersistedLeadMission(
+        tool_input_body, (body as Record<string, unknown>).lead_mission);
+      if (routingMission || bodyDeclaresCompanyFirst || (!raw_source_type && !planned_actor_key)) {
         // ROUTE FROM THE ORIGINAL USER INSTRUCTION, not the planner-rewritten Scout
         // prose. Compile the immutable entity intent (person/company/job) and select
         // the primary identity actor from it — "hiring signals" the planner injects
@@ -1150,8 +1170,8 @@ Deno.serve(async (req) => {
         // the persistable artifact, and the canonical Mission already answered
         // that from the same sentence. `applyMissionEntityAuthority` overlays the
         // Mission's answer, so execution stops re-interpreting the query.
-        const routingMission = readPersistedLeadMission(
-          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        // (`routingMission` is read above the gate — its presence is what
+        // routed us here in the first place.)
         const entityIntent = applyMissionEntityAuthority(
           compileLeadEntityIntent(input ?? instruction ?? ""),
           routingMission,
@@ -3653,6 +3673,79 @@ Deno.serve(async (req) => {
         // flags, the Scout query plan, the separated routing intent — reads this
         // instead when the task carries one. Null means a legacy missionless
         // task, where parsing the instruction is the only reading available.
+        // ══ FAIL CLOSED: A MISSION MUST NEVER EXECUTE HERE ═══════════════════
+        //
+        // This block is the LEGACY sourcing path: the Claude source planner,
+        // `runAdaptiveSourcing`, the legacy Brain-ICP qualification and the
+        // legacy `lead_type='company'` persistence. It predates the Mission
+        // architecture and cannot honour a Mission's hard constraints — the
+        // 2026-08-12 run proved that concretely: `geography_is_hard: true` was
+        // relaxed (`relaxed_filters: ["location"]`), the Mission's
+        // `verticals: ["AI startups"]` never reached the provider payload, and
+        // qualification scored against the workspace's generic sales ICP
+        // instead of the Mission (industry 0/25, location 0/5 → 28/100).
+        //
+        // Reaching here WITH a Mission means the new architecture did not
+        // accept the run — an unsupported shape, a routing conflict, or a
+        // capability the graph cannot serve. The correct response to that is to
+        // STOP, not to quietly re-run the request through an architecture that
+        // will lose the Mission's meaning and still spend Apify credits doing
+        // it. A refusal is cheap; a silent downgrade is expensive and
+        // indistinguishable from success in the Workbench.
+        //
+        // Missionless (deterministic-workspace) tasks are unaffected: they have
+        // no Mission to lose, and this block remains their intended path.
+        const legacyBlockMission = readPersistedLeadMission(
+          tool_input_body, (body as Record<string, unknown>).lead_mission);
+        if (legacyBlockMission) {
+          console.error("[run-agent][mission-legacy-block] refusing legacy execution for a mission run", {
+            task_id: task.id,
+            plan_id,
+            mission_parser_source: legacyBlockMission.mission_parser_source ?? null,
+            target_entity: legacyBlockMission.target_entity ?? null,
+            strategies: legacyBlockMission.strategies ?? null,
+            routing_conflict: !!routingConflict,
+            company_first: routingEntityIntent
+              ? isCompanyFirstRequest(routingEntityIntent)
+              : null,
+          });
+          await supabase.from("tasks").update({
+            status: "failed",
+            error_message: "mission_requires_new_architecture",
+            result: {
+              blocked: true,
+              reason: "mission_requires_new_architecture",
+              message:
+                "This run carries a compiled LeadMissionV1, so it may only execute " +
+                "through the Mission architecture (playbook selection → capability " +
+                "graph → authorization → paid preflight → capability engine). The " +
+                "new architecture did not accept it, and the legacy sourcing path " +
+                "is not a permitted fallback because it cannot honour the Mission's " +
+                "constraints and would still spend provider credits.",
+              mission_parser_source: legacyBlockMission.mission_parser_source ?? null,
+              target_entity: legacyBlockMission.target_entity ?? null,
+              routing_conflict: routingConflict ?? null,
+              company_first: routingEntityIntent
+                ? isCompanyFirstRequest(routingEntityIntent)
+                : null,
+            },
+          }).eq("id", task.id);
+          return json({
+            success: false,
+            task_id: task.id,
+            blocked: true,
+            error: "mission_requires_new_architecture",
+            terminal_status: "blocked",
+            terminal_reason: "mission_requires_new_architecture",
+            providers_called: 0,
+            message:
+              "Refused: a LeadMissionV1 run cannot execute the legacy sourcing path. " +
+              "No provider was called and nothing was spent.",
+          }, 422);
+        }
+
+        // Always null past the guard above — kept so the missionless
+        // (deterministic-workspace) path below reads exactly as it did before.
         const sourcingMission = readPersistedLeadMission(
           tool_input_body, (body as Record<string, unknown>).lead_mission);
         const missionLocations = (sourcingMission?.company_profile?.locations ?? [])
