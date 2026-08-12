@@ -2147,7 +2147,43 @@ export function toPortfolioCandidates(
 export function finalizedProgress(
   state: CapabilityExecutionState,
 ): EngineProgress | null {
-  if (!state.progress) return null;
+  // ── A RUN THAT ENDED BEFORE ANY STAGE PUBLISHED STILL HAPPENED ───────────
+  //
+  // `publish()` runs at the END of a completed capability. When discovery
+  // EXHAUSTS every approved provider — every Actor errored, or the entry
+  // capability is one the engine does not drive — the loop breaks before the
+  // first publish, so `state.progress` was never set. This function returned
+  // null, run-agent then wrote no `workbench_progress`, and the frontend's
+  // `readWorkbenchProgress` returned null: the Workbench rendered NOTHING.
+  //
+  // Nothing is the one answer that is never true. The run was attempted, and a
+  // measured zero is a result — `progressLines` shows "Accounts found: 0" and
+  // leaves every later counter correctly UNREACHED, so this states what
+  // happened without implying any stage ran. The terminal reason itself travels
+  // separately, on the route result.
+  //
+  // This is deliberately NOT a success: `qualified_companies` is 0, no
+  // evaluation row is invented, and nothing becomes actionable.
+  if (!state.progress) {
+    if (state.completed_capabilities.length === 0 && !state.terminal_reason) return null;
+    return {
+      stage: "accounts_found",
+      accounts_found: 0,
+      evaluated: 0,
+      eligible_opportunities: 0,
+      exclusion_reasons: {},
+      identity_resolved: 0,
+      identity_unresolved: 0,
+      companies_enriched: 0,
+      hiring_verified: 0,
+      qualified_companies: 0,
+      decision_makers_verified: 0,
+      open_jobs_evaluated: 0,
+      shortlisted: 0,
+      in_progress: false,
+      awaiting_external_run: state.pending_runs.length > 0,
+    };
+  }
   return {
     ...state.progress,
     in_progress: false,
