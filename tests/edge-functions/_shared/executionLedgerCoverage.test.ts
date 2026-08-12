@@ -108,15 +108,16 @@ Deno.test("wiring: the terminal reason comes from the owner that actually execut
     "the unconditional `cf.terminal_reason` terminal must be gone");
 });
 
-Deno.test("wiring: generic sourcing records its own terminal result", async () => {
+Deno.test("wiring: the generic sourcing owner no longer exists to record", async () => {
   const src = await Deno.readTextFile(RUN_AGENT);
-  assert(src.includes('execution_owner: "generic_sourcing_v1"'),
-    "the generic path must identify itself as the execution owner");
-  // It must record a terminal stage result from the adaptive loop's own result.
-  assert(/recordStageResult\([\s\S]{0,600}generic_sourcing/.test(src),
-    "the generic path must write a terminal stage result");
-  assert(src.includes("adaptive.status") && src.includes("adaptive.reason"),
-    "the adaptive loop's own status/reason is the authority for its terminal");
+  // SUPERSEDED BY THE MISSION CUTOVER. This asserted that the generic adaptive
+  // path identified itself as `generic_sourcing_v1` and wrote its own terminal
+  // stage result. That path was deleted, so there is no second execution owner
+  // left to instrument — which is the outcome the ownership ledger wanted.
+  assert(!src.includes('execution_owner: "generic_sourcing_v1"'),
+    "the ungoverned generic owner was removed with its branch");
+  assert(!src.includes("adaptive.status"),
+    "and so was the adaptive loop whose status it reported");
 });
 
 Deno.test("wiring: no second stop-reason enum was introduced", async () => {

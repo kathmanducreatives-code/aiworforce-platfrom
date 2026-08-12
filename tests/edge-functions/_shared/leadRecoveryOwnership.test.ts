@@ -152,36 +152,31 @@ Deno.test("the ledger refuses two conflicting accounts of one plan", () => {
 
 // ═══ INVARIANT 1 — ONE RECOVERY OWNER, STRUCTURALLY ════════════════════════
 
-Deno.test("Invariant 1: the company-first branch returns, so no second loop can run", async () => {
+Deno.test("Invariant 1: there is only one sourcing branch left, and it returns", async () => {
   const src = await Deno.readTextFile(RUN_AGENT);
 
-  // THE MECHANISM. `run-agent` holds two sourcing branches under the same
-  // `shouldRun` guard:
+  // WHAT CHANGED. run-agent used to hold two sourcing branches under the same
+  // `shouldRun` guard, and their mutual exclusion depended on the first ending
+  // in an unconditional `return json({...})`:
   //
-  //   if (shouldRun && routingEntityIntent && isCompanyFirstRequest(...)) { … }
+  //   if (shouldRun && routingEntityIntent && isCompanyFirstRequest(...)) { … return }
   //   if (shouldRun) { … runAdaptiveSourcing … }
   //
-  // They are mutually exclusive because the FIRST ends in an unconditional
-  // `return json({...})`. Without that return, a company-first task would fall
-  // through and run the adaptive loop as a second recovery mechanism on top of
-  // the quota controller. The return is therefore load-bearing, not stylistic.
+  // The Mission cutover deleted the second branch. One owner is now structural
+  // rather than contingent on a return statement, but the return still matters:
+  // without it a mission run would fall through to the refusal below it.
   const companyFirstAt = src.indexOf("if (shouldRun && routingEntityIntent && isCompanyFirstRequest(");
-  const genericAt = src.indexOf("\n      if (shouldRun) {");
-  const adaptiveAt = src.indexOf("await runAdaptiveSourcing({");
-  assert(companyFirstAt > 0, "the company-first branch must exist");
-  assert(genericAt > companyFirstAt, "the generic branch must follow it");
-  assert(adaptiveAt > genericAt, "the adaptive loop belongs to the generic branch");
+  assert(companyFirstAt > 0, "the mission-driven branch must exist");
+  assert(
+    !src.includes("await runAdaptiveSourcing({"),
+    "the second sourcing branch was deleted; no adaptive recovery loop remains",
+  );
 
-  const companyFirstBody = src.slice(companyFirstAt, genericAt);
-  assert(companyFirstBody.includes("Conclusively SKIP the ordinary people-first branch"),
-    "the exclusive return must remain documented as exclusive");
-  assert(/\n        return json\(\{/.test(companyFirstBody),
-    "the company-first branch must end in an unconditional return, or the adaptive " +
-    "loop becomes a second recovery owner for the same task");
-
-  // And the adaptive loop must NOT appear inside the company-first branch.
-  assert(!companyFirstBody.includes("runAdaptiveSourcing"),
-    "the adaptive loop must never run under the company-first controller");
+  const afterCompanyFirst = src.slice(companyFirstAt);
+  assert(
+    afterCompanyFirst.includes("return json({"),
+    "the mission branch must still return rather than fall through to the refusal",
+  );
 });
 
 Deno.test("Invariant 1: one FUNCTION owns 'quota unmet — what next?' for company-first", async () => {
@@ -342,26 +337,28 @@ Deno.test("Invariant 3: prompt injection in a proposed title is rejected", () =>
 
 // ═══ INVARIANT 2 — sourcingRetry's ACTUAL STATUS ═══════════════════════════
 
-Deno.test("Invariant 2: sourcingRetry owns the NON-company-first branch and is not dead", async () => {
-  // NOT DELETED, AND WHY. The audit called this an "architecturally
-  // disconnected older loop" and the previous phase's report expected it to be
-  // retired here. Tracing the branch structure shows otherwise: it is the
-  // recovery mechanism for the generic scout/hawk path — people-first and
-  // non-company-first sourcing — which the company-first controller does not
-  // serve at all. Deleting it would delete that path, not a duplicate.
+Deno.test("Invariant 2: sourcingRetry's loop is no longer reachable from run-agent", async () => {
+  // SUPERSEDED FINDING, KEPT DELIBERATELY. This test previously recorded that
+  // `runAdaptiveSourcing` was NOT dead — it owned the generic scout/hawk
+  // branch, and deleting it would have deleted that path rather than a
+  // duplicate. That was correct at the time.
   //
-  // This test pins that finding so the next person does not re-derive it, and
-  // fails if the loop ever becomes reachable from the company-first controller.
-  const src = await Deno.readTextFile(RUN_AGENT);
-  assert(src.includes("await runAdaptiveSourcing({"),
-    "the adaptive loop is live; if this line goes, the generic sourcing path went with it");
-
-  const companyFirstAt = src.indexOf("if (shouldRun && routingEntityIntent && isCompanyFirstRequest(");
-  const genericAt = src.indexOf("\n      if (shouldRun) {");
-  assert(src.indexOf("await runAdaptiveSourcing({") > genericAt,
-    "the adaptive loop must stay inside the generic branch");
-  assert(!src.slice(companyFirstAt, genericAt).includes("runAdaptiveSourcing"),
-    "the adaptive loop must never become reachable from the company-first controller");
+  // The Mission cutover deleted the generic branch itself, so the loop lost its
+  // only run-agent caller. The module still exists and its pure helpers are
+  // still shared (see the next test); what is gone is the controller call.
+  // Comments are stripped: the deletion is recorded in a comment at the
+  // refusal site, and prose describing what was removed must not count as the
+  // thing still being there.
+  const src = (await Deno.readTextFile(RUN_AGENT))
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert(
+    !src.includes("runAdaptiveSourcing"),
+    "run-agent must not reach the adaptive sourcing controller at all",
+  );
+  assert(
+    !src.includes("sourcingRetry.ts"),
+    "and must not import the module that owns it",
+  );
 });
 
 Deno.test("Invariant 2: sourcingRetry's pure helpers are shared, its LOOP is not", async () => {

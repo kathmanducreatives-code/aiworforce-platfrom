@@ -80,47 +80,31 @@ const RUN = Deno.readTextFileSync(
   new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
 ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 
-Deno.test("the sourcing run reads its Mission once and uses it for all four", () => {
-  assert(
-    /const sourcingMission = readPersistedLeadMission\(/.test(RUN),
-    "one read, reused — not four separate lookups that could drift apart",
-  );
-  assert(
-    /const separationMission = sourcingMission;/.test(RUN),
-    "the separated-intent projection uses the same object",
-  );
-});
+// ── POST-CUTOVER ────────────────────────────────────────────────────────────
+//
+// These three tests asserted that the legacy sourcing block preferred the
+// Mission over its own regex scans — geography over the `in <Place>` match,
+// decided role terms over the keyword scan, decided strict flags over an
+// "exactly" scan. They were the right assertions while that block existed.
+//
+// The Mission cutover deleted the block outright, so the invariant is now
+// stronger and simpler: there are no competing scans left to prefer the
+// Mission over. The projection helpers above are still unit-tested directly;
+// what changed is that run-agent no longer contains a second reader at all.
 
-Deno.test("the geography and role fallbacks are Mission-first, text-only when missionless", () => {
-  assert(
-    /location = missionLocations\[0\] \?\? null;/.test(RUN),
-    "the decided geography must be preferred over the `in <Place>` scan",
-  );
-  assert(
-    /if \(!location && !sourcingMission\) \{/.test(RUN),
-    "and the scan must be unreachable when a Mission exists",
-  );
-  assert(
-    /roleKeywords = \[\.\.\.new Set\(missionRoleTerms\)\];/.test(RUN),
-    "the decided role terms must be preferred over the keyword scan",
-  );
-  assert(
-    /if \(roleKeywords\.length === 0 && !sourcingMission\) \{/.test(RUN),
-    "and that scan must be unreachable when a Mission exists",
-  );
-});
-
-Deno.test("the strict flags and the attempt budget are Mission-first", () => {
-  assert(
-    /const strict = sourcingMission\s*\n?\s*\? strictConstraintsFromMission\(sourcingMission\)/.test(RUN),
-    "the hard-filter flags must come from decided fields",
-  );
-  assert(
-    /const maxAttempts = sourcingMission\s*\n?\s*\? maxAttemptsFromStrict\(strict\)/.test(RUN),
-    "and the attempt budget must not re-scan the sentence for 'exactly'",
-  );
-  assert(
-    /strictForPlan = sourcingMission/.test(RUN),
-    "the actor planner's copy of the flags must come from the same source",
-  );
+Deno.test("run-agent has no rival reader for the Mission to outrank", () => {
+  for (const goneScan of [
+    "missionLocations",
+    "missionRoleTerms",
+    "strictConstraintsFromMission",
+    "maxAttemptsFromStrict",
+    "strictForPlan",
+    "sourcingMission",
+  ]) {
+    assert(
+      !new RegExp(goneScan).test(RUN),
+      `${goneScan} belonged to the deleted legacy sourcing block`,
+    );
+  }
+  assert(!/runAdaptiveSourcing/.test(RUN), "the adaptive sourcing loop is gone");
 });

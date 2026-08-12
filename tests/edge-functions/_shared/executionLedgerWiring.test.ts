@@ -116,13 +116,15 @@ Deno.test("migration: tool_calls is left alone", async () => {
 
 // ═══ ONE LAYER, BOTH PATHS ════════════════════════════════════════════════
 
-Deno.test("wiring: both execution paths funnel through the instrumented seam", async () => {
+Deno.test("wiring: every remaining provider entry point funnels through the seam", async () => {
   const src = await Deno.readTextFile(RUN_AGENT);
-  // company-first jobs, company-first people, generic adaptive sourcing.
+  // Was three: company-first jobs, company-first people, and the generic
+  // adaptive loop. The Mission cutover deleted the generic loop, so two
+  // mission-driven entry points remain and both must stay instrumented.
   const calls = src.split('runTool("source_with_apify"').length - 1;
-  assertEquals(calls, 3,
-    "three provider entry points are expected: company-first jobs, company-first " +
-    "people, and the generic adaptive loop. A new one must be instrumented too.");
+  assertEquals(calls, 2,
+    "two provider entry points are expected: company-first jobs and " +
+    "company-first people. A new one must be instrumented too.");
 });
 
 Deno.test("wiring: the ledger is applied once, in runTool, not per adapter", async () => {

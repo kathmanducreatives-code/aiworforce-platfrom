@@ -11,7 +11,6 @@ import {
 } from "../../../supabase/functions/_shared/locationMatch.ts";
 import { classifyResults } from "../../../supabase/functions/_shared/sourceQuality.ts";
 import { validateSourcingResults } from "../../../supabase/functions/_shared/sourcingRetry.ts";
-import { filterPeopleCandidates } from "../../../supabase/functions/_shared/sourceGates.ts";
 import { resolveProviderSource } from "../../../supabase/functions/_shared/plannedToolResolver.ts";
 import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria } from "../../../supabase/functions/_shared/leadHandoffGuard.ts";
 import { filterPlanForMode, stepAllowedInMode } from "../../../supabase/functions/_shared/executionMode.ts";
@@ -109,22 +108,10 @@ Deno.test("17: location evidence is provider-backed only (empty raw ⇒ empty ev
   assertEquals(extractCandidateLocationEvidence(null), {});
 });
 
-// 18-19: source gate accept/reject by country.
-Deno.test("18: wrong-country candidate blocked at the source gate (before Aria)", () => {
-  const res = filterPeopleCandidates(
-    [{ name: "Liam London", profile_url: "https://linkedin.com/in/liam", title: "Founder", location: "Greater London", location_country: "United Kingdom", location_country_code: "GB" }],
-    { location: "United States", strict_location: true },
-  );
-  assertEquals(res.accepted.length, 0);
-  assertEquals(res.rejected[0]?.reason, "wrong country");
-});
-Deno.test("19: correct-country candidate passes the source gate", () => {
-  const res = filterPeopleCandidates(
-    [{ name: "Alex Founder", profile_url: "https://linkedin.com/in/alex", title: "Founder", location: "Greater Philadelphia", location_country: "United States", location_country_code: "US" }],
-    { location: "United States", strict_location: true },
-  );
-  assertEquals(res.accepted.length, 1);
-});
+// 18-19 REMOVED in the Mission cutover. They covered `filterPeopleCandidates`
+// in _shared/sourceGates.ts — the legacy source gate that ran inside run-agent's
+// deleted legacy sourcing block. Country filtering on the mission path is
+// enforced by the capability engine's geography constraint, covered elsewhere.
 
 // 20: LLM identities remain blocked.
 Deno.test("20: fabricated (no provider index) identities remain blocked before Aria", () => {

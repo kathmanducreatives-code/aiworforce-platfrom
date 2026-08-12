@@ -22,12 +22,12 @@ const CODE = Deno.readTextFileSync(
 
 // ---- gate kind ------------------------------------------------------------
 
-Deno.test("the gate kind is projected from the Mission, never re-extracted", () => {
+Deno.test("the gate kind cannot be re-extracted: the re-reader is gone", () => {
   assert(!/extractLeadIntent\(/.test(CODE), "run-agent must not re-extract a lead intent");
-  assert(
-    /workflow_type: threadedIntent\?\.workflow_type \?\? missionWorkflowType/.test(CODE),
-    "the gate's workflow_type must fall back to the Mission projection, not a re-read",
-  );
+  // Post-cutover this is stronger than "falls back to the Mission projection":
+  // the legacy block that owned the fallback was deleted, so there is no
+  // second reader left to disagree with the Mission at all.
+  assert(!/missionWorkflowType/.test(CODE), "the legacy gate-kind fallback no longer exists");
 });
 
 Deno.test("workflowTypeFromMission reads decided fields and parses nothing", () => {
@@ -83,16 +83,11 @@ Deno.test("the routing mission is read once and shared by both decisions", () =>
 
 // ---- semantic fields formerly read off the re-extraction ------------------
 
-Deno.test("candidate-rejection terms come from the Mission, not a re-read", () => {
+Deno.test("no re-extracted intent survives anywhere in run-agent", () => {
   assert(!/reIntent/.test(CODE), "no re-extracted intent may survive anywhere");
-  assert(
-    /missionVerticals[\s\S]{0,200}?company_profile\?\.verticals/.test(CODE),
-    "company-type terms must be projected from the Mission's decided verticals",
-  );
-  assert(
-    /threadedIntent\?\.competitors \?\? \[\]/.test(CODE),
-    "competitors must fall back to an empty list, never to a regex reading",
-  );
+  // `missionVerticals` lived in the deleted legacy block. Its absence is the
+  // point: nothing downstream re-derives company-type terms any more.
+  assert(!/missionVerticals/.test(CODE), "the legacy company-type projection is gone with its block");
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -219,29 +214,49 @@ Deno.test("a missionless task is unaffected and still uses the pinned actor", ()
   assertEquals(g.entered, false, "without a Mission the pinned-actor path is unchanged");
 });
 
-// ---- the legacy block must refuse a Mission, not absorb it ----------------
+// ---- the legacy block is GONE, not guarded --------------------------------
+//
+// f8680136 added a fail-closed 422 at the head of the legacy sourcing block.
+// The cutover deleted the block, so the guard has nothing left to guard. What
+// replaces it is a much smaller invariant: run-agent contains no legacy
+// sourcing implementation at all, and an unaccepted sourcing request refuses
+// rather than falling through to the generic LLM path.
 
-Deno.test("the legacy sourcing block fails closed when a Mission is present", () => {
-  assert(
-    /const legacyBlockMission = readPersistedLeadMission\(/.test(CODE),
-    "the legacy block must read the Mission in order to refuse it",
-  );
-  assert(
-    /if \(legacyBlockMission\) \{[\s\S]{0,2000}?mission_requires_new_architecture/.test(CODE),
-    "a Mission reaching the legacy block must raise mission_requires_new_architecture",
-  );
-  // The refusal must happen BEFORE the legacy block does any sourcing work.
-  const guard = CODE.indexOf("legacyBlockMission");
-  const adaptive = CODE.indexOf("runAdaptiveSourcing");
-  assert(guard > 0 && adaptive > 0, "both landmarks must exist");
-  assert(guard < adaptive, "the Mission refusal must precede runAdaptiveSourcing");
+Deno.test("run-agent contains no legacy sourcing implementation", () => {
+  for (const gone of [
+    "runAdaptiveSourcing",
+    "actorInputPlanner",
+    "ariaScoring",
+    "scoutStrategy",
+    "scoutSourcingPlan",
+    "sourceGates",
+    "leadAnalyst",
+    "leadPreRank",
+  ]) {
+    assert(!new RegExp(gone).test(CODE), `${gone} must not be reachable from run-agent`);
+  }
 });
 
-Deno.test("the Mission refusal spends nothing and is terminal", () => {
-  const block = CODE.slice(CODE.indexOf("if (legacyBlockMission)"));
-  const refusal = block.slice(0, block.indexOf("const sourcingMission"));
-  assert(/providers_called: 0/.test(refusal), "the refusal must state that no provider ran");
-  assert(/status: "failed"/.test(refusal), "the task must be recorded as failed, not partial");
-  assert(/return json\(/.test(refusal), "the refusal must return, never fall through");
-  assert(!/runTool\(/.test(refusal), "no provider call may appear inside the refusal path");
+Deno.test("an unaccepted sourcing request refuses instead of falling through", () => {
+  assert(
+    /sourcing_requires_mission_architecture/.test(CODE),
+    "there must be an explicit refusal for sourcing the mission path did not accept",
+  );
+  // Anchor on the log line that opens the refusal, so the whole branch — the
+  // task update AND the response — is inside the window.
+  const start = CODE.indexOf("sourcing-not-accepted");
+  assert(start > 0, "the refusal branch must be identifiable");
+  // Bound the window to the refusal's own `}, 422);` terminator so the
+  // assertions cannot accidentally read code that follows the branch.
+  const end = CODE.indexOf("}, 422);", start);
+  assert(end > start, "the refusal must terminate with a 422 response");
+  const refusal = CODE.slice(start, end);
+  assert(/providers_called: 0/.test(refusal), "the refusal must state no provider ran");
+  assert(/status: "failed"/.test(refusal), "the task must be recorded as failed");
+  assert(!/runTool\(/.test(refusal), "no provider call may appear in the refusal path");
+});
+
+Deno.test("the legacy-block band-aid is gone because the block is gone", () => {
+  assert(!/legacyBlockMission/.test(CODE), "the f8680136 guard is obsolete once the block is deleted");
+  assert(!/mission_requires_new_architecture/.test(CODE), "its refusal code is obsolete too");
 });

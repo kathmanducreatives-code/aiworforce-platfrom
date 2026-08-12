@@ -209,7 +209,7 @@ Deno.test("the projection contains no parser of its own", () => {
   );
 });
 
-Deno.test("both live callers project from the Mission", () => {
+Deno.test("orchestrate projects from the Mission; run-agent has no text reader left", () => {
   const ORCH = Deno.readTextFileSync(
     new URL("../../../supabase/functions/orchestrate/index.ts", import.meta.url),
   );
@@ -227,17 +227,17 @@ Deno.test("both live callers project from the Mission", () => {
     "orchestrate must not read the user's sentence for routing — it transports a Mission",
   );
 
-  assert(
-    code(RUN).includes("separatedIntentFromMission("),
-    "run-agent must project the DTO when the task carries a Mission",
-  );
-  // The legacy text reader survives ONLY behind a no-mission guard.
+  // POST-CUTOVER. This used to assert run-agent projected the DTO from the
+  // Mission and kept `separateIntent({...})` behind a no-mission guard. The
+  // legacy sourcing block that held both was deleted, so run-agent now has
+  // neither — which is a stronger guarantee than the guard was.
   const runCode = code(RUN);
-  const idx = runCode.indexOf("separateIntent({");
-  assert(idx > 0, "the legacy reader is still referenced for missionless legacy tasks");
-  const guard = runCode.slice(Math.max(0, idx - 600), idx);
   assert(
-    /separationMission\s*\n?\s*\?/.test(guard) || guard.includes("separationMission"),
-    "and only inside the `separationMission ? projection : legacy` branch",
+    !runCode.includes("separateIntent({"),
+    "the legacy text reader is gone from run-agent entirely, not merely guarded",
+  );
+  assert(
+    !runCode.includes("separationMission"),
+    "and so is the branch that used to choose between it and the projection",
   );
 });
