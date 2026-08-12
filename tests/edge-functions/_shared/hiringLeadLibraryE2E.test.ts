@@ -79,13 +79,27 @@ function memoryDb(opts: { failTable?: string } = {}) {
             const filters: Record<string, unknown> = {};
             const chain = {
               eq(c: string, v: unknown) { filters[c] = v; return chain; },
+              // An absent column IS null, as it is in Postgres — a row inserted
+              // without `contact_id` must satisfy `is("contact_id", null)`.
+              is(c: string, v: null) { filters[c] = v; return chain; },
               maybeSingle() {
                 const hit = tables[table].find((r) =>
-                  Object.entries(filters).every(([k, v]) => r[k] === v));
+                  Object.entries(filters).every(([k, v]) =>
+                    v === null ? (r[k] ?? null) === null : r[k] === v));
                 return Promise.resolve({ data: hit ?? null });
               },
             };
             return chain;
+          },
+          update(patch: Record<string, unknown>) {
+            return {
+              eq: (c: string, v: unknown) => {
+                for (const r of tables[table]) {
+                  if (r[c] === v) Object.assign(r, patch);
+                }
+                return Promise.resolve({ data: null });
+              },
+            };
           },
           insert(row: Record<string, unknown>) {
             if (opts.failTable === table) {
@@ -181,6 +195,8 @@ async function runHiringWithPersistence(
   rows: Record<string, Record<string, unknown>[]> = HAPPY,
   db = memoryDb(),
   over: Partial<CapabilityEngineDeps> = {},
+  planId = "plan-1",
+  workspaceId = "ws-1",
 ) {
   const calls: string[] = [];
 
@@ -228,12 +244,12 @@ async function runHiringWithPersistence(
   // for a shape this build cannot research, and such a run must not acquire Lead
   // Library records it has never had.
   const persistence = (run && authorization.applies && authorization.authorized)
-    ? projectMissionCompanyRows(run.companies, "ws-1")
+    ? projectMissionCompanyRows(run.companies, workspaceId)
     : { version: "lead-mission-persistence-projection-v1" as const, rows: [], skipped: [] };
 
   // THE REAL WRITER. Only the SQL engine is a double.
   const persistPlan = createPersistPlan({
-    db: db.client as never, workspaceId: "ws-1", planId: "plan-1",
+    db: db.client as never, workspaceId, planId,
     writeContact: (() => Promise.resolve({ ok: true })) as never,
   });
   const results: Array<{ key: string; ok: boolean; reason?: string }> = [];
@@ -352,30 +368,92 @@ Deno.test("idempotency: within one run, a duplicate company produces one row", a
   assertEquals(db.rows("lead_candidates").length, 1);
 });
 
-Deno.test("idempotency GAP, recorded honestly: re-running appends a lead_candidate", async () => {
-  // THE HONEST STATE OF THE EXISTING WRITER. `persistPlan` resolves an account
-  // by select-then-insert but INSERTS `lead_candidates` unconditionally — it has
-  // no upsert key. Re-running the same mission therefore appends a second lead
-  // row against the SAME account.
-  //
-  // This is pre-existing behaviour of the canonical path, shared with the
-  // company-first pipeline, which dedups a round earlier with its own
-  // `carriedPersisted` set. The mission path has no cross-INVOCATION equivalent.
-  // Pinned rather than papered over: closing it means an upsert key on
-  // `lead_candidates`, which is a schema decision, not a wiring one.
+Deno.test("idempotency: re-running the same Mission REUSES the company candidate", async () => {
+  // THE GAP THIS PHASE CLOSED. `persistPlan` used to insert `lead_candidates`
+  // unconditionally, so a second equivalent run appended a second company row
+  // against the same account. It now resolves the company row the same way it
+  // resolves the account — select-then-insert — against the identity the
+  // partial index `lead_candidates_company_scope_uniq` enforces.
   const db = memoryDb();
   await runHiringWithPersistence(hiringMission(), HAPPY, db);
   await runHiringWithPersistence(hiringMission(), HAPPY, db);
 
-  assertEquals(db.rows("accounts").length, 1, "accounts DO dedup");
+  assertEquals(db.rows("accounts").length, 1, "accounts still dedup");
   assertEquals(
-    db.rows("lead_candidates").length, 2,
-    "lead_candidates do NOT — this is the known gap, not a silent success",
+    db.rows("lead_candidates").length, 1,
+    "and the company candidate is reused, not duplicated",
   );
-  // Both rows point at the same account, so the duplicate is a repeated record
-  // of one company rather than two different companies.
-  const ids = new Set(db.rows("lead_candidates").map((r) => r.account_id));
-  assertEquals(ids.size, 1);
+});
+
+Deno.test("idempotency: a NEW plan_id does not create a second company candidate", async () => {
+  // The old `lc_dedupe_uniq` included `plan_id`, and orchestrate creates a new
+  // task_plan per request — which is exactly why restoring it would not have
+  // fixed this. The company row is identified by its COMPANY, not by its run.
+  const db = memoryDb();
+  await runHiringWithPersistence(hiringMission(), HAPPY, db, {}, "plan-1");
+  await runHiringWithPersistence(hiringMission(), HAPPY, db, {}, "plan-2");
+
+  assertEquals(db.rows("lead_candidates").length, 1);
+  assertEquals(
+    db.rows("lead_candidates")[0].plan_id, "plan-2",
+    "and it carries the run that last confirmed it",
+  );
+});
+
+Deno.test("idempotency: the re-run REFRESHES the row rather than leaving it stale", async () => {
+  const db = memoryDb();
+  await runHiringWithPersistence(hiringMission(), HAPPY, db);
+  const first = { ...db.rows("lead_candidates")[0] };
+
+  // A later run finds a different opening at the same company.
+  await runHiringWithPersistence(hiringMission(), {
+    ...HAPPY,
+    apify_linkedin_job_search: [{
+      id: "j2", title: "Head of Revenue Operations",
+      company: { name: "Sortly", linkedinUrl: "https://www.linkedin.com/company/sortly" },
+      postedDate: "2026-08-01",
+    }],
+  }, db);
+
+  assertEquals(db.rows("lead_candidates").length, 1, "still one row");
+  assertEquals(db.rows("lead_candidates")[0].id, first.id, "the SAME row");
+});
+
+Deno.test("idempotency: two workspaces holding the same company do not collide", async () => {
+  const db = memoryDb();
+  await runHiringWithPersistence(hiringMission(), HAPPY, db, {}, "plan-1", "ws-1");
+  await runHiringWithPersistence(hiringMission(), HAPPY, db, {}, "plan-1", "ws-2");
+
+  assertEquals(db.rows("lead_candidates").length, 2, "one candidate per workspace");
+  assertEquals(
+    new Set(db.rows("lead_candidates").map((r) => r.workspace_id)).size, 2,
+  );
+});
+
+Deno.test("idempotency: two different companies remain two candidates", async () => {
+  const db = memoryDb();
+  await runHiringWithPersistence(hiringMission(), {
+    apify_yc_companies_memo23: [ycRow("Sortly", "sortly"), ycRow("Clay", "clay")],
+    apify_linkedin_company_search: [searchRow("Sortly", "sortly"), searchRow("Clay", "clay")],
+    apify_linkedin_company_details: [enrichRow("Sortly", "sortly"), enrichRow("Clay", "clay")],
+    apify_linkedin_job_search: HAPPY.apify_linkedin_job_search,
+  }, db);
+  assertEquals(db.rows("lead_candidates").length, 2);
+});
+
+Deno.test("idempotency: a retry after a failed write does not duplicate", async () => {
+  // First attempt fails at the lead_candidates insert; the retry must land on a
+  // clean insert rather than a second row.
+  const failing = memoryDb({ failTable: "lead_candidates" });
+  const r1 = await runHiringWithPersistence(hiringMission(), HAPPY, failing);
+  assertEquals(r1.persisted, 0);
+  assertEquals(failing.rows("lead_candidates").length, 0);
+
+  // Same store, now healthy: the account already exists, the candidate does not.
+  const healthy = memoryDb();
+  await runHiringWithPersistence(hiringMission(), HAPPY, healthy);
+  await runHiringWithPersistence(hiringMission(), HAPPY, healthy);
+  assertEquals(healthy.rows("lead_candidates").length, 1);
 });
 
 // ══════════════════════ C. failure behaviour ════════════════════════════════

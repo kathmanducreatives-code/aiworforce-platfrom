@@ -24,19 +24,38 @@ export interface PersistPlanResult {
   contactId: string | null;
   leadCandidateId: string | null;
   reason?: string;
+  /**
+   * The company row already existed and was refreshed rather than inserted.
+   *
+   * Reported so a caller can tell "one new company" from "the same company
+   * again" without counting rows before and after.
+   */
+  reusedExisting?: boolean;
+}
+
+/** A filter chain over one table. `eq`/`is` compose; `maybeSingle` resolves. */
+export interface LeadCandidateQuery {
+  eq: (c: string, v: unknown) => LeadCandidateQuery;
+  is: (c: string, v: null) => LeadCandidateQuery;
+  maybeSingle: () => Promise<{ data: unknown }>;
 }
 
 export interface PersistPlanDeps {
   /** The Supabase client. Injected so a test can supply an isolated double. */
   db: {
     from: (table: string) => {
-      select: (cols: string) => {
-        eq: (c: string, v: unknown) => {
-          eq: (c: string, v: unknown) => { maybeSingle: () => Promise<{ data: unknown }> };
-        };
-      };
+      /**
+       * Chainable filters. `eq`/`is` return the same builder so the company-row
+       * lookup can express its four-column predicate; `maybeSingle` closes it.
+       * This is the shape the Supabase client already has — widened here only
+       * so the injected double must implement the same contract.
+       */
+      select: (cols: string) => LeadCandidateQuery;
       insert: (row: Record<string, unknown>) => {
         select: (cols: string) => { maybeSingle: () => Promise<{ data: unknown }> };
+      };
+      update?: (row: Record<string, unknown>) => {
+        eq: (c: string, v: unknown) => Promise<{ data?: unknown; error?: unknown }>;
       };
     };
   };
@@ -92,13 +111,60 @@ export function createPersistPlan(deps: PersistPlanDeps) {
       }
       // INVARIANT: a CONTACT lead must have a real account_id.
       const contactEligible = plan.verdict === "CONTACT" && !!accountId;
-      const { data: lc } = await supabase.from("lead_candidates").insert({
+      const row = {
         workspace_id, plan_id: plan_id ?? null, account_id: accountId,
         lead_type: plan.leadCandidate.lead_type, status: "new",
         reason: plan.leadCandidate.reason, next_action: plan.leadCandidate.next_action,
         raw: { ...plan.leadCandidate.raw, contact_eligible: contactEligible },
-      }).select("id").maybeSingle();
-      const leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
+      };
+
+      // ── THE COMPANY ROW IS IDENTIFIED BY ITS COMPANY, NOT BY ITS RUN ──────
+      //
+      // An account-type candidate anchoring no contact and no signal is THE
+      // company row for that account in that workspace — the identity the
+      // partial index `lead_candidates_company_scope_uniq` enforces. Repeating
+      // an equivalent Mission must reuse it, not append a second one.
+      //
+      // Resolved the same way the account above is: select-then-insert, so
+      // there is one dedup mechanism in this writer rather than two. A retry
+      // after a partial failure therefore lands on the existing row.
+      //
+      // Everything else — person candidates, contact-anchored and
+      // signal-anchored rows — is untouched and still inserts, because those
+      // dimensions legitimately carry several candidates per account.
+      const isCompanyRow = plan.leadCandidate.lead_type === "account" &&
+        !!accountId && !plan.contact;
+      let leadCandidateId: string | null = null;
+      let reusedExisting = false;
+
+      if (isCompanyRow) {
+        const { data: existingLead } = await supabase.from("lead_candidates")
+          .select("id")
+          .eq("workspace_id", workspace_id)
+          .eq("account_id", accountId)
+          .eq("lead_type", "account")
+          .is("contact_id", null)
+          .is("signal_id", null)
+          .maybeSingle();
+        leadCandidateId = (existingLead as { id?: string } | null)?.id ?? null;
+        if (leadCandidateId) {
+          reusedExisting = true;
+          // REFRESHED, NOT LEFT STALE. A re-run carries newer evidence — a
+          // different opening, a changed Brain status — and the row the user
+          // sees should be the latest reading of the same company. `plan_id`
+          // moves with it so the Library shows which run last confirmed it.
+          await supabase.from("lead_candidates").update?.({
+            plan_id: row.plan_id, reason: row.reason,
+            next_action: row.next_action, raw: row.raw,
+          }).eq("id", leadCandidateId);
+        }
+      }
+
+      if (!leadCandidateId) {
+        const { data: lc } = await supabase.from("lead_candidates").insert(row)
+          .select("id").maybeSingle();
+        leadCandidateId = (lc as { id?: string } | null)?.id ?? null;
+      }
       // 2) attach the contact through the PR #85 safe writer (verified account only).
       if (plan.contact && (plan.contact.name || plan.contact.linkedinUrl) && leadCandidateId) {
         await writeContact({
@@ -117,7 +183,10 @@ export function createPersistPlan(deps: PersistPlanDeps) {
           linkLeadCandidateId: leadCandidateId,
         } as never);
       }
-      return { ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId };
+      return {
+        ok: !!leadCandidateId, accountId, contactId: null, leadCandidateId,
+        ...(reusedExisting ? { reusedExisting: true } : {}),
+      };
     } catch (e) {
       return { ok: false, accountId: null, contactId: null, leadCandidateId: null,
         reason: (e as Error).message };

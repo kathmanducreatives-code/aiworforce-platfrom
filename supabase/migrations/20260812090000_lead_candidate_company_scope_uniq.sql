@@ -1,0 +1,89 @@
+-- ---------------------------------------------------------------------------
+-- COMPANY-SCOPED IDENTITY FOR ACCOUNT-TYPE LEAD CANDIDATES
+-- ---------------------------------------------------------------------------
+--
+-- WHAT THIS FIXES.
+--
+-- A Mission hiring run persists one account-type `lead_candidates` row per
+-- qualified company. Re-running an equivalent Mission produced ANOTHER row: the
+-- account was deduplicated (select-then-insert on domain) and the candidate was
+-- not, because `lead_candidates` carries no uniqueness constraint at all.
+--
+-- WHY THERE IS NONE TODAY.
+--
+-- `lc_dedupe_uniq` — UNIQUE (workspace_id, coalesce(plan_id,…),
+-- coalesce(account_id,…), coalesce(contact_id,…), coalesce(signal_id,…)) — was
+-- created in 20260611080445 and DROPPED one migration later, in
+-- 20260611081842, which dropped four indexes and recreated only the two on
+-- `accounts` and `contacts`. No comment explains the omission.
+--
+-- It is NOT restored here, and restoring it would not fix this: `plan_id` is
+-- part of that key, orchestrate creates a new `task_plans` row per request, so
+-- two runs of the same Mission are two distinct tuples under it. It would make
+-- same-plan retries idempotent and nothing else.
+--
+-- NOTE FOR THE FUTURE evidence_id CUTOVER: 20260717170000 and
+-- docs/architecture/signals-storage-schema-v2.md §9 both state that
+-- `lc_dedupe_uniq` still exists. It does not. That plan needs revisiting on its
+-- own terms; this migration deliberately does not act on it.
+--
+-- ---------------------------------------------------------------------------
+-- THE IDENTITY
+-- ---------------------------------------------------------------------------
+--
+--   a workspace has at most ONE account-type candidate per account,
+--   when that candidate anchors no contact and no signal.
+--
+-- DELIBERATELY NARROW. `account_id` is NOT globally unique across
+-- `lead_candidates`, and must not become so: the model supports many candidates
+-- per account, and the Lead Library renders them as a list
+-- (canonicalLeadView filters `leadCandidates` by `account_id` and returns
+-- several). The three predicate columns are what keep this to the company row:
+--
+--   lead_type = 'account'  — the canonical company row written by persistPlan
+--                            (companyRowProjection / the Mission projection).
+--                            The legacy tool path writes 'person' and 'company'
+--                            and is untouched by this index.
+--   contact_id IS NULL     — a candidate anchored to a person is a different
+--                            candidate, one per contact.
+--   signal_id IS NULL      — a candidate anchored to a signal is a different
+--                            candidate, one per signal. Every legacy 'company'
+--                            row carries one.
+--
+-- Rows are still scoped per workspace, so the same company in two workspaces is
+-- two candidates.
+--
+-- ---------------------------------------------------------------------------
+-- DATA AUDIT BEFORE CREATION
+-- ---------------------------------------------------------------------------
+--
+-- Run read-only against TEST (zbwsbnqqpkvdhqwavjke) on 2026-08-12:
+--
+--   lead_type='account' rows ......................... 0
+--   rows matching the index predicate ................ 0
+--   groups violating the proposed uniqueness ......... 0
+--   rows that would need resolving ................... 0
+--
+-- For context, the table held 257 legacy `lead_type='company'` rows (all with
+-- signal_id, so all outside this predicate) and 219 `'person'` rows.
+--
+-- PRODUCTION (wqnigjhcwjxtmordrwno) HAS NOT BEEN AUDITED. Run the same query
+-- there before deploying this migration:
+--
+--   select workspace_id, account_id, count(*)
+--   from public.lead_candidates
+--   where lead_type = 'account' and contact_id is null and signal_id is null
+--   group by workspace_id, account_id having count(*) > 1;
+--
+-- A non-empty result must be resolved by an explicit, reviewed decision — this
+-- migration deletes and merges nothing.
+-- ---------------------------------------------------------------------------
+
+CREATE UNIQUE INDEX IF NOT EXISTS lead_candidates_company_scope_uniq
+  ON public.lead_candidates (workspace_id, account_id)
+  WHERE lead_type = 'account'
+    AND contact_id IS NULL
+    AND signal_id IS NULL;
+
+COMMENT ON INDEX public.lead_candidates_company_scope_uniq IS
+  'One account-type lead candidate per (workspace, account) when it anchors no contact and no signal. Makes repeated Mission hiring runs idempotent. Deliberately partial: account_id is not unique across lead_candidates, because a workspace legitimately holds many candidates per account across the person, contact and signal dimensions.';

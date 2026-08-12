@@ -29,8 +29,12 @@ function fakeDb(opts: { failLeadInsert?: boolean; existingAccountId?: string } =
         return {
           select(_c: string) {
             const filters: Record<string, unknown> = {};
+            // `is` is part of the same filter chain as `eq` — the company-row
+            // lookup needs both, and the double must implement the contract the
+            // real client already has rather than a subset of it.
             const chain = {
               eq(c: string, v: unknown) { filters[c] = v; return chain; },
+              is(c: string, v: null) { filters[c] = v; return chain; },
               maybeSingle() {
                 selects.push({ table, filters });
                 return Promise.resolve({
@@ -40,6 +44,14 @@ function fakeDb(opts: { failLeadInsert?: boolean; existingAccountId?: string } =
               },
             };
             return chain;
+          },
+          update(row: Record<string, unknown>) {
+            return {
+              eq: (_c: string, _v: unknown) => {
+                writes.push({ table: `${table}:update`, row });
+                return Promise.resolve({ data: null });
+              },
+            };
           },
           insert(row: Record<string, unknown>) {
             writes.push({ table, row });
