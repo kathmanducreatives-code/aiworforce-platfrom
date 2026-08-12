@@ -108,6 +108,9 @@ import {
 import {
   authorizePlaybookExecution, playbookAuthorizationSummary,
 } from "../_shared/leadPlaybookExecution.ts";
+import {
+  projectMissionCompanyRows, missionPersistenceSummary,
+} from "../_shared/leadMissionPersistenceProjection.ts";
 
 /**
  * Reload persisted capability state for a resume.
@@ -2402,6 +2405,55 @@ Deno.serve(async (req) => {
               task_id: task.id, rows: evaluation.rows.length, counts: evaluation.counts,
             });
 
+            // ── THE SAME RESULT, ALSO INTO THE CANONICAL LEAD LIBRARY ───────
+            //
+            // The mission path produced `tasks.result.workbench_*` and nothing
+            // else: the Workbench could render the run and the Lead Library
+            // stayed empty. `projectEvaluationRows` above SKIPS a company once
+            // it qualifies — by design, because a qualified company is a record
+            // rather than progress — and nothing was picking it up there.
+            //
+            // ONE writer, not two. `projectMissionCompanyRows` maps the engine's
+            // qualified companies onto the SAME `buildCompanyRowPersistencePlan`
+            // the company-first pipeline uses, and `persistPlan` is the SAME
+            // canonical writer. Only an explicit Brain pass is projected, an
+            // account row is never CONTACT and never quota-eligible, and dedup
+            // uses the existing `companyRowKey`.
+            //
+            // BEST-EFFORT, DELIBERATELY. A persistence failure must not discard
+            // the Workbench result the user can already see: the run is
+            // reported either way and the outcome of each write is recorded, so
+            // a partial write is visible rather than silent. The two views are
+            // built from the same `capabilityRun.companies`, so they cannot
+            // disagree about what the run found.
+            const missionPersistence = projectMissionCompanyRows(
+              capabilityRun.companies, workspace_id);
+            const missionPersistPlan = createPersistPlan({
+              db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,
+            });
+            const missionPersistResults: Array<{
+              key: string; ok: boolean; lead_candidate_id: string | null; reason?: string;
+            }> = [];
+            for (const row of missionPersistence.rows) {
+              try {
+                const r = await missionPersistPlan(row.plan);
+                missionPersistResults.push({
+                  key: row.key, ok: r.ok, lead_candidate_id: r.leadCandidateId,
+                  ...(r.reason ? { reason: r.reason } : {}),
+                });
+              } catch (pe) {
+                missionPersistResults.push({
+                  key: row.key, ok: false, lead_candidate_id: null, reason: String(pe),
+                });
+              }
+            }
+            const missionPersisted = missionPersistResults.filter((r) => r.ok).length;
+            console.log("[run-agent][capability-engine][lead-library]", {
+              task_id: task.id,
+              ...missionPersistenceSummary(missionPersistence, missionPersisted),
+              failed: missionPersistResults.filter((r) => !r.ok).map((r) => r.reason ?? "unknown"),
+            });
+
             // THE RUN HAS ENDED — correct the snapshot that said otherwise.
             // The in-run publishes necessarily say `in_progress: true`; only
             // here is it known that no more work will happen in this
@@ -2421,6 +2473,14 @@ Deno.serve(async (req) => {
                     // A SEPARATE KEY, deliberately not merged into any lead
                     // collection. Nothing that reads leads will find these.
                     workbench_evaluation_rows: evaluation.rows,
+                    // WHAT REACHED THE LEAD LIBRARY, from the same companies the
+                    // Workbench rows were projected from. Persisted so the two
+                    // views can be reconciled from one row rather than argued
+                    // about from two.
+                    lead_library_persistence: {
+                      ...missionPersistenceSummary(missionPersistence, missionPersisted),
+                      results: missionPersistResults,
+                    },
                     workbench_evaluation_counts: evaluation.counts,
                     // THE CHECKPOINT. Per-company stage state plus the
                     // continuation flag the UI reads, so a run holding pending
