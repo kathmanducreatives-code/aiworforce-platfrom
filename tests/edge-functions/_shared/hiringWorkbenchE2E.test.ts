@@ -46,6 +46,7 @@ import {
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { projectEvaluationRows } from "../../../supabase/functions/_shared/leadWorkbenchProjection.ts";
 import { identityIsActionable } from "../../../supabase/functions/_shared/companyIdentityResolution.ts";
+import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 // THE FRONTEND READERS. Pure modules, no React — the same code the Workbench
 // panel calls. Importing them here is what makes this test end-to-end rather
@@ -147,6 +148,13 @@ function deps(
       return Promise.resolve(rows[call.actorKey] ?? []);
     },
     verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+    // A QUALIFYING RUN NEEDS AN EVALUATOR. This file is about the Mission
+    // reaching the Workbench, not about evaluator availability; since Phase 4
+    // only the evaluator can decide a Mission is satisfied, so without one
+    // nothing qualifies and there is no Workbench row to assert on. The stub
+    // answers from each company's own registry and is still checked by
+    // `parseMissionEvaluationStrict`.
+    evaluateMission: stubMissionEvaluator(),
     ...over,
   };
 }
@@ -493,6 +501,42 @@ Deno.test("failure: enrichment failure does not produce a qualified company", as
     readEvaluationRows(r.taskResult).some((x) => x.status === "qualified"),
     "and no row may claim qualification",
   );
+});
+
+Deno.test("failure: enrichment failure HOLDS the company, it never rejects it", async () => {
+  // RULE 6, stated as a verdict rather than a count.
+  //
+  // The sibling test above proves nothing QUALIFIES when enrichment returns
+  // nothing. This one proves the other half: the company is not rejected
+  // either. A provider that failed says nothing about the company, so the only
+  // honest outcome is insufficient evidence, and the company stays resolvable
+  // on a later run. Inferring "not a fit" from a failed call is the single
+  // inference this architecture forbids outright.
+  //
+  // Note the evaluator supplied by `deps` returns a grounded PASS here — the
+  // hold is enforced by deterministic code on a falsifiable fact (enrichment
+  // was bought and produced nothing), not by asking the model to be cautious.
+  const r = await runHiring(hiringMission(), {
+    ...HAPPY,
+    apify_linkedin_company_details: [],
+  });
+  const evaluated = r.run!.companies.filter((c) => c.evaluation_path !== "not_reached");
+  assert(evaluated.length > 0, "companies must still reach the evaluator");
+  assertFalse(
+    evaluated.some((c) => c.verdict === "reject"),
+    "a failed enrichment provider may never become a rejection",
+  );
+  assert(
+    evaluated.some((c) => c.verdict === "unknown"),
+    "it must be held as unknown instead",
+  );
+  for (const c of evaluated.filter((x) => x.verdict === "unknown")) {
+    assertEquals(c.decision_source, "insufficient_evidence", c.key);
+    assert(
+      c.record.missing_evidence.includes("company_enrichment"),
+      `${c.key}: the hold must name what was missing`,
+    );
+  }
 });
 
 Deno.test("failure: a playbook/capability mismatch refuses before any actor runs", async () => {

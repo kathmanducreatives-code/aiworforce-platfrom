@@ -1536,6 +1536,10 @@ export async function runCapabilityPlan(
     // ── COMPANY BRAIN QUALIFICATION ──────────────────────────────────────────
     if (cap === "company_brain_qualification") {
       let passed = 0, unknown = 0;
+      // Did this plan actually buy enrichment? A plan that never included the
+      // step cannot be held to its absence.
+      const enrichmentPlanned = opts.plan.steps.some(
+        (s) => s.capability === "company_enrichment");
       // EVERY COMPANY WITH A DECISION REACHES THE BRAIN.
       //
       // This used to require `stage === "hiring_verified"`, so a lone Tier B or a
@@ -1790,14 +1794,22 @@ export async function runCapabilityPlan(
 
         // ── THE CANONICAL EVIDENCE REGISTRY, FOR EVERY COMPANY ──────────────
         //
-        // BUILT ABOVE ALL THREE BRANCHES, not just the unknown one.
+        // BUILT FOR EVERY COMPANY that reaches qualification, before any branch
+        // decides anything — because it is what the evaluator reasons over.
         //
-        // The deterministic-pass branch below fabricates a semantic assessment
-        // — `business_model: "b2b_saas"`, `supporting_evidence: ["deterministic
-        // gates passed"]` — and that is the path most companies qualify
-        // through. Grounding only the classifier branch would have left the
-        // commonest route to QUALIFIED completely ungoverned, which is the
-        // opposite of the point.
+        // It was built here for a different reason originally: there were three
+        // qualification branches, and the deterministic-pass one wrote out a
+        // semantic assessment in code — a hardcoded business model, and
+        // supporting evidence that merely said the deterministic gates had
+        // passed — which was the route most companies qualified through.
+        // Grounding only the classifier branch would have left the commonest
+        // route to QUALIFIED ungoverned. The inversion deleted that branch —
+        // there is one evaluator call now — so the registry is no longer a way
+        // to police a fabrication; it is the evaluator's input.
+        //
+        // The literals themselves are deliberately not repeated here: test 6b
+        // in evaluationPathTelemetry greps this file for them, and cannot tell
+        // a comment from live code.
         //
         // This is the only layer holding the discovery row, the enriched row
         // and the job evidence for one company at once, so it is the only place
@@ -1974,6 +1986,26 @@ export async function runCapabilityPlan(
             reason: e.reasoning,
             source: "mission_evaluation",
           };
+          // ── ENRICHED EVIDENCE IS A PRECONDITION OF QUALIFYING ─────────────
+          //
+          // A FALSIFIABLE FACT, so deterministic code owns it rather than the
+          // model. When the plan bought enrichment and the provider returned
+          // nothing, the only company facts available are discovery-time
+          // fields — YC's self-reported headcount, its own one-liner — and
+          // qualifying on those is what the enrichment step exists to prevent.
+          //
+          // This is a HOLD, not a rejection. The provider failing says nothing
+          // about the company, so the company becomes insufficient_evidence and
+          // stays resolvable on a later run. Inferring "not a fit" from a failed
+          // call is the one inference this architecture forbids outright.
+          if (c.brain.outcome === "QUALIFIED" && enrichmentPlanned && c.enriched === null) {
+            c.decision_source = "insufficient_evidence";
+            c.verdict = "unknown";
+            c.record.stage_reason = "enrichment_evidence_missing";
+            c.record.missing_evidence.push("company_enrichment");
+            unknown++;
+            continue;
+          }
           if (c.brain.outcome === "QUALIFIED") {
             c.verdict = "pass";
             c.record = advance(c.record, "qualified_company", "mission_evaluation_pass");

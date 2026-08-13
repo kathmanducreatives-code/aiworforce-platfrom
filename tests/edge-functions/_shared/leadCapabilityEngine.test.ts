@@ -16,6 +16,7 @@ import {
 import {
   CapabilityContainmentError, buildCapabilityGraph,
 } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import { guardedInvoker } from "../../../supabase/functions/_shared/leadMissionRuntime.ts";
 import {
   newExecutionState, runCapabilityPlan, stateMatchesMission, toRouteResultShape,
@@ -96,6 +97,18 @@ function mockDeps(
       return Promise.resolve(rows[call.actorKey] ?? []);
     },
     verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+    // THE EVALUATOR IS NOW A REQUIRED DEPENDENCY OF A QUALIFYING RUN.
+    //
+    // Nothing in this file is about evaluator availability; these tests are
+    // about capability ordering, provider choice, evidence gates and resume.
+    // Before Phase 4 the engine could qualify a company from a deterministic
+    // gate pass, so they needed no model dep. Now only the evaluator can decide
+    // a Mission is satisfied — a run without one qualifies nobody, by design —
+    // so omitting it here would silently turn every test below into a test of
+    // the no-evaluator path. The stub answers from each company's OWN registry
+    // and is still checked by `parseMissionEvaluationStrict`, so it cannot
+    // smuggle an ungrounded pass.
+    evaluateMission: stubMissionEvaluator(),
     ...over,
   };
 }
@@ -369,11 +382,16 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
     }],
   };
 
-  // (a) NO classifier available → the company is held PENDING, not rejected.
+  // (a) NO evaluator and NO classifier → held PENDING, never rejected.
+  //
+  // This branch is the whole point of the test, so it opts OUT of the shared
+  // evaluator that `mockDeps` now supplies. Absence of a decider is not a fact
+  // about the company.
   const recA: Recorder = { calls: [] };
-  const runA = await runCapabilityPlan(mockDeps(thin, recA), {
-    mission: m, plan, brain: BRAIN,
-  });
+  const runA = await runCapabilityPlan(
+    mockDeps(thin, recA, { evaluateMission: undefined }), {
+      mission: m, plan, brain: BRAIN,
+    });
   assertEquals(runA.state.qualified_company_keys.length, 0);
   assert(runA.state.unknown_company_keys.length > 0,
     "an undecidable company must be UNKNOWN, not a rejection");
@@ -389,9 +407,14 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
     "nothing may be rejected for want of evidence");
 
   // (b) WITH a classifier that confirms the fit → it qualifies.
+  //
+  // The CLASSIFIER FALLBACK, which is reachable only when no evaluator is
+  // available — the evaluator outranks it by design. Opted out explicitly so
+  // this stays a test of the fallback rather than of the evaluator.
   const recB: Recorder = { calls: [] };
   const runB = await runCapabilityPlan(
     mockDeps(thin, recB, {
+      evaluateMission: undefined,
       // THE STRUCTURED CONTRACT. `deps.classifyCompany` used to return
       // `{verdict, reason}` while the Brain reasoned over the full schema, so
       // the live path could never produce a business-model judgement. A pass
@@ -418,6 +441,7 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   const recC: Recorder = { calls: [] };
   const runC = await runCapabilityPlan(
     mockDeps(thin, recC, {
+      evaluateMission: undefined,
       classifyCompany: () => Promise.resolve(parseSemanticFitStrict({
         business_model: "b2b_service", company_fit: "fail", confidence: 0.8,
         agentory_use_case: "weak", supporting_evidence: [],
