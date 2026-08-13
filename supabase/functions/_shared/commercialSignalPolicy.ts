@@ -80,15 +80,47 @@ export const TECHNICAL_TITLES: readonly string[] = [
 const lc = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase() : "";
 
 /**
+ * The role list this run qualifies against.
+ *
+ * ONE VOCABULARY PER RUN — see the module header. This is not a second list
+ * competing with the tiers below; it REPLACES them for the run when the Mission
+ * named its own roles, and is absent otherwise. The decision is made once, in
+ * `missionQualificationContext.buildQualificationContext`, and travels with the
+ * context so prequalification and hiring verification cannot diverge.
+ */
+export interface RoleVocabulary {
+  source: "mission" | "default_commercial";
+  /** Normalized title fragments that qualify. Empty for `default_commercial`. */
+  required_titles: readonly string[];
+}
+
+/**
  * Which tier does this job title belong to?
  *
  * COMMERCIAL TIERS ARE CHECKED BEFORE TECHNICAL, so "Sales Engineer" is not
  * discarded as engineering and "Founding Account Executive" is not discarded for
  * containing "founding".
+ *
+ * WHEN THE MISSION NAMED ITS OWN ROLES, THEY ARE THE VOCABULARY.
+ *
+ * TEST run cf6cce3d asked for companies hiring software engineers and qualified
+ * none: "Software Engineer" is in `TECHNICAL_TITLES`, `technical` never produces
+ * a qualifying tier, so 42 companies were excluded as `technical_only` — the
+ * exact companies the Mission asked for. The commercial ladder below encodes
+ * Agentory's own buyer, which is the right default and the wrong answer to a
+ * Mission that named a different role.
+ *
+ * With a Mission vocabulary the commercial ladder is not consulted at all: a
+ * matching title is tier A, everything else is `other` (or `technical` for
+ * labelling). Without one, behaviour is byte-identical to before.
  */
-export function classifyTitle(title: unknown): TitleClass {
+export function classifyTitle(title: unknown, vocab?: RoleVocabulary | null): TitleClass {
   const t = lc(title);
   if (!t) return "other";
+  if (vocab && vocab.source === "mission") {
+    if (vocab.required_titles.some((k) => k && t.includes(k))) return "A";
+    return TECHNICAL_TITLES.some((k) => t.includes(k)) ? "technical" : "other";
+  }
   if (TIER_A_TITLES.some((k) => t.includes(k))) return "A";
   if (TIER_B_TITLES.some((k) => t.includes(k))) return "B";
   if (TIER_C_TITLES.some((k) => t.includes(k))) return "C";

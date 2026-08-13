@@ -26,7 +26,7 @@
 // PURE. No network, provider, model or database access.
 
 import {
-  classifyTitle, type SignalTier, type TitleClass,
+  classifyTitle, type SignalTier, type TitleClass, type RoleVocabulary,
 } from "./commercialSignalPolicy.ts";
 
 export const PREQUALIFICATION_VERSION = "commercial-prequalification-v1" as const;
@@ -63,8 +63,8 @@ export function normalizeCompanyName(name: unknown): string {
  * company could be scored Tier A here and found to have no commercial signal one
  * capability later. A role list that lives in two places disagrees in two places.
  */
-export function classifyJobTitle(title: unknown): TitleClass {
-  return classifyTitle(title);
+export function classifyJobTitle(title: unknown, vocab?: RoleVocabulary | null): TitleClass {
+  return classifyTitle(title, vocab);
 }
 
 export interface YcCompanyInput {
@@ -152,6 +152,25 @@ export interface PrequalificationResult {
 interface SizeBounds { min?: number | null; max?: number | null }
 
 /**
+ * What the Mission decided, for the stages that used to answer to the workspace
+ * Brain alone. Omitted entirely on a missionless run, where behaviour is
+ * unchanged.
+ */
+export interface PrequalificationMissionPolicy {
+  /** The run's single role vocabulary. */
+  vocabulary?: RoleVocabulary | null;
+  /**
+   * May a size bound REJECT?
+   *
+   * False when the Mission expressed no employee range: the workspace Brain's
+   * bounds still order the shortlist, but they may not exclude, because nothing
+   * the user asked for mentioned company size. This is the rule that keeps the
+   * 7 `employee_size` exclusions from TEST run cf6cce3d.
+   */
+  size_enforceable?: boolean;
+}
+
+/**
  * Score and rank YC rows without spending anything.
  *
  * Deduplicated on domain first, then normalized name — the same precedence the
@@ -160,7 +179,11 @@ interface SizeBounds { min?: number | null; max?: number | null }
  */
 export function prequalifyYcCompanies(
   rows: readonly YcCompanyInput[], size: SizeBounds = {},
+  missionPolicy: PrequalificationMissionPolicy = {},
 ): PrequalificationResult {
+  const vocab = missionPolicy.vocabulary ?? null;
+  // Default TRUE preserves the pre-Mission behaviour exactly.
+  const sizeEnforceable = missionPolicy.size_enforceable !== false;
   const excluded: ExcludedArtifact[] = [];
   const byKey = new Map<string, PrequalifiedCompany>();
 
@@ -179,7 +202,7 @@ export function prequalifyYcCompanies(
     if (byKey.has(key)) continue;
 
     const jobs = (r.openJobs ?? [])
-      .map((j) => ({ title: String(j?.title ?? "").trim(), tier: classifyJobTitle(j?.title) }))
+      .map((j) => ({ title: String(j?.title ?? "").trim(), tier: classifyJobTitle(j?.title, vocab) }))
       .filter((j) => j.title.length > 0);
 
     const tier_a = jobs.filter((j) => j.tier === "A").length;
@@ -234,8 +257,9 @@ export function prequalifyYcCompanies(
       // Magic (350) each have a real commercial opening and are still wrong for
       // a 10-150 mission; paying to resolve them buys a lead that can never
       // pass the Brain gate.
-      eligible: best_tier !== null && size_status !== "above_max" && size_status !== "below_min",
-      exclusion: (size_status === "above_max" || size_status === "below_min")
+      eligible: best_tier !== null &&
+        (!sizeEnforceable || (size_status !== "above_max" && size_status !== "below_min")),
+      exclusion: (sizeEnforceable && (size_status === "above_max" || size_status === "below_min"))
         ? "employee_size"
         : best_tier === null
         ? (technical > 0 ? "technical_only" : "insufficient_commercial")

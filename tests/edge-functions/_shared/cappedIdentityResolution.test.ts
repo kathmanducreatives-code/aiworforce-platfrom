@@ -23,9 +23,27 @@ import {
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 
+// THE FIXTURE'S MISSION, AFTER MISSION-AUTHORITATIVE QUALIFICATION.
+//
+// This file used to ask for "Sales Operations" and rely on the funnel's broad
+// commercial ladder to make five of the REAL_25 eligible. None of those 25
+// companies actually has a Sales Operations opening — they have Sales
+// Directors, AEs, BDRs and engineers — so under Mission-authoritative
+// qualification that query correctly yields ZERO eligible, and every capping
+// test below would have had nothing to cap.
+//
+// The Mission now asks for what this fixture genuinely contains, and states its
+// own employee range. That keeps both properties this file exists to guard:
+//   * the ROLE vocabulary decides eligibility (now the Mission's, not a fixed
+//     commercial list), and
+//   * an out-of-range company is excluded before any paid identity call — now
+//     on the MISSION's bound, which is the only kind that may reject.
 const CANONICAL =
-  "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
-const mission = (): LeadMissionV1 => parseLeadMissionDeterministic(CANONICAL);
+  "Find founders of SaaS startups hiring software engineers in the United States. Return 5 qualified leads.";
+const mission = (): LeadMissionV1 => {
+  const m = parseLeadMissionDeterministic(CANONICAL);
+  return { ...m, company_profile: { ...m.company_profile, employee_range: { min: 10, max: 150 } } };
+};
 const BRAIN = {
   employee_min: 10, employee_max: 150,
   positive_industries: ["b2b saas"], excluded_industries: [] as string[],
@@ -62,13 +80,20 @@ const REAL_25 = [
 ] as unknown as Record<string, unknown>[];
 
 /** The five companies that must reach the paid stage — and only these. */
-const ELIGIBLE = ["SnapMagic", "Tara AI", "Zentail", "Bitmovin", "Etleap"];
+// Engineering openings AND inside the Mission's 10-150.
+//   Mashgin   150  Senior Software Engineer, Backend
+//   OneSignal 150  Senior Software Engineer, Email Team
+//   Etleap     11  Senior Software Engineer - San Francisco
+//   Zentail    30  Software Engineer - Hybrid Preferred
+// SnapMagic / Tara AI / Bitmovin were eligible only under the old commercial
+// ladder; they hire sales roles, which this Mission did not ask for.
+const ELIGIBLE = ["Mashgin", "OneSignal", "Etleap", "Zentail"];
 /** What the real search Actor would return for each bare-name query. */
 const DOMAIN_BY_NAME: Record<string, string> = {
-  SnapMagic: "snapmagic.com", "Tara AI": "tara.ai", Zentail: "zentail.com",
-  Bitmovin: "bitmovin.com", Etleap: "etleap.com",
+  Mashgin: "mashgin.com", OneSignal: "onesignal.com",
+  Etleap: "etleap.com", Zentail: "zentail.com",
 };
-/** Real commercial signal, but a headcount outside 10-150. */
+/** A real opening, but a headcount outside the MISSION's 10-150. */
 const OVERSIZED = ["Apollo", "Magic", "HackerRank", "InfluxData", "Odeko"];
 
 interface Trace {
@@ -122,8 +147,9 @@ function tracingDeps(trace: Trace, rows: Record<string, Record<string, unknown>[
 
 const ENRICH_ROWS = ELIGIBLE.map((name) => {
   const slug = name.toLowerCase().replace(/\s+/g, "");
-  const domain = { SnapMagic: "snapmagic.com", "Tara AI": "tara.ai", Zentail: "zentail.com",
-    Bitmovin: "bitmovin.com", Etleap: "etleap.com" }[name]!;
+  // One domain map for the file — a second copy is how this drifted when the
+  // eligible set changed.
+  const domain = DOMAIN_BY_NAME[name];
   return {
     id: slug, name, linkedinUrl: `https://www.linkedin.com/company/${domain.split(".")[0]}`,
     website: `https://${domain}`, employeeCount: 40,
@@ -166,16 +192,16 @@ Deno.test("6. prequalification decides the shortlist before anything is bought",
   assert(run.state.prequalification, "the free verdict must be persisted");
   assertEquals(run.state.prequalification!.total_rows, 25);
   assertEquals(run.state.prequalification!.unique_companies, 20);
-  assertEquals(run.state.prequalification!.eligible_companies, 5);
+  assertEquals(run.state.prequalification!.eligible_companies, 4);
 });
 
 // ═══════════ 7/8. only the eligible five reach the paid company search ══
 
-Deno.test("7. exactly the five eligible companies reach LinkedIn company search", async () => {
+Deno.test("7. exactly the eligible companies reach LinkedIn company search", async () => {
   const { trace } = await runFixture();
   const queries = searchQueries(trace);
 
-  assertEquals(queries.length, 5,
+  assertEquals(queries.length, ELIGIBLE.length,
     `at most one search per eligible company; task c8a6e53d made 16 (got: ${queries.join(" | ")})`);
   for (const name of ELIGIBLE) {
     assert(queries.some((q) => q.startsWith(name)), `${name} must be searched`);
@@ -206,32 +232,33 @@ Deno.test("8. out-of-range companies never reach identity resolution", async () 
     assertEquals(rec.exclusion, "employee_size", `${name} must say why it was skipped`);
     assertFalse(rec.shortlisted);
   }
-  // Apollo and Magic each HAVE a real commercial opening — size is what excluded
-  // them, not a missing signal. Recording that distinction is the whole point.
-  const apollo = run.state.prequalification!.companies.find((x) => x.name === "Apollo")!;
-  assert(apollo.commercial_jobs.length > 0, "Apollo does have a commercial role");
-  assertEquals(apollo.team_size, 200);
+  // HackerRank HAS engineering openings this Mission asked for — size is what
+  // excluded it, not a missing signal. Recording that distinction is the point.
+  const hr = run.state.prequalification!.companies.find((x) => x.name === "HackerRank")!;
+  assert(hr.commercial_jobs.length > 0, "HackerRank does have a matching role");
+  assertEquals(hr.team_size, 300);
 });
 
 // ════════════════════ 9/10. the FULL openJobs array is evaluated ══
 
 Deno.test("9. every open job is evaluated, not just the first", async () => {
   const { run } = await runFixture();
-  const snap = run.state.prequalification!.companies.find((x) => x.name === "SnapMagic")!;
-  // SnapMagic's four roles include two Tier-C and two commercial.
-  assert(snap.commercial_jobs.length >= 3, "all four roles were read");
-  assertEquals(snap.strongest_signal, "Head of Sales",
-    "the STRONGEST role, not openJobs[0] — which is 'Head of Operations'");
+  // OneSignal's openJobs[0] is "Product Marketing Manager"; the three engineering
+  // roles this Mission asked for are second, third and fourth. Reading only the
+  // first would have classified it as having no matching signal.
+  const one = run.state.prequalification!.companies.find((x) => x.name === "OneSignal")!;
+  assert(one.commercial_jobs.length >= 3, "all four roles were read");
+  assert(one.eligible, "the later engineering roles make it eligible");
 });
 
-Deno.test("10. a commercial role listed after an engineering role is still found", async () => {
+Deno.test("10. a matching role anywhere in the array is found", async () => {
   const { run, trace } = await runFixture();
-  // Etleap's openJobs[0] is "Senior Software Engineer". The Account Executive is
-  // second. Reading openJobs[0] would have classified Etleap as technical-only.
-  const etleap = run.state.prequalification!.companies.find((x) => x.name === "Etleap")!;
-  assertEquals(etleap.strongest_signal, "Account Executive");
-  assert(etleap.eligible);
-  assert(searchQueries(trace).includes("Etleap"));
+  // Zentail's openJobs[0] and [1] are BDR and Account Executive; the "Software
+  // Engineer - Hybrid Preferred" this Mission asked for is THIRD. Reading
+  // openJobs[0] would have missed it entirely.
+  const zentail = run.state.prequalification!.companies.find((x) => x.name === "Zentail")!;
+  assert(zentail.eligible, "the third role is what qualifies it");
+  assert(searchQueries(trace).includes("Zentail"));
 });
 
 // ════════════════════ 11/12. concurrency and batching ══
@@ -249,7 +276,7 @@ Deno.test("12. company details receives resolved LinkedIn URLs in ONE batch", as
   assertEquals(details.length, 1,
     "one batched enrichment call, not one per company");
   const companies = (details[0].input as { companies?: string[] }).companies ?? [];
-  assertEquals(companies.length, 5);
+  assertEquals(companies.length, ELIGIBLE.length);
   for (const u of companies) {
     assert(u.startsWith("https://www.linkedin.com/company/"),
       `details must receive URLs, never names (got ${u})`);
@@ -284,7 +311,9 @@ Deno.test("13. an unresolved identity stays not-evaluated and is never actionabl
     assertEquals(co.founders.length, 0, "no people are ever bought for it");
   }
   // NO RETRY LOOP. One search per shortlisted company, and that is all.
-  assertEquals(trace.calls.filter((c) => c.actor === "apify_linkedin_company_search").length, 5);
+  assertEquals(
+    trace.calls.filter((c) => c.actor === "apify_linkedin_company_search").length,
+    ELIGIBLE.length);
   assertFalse(trace.calls.some((c) => c.actor === "apify_linkedin_company_employees"),
     "founder discovery must not run without a qualified company");
 });
@@ -324,7 +353,7 @@ Deno.test("19. progress is published per stage and never qualifies prematurely",
   // the engine's own dedupe, and prequalification drops it from the working set
   // rather than counting a row with no name and no website as an account found.
   assertEquals(prequal.accounts_found, 20);
-  assertEquals(prequal.eligible_opportunities, 5);
+  assertEquals(prequal.eligible_opportunities, 4);
   assertEquals(prequal.exclusion_reasons["employee_size"], 5);
   assertEquals(prequal.qualified_companies, 0,
     "nothing may be reported qualified before the Company Brain has run");

@@ -154,7 +154,18 @@ Deno.test("8. employee bounds use supported enum values only", () => {
 });
 
 Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Actor", async () => {
-  const m = mission();
+  // THE BOUND NOW COMES FROM THE MISSION, NOT THE WORKSPACE BRAIN.
+  //
+  // This test's point is unchanged: the ENRICHED headcount (400) decides, not
+  // YC's self-reported 40. What changed is whose 10-150 it is. A workspace
+  // Brain may no longer reject on an axis the Mission never mentioned — see
+  // `missionQualificationContext` and the companion test below — so the range
+  // is stated on the Mission, which is where an enforceable bound belongs.
+  const base = mission();
+  const m = {
+    ...base,
+    company_profile: { ...base.company_profile, employee_range: { min: 10, max: 150 } },
+  } as typeof base;
   const plan = buildCapabilityGraph(m);
   // A YC company whose ENRICHED headcount is 400 — inside the broad 10+..500
   // discovery filter, outside the mission's 10-150.
@@ -204,6 +215,56 @@ Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Act
   const rejected = run.companies.find((c) => c.verdict === "reject");
   assert(rejected, "the company must be explicitly rejected");
   assert(rejected!.fit?.failed_gates.includes("employee_count_above_max"));
+});
+
+Deno.test("9b. a Brain-only size bound does NOT reject when the Mission is silent", async () => {
+  // THE AUTHORITY RULE, EXERCISED END TO END.
+  //
+  // Identical fixture to test 9 — a 400-employee company under a 10-150 Brain —
+  // except the Mission states no employee range. TEST run cf6cce3d excluded 7
+  // companies exactly this way, on a question the user never asked. The Brain's
+  // bound survives for RANKING; it may not reject.
+  const m = mission();
+  assertEquals((m.company_profile as { employee_range?: unknown }).employee_range, undefined,
+    "the fixture Mission must genuinely express no size opinion");
+  const plan = buildCapabilityGraph(m);
+  const run = await runCapabilityPlan({
+    invoke: (c: CompiledActorCall<unknown>) => {
+      if (c.actorKey === "apify_yc_companies_memo23") {
+        return Promise.resolve([{
+          id: "big", name: "BigCo", website: "https://bigco.com", teamSize: 40,
+          openJobs: [{ title: "Revenue Operations Manager", url: "https://x/big/1" }],
+        }]);
+      }
+      if (c.actorKey === "apify_linkedin_company_search") {
+        return Promise.resolve([{ id: "big", name: "BigCo",
+          linkedinUrl: "https://www.linkedin.com/company/bigco",
+          website: "https://bigco.com" }]);
+      }
+      if (c.actorKey === "apify_linkedin_company_details") {
+        return Promise.resolve([{ id: "big", name: "BigCo",
+          linkedinUrl: "https://www.linkedin.com/company/bigco",
+          website: "https://bigco.com", employeeCount: 400,
+          description: "BigCo is a B2B SaaS platform sold on subscription.",
+          industries: [{ id: "4", name: "B2B SaaS", hierarchy: "Technology" }],
+          locations: [{ linkedinText: "United States" }] }]);
+      }
+      if (c.actorKey === "apify_linkedin_job_search") {
+        return Promise.resolve([{ id: "j1", title: "Revenue Operations Manager",
+          company: { name: "BigCo", linkedinUrl: "https://www.linkedin.com/company/bigco" },
+          postedDate: "2026-07-20" }]);
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+  }, { mission: m, plan, brain: BRAIN });
+
+  const co = run.companies.find((c) => c.key.includes("bigco") || c.company.company_name === "BigCo");
+  assert(co, "the company must still be evaluated");
+  assertFalse(
+    co!.fit?.failed_gates.includes("employee_count_above_max") ?? false,
+    "a Brain-only bound must not fail the size gate when the Mission set none",
+  );
 });
 
 Deno.test("10. YC isHiring is not treated as Sales-Ops verification", async () => {

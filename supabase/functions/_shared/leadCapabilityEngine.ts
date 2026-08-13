@@ -48,6 +48,10 @@ import {
   prequalificationKey, prequalifyYcCompanies, shortlistForLinkedInResolution,
   type PrequalificationResult, type PrequalifiedCompany, type YcCompanyInput,
 } from "./leadCommercialPrequalification.ts";
+import {
+  buildQualificationContext, resolveEmployeeBounds, qualificationContextSummary,
+  type QualificationContext,
+} from "./missionQualificationContext.ts";
 import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
@@ -585,6 +589,17 @@ export async function runCapabilityPlan(
     ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
     : newExecutionState(opts.plan, hash);
 
+  // ── WHOSE QUESTION THIS RUN ANSWERS, DECIDED ONCE ────────────────────────
+  //
+  // Built here and threaded down, so every stage qualifies against the SAME
+  // Mission-derived rules. Before this existed, prequalification answered to a
+  // hard-coded commercial role list and the workspace Brain's employee bounds,
+  // and a Mission asking for companies hiring software engineers qualified none
+  // of a hundred (TEST run cf6cce3d): its own required signal was classified
+  // `technical`, and `technical` could not produce a qualifying tier.
+  const qualificationCtx = buildQualificationContext(opts.mission);
+  log("qualification_context", qualificationContextSummary(qualificationCtx));
+
   const outcomes: CapabilityRunResult["capability_outcomes"] = [];
   const companies: EngineCompany[] = [];
   // STAGE 2 state, captured inside the qualification capability and read after
@@ -1031,7 +1046,8 @@ export async function runCapabilityPlan(
         // is off — every identity and enrichment call comes out of this number.
         deps.evaluateBatch
           ? (deps.batchLimits ?? resolveBatchLimits({})).max_evaluated
-          : undefined);
+          : undefined,
+        qualificationCtx);
       // The working set may have shrunk — artifacts are gone.
       state.company_keys = companies.map((c) => c.key);
       log("prequalification_complete", {
@@ -1550,6 +1566,13 @@ export async function runCapabilityPlan(
         });
       }
 
+      // Resolved once for the whole eligible set — the Mission's bounds when it
+      // stated any, the Brain's as advisory-only when it did not.
+      const fitBounds = resolveEmployeeBounds(qualificationCtx, {
+        employee_min: opts.brain?.employee_min ?? null,
+        employee_max: opts.brain?.employee_max ?? null,
+      });
+
       for (const c of eligible) {
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
@@ -1559,8 +1582,11 @@ export async function runCapabilityPlan(
           enrichment_complete: c.enriched !== null,
           employee_count: src.employee_count ?? null,
           employee_range_advisory: src.employee_range_advisory ?? null,
-          employee_min: opts.brain?.employee_min ?? null,
-          employee_max: opts.brain?.employee_max ?? null,
+          // MISSION-RESOLVED BOUNDS. The Mission's range when it stated one;
+          // otherwise null, because the workspace Brain's bounds are advisory
+          // on an axis the user never mentioned and must not reject there.
+          employee_min: fitBounds.enforceable ? fitBounds.min : null,
+          employee_max: fitBounds.enforceable ? fitBounds.max : null,
           industry_ids: src.industry_ids ?? [],
           positive_industries: opts.brain?.positive_industries ?? [],
           excluded_industries: opts.brain?.excluded_industries ?? [],
@@ -1595,7 +1621,10 @@ export async function runCapabilityPlan(
           geography: src.geography ?? null,
           required_geography: opts.brain?.required_geography ?? null,
           employee_count: src.employee_count ?? null,
-          employee_ceiling: opts.brain?.employee_max ?? 200,
+          // The Mission's ceiling when it set one. When it did not, the Brain's
+          // ceiling is advisory, so the gate falls back to the generous default
+          // rather than the workspace's own narrower preference.
+          employee_ceiling: (fitBounds.enforceable ? fitBounds.max : null) ?? 200,
           commercial_tier: c.hiring_assessment?.tier ?? null,
           semantic: null,
         };
@@ -2248,8 +2277,27 @@ export function applyPrequalification(
   size: { min: number | null; max: number | null },
   requestedLeadCount: number,
   shortlistCeiling?: number,
+  /**
+   * The Mission's qualification context. Omitted on a missionless run, where
+   * the workspace Brain keeps its previous authority and behaviour is unchanged.
+   */
+  qualification?: QualificationContext | null,
 ): PrequalificationResult {
-  const result = prequalifyYcCompanies(rawRows, { min: size.min, max: size.max });
+  // THE MISSION DECIDES WHAT COUNTS AS A QUALIFYING ROLE, AND WHETHER SIZE MAY
+  // REJECT. Both used to be answered by the workspace Brain and a hard-coded
+  // commercial role list, which is how a "hiring software engineers" Mission
+  // qualified zero of a hundred companies (TEST run cf6cce3d).
+  const bounds = qualification
+    ? resolveEmployeeBounds(qualification, { employee_min: size.min, employee_max: size.max })
+    : { min: size.min, max: size.max, enforceable: true, source: "brain_advisory" as const };
+  const result = prequalifyYcCompanies(
+    rawRows,
+    { min: bounds.min, max: bounds.max },
+    {
+      vocabulary: qualification?.role_vocabulary ?? null,
+      size_enforceable: bounds.enforceable,
+    },
+  );
   const shortlist = shortlistForLinkedInResolution(
     result, requestedLeadCount, shortlistCeiling);
   const shortlistKeys = new Set(shortlist.map((c) => c.company_key));
