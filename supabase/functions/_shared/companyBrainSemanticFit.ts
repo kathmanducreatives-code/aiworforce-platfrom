@@ -44,6 +44,24 @@ export interface SemanticFitAssessment {
   conflicting_evidence: string[];
   unknown_fields: string[];
   reason: string;
+  /**
+   * DOES THE COMPANY SATISFY THE USER'S MISSION?
+   *
+   * ADDITIVE AND OPTIONAL, on purpose. Absent, every path below behaves exactly
+   * as it did — five test files and roughly twenty-five assertions depend on
+   * that, and a rewrite would have made this change unreviewable as a diff.
+   * Present, it OUTRANKS `company_fit`.
+   *
+   * The two answer different questions. `company_fit` asks whether the company
+   * looks like Agentory's buyer; `mission_fit` asks whether it is what the user
+   * requested. For "AI startups hiring software engineers" those come apart
+   * completely, and the second is the one the run was commissioned to answer.
+   */
+  mission_fit?: "pass" | "review" | "fail";
+  /** Workspace preference strength. RANKING ONLY — may never cause a reject. */
+  icp_fit?: "strong" | "plausible" | "weak";
+  /** 0-100, for ordering qualified results. Never a threshold. */
+  match_score?: number;
 }
 
 /** Everything the assessment may look at. Nothing is privileged over the rest. */
@@ -153,6 +171,15 @@ export interface HardGateInput {
   employee_ceiling: number;
   commercial_tier: "A" | "B" | "C" | null;
   semantic: SemanticFitAssessment | null;
+  /**
+   * Did the MISSION decide which roles qualify?
+   *
+   * True when `role_vocabulary.source === "mission"`. It changes one thing: an
+   * absent commercial tier stops being a hard rejection, because "commercial"
+   * is then a question about Agentory's buyer that the user did not ask.
+   * Omitted, behaviour is exactly as before.
+   */
+  mission_owns_hiring_role?: boolean;
 }
 
 /** How far above the ceiling counts as "clearly" above. */
@@ -182,7 +209,23 @@ export function failedHardGates(i: HardGateInput): HardGate[] {
     failed.push("employee_count_far_above_ceiling");
   }
   if (i.semantic?.business_model === "consumer") failed.push("consumer_only");
-  if (i.commercial_tier === null) failed.push("no_commercial_signal");
+  // AN ABSENT COMMERCIAL TIER IS NOT A FALSIFIABLE FACT WHEN THE MISSION NAMED
+  // ITS OWN ROLES.
+  //
+  // "Commercial" here means Agentory's buyer — a company standing up a GTM
+  // motion. That is the right default and the wrong question to ask of a
+  // Mission whose required signal is software engineers: `commercial_tier`
+  // comes from `hiring_assessment.tier`, so a Mission-scoped run that found
+  // four Senior Software Engineer openings and a Mission-scoped run that found
+  // nothing at all were both rejected here, identically, before any model was
+  // consulted. Whether an opening satisfies the Mission is a JUDGEMENT, and it
+  // belongs to the evaluator.
+  //
+  // Where the Mission is silent the gate stands: a GTM mission with no
+  // commercial role genuinely has no signal.
+  if (i.commercial_tier === null && !i.mission_owns_hiring_role) {
+    failed.push("no_commercial_signal");
+  }
   if (i.semantic?.agentory_use_case === "none") failed.push("no_agentory_use_case");
   return failed;
 }
@@ -263,6 +306,46 @@ export function decideCompanyBrain(i: {
   // verified one wins, because the whole failure this replaces was a confident
   // claim nobody could substantiate reaching a salesperson as a fact.
   const g = i.grounding ?? null;
+
+  // ── THE MISSION VERDICT OUTRANKS THE BUYER VERDICT ───────────────────────
+  //
+  // When the evaluator answered the Mission question, that answer governs.
+  // `company_fit` is a judgement about Agentory's buyer and stays available as
+  // supporting context, but it may no longer decide: a company that satisfies
+  // the user's request is not disqualified for being an imperfect ICP match,
+  // and `icp_fit` is deliberately not consulted here at all — it exists to
+  // ORDER results, and reading it in a decision is how a preference becomes a
+  // gate by accident.
+  //
+  // Grounding still applies, and still only downgrades: a Mission pass whose
+  // cited evidence did not survive verification is REVIEW, never a silent
+  // qualify. It cannot rescue a `fail`, because a `fail` here means the
+  // evaluator found evidence AGAINST a stated requirement.
+  if (s.mission_fit) {
+    if (s.mission_fit === "fail") {
+      return {
+        ...base, outcome: "REJECT",
+        reason: s.reason || "the company does not satisfy the mission",
+      };
+    }
+    const groundedDown = g && g.final_grounded_decision !== "pass";
+    if (s.mission_fit === "review" || groundedDown) {
+      return {
+        ...base, outcome: "REVIEW",
+        reason: groundedDown && g!.downgrade_reasons.length > 0
+          ? `held for review: ${g!.downgrade_reasons.join("; ")}`
+          : s.reason || "the mission is not yet settled on the available evidence",
+      };
+    }
+    return {
+      ...base, outcome: "QUALIFIED",
+      reason: g
+        ? `${s.reason || "satisfies the mission"} ` +
+          `(grounding ${g.grounding_score}, validated: ${g.validated_claim_types.join(", ")})`
+        : s.reason || "satisfies the mission",
+    };
+  }
+
   const effectiveFit = g ? g.final_grounded_decision : s.company_fit;
 
   if (effectiveFit === "fail") {

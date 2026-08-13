@@ -281,6 +281,190 @@ export function brainMayReject(
   return !ctx.mission_owns[axis];
 }
 
+// ───────────────────────────── the four-tier authority ─────────────────────
+
+/**
+ * WHAT THE BRAIN IS ALLOWED TO DO, FIELD BY FIELD.
+ *
+ * TWO CONTRADICTORY PRECEDENCE MODELS WERE LIVE AT ONCE.
+ *
+ *   `companyBrainEffectivePolicy` — "a mission may narrow a hard Brain
+ *   constraint, never widen it", merged as an INTERSECTION.
+ *
+ *   this module's header — "the Brain is supplementary: hard ONLY where the
+ *   Mission is silent".
+ *
+ * They disagree on the case that matters. For the Mission "AI startups in the
+ * United States hiring software engineers", which states no employee range, the
+ * first keeps the workspace's 10-150 ceiling HARD and rejects a 220-person AI
+ * startup that satisfies every stated requirement; the second lets it through
+ * and ranks it below its in-range peers. Both ran in TEST run d787cfc7, in
+ * different stages of the same pipeline.
+ *
+ * This resolves it, and the resolution is scoped to qualification: the shared
+ * `companyBrainEffectivePolicy` keeps its own semantics for Scout Radar,
+ * Content and Outreach, which are not this pipeline and are not covered by
+ * these tests.
+ *
+ * ── THE FOUR TIERS ────────────────────────────────────────────────────────
+ *
+ *   1 MISSION HARD      the user said it in this request              absolute
+ *   2 BRAIN HARD        an axis the Mission never mentions            absolute
+ *   3 BRAIN PREFERENCE  an axis the Mission never mentions        score only
+ *   4 CONFLICT          both spoke and disagreed          Mission wins, recorded
+ *
+ * ── WHY EACH FIELD SITS WHERE IT DOES ─────────────────────────────────────
+ *
+ * `excluded_industries` and `disqualifier_keywords` are tier 2 ALWAYS. They say
+ * who the workspace can never sell to, which is a different question from which
+ * slice the user wants today — a Mission naming "AI startups" is not a Mission
+ * authorising Manufacturing.
+ *
+ * `positive_industries` is tier 3 ALWAYS. LinkedIn's vocabulary has no
+ * "B2B SaaS"; `evaluateCompanyFit` already demoted the label to soft evidence
+ * for exactly that reason, and a wording mismatch is a question for the
+ * evaluator, not a rejection.
+ *
+ * `employee_range` is tier 3 ALWAYS. A preferred size is a preference; it may
+ * order results and may never be the sole reason a company that satisfies the
+ * Mission is discarded.
+ *
+ * `required_geography` is tier 2 when the Mission is silent and tier 4 when it
+ * is not — the Mission's own locations then govern.
+ */
+export const BRAIN_AUTHORITY_VERSION = "mission-brain-authority-v1" as const;
+
+/** A Brain field the evaluator may REJECT on. */
+export interface BrainRejectingConstraints {
+  excluded_industries: readonly string[];
+  disqualifier_keywords: readonly string[];
+  /** Null when the Mission owns geography, or the Brain named none. */
+  required_geography: string | null;
+}
+
+/** A Brain field that may only move the score. */
+export interface BrainPreferences {
+  employee_range: { min: number | null; max: number | null };
+  target_industries: readonly string[];
+  business_models: readonly string[];
+  buyer_roles: readonly string[];
+  target_signals: readonly string[];
+}
+
+export interface AuthorityConflict {
+  axis: keyof MissionOwnedAxes | "geography_value";
+  mission_value: unknown;
+  brain_value: unknown;
+  /** Always `mission`. Recorded so a decision can be explained, never inferred. */
+  resolved_to: "mission";
+  reason: string;
+}
+
+export interface BrainAuthority {
+  version: typeof BRAIN_AUTHORITY_VERSION;
+  rejecting: BrainRejectingConstraints;
+  preferences: BrainPreferences;
+  /** Axes the Mission decided. The Brain contributes ranking on these only. */
+  mission_owned: readonly string[];
+  conflicts: readonly AuthorityConflict[];
+}
+
+/** The Brain slice this resolver reads. Loose, so it works on the wire shape. */
+export interface BrainAuthorityInput {
+  employee_min?: number | null;
+  employee_max?: number | null;
+  positive_industries?: readonly string[];
+  excluded_industries?: readonly string[];
+  required_geography?: string | null;
+  business_models?: readonly string[];
+  buyer_roles?: readonly string[];
+  target_signals?: readonly string[];
+  disqualifier_keywords?: readonly string[];
+}
+
+const arr = (v: readonly string[] | undefined): string[] =>
+  (v ?? []).map((x) => String(x ?? "").trim()).filter(Boolean);
+
+/**
+ * Split the Brain into what may reject and what may only score.
+ *
+ * TOTAL. Every supplied field lands in exactly one of the two, and every axis
+ * the Mission also decided is recorded — as a conflict when the Brain
+ * disagreed, so "the Mission won here" is a fact in the artifact rather than an
+ * inference from absence.
+ */
+export function resolveBrainAuthority(
+  ctx: Pick<QualificationContext, "mission_owns" | "verticals" | "locations" | "employee_range">,
+  brain: BrainAuthorityInput | null | undefined,
+): BrainAuthority {
+  const conflicts: AuthorityConflict[] = [];
+  const missionOwned = (Object.keys(ctx.mission_owns) as Array<keyof MissionOwnedAxes>)
+    .filter((k) => ctx.mission_owns[k]);
+
+  // GEOGRAPHY — tier 2 when the Mission is silent, tier 4 when it is not.
+  const brainGeo = typeof brain?.required_geography === "string" && brain.required_geography.trim()
+    ? brain.required_geography.trim()
+    : null;
+  let rejectingGeo = brainGeo;
+  if (brainGeo && ctx.mission_owns.geography) {
+    rejectingGeo = null;
+    conflicts.push({
+      axis: "geography_value",
+      mission_value: ctx.locations,
+      brain_value: brainGeo,
+      resolved_to: "mission",
+      reason: "the Mission stated its own geography; the workspace default may not narrow it",
+    });
+  }
+
+  // EMPLOYEE RANGE — tier 3 always. Recorded as a conflict only when the
+  // Mission also stated one, because that is the case where two numbers exist.
+  const bMin = brain?.employee_min ?? null;
+  const bMax = brain?.employee_max ?? null;
+  if ((bMin != null || bMax != null) && ctx.mission_owns.employee_count) {
+    conflicts.push({
+      axis: "employee_count",
+      mission_value: ctx.employee_range,
+      brain_value: { min: bMin, max: bMax },
+      resolved_to: "mission",
+      reason: "the Mission stated its own employee range",
+    });
+  }
+
+  // INDUSTRY — positive industries are a preference either way; a conflict is
+  // recorded when the Mission named verticals of its own.
+  const positives = arr(brain?.positive_industries);
+  if (positives.length > 0 && ctx.mission_owns.industry) {
+    conflicts.push({
+      axis: "industry",
+      mission_value: ctx.verticals,
+      brain_value: positives,
+      resolved_to: "mission",
+      reason: "the Mission named its own verticals; workspace industries rank, they do not gate",
+    });
+  }
+
+  return {
+    version: BRAIN_AUTHORITY_VERSION,
+    rejecting: {
+      // TIER 2 ALWAYS — who the workspace can never sell to.
+      excluded_industries: arr(brain?.excluded_industries),
+      disqualifier_keywords: arr(brain?.disqualifier_keywords),
+      required_geography: rejectingGeo,
+    },
+    preferences: {
+      // TIER 3 ALWAYS.
+      employee_range: { min: bMin, max: bMax },
+      target_industries: positives,
+      business_models: arr(brain?.business_models),
+      buyer_roles: arr(brain?.buyer_roles),
+      target_signals: arr(brain?.target_signals),
+    },
+    mission_owned: missionOwned,
+    conflicts,
+  };
+}
+
 /** Compact, loggable summary. No user text beyond the query the Mission owns. */
 export function qualificationContextSummary(ctx: QualificationContext) {
   return {

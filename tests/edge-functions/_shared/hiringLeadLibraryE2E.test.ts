@@ -43,6 +43,7 @@ import {
   type CapabilityEngineDeps,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { projectEvaluationRows } from "../../../supabase/functions/_shared/leadWorkbenchProjection.ts";
+import { parseMissionEvaluationStrict } from "../../../supabase/functions/_shared/missionEvaluation.ts";
 import {
   projectMissionCompanyRows, missionPersistenceSummary,
 } from "../../../supabase/functions/_shared/leadMissionPersistenceProjection.ts";
@@ -212,6 +213,26 @@ async function runHiringWithPersistence(
   });
 
   let run = null as Awaited<ReturnType<typeof runCapabilityPlan>> | null;
+  // Cites the company's OWN registry, so the citation survives verification —
+  // a stub that invented an evidence id would be downgraded to review, exactly
+  // as a real model would be.
+  const passingEvaluator: CapabilityEngineDeps["evaluateMission"] = ({ registry }) => {
+    const job = registry.items.find((x) =>
+      x.evidence_type === "job_posting" || x.evidence_type === "yc_job");
+    return Promise.resolve(parseMissionEvaluationStrict({
+      mission_fit: "pass", icp_fit: "strong", hiring_fit: "verified",
+      confidence: 0.9, match_score: 88,
+      matched_requirements: job
+        ? [{
+          requirement: "hiring the requested role",
+          evidence_id: job.evidence_id,
+          excerpt: String(job.source_text ?? "").slice(0, 20),
+        }]
+        : [],
+      reasoning: "satisfies the mission",
+      evidence_quality: "strong",
+    }, registry));
+  };
   if (preflight.ok) {
     assertPaidExecutionAllowed(preflight);
     run = await runCapabilityPlan({
@@ -220,6 +241,14 @@ async function runHiringWithPersistence(
         return Promise.resolve(rows[call.actorKey] ?? []);
       },
       verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+      // QUALIFICATION NOW REQUIRES AN EVALUATOR.
+      //
+      // The engine no longer fabricates a passing assessment when deterministic
+      // gates happen to clear — that fabrication was reported as model output
+      // and is gone. A company qualifies when the evaluator says the Mission is
+      // satisfied, so this suite (which is about PERSISTENCE, not about
+      // qualification) supplies one that answers from the real registry.
+      evaluateMission: passingEvaluator,
       ...over,
     }, { mission: m, plan, brain: BRAIN });
   }

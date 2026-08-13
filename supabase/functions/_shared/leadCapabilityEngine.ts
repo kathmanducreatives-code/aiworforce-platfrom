@@ -50,8 +50,14 @@ import {
 } from "./leadCommercialPrequalification.ts";
 import {
   buildQualificationContext, resolveEmployeeBounds, qualificationContextSummary,
+  resolveBrainAuthority,
   type QualificationContext,
 } from "./missionQualificationContext.ts";
+import {
+  buildMissionEvaluationInput, notEvaluated,
+  type MissionEvaluation, type MissionEvaluationInput,
+  type ParsedMissionEvaluation, type DecisionSource,
+} from "./missionEvaluation.ts";
 import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
@@ -298,6 +304,34 @@ export function stateMatchesMission(
 
 // -------------------------------------------------------------- working set ----
 
+/**
+ * HOW THIS COMPANY'S VERDICT WAS ACTUALLY REACHED.
+ *
+ * PHASE 0 INSTRUMENTATION, AND IT MEASURES THE THING THE AUDIT COULD NOT.
+ *
+ * `capability_outcomes` reported `company_brain_qualification: {status:"complete",
+ * rows:0, reason:"no company passed the Company Brain"}` for a run in which the
+ * Brain's eligible set was EMPTY. "Nobody passed" and "nobody was offered" are
+ * different facts and the artifact could not tell them apart, so a scheduling
+ * gap read as twenty rejections.
+ *
+ * These five values are mutually exclusive and total: every company carries
+ * exactly one, and `not_reached` is the honest answer for a company the gate
+ * never saw. Nothing here CHANGES a decision — it records which code made it.
+ *
+ *   not_reached        never entered the Brain's eligible set
+ *   fabricated_pass    `company_fit_pass` — verdict from a hardcoded assessment
+ *   fabricated_reject  `company_fit_reject` — verdict from a hardcoded assessment
+ *   model_evaluated    a classifier response was parsed and used
+ *   model_unavailable  the pending branch was reached with no usable classifier
+ */
+export type EvaluationPath =
+  | "not_reached"
+  | "fabricated_pass"
+  | "fabricated_reject"
+  | "model_evaluated"
+  | "model_unavailable";
+
 export interface EngineCompany {
   key: string;
   /**
@@ -334,6 +368,17 @@ export interface EngineCompany {
   grounded: GroundedVerification | null;
   /** Set when the Brain returned UNKNOWN and evidence resolution was attempted. */
   classification: { verdict: "pass" | "fail" | "unknown"; reason: string; source: string } | null;
+  /** WHICH CODE DECIDED. Observability only — never read by a decision. */
+  evaluation_path: EvaluationPath;
+  /**
+   * WHY this company ended where it did, in the vocabulary the Workbench needs.
+   *
+   * `not_evaluated` and `not_qualified` are different answers and the UI must
+   * never render the first as the second.
+   */
+  decision_source: DecisionSource;
+  /** The evaluator's structured answer. Null until qualification runs. */
+  mission_evaluation: MissionEvaluation | null;
   /**
    * THE QUALIFICATION DECISION, held explicitly.
    *
@@ -399,6 +444,31 @@ export interface CapabilityEngineDeps {
    * for review, never converted into a rejection for want of budget.
    */
   classifyCompany?: (input: SemanticFitInput) => Promise<ParsedSemanticFit | null>;
+  /**
+   * DOES THIS COMPANY SATISFY THE MISSION? — the deciding call.
+   *
+   * THE ARCHITECTURAL INVERSION LIVES HERE.
+   *
+   * `classifyCompany` above is an EXCEPTION HANDLER: it was consulted only when
+   * deterministic code returned `pending`, and the other two branches
+   * fabricated an assessment in code and reported it as model output. So the
+   * evaluator could not qualify anybody it had not first been allowed to see,
+   * and on the commonest paths it was never called at all.
+   *
+   * This one is consulted for EVERY company that reaches qualification, and its
+   * answer outranks the deterministic fit. Deterministic code keeps the facts
+   * it can actually falsify — identity, aggregator, excluded industry — and
+   * hands everything else to the evaluator as evidence.
+   *
+   * Absent, or returning null, the company is held as INSUFFICIENT EVIDENCE and
+   * reported as never evaluated. It is never converted into a rejection for
+   * want of a model.
+   */
+  evaluateMission?: (i: {
+    input: MissionEvaluationInput;
+    registry: EvidenceRegistry;
+    company_key: string;
+  }) => Promise<ParsedMissionEvaluation | null>;
   /**
    * THE GROUNDED SECOND OPINION, built from this company's own evidence.
    *
@@ -501,7 +571,31 @@ export interface CapabilityEngineOpts {
     positive_industries?: string[];
     excluded_industries?: string[];
     required_geography?: string | null;
+    /**
+     * RICHER ICP, for the evaluator only.
+     *
+     * Optional so every existing caller and test is unaffected. These never
+     * reach a deterministic gate — `resolveBrainAuthority` files them as
+     * preferences, and preferences may only move the score.
+     */
+    business_models?: string[];
+    buyer_roles?: string[];
+    target_signals?: string[];
+    disqualifier_keywords?: string[];
   };
+  /**
+   * The workspace's own plain-English qualification rules.
+   *
+   * `company_brain.profile.icp.qualification_rules` — `reject_if`,
+   * `manual_review_if`, `required_evidence`. Written by the user, read by
+   * nothing in the qualification path until now. Handed to the evaluator as
+   * context, never compiled into a gate.
+   */
+  brainQualificationRules?: {
+    reject_if?: string[];
+    manual_review_if?: string[];
+    required_evidence?: string[];
+  } | null;
   maxCandidates?: number;
   rolePacks?: readonly RolePack[];
   postedLimit?: "1h" | "24h" | "week" | "month";
@@ -599,6 +693,43 @@ export async function runCapabilityPlan(
   // `technical`, and `technical` could not produce a qualifying tier.
   const qualificationCtx = buildQualificationContext(opts.mission);
   log("qualification_context", qualificationContextSummary(qualificationCtx));
+
+  /**
+   * The hiring verdict that costs NOTHING, for one company.
+   *
+   * EXTRACTED SO IT CAN RUN WITHOUT THE PAID CAPABILITY.
+   *
+   * This logic used to live inside the `hiring_verification` block, which is the
+   * step `buildCapabilityGraph` schedules only when the Mission asks for
+   * EXTERNAL verification. For a Mission that does not — and the graph says so
+   * itself, appending "hiring evidence taken from embedded sources, not
+   * purchased" — the embedded evidence was then read by nobody. `hiring_jobs`
+   * stayed `[]`, `hiring_assessment` stayed `null`, and the Company Brain's
+   * eligibility filter admitted no one, so a hundred companies produced zero
+   * evaluations and the run reported it as zero qualifications.
+   *
+   * The comment described this function. It just did not exist outside the
+   * branch. Free assessment is now unconditional; the PAID escalation stays
+   * exactly where it was, behind the scheduled capability.
+   */
+  const freeHiringAssessment = (c: EngineCompany): HiringAssessment => {
+    // Supporting signals the free evidence already proves.
+    const supporting: SupportingSignal[] = [];
+    if ((c.prequalified?.tier_a ?? 0) + (c.prequalified?.tier_b ?? 0) >= 2) {
+      supporting.push("multiple_commercial_openings");
+    }
+    return assessHiring(
+      c.yc_open_jobs.map((j) => ({ title: j.title, url: j.job_url, location: j.location })),
+      supporting,
+      // THE MISSION'S OWN VOCABULARY, the same list prequalification scored on.
+      { source: "yc_open_jobs", vocab: qualificationCtx.role_vocabulary },
+    );
+  };
+
+  /** The openings that earned the verdict, as normalized rows. */
+  const hiringJobsFor = (c: EngineCompany, a: HiringAssessment): NormalizedHiringJob[] =>
+    dedupeJobs(c.yc_open_jobs.filter((j) =>
+      a.commercial_jobs.some((cj) => cj.title === j.title)));
 
   const outcomes: CapabilityRunResult["capability_outcomes"] = [];
   const companies: EngineCompany[] = [];
@@ -1335,14 +1466,7 @@ export async function runCapabilityPlan(
       const targets = companies.filter((c) => c.identity && identityIsActionable(c.identity));
       let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
       for (const c of targets) {
-        // Supporting signals the free evidence already proves.
-        const supporting: SupportingSignal[] = [];
-        if ((c.prequalified?.tier_a ?? 0) + (c.prequalified?.tier_b ?? 0) >= 2) {
-          supporting.push("multiple_commercial_openings");
-        }
-        let assessment = assessHiring(
-          c.yc_open_jobs.map((j) => ({ title: j.title, url: j.job_url, location: j.location })),
-          supporting, { source: "yc_open_jobs" });
+        let assessment = freeHiringAssessment(c);
 
         // PAID FALLBACK, ONLY FOR A LONE TIER B. Everything else is settled by
         // evidence already held; re-checking it is pure waste.
@@ -1361,8 +1485,12 @@ export async function runCapabilityPlan(
               const external = assessHiring(
                 rows.map(normalizeLinkedInJob).map((j) => ({
                   title: j.title ?? "", url: j.job_url, location: j.location })),
-                [...supporting, "another_active_gtm_opening"],
-                { source: "external_job_search" });
+                [...assessment.supporting_signals, "another_active_gtm_opening"],
+                // SAME VOCABULARY AS THE FREE PASS. An external check that
+                // judged on a different role list could contradict evidence the
+                // free pass already accepted, which is the divergence
+                // `commercialSignalPolicy` exists to prevent.
+                { source: "external_job_search", vocab: qualificationCtx.role_vocabulary });
               // The external pass only ever UPGRADES; it cannot demote evidence
               // the free pass already accepted.
               if (external.verdict === "hiring_verified") assessment = external;
@@ -1371,9 +1499,7 @@ export async function runCapabilityPlan(
         }
 
         c.hiring_assessment = assessment;
-        c.hiring_jobs = dedupeJobs(
-          c.yc_open_jobs.filter((j) =>
-            assessment.commercial_jobs.some((cj) => cj.title === j.title)));
+        c.hiring_jobs = hiringJobsFor(c, assessment);
 
         if (assessment.verdict === "hiring_verified") {
           c.record = advance(c.record, "hiring_verified",
@@ -1416,6 +1542,35 @@ export async function runCapabilityPlan(
       // Tier C watch item was silently NOT_EVALUATED — no pass, no reject, no
       // unknown. That is how seven enriched companies produced a Brain summary of
       // "0 passed, 0 held as unknown": the eligible set was empty.
+      //
+      // ── AND WHY THAT FIX WAS NOT ENOUGH ──────────────────────────────────
+      //
+      // All three conditions read fields that ONLY `hiring_verification` wrote.
+      // When the Mission did not ask for paid verification the capability was
+      // never scheduled, so all three were false for every company and the
+      // eligible set was empty again — this time for a hundred companies
+      // (TEST run d787cfc7). The filter was not wrong; it was reading state
+      // nobody had been asked to produce.
+      //
+      // The free assessment now runs HERE for any company that reached
+      // enrichment without one, so the filter reads state that always exists.
+      // An assessment is not a pass: `reachesCompanyBrain` still decides, and
+      // `hiring_not_verified` still stays out.
+      // AN UNRESOLVED IDENTITY IS STILL NOT EVALUATED.
+      //
+      // The guard is `identityIsActionable`, the SAME one the paid capability
+      // uses for its targets. Widening it here to "has any open job" would
+      // assess companies whose identity was never proven — and a company we
+      // cannot identify is one whose founder could be attached to the wrong
+      // employer. Unresolved stays `identity_pending` with a null verdict:
+      // not a pass, not a rejection, and honestly reported as neither.
+      for (const c of companies) {
+        if (c.hiring_assessment === null && c.identity && identityIsActionable(c.identity)) {
+          const free = freeHiringAssessment(c);
+          c.hiring_assessment = free;
+          c.hiring_jobs = hiringJobsFor(c, free);
+        }
+      }
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
         (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false));
@@ -1626,6 +1781,9 @@ export async function runCapabilityPlan(
           // rather than the workspace's own narrower preference.
           employee_ceiling: (fitBounds.enforceable ? fitBounds.max : null) ?? 200,
           commercial_tier: c.hiring_assessment?.tier ?? null,
+          // THE MISSION NAMED ITS ROLES, so "no commercial signal" is not a fact
+          // this gate may reject on — see `failedHardGates`.
+          mission_owns_hiring_role: qualificationCtx.mission_owns.hiring_role,
           semantic: null,
         };
         const hiringVerified = c.hiring_assessment?.verdict === "hiring_verified";
@@ -1695,46 +1853,50 @@ export async function runCapabilityPlan(
             downgrade_reasons: ["grounded_classifier_unavailable"],
           };
 
-        if (c.fit.stage === "company_fit_pass") {
-          c.brain = decideCompanyBrain({
-            gates: gateInput,
-            semantic: {
-              business_model: "b2b_saas", company_fit: "pass", confidence: 0.8,
-              agentory_use_case: "strong", supporting_evidence: ["deterministic gates passed"],
-              conflicting_evidence: [], unknown_fields: [],
-              reason: "all deterministic Company Brain gates passed",
-            },
-            policy: appliedPolicy, hiring_verified: hiringVerified,
-            grounding: groundingForBrain,
-          });
-          if (c.brain.outcome === "QUALIFIED") {
-            c.verdict = "pass";
-            c.record = advance(c.record, "qualified_company", "hiring_signal_verified");
-            passed++;
-          } else if (c.brain.outcome === "REJECT") {
-            c.verdict = "reject";
-            c.record = advance(c.record, "company_fit_reject", c.brain.reason);
-          } else {
-            c.verdict = "unknown";
-            unknown++;
-            c.record.stage_reason = `company_brain_review:${c.brain.reason}`;
-          }
-          continue;
-        }
-        if (c.fit.stage === "company_fit_reject") {
+        // ── A FALSIFIABLE FACT STILL REJECTS, AND ONLY A FALSIFIABLE FACT ───
+        //
+        // Four checkable facts, and nothing else:
+        //
+        //   identity_mismatch          the evidence describes a DIFFERENT company
+        //   staffing_or_aggregator     the "company" is a job board
+        //   excluded_industry          tier 2 — who this workspace can never sell to
+        //   employee_count_*           tier 1 — and ONLY ever a MISSION-stated
+        //                              bound, because `fitBounds.enforceable`
+        //                              passes null for an advisory Brain range,
+        //                              so these can physically not fire for a
+        //                              workspace preference
+        //
+        // None is a judgement and none improves by asking a model: a verified
+        // headcount of 400 against a stated maximum of 150 is arithmetic.
+        //
+        // `geography_mismatch` is deliberately NOT here. Its gate is
+        // `geography.includes(required_geography)`, and "San Francisco, CA, USA"
+        // does not contain "united states" — the check rejects the very
+        // companies it is meant to keep. Geography travels to the evaluator
+        // inside `brain.hard_constraints`, where a model that knows San
+        // Francisco is in the United States can apply it properly. Everything
+        // else the old gate rejected on — industry wording, business model, an
+        // absent commercial tier — is evidence now, not a wall.
+        const FALSIFIABLE_REJECTIONS: readonly string[] = [
+          "identity_mismatch", "staffing_or_aggregator", "excluded_industry",
+          "employee_count_above_max", "employee_count_below_min",
+        ];
+        const falsifiable = c.fit.stage === "company_fit_reject" &&
+          FALSIFIABLE_REJECTIONS.includes(c.fit.reason);
+        if (falsifiable) {
+          c.evaluation_path = "fabricated_reject";
+          c.decision_source = "hard_constraint_rejection";
+          c.mission_evaluation = notEvaluated(
+            `rejected on a verified fact before evaluation: ${c.fit.reason}`);
           c.brain = decideCompanyBrain({
             gates: gateInput,
             semantic: {
               business_model: "unknown", company_fit: "fail", confidence: 0.9,
               agentory_use_case: "none", supporting_evidence: [],
               conflicting_evidence: c.fit.failed_gates, unknown_fields: [],
-              reason: `deterministic hard gate failed: ${c.fit.reason}`,
+              reason: `verified hard fact: ${c.fit.reason}`,
             },
             policy: appliedPolicy, hiring_verified: hiringVerified,
-            // A VERIFIED GATE FAILURE IS A LEGITIMATE REJECT, and
-            // `decideCompanyBrain` returns on `failed.length > 0` before it
-            // consults grounding — so passing it here changes nothing and keeps
-            // the three call sites identical.
             grounding: groundingForBrain,
           });
           c.verdict = "reject";
@@ -1743,11 +1905,102 @@ export async function runCapabilityPlan(
           continue;
         }
 
-        // ── UNKNOWN: RESOLVE, NEVER REJECT ──────────────────────────────────
-        // A pending verdict means evidence was missing, not that the company was
-        // unsuitable. Rejecting here is what destroyed Docusign, Outreach, Clay,
-        // Sortly and Harmonic Security on the 2026-08-03 run while looking like
-        // precision.
+        // ── THE EVALUATOR DECIDES ───────────────────────────────────────────
+        //
+        // ONE CALL SITE. There used to be three, and two of them fabricated the
+        // model's answer in code:
+        //
+        //   company_fit_pass   → {company_fit:"pass", confidence:0.8,
+        //                         supporting_evidence:["deterministic gates passed"]}
+        //   company_fit_reject → {company_fit:"fail", confidence:0.9}
+        //
+        // Those literals were then reported through
+        // `semantic_classification_observability` as though a classifier had
+        // produced them, so the telemetry said the model had run on paths where
+        // it was never called. The evaluator was an exception handler for cases
+        // deterministic code could not settle; it is now the thing that settles
+        // them.
+        //
+        // `evaluateCompanyFit` still runs — above — but as an EVIDENCE
+        // SUMMARISER. Its `missing_evidence` tells the evaluator what nobody
+        // could establish; its verdict no longer decides.
+        const evaluation = deps.evaluateMission
+          ? await deps.evaluateMission({
+            input: buildMissionEvaluationInput({
+              ctx: qualificationCtx,
+              authority: resolveBrainAuthority(qualificationCtx, opts.brain),
+              registry,
+              qualification_rules: opts.brainQualificationRules ?? null,
+            }),
+            registry,
+            company_key: c.key,
+          })
+          : null;
+
+        if (evaluation) {
+          c.evaluation_path = "model_evaluated";
+          c.decision_source = "gpt_evaluation";
+          c.mission_evaluation = evaluation.evaluation;
+          const e = evaluation.evaluation;
+          c.brain = decideCompanyBrain({
+            gates: gateInput,
+            semantic: {
+              // The evaluator's Mission verdict, which `decideCompanyBrain`
+              // ranks above `company_fit`.
+              mission_fit: e.mission_fit,
+              icp_fit: e.icp_fit,
+              match_score: e.match_score,
+              // Kept for the existing telemetry contract. Derived from the
+              // Mission verdict rather than asked for separately, so the two
+              // cannot disagree.
+              business_model: "unknown",
+              company_fit: e.mission_fit,
+              confidence: e.confidence,
+              agentory_use_case: e.icp_fit === "strong"
+                ? "strong" : e.icp_fit === "plausible" ? "plausible" : "weak",
+              supporting_evidence: e.matched_requirements.map(
+                (m) => `${m.requirement}: ${m.excerpt}`),
+              conflicting_evidence: e.failed_requirements.map(
+                (f) => `${f.requirement}: ${f.why}`),
+              unknown_fields: [...new Set([...e.unknown_fields, ...c.fit.missing_evidence])],
+              reason: e.reasoning,
+            },
+            policy: appliedPolicy, hiring_verified: hiringVerified,
+            grounding: groundingForBrain,
+          });
+          c.classification = {
+            verdict: e.mission_fit === "pass" ? "pass"
+              : e.mission_fit === "fail" ? "fail" : "unknown",
+            reason: e.reasoning,
+            source: "mission_evaluation",
+          };
+          if (c.brain.outcome === "QUALIFIED") {
+            c.verdict = "pass";
+            c.record = advance(c.record, "qualified_company", "mission_evaluation_pass");
+            passed++;
+          } else if (c.brain.outcome === "REJECT") {
+            c.verdict = "reject";
+            c.record = advance(c.record, "company_fit_reject", c.brain.reason);
+            c.record.failed_gates = c.fit.failed_gates;
+          } else {
+            c.verdict = "unknown";
+            c.record.stage_reason = `mission_evaluation_review:${c.brain.reason}`;
+            c.record.missing_evidence.push(...c.fit.missing_evidence);
+            unknown++;
+          }
+          continue;
+        }
+
+        // ── NO EVALUATOR: HELD, NEVER REJECTED ──────────────────────────────
+        //
+        // The flag is off, the workspace is not allow-listed, the budget is
+        // spent, or the model failed. None of those is a fact about the
+        // company. It is recorded as INSUFFICIENT EVIDENCE and reported as
+        // never evaluated, which is the distinction the whole architecture
+        // exists to preserve.
+        c.decision_source = "insufficient_evidence";
+        c.mission_evaluation = notEvaluated("no evaluator was available for this run");
+
         const parsed = deps.classifyCompany
           ? await deps.classifyCompany({
             original_user_query: opts.mission.original_user_query,
@@ -1768,6 +2021,9 @@ export async function runCapabilityPlan(
           })
           : null;
         c.semantic_parse = parsed;
+        // THE ONLY PATH THAT CONSULTS A MODEL — and only when one was both
+        // available and returned something parseable.
+        c.evaluation_path = parsed ? "model_evaluated" : "model_unavailable";
         // The legacy `{verdict, reason}` view, DERIVED rather than requested, so
         // existing telemetry keeps working without a second live contract.
         const resolved = parsed
@@ -1819,10 +2075,29 @@ export async function runCapabilityPlan(
       state.qualified_company_keys = companies.filter((c) => c.verdict === "pass").map((c) => c.key);
       state.unknown_company_keys = companies.filter((c) => c.verdict === "unknown").map((c) => c.key);
 
-      finish(cap, "complete", passed, [], passed > 0,
-        passed === 0
-          ? `no company passed the Company Brain; ${unknown} held as unknown pending evidence`
-          : null);
+      // "NOBODY PASSED" AND "NOBODY WAS OFFERED" ARE DIFFERENT FACTS.
+      //
+      // This reason string previously said the former in both cases. A run whose
+      // eligible set was EMPTY reported `no company passed the Company Brain`,
+      // which reads as twenty rejections and is how a scheduling gap was
+      // mistaken for an ICP that was too strict. The distinction costs one
+      // branch and is the whole point of the instrumentation.
+      const reason = passed > 0
+        ? null
+        : eligible.length === 0
+        ? `no company reached the Company Brain: the eligible set was empty ` +
+          `(${companies.length} compan${companies.length === 1 ? "y" : "ies"} ` +
+          `carried no hiring assessment) — nothing was evaluated, nothing was rejected`
+        : `no company passed the Company Brain; ${unknown} held as unknown pending evidence`;
+      finish(cap, "complete", passed, [], passed > 0, reason);
+      log("company_brain_qualification_complete", {
+        ...summariseEvaluationPaths(companies),
+        // The per-company array is already in the run result; the log carries
+        // the aggregate only.
+        companies: undefined,
+        eligible: eligible.length,
+        passed, unknown,
+      });
       await publish("qualified");
       continue;
     }
@@ -2476,9 +2751,87 @@ function addCompany(
     brain: null, semantic_parse: null, completed_operations: [],
     evidence_registry: null, grounded: null,
     classification: null, verdict: null,
+    // NOT_REACHED IS THE HONEST DEFAULT. A company only leaves this state when
+    // some branch actually decides it.
+    evaluation_path: "not_reached",
+    decision_source: "not_evaluated",
+    mission_evaluation: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
   });
+}
+
+// --------------------------------------------------- evaluation telemetry ----
+
+export const EVALUATION_PATH_VERSION = "evaluation-path-telemetry-v1" as const;
+
+export interface EvaluationPathSummary {
+  version: typeof EVALUATION_PATH_VERSION;
+  /** Companies the Brain's eligible filter actually admitted. */
+  reached_evaluation: number;
+  /** Verdicts produced WITHOUT consulting a model. */
+  decided_without_model: number;
+  /** Verdicts produced WITH a parsed model response. */
+  decided_by_model: number;
+  counts: Record<EvaluationPath, number>;
+  /** Per company, so a single row can be explained. */
+  companies: Array<{
+    company_key: string;
+    company_name: string | null;
+    evaluation_path: EvaluationPath;
+    verdict: "pass" | "reject" | "unknown" | null;
+    brain_outcome: BrainDecision["outcome"] | null;
+    /** True when the grounded classifier produced a verification for this company. */
+    grounded: boolean;
+    /** Whether the model decided, a fact decided, or nobody looked. */
+    decision_source: DecisionSource;
+    /** The evaluator's own terminal answer, when it ran. */
+    decision: MissionEvaluation["decision"] | null;
+    mission_fit: MissionEvaluation["mission_fit"] | null;
+    icp_fit: MissionEvaluation["icp_fit"] | null;
+    match_score: number | null;
+  }>;
+}
+
+/**
+ * WHO ACTUALLY DECIDED, per company and in aggregate.
+ *
+ * This is the measurement the previous audit had to reconstruct by hand from
+ * three disagreeing fields. `decided_by_model` is the number the architecture
+ * correction is judged on: today it is expected to be ZERO, and a run where it
+ * stays zero after the inversion means the inversion did not land.
+ *
+ * PURE. Reads finished state, changes nothing.
+ */
+export function summariseEvaluationPaths(
+  companies: readonly EngineCompany[],
+): EvaluationPathSummary {
+  const counts: Record<EvaluationPath, number> = {
+    not_reached: 0, fabricated_pass: 0, fabricated_reject: 0,
+    model_evaluated: 0, model_unavailable: 0,
+  };
+  for (const c of companies) counts[c.evaluation_path]++;
+  return {
+    version: EVALUATION_PATH_VERSION,
+    reached_evaluation: companies.length - counts.not_reached,
+    decided_without_model: counts.fabricated_pass + counts.fabricated_reject +
+      counts.model_unavailable,
+    decided_by_model: counts.model_evaluated,
+    counts,
+    companies: companies.map((c) => ({
+      company_key: c.key,
+      company_name: c.company.company_name ?? null,
+      evaluation_path: c.evaluation_path,
+      verdict: c.verdict,
+      brain_outcome: c.brain?.outcome ?? null,
+      grounded: c.grounded !== null,
+      decision_source: c.decision_source,
+      decision: c.mission_evaluation?.decision ?? null,
+      mission_fit: c.mission_evaluation?.mission_fit ?? null,
+      icp_fit: c.mission_evaluation?.icp_fit ?? null,
+      match_score: c.mission_evaluation?.match_score ?? null,
+    })),
+  };
 }
 
 // ------------------------------------------------------- persistence bridge ----

@@ -225,17 +225,35 @@ export interface HiringAssessment {
   reason: string;
 }
 
-/** Classify every job in an `openJobs` array. Never just the first. */
+/**
+ * Classify every job in an `openJobs` array. Never just the first.
+ *
+ * THE VOCABULARY TRAVELS. This used to call `classifyTitle(j?.title)` with no
+ * second argument, which is the module header's own incident reproduced by an
+ * omitted parameter: prequalification scored on the MISSION's role list while
+ * `assessHiring` — the caller of this function — re-judged the same YC evidence
+ * on the default commercial ladder. For a mission whose required role IS
+ * "software engineer", every title came back `technical`, every verdict came
+ * back `hiring_not_verified`, and `reachesCompanyBrain` refused the exact
+ * companies the mission asked for.
+ *
+ * `round` is the GTM BROADENING ladder and has no meaning under a mission
+ * vocabulary — a mission-decided title is round-less by construction, so it is
+ * null rather than forced into a ladder it does not belong to. It is display
+ * metadata only (see `leadCapabilityEngine`'s portfolio projection).
+ */
 export function classifyJobs(
   jobs: ReadonlyArray<{ title?: string | null; url?: string | null; location?: string | null }>,
+  vocab?: RoleVocabulary | null,
 ): CommercialJob[] {
+  const missionScoped = vocab?.source === "mission";
   return (jobs ?? [])
     .map((j) => ({
       title: String(j?.title ?? "").trim(),
       url: j?.url ?? null,
       location: j?.location ?? null,
-      tier: classifyTitle(j?.title),
-      round: roundForTitle(j?.title),
+      tier: classifyTitle(j?.title, vocab),
+      round: missionScoped ? null : roundForTitle(j?.title),
     }))
     .filter((j) => j.title.length > 0);
 }
@@ -252,9 +270,20 @@ export function classifyJobs(
 export function assessHiring(
   jobs: ReadonlyArray<{ title?: string | null; url?: string | null; location?: string | null }>,
   supporting: readonly SupportingSignal[] = [],
-  opts: { source?: "yc_open_jobs" | "external_job_search" } = {},
+  opts: {
+    source?: "yc_open_jobs" | "external_job_search";
+    /**
+     * THE RUN'S SINGLE ROLE VOCABULARY, decided once from the Mission.
+     *
+     * Omitted, behaviour is byte-identical to before: the default commercial
+     * ladder answers, which is correct for a missionless run. Supplied, it is
+     * the SAME list prequalification scored on — that identity is the whole
+     * point, and its absence is what this module's header describes.
+     */
+    vocab?: RoleVocabulary | null;
+  } = {},
 ): HiringAssessment {
-  const all = classifyJobs(jobs);
+  const all = classifyJobs(jobs, opts.vocab);
   const source = opts.source ?? "yc_open_jobs";
   const commercial = all.filter((j) => j.tier === "A" || j.tier === "B" || j.tier === "C");
   const a = all.filter((j) => j.tier === "A");
@@ -299,11 +328,23 @@ export function assessHiring(
     };
   }
   const technical = all.filter((j) => j.tier === "technical").length;
+  // THE REASON MUST NAME THE VOCABULARY IT JUDGED ON.
+  //
+  // "technical hiring is never commercial evidence" is a statement about
+  // Agentory's own buyer. Said to a mission that ASKED for engineers it is
+  // simply false, and it was the sentence on 33 exclusion rows in TEST run
+  // d787cfc7 — companies excluded for hiring exactly what was requested.
+  const missionScoped = opts.vocab?.source === "mission";
+  const wanted = opts.vocab?.required_titles ?? [];
   return {
     ...base, verdict: "hiring_not_verified", tier: null, strongest: null,
     evidence_source: commercial.length ? source : "none",
     needs_external_verification: false,
-    reason: technical > 0
+    reason: missionScoped
+      ? `No open role matches the mission's required role${
+        wanted.length ? ` (${wanted.join(", ")})` : ""
+      }${all.length ? `; ${all.length} other opening(s) present` : ""}.`
+      : technical > 0
       ? `${technical} technical role(s) only — technical hiring is never commercial evidence.`
       : "No relevant commercial role found in the available evidence.",
   };

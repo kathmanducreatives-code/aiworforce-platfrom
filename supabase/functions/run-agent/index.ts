@@ -72,7 +72,7 @@ import {
 } from "../_shared/leadMissionRuntime.ts";
 import {
   CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
-  runCapabilityPlan, toPortfolioCandidates, toRouteResultShape,
+  runCapabilityPlan, summariseEvaluationPaths, toPortfolioCandidates, toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
 import {
@@ -2630,6 +2630,13 @@ Deno.serve(async (req) => {
                         },
                       }
                       : {}),
+                    // WHO ACTUALLY DECIDED EACH COMPANY.
+                    //
+                    // Diagnostic, not user-facing. `decided_by_model` is the
+                    // number the GPT-authority correction is measured on — a run
+                    // where it stays 0 means the evaluator never ran, whatever
+                    // the other counters say.
+                    evaluation_paths: summariseEvaluationPaths(capabilityRun.companies),
                     // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot
                     // reach this array; `buildWorkbenchExplanation` is built
                     // from `validated_claims` and nothing else.
