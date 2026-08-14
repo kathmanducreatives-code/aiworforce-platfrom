@@ -31,7 +31,8 @@ import {
 } from "../../../supabase/functions/_shared/missionTriage.ts";
 import {
   buildSmartShortlist, DEFAULT_INVESTIGATION_BUDGET, INVESTIGATION_BUDGET_ENV,
-  MAX_INVESTIGATION_BUDGET, resolveInvestigationBudget,
+  MAX_INVESTIGATION_BUDGET, resolveInvestigationBudget, resolveUntriagedPolicy,
+  UNTRIAGED_POLICY_ENV,
 } from "../../../supabase/functions/_shared/leadInvestigationBudget.ts";
 import {
   buildMissionTriageBinding, isMissionTriageEnabled,
@@ -259,11 +260,71 @@ Deno.test("4b. GPT can rescue a company the deterministic pass called ineligible
 
   assert(d.selected.includes("ml-engineer-co"),
     "a company GPT called relevant is investigated even though the keyword gate refused it");
-  assertFalse(d.selected.includes("no-triage-ineligible"),
-    "and with NO triage the deterministic gate still stands — behaviour unchanged when off");
+  // ── AND WITH NO TRIAGE THE KEYWORD GATE NO LONGER EXCLUDES EITHER ────────
+  //
+  // This used to assert the opposite. "Behaviour unchanged when off" sounded
+  // conservative, but Mission Intelligence is off by DEFAULT — so the branch it
+  // preserved was the one that actually ran in production, and the brittle
+  // vocabulary remained the real gate for every live run. A substring match may
+  // not permanently remove a candidate, because nothing downstream can recover
+  // one: the pool is the only place a company can be reconsidered from.
+  //
+  // It still RANKS last (see `NO_TRIAGE_INELIGIBLE_TIER`), so it consumes only
+  // budget that no better candidate wanted.
+  assert(d.selected.includes("no-triage-ineligible"),
+    "with no GPT verdict the deterministic pass ranks, it does not exclude");
+  assertEquals(d.ranking, ["ml-engineer-co", "no-triage-ineligible"],
+    "and the GPT-relevant company is still investigated first");
+  assertEquals(d.excluded.length, 0, "nobody is removed from the pool");
+  assertEquals(d.untriaged_policy, "rank");
+});
+
+Deno.test("4c. an operator may restore the old spend profile explicitly", () => {
+  // THE COST CONTROL, MADE EXPLICIT RATHER THAN IMPLIED. `rank` spends the full
+  // budget on a large pool; `eligible_only` spends only what the vocabulary
+  // approved. That is a money decision, so it is an operator's to make — and it
+  // is recorded on the decision either way.
+  const budget = resolveInvestigationBudget({
+    requestedCount: 5, poolSize: 10, read: () => undefined,
+  });
+  const candidates = [
+    { company_key: "eligible-co", eligible: true, relevance: null },
+    { company_key: "ineligible-co", eligible: false, relevance: null },
+  ];
+  const legacy = buildSmartShortlist(candidates, budget, { untriaged: "eligible_only" });
+  assertEquals(legacy.selected, ["eligible-co"]);
   assertEquals(
-    d.excluded.find((e) => e.company_key === "no-triage-ineligible")?.reason,
+    legacy.excluded.find((e) => e.company_key === "ineligible-co")?.reason,
     "prequalification_ineligible");
+  assertEquals(legacy.untriaged_policy, "eligible_only");
+
+  // ...and the env var is what selects it.
+  assertEquals(resolveUntriagedPolicy(() => undefined), "rank");
+  assertEquals(resolveUntriagedPolicy(() => "eligible_only"), "eligible_only");
+  assertEquals(resolveUntriagedPolicy(() => "nonsense"), "rank",
+    "an unreadable value falls back to the architecture's default");
+});
+
+Deno.test("4d. a MISSION-STATED size constraint still removes a candidate", () => {
+  // THE ONE NON-GPT EXCLUSION THAT SURVIVES, and the reason it is separate from
+  // `eligible`: the Mission set a range and this company is verifiably outside
+  // it. That is a falsifiable fact about a constraint the USER expressed, not a
+  // judgement about role titles — so paying to investigate it buys a lead that
+  // cannot qualify. Triage cannot override it either.
+  const budget = resolveInvestigationBudget({
+    requestedCount: 5, poolSize: 10, read: () => undefined,
+  });
+  const d = buildSmartShortlist([
+    { company_key: "too-big", eligible: true, hard_exclusion: "employee_size",
+      relevance: "relevant", confidence: 1, signal_strength: 99 },
+    { company_key: "in-range", eligible: true, relevance: null },
+  ], budget);
+  assertFalse(d.selected.includes("too-big"),
+    "a verified mission-stated disqualifier is not overridable by triage");
+  assertEquals(
+    d.excluded.find((e) => e.company_key === "too-big")?.reason,
+    "mission_constraint:employee_size");
+  assert(d.selected.includes("in-range"));
 });
 
 Deno.test("4c. running out of budget is recorded as budget, not as a judgement", () => {
@@ -301,6 +362,8 @@ const runEngine = async (o: {
   titles: readonly string[];
   triage?: (i: { input: MissionTriageInput; company_keys: string[] }) => Promise<unknown>;
   budgetEnv?: string;
+  /** Extra env, so the untriaged spend policy is exercised through the engine. */
+  env?: Record<string, string>;
 }) => {
   const m = mission();
   const plan = buildCapabilityGraph(m);
@@ -316,21 +379,47 @@ const runEngine = async (o: {
   } as never, {
     mission: m, plan, brain: BRAIN, maxCandidates: 60,
     readEnv: (k: string) =>
-      (k === INVESTIGATION_BUDGET_ENV ? o.budgetEnv : undefined),
+      (k === INVESTIGATION_BUDGET_ENV ? o.budgetEnv : o.env?.[k]),
   } as never);
   return run;
 };
 
-Deno.test("5. THE DEFECT: a role absent from the dictionary is excluded before any spend",
+Deno.test("5. THE DEFECT IS FIXED: a role absent from the dictionary is no longer excluded",
   async () => {
+    // WHAT THIS TEST USED TO ASSERT, VERBATIM: that all five companies were
+    // dropped and every one carried `shortlist_exclusion:
+    // "prequalification_ineligible"`. It was written to DOCUMENT the defect
+    // while Mission Intelligence was built beside it — but the flag is off by
+    // default, so the documented defect was also the shipping behaviour.
+    //
+    // Founding Engineer, Member of Technical Staff, Platform Engineer,
+    // Infrastructure Engineer and Data Scientist all plainly satisfy a Mission
+    // asking for software engineers. None appears in the compiled vocabulary.
+    // They now enter the investigation pool on the deterministic path too — the
+    // vocabulary orders them, it does not delete them.
     const run = await runEngine({ titles: BREADTH_ROLES });
-    assertEquals(run.companies.filter((c) => c.shortlisted).length, 0,
-      "Founding Engineer, Member of Technical Staff, Platform Engineer, " +
-      "Infrastructure Engineer and Data Scientist are all dropped");
+    assertEquals(run.companies.filter((c) => c.shortlisted).length, BREADTH_ROLES.length,
+      "every breadth role now reaches investigation, with no GPT verdict at all");
     for (const c of run.companies) {
-      assertEquals(c.shortlist_exclusion, "prequalification_ineligible");
+      assertEquals(c.shortlist_exclusion, null, c.key);
+      // The deterministic opinion is still RECORDED — it simply has no veto.
+      assertFalse(c.prequalified?.eligible ?? true,
+        `${c.key}: the vocabulary still rates it ineligible, and is still wrong`);
     }
   });
+
+Deno.test("5-legacy. …and an operator can still restore the old exclusion", async () => {
+  // The same pool under `eligible_only`. Kept as a real, exercised path so the
+  // rollback is a configuration change rather than a code revert.
+  const run = await runEngine({
+    titles: BREADTH_ROLES,
+    env: { [UNTRIAGED_POLICY_ENV]: "eligible_only" },
+  });
+  assertEquals(run.companies.filter((c) => c.shortlisted).length, 0);
+  for (const c of run.companies) {
+    assertEquals(c.shortlist_exclusion, "prequalification_ineligible");
+  }
+});
 
 Deno.test("5a. …while roles that happen to BE in the dictionary sail through", async () => {
   // The contrast is the argument: nothing here understood the Mission. One set

@@ -88,7 +88,32 @@ const IDENTITY_TERMINAL: ReadonlySet<IdentityStage> =
  */
 export const IDENTITY_RESUMABLE: ReadonlySet<IdentityStage> =
   new Set<IdentityStage>(["not_started", "deferred", "provider_error"]);
-export type EnrichmentStage = "not_started" | "completed" | "failed" | "not_required";
+/**
+ * ENRICHMENT MAKES THE SAME DISTINCTION IDENTITY ALREADY DOES.
+ *
+ * `not_started` used to absorb four different outcomes: never reached, answered
+ * with nothing, the call failed, and the call was never started. A resume
+ * therefore could not tell a company that still owes a paid lookup from one
+ * that has already been answered — so it re-bought the answered ones and left
+ * the deferred ones looking finished.
+ *
+ *   empty           ANSWERED. The provider has no record of this company.
+ *                   Asking again buys the same silence, so it is terminal.
+ *   deferred        never started; the checkpoint reserve was reached first.
+ *   provider_error  started and failed.
+ */
+export type EnrichmentStage =
+  | "not_started" | "completed" | "failed" | "not_required"
+  | "empty" | "deferred" | "provider_error";
+
+/**
+ * Enrichment outcomes that mean "this company still owes an enrichment attempt".
+ *
+ * `empty` is deliberately ABSENT: it is a real answer, and retrying it spends
+ * money to be told the same thing.
+ */
+export const ENRICHMENT_RESUMABLE: ReadonlySet<EnrichmentStage> =
+  new Set<EnrichmentStage>(["not_started", "deferred", "provider_error"]);
 export type HiringStage =
   | "not_started" | "verified_from_existing_evidence" | "verified_externally"
   | "verification_needed" | "not_verified" | "failed";
@@ -132,6 +157,14 @@ export interface CompanyWorkingSetSnapshot {
   shortlisted: boolean;
   /** Enrichment already bought, so a resume never buys it twice. */
   enriched: Record<string, unknown> | null;
+  /**
+   * WHY there is no `enriched` row — `EnrichmentOutcome`, carried verbatim.
+   *
+   * Optional: checkpoints written before this field existed simply have no
+   * outcome, and the engine narrows an absent or unrecognised value back to
+   * `not_attempted` rather than failing to restore.
+   */
+  enrichment_outcome?: string | null;
 }
 
 /**
@@ -192,7 +225,9 @@ export function nextStageFor(r: CompanyResumeRecord):
   // work was never done; only a real answer from the provider ends it.
   if (IDENTITY_RESUMABLE.has(r.identity)) return "identity";
   if (IDENTITY_TERMINAL.has(r.identity)) return null;
-  if (r.enrichment === "not_started") return "enrichment";
+  // DEFERRED AND PROVIDER_ERROR RESUME HERE, for the same reason they do for
+  // identity: the work was never done. `empty` does NOT — it is an answer.
+  if (ENRICHMENT_RESUMABLE.has(r.enrichment)) return "enrichment";
   if (r.enrichment === "failed") return null;
   if (r.hiring === "not_started") return "hiring";
   if (r.hiring === "verification_needed") return "hiring";
@@ -384,7 +419,8 @@ export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecor
       identity: asStage(c.identity,
         ["not_started", "resolved", "unresolved", "mismatch"] as const, "not_started"),
       enrichment: asStage(c.enrichment,
-        ["not_started", "completed", "failed", "not_required"] as const, "not_started"),
+        ["not_started", "completed", "failed", "not_required",
+          "empty", "deferred", "provider_error"] as const, "not_started"),
       hiring: asStage(c.hiring,
         ["not_started", "verified_from_existing_evidence", "verified_externally",
           "verification_needed", "not_verified", "failed"] as const, "not_started"),

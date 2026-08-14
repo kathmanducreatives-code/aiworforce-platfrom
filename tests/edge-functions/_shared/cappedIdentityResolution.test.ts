@@ -197,15 +197,39 @@ Deno.test("6. prequalification decides the shortlist before anything is bought",
 
 // ═══════════ 7/8. only the eligible five reach the paid company search ══
 
-Deno.test("7. exactly the eligible companies reach LinkedIn company search", async () => {
-  const { trace } = await runFixture();
-  const queries = searchQueries(trace);
+Deno.test("7. the BUDGET bounds the paid search, and the role vocabulary does not",
+  async () => {
+    // WHAT BOUNDS THE SPEND, AND WHAT MERELY ORDERS IT.
+    //
+    // This used to assert `queries.length === ELIGIBLE.length` — four searches,
+    // because `classifyTitle` had approved exactly four companies. That made
+    // the compiled role vocabulary the real cost control, which is precisely
+    // the accidental coupling the investigation budget exists to remove: spend
+    // moved whenever someone edited a role list, and the companies the
+    // vocabulary was WRONG about (Founding Engineer, Platform Engineer) could
+    // never be reached at any budget.
+    //
+    // The budget is now the bound. The vocabulary still ranks — every company
+    // it approved is searched FIRST — and companies it merely failed to
+    // recognise fill the remainder rather than being deleted.
+    const { trace, run } = await runFixture();
+    const queries = searchQueries(trace);
+    const budget = run.state.shortlist_decision!.budget.budget;
 
-  assertEquals(queries.length, ELIGIBLE.length,
-    `at most one search per eligible company; task c8a6e53d made 16 (got: ${queries.join(" | ")})`);
-  for (const name of ELIGIBLE) {
-    assert(queries.some((q) => q.startsWith(name)), `${name} must be searched`);
-  }
+    assertEquals(queries.length, budget,
+      `the paid stage is capped by the budget, not by a keyword list; ` +
+      `task c8a6e53d made 16 (got: ${queries.join(" | ")})`);
+    for (const name of ELIGIBLE) {
+      assert(queries.some((q) => q.startsWith(name)),
+        `${name} is vocabulary-approved and must be searched`);
+    }
+    // AND THE MISSION'S OWN CONSTRAINT STILL REMOVES THESE ENTIRELY. A verified
+    // headcount outside the MISSION's stated 10-150 is falsifiable, so it is
+    // excluded before any paid call — at any budget.
+    for (const name of OVERSIZED) {
+      assertFalse(queries.some((q) => q.startsWith(name)),
+        `${name} is outside the mission's stated range and must never be paid for`);
+    }
   // Name AND domain — a bare name search is what returns the wrong "Apollo".
   // BARE NAMES. "SnapMagic snapmagic.com" is what failed six times live.
   for (const n of ELIGIBLE) assert(queries.includes(n), `${n} must be searched by name`);
@@ -276,7 +300,12 @@ Deno.test("12. company details receives resolved LinkedIn URLs in ONE batch", as
   assertEquals(details.length, 1,
     "one batched enrichment call, not one per company");
   const companies = (details[0].input as { companies?: string[] }).companies ?? [];
-  assertEquals(companies.length, ELIGIBLE.length);
+  // ENRICHMENT FOLLOWS RESOLUTION, so this is however many identities actually
+  // resolved — bounded by the budget above, and never one call per company.
+  const resolved = searchQueries(trace).length;
+  assert(companies.length > 0 && companies.length <= resolved,
+    `every enriched URL must come from a resolved identity ` +
+    `(${companies.length} enriched, ${resolved} searched)`);
   for (const u of companies) {
     assert(u.startsWith("https://www.linkedin.com/company/"),
       `details must receive URLs, never names (got ${u})`);
@@ -310,10 +339,14 @@ Deno.test("13. an unresolved identity stays not-evaluated and is never actionabl
     assertEquals(co.record.stage, "identity_pending");
     assertEquals(co.founders.length, 0, "no people are ever bought for it");
   }
-  // NO RETRY LOOP. One search per shortlisted company, and that is all.
+  // NO RETRY LOOP. One search per SHORTLISTED company, and that is all — the
+  // property this asserts. Counted against the shortlist the run actually
+  // built rather than against the vocabulary-approved subset, so it keeps
+  // measuring "no company is searched twice" instead of quietly re-asserting
+  // that the role list decides the spend.
   assertEquals(
     trace.calls.filter((c) => c.actor === "apify_linkedin_company_search").length,
-    ELIGIBLE.length);
+    run.state.shortlist_decision!.counts.selected);
   assertFalse(trace.calls.some((c) => c.actor === "apify_linkedin_company_employees"),
     "founder discovery must not run without a qualified company");
 });

@@ -72,10 +72,14 @@ Deno.test("A2. run-agent passes evaluateMission into the capability engine", asy
   assert(depsStart > 0, "the engine call site must exist");
   const depsBlock = src.slice(depsStart, src.indexOf("readPendingRun,", depsStart));
   assert(depsBlock.includes("evaluateMission:"),
-    "`evaluateMission` must sit in the SAME deps object as classifyCompany " +
-    "and groundCompany — not in an unrelated scope");
-  assert(depsBlock.includes("classifyCompany:") && depsBlock.includes("groundCompany:"),
+    "`evaluateMission` must sit in the engine's own deps object, not an " +
+    "unrelated scope");
+  assert(depsBlock.includes("groundCompany:"),
     "sanity: this really is the engine dependency block");
+  // `classifyCompany` is DELETED — it was the second semantic authority. Its
+  // absence from this block is now part of the contract.
+  assertFalse(depsBlock.includes("classifyCompany:"),
+    "no second evaluator may be wired alongside the Mission evaluator");
 });
 
 Deno.test("A3. the raw response is adapted through the strict parser", async () => {
@@ -164,10 +168,18 @@ Deno.test("C2. a task with no mission is the ONLY thing that reaches the legacy 
 
 // ══════════════════════ D. the classifier keeps its job and loses its authority ══
 
-Deno.test("D1. parseSemanticFitStrict is still called with its existing shape", async () => {
-  const src = await readSource("run-agent/index.ts");
-  assert(src.includes("parseSemanticFitStrict(raw)"),
-    "the classifier's existing responsibility is preserved verbatim");
+Deno.test("D1. the Mission pipeline no longer calls the classifier at all", async () => {
+  // Was: "parseSemanticFitStrict is still called with its existing shape",
+  // guarding the classifier's adapter inside the engine's dependency block.
+  // That adapter is deleted, so the guard is inverted — the Mission path must
+  // make no semantic call other than the evaluator's.
+  const src = await readSource("_shared/leadCapabilityEngine.ts");
+  assertFalse(/parseSemanticFitStrict\s*\(/.test(src),
+    "the engine must not parse a second semantic opinion");
+  assertFalse(/deps\.classifyCompany/.test(src),
+    "and must not call a classifier");
+  assertFalse(/classifyCompany\?:/.test(src),
+    "nor declare one as a dependency");
 });
 
 Deno.test("D2. the classifier is not a competing final authority", async () => {

@@ -19,6 +19,7 @@ import {
   runCapabilityPlan, type CapabilityEngineDeps,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import {
   parseLeadMissionDeterministic,
 } from "../../../supabase/functions/_shared/leadMission.ts";
@@ -96,22 +97,22 @@ async function runWith(over: Partial<CapabilityEngineDeps>) {
   return { run, rec };
 }
 
-/** A legacy classifier that says PASS, so shadow disagreement is observable. */
-const legacyPass: CapabilityEngineDeps["classifyCompany"] = () =>
-  Promise.resolve({
-    assessment: {
-      business_model: "b2b_saas", company_fit: "pass", confidence: 0.9,
-      agentory_use_case: "strong", supporting_evidence: ["sells software"],
-      conflicting_evidence: [], unknown_fields: [], reason: "fits",
-    },
-    parse_status: "valid",
-    raw_shape: { received_keys: [], repaired_fields: [], rejected_values: [] },
-  } as never);
+/**
+ * A MISSION EVALUATOR that says PASS, so grounding disagreement is observable.
+ *
+ * Was `legacyPass`, a `classifyCompany` stub — the pre-Phase-4 semantic
+ * classifier, now deleted as the architecture's second semantic authority. The
+ * grounded Brain is unchanged and still governs; what changed is which stage
+ * hands it a semantic verdict to ground. It is the Mission evaluator, and it is
+ * the only one.
+ */
+const evaluatorPass: CapabilityEngineDeps["evaluateMission"] =
+  stubMissionEvaluator({ mission_fit: "pass" });
 
 // ═════════════════════════════════════════════════════ 1-7. live wiring ══
 
 Deno.test("1. the engine builds an evidence registry before semantic evaluation", async () => {
-  const { run } = await runWith({ classifyCompany: legacyPass });
+  const { run } = await runWith({ evaluateMission: evaluatorPass });
   const evaluated = run.companies.filter((c) => c.brain !== null);
   assert(evaluated.length > 0, "a company must have reached the Brain");
   for (const c of evaluated) {
@@ -122,7 +123,7 @@ Deno.test("1. the engine builds an evidence registry before semantic evaluation"
 });
 
 Deno.test("2-3. the registry holds only normalized evidence, with no vendor names in ids", async () => {
-  const { run } = await runWith({ classifyCompany: legacyPass });
+  const { run } = await runWith({ evaluateMission: evaluatorPass });
   const reg = run.companies.find((c) => c.evidence_registry)!.evidence_registry!;
   // Embedded YC openings became job evidence.
   assert(reg.items.some((x) => x.evidence_type === "yc_job" || x.evidence_type === "job_posting"),
@@ -142,7 +143,7 @@ Deno.test("2-3. the registry holds only normalized evidence, with no vendor name
 Deno.test("4-6. the grounded verifier runs and its verdict reaches the Brain in enforce", async () => {
   const seen: string[] = [];
   const { run } = await runWith({
-    classifyCompany: legacyPass,
+    evaluateMission: evaluatorPass,
     groundingMode: "enforce",
     groundCompany: ({ registry }) => {
       seen.push(registry.company_key);
@@ -175,7 +176,7 @@ Deno.test("4-6. the grounded verifier runs and its verdict reaches the Brain in 
 
 Deno.test("7. the Workbench explanation is built from validated claims only", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass,
+    evaluateMission: evaluatorPass,
     groundingMode: "enforce",
     groundCompany: ({ registry }) => {
       const descId = registry.items
@@ -257,10 +258,10 @@ Deno.test("11b. shadow mode does not change the user-facing decision", async () 
     }));
 
   const shadow = await runWith({
-    classifyCompany: legacyPass, groundCompany: grounder, groundingMode: "shadow",
+    evaluateMission: evaluatorPass, groundCompany: grounder, groundingMode: "shadow",
   });
   const enforce = await runWith({
-    classifyCompany: legacyPass, groundCompany: grounder, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundCompany: grounder, groundingMode: "enforce",
   });
   const s = shadow.run.companies.find((c) => c.grounded)!;
   const e = enforce.run.companies.find((c) => c.grounded)!;
@@ -275,7 +276,7 @@ Deno.test("11b. shadow mode does not change the user-facing decision", async () 
 
 Deno.test("12-13. in ENFORCE an unavailable grounder becomes REVIEW, never QUALIFIED", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass,
+    evaluateMission: evaluatorPass,
     groundingMode: "enforce",
     // The model was unavailable.
     groundCompany: () => Promise.resolve(null),
@@ -295,7 +296,7 @@ Deno.test("12-13. in ENFORCE an unavailable grounder becomes REVIEW, never QUALI
 
 Deno.test("12b. in SHADOW an unavailable grounder leaves the legacy verdict alone", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass,
+    evaluateMission: evaluatorPass,
     groundingMode: "shadow",
     groundCompany: () => Promise.resolve(null),
   });
@@ -307,7 +308,7 @@ Deno.test("12b. in SHADOW an unavailable grounder leaves the legacy verdict alon
 Deno.test("14. a malformed grounded response cannot qualify a company", async () => {
   for (const junk of [null, "not json", 42, [], {}]) {
     const { run } = await runWith({
-      classifyCompany: legacyPass,
+      evaluateMission: evaluatorPass,
       groundingMode: "enforce",
       groundCompany: ({ registry }) => Promise.resolve(verifyGroundedResult({
         registry, result: parseGroundedResult(junk),
@@ -360,7 +361,7 @@ Deno.test("S1. the shadow comparison records the disagreement, not a transcript"
 // ═════════════════════════════════════════════════════ 29-35. regression ══
 
 Deno.test("29-32. the routes still work and people Actors stay unreachable", async () => {
-  const { run, rec } = await runWith({ classifyCompany: legacyPass });
+  const { run, rec } = await runWith({ evaluateMission: evaluatorPass });
   // YC route still evaluates companies.
   assert(run.companies.length > 0);
   assert(run.companies.some((c) => c.brain !== null), "the Brain still decides");
@@ -405,7 +406,7 @@ Deno.test("33-35. run-agent wires grounding without touching the protected file"
 
 Deno.test("G1. no claim may reference another company's evidence", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundingMode: "enforce",
     groundCompany: ({ registry }) => {
       // An id built for a DIFFERENT company, in the correct format.
       const foreign = registry.items[0].evidence_id.replace(/:[0-9a-f]{8}$/, ":ffffffff");
@@ -429,7 +430,7 @@ Deno.test("G1. no claim may reference another company's evidence", async () => {
 
 Deno.test("G2-G3. invented evidence never reaches Workbench, and cannot hold a PASS", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundingMode: "enforce",
     groundCompany: ({ registry }) => {
       const d = registry.items
         .find((x) => x.evidence_type === "company_description")!.evidence_id;
@@ -455,7 +456,7 @@ Deno.test("G2-G3. invented evidence never reaches Workbench, and cannot hold a P
 
 Deno.test("G4. a provider failure leaves the company unresolved, never rejected", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundingMode: "enforce",
     groundCompany: ({ registry }) => Promise.resolve(verifyGroundedResult({
       registry,
       result: parseGroundedResult({
@@ -477,7 +478,7 @@ Deno.test("G4. a provider failure leaves the company unresolved, never rejected"
 
 Deno.test("G5. a fully grounded company still qualifies under enforce", async () => {
   const { run } = await runWith({
-    classifyCompany: legacyPass, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundingMode: "enforce",
     groundCompany: ({ registry }) => {
       const d = registry.items
         .find((x) => x.evidence_type === "company_description")!.evidence_id;
@@ -511,7 +512,7 @@ Deno.test("G5. a fully grounded company still qualifies under enforce", async ()
 
 Deno.test("G6. enforcing makes no people Actor reachable", async () => {
   const { rec } = await runWith({
-    classifyCompany: legacyPass, groundingMode: "enforce",
+    evaluateMission: evaluatorPass, groundingMode: "enforce",
     groundCompany: () => Promise.resolve(null),
   });
   for (const actor of [

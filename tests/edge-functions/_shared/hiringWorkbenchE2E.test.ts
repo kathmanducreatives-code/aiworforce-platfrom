@@ -533,9 +533,20 @@ Deno.test("failure: enrichment failure HOLDS the company, it never rejects it", 
   for (const c of evaluated.filter((x) => x.verdict === "unknown")) {
     assertEquals(c.decision_source, "insufficient_evidence", c.key);
     assert(
-      c.record.missing_evidence.includes("company_enrichment"),
+      c.record.missing_evidence.some((e) => e.startsWith("company_enrichment")),
       `${c.key}: the hold must name what was missing`,
     );
+    // ...AND WHICH OF THE FOUR WAYS IT WENT MISSING. The provider answered here
+    // with an empty dataset, which is the one outcome that is genuinely about
+    // the company — as opposed to a failed call or a deadline deferral, which a
+    // continuation would retry. The hold is identical; the reason is not, and
+    // recording only "no enrichment" is what made them indistinguishable.
+    assert(
+      c.record.missing_evidence.includes("company_enrichment:empty"),
+      `${c.key}: the hold must name WHY enrichment produced nothing, got ` +
+        c.record.missing_evidence.join(","),
+    );
+    assertEquals(c.enrichment_outcome, "empty", c.key);
   }
 });
 

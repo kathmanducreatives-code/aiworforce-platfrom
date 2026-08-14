@@ -336,14 +336,50 @@ export function assessHiring(
   // d787cfc7 — companies excluded for hiring exactly what was requested.
   const missionScoped = opts.vocab?.source === "mission";
   const wanted = opts.vocab?.required_titles ?? [];
+
+  // ── AN UNRECOGNISED TITLE IS NOT AN ABSENT ROLE ──────────────────────────
+  //
+  // THIS BRANCH DECIDED WHETHER A COMPANY EVER REACHED GPT.
+  //
+  // `reachesCompanyBrain` accepts verified / verification_needed / watch and
+  // refuses `hiring_not_verified`. So a mission-scoped run whose compiled
+  // vocabulary failed to recognise a title stopped the company here —
+  // permanently, before the Company Brain, before the Mission evaluator, on a
+  // substring match.
+  //
+  // The vocabulary compiled from "software engineers" is a FIXED list:
+  // software engineer · backend engineer · frontend engineer · full stack
+  // engineer · ai engineer · ml engineer · developer · staff engineer. So
+  // "Founding Engineer", "Member of Technical Staff" and "Platform Engineer"
+  // matched nothing, and companies hiring exactly what the mission asked for
+  // never reached the only stage capable of noticing that.
+  //
+  // WITH OPENINGS PRESENT, the honest verdict is `watch`: there IS hiring
+  // evidence, and whether it satisfies the mission is a judgement — which is
+  // the evaluator's to make, from the real titles in the evidence registry.
+  // `watch` reaches the Brain and, per `needsPaidJobVerification`, buys
+  // nothing, so this costs no money and only stops throwing evidence away.
+  //
+  // WITH NO OPENINGS AT ALL, `hiring_not_verified` still stands: that is a
+  // genuine absence of evidence rather than a failure to recognise it.
+  if (missionScoped && all.length > 0) {
+    return {
+      ...base, verdict: "watch", tier: null, strongest: null,
+      evidence_source: source,
+      needs_external_verification: false,
+      reason: `${all.length} open role(s) present, none matching the mission's ` +
+        `compiled vocabulary${wanted.length ? ` (${wanted.join(", ")})` : ""} — ` +
+        `held for the evaluator to judge on the actual titles, not the keyword list.`,
+    };
+  }
+
   return {
     ...base, verdict: "hiring_not_verified", tier: null, strongest: null,
     evidence_source: commercial.length ? source : "none",
     needs_external_verification: false,
     reason: missionScoped
-      ? `No open role matches the mission's required role${
-        wanted.length ? ` (${wanted.join(", ")})` : ""
-      }${all.length ? `; ${all.length} other opening(s) present` : ""}.`
+      ? `No open roles at all — nothing to judge against the mission's required ` +
+        `role${wanted.length ? ` (${wanted.join(", ")})` : ""}.`
       : technical > 0
       ? `${technical} technical role(s) only — technical hiring is never commercial evidence.`
       : "No relevant commercial role found in the available evidence.",

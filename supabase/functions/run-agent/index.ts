@@ -72,6 +72,7 @@ import {
 } from "../_shared/leadMissionRuntime.ts";
 import {
   CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
+  missionFunnelFor,
   runCapabilityPlan, summariseEvaluationPaths, toPortfolioCandidates, toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
@@ -85,11 +86,13 @@ import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
+import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
-import {
-  applyMissionPrecedence, buildClassifierPayload, parseSemanticFitStrict,
-  SEMANTIC_INPUT_SCHEMA_VERSION,
-} from "../_shared/companyBrainSemanticFit.ts";
+// `applyMissionPrecedence`, `buildClassifierPayload`, `parseSemanticFitStrict`
+// and `SEMANTIC_INPUT_SCHEMA_VERSION` are no longer imported here: they existed
+// to adapt the second semantic evaluator onto the capability engine, which no
+// longer accepts one. They remain exported for the legacy company-first route,
+// which is a separate execution path and is not part of the Mission pipeline.
 import {
   buildCheckpoint, CHECKPOINT_RESERVE_MS, LINEAGE_ROOT_RESULT_KEY,
   lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
@@ -253,7 +256,7 @@ import { parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 // The SAME sizing function the engine shortlists with, so the evaluation budget
 // and the set of companies that can be evaluated are derived from one rule
 // rather than two that may drift.
-import { shortlistSize } from "../_shared/leadCommercialPrequalification.ts";
+import { resolveInvestigationBudget } from "../_shared/leadInvestigationBudget.ts";
 import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
 import { buildPoolBinding } from "../_shared/poolEvaluationBinding.ts";
 import {
@@ -1770,13 +1773,26 @@ Deno.serve(async (req) => {
         // supplied only by test fixtures, so every live company fell to the
         // no-evaluator branch and the pre-Phase-4 classifier kept deciding.
         //
-        // Built HERE, beside the classifier it supersedes, so the two are read
-        // together and neither can be switched on without seeing the other.
-        // Budget is the SHORTLIST, not the requested count: only shortlisted
-        // companies are ever paid to be resolved, so only they can be evaluated.
+        // ── THE EVALUATOR BUDGET IS THE INVESTIGATION BUDGET ────────────────
+        //
+        // It used to be `shortlistSize(quota.requestedLeadCount)` —
+        // `min(10, max(5, requested * 2))` — which is the requested lead count
+        // deciding how many companies a model may read. That is the coupling
+        // `leadInvestigationBudget` was written to break, and it survived here
+        // because the comment above ("Budget is the SHORTLIST, not the requested
+        // count") described an intent the code did not implement: the helper it
+        // called takes the requested count as its only input.
+        //
+        // Only shortlisted companies are ever resolved and enriched, so only
+        // they can be evaluated — and the shortlist is the investigation budget.
+        // Reading it from the same resolver the engine uses keeps one number in
+        // one place rather than two that drift.
         const missionEvaluationBinding = buildMissionEvaluationBinding({
           workspaceId: workspace_id,
-          shortlistSize: shortlistSize(quota.requestedLeadCount),
+          shortlistSize: resolveInvestigationBudget({
+            requestedCount: quota.requestedLeadCount,
+            poolSize: Number.MAX_SAFE_INTEGER,
+          }).budget,
         });
         console.log("[run-agent][mission-evaluation][binding]", {
           task_id: task.id, ...missionEvaluationBinding.diagnostics,
@@ -2095,51 +2111,12 @@ Deno.serve(async (req) => {
                 );
                 return { verified: employerGatePasses(v.outcome), outcome: String(v.outcome) };
               },
-              // UNKNOWN is resolved through the EXISTING semantic-classification
-              // binding, or not at all. A null classifier leaves the company
-              // pending — it never becomes a rejection for want of budget.
-              // THE LIVE STRUCTURED CLASSIFIER.
+              // ── THE SECOND EVALUATOR IS NOT WIRED, BECAUSE IT IS GONE ───
               //
-              // This used to squeeze the model's answer down to
-              // `{verdict, reason}` before the Brain ever saw it, so the live
-              // path could not produce a business-model judgement at all — only
-              // an offline stub could. The full evidence payload now goes out
-              // and the full schema comes back through the fail-closed parser.
-              classifyCompany: classificationBinding.classifyCompanyEvidence
-                ? async (evidence) => {
-                  const policy = applyMissionPrecedence({
-                    original_user_query: evidence.original_user_query,
-                    mission_verticals: evidence.mission_verticals,
-                    mission_geography: evidence.mission_geography,
-                    workspace_industries: evidence.workspace_industries,
-                  });
-                  // ── THE SAME MISSION, FROM QUERY TO VERDICT ─────────────
-                  //
-                  // The classifier used to receive only verticals and geography
-                  // and re-derive everything else from the raw sentence — so the
-                  // stage that judged a company could disagree with the stage
-                  // that chose it, about the same run. It now reads the compiled
-                  // mission's own constraints, signals and instructions.
-                  const payload = buildClassifierPayload(evidence, policy, {
-                    hard_constraints: persistedMission.hard_constraints,
-                    soft_preferences: persistedMission.soft_preferences,
-                    ...(persistedMission.directives ?? {}),
-                  });
-                  const raw = await classificationBinding.classifyCompanyEvidence!(payload);
-                  // A NULL RESPONSE IS NOT A PASS AND NOT A REJECTION. The
-                  // parser turns anything unusable into REVIEW with a status
-                  // that says so.
-                  const parsed = parseSemanticFitStrict(raw);
-                  console.log("[run-agent][semantic-fit]", {
-                    task_id: task.id, company: evidence.company_name,
-                    parse_status: parsed.parse_status,
-                    business_model: parsed.assessment.business_model,
-                    company_fit: parsed.assessment.company_fit,
-                    repaired: parsed.raw_shape.repaired_fields,
-                  });
-                  return parsed;
-                }
-                : undefined,
+              // `classifyCompany` used to be passed here, adapting the
+              // pre-Phase-4 semantic classifier onto the engine. The engine no
+              // longer accepts it: one semantic authority, one call site, and
+              // that is `evaluateMission` below.
               // ── STAGE 2 WIRING: GPT MISSION INTELLIGENCE ─────────────────
               //
               // Undefined when the flag is down, and the engine then keeps the
@@ -2556,10 +2533,66 @@ Deno.serve(async (req) => {
               hiringVerified: c.hiring_jobs.length > 0,
               verdict: c.verdict,
               contactCount: c.contact_identities.length,
+              // ── WHY, NOT JUST WHAT ────────────────────────────────────────
+              //
+              // The engine has carried all five of these per company since the
+              // evaluator inversion landed, and the projection received none of
+              // them — so a company the budget never reached and one the
+              // evaluator explicitly failed arrived at the Workbench
+              // indistinguishable, and were captioned identically as "not
+              // qualified". These are the fields that tell them apart.
+              decisionSource: c.decision_source,
+              triage: c.triage
+                ? {
+                  relevance: c.triage.relevance,
+                  confidence: c.triage.confidence,
+                  signal_strength: c.triage.signal_strength,
+                  reasons: c.triage.reasons,
+                }
+                : null,
+              shortlistExclusion: c.shortlist_exclusion,
+              enrichmentOutcome: c.enrichment_outcome,
+              stageBlock: c.stage_block,
+              missionEvaluation: c.mission_evaluation
+                ? {
+                  decision: c.mission_evaluation.decision,
+                  match_score: c.mission_evaluation.match_score,
+                  confidence: c.mission_evaluation.confidence,
+                  reasoning: c.mission_evaluation.reasoning,
+                  rejection_reasons: c.mission_evaluation.rejection_reasons,
+                  failed_requirements: c.mission_evaluation.failed_requirements,
+                }
+                : null,
             })));
             console.log("[run-agent][capability-engine][evaluation-rows]", {
               task_id: task.id, rows: evaluation.rows.length, counts: evaluation.counts,
             });
+
+            // ── ONE ORDERED WALK OF THE PIPELINE ────────────────────────────
+            //
+            // "I asked for 5 leads and got 1" is answerable today only by
+            // joining eight separate structures by hand. This is that join,
+            // read from the same companies every other view is built from, so
+            // it can explain the shortfall without being able to disagree with
+            // the Workbench about it.
+            //
+            // `unaccounted` is the assertion that matters: a stage that loses
+            // companies without attributing them to decided / withheld /
+            // excluded has lost them silently, and that is logged loudly.
+            const funnel = missionFunnelFor(capabilityRun.companies);
+            for (const line of formatFunnel(funnel)) {
+              console.log("[run-agent][mission-funnel]", { task_id: task.id, line });
+            }
+            const unbalanced = unbalancedStages(funnel);
+            if (unbalanced.length > 0) {
+              console.error("[run-agent][mission-funnel][UNACCOUNTED]", {
+                task_id: task.id,
+                stages: unbalanced.map((s) => ({
+                  stage: s.stage, entered: s.entered, advanced: s.advanced,
+                  unaccounted: s.unaccounted,
+                })),
+              });
+            }
 
             // ── THE SAME RESULT, ALSO INTO THE CANONICAL LEAD LIBRARY ───────
             //
@@ -2647,6 +2680,20 @@ Deno.serve(async (req) => {
                       results: missionPersistResults,
                     },
                     workbench_evaluation_counts: evaluation.counts,
+                    // THE STAGE-LEVEL TOTALS BEHIND THOSE COUNTS. "0 qualified"
+                    // is only explainable next to how many were triaged out,
+                    // how many the budget never reached and how many the
+                    // enrichment provider never answered for.
+                    workbench_triage_counts: evaluation.triage_counts,
+                    workbench_enrichment_counts: evaluation.enrichment_counts,
+                    // THE FUNNEL, PERSISTED. Rebuilt here from the same
+                    // companies with the keys that actually reached the Lead
+                    // Library, so the persistence stage reports what was
+                    // written rather than what was eligible to be.
+                    mission_funnel: missionFunnelFor(capabilityRun.companies, {
+                      persistedKeys: missionPersistResults
+                        .filter((r) => r.ok).map((r) => r.key),
+                    }),
                     // THE CHECKPOINT. Per-company stage state plus the
                     // continuation flag the UI reads, so a run holding pending
                     // verification can never be described as complete.
@@ -2842,23 +2889,35 @@ Deno.serve(async (req) => {
                           ? "offer_founder_unlock" : null,
                         ...buildWorkbenchExplanation(c.grounded!, c.evidence_registry!),
                       })),
-                    semantic_classification_observability: {
-                      input_schema_version: SEMANTIC_INPUT_SCHEMA_VERSION,
-                      model: classificationBinding.enablement?.model ?? null,
+                    // ── THE COMPANY BRAIN'S OWN RECORD ────────────────────────
+                    //
+                    // Was `semantic_classification_observability`, reporting the
+                    // pre-Phase-4 classifier: `parse_status`, `repaired_fields`
+                    // and `company_fit` all came from `semantic_parse`, which the
+                    // engine no longer populates because that second evaluator is
+                    // deleted. The fields degraded to literal
+                    // `"invalid_fallback_review"` / `"review"` for every company —
+                    // telemetry describing a stage that had stopped running.
+                    //
+                    // What remains is what the Brain actually produced: the gates
+                    // it computed, the evidence it assembled, and its outcome.
+                    // The SEMANTIC answer is reported by
+                    // `mission_evaluation_observability` and `evaluation_paths`,
+                    // which describe the one authority that exists.
+                    company_brain_observability: {
                       companies: capabilityRun.companies
                         .filter((c) => c.brain !== null)
                         .map((c) => ({
                           company_key: c.key,
                           evaluated_at: new Date().toISOString(),
-                          parse_status: c.semantic_parse?.parse_status ?? "invalid_fallback_review",
-                          repaired_fields: c.semantic_parse?.raw_shape.repaired_fields ?? [],
                           business_model: c.brain!.business_model,
-                          company_fit: c.semantic_parse?.assessment.company_fit ?? "review",
                           confidence: c.brain!.confidence,
                           agentory_use_case: c.brain!.agentory_use_case,
                           supporting_evidence: c.brain!.supporting_evidence,
                           conflicting_evidence: c.brain!.conflicting_evidence,
                           unknown_fields: c.brain!.unknown_fields,
+                          // COMPUTED AND REPORTED, BUT NOT ALL OF THEM DECIDE —
+                          // see `gatesThatOutrankTheMission`.
                           failed_hard_gates: c.brain!.failed_hard_gates,
                           final_verdict: c.brain!.outcome,
                           final_reason: c.brain!.reason,
@@ -3744,7 +3803,11 @@ Deno.serve(async (req) => {
               companies_evaluated: capabilityRun.state.prequalification?.unique_companies ?? 0,
               open_jobs_evaluated: capabilityRun.state.prequalification?.open_jobs_evaluated ?? 0,
               commercially_eligible: capabilityRun.state.prequalification?.eligible_companies ?? 0,
-              shortlisted: capabilityRun.state.prequalification?.shortlist_keys.length ?? 0,
+              // THE SHORTLIST THAT WAS ACTUALLY PAID FOR. Read from the smart
+              // shortlist's own decision — this used to report the deterministic
+              // pass's shortlist, which `applyMissionIntelligence` overwrote, so
+              // the number named a different set of companies than the run bought.
+              shortlisted: capabilityRun.state.shortlist_decision?.counts.selected ?? 0,
               identities_resolved: capabilityRun.state.progress?.identity_resolved ?? 0,
               identities_unresolved: capabilityRun.state.progress?.identity_unresolved ?? 0,
               qualified: capabilityRun.state.qualified_company_keys.length,

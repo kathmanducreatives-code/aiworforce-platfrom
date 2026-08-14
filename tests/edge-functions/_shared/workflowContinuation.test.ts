@@ -261,7 +261,7 @@ Deno.test("13. Workbench ownership switches to the continuation plan", async () 
 });
 
 Deno.test("14. the four tracked companies survive prequalification of the stored rows", async () => {
-  const { prequalifyYcCompanies, shortlistForLinkedInResolution, linkedInSearchQueryFor } =
+  const { prequalifyYcCompanies, linkedInSearchQueryFor } =
     await import("../../../supabase/functions/_shared/leadCommercialPrequalification.ts");
   const yc = (name: string, website: string, teamSize: number, titles: string[]) =>
     ({ name, website, teamSize, batch: "W25", industries: ["B2B"],
@@ -274,12 +274,16 @@ Deno.test("14. the four tracked companies survive prequalification of the stored
   ];
   const r = prequalifyYcCompanies(rows, { min: 10, max: 150 });
   assertEquals(r.eligible_companies, 4, "all four must remain commercially eligible");
-  const names = shortlistForLinkedInResolution(r, 5).map((c) => c.name);
-  for (const n of ["SnapMagic", "Tara AI", "AgentMail", "Bluejay"]) {
-    assert(names.includes(n), `${n} must be shortlisted`);
+  // NONE OF THE FOUR CARRIES AN EXCLUSION, so nothing can remove them from the
+  // investigation pool. `shortlistForLinkedInResolution` is deleted — the
+  // budget controller decides the shortlist now — and what this test actually
+  // guards is that the stored rows survive prequalification and produce
+  // domain-free search queries.
+  for (const c of r.companies) {
+    assertEquals(c.exclusion, null, `${c.name} must carry no exclusion`);
   }
   // Bare names, as the search Actor requires.
-  for (const c of shortlistForLinkedInResolution(r, 5)) {
+  for (const c of r.companies) {
     assertFalse(/\.(com|ai|to)\b/.test(linkedInSearchQueryFor(c)),
       `query "${linkedInSearchQueryFor(c)}" must not carry a domain`);
   }

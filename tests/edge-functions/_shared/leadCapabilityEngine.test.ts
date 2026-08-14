@@ -406,79 +406,22 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   assertFalse(runA.companies.some((c) => c.verdict === "reject"),
     "nothing may be rejected for want of evidence");
 
-  // (b) WITH a classifier that confirms the fit → STILL HELD.
+  // ── (b) AND (c) DELETED WITH THE CLASSIFIER THEY EXERCISED ──────────────
   //
-  // THIS EXPECTATION WAS INVERTED DELIBERATELY. It used to read "semantic
-  // classification must be able to resolve an UNKNOWN into a pass", and that
-  // was the defect: with the Mission evaluator unwired in production, this
-  // fallback was the thing that actually qualified companies — a second final
-  // authority, and the very one the evaluator was written to replace. A
-  // company qualified here also carried `decision_source:
-  // "insufficient_evidence"` and `mission_evaluation: notEvaluated(...)`,
-  // because nothing had in fact evaluated it.
+  // They supplied `classifyCompany` — a confirming one, then a contradicting
+  // one — and asserted that neither could qualify or reject a company the
+  // Mission evaluator had never seen. That property now holds STRUCTURALLY:
+  // the engine has no classifier dependency to supply, so there is no second
+  // decider to neutralise. `missionEvaluatorProductionWiring` D1 and
+  // `structuredClassifierAndResume` 1 assert the absence directly.
   //
-  // The classifier still runs, is still parsed, and still populates
-  // `semantic_parse` and the Brain for observability. It may no longer end a
-  // company's journey. No evaluator ⇒ UNKNOWN.
-  const recB: Recorder = { calls: [] };
-  const runB = await runCapabilityPlan(
-    mockDeps(thin, recB, {
-      evaluateMission: undefined,
-      // THE STRUCTURED CONTRACT. `deps.classifyCompany` used to return
-      // `{verdict, reason}` while the Brain reasoned over the full schema, so
-      // the live path could never produce a business-model judgement. A pass
-      // must now cite supporting evidence and a credible use case — the parser
-      // downgrades it otherwise.
-      classifyCompany: () => Promise.resolve(parseSemanticFitStrict({
-        business_model: "b2b_saas", company_fit: "pass", confidence: 0.85,
-        agentory_use_case: "strong",
-        supporting_evidence: ["sells a subscription platform to businesses"],
-        conflicting_evidence: [], unknown_fields: [], reason: "B2B SaaS confirmed",
-      })),
-    }),
-    { mission: m, plan, brain: BRAIN },
-  );
-  assertEquals(runB.state.qualified_company_keys.length, 0,
-    "the classifier may not qualify a company the Mission evaluator never saw");
-  assert(runB.state.unknown_company_keys.length > 0, "it is held instead");
-  const heldB = runB.companies.find((c) => c.verdict === "unknown");
-  assert(heldB, "the company is held, not passed");
-  // THE ANSWER IS STILL RECORDED — held is not the same as unexamined.
-  assertEquals(heldB!.classification?.source, "semantic_classification");
-  assertEquals(heldB!.classification?.verdict, "pass",
-    "what the classifier thought is preserved for observability");
-  assertEquals(heldB!.decision_source, "insufficient_evidence");
-  assert(heldB!.record.missing_evidence.includes("mission_evaluation"),
-    "and the record names exactly what was missing");
-  assertFalse(runB.companies.some((c) => c.record.history.some(
-    (h) => h.stage === "qualified_company")),
-    "nothing reached qualified_company without the evaluator");
-
-  // (c) A classifier that CONTRADICTS does NOT reject either.
-  //
-  // Also inverted, and for the same reason in the opposite direction: the
-  // absence of the authority is not evidence for a company OR against it.
-  const recC: Recorder = { calls: [] };
-  const runC = await runCapabilityPlan(
-    mockDeps(thin, recC, {
-      evaluateMission: undefined,
-      classifyCompany: () => Promise.resolve(parseSemanticFitStrict({
-        business_model: "b2b_service", company_fit: "fail", confidence: 0.8,
-        agentory_use_case: "weak", supporting_evidence: [],
-        conflicting_evidence: ["staffing agency, not a software product"],
-        unknown_fields: [], reason: "staffing firm",
-      })),
-    }),
-    { mission: m, plan, brain: BRAIN },
-  );
-  assertEquals(runC.state.qualified_company_keys.length, 0);
-  assert(runC.state.unknown_company_keys.length > 0,
-    "without the evaluator a contradiction is HELD, not turned into a rejection");
-  assertFalse(runC.companies.some((c) => c.verdict === "reject"),
-    "the classifier is not a rejection authority either");
-  const heldC = runC.companies.find((c) => c.verdict === "unknown");
-  assertEquals(heldC!.classification?.verdict, "fail",
-    "its dissent is recorded — it simply does not decide");
+  // What remains is the branch that still matters: no evaluator ⇒ UNKNOWN.
+  assertEquals(held!.decision_source, "insufficient_evidence",
+    "the record must say nothing evaluated it");
+  assert(held!.record.missing_evidence.includes("mission_evaluation"),
+    "and name exactly what was missing");
+  assertEquals(runA.companies.filter((c) => c.verdict === "pass").length, 0,
+    "no path qualifies a company without the evaluator");
 });
 
 // ═══════════════════════════════════════════════════════════ 10. telemetry ══

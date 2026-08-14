@@ -449,7 +449,18 @@ Deno.test("8. RUN 2 resumes the deferred candidates and does not re-buy the reso
       const r = after.find((x) => x.company_key === key);
       assert(r, `${key} must still exist in run 2`);
       assertEquals(r!.identity, "resolved", "the deferred candidate was picked up");
-      assertEquals(nextStageFor(r!), "enrichment", "and it no longer owes identity");
+      // AND IT NO LONGER OWES IDENTITY — which is what this assertion is for.
+      //
+      // It used to read `nextStageFor === "enrichment"`, and that passed for the
+      // wrong reason: enrichment here is ASKED AND ANSWERED (the provider has no
+      // record for these companies), but the resume record reported it as
+      // `not_started` because every non-`completed` enrichment collapsed into
+      // that one value. A continuation reading it would have re-bought an answer
+      // it already had. `empty` is a terminal answer, so run 2 leaves nothing
+      // outstanding for these companies at all.
+      assertFalse(nextStageFor(r!) === "identity", "and it no longer owes identity");
+      assertEquals(r!.enrichment, "empty",
+        "enrichment was asked and answered — not left looking unstarted");
     }
 
     // AND THE ALREADY-PAID-FOR ONES WERE NOT BOUGHT AGAIN.

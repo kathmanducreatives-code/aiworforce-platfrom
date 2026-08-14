@@ -290,53 +290,32 @@ export function prequalifyYcCompanies(
 }
 
 // ------------------------------------------------------------- shortlist ----
-
-/**
- * `min(ceiling, max(5, requested × 2))` — bounded above AND below.
- *
- * THE CEILING WAS THE REAL TEN-COMPANY LIMIT.
- *
- * Removing the classifier's ten-call cap did not, on its own, evaluate more
- * companies: identity resolution only runs for the SHORTLIST, so a hard `10`
- * here meant a run that discovered forty enriched ten and the pool never saw
- * the rest. The cap that mattered was upstream of the one everybody was
- * looking at.
- *
- * It stays 10 by default — every paid identity and enrichment call comes out of
- * this number, so widening it for everyone would multiply provider spend on
- * every run. Stage 2 passes a larger ceiling because it is the thing that can
- * actually USE more companies, and it is bounded by the evaluation limit.
- */
-export const DEFAULT_SHORTLIST_CEILING = 10;
-
-export function shortlistSize(
-  requestedLeadCount: number, ceiling: number = DEFAULT_SHORTLIST_CEILING,
-): number {
-  const n = Math.max(0, Math.trunc(requestedLeadCount));
-  const cap = Math.max(1, Math.trunc(ceiling));
-  return Math.min(cap, Math.max(5, n * 2));
-}
+//
+// ── DELETED: `DEFAULT_SHORTLIST_CEILING`, `shortlistSize`,
+//            `shortlistForLinkedInResolution` ────────────────────────────────
+//
+// `shortlistSize(n) = min(10, max(5, n * 2))` derived how many companies could
+// be PAID FOR from how many leads the user ASKED FOR. Two unrelated quantities
+// collapsed into one number, and the `× 2` encoded an assumed 50% yield that
+// nothing measured.
+//
+// `shortlistForLinkedInResolution` then filtered on `c.eligible` — the
+// substring match over a compiled role vocabulary — so a company hiring a
+// "Founding Engineer" for a Mission asking for software engineers was removed
+// before any stage could reconsider it.
+//
+// Both are replaced by `leadInvestigationBudget`:
+//
+//   resolveInvestigationBudget   spend, as its own configurable quantity
+//   buildSmartShortlist          who to spend it on, GPT first, vocabulary as
+//                                a ranking hint that excludes nobody
+//
+// The old pair was still being CALLED by `applyPrequalification`, whose result
+// `applyMissionIntelligence` then overwrote — so it shaped the reported
+// shortlist while the smart shortlist decided the real one.
 
 /** Maximum simultaneous paid Actor starts in the resolution stage. */
 export const LINKEDIN_RESOLUTION_CONCURRENCY = 2;
-
-/**
- * The companies worth paying to resolve.
- *
- * A company with no commercial signal at all is NEVER shortlisted, however good
- * its size or batch — paying to identify a company that is only hiring
- * engineers cannot produce a lead for a GTM-hiring mission.
- */
-export function shortlistForLinkedInResolution(
-  result: PrequalificationResult, requestedLeadCount: number,
-  ceiling: number = DEFAULT_SHORTLIST_CEILING,
-): PrequalifiedCompany[] {
-  // The cap is a CEILING, not a quota. Filling it with known out-of-range
-  // companies would spend the budget on leads that cannot qualify.
-  return result.companies
-    .filter((c) => c.eligible)
-    .slice(0, shortlistSize(requestedLeadCount, ceiling));
-}
 
 /**
  * The search query for one shortlisted company — THE BARE NAME.

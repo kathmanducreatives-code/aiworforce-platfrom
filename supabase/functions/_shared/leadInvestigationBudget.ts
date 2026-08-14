@@ -36,6 +36,49 @@ export const INVESTIGATION_BUDGET_VERSION = "lead-investigation-budget-v1" as co
 export type EnvReader = (key: string) => string | undefined;
 
 export const INVESTIGATION_BUDGET_ENV = "LEAD_INVESTIGATION_BUDGET";
+export const UNTRIAGED_POLICY_ENV = "LEAD_INVESTIGATION_UNTRIAGED";
+
+/**
+ * WHAT TO DO WITH CANDIDATES GPT NEVER JUDGED.
+ *
+ * Mission Intelligence is off by default (flag + workspace allow-list), so on
+ * most runs today NOTHING semantic has looked at the pool. The question is what
+ * the deterministic role vocabulary is then allowed to do about it.
+ *
+ *   rank           Its verdict ORDERS the pool and removes nobody. Ineligible
+ *                  candidates rank last and are investigated only with budget
+ *                  no better-ranked candidate wanted. This is the target
+ *                  architecture: a substring match may not permanently exclude
+ *                  a company, because nothing downstream can recover it.
+ *
+ *   eligible_only  Its verdict EXCLUDES, as it used to. Cheaper on a pool the
+ *                  vocabulary mostly rejects, and wrong in exactly the way that
+ *                  motivated Mission Intelligence — Founding Engineer, Member
+ *                  of Technical Staff and Platform Engineer never enter the
+ *                  pool for a Mission asking for software engineers.
+ *
+ * ── THE COST, STATED PLAINLY ────────────────────────────────────────────────
+ *
+ * `rank` spends the FULL budget whenever the pool is larger than the budget;
+ * `eligible_only` spends only what the vocabulary approved. On the audited
+ * 20-company fixture that is 10 identity searches against 4. Neither exceeds
+ * `LEAD_INVESTIGATION_BUDGET` — the budget remains the one number that bounds
+ * spend — but the default genuinely uses more of it than before.
+ *
+ * Configurable rather than assumed, because it is a money decision and it
+ * belongs to an operator, not to a role dictionary.
+ */
+export type UntriagedPolicy = "rank" | "eligible_only";
+
+export const DEFAULT_UNTRIAGED_POLICY: UntriagedPolicy = "rank";
+
+export function resolveUntriagedPolicy(read?: EnvReader): UntriagedPolicy {
+  const get: EnvReader = read ?? ((k) => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  });
+  const raw = String(get(UNTRIAGED_POLICY_ENV) ?? "").trim().toLowerCase();
+  return raw === "eligible_only" ? "eligible_only" : DEFAULT_UNTRIAGED_POLICY;
+}
 
 /**
  * Companies paid for per run, by default.
@@ -130,8 +173,26 @@ export function resolveInvestigationBudget(i: {
 /** One candidate, as the shortlist ranker sees it. */
 export interface ShortlistCandidate {
   company_key: string;
-  /** Deterministic triage: did the free pass consider it eligible at all? */
+  /**
+   * The deterministic pass's OPINION — ranking only, never a veto.
+   *
+   * Derived from `classifyTitle`, a substring match over a compiled role
+   * vocabulary. See `buildSmartShortlist` for why this may not exclude.
+   */
   eligible: boolean;
+  /**
+   * A MISSION-STATED, VERIFIED reason this candidate is disqualified.
+   *
+   * The one thing other than an explicit GPT `irrelevant` that removes a
+   * candidate from the pool — and only ever `employee_size`, which fires solely
+   * when the MISSION set a range and the company's size is known to be outside
+   * it. That is a falsifiable fact about a constraint the user actually
+   * expressed, so paying to investigate it buys a lead that cannot qualify.
+   *
+   * DELIBERATELY NOT the role taxonomy. `technical_only` and
+   * `insufficient_commercial` are judgements, and they belong to GPT.
+   */
+  hard_exclusion?: string | null;
   /** GPT triage verdict, when Mission Intelligence ran. */
   relevance?: "relevant" | "uncertain" | "irrelevant" | null;
   confidence?: number | null;
@@ -147,11 +208,23 @@ export interface ShortlistDecision {
   excluded: Array<{ company_key: string; reason: string }>;
   /** Ordered keys, so telemetry can show what nearly made it. */
   ranking: string[];
+  /** Which untriaged policy produced this decision. Recorded, never inferred. */
+  untriaged_policy: UntriagedPolicy;
   budget: InvestigationBudget;
   counts: Record<string, number>;
 }
 
+/**
+ * Ranking tiers. LOWER IS INVESTIGATED FIRST.
+ *
+ * `relevant` outranks everything. Below it sit two different kinds of "we do not
+ * know": a GPT `uncertain`, and a company with no GPT verdict at all. The second
+ * is split by the deterministic pass — an `eligible` company ranks with the
+ * uncertain ones, an ineligible one ranks last but STAYS IN THE RUN.
+ */
 const TIER: Record<string, number> = { relevant: 0, uncertain: 1 };
+const NO_TRIAGE_ELIGIBLE_TIER = 1;
+const NO_TRIAGE_INELIGIBLE_TIER = 2;
 
 /**
  * Choose who to pay for, best first, up to the budget.
@@ -166,38 +239,83 @@ const TIER: Record<string, number> = { relevant: 0, uncertain: 1 };
  * said it about a company it was shown. Everything else is ranked, and a company
  * that merely runs out of budget is recorded as `budget_exhausted` — it was not
  * judged, it was not reached.
+ *
+ * ── THE DETERMINISTIC PASS RANKS; IT NO LONGER EXCLUDES ─────────────────────
+ *
+ * `eligible` comes from `classifyTitle`, a substring match over a compiled role
+ * vocabulary. It used to remove a candidate outright whenever GPT had not
+ * spoken — and GPT is off by default, so in production the brittle vocabulary
+ * WAS the gate: a Mission asking for "software engineers" compiled the single
+ * fragment "software engineer", and Founding Engineer, Member of Technical
+ * Staff and Platform Engineer were dropped before anything could reconsider
+ * them. Excluding here is irreversible; nothing downstream can recover a
+ * candidate that never entered the pool.
+ *
+ * Demoting it to a ranking signal costs NOTHING, which is the point: the budget
+ * bounds how many companies are investigated, so an ineligible candidate can
+ * only ever consume budget that no better-ranked candidate wanted. Recall
+ * improves, spend does not move, and the vocabulary keeps doing the one job it
+ * is actually good at — ordering.
  */
 export function buildSmartShortlist(
   candidates: readonly ShortlistCandidate[],
   budget: InvestigationBudget,
+  opts: { untriaged?: UntriagedPolicy } = {},
 ): ShortlistDecision {
+  const untriaged = opts.untriaged ?? DEFAULT_UNTRIAGED_POLICY;
   const excluded: ShortlistDecision["excluded"] = [];
   const counts: Record<string, number> = {
     relevant: 0, uncertain: 0, irrelevant: 0, ineligible: 0, no_triage: 0,
+    hard_excluded: 0,
   };
 
   const ranked = candidates.filter((c) => {
+    // ── THE TWO WAYS OUT OF THE POOL, AND THERE ARE ONLY TWO ─────────────
+    //
+    // A MISSION-STATED, VERIFIED DISQUALIFIER. Checked first, and NOT
+    // overridable by triage: if the Mission asked for 10-150 employees and this
+    // company verifiably has 350, no semantic verdict makes it in range.
+    if (c.hard_exclusion) {
+      counts.hard_excluded++;
+      excluded.push({
+        company_key: c.company_key,
+        reason: `mission_constraint:${c.hard_exclusion}`,
+      });
+      return false;
+    }
+    // AN EXPLICIT GPT `irrelevant`, about a company GPT was actually shown.
     if (c.relevance === "irrelevant") {
       counts.irrelevant++;
       excluded.push({ company_key: c.company_key, reason: "triage_irrelevant" });
       return false;
     }
-    // NO TRIAGE ⇒ THE DETERMINISTIC PASS STILL GATES. With Mission Intelligence
-    // off this is exactly the previous behaviour; with it on, `eligible` is
-    // advisory and GPT decides.
-    if (!c.relevance && !c.eligible) {
-      counts.ineligible++;
-      excluded.push({ company_key: c.company_key, reason: "prequalification_ineligible" });
-      return false;
-    }
     if (c.relevance) counts[c.relevance]++;
-    else counts.no_triage++;
+    else {
+      counts.no_triage++;
+      if (!c.eligible) {
+        counts.ineligible++;
+        // THE LEGACY SPEND PROFILE, kept as an explicit operator choice rather
+        // than as the silent default it used to be.
+        if (untriaged === "eligible_only") {
+          excluded.push({
+            company_key: c.company_key, reason: "prequalification_ineligible",
+          });
+          return false;
+        }
+      }
+    }
     return true;
   });
 
+  const tierOf = (c: ShortlistCandidate): number => {
+    const t = TIER[c.relevance ?? ""];
+    if (t !== undefined) return t;
+    return c.eligible ? NO_TRIAGE_ELIGIBLE_TIER : NO_TRIAGE_INELIGIBLE_TIER;
+  };
+
   ranked.sort((a, b) => {
-    const ta = TIER[a.relevance ?? ""] ?? 1;
-    const tb = TIER[b.relevance ?? ""] ?? 1;
+    const ta = tierOf(a);
+    const tb = tierOf(b);
     if (ta !== tb) return ta - tb;
     const sa = a.signal_strength ?? -1, sb = b.signal_strength ?? -1;
     if (sa !== sb) return sb - sa;
@@ -218,6 +336,7 @@ export function buildSmartShortlist(
     excluded,
     ranking: ranked.map((c) => c.company_key),
     budget,
+    untriaged_policy: untriaged,
     counts: { ...counts, selected: selected.length, ranked: ranked.length },
   };
 }

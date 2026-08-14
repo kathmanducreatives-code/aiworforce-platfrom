@@ -45,7 +45,7 @@ import {
 } from "./hiringActorInputs.ts";
 import {
   acceptLinkedInMatch, linkedInSearchQueryFor, LINKEDIN_RESOLUTION_CONCURRENCY,
-  prequalificationKey, prequalifyYcCompanies, shortlistForLinkedInResolution,
+  prequalificationKey, prequalifyYcCompanies,
   type PrequalificationResult, type PrequalifiedCompany, type YcCompanyInput,
 } from "./leadCommercialPrequalification.ts";
 import {
@@ -58,6 +58,13 @@ import {
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
 } from "./missionEvaluation.ts";
+import {
+  asEnrichmentOutcome, enrichmentIsEvidence, enrichmentIsTerminal,
+  summariseEnrichmentOutcomes, type EnrichmentOutcome,
+} from "./leadEnrichmentState.ts";
+import {
+  buildMissionFunnel, type FunnelCompany, type MissionFunnel,
+} from "./leadMissionFunnel.ts";
 import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
@@ -65,7 +72,7 @@ import {
 } from "./commercialSignalPolicy.ts";
 import {
   applyMissionPrecedence, decideCompanyBrain,
-  type BrainDecision, type ParsedSemanticFit, type SemanticFitInput,
+  type BrainDecision,
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
 import {
@@ -97,7 +104,8 @@ import {
   type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
 } from "./missionTriage.ts";
 import {
-  buildSmartShortlist, resolveInvestigationBudget, type InvestigationBudget,
+  buildSmartShortlist, resolveInvestigationBudget, resolveUntriagedPolicy,
+  type InvestigationBudget,
 } from "./leadInvestigationBudget.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson,
@@ -213,9 +221,14 @@ export interface PrequalificationRecord {
   strongest_signal: string | null;
   /** Every commercial job, not just the strongest. */
   commercial_jobs: string[];
+  /** The vocabulary's OPINION. Ranking only — it excludes nobody. */
   eligible: boolean;
   exclusion: PrequalifiedCompany["exclusion"];
-  shortlisted: boolean;
+  // `shortlisted` DELETED. Prequalification does not decide the shortlist, so
+  // recording its guess here produced a second, contradictory answer to "was
+  // this company investigated?" — one that `applyMissionIntelligence` had
+  // already overwritten on the working set. `state.shortlist_decision` is the
+  // single record.
   reasons: string[];
 }
 
@@ -265,7 +278,10 @@ export interface CapabilityExecutionState {
     technical_only_companies: number;
     /** EVERY job seen across every company, commercial or not. */
     open_jobs_evaluated: number;
-    shortlist_keys: string[];
+    // `shortlist_keys` DELETED. Prequalification no longer decides the
+    // shortlist; `state.shortlist_decision` is the single record of who was
+    // investigated and why. Reporting both let the run name one set of
+    // companies and pay for another.
     companies: PrequalificationRecord[];
   } | null;
   /**
@@ -287,6 +303,8 @@ export interface CapabilityExecutionState {
     budget: InvestigationBudget;
     counts: Record<string, number>;
     ranking: string[];
+    /** How untriaged candidates were treated. See `UntriagedPolicy`. */
+    untriaged_policy: string;
   } | null;
   /** The last published progress snapshot. Never contains a premature pass. */
   progress: EngineProgress | null;
@@ -410,6 +428,18 @@ export interface EngineCompany {
    */
   stage_block: { capability: CapabilityId; reason: "deferred" | "provider_error" } | null;
   enriched: NormalizedHiringCompany | null;
+  /**
+   * WHAT HAPPENED WHEN ENRICHMENT WAS ATTEMPTED — explicitly, not inferred.
+   *
+   * `enriched === null` conflates four outcomes: the provider answered and had
+   * nothing, the call failed, the call was never started, and the company never
+   * reached the stage. Only the first is about the company; the rest are about
+   * the run. Qualification already holds an unenriched company rather than
+   * rejecting it, and this is the field that lets every OTHER consumer — the
+   * checkpoint, the Workbench — tell those four apart instead of rendering all
+   * of them as the same absence.
+   */
+  enrichment_outcome: EnrichmentOutcome;
   yc_open_jobs: NormalizedHiringJob[];
   hiring_jobs: NormalizedHiringJob[];
   fit: CompanyFitResult | null;
@@ -421,7 +451,7 @@ export interface EngineCompany {
    */
   brain: BrainDecision | null;
   /** The classifier's raw-safe parse: status, repaired fields, assessment. */
-  semantic_parse: ParsedSemanticFit | null;
+  // `semantic_parse` DELETED with the second evaluator that populated it.
   /** Stable keys of provider operations already completed for this company. */
   completed_operations: string[];
   /** The canonical evidence registry, built at qualification time. */
@@ -513,36 +543,14 @@ export interface CapabilityEngineDeps {
     person: NormalizedHiringPerson, companyLinkedInUrl: string,
   ) => { verified: boolean; outcome: string };
   /**
-   * Resolve an UNKNOWN Company Brain verdict with a semantic classifier.
+   * DOES THIS COMPANY SATISFY THE MISSION? — THE deciding call, and the only one.
    *
-   * Absent or null-returning means UNKNOWN STAYS UNKNOWN. That is the whole
-   * point: a company we could not classify is held for review, never converted
-   * into a rejection because the budget for interpreting it was zero.
-   */
-  /**
-   * THE STRUCTURED CLASSIFIER. One contract, end to end.
+   * The pre-Phase-4 semantic classifier used to sit
+   * beside this as a second semantic authority. It has been DELETED: the
+   * inversion had already stripped its verdict, leaving a paid model call per
+   * company that populated telemetry and decided nothing.
    *
-   * This used to return `{verdict, reason}` while the semantic module expected
-   * the full schema, so the live path could never produce a real business-model
-   * judgement — only an offline stub could. There is now ONE shape, and it is
-   * the schema the Brain actually reasons over.
-   *
-   * Absent, or returning null, means UNKNOWN STAYS UNKNOWN: the company is held
-   * for review, never converted into a rejection for want of budget.
-   */
-  classifyCompany?: (input: SemanticFitInput) => Promise<ParsedSemanticFit | null>;
-  /**
-   * DOES THIS COMPANY SATISFY THE MISSION? — the deciding call.
-   *
-   * THE ARCHITECTURAL INVERSION LIVES HERE.
-   *
-   * `classifyCompany` above is an EXCEPTION HANDLER: it was consulted only when
-   * deterministic code returned `pending`, and the other two branches
-   * fabricated an assessment in code and reported it as model output. So the
-   * evaluator could not qualify anybody it had not first been allowed to see,
-   * and on the commonest paths it was never called at all.
-   *
-   * This one is consulted for EVERY company that reaches qualification, and its
+   * This is consulted for EVERY company that reaches qualification, and its
    * answer outranks the deterministic fit. Deterministic code keeps the facts
    * it can actually falsify — identity, aggregator, excluded industry — and
    * hands everything else to the evaluator as evidence.
@@ -974,6 +982,17 @@ export async function runCapabilityPlan(
       companies.map((c) => ({
         company_key: c.key,
         eligible: c.prequalified?.eligible ?? true,
+        // THE MISSION'S OWN CONSTRAINT, AND ONLY THAT.
+        //
+        // `prequalified.exclusion` carries three values. `employee_size` fires
+        // only when the MISSION set a range and the size is known to be
+        // outside it — a verified fact about a constraint the user expressed.
+        // `technical_only` and `insufficient_commercial` come from the role
+        // vocabulary and are judgements, so they rank (via `eligible`) and no
+        // longer remove anyone from the pool.
+        hard_exclusion: c.prequalified?.exclusion === "employee_size"
+          ? "employee_size"
+          : null,
         relevance: c.triage?.relevance ?? null,
         confidence: c.triage?.confidence ?? null,
         signal_strength: c.triage?.signal_strength ?? null,
@@ -981,6 +1000,8 @@ export async function runCapabilityPlan(
         name: c.prequalified?.name ?? c.company.company_name ?? c.key,
       })),
       budget,
+      // THE UNTRIAGED SPEND POLICY, read from the same env the budget uses.
+      { untriaged: resolveUntriagedPolicy(opts.readEnv) },
     );
 
     const chosen = new Set(decision.selected);
@@ -998,6 +1019,7 @@ export async function runCapabilityPlan(
     }
     state.shortlist_decision = {
       budget: decision.budget, counts: decision.counts,
+      untriaged_policy: decision.untriaged_policy,
       ranking: decision.ranking.slice(0, 50),
     };
     log("smart_shortlist_complete", {
@@ -1005,6 +1027,9 @@ export async function runCapabilityPlan(
       requested: budget.requested_count, pool: budget.pool_size,
       ...decision.counts,
       triage_enabled: deps.triageCompanies != null,
+      // WHAT DECIDED THE SPEND when GPT did not. Logged so a run's cost is
+      // explainable from its own telemetry rather than from the deployed env.
+      untriaged_policy: decision.untriaged_policy,
     });
   };
 
@@ -1451,14 +1476,7 @@ export async function runCapabilityPlan(
       applyPrequalification(state, companies, rawYcRows, {
         min: opts.brain?.employee_min ?? null,
         max: opts.brain?.employee_max ?? null,
-      }, effectiveRequestedCount(opts.mission),
-        // STAGE 2 CAN USE MORE COMPANIES, so it is allowed to pay to resolve
-        // more. Bounded by the evaluation ceiling, and unchanged when Stage 2
-        // is off — every identity and enrichment call comes out of this number.
-        deps.evaluateBatch
-          ? (deps.batchLimits ?? resolveBatchLimits({})).max_evaluated
-          : undefined,
-        qualificationCtx);
+      }, qualificationCtx);
       // The working set may have shrunk — artifacts are gone.
       state.company_keys = companies.map((c) => c.key);
       log("prequalification_complete", {
@@ -1466,7 +1484,6 @@ export async function runCapabilityPlan(
         eligible: state.prequalification?.eligible_companies,
         size_excluded: state.prequalification?.employee_size_excluded,
         technical_only: state.prequalification?.technical_only_companies,
-        shortlist: state.prequalification?.shortlist_keys,
       });
 
       // ── STAGE 2: GPT MISSION INTELLIGENCE, THEN THE SMART SHORTLIST ────────
@@ -1780,6 +1797,33 @@ export async function runCapabilityPlan(
         for (const batch of chunk(urls, COMPANY_DETAILS_BATCH_SIZE)) {
           const compiled = compileHarvestCompanyDetailsInput({ companies: batch });
           const rows = await callProvider(cap, "apify_linkedin_company_details", compiled);
+          // ── WHY THIS BATCH PRODUCED NOTHING ─────────────────────────────────
+          //
+          // Read IMMEDIATELY after the call and scoped to THIS batch's
+          // companies. `callProvider` clears `lastCallBlock` on entry, so it
+          // describes this call and no other; the enrichment call is batched and
+          // passes no `company`, so without this the block it recorded would be
+          // attributed to nobody and every company in a deferred batch would
+          // fall through to `empty` — a run fact rendered as a company fact.
+          const blocked = lastCallBlock;
+          if (blocked) {
+            for (const url of batch) {
+              for (const c of byUrl.get(url) ?? []) {
+                if (c.enriched) continue;
+                c.enrichment_outcome = blocked;
+                // SCOPED TO THIS CAPABILITY, so an enrichment failure can never
+                // be read back as an identity outcome. Identity is already
+                // resolved for every company here, so there is no earlier block
+                // worth preserving.
+                c.stage_block = { capability: cap, reason: blocked };
+              }
+            }
+            // A DEFERRED BATCH ENDS THE STAGE. The reserve exists so there is
+            // time to write a checkpoint; spending it on the next batch is
+            // precisely what it forbids.
+            if (blocked === "deferred") break;
+            continue;
+          }
           // MAPPED BACK BY URL. A batched response arrives in the Actor's order,
           // not ours, so pairing by index would attach one company's evidence to
           // another — a silent, unfalsifiable corruption.
@@ -1789,25 +1833,66 @@ export async function runCapabilityPlan(
             const matches = url ? byUrl.get(url) ?? [] : [];
             for (const c of matches) {
               c.enriched = normalized;
+              c.enrichment_outcome = "success";
+              // THE BLOCK IS CLEARED BY AN ANSWER. A company whose earlier batch
+              // errored and whose retry succeeded is not blocked.
+              if (c.stage_block?.capability === cap) c.stage_block = null;
               c.record = advance(c.record, "enrichment_complete", "provider_evidence_collected");
               enriched++;
+            }
+          }
+          // ANSWERED, AND NOT IN THE ANSWER. The one outcome here that is
+          // genuinely about the company: the provider was asked and has no
+          // record of it. Still not a rejection — it is an absence of evidence,
+          // and qualification holds on it rather than deciding.
+          for (const url of batch) {
+            for (const c of byUrl.get(url) ?? []) {
+              if (c.enriched || c.enrichment_outcome !== "not_attempted") continue;
+              c.enrichment_outcome = "empty";
             }
           }
         }
       }
       for (const c of actionable) {
         if (c.enriched) continue;
-        c.record = advance(c.record, "enrichment_pending", "enrichment_returned_no_rows");
+        c.record = advance(c.record, "enrichment_pending",
+          `enrichment_${c.enrichment_outcome}`);
       }
+      const enrichmentOutcomes = summariseEnrichmentOutcomes(
+        actionable.map((c) => c.enrichment_outcome));
+      // ── PARTIAL EXECUTION IS NOT COMPLETE EXECUTION ───────────────────────
+      //
+      // The same invariant identity resolution already holds. A company whose
+      // enrichment was DEFERRED or ERRORED never reached a terminal state, so
+      // the capability is incomplete: it stays pending, the run stays resumable,
+      // and a continuation buys exactly the evidence that is still missing.
+      // Marking it complete would move it to `completed_capabilities`, where the
+      // resume guard skips it — stranding those companies permanently on an
+      // outcome that was never about them.
+      const unenriched = actionable.filter(
+        (c) => !enrichmentIsTerminal(c.enrichment_outcome)).length;
+      const truncated = unenriched > 0;
       // EVIDENCE GATE. Enrichment that produced nothing is not enrichment, and
       // qualification must see that rather than an empty record it could read as
       // a proven negative.
-      finish(cap, "complete", enriched, ["apify_linkedin_company_details"], enriched > 0,
-        enriched === 0 ? "no company was enriched; qualification will hold them as unknown" : null);
+      finish(cap, truncated ? "incomplete" : "complete", enriched,
+        ["apify_linkedin_company_details"], truncated ? false : enriched > 0,
+        truncated
+          ? `${enriched} enriched, ${enrichmentOutcomes.deferred} deferred, ` +
+            `${enrichmentOutcomes.provider_error} provider error; ${unenriched} of ` +
+            `${actionable.length} company(ies) never reached a terminal state`
+          : enriched === 0
+            ? "no company was enriched; qualification will hold them as unknown"
+            : null);
       log("company_enrichment_complete", {
         resolved_urls: urls.length,
         actor_starts: Math.ceil(urls.length / COMPANY_DETAILS_BATCH_SIZE),
         enriched,
+        // THE COUNTS THAT WERE PREVIOUSLY COLLAPSED INTO ONE `null`.
+        outcomes: enrichmentOutcomes,
+        truncated,
+        deferred_company_keys: actionable
+          .filter((c) => c.enrichment_outcome === "deferred").map((c) => c.key),
       });
       await publish("companies_enriched");
       continue;
@@ -2147,10 +2232,15 @@ export async function runCapabilityPlan(
           geography: src.geography ?? null,
           required_geography: opts.brain?.required_geography ?? null,
           employee_count: src.employee_count ?? null,
-          // The Mission's ceiling when it set one. When it did not, the Brain's
-          // ceiling is advisory, so the gate falls back to the generous default
-          // rather than the workspace's own narrower preference.
-          employee_ceiling: (fitBounds.enforceable ? fitBounds.max : null) ?? 200,
+          // THE MISSION'S CEILING, OR NONE AT ALL.
+          //
+          // This used to fall back to `?? 200` when the Mission set no bound,
+          // reasoning that a generous default beat the workspace's narrower
+          // preference. Both are preferences. With `CEILING_TOLERANCE` at 1.0
+          // that default rejected every verified count above 400 — including
+          // companies the Mission evaluator had explicitly passed, on a
+          // constraint the user never expressed. A null ceiling is no gate.
+          employee_ceiling: fitBounds.enforceable ? fitBounds.max : null,
           commercial_tier: c.hiring_assessment?.tier ?? null,
           // THE MISSION NAMED ITS ROLES, so "no commercial signal" is not a fact
           // this gate may reject on — see `failedHardGates`.
@@ -2365,11 +2455,16 @@ export async function runCapabilityPlan(
           // about the company, so the company becomes insufficient_evidence and
           // stays resolvable on a later run. Inferring "not a fit" from a failed
           // call is the one inference this architecture forbids outright.
-          if (c.brain.outcome === "QUALIFIED" && enrichmentPlanned && c.enriched === null) {
+          if (c.brain.outcome === "QUALIFIED" && enrichmentPlanned &&
+              !enrichmentIsEvidence(c.enrichment_outcome)) {
             c.decision_source = "insufficient_evidence";
             c.verdict = "unknown";
-            c.record.stage_reason = "enrichment_evidence_missing";
-            c.record.missing_evidence.push("company_enrichment");
+            // WHICH of the four non-evidence outcomes, not merely that there was
+            // none. A continuation treats `deferred` and `provider_error` as
+            // still-owed work; `empty` is answered and will not improve on a
+            // retry. The hold is identical, the reason is not.
+            c.record.stage_reason = `enrichment_evidence_missing:${c.enrichment_outcome}`;
+            c.record.missing_evidence.push(`company_enrichment:${c.enrichment_outcome}`);
             unknown++;
             continue;
           }
@@ -2397,90 +2492,45 @@ export async function runCapabilityPlan(
         // company. It is recorded as INSUFFICIENT EVIDENCE and reported as
         // never evaluated, which is the distinction the whole architecture
         // exists to preserve.
+        // ── THE SECOND EVALUATOR IS DELETED ─────────────────────────────────
+        //
+        // This branch used to call the pre-Phase-4
+        // semantic classifier on every company the Mission evaluator did not
+        // reach. It was the ARCHITECTURE'S SECOND SEMANTIC AUTHORITY, and for a
+        // long time the one that actually decided in production, because
+        // `MISSION_EVALUATION` is off by default and this path is precisely the
+        // one taken when it is.
+        //
+        // The authority inversion already stripped its verdict: `c.verdict`
+        // became `unknown` regardless of what it said. What remained was a paid
+        // model call per company whose only surviving purpose was to populate
+        // `semantic_parse` and feed a `decideCompanyBrain` call whose result no
+        // longer changed anything — an entire duplicate evaluator kept alive to
+        // fill in telemetry fields.
+        //
+        // Now the absence is simply recorded. One semantic authority, one call
+        // site, and a run with no evaluator makes no model call here at all —
+        // it qualifies nobody and says so through `evaluation_paths` and
+        // `mission_evaluation_observability`. Silence reported as silence.
         c.decision_source = "insufficient_evidence";
         c.mission_evaluation = notEvaluated("no evaluator was available for this run");
-
-        const parsed = deps.classifyCompany
-          ? await deps.classifyCompany({
-            original_user_query: opts.mission.original_user_query,
-            mission_verticals: opts.mission.company_profile?.verticals ?? [],
-            mission_geography: opts.brain?.required_geography ?? null,
-            workspace_industries: opts.brain?.positive_industries ?? [],
-            company_name: src.company_name ?? null,
-            yc_description: c.company.description ?? null,
-            website_description: src.website ?? null,
-            linkedin_description: c.enriched?.description ?? null,
-            linkedin_industry: src.provider_industry ?? null,
-            linkedin_industry_ids: (src.industry_ids ?? []).map((x) => x.name),
-            employee_count: src.employee_count ?? null,
-            employee_advisory: src.employee_range_advisory ?? null,
-            geography: src.geography ?? null,
-            commercial_signal: c.hiring_assessment?.strongest?.title ?? null,
-            commercial_tier: c.hiring_assessment?.tier ?? null,
-          })
-          : null;
-        c.semantic_parse = parsed;
-        // THE ONLY PATH THAT CONSULTS A MODEL — and only when one was both
-        // available and returned something parseable.
-        c.evaluation_path = parsed ? "model_evaluated" : "model_unavailable";
-        // The legacy `{verdict, reason}` view, DERIVED rather than requested, so
-        // existing telemetry keeps working without a second live contract.
-        const resolved = parsed
-          ? {
-            verdict: (parsed.assessment.company_fit === "pass" ? "pass"
-              : parsed.assessment.company_fit === "fail" ? "fail" : "unknown") as
-              "pass" | "fail" | "unknown",
-            reason: parsed.assessment.reason,
-          }
-          : null;
-        // THE CLASSIFIER'S OWN STRUCTURED ANSWER, not a re-synthesis of it.
-        // A definitive answer resolves the fields it was asked about; only an
-        // inconclusive one leaves them unknown.
-        const semantic = parsed
-          ? {
-            ...parsed.assessment,
-            unknown_fields: parsed.assessment.company_fit === "review"
-              ? [...new Set([...parsed.assessment.unknown_fields, ...c.fit.missing_evidence])]
-              : parsed.assessment.unknown_fields,
-          }
-          : null;
+        c.evaluation_path = "model_unavailable";
+        // The Brain still runs, with no semantic assessment, so the deterministic
+        // gate record exists for a reviewer. It cannot QUALIFY without one — see
+        // `decideCompanyBrain`, where an absent assessment is REVIEW.
         c.brain = decideCompanyBrain({
-          gates: gateInput, semantic, policy: appliedPolicy, hiring_verified: hiringVerified,
-          grounding: groundingForBrain,
+          gates: gateInput, semantic: null, policy: appliedPolicy,
+          hiring_verified: hiringVerified, grounding: groundingForBrain,
         });
-
-        // ── THE CLASSIFIER INFORMS; IT NO LONGER DECIDES ────────────────────
-        //
-        // THIS BRANCH USED TO BE THE REAL QUALIFICATION AUTHORITY IN
-        // PRODUCTION. `resolved.verdict === "pass"` qualified a company and
-        // `=== "fail"` rejected one — from the pre-Phase-4 semantic classifier,
-        // on the path taken precisely when the Mission evaluator did NOT run.
-        // So the architecture had two final authorities, and the one that
-        // actually decided was the one it had been written to replace. Worse,
-        // the company still carried `decision_source: "insufficient_evidence"`
-        // and `mission_evaluation: notEvaluated(...)` from a few lines above —
-        // a QUALIFIED row whose own record said nothing had evaluated it.
-        //
-        // No evaluator ⇒ UNKNOWN. Not a pass, and not a rejection either: the
-        // absence of the authority is not evidence for or against a company.
-        // The classifier's structured answer is still parsed, still recorded on
-        // `semantic_parse`, and still feeds `decideCompanyBrain` above for
-        // observability — it simply may not end a company's journey.
-        //
-        // THE CONSEQUENCE IS DELIBERATE AND VISIBLE: with `MISSION_EVALUATION`
-        // off, a run qualifies NOBODY and says so through `evaluation_paths`
-        // and `mission_evaluation_observability`. Silence is reported as
-        // silence rather than as twenty rejections or a handful of unearned
-        // passes.
-        c.classification = resolved
-          ? { ...resolved, source: "semantic_classification" }
-          : { verdict: "unknown", reason: "no classifier available", source: "unresolved" };
+        c.classification = {
+          verdict: "unknown",
+          reason: "the mission evaluator did not run for this company",
+          source: "unresolved",
+        };
         // HELD, NOT REJECTED. The stage stays where the pipeline actually got
-        // to; the verdict is what says the Brain could not decide.
+        // to; the verdict is what says nothing could decide.
         c.verdict = "unknown";
-        c.record.stage_reason = resolved
-          ? `mission_evaluator_unavailable:${resolved.verdict}`
-          : `company_fit_pending:${c.fit.reason}`;
+        c.record.stage_reason = `mission_evaluator_unavailable:${c.fit.reason}`;
         c.record.missing_evidence.push(...c.fit.missing_evidence, "mission_evaluation");
         unknown++;
       }
@@ -2794,7 +2844,16 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       : c.identity === null ? "not_started"
       : identityIsActionable(c.identity) ? "resolved"
       : c.identity.status === "mismatch" ? "mismatch" : "unresolved",
+    // THE SAME DISTINCTION IDENTITY ALREADY MAKES, now that enrichment records
+    // it. `deferred` and `provider_error` are resumable — `nextStageFor` reads
+    // them as "still owes enrichment" — while `empty` was answered and asking
+    // again buys the same silence. Collapsing all three into `not_started`
+    // (what this did) made a continuation re-buy the answered ones and made a
+    // deferred one indistinguishable from a company that was never reached.
     enrichment: c.enriched !== null ? "completed"
+      : c.enrichment_outcome === "deferred" ? "deferred"
+      : c.enrichment_outcome === "provider_error" ? "provider_error"
+      : c.enrichment_outcome === "empty" ? "empty"
       : c.identity && identityIsActionable(c.identity) ? "not_started" : "not_required",
     hiring: !c.hiring_assessment ? "not_started"
       : c.hiring_assessment.verdict === "hiring_verified"
@@ -2825,6 +2884,11 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       prequal_key: c.prequal_key,
       shortlisted: c.shortlisted,
       enriched: (c.enriched ?? null) as unknown as Record<string, unknown> | null,
+      // CARRIED, NOT RECOMPUTED. A restored company with no `enriched` row is
+      // otherwise indistinguishable from one that was never attempted, so a
+      // continuation would report a provider error or a deadline deferral as
+      // `not_attempted` — losing precisely the fact the outcome exists to keep.
+      enrichment_outcome: c.enrichment_outcome,
     },
     updated_at: new Date().toISOString(),
   };
@@ -2865,6 +2929,12 @@ export function restoreWorkingSet(
     c.prequalified = (s.prequalified ?? null) as unknown as EngineCompany["prequalified"];
     c.shortlisted = s.shortlisted === true;
     c.enriched = (s.enriched ?? null) as unknown as NormalizedHiringCompany | null;
+    // NARROWED, because a checkpoint is untrusted input. A record written
+    // before this field existed has no outcome and degrades to `not_attempted`
+    // — except where the evidence itself survived, which IS a success.
+    c.enrichment_outcome = c.enriched !== null
+      ? "success"
+      : asEnrichmentOutcome(s.enrichment_outcome);
     // THE LEDGER OF WHAT WAS BOUGHT. `shouldSkipProviderCall` reads this, and it
     // is the only thing standing between a resume and paying twice.
     for (const op of r.completed_operations) {
@@ -3034,19 +3104,33 @@ export async function runBounded<T>(
 }
 
 /**
- * Score the discovered rows and decide the shortlist — no provider, no cost.
+ * SCORE the discovered rows — no provider, no cost, and NO SHORTLIST.
  *
- * Attaches the verdict to each working-set company AND records it on the state,
- * because "why was this company not pursued?" must be answerable from the task
- * row alone.
+ * ── WHAT WAS DELETED FROM HERE, AND WHY ─────────────────────────────────────
+ *
+ * This used to also DECIDE the shortlist, via
+ * `shortlistForLinkedInResolution(result, requestedLeadCount, ceiling)` — which
+ * is `min(ceiling, max(5, requestedLeadCount * 2))`, the exact coupling between
+ * "how many leads to return" and "how many companies to pay for" that the
+ * investigation budget exists to break.
+ *
+ * It was also DEAD. `applyMissionIntelligence` runs immediately afterwards and
+ * overwrites `c.shortlisted` for every company unconditionally, so this
+ * computed a spend decision, wrote it onto the working set, and had it
+ * discarded microseconds later. Two shortlist mechanisms, one of them
+ * load-bearing, the other still shaping `state.prequalification.shortlist_keys`
+ * — which is what the run then REPORTED as the shortlist. The telemetry named a
+ * set of companies that had not been the ones investigated.
+ *
+ * Prequalification now does only what it is good at: dedupe, drop scraper
+ * artifacts, and score. Who gets paid for is decided once, downstream, by
+ * `buildSmartShortlist` against the investigation budget.
  */
 export function applyPrequalification(
   state: CapabilityExecutionState,
   companies: EngineCompany[],
   rawRows: readonly YcCompanyInput[],
   size: { min: number | null; max: number | null },
-  requestedLeadCount: number,
-  shortlistCeiling?: number,
   /**
    * The Mission's qualification context. Omitted on a missionless run, where
    * the workspace Brain keeps its previous authority and behaviour is unchanged.
@@ -3068,15 +3152,13 @@ export function applyPrequalification(
       size_enforceable: bounds.enforceable,
     },
   );
-  const shortlist = shortlistForLinkedInResolution(
-    result, requestedLeadCount, shortlistCeiling);
-  const shortlistKeys = new Set(shortlist.map((c) => c.company_key));
   const byKey = new Map(result.companies.map((c) => [c.company_key, c]));
 
+  // SCORE ONLY. `shortlisted` stays false until `buildSmartShortlist` decides
+  // it against the investigation budget — see this function's header for the
+  // duplicate that used to set it here and be discarded.
   for (const c of companies) {
-    const pq = c.prequal_key ? byKey.get(c.prequal_key) ?? null : null;
-    c.prequalified = pq;
-    c.shortlisted = pq !== null && shortlistKeys.has(pq.company_key);
+    c.prequalified = c.prequal_key ? byKey.get(c.prequal_key) ?? null : null;
   }
 
   // SCRAPER ARTIFACTS LEAVE THE WORKING SET ENTIRELY.
@@ -3100,7 +3182,6 @@ export function applyPrequalification(
     employee_size_excluded: result.employee_size_excluded,
     technical_only_companies: result.technical_only_companies,
     open_jobs_evaluated: result.companies.reduce((n, c) => n + c.jobs.length, 0),
-    shortlist_keys: shortlist.map((c) => c.company_key),
     companies: result.companies.map((c) => ({
       company_key: c.company_key,
       name: c.name,
@@ -3116,7 +3197,6 @@ export function applyPrequalification(
         .map((j) => j.title),
       eligible: c.eligible,
       exclusion: c.exclusion,
-      shortlisted: shortlistKeys.has(c.company_key),
       reasons: c.reasons,
     })),
   };
@@ -3254,8 +3334,11 @@ function addCompany(
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     triage: null, shortlist_exclusion: null,
     company: c, identity: null, stage_block: null, enriched: null,
+    // NOT_ATTEMPTED IS THE HONEST DEFAULT, exactly as with `evaluation_path`.
+    // A company leaves it only when the stage actually tries.
+    enrichment_outcome: "not_attempted",
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
-    brain: null, semantic_parse: null, completed_operations: [],
+    brain: null, completed_operations: [],
     evidence_registry: null, grounded: null,
     classification: null, verdict: null,
     // NOT_REACHED IS THE HONEST DEFAULT. A company only leaves this state when
@@ -3339,6 +3422,51 @@ export function summariseEvaluationPaths(
       match_score: c.mission_evaluation?.match_score ?? null,
     })),
   };
+}
+
+/**
+ * ONE ORDERED WALK OF THE PIPELINE, built from the companies themselves.
+ *
+ * The adapter between engine state and `buildMissionFunnel`. Every field is
+ * READ, never recomputed — the funnel exists to join views that already agree,
+ * and deriving anything here would let it drift from the Workbench and the
+ * checkpoint the way two independent counters always eventually do.
+ */
+export function toFunnelCompanies(
+  companies: readonly EngineCompany[],
+  opts: { persistedKeys?: readonly string[] } = {},
+): FunnelCompany[] {
+  const persisted = new Set(opts.persistedKeys ?? []);
+  return companies.map((c) => ({
+    key: c.key,
+    prequalified: c.prequalified !== null,
+    triage: c.triage?.relevance ?? null,
+    shortlisted: c.shortlisted,
+    shortlist_exclusion: c.shortlist_exclusion,
+    // BLOCKED IS CHECKED FIRST. A company the deadline stopped has no identity
+    // outcome to report, and calling that "unresolved" would turn a clock
+    // decision into a permanent fact about the company.
+    identity: c.stage_block?.capability === "company_identity_resolution"
+      ? "blocked"
+      : c.identity === null ? "not_attempted"
+      : identityIsActionable(c.identity) ? "resolved"
+      : c.identity.status === "mismatch" ? "mismatch" : "unresolved",
+    enrichment: c.enrichment_outcome,
+    reached_brain: c.brain !== null,
+    brain: c.brain?.outcome ?? null,
+    evaluated: c.decision_source === "gpt_evaluation",
+    decision_source: c.decision_source,
+    verdict: c.verdict,
+    persisted: persisted.has(c.key),
+  }));
+}
+
+/** The funnel for a finished (or partial) run. */
+export function missionFunnelFor(
+  companies: readonly EngineCompany[],
+  opts: { persistedKeys?: readonly string[] } = {},
+): MissionFunnel {
+  return buildMissionFunnel(toFunnelCompanies(companies, opts));
 }
 
 // ------------------------------------------------------- persistence bridge ----

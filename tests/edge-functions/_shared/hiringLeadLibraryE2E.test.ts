@@ -553,16 +553,54 @@ Deno.test("persistence failure: reported, and the Workbench result survives", as
   assertEquals(summary.persisted, 0, "the failure is visible from the persisted row");
 });
 
-Deno.test("an unqualified company is never written to the Lead Library", async () => {
-  // A company outside the Brain's employee range cannot qualify.
+Deno.test("a MISSION-STATED size constraint still rejects, and writes nothing", async () => {
+  // THE CONSTRAINT THE USER ACTUALLY EXPRESSED.
+  //
+  // `employee_range` on the mission makes the bound ENFORCEABLE, so a verified
+  // 5000-employee company fails a falsifiable fact the mission itself stated.
+  // That rejection survives the evaluator — see `MISSION_STATED_GATES` — because
+  // the user asked for it, and it is checkable.
   const db = memoryDb();
-  const r = await runHiringWithPersistence(hiringMission(), {
+  const r = await runHiringWithPersistence(hiringMission({
+    company_profile: {
+      business_models: [], verticals: ["b2b saas"], stages: ["startup"],
+      locations: ["United States"],
+      employee_range: { min: 10, max: 150 },
+    },
+  } as never), {
     ...HAPPY,
     apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCount: 5000 }],
   }, db);
   assertEquals(r.run!.state.qualified_company_keys.length, 0);
   assertEquals(db.rows("lead_candidates").length, 0);
   assert(readEvaluationRows(r.taskResult).length > 0, "but it is visible as work done");
+});
+
+Deno.test("a WORKSPACE PREFERENCE does not reject what the evaluator passed", async () => {
+  // THE AUTHORITY BOUNDARY, FROM THE OTHER SIDE.
+  //
+  // Here the MISSION says nothing about size; the 10-150 range is the workspace
+  // Brain's own preference. The Brain used to reject on it anyway, through
+  // `employee_count_far_above_ceiling`, BEFORE `mission_fit` was ever read — so
+  // a preference silently outranked the Mission evaluator, which is exactly
+  // what `missionEvaluation` documents it may never do ("It may not reject for
+  // a Brain PREFERENCE. `icp_fit` moves the score and nothing else").
+  //
+  // The preference still reaches the evaluator, inside the brain authority
+  // block, where a model can weigh it and set `icp_fit` accordingly. What it
+  // may no longer do is end the company's journey before the question is asked.
+  const db = memoryDb();
+  const r = await runHiringWithPersistence(hiringMission(), {
+    ...HAPPY,
+    apify_linkedin_company_details: [{ ...enrichRow("Sortly", "sortly"), employeeCount: 5000 }],
+  }, db);
+  const brains = r.run!.companies.map((c) => c.brain).filter(Boolean);
+  assert(brains.length > 0, "the company must reach the Brain");
+  assertFalse(
+    brains.some((b) => b!.outcome === "REJECT" &&
+      b!.reason.includes("employee_count_far_above_ceiling")),
+    "a workspace preference may not produce a rejection",
+  );
 });
 
 // ══════════════════════ D. containment ══════════════════════════════════════

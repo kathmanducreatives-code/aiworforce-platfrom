@@ -22,9 +22,12 @@ import {
   STRUCTURED_COMPANY_ACTOR_IDS, STRUCTURED_COMPANY_ACTOR_KEYS,
 } from "../../../supabase/functions/_shared/providerResponseContract.ts";
 import {
-  prequalifyYcCompanies, shortlistForLinkedInResolution, classifyJobTitle,
+  prequalifyYcCompanies, classifyJobTitle,
   type YcCompanyInput,
 } from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
+import {
+  buildSmartShortlist, resolveInvestigationBudget,
+} from "../../../supabase/functions/_shared/leadInvestigationBudget.ts";
 
 // ─────────────────────────────────────────────── a realistic memo23 row ──
 
@@ -327,11 +330,30 @@ Deno.test("10. the intact 50 rows produce the expected eligible shortlist", () =
   assert(r.eligible_companies > 0,
     "the live run produced ZERO here — that is the regression this file exists for");
 
-  const names = shortlistForLinkedInResolution(r, 5).map((c) => c.name);
+  // THE CANONICAL SHORTLIST, through the budget controller — the old
+  // `shortlistForLinkedInResolution` is deleted. This file's subject is the
+  // TRANSPORT (structured rows reaching prequalification unadapted), so it
+  // asserts the shortlist only far enough to prove the rows arrived usable.
+  const decision = buildSmartShortlist(
+    r.companies.map((c) => ({
+      company_key: c.company_key,
+      eligible: c.eligible,
+      hard_exclusion: c.exclusion === "employee_size" ? "employee_size" : null,
+      relevance: null,
+      score: c.score,
+      name: c.name,
+    })),
+    resolveInvestigationBudget({
+      requestedCount: 5, poolSize: r.companies.length, read: () => undefined,
+    }),
+  );
+  const byKey = new Map(r.companies.map((c) => [c.company_key, c.name]));
+  const names = decision.selected.map((k) => byKey.get(k)!);
   for (const n of ["Bluejay", "SnapMagic", "AgentMail", "Tara AI", "Zentail", "Bitmovin", "Etleap"]) {
     assert(names.includes(n), `${n} must be shortlisted (got: ${names.join(", ")})`);
   }
-  // Out of range, and excluded for that reason rather than for a missing signal.
+  // Out of range, and excluded for that reason rather than for a missing signal
+  // — the one non-GPT exclusion that survives, because it is a verified fact.
   const odeko = r.companies.find((c) => c.name === "Odeko")!;
   assertEquals(odeko.exclusion, "employee_size");
   assertFalse(names.includes("Odeko"));

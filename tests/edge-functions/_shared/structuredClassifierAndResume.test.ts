@@ -34,28 +34,40 @@ const gates = (o: Partial<HardGateInput> = {}): HardGateInput => ({
 
 // ═══════════════ 1-10. the classifier contract ══
 
-Deno.test("1. run-agent binds the FULL structured schema", async () => {
-  const src = await Deno.readTextFile(
-    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(src.includes("buildClassifierPayload(evidence, policy"),
-    "the full evidence payload must go out");
-  // AND THE COMPILED MISSION GOES WITH IT. The classifier used to receive only
-  // verticals and geography, then re-derive the rest from the raw sentence —
-  // which is how the stage that judged a company could disagree with the stage
-  // that chose it, about the same run.
-  assert(src.includes("persistedMission.directives"),
-    "the validated mission's directives must reach the classifier");
-  assert(src.includes("hard_constraints: persistedMission.hard_constraints"),
-    "and its hard constraints too");
-  assert(src.includes("parseSemanticFitStrict(raw)"),
-    "the full schema must come back through the fail-closed parser");
-  assertFalse(/return v === "pass" \|\| v === "fail" \|\| v === "unknown"/.test(src),
-    "the old {verdict, reason} squeeze must be gone");
-
+Deno.test("1. the capability engine binds NO second semantic evaluator", async () => {
+  // THIS TEST WAS INVERTED, and the inversion is the point.
+  //
+  // It used to assert that `classifyCompany` was wired from run-agent into the
+  // capability engine, carrying the full structured schema. That wiring was the
+  // architecture's SECOND semantic authority, and — because `MISSION_EVALUATION`
+  // is off by default and this path is exactly the one taken when it is — the
+  // one that decided in production.
+  //
+  // The Mission evaluator is the semantic authority. The engine no longer
+  // accepts a classifier at all, so the second evaluator cannot come back by
+  // someone re-adding a dependency.
   const engine = await Deno.readTextFile(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
-  assert(engine.includes("classifyCompany?: (input: SemanticFitInput) => Promise<ParsedSemanticFit | null>"),
-    "one contract, engine-side too");
+  assertFalse(/classifyCompany\?:/.test(engine),
+    "the engine must not declare a classifier dependency");
+  assertFalse(/deps\.classifyCompany/.test(engine),
+    "and it must not call one");
+  assert(/evaluateMission\?:/.test(engine),
+    "the Mission evaluator remains the one semantic seam");
+
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assertFalse(/classifyCompany:/.test(src),
+    "run-agent must not pass a classifier into the engine");
+  assert(src.includes("evaluateMission:"),
+    "it passes the evaluator instead");
+
+  // The classifier MODULE still exists and is still tested below — it serves
+  // the legacy company-first route, which is a separate execution path. What
+  // was deleted is its role as a qualification authority in the Mission
+  // pipeline, not the code itself.
+  assertFalse(/return v === "pass" \|\| v === "fail" \|\| v === "unknown"/.test(src),
+    "the old {verdict, reason} squeeze must stay gone");
 });
 
 Deno.test("2. valid B2B evidence produces a semantic pass", () => {

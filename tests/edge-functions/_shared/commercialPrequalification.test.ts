@@ -10,7 +10,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import {
   LINKEDIN_RESOLUTION_CONCURRENCY, acceptLinkedInMatch, classifyJobTitle,
   linkedInSearchQueryFor, normalizeDomain, prequalifyYcCompanies,
-  shortlistForLinkedInResolution, shortlistSize, type YcCompanyInput,
+  type YcCompanyInput,
 } from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
 
 const c = (name: string, website: string, teamSize: number | null, jobs: string[]): YcCompanyInput =>
@@ -59,38 +59,35 @@ Deno.test("1. prequalification is pure — 25 companies cost zero Actor calls", 
   assertEquals(r.excluded.length, 5, "the five empty memo23 rows are excluded, not scored");
 });
 
-// ═══════════════════════════════ 2/3. the shortlist is capped ══
+// ═══════════════════════════ 2/3. scoring, and the SIZE gate ══
+//
+// `shortlistSize` and `shortlistForLinkedInResolution` are DELETED, and the
+// tests that exercised them went with them. They derived spend from the
+// requested lead count (`min(10, max(5, n * 2))`) and then filtered on
+// `c.eligible` — the role-vocabulary substring match. Both jobs now belong to
+// `leadInvestigationBudget`: the budget is its own configurable number, and
+// `buildSmartShortlist` ranks rather than excludes.
+//
+// What survives here is what prequalification still genuinely owns: scoring,
+// dedupe, artifact removal, and the SIZE verdict — the one exclusion that is a
+// verified fact rather than a judgement.
 
-Deno.test("2. a request for 5 leads caps the shortlist at 10", () => {
-  assertEquals(shortlistSize(5), 10);
-  assertEquals(shortlistSize(1), 5, "floor of 5");
-  assertEquals(shortlistSize(50), 10, "ceiling of 10");
-  assertEquals(shortlistSize(0), 5);
+Deno.test("2. paid resolution concurrency is bounded", () => {
   assertEquals(LINKEDIN_RESOLUTION_CONCURRENCY, 2);
 });
 
-Deno.test("3. the real run shortlists 5, not 25 — size gate applied first", () => {
-  const sl = shortlistForLinkedInResolution(run(), 5);
-  assert(sl.length <= shortlistSize(5), "the cap is a ceiling");
-  assertEquals(sl.map((x) => x.name),
-    ["SnapMagic", "Tara AI", "Zentail", "Bitmovin", "Etleap"]);
-  // Every one is inside 10-150 on VERIFIED evidence.
-  for (const c of sl) assertEquals(c.size_status, "in_range", c.name);
-});
-
-Deno.test("3b. Apollo (200) and Magic (350) never reach LinkedIn resolution", () => {
+Deno.test("3b. Apollo (200) and Magic (350) are marked out of range", () => {
   const r = run();
-  const sl = shortlistForLinkedInResolution(r, 5).map((x) => x.name);
   for (const tooBig of ["Apollo", "Magic"]) {
     const c = r.companies.find((x) => x.name === tooBig)!;
     assert(c.best_tier !== null, `${tooBig} does have a real commercial opening`);
     assertEquals(c.size_status, "above_max");
     assertEquals(c.eligible, false, "a known out-of-range headcount is disqualifying on its own");
+    // THE ONE EXCLUSION THAT STILL REMOVES A CANDIDATE FROM THE POOL — carried
+    // to `buildSmartShortlist` as `hard_exclusion`, because it is a verified
+    // fact about a constraint the MISSION stated.
     assertEquals(c.exclusion, "employee_size");
-    assertFalse(sl.includes(tooBig), `${tooBig} must not consume a paid search`);
   }
-  // The cap is NOT filled with ineligible companies just because room exists.
-  assert(sl.length < shortlistSize(5));
 });
 
 Deno.test("3c. exclusion kinds are distinct and the totals reconcile", () => {
@@ -117,14 +114,19 @@ Deno.test("3d. an unverified size never outranks a verified in-range company", (
 
 // ══════════════════ 4/5/6. technical-only never qualifies, full array read ══
 
-Deno.test("4. technical-only companies are never shortlisted", () => {
-  const sl = shortlistForLinkedInResolution(run(), 5).map((x) => x.name);
-  for (const technicalOnly of ["Odeko", "Mashgin", "HackerRank", "Mux", "Streak", "Revion", "Hub"]) {
-    assertFalse(sl.includes(technicalOnly), `${technicalOnly} hires only engineers — not a GTM signal`);
+Deno.test("4. technical-only companies are MARKED, not removed", () => {
+  // This used to assert they were "never shortlisted". That was the defect:
+  // `technical_only` comes from a substring match over a compiled role list, so
+  // for a mission asking for engineers it excluded exactly what was requested.
+  // The verdict is still recorded — it RANKS them last — and it no longer
+  // removes anyone. Only `employee_size` does that.
+  const r = run();
+  assertEquals(r.technical_only_companies, 5);
+  for (const c of r.companies.filter((x) => x.exclusion === "technical_only")) {
+    assertEquals(c.eligible, false, `${c.name} is rated ineligible`);
+    assertFalse(c.exclusion === "employee_size",
+      `${c.name} carries a judgement, not a verified disqualifier`);
   }
-  // Odeko and HackerRank are technical-only AND out of range; the size gate
-  // claims them first, so each company carries exactly one exclusion reason.
-  assertEquals(run().technical_only_companies, 5);
 });
 
 Deno.test("5. the FULL jobs array is read — a commercial role after engineers is found", () => {
@@ -156,7 +158,10 @@ Deno.test("6. tier classification is commercial-first", () => {
 Deno.test("6b. a lone Tier-C role is not a commercial signal", () => {
   const r = prequalifyYcCompanies([c("Gemnote", "http://gemnote.com", 40, ["Head of Operations"])], SIZE);
   assertEquals(r.companies[0].best_tier, null, "one ops role could be an office manager");
-  assertEquals(shortlistForLinkedInResolution(r, 5).length, 0);
+  // ...and it is rated ineligible, which now RANKS it last rather than deleting
+  // it from the pool. `buildSmartShortlist` owns that decision.
+  assertEquals(r.companies[0].eligible, false);
+  assertEquals(r.companies[0].exclusion, "insufficient_commercial");
 });
 
 // ═══════════════════════════ 7. domain is the internal identity ══

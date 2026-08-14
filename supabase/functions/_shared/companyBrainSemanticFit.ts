@@ -167,8 +167,18 @@ export interface HardGateInput {
   geography: string | null;
   required_geography: string | null;
   employee_count: number | null;
-  /** The preferred ceiling. A verified count must exceed it CLEARLY to reject. */
-  employee_ceiling: number;
+  /**
+   * The ceiling, or NULL when nobody stated one.
+   *
+   * NULL IS NOT A DEFAULT CEILING. This used to be a required number, and the
+   * engine passed `?? 200` when the Mission set no size range — so a Mission
+   * that never mentioned company size still rejected every verified count above
+   * 400 (the ceiling plus `CEILING_TOLERANCE`), including companies the Mission
+   * evaluator had explicitly passed. A bound nobody asked for is not a
+   * falsifiable fact about the company; it is a preference, and preferences
+   * rank rather than reject.
+   */
+  employee_ceiling: number | null;
   commercial_tier: "A" | "B" | "C" | null;
   semantic: SemanticFitAssessment | null;
   /**
@@ -202,9 +212,10 @@ export function failedHardGates(i: HardGateInput): HardGate[] {
       !i.geography.toLowerCase().includes(i.required_geography.toLowerCase())) {
     failed.push("unsupported_geography");
   }
-  // A VERIFIED count clearly above the ceiling. An unverified or borderline
-  // count is REVIEW — the audited data had YC self-reports off by up to 23x.
-  if (i.employee_count != null &&
+  // A VERIFIED count clearly above a STATED ceiling. An unverified or
+  // borderline count is REVIEW — the audited data had YC self-reports off by up
+  // to 23x — and an ABSENT ceiling is no gate at all.
+  if (i.employee_count != null && i.employee_ceiling != null &&
       i.employee_count > i.employee_ceiling * (1 + CEILING_TOLERANCE)) {
     failed.push("employee_count_far_above_ceiling");
   }
@@ -228,6 +239,70 @@ export function failedHardGates(i: HardGateInput): HardGate[] {
   }
   if (i.semantic?.agentory_use_case === "none") failed.push("no_agentory_use_case");
   return failed;
+}
+
+// ─────────────────────── who may still speak after the evaluator has spoken ──
+//
+// THE AUTHORITY BOUNDARY, AS TWO SETS.
+//
+// `failedHardGates` predates the Mission evaluator. It ran FIRST and returned
+// REJECT before `mission_fit` was ever read, so the Company Brain — which exists
+// to ASSEMBLE evidence for the evaluator — was quietly the final authority over
+// it. Two of its gates rejected companies the evaluator had explicitly passed:
+//
+//   unsupported_geography             `geography.includes(required_geography)`,
+//                                     so "San Francisco, CA, USA" does not
+//                                     contain "united states" and the check
+//                                     rejected the very companies it was meant
+//                                     to keep.
+//   employee_count_far_above_ceiling  against a ceiling the Mission never set.
+//
+// Both are SEMANTIC judgements wearing a deterministic costume. Whether a
+// location satisfies "the United States", and whether a company's size suits a
+// request that never mentioned size, are exactly the questions the evaluator
+// reads the Mission to answer. So after it has answered, only two kinds of fact
+// may still speak.
+
+/**
+ * Facts that make the EVIDENCE UNTRUSTWORTHY rather than the company unsuitable.
+ *
+ * A mismatched identity means the evidence describes a DIFFERENT COMPANY, so the
+ * evaluator's verdict is void — it answered about something else. That is a
+ * REVIEW: nothing was learned about this company, and "we resolved the wrong
+ * LinkedIn page" is not a reason to tell a user their prospect was rejected.
+ */
+const INTEGRITY_GATES: ReadonlySet<HardGate> = new Set<HardGate>(["identity_mismatch"]);
+
+/**
+ * Verified facts the MISSION ITSELF made disqualifying.
+ *
+ * These may still reject after the evaluator passes, because the user stated the
+ * constraint and the fact is checkable. `employee_count_far_above_ceiling` is
+ * here ONLY because its ceiling is now nullable: it can fire only when the
+ * Mission set a bound, so a workspace preference can never reach this set.
+ *
+ * Everything NOT in either set — `unsupported_geography`, `consumer_only`,
+ * `no_commercial_signal`, `no_agentory_use_case` — is about Agentory's own buyer
+ * or is a judgement the evaluator is better placed to make. Those remain
+ * computed and REPORTED on every decision, so the Brain still shows its work;
+ * they simply no longer carry a veto.
+ */
+const MISSION_STATED_GATES: ReadonlySet<HardGate> = new Set<HardGate>([
+  "inactive_company", "employee_count_far_above_ceiling",
+]);
+
+/** Gates that may still overturn a Mission verdict, split by what they mean. */
+export function gatesThatOutrankTheMission(failed: readonly HardGate[]): {
+  integrity: HardGate[];
+  mission_stated: HardGate[];
+  context_only: HardGate[];
+} {
+  return {
+    integrity: failed.filter((g) => INTEGRITY_GATES.has(g)),
+    mission_stated: failed.filter((g) => MISSION_STATED_GATES.has(g)),
+    context_only: failed.filter(
+      (g) => !INTEGRITY_GATES.has(g) && !MISSION_STATED_GATES.has(g)),
+  };
 }
 
 // --------------------------------------------------------- the decision ----
@@ -290,6 +365,70 @@ export function decideCompanyBrain(i: {
     policy: i.policy,
   };
 
+  // ── THE MISSION VERDICT IS CONSULTED BEFORE ANY GATE MAY REJECT ──────────
+  //
+  // THE ORDER IS THE AUTHORITY BOUNDARY. This block used to sit BELOW an
+  // unconditional `if (failed.length > 0) return REJECT`, which meant the
+  // evaluator's answer was read only for companies no gate had already
+  // disposed of — and the gates included two semantic judgements the evaluator
+  // exists to make. Hoisting it is the fix: a Mission verdict is now overturned
+  // only by a fact that is either an integrity problem or something the Mission
+  // itself made disqualifying, and never silently.
+  if (s?.mission_fit) {
+    const { integrity, mission_stated, context_only } = gatesThatOutrankTheMission(failed);
+
+    // THE EVIDENCE IS ABOUT ANOTHER COMPANY. The verdict is void, not negative.
+    if (integrity.length > 0) {
+      return {
+        ...base, outcome: "REVIEW",
+        reason: `mission verdict not applicable — ${integrity.join(", ")}; ` +
+          `the collected evidence may not describe this company`,
+      };
+    }
+    // THE MISSION SAID SO, AND THE FACT IS VERIFIED. A rejection here names both
+    // the gate and the authority, so it can be argued with.
+    if (mission_stated.length > 0) {
+      return {
+        ...base, outcome: "REJECT",
+        reason: `mission-stated constraint failed on a verified fact: ` +
+          `${mission_stated.join(", ")}`,
+      };
+    }
+
+    const g = i.grounding ?? null;
+    if (s.mission_fit === "fail") {
+      return {
+        ...base, outcome: "REJECT",
+        reason: s.reason || "the company does not satisfy the mission",
+      };
+    }
+    const groundedDown = g && g.final_grounded_decision !== "pass";
+    if (s.mission_fit === "review" || groundedDown) {
+      return {
+        ...base, outcome: "REVIEW",
+        reason: groundedDown && g!.downgrade_reasons.length > 0
+          ? `held for review: ${g!.downgrade_reasons.join("; ")}`
+          : s.reason || "the mission is not yet settled on the available evidence",
+      };
+    }
+    // A PASS. `context_only` gates are recorded on `failed_hard_gates` for the
+    // reviewer and are deliberately not consulted here — they are questions
+    // about Agentory's buyer, or judgements the evaluator already made.
+    return {
+      ...base, outcome: "QUALIFIED",
+      reason: [
+        s.reason || "satisfies the mission",
+        g ? `(grounding ${g.grounding_score}, validated: ${g.validated_claim_types.join(", ")})` : "",
+        context_only.length > 0 ? `[advisory, not disqualifying: ${context_only.join(", ")}]` : "",
+      ].filter(Boolean).join(" "),
+    };
+  }
+
+  // ── NO MISSION VERDICT: THE DETERMINISTIC PATH, UNCHANGED ────────────────
+  //
+  // Reached when the evaluator did not run. The gates keep their full force
+  // here because nothing better has spoken — but note that the engine no longer
+  // lets this path QUALIFY anything either; it records `unknown`.
   if (failed.length > 0) {
     return { ...base, outcome: "REJECT", reason: `hard gate failed: ${failed.join(", ")}` };
   }
@@ -306,45 +445,6 @@ export function decideCompanyBrain(i: {
   // verified one wins, because the whole failure this replaces was a confident
   // claim nobody could substantiate reaching a salesperson as a fact.
   const g = i.grounding ?? null;
-
-  // ── THE MISSION VERDICT OUTRANKS THE BUYER VERDICT ───────────────────────
-  //
-  // When the evaluator answered the Mission question, that answer governs.
-  // `company_fit` is a judgement about Agentory's buyer and stays available as
-  // supporting context, but it may no longer decide: a company that satisfies
-  // the user's request is not disqualified for being an imperfect ICP match,
-  // and `icp_fit` is deliberately not consulted here at all — it exists to
-  // ORDER results, and reading it in a decision is how a preference becomes a
-  // gate by accident.
-  //
-  // Grounding still applies, and still only downgrades: a Mission pass whose
-  // cited evidence did not survive verification is REVIEW, never a silent
-  // qualify. It cannot rescue a `fail`, because a `fail` here means the
-  // evaluator found evidence AGAINST a stated requirement.
-  if (s.mission_fit) {
-    if (s.mission_fit === "fail") {
-      return {
-        ...base, outcome: "REJECT",
-        reason: s.reason || "the company does not satisfy the mission",
-      };
-    }
-    const groundedDown = g && g.final_grounded_decision !== "pass";
-    if (s.mission_fit === "review" || groundedDown) {
-      return {
-        ...base, outcome: "REVIEW",
-        reason: groundedDown && g!.downgrade_reasons.length > 0
-          ? `held for review: ${g!.downgrade_reasons.join("; ")}`
-          : s.reason || "the mission is not yet settled on the available evidence",
-      };
-    }
-    return {
-      ...base, outcome: "QUALIFIED",
-      reason: g
-        ? `${s.reason || "satisfies the mission"} ` +
-          `(grounding ${g.grounding_score}, validated: ${g.validated_claim_types.join(", ")})`
-        : s.reason || "satisfies the mission",
-    };
-  }
 
   const effectiveFit = g ? g.final_grounded_decision : s.company_fit;
 
