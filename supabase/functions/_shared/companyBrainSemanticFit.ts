@@ -291,6 +291,88 @@ const MISSION_STATED_GATES: ReadonlySet<HardGate> = new Set<HardGate>([
   "inactive_company", "employee_count_far_above_ceiling",
 ]);
 
+// ───────────────────────── grounding: a verifier, not a second authority ────
+//
+// THE DEFECT THIS ENCODES AGAINST.
+//
+// The Brain used to downgrade on `final_grounded_decision !== "pass"`. That
+// treats "grounding did not say pass" as "grounding said no" — and those are
+// different claims. TEST run ea2d02f2 is the proof: the grounded classifier ran
+// in `enforce` for all five companies that reached qualification and returned,
+// every time,
+//
+//     grounding_score: 0, validated_claims: [], rejected_claims: [],
+//     downgrade_reasons: [], decision: "review"
+//
+// It refuted nothing. It produced NOTHING. Yet `"review" !== "pass"` was true,
+// so every company was downgraded — including Deepgram, which the Mission
+// evaluator passed at match_score 91 with five verified citations and zero
+// failed gates, and whose own Brain record reads "All mission requirements are
+// supported by cited evidence." QUALIFIED was unreachable for any company in
+// any run, whatever the budget.
+//
+// AN EMPTY VERIFICATION IS THE ABSENCE OF VERIFICATION, NOT A FAILED ONE.
+//
+// ── WHY THIS DOES NOT REOPEN THE UNGROUNDED-PASS HOLE ───────────────────────
+//
+// The Mission evaluator does its OWN grounding, and that is the grounding that
+// governs the mission verdict: `parseMissionEvaluationStrict` checks every
+// citation against this company's registry, drops any evidence_id it does not
+// contain, drops any excerpt that is not verbatim in the source, and downgrades
+// an uncited pass to review. A `mission_fit: pass` has therefore ALREADY been
+// paid for in verified evidence before it reaches this function.
+//
+// The grounded classifier is a separate, older layer verifying different claims
+// (business model, use case). It remains free to REFUTE — with evidence. What
+// it may no longer do is veto by silence.
+
+export interface GroundingSummary {
+  final_grounded_decision: "pass" | "review" | "fail";
+  grounding_score: number;
+  validated_claim_types: string[];
+  downgrade_reasons: string[];
+  /** Claims checked and VERIFIED against the registry. */
+  validated_claims: number;
+  /** Claims checked and REFUTED. */
+  rejected_claims: number;
+  /** Material registry conflicts the model did not address. */
+  unacknowledged_conflicts: number;
+}
+
+/**
+ * Did grounding actually examine anything?
+ *
+ * Reported for observability. A run where this is false for every company is a
+ * broken grounder, and that should be visible rather than silently absorbed as
+ * a pile of held companies.
+ */
+export function groundingWasPerformed(g: GroundingSummary): boolean {
+  return g.validated_claims + g.rejected_claims > 0 ||
+    g.downgrade_reasons.length > 0 || g.unacknowledged_conflicts > 0;
+}
+
+/**
+ * Does grounding hold EVIDENCE that contradicts a pass?
+ *
+ * The only question the Brain may ask of grounding. Three things count, and all
+ * three are positive findings rather than absences:
+ *
+ *   rejected_claims          a claim was checked and did not survive
+ *   downgrade_reasons        the verifier named a specific defect — an
+ *                            unvalidated business model, a score below
+ *                            threshold, a missing required signal
+ *   unacknowledged_conflicts the registry contradicts itself and the model
+ *                            did not address it
+ *
+ * A verifier that returned nothing satisfies none of them and cannot downgrade.
+ */
+export function groundingRefutes(g: GroundingSummary): boolean {
+  if (g.final_grounded_decision === "pass") return false;
+  return g.rejected_claims > 0 ||
+    g.downgrade_reasons.length > 0 ||
+    g.unacknowledged_conflicts > 0;
+}
+
 /** Gates that may still overturn a Mission verdict, split by what they mean. */
 export function gatesThatOutrankTheMission(failed: readonly HardGate[]): {
   integrity: HardGate[];
@@ -344,15 +426,28 @@ export function decideCompanyBrain(i: {
    * cited. Absent, the behaviour is exactly as before — an ungrounded run still
    * works, it simply cannot reach QUALIFIED on confidence alone.
    */
-  grounding?: {
-    final_grounded_decision: "pass" | "review" | "fail";
-    grounding_score: number;
-    validated_claim_types: string[];
-    downgrade_reasons: string[];
-  } | null;
+  /**
+   * The verifier's findings. See `groundingRefutes` — only a POSITIVE finding
+   * may downgrade. The claim counts default to 0 so an older caller that omits
+   * them is treated as "grounding examined nothing", which is the safe reading.
+   */
+  grounding?:
+    | (Omit<GroundingSummary, "validated_claims" | "rejected_claims" | "unacknowledged_conflicts">
+      & Partial<Pick<GroundingSummary,
+        "validated_claims" | "rejected_claims" | "unacknowledged_conflicts">>)
+    | null;
 }): BrainDecision {
   const failed = failedHardGates({ ...i.gates, semantic: i.semantic });
   const s = i.semantic;
+  // NORMALISED ONCE, with the absent counts read as zero — see `groundingRefutes`.
+  const grounding: GroundingSummary | null = i.grounding
+    ? {
+      ...i.grounding,
+      validated_claims: i.grounding.validated_claims ?? 0,
+      rejected_claims: i.grounding.rejected_claims ?? 0,
+      unacknowledged_conflicts: i.grounding.unacknowledged_conflicts ?? 0,
+    }
+    : null;
   const base = {
     version: SEMANTIC_FIT_VERSION,
     business_model: s?.business_model ?? "unknown",
@@ -395,14 +490,19 @@ export function decideCompanyBrain(i: {
       };
     }
 
-    const g = i.grounding ?? null;
+    const g = grounding;
     if (s.mission_fit === "fail") {
       return {
         ...base, outcome: "REJECT",
         reason: s.reason || "the company does not satisfy the mission",
       };
     }
-    const groundedDown = g && g.final_grounded_decision !== "pass";
+    // ── GROUNDING MAY REFUTE, BUT MAY NOT VETO BY SILENCE ─────────────────
+    //
+    // Was `g.final_grounded_decision !== "pass"`, which made an empty verifier
+    // indistinguishable from a refuting one and put QUALIFIED permanently out
+    // of reach. It now takes an actual finding — see `groundingRefutes`.
+    const groundedDown = g !== null && groundingRefutes(g);
     if (s.mission_fit === "review" || groundedDown) {
       return {
         ...base, outcome: "REVIEW",
@@ -444,9 +544,14 @@ export function decideCompanyBrain(i: {
   // being checked against the evidence it cited. Where they disagree the
   // verified one wins, because the whole failure this replaces was a confident
   // claim nobody could substantiate reaching a salesperson as a fact.
-  const g = i.grounding ?? null;
+  const g = grounding;
 
-  const effectiveFit = g ? g.final_grounded_decision : s.company_fit;
+  // THE SAME RULE ON THIS PATH. A verifier that examined nothing may not
+  // replace the classifier's own verdict; it would be substituting silence for
+  // an answer, which is what `groundingWasPerformed` exists to detect.
+  const effectiveFit = g && groundingWasPerformed(g)
+    ? g.final_grounded_decision
+    : s.company_fit;
 
   if (effectiveFit === "fail") {
     // A REJECT MUST BE EARNED. The verifier already refuses to let an

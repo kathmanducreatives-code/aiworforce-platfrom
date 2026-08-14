@@ -193,11 +193,24 @@ Deno.test("3. the budget no longer moves when the requested lead count moves", (
 
   // THE OLD BEHAVIOUR: min(10, max(5, n*2)) — 5→10 and 50→10, identical, and a
   // request for 50 leads was arithmetically unsatisfiable from ten companies.
-  assertEquals(at(1), DEFAULT_INVESTIGATION_BUDGET);
-  assertEquals(at(5), DEFAULT_INVESTIGATION_BUDGET);
-  // A FLOOR, NOT A MULTIPLIER. Never fewer companies than leads requested.
-  assertEquals(at(25), 25, "returning 25 leads from 10 companies is impossible");
-  assertEquals(at(500), MAX_INVESTIGATION_BUDGET, "and the hard cap still binds");
+  //
+  // THE FLOOR IS GONE TOO. It used to raise the budget to the requested count
+  // ("never investigate fewer companies than we were asked to return"), which
+  // sounded like arithmetic and was really the product question setting the
+  // spend decision through the last remaining door. Asking for 25 leads does
+  // not make 25 paid investigations affordable — and if it is not affordable,
+  // the honest output is a shortfall, not the spend.
+  //
+  // `requested_count` is now recorded and never read by the arithmetic.
+  for (const n of [1, 5, 25, 500]) {
+    assertEquals(at(n), DEFAULT_INVESTIGATION_BUDGET,
+      `requested_count=${n} must not move the investigation budget`);
+  }
+  // It is still CARRIED, so a shortfall can name what was asked for.
+  assertEquals(
+    resolveInvestigationBudget({ requestedCount: 25, poolSize: 100, read }).requested_count,
+    25);
+  assert(MAX_INVESTIGATION_BUDGET >= DEFAULT_INVESTIGATION_BUDGET);
 });
 
 Deno.test("3b. DEFAULT SPEND IS UNCHANGED — the refactor costs nothing", () => {

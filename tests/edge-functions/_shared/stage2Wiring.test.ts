@@ -21,6 +21,9 @@ import {
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import {
+  INVESTIGATION_BUDGET_ENV,
+} from "../../../supabase/functions/_shared/leadInvestigationBudget.ts";
+import {
   parseLeadMissionDeterministic,
 } from "../../../supabase/functions/_shared/leadMission.ts";
 import {
@@ -108,11 +111,27 @@ function respond(batch: readonly BatchMember[], opts: { invented?: string } = {}
   };
 }
 
+/**
+ * THE INVESTIGATION BUDGET IS NOW EXPLICIT IN THIS FILE.
+ *
+ * Stage 2 batch-evaluates companies that have COLLECTED EVIDENCE, so its pool
+ * is bounded by what was actually investigated. It used to be bounded by
+ * `stage2Ceiling` instead — the engine adopted `batchLimits.max_evaluated` (100)
+ * as the PAID investigation budget, so all 22 fixture companies were bought.
+ *
+ * That conflation is removed: a GPT batch-read limit is not a provider spend
+ * authorisation (TEST run ea2d02f2 turned it into 97 LinkedIn searches and
+ * finished none). This file's subject is the batching wiring, not the spend
+ * decision, so it states the budget it wants rather than inheriting one.
+ */
+const BUDGET_ENV = { [INVESTIGATION_BUDGET_ENV]: String(N) };
+const readBudget = (k: string) => (BUDGET_ENV as Record<string, string>)[k];
+
 async function run(over: Partial<CapabilityEngineDeps>) {
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, over), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   return { out, rec };
 }
@@ -138,7 +157,7 @@ Deno.test("1-2. Stage 2 collects before evaluating; disabled keeps the old path"
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const on = await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   assert(on.pool, "Stage 2 produced a pool");
   assertEquals(on.pool!.eligible.discovered, N);
@@ -148,7 +167,7 @@ Deno.test("3-5. free gates run before any model call, and batches stay bounded",
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   const p = out.pool!;
   assertEquals(p.eligible.discovered, N);
@@ -165,7 +184,7 @@ Deno.test("6-8. every evaluated company gets a grounded decision; evidence stays
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   for (const s of out.pool!.summaries) {
     assert(["qualified", "review", "reject"].includes(s.brain_decision));
@@ -187,7 +206,7 @@ Deno.test("7b/9. an unsupported claim cannot qualify, and does not spoil its bat
     groundingMode: "enforce",
     evaluateBatch: (batch) => Promise.resolve(
       evaluateBatchResponse({ batch, raw: respond(batch, { invented: "co0.com" }) })),
-  }), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  }), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   const badKey = out.companies[0].key;
   const bad = out.companies.find((c) => c.key === badKey)!;
@@ -224,7 +243,7 @@ Deno.test("10. completed summaries are what reach the ranker", async () => {
       assertEquals(typeof unevaluatedCount, "number");
       return Promise.resolve(null);
     },
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
   assertEquals(sawSummaries, out.pool!.summaries.length);
   assert(sawSummaries > 10);
 });
@@ -240,7 +259,7 @@ Deno.test("11-14. completed batches checkpoint, and a continuation restores them
       checkpoints.push(evaluated.length);
       assertEquals(next_offset, evaluated.length);
     },
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
   assert(checkpoints.length >= 2, "a checkpoint per completed batch");
   assert(checkpoints[checkpoints.length - 1] > 10);
 
@@ -258,7 +277,7 @@ Deno.test("11-14. completed batches checkpoint, and a continuation restores them
       rec2.batches.push(batch.length);
       return Promise.resolve(evaluateBatchResponse({ batch, raw: respond(batch) }));
     },
-  }), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  }), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   assertEquals(rec2.batches.length, 0, "nothing was re-evaluated");
   assertEquals(second.pool!.restored, restored.size);
@@ -310,7 +329,7 @@ Deno.test("27-28. a ranking outage falls back and never fails the workflow", asy
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
     rankPool: () => Promise.reject(new Error("ranker down")),
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN })
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget })
     .catch(() => null);
   // The engine must not propagate a ranking failure.
   assert(out, "a ranking outage must not fail the run");
@@ -323,7 +342,7 @@ Deno.test("27b. an absent ranker uses the deterministic order and says so", asyn
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   assertEquals(out.pool!.ranking.ranking_source, "deterministic_fallback");
   assert(out.pool!.ranking.fallback_reason);
@@ -334,7 +353,7 @@ Deno.test("29-35. code keeps decision-class authority and reports honestly", asy
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   const d = out.pool!.delivery;
   assertEquals(d.metrics.requested, m.requested_count);
@@ -368,7 +387,7 @@ Deno.test("23. a REJECT cannot outrank a QUALIFIED through the live path", async
       },
       summaries, requestedCount: 25,
     })),
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   const byKey = new Map(out.pool!.summaries.map((s) => [s.company_key, s]));
   let lastClass = -1;
@@ -408,7 +427,7 @@ Deno.test("51-54. shadow runs the ranker, ships deterministic, records the diff"
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
     rankingMode: "shadow",
     rankPool: (i) => { ranked++; return reversingRanker(i); },
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   const p = out.pool!;
   // IT RAN. This is the whole defect: it used to be zero.
@@ -432,7 +451,7 @@ Deno.test("55-56. enforce lets the ranking govern and records no shadow", async 
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
     rankingMode: "enforce", rankPool: reversingRanker,
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   const p = out.pool!;
   assertEquals(p.ranking_mode, "enforce");
@@ -448,7 +467,7 @@ Deno.test("57. an absent mode observes rather than reorders", async () => {
   const m = mission();
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
     rankPool: reversingRanker, // no rankingMode at all
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
   assertEquals(out.pool!.ranking_mode, "shadow",
     "a missing mode must never be able to reorder what somebody calls today");
   assertEquals(out.pool!.ranking.ranking_source, "deterministic_fallback");
@@ -510,7 +529,7 @@ Deno.test("59-60. the pool fingerprint is computed after discovery", async () =>
   const seen: string[] = [];
   const out = await runCapabilityPlan(deps(rec, stage2Deps(rec, {
     onBatchComplete: ({ pool_fingerprint }) => { seen.push(pool_fingerprint); },
-  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget });
 
   const p = out.pool!;
   // It is the ELIGIBLE SET, not the mission.
@@ -530,7 +549,7 @@ Deno.test("61-62. a different discovered set under the same mission is flagged",
     const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
     return (await runCapabilityPlan(deps(rec, stage2Deps(rec, {
       restoredPoolFingerprint,
-    })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN })).pool!;
+    })), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget })).pool!;
   };
 
   // The same set the previous invocation evaluated ⇒ continuous.
@@ -583,7 +602,7 @@ Deno.test("42-46. routes still work and no people Actor becomes reachable", asyn
   const rec: Rec = { calls: [], batches: [], groundedCalls: 0 };
   const m = mission();
   await runCapabilityPlan(deps(rec, stage2Deps(rec)), {
-    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
+    mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, readEnv: readBudget,
   });
   assert(rec.calls.includes("apify_yc_companies_memo23"), "the YC route still runs");
   for (const actor of [

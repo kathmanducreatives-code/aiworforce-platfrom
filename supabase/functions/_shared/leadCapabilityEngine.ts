@@ -104,8 +104,9 @@ import {
   type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
 } from "./missionTriage.ts";
 import {
-  buildSmartShortlist, resolveInvestigationBudget, resolveUntriagedPolicy,
-  type InvestigationBudget,
+  buildSmartShortlist, identityStopThreshold, resolveGptBudget,
+  resolveInvestigationBudget, resolveTimeCapacity, resolveUntriagedPolicy,
+  type GptBudget, type InvestigationBudget, type TimeCapacity,
 } from "./leadInvestigationBudget.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson,
@@ -305,7 +306,19 @@ export interface CapabilityExecutionState {
     ranking: string[];
     /** How untriaged candidates were treated. See `UntriagedPolicy`. */
     untriaged_policy: string;
+    /** What the wall clock allowed. Null when the run had no deadline. */
+    time_capacity: TimeCapacity | null;
+    /** The CHEAP budget, sized independently of the paid one. */
+    gpt_budget: GptBudget;
   } | null;
+  /**
+   * The wall-clock capacity that bounded paid investigation.
+   *
+   * Surfaced at the top level too, because "the clock, not the config" is the
+   * commonest reason a run investigates fewer companies than it authorised and
+   * it should not require digging into the shortlist decision to find out.
+   */
+  investigation_capacity: TimeCapacity | null;
   /** The last published progress snapshot. Never contains a premature pass. */
   progress: EngineProgress | null;
 }
@@ -332,6 +345,7 @@ export function newExecutionState(
     prequalification: null,
     triage: null,
     shortlist_decision: null,
+    investigation_capacity: null,
     progress: null,
   };
 }
@@ -969,14 +983,46 @@ export async function runCapabilityPlan(
 
     for (const c of companies) c.triage = verdicts.get(c.key) ?? null;
 
-    // ── STAGE 3: THE BUDGET DECIDES THE SHORTLIST, NOT THE LEAD COUNT ───────
-    const budget = resolveInvestigationBudget({
+    // ── STAGE 3: THE BUDGET DECIDES THE SHORTLIST ──────────────────────────
+    //
+    // TWO CONSTRAINTS, RECONCILED HERE. The count budget says how many
+    // companies this run may pay for; the wall clock says how many it can
+    // actually carry from identity through persistence before the invocation
+    // ends. The smaller binds, and the decision records which one did.
+    //
+    // `stage2Ceiling` is gone — see `leadInvestigationBudget`. A GPT batch-read
+    // limit authorised 100 paid Actor starts on run ea2d02f2 and the run
+    // finished none of them.
+    const countBudget = resolveInvestigationBudget({
       requestedCount: effectiveRequestedCount(opts.mission),
       poolSize: companies.length,
       read: opts.readEnv,
-      stage2Ceiling: deps.evaluateBatch
-        ? (deps.batchLimits ?? resolveBatchLimits({})).max_evaluated
-        : null,
+    });
+    // OBSERVATIONAL ONLY at this point. Recorded so the shortlist decision can
+    // be read against the clock it was made under; the ENFORCEMENT happens in
+    // the identity stage, which recomputes it from that invocation's own
+    // remaining time. See `downstreamReserveMs`.
+    const capacity = deps.deadline
+      ? resolveTimeCapacity({
+        remainingMs: deps.deadline.remainingMs(),
+        reserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
+        concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
+        enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
+        read: opts.readEnv,
+        observedIdentityMs: deps.deadline.estimateFor("apify_linkedin_company_search"),
+      })
+      : null;
+    // THE CLOCK DOES NOT SHRINK THE SHORTLIST — see `downstreamReserveMs`.
+    // Doing so would strand companies permanently, because the shortlist is
+    // computed once per lineage and a resume skips completed capabilities.
+    // `capacity` is carried for observability and ENFORCED inside the identity
+    // stage, where a stop is deferral rather than deletion.
+    const budget = countBudget;
+    // THE CHEAP STAGES ARE SIZED SEPARATELY, and never from this number.
+    const gptBudget = resolveGptBudget({
+      poolSize: companies.length,
+      investigationBudget: budget.budget,
+      read: opts.readEnv,
     });
     const decision = buildSmartShortlist(
       companies.map((c) => ({
@@ -1021,15 +1067,26 @@ export async function runCapabilityPlan(
       budget: decision.budget, counts: decision.counts,
       untriaged_policy: decision.untriaged_policy,
       ranking: decision.ranking.slice(0, 50),
+      // BOTH BUDGETS, RECORDED SEPARATELY. "Why did this run only investigate
+      // six companies?" must be answerable from the task row, and the answer is
+      // one of: the count budget, the pool, or the clock.
+      time_capacity: capacity,
+      gpt_budget: gptBudget,
     };
+    state.investigation_capacity = capacity;
     log("smart_shortlist_complete", {
       budget: budget.budget, budget_source: budget.source,
+      count_budget: countBudget.budget,
       requested: budget.requested_count, pool: budget.pool_size,
       ...decision.counts,
       triage_enabled: deps.triageCompanies != null,
-      // WHAT DECIDED THE SPEND when GPT did not. Logged so a run's cost is
-      // explainable from its own telemetry rather than from the deployed env.
       untriaged_policy: decision.untriaged_policy,
+      // ── WHY THE CLOCK ALLOWED WHAT IT ALLOWED ────────────────────────────
+      time_capacity: capacity?.capacity ?? null,
+      per_company_ms: capacity?.per_company_ms ?? null,
+      usable_ms: capacity?.usable_ms ?? null,
+      gpt_read_budget: gptBudget.read_budget,
+      gpt_evaluation_budget: gptBudget.evaluation_budget,
     });
   };
 
@@ -1604,6 +1661,22 @@ export async function runCapabilityPlan(
       let resolved = 0;
       let unresolved = 0;
 
+      // COMPUTED HERE, FROM THE CLOCK AS IT IS NOW. Not read off the shortlist
+      // decision: a continuation skips discovery entirely, so the capacity
+      // recorded there belongs to a previous invocation with a different
+      // window. What bounds this stage is the time THIS invocation has left.
+      const timeCapacity = deps.deadline
+        ? resolveTimeCapacity({
+          remainingMs: deps.deadline.remainingMs(),
+          reserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
+          concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
+          enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
+          read: opts.readEnv,
+          observedIdentityMs: deps.deadline.estimateFor(provider),
+        })
+        : null;
+      if (timeCapacity) state.investigation_capacity = timeCapacity;
+
       /** Resolve one company. Never more than `CONCURRENCY` of these in flight. */
       const resolveOne = async (c: EngineCompany): Promise<void> => {
         let lookups: Array<{ name: string | null; linkedinUrl: string | null; website: string | null }> = [];
@@ -1676,12 +1749,41 @@ export async function runCapabilityPlan(
         }
       };
 
+      // ── IDENTITY MAY NOT SPEND THE WINDOW THE LATER STAGES NEED ───────────
+      //
       // SCOPED TO THIS PROVIDER. An unscoped `expired()` compares the time left
       // against the slowest call ANY stage has made — so a 51s discovery start
       // made a 9s identity search look unaffordable and ended the stage with a
       // third of the budget unspent.
+      //
+      // AND SCOPED TO THE WHOLE PIPELINE. `expired(provider)` alone asks only
+      // "is there room for one more search?", which on run ea2d02f2 was true
+      // 12 times in a row until 114 of 125 seconds were gone — leaving 10.8s
+      // against an 18s checkpoint reserve, so enrichment never ran, the five
+      // resolved companies reached the evaluator with no enrichment evidence,
+      // and the run qualified nobody. Every search was individually
+      // affordable; the sequence was not.
+      //
+      // `identityStopThreshold` asks the second question: is there still room
+      // to FINISH what we already hold? The reserve grows with each resolved
+      // identity, so the stage stops on its own and the companies it never
+      // reached are deferred — resumably, by the accounting directly below.
+      const stopThreshold = () => {
+        if (!timeCapacity) return 0;
+        return identityStopThreshold({
+          resolvedSoFar: targets.filter(
+            (c) => c.identity && identityIsActionable(c.identity)).length,
+          capacity: timeCapacity,
+          checkpointReserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
+          perCallEstimateMs: deps.deadline?.estimateFor(provider) ?? 0,
+        });
+      };
       const bounded = await runBounded(targets, LINKEDIN_RESOLUTION_CONCURRENCY, resolveOne,
-        () => deps.deadline?.expired(provider) === true);
+        () => {
+          if (!deps.deadline) return false;
+          if (deps.deadline.expired(provider)) return true;
+          return deps.deadline.remainingMs() <= stopThreshold();
+        });
 
       // ── WHAT DID NOT HAPPEN, RECORDED AS EXPLICITLY AS WHAT DID ────────────
       //
@@ -2304,6 +2406,14 @@ export async function runCapabilityPlan(
         // that the company deserved it. Enforce now degrades to REVIEW rather
         // than to the old behaviour: a human is asked, nobody is rejected, and
         // no company is qualified on a claim nothing checked.
+        // ── THE VERIFIER'S FINDINGS, INCLUDING HOW MUCH IT ACTUALLY CHECKED ──
+        //
+        // The claim COUNTS travel, not just the verdict. Without them the Brain
+        // cannot tell a verifier that refuted something from one that examined
+        // nothing, and on run ea2d02f2 it could not: the grounder returned zero
+        // validated, zero rejected, zero downgrade reasons and a `review`
+        // verdict for every company, and every Mission pass was vetoed by that
+        // silence. See `groundingRefutes`.
         const groundingForBrain = deps.groundingMode !== "enforce"
           ? null
           : grounded
@@ -2314,12 +2424,22 @@ export async function runCapabilityPlan(
               ...new Set(grounded.validated_claims.map((x) => x.claim_type)),
             ],
             downgrade_reasons: grounded.downgrade_reasons,
+            validated_claims: grounded.validated_claims.length,
+            rejected_claims: grounded.rejected_claims.length,
+            unacknowledged_conflicts: grounded.unacknowledged_conflicts.length,
           }
           : {
+            // UNAVAILABLE IS NOT REFUTED. The verifier did not run, so it found
+            // nothing — `groundingRefutes` reads this as no finding and leaves
+            // the Mission verdict standing. The reason is still recorded so an
+            // outage is visible rather than inferred from a pile of holds.
             final_grounded_decision: "review" as const,
             grounding_score: 0,
             validated_claim_types: [] as string[],
-            downgrade_reasons: ["grounded_classifier_unavailable"],
+            downgrade_reasons: [] as string[],
+            validated_claims: 0,
+            rejected_claims: 0,
+            unacknowledged_conflicts: 0,
           };
 
         // ── A FALSIFIABLE FACT STILL REJECTS, AND ONLY A FALSIFIABLE FACT ───

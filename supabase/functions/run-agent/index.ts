@@ -1784,14 +1784,18 @@ Deno.serve(async (req) => {
         // called takes the requested count as its only input.
         //
         // Only shortlisted companies are ever resolved and enriched, so only
-        // they can be evaluated — and the shortlist is the investigation budget.
-        // Reading it from the same resolver the engine uses keeps one number in
-        // one place rather than two that drift.
+        // they can be evaluated. This binding is built BEFORE the engine runs,
+        // so it takes the COUNT budget — the upper bound on what could be
+        // investigated. The wall clock can only reduce the real shortlist, so
+        // an allowance sized here is never too small, and the engine's own
+        // `gpt_budget.evaluation_budget` records what it actually needed.
         const missionEvaluationBinding = buildMissionEvaluationBinding({
           workspaceId: workspace_id,
           shortlistSize: resolveInvestigationBudget({
             requestedCount: quota.requestedLeadCount,
-            poolSize: Number.MAX_SAFE_INTEGER,
+            // The discovery ceiling, not MAX_SAFE_INTEGER: the pool bound is
+            // meaningful and passing infinity made `pool_bound` unreachable.
+            poolSize: Math.max(10, quota.requestedLeadCount * 10),
           }).budget,
         });
         console.log("[run-agent][mission-evaluation][binding]", {
@@ -2869,6 +2873,12 @@ Deno.serve(async (req) => {
                         irrelevant: capabilityRun.state.triage?.irrelevant ?? 0,
                       }),
                     investigation_budget: capabilityRun.state.shortlist_decision,
+                    // WHY THE PAID STAGES WERE SIZED AS THEY WERE. The count
+                    // budget, the wall clock and the pool are three different
+                    // constraints and any of them can bind; `budget.source`
+                    // names the one that did. Persisted at the top level so a
+                    // starved run is diagnosable from the task row.
+                    investigation_capacity: capabilityRun.state.investigation_capacity,
                     mission_evaluation_observability: evaluationTaskDiagnostics(
                       missionEvaluationBinding, {
                         calls_made: evaluationCallsMade,

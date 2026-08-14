@@ -274,25 +274,31 @@ Deno.test("11b. shadow mode does not change the user-facing decision", async () 
   assertEquals(e.brain?.outcome, "REVIEW", "enforce applies the grounded one");
 });
 
-Deno.test("12-13. in ENFORCE an unavailable grounder becomes REVIEW, never QUALIFIED", async () => {
-  const { run } = await runWith({
-    evaluateMission: evaluatorPass,
-    groundingMode: "enforce",
-    // The model was unavailable.
-    groundCompany: () => Promise.resolve(null),
+Deno.test("12-13. in ENFORCE an unavailable grounder blocks nothing and rejects nobody",
+  async () => {
+    // ALSO INVERTED, and for the same reason as test 14. The old rule — an
+    // outage becomes REVIEW — reads an ABSENT verifier as a dissenting one.
+    // An outage is a fact about the run, never about the company, and the
+    // architecture's own principle is that run facts fail toward unknown
+    // WITHOUT overturning a verdict something else already earned.
+    //
+    // The pass here was earned by the Mission evaluator against this company's
+    // registry. A grounder that never answered has no standing to overturn it.
+    const { run } = await runWith({
+      evaluateMission: evaluatorPass,
+      groundingMode: "enforce",
+      // The model was unavailable.
+      groundCompany: () => Promise.resolve(null),
+    });
+    const c = run.companies.find((x) => x.brain)!;
+    assertEquals(c.grounded, null);
+    // NEVER A REJECTION — nobody is thrown away for an outage…
+    assertFalse(c.brain!.outcome === "REJECT",
+      "an unavailable grounder must never reject a company");
+    // …and it may not hold one either.
+    assertEquals(c.brain!.outcome, "QUALIFIED",
+      "an outage has no standing to overturn an evidenced mission pass");
   });
-  const c = run.companies.find((x) => x.brain)!;
-  assertEquals(c.grounded, null);
-  // NEVER A REJECTION — nobody is thrown away for an outage…
-  assertFalse(c.brain!.outcome === "REJECT",
-    "an unavailable grounder must never reject a company");
-  // …and never an ungrounded QUALIFIED either. Falling back to the legacy
-  // verdict would restore exactly the unchecked pass that enforcing exists to
-  // prevent, at the moment there is least evidence it is deserved.
-  assertEquals(c.brain!.outcome, "REVIEW");
-  assert(c.brain!.reason.includes("grounded_classifier_unavailable"),
-    `the outage must name itself, got: ${c.brain!.reason}`);
-});
 
 Deno.test("12b. in SHADOW an unavailable grounder leaves the legacy verdict alone", async () => {
   const { run } = await runWith({
@@ -305,7 +311,24 @@ Deno.test("12b. in SHADOW an unavailable grounder leaves the legacy verdict alon
     "shadow observes; it never degrades a decision");
 });
 
-Deno.test("14. a malformed grounded response cannot qualify a company", async () => {
+Deno.test("14. a malformed grounded response neither qualifies NOR blocks", async () => {
+  // ── THIS ASSERTION WAS INVERTED, DELIBERATELY ───────────────────────────
+  //
+  // It used to require that malformed grounding prevent QUALIFIED. That rule
+  // shipped, and TEST run ea2d02f2 is what it did: the grounder returned
+  // `decision: "review", validated: 0, rejected: 0, downgrade_reasons: []` for
+  // every company — the identical shape a malformed response produces — and so
+  // every Mission pass was vetoed. Deepgram, passed by the evaluator at
+  // match_score 91 with five verified citations and zero failed gates, came out
+  // `unknown`. QUALIFIED was unreachable in any run.
+  //
+  // An empty verification is the ABSENCE of verification. It contributes
+  // nothing in either direction, and `groundingRefutes` now says so.
+  //
+  // THE PASS IS STILL PAID FOR IN EVIDENCE — by the evaluator, not by this
+  // layer. `parseMissionEvaluationStrict` checks every citation against the
+  // company's own registry and downgrades an uncited pass to review. Test 14b
+  // below is that guard, and it is the one that actually protects the verdict.
   for (const junk of [null, "not json", 42, [], {}]) {
     const { run } = await runWith({
       evaluateMission: evaluatorPass,
@@ -315,9 +338,57 @@ Deno.test("14. a malformed grounded response cannot qualify a company", async ()
       })),
     });
     const c = run.companies.find((x) => x.grounded)!;
-    assertFalse(c.brain?.outcome === "QUALIFIED",
-      `${JSON.stringify(junk)} must not qualify a company`);
+    // It examined nothing…
+    assertEquals(c.grounded!.validated_claims.length, 0, JSON.stringify(junk));
+    assertEquals(c.grounded!.rejected_claims.length, 0, JSON.stringify(junk));
+    assertEquals(c.grounded!.downgrade_reasons, [], JSON.stringify(junk));
+    // …so it may not overturn a verdict it did not examine.
+    assertEquals(c.brain?.outcome, "QUALIFIED",
+      `${JSON.stringify(junk)}: an empty verifier must not veto an evidenced pass`);
   }
+});
+
+Deno.test("14b. an UNCITED mission pass still cannot qualify, grounder or not", async () => {
+  // THE GUARD THAT REPLACES IT. The evaluator's own citation check is what
+  // makes a pass grounded: `citeNothing` produces a pass with no verified
+  // citation, the strict parser downgrades it to review, and no amount of
+  // absent grounding can rescue it.
+  const { run } = await runWith({
+    evaluateMission: stubMissionEvaluator({ mission_fit: "pass", citeNothing: true }),
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) => Promise.resolve(verifyGroundedResult({
+      registry, result: parseGroundedResult(null),
+    })),
+  });
+  const c = run.companies.find((x) => x.brain)!;
+  assertFalse(c.brain!.outcome === "QUALIFIED",
+    "a pass nobody cited may never qualify");
+  assertEquals(c.verdict, "unknown", "it is held, not rejected");
+});
+
+Deno.test("14c. grounding that REFUTES with evidence still downgrades", async () => {
+  // The capability is not lost — only the veto-by-silence is. A verifier that
+  // rejects a claim, or names a downgrade reason, still overrules a pass.
+  const { run } = await runWith({
+    evaluateMission: evaluatorPass,
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) => Promise.resolve(verifyGroundedResult({
+      registry,
+      result: parseGroundedResult({
+        business_model: { value: "b2b_saas", confidence: 0.95, claims: [{
+          claim: "invented", claim_type: "business_model",
+          evidence_ids: ["nope:nope:nope"], evidence_excerpts: [],
+        }] },
+        company_fit: "pass", agentory_use_case: "strong",
+        supporting_claims: [], confidence: 0.95, reason: "",
+      }),
+    })),
+  });
+  const c = run.companies.find((x) => x.grounded)!;
+  assert(c.grounded!.rejected_claims.length > 0,
+    "the invented citation must be rejected");
+  assertEquals(c.brain!.outcome, "REVIEW",
+    "an evidence-backed refutation still holds the company");
 });
 
 // ══════════════════════════════════════════════ shadow comparison shape ══

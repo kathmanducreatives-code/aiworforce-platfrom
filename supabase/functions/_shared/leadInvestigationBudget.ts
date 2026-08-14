@@ -97,7 +97,36 @@ export const DEFAULT_INVESTIGATION_BUDGET = 10;
  */
 export const MAX_INVESTIGATION_BUDGET = 100;
 
-export type BudgetSource = "default" | "environment" | "stage2_ceiling" | "pool_bound";
+// ─────────────────────────── TWO BUDGETS, TWO COST MODELS, NEVER ONE ────────
+//
+// THE CONFLATION THIS REMOVES.
+//
+// `resolveInvestigationBudget` accepted a `stage2Ceiling` and, when Stage 2
+// full-pool evaluation was enabled, adopted it as the paid ceiling. On TEST run
+// ea2d02f2 that turned a GPT batch-read limit of 100 into an authorisation to
+// buy 100 LinkedIn identity searches. 97 companies were shortlisted, 12 were
+// reached in the 125s window, 85 were deferred and nothing was enriched.
+//
+// The two quantities have nothing in common:
+//
+//   GPT BUDGET            batched, cheap, ~1 call per 25 companies for triage
+//                         and ~3s per company for evaluation. Reading 100
+//                         companies is entirely reasonable.
+//   INVESTIGATION BUDGET  one paid Actor start per company, ~10s each at
+//                         concurrency 2, plus enrichment. Buying 100 is not
+//                         reasonable and does not fit in an edge invocation.
+//
+// They are now separate functions with separate env vars, separate caps and
+// separate telemetry. Neither can silently become the other, and
+// `requested_count` sizes neither — it is what the run must RETURN, which is a
+// product answer, not a spend decision.
+
+export type BudgetSource =
+  | "default"
+  | "environment"
+  | "pool_bound"
+  /** The wall clock could not fit the configured count. See `applyTimeCapacity`. */
+  | "time_bound";
 
 export interface InvestigationBudget {
   version: typeof INVESTIGATION_BUDGET_VERSION;
@@ -112,19 +141,27 @@ export interface InvestigationBudget {
 }
 
 /**
- * Decide how many companies this run may pay to investigate.
+ * How many companies this run may PAY to investigate.
  *
- * `requestedCount` is carried for observability and NEVER multiplied into the
- * answer — that arithmetic is the bug this module exists to remove. The one
- * concession is a floor: a run may never investigate fewer companies than it
- * was asked to return, because that is unsatisfiable on its face.
+ * `requestedCount` is carried for observability and never sizes the answer —
+ * neither as a multiplier nor as a floor. A floor was the last remaining path
+ * by which the product question ("return 50 leads") could set the spend
+ * decision, and it is exactly as unfounded as the multiplier it replaced:
+ * asking for 50 leads does not make 50 paid investigations affordable, and a
+ * run that cannot deliver 50 should say so through the shortfall rather than
+ * spend its way there.
+ *
+ * `stage2Ceiling` is GONE. See the header: a GPT batch-read limit is not a
+ * provider spend authorisation.
+ *
+ * This answers the COUNT question only. `applyTimeCapacity` then reconciles it
+ * with the wall clock, which is the other half and the one that actually bound
+ * on run ea2d02f2.
  */
 export function resolveInvestigationBudget(i: {
   requestedCount: number;
   poolSize: number;
   read?: EnvReader;
-  /** Stage 2 evaluates a larger pool, so it may authorise a larger budget. */
-  stage2Ceiling?: number | null;
 }): InvestigationBudget {
   const get: EnvReader = i.read ?? ((k) => {
     try { return Deno.env.get(k); } catch { return undefined; }
@@ -139,17 +176,6 @@ export function resolveInvestigationBudget(i: {
   if (Number.isFinite(envRaw) && envRaw > 0) {
     budget = Math.trunc(envRaw);
     source = "environment";
-  } else if (i.stage2Ceiling && i.stage2Ceiling > budget) {
-    // Stage 2 is the thing that can actually USE more companies.
-    budget = Math.trunc(i.stage2Ceiling);
-    source = "stage2_ceiling";
-  }
-
-  // A FLOOR, NOT A MULTIPLIER. Returning 20 leads from 10 investigated companies
-  // is impossible; investigating 20 to return 20 is merely optimistic.
-  if (requested > budget) {
-    budget = requested;
-    source = "default";
   }
 
   budget = Math.min(MAX_INVESTIGATION_BUDGET, budget);
@@ -165,6 +191,271 @@ export function resolveInvestigationBudget(i: {
     budget, source,
     requested_count: requested, pool_size: pool,
     cap: MAX_INVESTIGATION_BUDGET,
+  };
+}
+
+// ──────────────────────────────── the wall clock is a budget too ────────────
+//
+// THE FAILURE THIS MODELS.
+//
+// A count budget authorises companies. It says nothing about whether they fit
+// in an edge invocation, and on run ea2d02f2 they did not: 97 authorised, 12
+// reached, 85 deferred, 0 enriched, 0 qualified. The run spent 114 of its 125
+// seconds on identity searches and then had 10.8s left against an 18s
+// checkpoint reserve, so enrichment never started for the five companies that
+// HAD resolved.
+//
+// A company is not investigated when its identity resolves. It is investigated
+// when it has been resolved, enriched, assembled into evidence, evaluated by
+// the model and written down. Sizing the shortlist on the first of those five
+// costs is what produced a run that started 97 journeys and finished none.
+//
+// So the capacity is computed from the FULL per-company cost, and the identity
+// stage can no longer eat the window the later stages need.
+
+export const IDENTITY_CALL_MS_ENV = "LEAD_IDENTITY_CALL_MS";
+export const QUALIFICATION_PER_COMPANY_MS_ENV = "LEAD_QUALIFICATION_PER_COMPANY_MS";
+
+/**
+ * Per-company stage costs, in wall-clock milliseconds.
+ *
+ * MEASURED, not guessed — these are the medians from TEST run ea2d02f2, whose
+ * provider ledger and function logs are the only real data this pipeline has:
+ *
+ *   identity search        ~9.5s per company   (12 calls / 114.2s)
+ *   enrichment             ~12s per BATCH      (batched by LinkedIn URL)
+ *   grounded brain         ~3.5s per company   (10:25:28 → :35 → :41 → :49)
+ *   mission evaluator      ~3.2s per company   (10:25:32 → :38 → :44 → :55)
+ *
+ * Overridable, because they are latency estimates and latency moves.
+ */
+export const DEFAULT_IDENTITY_CALL_MS = 10_000;
+export const DEFAULT_ENRICHMENT_CALL_MS = 12_000;
+/** Grounded brain + evaluator, both serial, both per company. */
+export const DEFAULT_QUALIFICATION_PER_COMPANY_MS = 7_000;
+
+export interface TimeCapacity {
+  /** Companies the remaining wall clock can carry end to end. */
+  capacity: number;
+  remaining_ms: number;
+  /** Held back for the checkpoint write, so a deferral is always recordable. */
+  reserve_ms: number;
+  usable_ms: number;
+  /** Serial-equivalent cost of carrying ONE company through every stage. */
+  per_company_ms: number;
+  identity_call_ms: number;
+  enrichment_call_ms: number;
+  qualification_ms: number;
+  concurrency: number;
+  enrichment_batch_size: number;
+}
+
+/**
+ * How many companies the remaining wall clock can carry ALL THE WAY THROUGH.
+ *
+ * Identity parallelises across `concurrency`; enrichment is batched, so its
+ * cost amortises over the batch; qualification is two serial model calls per
+ * company and does not parallelise at all. The reserve is subtracted first —
+ * checkpointing must be affordable even when capacity comes out at zero, or a
+ * deferral cannot be recorded and the companies are stranded rather than
+ * resumable.
+ */
+export function resolveTimeCapacity(i: {
+  remainingMs: number;
+  reserveMs: number;
+  concurrency: number;
+  enrichmentBatchSize: number;
+  read?: EnvReader;
+  /** Observed identity latency, when the deadline has measured one. */
+  observedIdentityMs?: number | null;
+}): TimeCapacity {
+  const get: EnvReader = i.read ?? ((k) => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  });
+  const envNum = (key: string, fallback: number): number => {
+    const v = Number(get(key));
+    return Number.isFinite(v) && v > 0 ? Math.trunc(v) : fallback;
+  };
+
+  // THE SLOWER OF CONFIGURED AND OBSERVED. An estimate may only move UP from
+  // its safe baseline — the same rule `ExecutionDeadline.estimateFor` applies,
+  // and for the same reason: one fast call must not talk the controller into
+  // authorising work it cannot finish.
+  const configuredIdentity = envNum(IDENTITY_CALL_MS_ENV, DEFAULT_IDENTITY_CALL_MS);
+  const identity = Math.max(configuredIdentity, Math.trunc(i.observedIdentityMs ?? 0));
+  const enrichment = DEFAULT_ENRICHMENT_CALL_MS;
+  const qualification = envNum(
+    QUALIFICATION_PER_COMPANY_MS_ENV, DEFAULT_QUALIFICATION_PER_COMPANY_MS);
+
+  const concurrency = Math.max(1, Math.trunc(i.concurrency));
+  const batch = Math.max(1, Math.trunc(i.enrichmentBatchSize));
+
+  const perCompany =
+    identity / concurrency +   // parallel across lanes
+    enrichment / batch +       // amortised over the batched call
+    qualification;             // strictly serial, two model calls
+
+  const reserve = Math.max(0, Math.trunc(i.reserveMs));
+  const usable = Math.max(0, Math.trunc(i.remainingMs) - reserve);
+  const capacity = perCompany > 0 ? Math.floor(usable / perCompany) : 0;
+
+  return {
+    capacity: Math.max(0, capacity),
+    remaining_ms: Math.max(0, Math.trunc(i.remainingMs)),
+    reserve_ms: reserve,
+    usable_ms: usable,
+    per_company_ms: Math.round(perCompany),
+    identity_call_ms: identity,
+    enrichment_call_ms: enrichment,
+    qualification_ms: qualification,
+    concurrency,
+    enrichment_batch_size: batch,
+  };
+}
+
+/**
+ * TIME MUST BOUND THE STAGE, NOT THE SHORTLIST.
+ *
+ * The obvious fix — shrink the shortlist to what the clock can carry — is
+ * WRONG, and worth recording as such. `applyMissionIntelligence` runs inside
+ * the discovery capability, and a resumed run skips completed capabilities, so
+ * the shortlist is computed exactly once per lineage. A company dropped from it
+ * for want of time would carry `budget_exhausted` forever and no continuation
+ * would ever reconsider it. That trades one starvation for a worse one: silent,
+ * permanent, and invisible to the resume machinery built to prevent it.
+ *
+ * The shortlist therefore stays a COUNT decision. The clock is enforced inside
+ * the identity stage, which already has the machinery to stop early, mark
+ * itself `incomplete`, name the companies it deferred, and let a continuation
+ * finish exactly those. `identityStopThreshold` is that enforcement.
+ *
+ * ── WHAT IT RESERVES ────────────────────────────────────────────────────────
+ *
+ * Run ea2d02f2 spent 114 of 125 seconds resolving identities and then had
+ * 10.8s against an 18s checkpoint reserve — so enrichment never started, the
+ * five resolved companies reached the evaluator with no enrichment evidence,
+ * and nothing qualified. Identity is not free to spend the window the stages
+ * after it need.
+ *
+ * The reserve GROWS with what has already resolved, which is what makes this
+ * self-limiting: every additional identity adds an enrichment slot and a
+ * qualification pass to the work still owed, so the stage stops precisely when
+ * finishing what it holds would cost the rest of the budget. The companies it
+ * has not reached are deferred — resumably, by the mechanism that already
+ * exists.
+ */
+export function downstreamReserveMs(i: {
+  resolvedSoFar: number;
+  capacity: TimeCapacity;
+  checkpointReserveMs: number;
+}): number {
+  const resolved = Math.max(0, Math.trunc(i.resolvedSoFar));
+  const c = i.capacity;
+  // At least one enrichment call is owed the moment anything resolves.
+  const enrichmentCalls = resolved === 0
+    ? 0
+    : Math.ceil(resolved / c.enrichment_batch_size);
+  return enrichmentCalls * c.enrichment_call_ms +
+    resolved * c.qualification_ms +
+    Math.max(0, Math.trunc(i.checkpointReserveMs));
+}
+
+/**
+ * The point at which identity resolution must stop starting new calls.
+ *
+ * ── WHY THE CALL COST IS ADDED, NOT MAX'd ──────────────────────────────────
+ *
+ * The guard is evaluated BEFORE a call starts, so whatever it permits will
+ * still be running afterwards. Comparing `remaining` against the reserve alone
+ * lets a call begin with just over the reserve left and finish below it — which
+ * is precisely how run ea2d02f2 ended at 10,804ms against an 18,000ms reserve.
+ * The last search was affordable when it started and was not by the time it
+ * returned.
+ *
+ * The reserve must survive the work already in flight, so one call's estimate
+ * is added to it. `Math.max` with the bare estimate keeps the original
+ * guarantee — never start a call that cannot itself finish — for the case where
+ * nothing has resolved yet and the downstream reserve is only the checkpoint.
+ */
+export function identityStopThreshold(i: {
+  resolvedSoFar: number;
+  capacity: TimeCapacity;
+  checkpointReserveMs: number;
+  perCallEstimateMs: number;
+}): number {
+  const perCall = Math.max(0, Math.trunc(i.perCallEstimateMs));
+  return Math.max(perCall, downstreamReserveMs(i) + perCall);
+}
+
+// ──────────────────────────────── the GPT budget, which is a different thing ──
+
+export const GPT_READ_BUDGET_ENV = "LEAD_GPT_READ_BUDGET";
+
+/**
+ * Companies GPT may READ per run — triage plus evaluation.
+ *
+ * Deliberately LARGER than the investigation budget and deliberately unrelated
+ * to it. Triage is batched at 25 companies per call, so reading 100 costs four
+ * cheap calls; evaluation is one call per company that actually survived to
+ * qualification, which the investigation budget has already bounded.
+ *
+ * The default matches the discovery ceiling: everything discovered should be
+ * triaged, because triage is the stage that decides where the expensive budget
+ * goes and starving it is how a good company never gets ranked.
+ */
+export const DEFAULT_GPT_READ_BUDGET = 100;
+export const MAX_GPT_READ_BUDGET = 500;
+
+export interface GptBudget {
+  version: typeof INVESTIGATION_BUDGET_VERSION;
+  /** Companies GPT may read in triage. */
+  read_budget: number;
+  /** Per-company evaluator calls, bounded by what survives to qualification. */
+  evaluation_budget: number;
+  source: "default" | "environment" | "pool_bound";
+  pool_size: number;
+  cap: number;
+}
+
+/**
+ * Size the CHEAP stages, independently of the paid ones.
+ *
+ * `investigationBudget` is passed only to bound the evaluation calls — a
+ * company that was never investigated cannot be evaluated, so buying evaluator
+ * calls beyond it would authorise spend for work that cannot happen. It does
+ * NOT bound the read budget, which is the whole point: triage must see the
+ * broad pool in order to choose the narrow one.
+ */
+export function resolveGptBudget(i: {
+  poolSize: number;
+  investigationBudget: number;
+  read?: EnvReader;
+}): GptBudget {
+  const get: EnvReader = i.read ?? ((k) => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  });
+  const pool = Math.max(0, Math.trunc(i.poolSize));
+
+  let read_budget = DEFAULT_GPT_READ_BUDGET;
+  let source: GptBudget["source"] = "default";
+  const envRaw = Number(get(GPT_READ_BUDGET_ENV));
+  if (Number.isFinite(envRaw) && envRaw > 0) {
+    read_budget = Math.trunc(envRaw);
+    source = "environment";
+  }
+  read_budget = Math.min(MAX_GPT_READ_BUDGET, read_budget);
+  if (pool < read_budget) {
+    read_budget = pool;
+    source = "pool_bound";
+  }
+
+  return {
+    version: INVESTIGATION_BUDGET_VERSION,
+    read_budget,
+    evaluation_budget: Math.max(0, Math.trunc(i.investigationBudget)),
+    source,
+    pool_size: pool,
+    cap: MAX_GPT_READ_BUDGET,
   };
 }
 
