@@ -406,11 +406,20 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   assertFalse(runA.companies.some((c) => c.verdict === "reject"),
     "nothing may be rejected for want of evidence");
 
-  // (b) WITH a classifier that confirms the fit → it qualifies.
+  // (b) WITH a classifier that confirms the fit → STILL HELD.
   //
-  // The CLASSIFIER FALLBACK, which is reachable only when no evaluator is
-  // available — the evaluator outranks it by design. Opted out explicitly so
-  // this stays a test of the fallback rather than of the evaluator.
+  // THIS EXPECTATION WAS INVERTED DELIBERATELY. It used to read "semantic
+  // classification must be able to resolve an UNKNOWN into a pass", and that
+  // was the defect: with the Mission evaluator unwired in production, this
+  // fallback was the thing that actually qualified companies — a second final
+  // authority, and the very one the evaluator was written to replace. A
+  // company qualified here also carried `decision_source:
+  // "insufficient_evidence"` and `mission_evaluation: notEvaluated(...)`,
+  // because nothing had in fact evaluated it.
+  //
+  // The classifier still runs, is still parsed, and still populates
+  // `semantic_parse` and the Brain for observability. It may no longer end a
+  // company's journey. No evaluator ⇒ UNKNOWN.
   const recB: Recorder = { calls: [] };
   const runB = await runCapabilityPlan(
     mockDeps(thin, recB, {
@@ -429,15 +438,26 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
     }),
     { mission: m, plan, brain: BRAIN },
   );
-  assert(runB.state.qualified_company_keys.length > 0,
-    "semantic classification must be able to resolve an UNKNOWN into a pass");
-  const passed = runB.companies.find((c) => c.verdict === "pass");
-  assertEquals(passed?.classification?.source, "semantic_classification");
-  // It PASSED THROUGH qualified_company and kept going — a resolved UNKNOWN is a
-  // real lead, not a special case that stalls.
-  assert(passed!.record.history.some((h) => h.stage === "qualified_company"));
+  assertEquals(runB.state.qualified_company_keys.length, 0,
+    "the classifier may not qualify a company the Mission evaluator never saw");
+  assert(runB.state.unknown_company_keys.length > 0, "it is held instead");
+  const heldB = runB.companies.find((c) => c.verdict === "unknown");
+  assert(heldB, "the company is held, not passed");
+  // THE ANSWER IS STILL RECORDED — held is not the same as unexamined.
+  assertEquals(heldB!.classification?.source, "semantic_classification");
+  assertEquals(heldB!.classification?.verdict, "pass",
+    "what the classifier thought is preserved for observability");
+  assertEquals(heldB!.decision_source, "insufficient_evidence");
+  assert(heldB!.record.missing_evidence.includes("mission_evaluation"),
+    "and the record names exactly what was missing");
+  assertFalse(runB.companies.some((c) => c.record.history.some(
+    (h) => h.stage === "qualified_company")),
+    "nothing reached qualified_company without the evaluator");
 
-  // (c) A classifier that CONTRADICTS still rejects — the path is not a rubber stamp.
+  // (c) A classifier that CONTRADICTS does NOT reject either.
+  //
+  // Also inverted, and for the same reason in the opposite direction: the
+  // absence of the authority is not evidence for a company OR against it.
   const recC: Recorder = { calls: [] };
   const runC = await runCapabilityPlan(
     mockDeps(thin, recC, {
@@ -452,8 +472,13 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
     { mission: m, plan, brain: BRAIN },
   );
   assertEquals(runC.state.qualified_company_keys.length, 0);
-  assertEquals(runC.state.unknown_company_keys.length, 0, "a contradiction is decided, not held");
-  assert(runC.companies.some((c) => c.verdict === "reject"));
+  assert(runC.state.unknown_company_keys.length > 0,
+    "without the evaluator a contradiction is HELD, not turned into a rejection");
+  assertFalse(runC.companies.some((c) => c.verdict === "reject"),
+    "the classifier is not a rejection authority either");
+  const heldC = runC.companies.find((c) => c.verdict === "unknown");
+  assertEquals(heldC!.classification?.verdict, "fail",
+    "its dissent is recorded — it simply does not decide");
 });
 
 // ═══════════════════════════════════════════════════════════ 10. telemetry ══

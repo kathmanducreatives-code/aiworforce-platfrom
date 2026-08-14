@@ -243,6 +243,17 @@ import {
 import {
   buildGroundedBrainBinding, buildShadowComparison,
 } from "../_shared/groundedBrainBinding.ts";
+import {
+  buildMissionEvaluationBinding, evaluationTaskDiagnostics,
+} from "../_shared/missionEvaluationBinding.ts";
+import {
+  buildMissionTriageBinding, triageTaskDiagnostics,
+} from "../_shared/missionTriageBinding.ts";
+import { parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
+// The SAME sizing function the engine shortlists with, so the evaluation budget
+// and the set of companies that can be evaluated are derived from one rule
+// rather than two that may drift.
+import { shortlistSize } from "../_shared/leadCommercialPrequalification.ts";
 import { buildWorkbenchExplanation } from "../_shared/groundedClaims.ts";
 import { buildPoolBinding } from "../_shared/poolEvaluationBinding.ts";
 import {
@@ -1751,6 +1762,52 @@ Deno.serve(async (req) => {
           requestedLeadCount: quota.requestedLeadCount,
         });
 
+        // ── THE MISSION EVALUATOR ────────────────────────────────────────────
+        //
+        // THE SEMANTIC AUTHORITY FOR QUALIFICATION, and the reason this block
+        // exists at all: the evaluator was built, tested and committed without
+        // ever being constructed in production. `deps.evaluateMission` was
+        // supplied only by test fixtures, so every live company fell to the
+        // no-evaluator branch and the pre-Phase-4 classifier kept deciding.
+        //
+        // Built HERE, beside the classifier it supersedes, so the two are read
+        // together and neither can be switched on without seeing the other.
+        // Budget is the SHORTLIST, not the requested count: only shortlisted
+        // companies are ever paid to be resolved, so only they can be evaluated.
+        const missionEvaluationBinding = buildMissionEvaluationBinding({
+          workspaceId: workspace_id,
+          shortlistSize: shortlistSize(quota.requestedLeadCount),
+        });
+        console.log("[run-agent][mission-evaluation][binding]", {
+          task_id: task.id, ...missionEvaluationBinding.diagnostics,
+        });
+        // ACROSS ROUNDS, NOT PER ROUND. A multi-round run must not buy the
+        // allowance again each time it broadens; the cap is what one TASK may
+        // spend, which is the number the diagnostics report.
+        let evaluationCallsMade = 0;
+        let evaluationCompaniesEvaluated = 0;
+        let evaluationBudgetExhausted = false;
+
+        // ── STAGE 2: GPT MISSION INTELLIGENCE ────────────────────────────────
+        //
+        // The FREE stage that decides where the paid stages spend. It replaces
+        // a substring match over a fixed role vocabulary — the thing that
+        // excluded ML Engineer, Founding Engineer and Member of Technical Staff
+        // from a Mission asking for software engineers, before any model was
+        // consulted and before any evidence was bought.
+        //
+        // Batched, so a hundred candidates cost a handful of cheap calls. Off by
+        // default: with the flag down no call is made and the deterministic
+        // prequalification verdict stands exactly as it does today.
+        const triageBinding = buildMissionTriageBinding({
+          workspaceId: workspace_id,
+          poolSize: Math.max(10, quota.requestedLeadCount * 10),
+        });
+        console.log("[run-agent][mission-triage][binding]", {
+          task_id: task.id, ...triageBinding.diagnostics,
+        });
+        let triageBatchesMade = 0;
+
         // ── THE GROUNDED COMPANY BRAIN ───────────────────────────────────────
         //
         // A SEPARATE flag from the classifier, because it answers a separate
@@ -2083,6 +2140,76 @@ Deno.serve(async (req) => {
                   return parsed;
                 }
                 : undefined,
+              // ── STAGE 2 WIRING: GPT MISSION INTELLIGENCE ─────────────────
+              //
+              // Undefined when the flag is down, and the engine then keeps the
+              // deterministic verdict. A failure here is never an exclusion —
+              // the strict parser degrades a bad batch to `uncertain`, which
+              // costs a company its priority and never its place in the run.
+              triageCompanies: triageBinding.triageCompanies
+                ? async ({ input, company_keys }) => {
+                  triageBatchesMade++;
+                  const raw = await triageBinding.triageCompanies!(
+                    input as unknown as Record<string, unknown>);
+                  console.log("[run-agent][mission-triage][batch]", {
+                    task_id: task.id,
+                    batch: triageBatchesMade,
+                    companies: company_keys.length,
+                    answered: raw !== null,
+                  });
+                  return raw;
+                }
+                : undefined,
+              triageBatchesAllowed: triageBinding.batchesRemaining,
+              triageBatchSize: triageBinding.batchSize,
+              // ── THE MISSION EVALUATOR, IN PRODUCTION ─────────────────────
+              //
+              // THE SINGLE SEMANTIC AUTHORITY FOR MISSION QUALIFICATION.
+              //
+              // The engine calls this before it consults anything else; only
+              // when it is absent or returns null does the company fall to
+              // `insufficient_evidence`. Undefined here — the flag off, the
+              // workspace not allow-listed — is the honest "no evaluator was
+              // available", never a fabricated pass.
+              //
+              // Budget is enforced HERE rather than inside the engine, because
+              // the binding is the thing that knows what was authorised. Once
+              // the allowance is spent every further company returns null, and
+              // null is `insufficient_evidence` — held, resumable, not rejected.
+              evaluateMission: missionEvaluationBinding.evaluateMission
+                ? async ({ input, registry, company_key }) => {
+                  if (evaluationCallsMade >= missionEvaluationBinding.callsRemaining) {
+                    evaluationBudgetExhausted = true;
+                    console.log("[run-agent][mission-evaluation][budget-exhausted]", {
+                      task_id: task.id, company_key,
+                      calls_made: evaluationCallsMade,
+                      calls_allowed: missionEvaluationBinding.callsRemaining,
+                    });
+                    return null;
+                  }
+                  evaluationCallsMade++;
+                  const raw = await missionEvaluationBinding.evaluateMission!(
+                    input as unknown as Record<string, unknown>);
+                  // A NULL OR MALFORMED RESPONSE IS NOT A VERDICT. The strict
+                  // parser turns anything unusable into `insufficient_evidence`
+                  // with a parse status that says so — the company is held for
+                  // a later run, never failed for a provider's bad day.
+                  // THE REGISTRY THE ENGINE BUILT, not one reconstructed here:
+                  // the parser refuses any citation that is not in it, which is
+                  // what stops the evaluator inventing evidence.
+                  const parsed = parseMissionEvaluationStrict(raw, registry);
+                  evaluationCompaniesEvaluated++;
+                  console.log("[run-agent][mission-evaluation]", {
+                    task_id: task.id, company_key,
+                    parse_status: parsed.parse_status,
+                    decision: parsed.evaluation.decision,
+                    mission_fit: parsed.evaluation.mission_fit,
+                    match_score: parsed.evaluation.match_score,
+                    repaired: parsed.raw_shape.repaired_fields,
+                  });
+                  return parsed;
+                }
+                : undefined,
               // ── THE GROUNDED SECOND OPINION ──────────────────────────────
               // Null unless the flag AND the workspace allow-list both pass, so
               // this is inert until deliberately switched on for one workspace.
@@ -2218,15 +2345,48 @@ Deno.serve(async (req) => {
                 lineage_root_task_id: leadResumeLineageRoot,
                 records: roundResume,
               },
-              brain: brainEnforced
-                ? {
-                  employee_min: effectivePolicy.constraints.min_employees ?? null,
-                  employee_max: effectivePolicy.constraints.max_employees ?? null,
-                  positive_industries: effectivePolicy.constraints.positive_industries ?? [],
-                  excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
-                  required_geography: null,
-                }
-                : undefined,
+              // ── THE BRAIN THE EVALUATOR READS ───────────────────────────
+              //
+              // TWO KINDS OF FIELD, and which side of the line each one falls
+              // on is decided by `resolveBrainAuthority`, not by intuition.
+              //
+              // REJECTING (tier 2 — absolute on an axis the Mission never
+              // mentions): `excluded_industries`, `required_geography` AND
+              // `disqualifier_keywords`. All three stay behind `brainEnforced`,
+              // exactly as before. `disqualifier_keywords` belongs here despite
+              // reading like an ICP hint: the authority resolver files it under
+              // `rejecting`, so supplying it unconditionally would hand an
+              // unenforced Brain a brand-new way to reject companies. That is a
+              // product-behaviour change, not a wiring fix, so it is not made
+              // here.
+              //
+              // PREFERENCES (tier 3 — ranking only, never a rejection):
+              // `business_models`, `buyer_roles`, `target_signals`. These are
+              // supplied ALWAYS. They cannot change who qualifies; withholding
+              // them only meant the evaluator judged a company without knowing
+              // who the workspace actually sells to.
+              brain: {
+                ...(brainEnforced
+                  ? {
+                    employee_min: effectivePolicy.constraints.min_employees ?? null,
+                    employee_max: effectivePolicy.constraints.max_employees ?? null,
+                    positive_industries: effectivePolicy.constraints.positive_industries ?? [],
+                    excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
+                    required_geography: null,
+                    disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
+                  }
+                  : {}),
+                business_models: brainIcpCtx.icp.business_models ?? [],
+                buyer_roles: brainIcpCtx.buyer_personas?.titles ?? [],
+                target_signals: [...new Set([
+                  ...(brainIcpCtx.buying_triggers?.hiring ?? []),
+                  ...(brainIcpCtx.jobs_to_watch ?? []),
+                ])],
+              },
+              // THE WORKSPACE'S OWN WORDS, handed over as context and never
+              // compiled into a gate. Written by the user during onboarding and
+              // read by nothing in the qualification path until now.
+              brainQualificationRules: brainIcpCtx.qualification_rules ?? null,
               maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
             });
 
@@ -2637,6 +2797,39 @@ Deno.serve(async (req) => {
                     // where it stays 0 means the evaluator never ran, whatever
                     // the other counters say.
                     evaluation_paths: summariseEvaluationPaths(capabilityRun.companies),
+                    // WHAT THE EVALUATOR WAS ALLOWED, AND WHAT IT DID.
+                    //
+                    // Paired with `evaluation_paths` deliberately: paths say who
+                    // decided each company, this says whether the evaluator was
+                    // even constructed. `enabled:false` with `reason:"flag_off"`
+                    // and `decided_by_model:0` is a configuration answer;
+                    // `enabled:true` with `calls_made:0` is a bug. Before this
+                    // was emitted the two were indistinguishable from the task
+                    // row, which is how an unwired evaluator survived a review.
+                    // STAGE 2 + STAGE 3 — where the money was pointed, and why.
+                    //
+                    // `triage_enabled:false` with everything zero is a
+                    // configuration answer; `enabled:true` with
+                    // `companies_triaged:0` is a bug. The budget block says why
+                    // the shortlist was the size it was, which is the question
+                    // `requested × 2` could never answer.
+                    mission_triage_observability: triageTaskDiagnostics(
+                      triageBinding, {
+                        batches_made: triageBatchesMade,
+                        companies_triaged: capabilityRun.state.triage?.total ?? 0,
+                        relevant: capabilityRun.state.triage?.relevant ?? 0,
+                        uncertain: capabilityRun.state.triage?.uncertain ?? 0,
+                        irrelevant: capabilityRun.state.triage?.irrelevant ?? 0,
+                      }),
+                    investigation_budget: capabilityRun.state.shortlist_decision,
+                    mission_evaluation_observability: evaluationTaskDiagnostics(
+                      missionEvaluationBinding, {
+                        calls_made: evaluationCallsMade,
+                        calls_remaining: Math.max(
+                          0, missionEvaluationBinding.callsRemaining - evaluationCallsMade),
+                        companies_evaluated: evaluationCompaniesEvaluated,
+                        budget_exhausted: evaluationBudgetExhausted,
+                      }),
                     // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot
                     // reach this array; `buildWorkbenchExplanation` is built
                     // from `validated_claims` and nothing else.

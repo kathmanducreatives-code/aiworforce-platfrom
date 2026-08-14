@@ -52,7 +52,42 @@ export function shouldCheckpoint(
 
 // ------------------------------------------------------ per-company stages ----
 
-export type IdentityStage = "not_started" | "resolved" | "unresolved" | "mismatch";
+/**
+ * How far identity resolution got for ONE company — five outcomes, not three.
+ *
+ * The three that existed collapsed distinct facts into one. A company the
+ * deadline never reached recorded `not_started`, which is also what a company
+ * nobody had scheduled yet recorded; a company whose provider call ERRORED
+ * recorded `unresolved`, which is what a company with no LinkedIn presence
+ * records. So "we ran out of time" and "this company does not exist on
+ * LinkedIn" were the same value, and the second is terminal.
+ *
+ *   not_started     scheduled, not yet reached by this run
+ *   resolved        an actionable identity was found
+ *   unresolved      the provider answered, and nothing matched  — TERMINAL
+ *   mismatch        the provider answered, and the match was rejected — TERMINAL
+ *   deferred        selected and budgeted, but the deadline fired first
+ *   provider_error  the call was made and failed — says nothing about the company
+ *
+ * `deferred` and `provider_error` are RESUMABLE. Neither is evidence about the
+ * company, so neither may end its journey.
+ */
+export type IdentityStage =
+  | "not_started" | "resolved" | "unresolved" | "mismatch"
+  | "deferred" | "provider_error";
+
+/** Identity outcomes that are a real, final answer ABOUT THE COMPANY. */
+const IDENTITY_TERMINAL: ReadonlySet<IdentityStage> =
+  new Set<IdentityStage>(["unresolved", "mismatch"]);
+
+/**
+ * Identity outcomes that mean "this company still owes an identity attempt".
+ *
+ * A resume MUST pick these up. Treating either as finished is how nine of
+ * twenty candidates disappeared from a run that reported itself complete.
+ */
+export const IDENTITY_RESUMABLE: ReadonlySet<IdentityStage> =
+  new Set<IdentityStage>(["not_started", "deferred", "provider_error"]);
 export type EnrichmentStage = "not_started" | "completed" | "failed" | "not_required";
 export type HiringStage =
   | "not_started" | "verified_from_existing_evidence" | "verified_externally"
@@ -60,6 +95,54 @@ export type HiringStage =
 export type BrainStage = "not_started" | "qualified" | "review" | "rejected" | "failed";
 export type FounderStage =
   | "not_started" | "completed" | "unresolved" | "failed" | "not_eligible";
+
+/**
+ * ENOUGH OF A COMPANY TO REBUILD IT WITHOUT RE-DISCOVERING IT.
+ *
+ * THE WORKING SET IS BUILT ONLY BY DISCOVERY. A continuation whose state says
+ * `startup_company_discovery` is already complete skips that step — correctly,
+ * because re-running it means paying for the same Actor twice — and then has an
+ * EMPTY working set. Every downstream stage iterates over that empty array, so
+ * nothing resumes: not the deferred identity candidates, not the enrichment,
+ * not the evaluation. The per-company resume ledger was unreachable across
+ * invocations, which is the same as not existing.
+ *
+ * This snapshot is what makes the ledger real. It carries the normalized
+ * company, its discovery-time jobs, its prequalification verdict and its
+ * shortlist status — the four things `addCompany` and `applyPrequalification`
+ * would otherwise have to buy again.
+ *
+ * OPTIONAL BY DESIGN. A checkpoint written before this existed has no snapshot;
+ * such a record restores nothing and the run behaves exactly as it did before,
+ * rather than failing to parse.
+ *
+ * Typed structurally so this module stays free of runtime imports — the shapes
+ * are `NormalizedHiringCompany`, `NormalizedHiringJob[]` and
+ * `PrequalifiedCompany`, and the engine owns the casts.
+ */
+export interface CompanyWorkingSetSnapshot {
+  /** The normalized company, as discovery produced it. */
+  company: Record<string, unknown>;
+  /** Discovery-time open jobs. BOUNDED — see `MAX_SNAPSHOT_JOBS`. */
+  yc_open_jobs: Record<string, unknown>[];
+  /** The free prequalification verdict, so triage is not recomputed. */
+  prequalified: Record<string, unknown> | null;
+  prequal_key: string | null;
+  /** Whether this company was worth paying to resolve. */
+  shortlisted: boolean;
+  /** Enrichment already bought, so a resume never buys it twice. */
+  enriched: Record<string, unknown> | null;
+}
+
+/**
+ * Jobs kept per company in the checkpoint.
+ *
+ * The checkpoint is one jsonb column on `tasks`, and a hundred companies with
+ * unbounded job arrays is how a resume record stops being writable. Twenty is
+ * far above what prequalification actually reads and keeps a full working set
+ * comfortably inside a single row.
+ */
+export const MAX_SNAPSHOT_JOBS = 20;
 
 export interface CompanyResumeRecord {
   company_key: string;
@@ -73,6 +156,13 @@ export interface CompanyResumeRecord {
   linkedin_company_url: string | null;
   /** Completed provider operations, by stable key. */
   completed_operations: string[];
+  /**
+   * Enough of the company to rebuild the working set on a continuation.
+   *
+   * Absent on checkpoints written before this field existed, and absent is
+   * handled: the run simply cannot reconstruct, exactly as before.
+   */
+  snapshot?: CompanyWorkingSetSnapshot | null;
   updated_at: string;
 }
 
@@ -98,8 +188,10 @@ export function newCompanyRecord(
  */
 export function nextStageFor(r: CompanyResumeRecord):
   "identity" | "enrichment" | "hiring" | "brain" | "founder" | null {
-  if (r.identity === "not_started") return "identity";
-  if (r.identity === "unresolved" || r.identity === "mismatch") return null;
+  // DEFERRED AND PROVIDER_ERROR RESUME HERE, exactly like `not_started`. The
+  // work was never done; only a real answer from the provider ends it.
+  if (IDENTITY_RESUMABLE.has(r.identity)) return "identity";
+  if (IDENTITY_TERMINAL.has(r.identity)) return null;
   if (r.enrichment === "not_started") return "enrichment";
   if (r.enrichment === "failed") return null;
   if (r.hiring === "not_started") return "hiring";
@@ -175,7 +267,10 @@ export function shouldSkipProviderCall(
   if (record.completed_operations.includes(operationKey)) {
     return { skip: true, reason: "already_completed" };
   }
-  if (record.identity === "unresolved" || record.identity === "mismatch") {
+  // ONLY A REAL ANSWER IS A REASON NOT TO ASK AGAIN. `deferred` and
+  // `provider_error` are deliberately absent: the question was never answered,
+  // so a resume must be allowed to ask it.
+  if (IDENTITY_TERMINAL.has(record.identity)) {
     return { skip: true, reason: "identity_terminal" };
   }
   return { skip: false, reason: null };

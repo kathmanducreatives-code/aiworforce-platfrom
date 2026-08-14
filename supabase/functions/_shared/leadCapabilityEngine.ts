@@ -88,9 +88,17 @@ import {
 } from "./poolRanking.ts";
 import { poolFingerprintOf } from "./poolCheckpoint.ts";
 import {
-  CHECKPOINT_RESERVE_MS, inputFingerprint, providerOperationKey, shouldCheckpoint,
-  shouldSkipProviderCall, type CompanyResumeRecord,
+  CHECKPOINT_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS, providerOperationKey,
+  shouldCheckpoint, shouldSkipProviderCall, type CompanyResumeRecord,
 } from "./leadResumeState.ts";
+import {
+  buildMissionTriageInput, parseMissionTriageStrict, summariseTriage, TRIAGE_BATCH_SIZE,
+  triageBatches, uncertainVerdict,
+  type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
+} from "./missionTriage.ts";
+import {
+  buildSmartShortlist, resolveInvestigationBudget, type InvestigationBudget,
+} from "./leadInvestigationBudget.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson,
   normalizeLinkedInCompanyCandidate, normalizeLinkedInCompanyEnriched,
@@ -260,6 +268,26 @@ export interface CapabilityExecutionState {
     shortlist_keys: string[];
     companies: PrequalificationRecord[];
   } | null;
+  /**
+   * STAGE 2 counts — how many companies GPT read, and what it said.
+   *
+   * Null when Mission Intelligence did not run, which is a different fact from
+   * "it ran and found nothing relevant". Both must be answerable from the task
+   * row alone.
+   */
+  triage: Record<string, number> | null;
+  /**
+   * STAGE 3 — the budget that was authorised and how the shortlist was chosen.
+   *
+   * `budget.source` is the field that says WHY the number was what it was:
+   * `default`, an operator's `environment` override, the Stage 2 ceiling, or
+   * simply the size of the pool.
+   */
+  shortlist_decision: {
+    budget: InvestigationBudget;
+    counts: Record<string, number>;
+    ranking: string[];
+  } | null;
   /** The last published progress snapshot. Never contains a premature pass. */
   progress: EngineProgress | null;
 }
@@ -284,6 +312,8 @@ export function newExecutionState(
     fallback_reason: null,
     pending_runs: [],
     prequalification: null,
+    triage: null,
+    shortlist_decision: null,
     progress: null,
   };
 }
@@ -345,8 +375,40 @@ export interface EngineCompany {
   prequal_key: string | null;
   prequalified: PrequalifiedCompany | null;
   shortlisted: boolean;
+  /**
+   * The GPT triage verdict — Stage 2, free, discovery-data only.
+   *
+   * Null when Mission Intelligence did not run. NOT a qualification: it answers
+   * "worth paying to investigate?" and its vocabulary
+   * (relevant/uncertain/irrelevant) is deliberately disjoint from the
+   * evaluator's, so the two can never be read as the same answer.
+   */
+  triage: TriageVerdict | null;
+  /**
+   * Why this company did not make the shortlist.
+   *
+   * `triage_irrelevant`, `prequalification_ineligible` and `budget_exhausted`
+   * are different facts. The last one especially: that company was never judged
+   * at all, and rendering it as "not qualified" is the lie this field exists to
+   * prevent.
+   */
+  shortlist_exclusion: string | null;
   company: NormalizedHiringCompany;
   identity: IdentityResolution | null;
+  /**
+   * WHY THIS COMPANY HAS NO ANSWER FOR A STAGE — when the reason is the run,
+   * not the company.
+   *
+   * Set by `callProvider` when a call for this company was skipped by the
+   * checkpoint reserve (`deferred`) or failed outright (`provider_error`).
+   * Both return an empty result, and an empty result is indistinguishable from
+   * a genuine "nothing matched" unless something records the difference. This
+   * is that record.
+   *
+   * `capability` scopes it, so an enrichment failure can never be misread as an
+   * identity outcome. Null means every call this company made was answered.
+   */
+  stage_block: { capability: CapabilityId; reason: "deferred" | "provider_error" } | null;
   enriched: NormalizedHiringCompany | null;
   yc_open_jobs: NormalizedHiringJob[];
   hiring_jobs: NormalizedHiringJob[];
@@ -394,6 +456,31 @@ export interface EngineCompany {
   verified_founders: NormalizedHiringPerson[];
   contact_identities: string[];
   record: CompanyRecordState;
+}
+
+/**
+ * What triage is allowed to see: discovery-time data, and nothing else.
+ *
+ * NO IDENTITY, NO ENRICHMENT — not because they are unavailable (triage runs
+ * before both) but because the contract must stay true if that ever changes. A
+ * stage that decides where to spend must judge on what is free; letting it read
+ * paid evidence would make the decision circular.
+ *
+ * ROLE TITLES GO OUT VERBATIM. Passing the prequalifier's classified subset
+ * would hand the model the same keyword filter this stage exists to replace.
+ */
+function toTriageInput(c: EngineCompany): TriageCompanyInput {
+  const p = c.prequalified;
+  return {
+    company_key: c.key,
+    name: p?.name ?? c.company.company_name ?? null,
+    domain: c.company.canonical_domain ?? null,
+    description: p?.one_liner ?? c.company.description ?? null,
+    industries: c.company.provider_industry ? [c.company.provider_industry] : [],
+    employee_count: p?.team_size ?? c.company.employee_count ?? null,
+    location: p?.locations ?? c.company.geography ?? null,
+    open_roles: (c.yc_open_jobs ?? []).map((j) => j.title).filter(Boolean) as string[],
+  };
 }
 
 function companyKey(c: NormalizedHiringCompany): string {
@@ -464,6 +551,23 @@ export interface CapabilityEngineDeps {
    * reported as never evaluated. It is never converted into a rejection for
    * want of a model.
    */
+  /**
+   * STAGE 2 — GPT MISSION INTELLIGENCE, batched and free-tier.
+   *
+   * Absent, no triage runs and the deterministic prequalification verdict
+   * stands, exactly as before. Present, its verdicts decide who is worth paying
+   * for — but never whether anyone QUALIFIES, which is the evaluator's alone.
+   *
+   * A null return, a throw or an unparseable response all degrade the affected
+   * batch to `uncertain`. Nothing a failure here does may exclude a company.
+   */
+  triageCompanies?: (i: {
+    input: MissionTriageInput;
+    company_keys: string[];
+  }) => Promise<unknown>;
+  /** Batches this task may pay for. Defaults to "as many as the pool needs". */
+  triageBatchesAllowed?: number;
+  triageBatchSize?: number;
   evaluateMission?: (i: {
     input: MissionEvaluationInput;
     registry: EvidenceRegistry;
@@ -596,6 +700,12 @@ export interface CapabilityEngineOpts {
     manual_review_if?: string[];
     required_evidence?: string[];
   } | null;
+  /**
+   * Env reader for the investigation budget. Injected so budget behaviour is
+   * testable without a process environment, and so a run can be given an
+   * explicit budget rather than inheriting the deployment's.
+   */
+  readEnv?: (key: string) => string | undefined;
   maxCandidates?: number;
   rolePacks?: readonly RolePack[];
   postedLimit?: "1h" | "24h" | "week" | "month";
@@ -782,11 +892,144 @@ export async function runCapabilityPlan(
     }
   };
 
+  /**
+   * STAGE 2 + STAGE 3 — GPT triage, then a budget-driven shortlist.
+   *
+   * Both run free of any provider. Triage is a cheap batched model call and the
+   * shortlist is pure arithmetic; between them they decide where every paid
+   * stage downstream spends its money.
+   *
+   * SAFE WHEN OFF. With no `triageCompanies` dependency no model call is made,
+   * every company keeps its deterministic verdict, and the shortlist is rebuilt
+   * from `eligible` + the same budget — which defaults to the ten the old
+   * ceiling allowed. Nothing about a run changes until triage is switched on.
+   */
+  const applyMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
+    const verdicts = new Map<string, TriageVerdict>();
+
+    if (deps.triageCompanies && companies.length > 0) {
+      const batches = triageBatches(companies, deps.triageBatchSize ?? TRIAGE_BATCH_SIZE);
+      let made = 0;
+      for (const batch of batches) {
+        if (made >= (deps.triageBatchesAllowed ?? batches.length)) {
+          // OUT OF BATCHES IS NOT A JUDGEMENT. The rest stay uncertain and
+          // remain fully eligible for the shortlist.
+          for (const c of batch) {
+            verdicts.set(c.key, uncertainVerdict(c.key, "triage_budget_exhausted"));
+          }
+          continue;
+        }
+        // THE DEADLINE APPLIES TO FREE WORK TOO. A model call still costs wall
+        // clock, and spending it here is what leaves none for the paid stages.
+        if (deps.deadline?.expired("mission_triage") === true) {
+          for (const c of batch) {
+            verdicts.set(c.key, uncertainVerdict(c.key, "triage_deadline_deferred"));
+          }
+          continue;
+        }
+        made++;
+        const startedAt = Date.now();
+        let parsed;
+        try {
+          const raw = await deps.triageCompanies({
+            input: buildMissionTriageInput({
+              ctx: qualificationCtx,
+              companies: batch.map(toTriageInput),
+            }),
+            company_keys: batch.map((c) => c.key),
+          });
+          parsed = parseMissionTriageStrict(raw, batch.map((c) => c.key));
+        } catch (e) {
+          // A THROWN TRIAGE CALL EXCLUDES NOBODY.
+          log("triage_batch_error", { error: String(e), size: batch.length });
+          parsed = parseMissionTriageStrict(null, batch.map((c) => c.key));
+        }
+        deps.deadline?.observeCall(Date.now() - startedAt, "mission_triage");
+        for (const [k, v] of parsed.verdicts) verdicts.set(k, v);
+        log("triage_batch_complete", {
+          size: batch.length, parse_status: parsed.parse_status,
+          unknown_keys: parsed.raw_shape.unknown_keys.length,
+          missing_keys: parsed.raw_shape.missing_keys.length,
+        });
+      }
+      state.triage = {
+        ...summariseTriage(verdicts.values()),
+        batches_made: made,
+        batches_available: batches.length,
+      };
+    }
+
+    for (const c of companies) c.triage = verdicts.get(c.key) ?? null;
+
+    // ── STAGE 3: THE BUDGET DECIDES THE SHORTLIST, NOT THE LEAD COUNT ───────
+    const budget = resolveInvestigationBudget({
+      requestedCount: effectiveRequestedCount(opts.mission),
+      poolSize: companies.length,
+      read: opts.readEnv,
+      stage2Ceiling: deps.evaluateBatch
+        ? (deps.batchLimits ?? resolveBatchLimits({})).max_evaluated
+        : null,
+    });
+    const decision = buildSmartShortlist(
+      companies.map((c) => ({
+        company_key: c.key,
+        eligible: c.prequalified?.eligible ?? true,
+        relevance: c.triage?.relevance ?? null,
+        confidence: c.triage?.confidence ?? null,
+        signal_strength: c.triage?.signal_strength ?? null,
+        score: c.prequalified?.score ?? null,
+        name: c.prequalified?.name ?? c.company.company_name ?? c.key,
+      })),
+      budget,
+    );
+
+    const chosen = new Set(decision.selected);
+    for (const c of companies) {
+      c.shortlisted = chosen.has(c.key);
+      // WHY A COMPANY WAS NOT PURSUED, on the company itself — "the budget ran
+      // out" and "GPT said this is not what you asked for" are different facts
+      // and the Workbench must never render the first as the second.
+      if (!c.shortlisted) {
+        const why = decision.excluded.find((e) => e.company_key === c.key);
+        c.shortlist_exclusion = why?.reason ?? "not_selected";
+      } else {
+        c.shortlist_exclusion = null;
+      }
+    }
+    state.shortlist_decision = {
+      budget: decision.budget, counts: decision.counts,
+      ranking: decision.ranking.slice(0, 50),
+    };
+    log("smart_shortlist_complete", {
+      budget: budget.budget, budget_source: budget.source,
+      requested: budget.requested_count, pool: budget.pool_size,
+      ...decision.counts,
+      triage_enabled: deps.triageCompanies != null,
+    });
+  };
+
+  /**
+   * WHY THE LAST PROVIDER CALL RETURNED NOTHING — for BATCHED stages.
+   *
+   * `callProvider` records the reason on the company when it is given one, but
+   * enrichment calls the provider once for a BATCH of LinkedIn URLs and has no
+   * single company to attribute it to. Without this, a deferred or failed batch
+   * was indistinguishable from a batch the provider genuinely answered with zero
+   * rows — so "we ran out of time" was recorded as "this company has no
+   * LinkedIn record", which is evidence, and wrong.
+   *
+   * Reset at the start of every call, read immediately after.
+   */
+  let lastCallBlock: "deferred" | "provider_error" | null = null;
+
   /** One provider call: idempotency, cost, attempt record, never off-graph. */
   const callProvider = async (
     capability: CapabilityId, provider: string, compiled: CompileResult<unknown>,
     company?: EngineCompany,
   ): Promise<Record<string, unknown>[]> => {
+    // CLEARED PER CALL. A stale block from an earlier batch would mark a
+    // perfectly answered one as deferred.
+    lastCallBlock = null;
     const spec = CAPABILITY_REGISTRY[capability];
     // COUNTED AT RECORD TIME, not before the await. The resolution stage runs two
     // calls concurrently; computing the number up front gave both of them
@@ -866,6 +1109,11 @@ export async function runCapabilityPlan(
       record("skipped_deadline", 0,
         `checkpoint reserve reached after ${deps.deadline.elapsedMs()}ms ` +
         `(${deps.deadline.remainingMs()}ms left); call not started`);
+      // THIS COMPANY WAS DEFERRED, NOT ANSWERED. Without this the caller reads
+      // an empty result and resolves it into "nothing matched" — turning a
+      // clock decision into a permanent fact about the company.
+      if (company) company.stage_block = { capability, reason: "deferred" };
+      lastCallBlock = "deferred";
       state.terminal_reason = "execution_deadline_checkpoint";
       log("provider_skipped_checkpoint_reserve", {
         capability, provider, remaining_ms: deps.deadline.remainingMs(),
@@ -890,7 +1138,11 @@ export async function runCapabilityPlan(
       // THE ESTIMATE LEARNS FROM REALITY. memo23 took 24s on task c8a6e53d; a
       // deadline still assuming 12s would have authorised one more call it could
       // not finish.
-      deps.deadline?.observeCall(Date.now() - startedAt);
+      //
+      // SCOPED TO THE PROVIDER, so what discovery costs is not charged against
+      // what an identity search costs. One monotonic maximum across every
+      // provider is what stranded nine candidates behind a 51s memo23 start.
+      deps.deadline?.observeCall(Date.now() - startedAt, provider);
       deps.onCallComplete?.(call.batchIdentity);
       record(rows.length > 0 ? "ok" : "empty", rows.length, null);
       // THE LEDGER OF WHAT WAS BOUGHT, written only after the answer arrived.
@@ -903,7 +1155,7 @@ export async function runCapabilityPlan(
       }
       return rows;
     } catch (e) {
-      deps.deadline?.observeCall(Date.now() - startedAt);
+      deps.deadline?.observeCall(Date.now() - startedAt, provider);
       // A CONTAINMENT error is an engine bug, not a provider failure. Letting it
       // become "try the next provider" is exactly how a guard turns into a
       // suggestion, so it propagates.
@@ -936,6 +1188,10 @@ export async function runCapabilityPlan(
         return [];
       }
       record("error", 0, String(e));
+      // A FAILED CALL IS NOT A NEGATIVE ANSWER. Same reasoning as the deadline
+      // skip above: the caller must not read the empty array as evidence.
+      if (company) company.stage_block = { capability, reason: "provider_error" };
+      lastCallBlock = "provider_error";
       log("provider_error", { capability, provider, error: String(e) });
       return [];
     }
@@ -1022,6 +1278,30 @@ export async function runCapabilityPlan(
         evidence_satisfied: true, reason: "completed in an earlier run",
       });
       state.pending_capabilities = state.pending_capabilities.filter((c) => c !== cap);
+
+      // ── SKIPPING DISCOVERY MUST NOT MEAN LOSING THE CANDIDATES ───────────
+      //
+      // Discovery is the only step that fills `companies`. Skipping it as
+      // already-complete — the correct call, since re-running it re-pays for
+      // the Actor — used to leave the working set EMPTY, so every downstream
+      // stage looped over nothing and a continuation resumed exactly zero
+      // candidates. The deferred identity candidates that the truncation fix
+      // deliberately keeps alive could never actually be picked up.
+      //
+      // The checkpoint carries a snapshot per company for precisely this.
+      if (WORKING_SET_CAPABILITIES.has(cap) && companies.length === 0 && resumeScope) {
+        const restored = restoreWorkingSet(resumeScope.records);
+        for (const c of restored) companies.push(c);
+        log("working_set_restored_from_checkpoint", {
+          capability: cap,
+          restored: restored.length,
+          records: resumeScope.records.length,
+          shortlisted: restored.filter((c) => c.shortlisted).length,
+          // Zero restored from a non-empty ledger means the checkpoint predates
+          // the snapshot field — worth seeing, and not an error.
+          snapshots_missing: resumeScope.records.filter((r) => !r.snapshot).length,
+        });
+      }
       continue;
     }
     state.current_capability = cap;
@@ -1189,6 +1469,16 @@ export async function runCapabilityPlan(
         shortlist: state.prequalification?.shortlist_keys,
       });
 
+      // ── STAGE 2: GPT MISSION INTELLIGENCE, THEN THE SMART SHORTLIST ────────
+      //
+      // Runs AFTER the deterministic pass and OVERRIDES its shortlist. The free
+      // pass keeps doing what it is good at — deduping, artifact removal,
+      // scoring — and stops being the thing that decides which companies are
+      // semantically worth money. That decision was a substring match, and it
+      // excluded ML Engineer, Founding Engineer and Member of Technical Staff
+      // from a Mission asking for software engineers.
+      await applyMissionIntelligence(companies);
+
       finish(cap, "complete", companies.length, used, true, null);
       await publish("prequalified");
       continue;
@@ -1320,6 +1610,16 @@ export async function runCapabilityPlan(
           // previous run gave up on re-derives the same unresolved identity from
           // zero lookups — the outcome it already had, for nothing.
           const found = await callProvider(cap, provider, compiled, c);
+          // ── NO CALL, NO VERDICT ──────────────────────────────────────────
+          //
+          // The reserve fired before this call, or the call failed. Either way
+          // `found` is empty for a reason that has nothing to do with the
+          // company. Falling through would hand zero lookups to
+          // `resolveIdentityAgainstLookups`, which would return `unresolved` —
+          // a TERMINAL state that stops the company being retried, ever. The
+          // company keeps `identity === null` and is counted as unfinished
+          // work below.
+          if (c.stage_block?.capability === cap) return;
           lookups = found.map((f) => ({
             name: (f.name as string) ?? null,
             linkedinUrl: (f.linkedinUrl as string) ?? null,
@@ -1359,8 +1659,45 @@ export async function runCapabilityPlan(
         }
       };
 
-      await runBounded(targets, LINKEDIN_RESOLUTION_CONCURRENCY, resolveOne,
-        () => deps.deadline?.expired() === true);
+      // SCOPED TO THIS PROVIDER. An unscoped `expired()` compares the time left
+      // against the slowest call ANY stage has made — so a 51s discovery start
+      // made a 9s identity search look unaffordable and ended the stage with a
+      // third of the budget unspent.
+      const bounded = await runBounded(targets, LINKEDIN_RESOLUTION_CONCURRENCY, resolveOne,
+        () => deps.deadline?.expired(provider) === true);
+
+      // ── WHAT DID NOT HAPPEN, RECORDED AS EXPLICITLY AS WHAT DID ────────────
+      //
+      // `runBounded` has always returned `{processed, skipped}` and the caller
+      // has always thrown the second half away. Nine of twenty candidates on a
+      // real run were selected, budgeted, and then never attempted — and the
+      // capability still reported `complete`, so a resume skipped the whole
+      // stage and those nine were lost permanently.
+      //
+      // Membership is derived from the COMPANIES, not from the count: a company
+      // with no identity and no terminal answer is unfinished, whichever lane
+      // did or did not claim it.
+      const providerFailed = targets.filter(
+        (c) => c.identity === null && c.stage_block?.reason === "provider_error");
+      const deferredTargets = targets.filter(
+        (c) => c.identity === null && c.stage_block?.reason !== "provider_error");
+      for (const c of deferredTargets) {
+        // MARKED EVEN WHEN NO LANE EVER CLAIMED IT. A company `runBounded` never
+        // reached has no `stage_block` from `callProvider`, because no call was
+        // made for it at all — it would otherwise persist as `not_started`,
+        // which is indistinguishable from a company nobody has scheduled yet.
+        // Setting it here is what makes "budgeted and abandoned" a state the
+        // checkpoint can carry.
+        c.stage_block ??= { capability: cap, reason: "deferred" };
+        // A HOLDING STATE THAT NAMES ITS CAUSE. Not "unresolved" — nothing was
+        // asked — and not silence, which is what made these companies vanish.
+        c.record = advance(c.record, "identity_pending", "identity_resolution_deferred");
+        c.record.missing_evidence.push("identity_resolution_deferred");
+      }
+      for (const c of providerFailed) {
+        c.record = advance(c.record, "identity_pending", "identity_provider_error");
+        c.record.missing_evidence.push("identity_provider_error");
+      }
 
       // Companies that were never shortlisted are explicitly not evaluated. They
       // must not look like failed lookups, and they must never be actionable.
@@ -1374,10 +1711,40 @@ export async function runCapabilityPlan(
         );
       }
 
-      finish(cap, "complete", resolved, [provider], resolved > 0,
-        resolved === 0 ? "no company reached an actionable identity" : null);
+      // ── PARTIAL EXECUTION IS NOT COMPLETE EXECUTION ───────────────────────
+      //
+      // THE INVARIANT THIS STAGE BROKE. `complete` used to be unconditional,
+      // with `evidence_satisfied = resolved > 0` — so ONE successful lookup out
+      // of twenty marked the capability done. `finish` then moved it to
+      // `completed_capabilities`, and the resume guard skips anything listed
+      // there. Eleven attempted, nine never touched, and the run reported the
+      // stage finished.
+      //
+      // A capability is complete only when every target reached a TERMINAL
+      // state: resolved, or answered-and-unmatched. Deferred and provider-error
+      // candidates are neither, so the capability stays `incomplete` — which
+      // keeps it in `pending_capabilities`, makes the run `partial` and
+      // resumable, and lets a continuation finish exactly the candidates that
+      // were left. Companies already resolved are protected from being re-paid
+      // for by `shouldSkipProviderCall`, not by pretending the stage was done.
+      const unfinished = deferredTargets.length + providerFailed.length;
+      const truncated = unfinished > 0;
+      finish(cap, truncated ? "incomplete" : "complete", resolved, [provider],
+        truncated ? false : resolved > 0,
+        truncated
+          ? `${resolved} resolved, ${deferredTargets.length} deferred, ` +
+            `${providerFailed.length} provider error; ${unfinished} of ` +
+            `${targets.length} target(s) never reached a terminal state`
+          : resolved === 0 ? "no company reached an actionable identity" : null);
       log("identity_resolution_complete", {
         targets: targets.length, resolved, unresolved,
+        // THE COUNTS THAT WERE PREVIOUSLY DISCARDED.
+        deferred: deferredTargets.length,
+        provider_errors: providerFailed.length,
+        attempted: bounded.processed,
+        unattempted: bounded.skipped,
+        truncated,
+        deferred_company_keys: deferredTargets.map((c) => c.key),
         concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
       });
       await publish("identity_resolved");
@@ -2082,27 +2449,40 @@ export async function runCapabilityPlan(
           grounding: groundingForBrain,
         });
 
-        if (resolved && resolved.verdict === "pass" && c.brain.outcome === "QUALIFIED") {
-          c.classification = { ...resolved, source: "semantic_classification" };
-          c.verdict = "pass";
-          c.record = advance(c.record, "qualified_company", "semantic_classification_pass");
-          passed++;
-        } else if (resolved && resolved.verdict === "fail") {
-          c.classification = { ...resolved, source: "semantic_classification" };
-          c.verdict = "reject";
-          c.record = advance(c.record, "company_fit_reject", "semantic_classification_fail");
-          c.record.failed_gates = c.fit.failed_gates;
-        } else {
-          c.classification = resolved
-            ? { ...resolved, source: "semantic_classification" }
-            : { verdict: "unknown", reason: "no classifier available", source: "unresolved" };
-          // HELD, NOT REJECTED. The stage stays where the pipeline actually got
-          // to; the verdict is what says the Brain could not decide.
-          c.verdict = "unknown";
-          c.record.stage_reason = `company_fit_pending:${c.fit.reason}`;
-          c.record.missing_evidence.push(...c.fit.missing_evidence);
-          unknown++;
-        }
+        // ── THE CLASSIFIER INFORMS; IT NO LONGER DECIDES ────────────────────
+        //
+        // THIS BRANCH USED TO BE THE REAL QUALIFICATION AUTHORITY IN
+        // PRODUCTION. `resolved.verdict === "pass"` qualified a company and
+        // `=== "fail"` rejected one — from the pre-Phase-4 semantic classifier,
+        // on the path taken precisely when the Mission evaluator did NOT run.
+        // So the architecture had two final authorities, and the one that
+        // actually decided was the one it had been written to replace. Worse,
+        // the company still carried `decision_source: "insufficient_evidence"`
+        // and `mission_evaluation: notEvaluated(...)` from a few lines above —
+        // a QUALIFIED row whose own record said nothing had evaluated it.
+        //
+        // No evaluator ⇒ UNKNOWN. Not a pass, and not a rejection either: the
+        // absence of the authority is not evidence for or against a company.
+        // The classifier's structured answer is still parsed, still recorded on
+        // `semantic_parse`, and still feeds `decideCompanyBrain` above for
+        // observability — it simply may not end a company's journey.
+        //
+        // THE CONSEQUENCE IS DELIBERATE AND VISIBLE: with `MISSION_EVALUATION`
+        // off, a run qualifies NOBODY and says so through `evaluation_paths`
+        // and `mission_evaluation_observability`. Silence is reported as
+        // silence rather than as twenty rejections or a handful of unearned
+        // passes.
+        c.classification = resolved
+          ? { ...resolved, source: "semantic_classification" }
+          : { verdict: "unknown", reason: "no classifier available", source: "unresolved" };
+        // HELD, NOT REJECTED. The stage stays where the pipeline actually got
+        // to; the verdict is what says the Brain could not decide.
+        c.verdict = "unknown";
+        c.record.stage_reason = resolved
+          ? `mission_evaluator_unavailable:${resolved.verdict}`
+          : `company_fit_pending:${c.fit.reason}`;
+        c.record.missing_evidence.push(...c.fit.missing_evidence, "mission_evaluation");
+        unknown++;
       }
       state.qualified_company_keys = companies.filter((c) => c.verdict === "pass").map((c) => c.key);
       state.unknown_company_keys = companies.filter((c) => c.verdict === "unknown").map((c) => c.key);
@@ -2397,7 +2777,21 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
   return {
     company_key: c.key,
     company_name: c.prequalified?.name ?? c.company.company_name ?? c.key,
-    identity: c.identity === null ? "not_started"
+    // ── THE STATE THAT SURVIVES THE PROCESS ────────────────────────────────
+    //
+    // This record IS the durable form of a deferred candidate: the checkpoint
+    // writes it to `tasks.result`, so nine candidates the deadline never
+    // reached come back as nine rows saying `identity: "deferred"` rather than
+    // as an absence. `nextStageFor` reads `deferred` and `provider_error` as
+    // "still owes identity", and `shouldSkipProviderCall` refuses to treat
+    // either as done — so a continuation resumes precisely them.
+    //
+    // Checked BEFORE the resolution states, because a blocked company has no
+    // resolution to report; checked against `capability` so an enrichment
+    // failure cannot be recorded as an identity outcome.
+    identity: c.identity === null && c.stage_block?.capability === "company_identity_resolution"
+      ? (c.stage_block.reason === "provider_error" ? "provider_error" : "deferred")
+      : c.identity === null ? "not_started"
       : identityIsActionable(c.identity) ? "resolved"
       : c.identity.status === "mismatch" ? "mismatch" : "unresolved",
     enrichment: c.enriched !== null ? "completed"
@@ -2417,9 +2811,78 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       : c.founders.length > 0 ? "unresolved" : "not_started",
     linkedin_company_url: url,
     completed_operations: c.completed_operations,
+    // ── THE DURABLE WORKING SET ────────────────────────────────────────────
+    //
+    // Written for EVERY company, not only the shortlisted ones, so a resume
+    // restores the whole pool with its triage verdicts intact — an excluded
+    // company must come back excluded rather than come back unknown, or the
+    // Workbench would lose the reason it was never pursued.
+    snapshot: {
+      company: c.company as unknown as Record<string, unknown>,
+      yc_open_jobs: c.yc_open_jobs.slice(0, MAX_SNAPSHOT_JOBS) as unknown as Record<
+        string, unknown>[],
+      prequalified: (c.prequalified ?? null) as unknown as Record<string, unknown> | null,
+      prequal_key: c.prequal_key,
+      shortlisted: c.shortlisted,
+      enriched: (c.enriched ?? null) as unknown as Record<string, unknown> | null,
+    },
     updated_at: new Date().toISOString(),
   };
 }
+
+/**
+ * Rebuild the working set from a checkpoint — the missing half of resume.
+ *
+ * Discovery is the only step that populates `companies`, and a continuation
+ * skips it as already-complete. Without this, every downstream stage on a
+ * resumed run iterates an empty array and nothing is ever finished: deferred
+ * identity candidates stay deferred forever, and the capability that stayed
+ * `incomplete` to protect them can never reach a truthful completion.
+ *
+ * Restores identity and enrichment that were already PAID FOR, so a resumed run
+ * continues from the evidence it owns rather than buying it again. Records
+ * without a snapshot — checkpoints written before the field existed — are
+ * skipped, which degrades to the previous behaviour instead of throwing.
+ */
+export function restoreWorkingSet(
+  records: readonly CompanyResumeRecord[],
+): EngineCompany[] {
+  const out: EngineCompany[] = [];
+  for (const r of records) {
+    const s = r.snapshot;
+    if (!s || !s.company) continue;
+    addCompany(
+      out,
+      s.company as unknown as NormalizedHiringCompany,
+      (s.yc_open_jobs ?? []) as unknown as NormalizedHiringJob[],
+      s.prequal_key ?? null,
+      // KEYED AS RECORDED. See `addCompany` — a restored company whose identity
+      // resolved carries a LinkedIn url, and recomputing would rename it.
+      r.company_key,
+    );
+    const c = out.find((x) => x.key === r.company_key);
+    if (!c) continue;
+    c.prequalified = (s.prequalified ?? null) as unknown as EngineCompany["prequalified"];
+    c.shortlisted = s.shortlisted === true;
+    c.enriched = (s.enriched ?? null) as unknown as NormalizedHiringCompany | null;
+    // THE LEDGER OF WHAT WAS BOUGHT. `shouldSkipProviderCall` reads this, and it
+    // is the only thing standing between a resume and paying twice.
+    for (const op of r.completed_operations) {
+      if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+    }
+  }
+  return out;
+}
+
+/**
+ * Capabilities that BUILD the working set.
+ *
+ * Skipping any of them on a resume is what leaves `companies` empty, so these
+ * are exactly the steps that must trigger a restore.
+ */
+const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
+  "startup_company_discovery", "general_company_discovery", "known_company_resolution",
+]);
 
 /**
  * Project the engine's working set into portfolio candidates.
@@ -2773,12 +3236,24 @@ function packTitles(packs: readonly RolePack[]): string[] {
 function addCompany(
   set: EngineCompany[], c: NormalizedHiringCompany, ycJobs: NormalizedHiringJob[],
   prequalKey: string | null = null,
+  /**
+   * THE KEY THIS COMPANY ALREADY HAD, when restoring one rather than
+   * discovering it.
+   *
+   * `companyKey` prefers `linkedin_company_url` over the domain, and identity
+   * resolution WRITES that url back onto `company`. So recomputing the key for
+   * a restored company would produce `li:…` where the original run recorded
+   * `acme.com`, and every ledger entry keyed on the old value — completed
+   * operations included — would stop matching. The recorded key is authoritative.
+   */
+  explicitKey?: string,
 ): void {
-  const key = companyKey(c);
+  const key = explicitKey ?? companyKey(c);
   if (set.some((x) => x.key === key)) return;
   set.push({
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
-    company: c, identity: null, enriched: null,
+    triage: null, shortlist_exclusion: null,
+    company: c, identity: null, stage_block: null, enriched: null,
     yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
     brain: null, semantic_parse: null, completed_operations: [],
     evidence_registry: null, grounded: null,

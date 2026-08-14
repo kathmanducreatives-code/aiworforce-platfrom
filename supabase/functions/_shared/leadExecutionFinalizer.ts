@@ -71,17 +71,33 @@ export const EDGE_WALL_CLOCK_MS = 150_000;
 export const SAFETY_MARGIN_MS = 25_000;
 export const DEFAULT_BUDGET_MS = EDGE_WALL_CLOCK_MS - SAFETY_MARGIN_MS;
 
+/**
+ * WHICH OPERATION IS BEING SCHEDULED.
+ *
+ * A free-form key — in practice the provider name, because that is the unit
+ * whose latency actually varies. Callers that do not know or care pass nothing
+ * and get the global estimate, which is the behaviour that existed before.
+ */
+export type DeadlineOperation = string;
+
 export interface ExecutionDeadline {
   startedAt: number;
   budgetMs: number;
-  /** Longest a single provider call has been observed to take. */
+  /** Longest a single provider call has been observed to take, across ALL operations. */
   slowestCallMs: number;
   elapsedMs(): number;
   remainingMs(): number;
-  /** True once there is no longer room for another provider call plus writing state. */
-  expired(): boolean;
+  /**
+   * True once there is no longer room for another provider call plus writing state.
+   *
+   * Pass `op` to ask about a SPECIFIC operation. Without it the answer is the
+   * conservative global one.
+   */
+  expired(op?: DeadlineOperation): boolean;
   /** Record how long a call actually took, so the estimate tracks reality. */
-  observeCall(ms: number): void;
+  observeCall(ms: number, op?: DeadlineOperation): void;
+  /** The duration currently assumed for `op` — the number `expired` compares against. */
+  estimateFor(op?: DeadlineOperation): number;
 }
 
 export function createExecutionDeadline(
@@ -90,7 +106,30 @@ export function createExecutionDeadline(
   const now = opts.now ?? (() => Date.now());
   const startedAt = now();
   const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS;
-  let slowest = opts.assumedCallMs ?? 12_000;
+  const assumed = opts.assumedCallMs ?? 12_000;
+  let slowest = assumed;
+
+  // ── PER-OPERATION LATENCY, BECAUSE ONE NUMBER WAS A LIE ────────────────────
+  //
+  // `slowest` is a monotonic maximum across every provider. On a real TEST run
+  // a memo23 discovery start took 51s, which permanently raised the estimate
+  // for the ~9s LinkedIn identity searches that followed. The identity stage
+  // then stopped with 31s of a 125s budget unspent and nine shortlisted
+  // candidates never attempted — stranded by a number that described a
+  // different provider entirely.
+  //
+  // Each operation now carries its own observed maximum. An operation with no
+  // history assumes `assumedCallMs` — the conservative default the deadline was
+  // constructed with — rather than inheriting an unrelated stage's worst case.
+  //
+  // THE FLOOR IS THE POINT. A per-op estimate is never allowed BELOW `assumed`,
+  // so one unusually fast call cannot talk the deadline into authorising work it
+  // cannot finish. The estimate may only ever move up from the safe baseline.
+  const byOp = new Map<DeadlineOperation, number>();
+  const estimateFor = (op?: DeadlineOperation): number => {
+    if (!op) return slowest;
+    return Math.max(assumed, byOp.get(op) ?? 0);
+  };
 
   return {
     startedAt,
@@ -98,11 +137,19 @@ export function createExecutionDeadline(
     get slowestCallMs() { return slowest; },
     elapsedMs: () => now() - startedAt,
     remainingMs: () => Math.max(0, budgetMs - (now() - startedAt)),
+    estimateFor,
     // EXPIRED MEANS "no room for another call", not "out of time". Starting a
     // call that cannot finish is how the previous run died holding a paid run
     // it never read.
-    expired: () => (budgetMs - (now() - startedAt)) <= slowest,
-    observeCall: (ms: number) => { if (ms > slowest) slowest = ms; },
+    expired: (op?: DeadlineOperation) =>
+      (budgetMs - (now() - startedAt)) <= estimateFor(op),
+    observeCall: (ms: number, op?: DeadlineOperation) => {
+      // BOTH, always. The global figure still backs every unscoped caller —
+      // the terminal guard and the finalizer among them — so scoping the
+      // estimate never weakens the run-level answer.
+      if (ms > slowest) slowest = ms;
+      if (op && ms > (byOp.get(op) ?? 0)) byOp.set(op, ms);
+    },
   } as ExecutionDeadline;
 }
 
