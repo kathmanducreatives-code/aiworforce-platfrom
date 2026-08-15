@@ -626,3 +626,117 @@ Deno.test("9c. a checkpoint with no snapshots degrades safely, it does not throw
       .includes("company_identity_resolution"),
       "an empty working set must never be mistaken for finished work");
   });
+
+// ═════════ 10-12. QUALIFICATION IS DEADLINE-BOUND, LIKE EVERY PAID STAGE ══
+//
+// Task 6e218eeb ran for an hour and produced nothing. It was not a loop: the
+// engine executed discovery, triage, identity and enrichment exactly once each.
+// It then entered the qualification loop with six enriched companies and made
+// up to TWO model calls apiece — the per-company grounder and the Mission
+// evaluator, ~7s and ~5s — with no deadline check of any kind. The batch stage
+// above it checks `shouldCheckpoint` between batches; this loop checked nothing.
+//
+// The isolate was killed mid-company at ~150s against a 125s budget. Because
+// the kill landed before any checkpoint was written, `tasks.result` stayed
+// null, the row stayed `running`, and no continuation was scheduled — the run
+// simply stopped existing, with five companies already qualified and thrown
+// away.
+//
+// It only became reachable once the per-company grounder started doing real
+// work. While it returned an empty result instantly, six companies cost
+// nothing.
+
+/** A qualification-stage fixture: N enriched companies, a slow evaluator. */
+const slowQualificationRun = async (o: {
+  companies: number;
+  budgetMs: number;
+  msPerCompany: number;
+}) => {
+  let now = 0;
+  const deadline = createExecutionDeadline({
+    budgetMs: o.budgetMs, now: () => now, assumedCallMs: 1_000,
+  });
+  const m = mission();
+  const plan = buildCapabilityGraph(m);
+  const evaluated: string[] = [];
+  const run = await runCapabilityPlan({
+    invoke: (call: CompiledActorCall<unknown>) => {
+      if (call.actorKey === DISCOVERY_ACTOR) {
+        now += 1_000;
+        return Promise.resolve(ELIGIBLE_25.slice(0, o.companies));
+      }
+      if (call.actorKey === IDENTITY_ACTOR) {
+        const i = indexOfSearch(call.input as Record<string, unknown>);
+        now += 500;
+        return Promise.resolve(i >= 0 ? [hitFor(i)] : []);
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+    deadline,
+    // THE COST THIS LOOP ACTUALLY CARRIES: a model call per company.
+    evaluateMission: ({ company_key }) => {
+      evaluated.push(company_key);
+      now += o.msPerCompany;
+      return Promise.resolve({
+        evaluation: {
+          mission_fit: "pass", icp_fit: "strong", match_score: 90,
+          confidence: 0.9, reasoning: "fits", matched_requirements: [],
+          failed_requirements: [], unknown_fields: [],
+        },
+      } as never);
+    },
+  } as never, {
+    mission: m, plan, brain: BRAIN, maxCandidates: 60,
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+  } as never);
+  return { run, evaluated };
+};
+
+Deno.test("10. the qualification loop STOPS at the reserve instead of overrunning",
+  async () => {
+    // Enough clock for a couple of companies, nowhere near all ten.
+    // Room for every company to resolve and enrich, then a qualification cost
+    // that cannot possibly fit: 10 x 30s against ~176s of usable clock.
+    const { run, evaluated } = await slowQualificationRun({
+      companies: 10, budgetMs: 200_000, msPerCompany: 30_000,
+    });
+
+    assert(evaluated.length < 10,
+      `the loop must stop at the reserve, not evaluate all ten (did ${evaluated.length})`);
+    assert(evaluated.length > 0, "and it must get some real work done first");
+
+    const outcome = run.capability_outcomes.find(
+      (o) => o.capability === "company_brain_qualification");
+    assertEquals(outcome?.status, "incomplete",
+      "a stage that stopped on the clock is not complete");
+    assert(outcome?.reason?.includes("not reached"),
+      `the reason names what happened, got: ${outcome?.reason}`);
+  });
+
+Deno.test("11. what it did not reach is HELD, never rejected", async () => {
+  const { run, evaluated } = await slowQualificationRun({
+    companies: 10, budgetMs: 200_000, msPerCompany: 30_000,
+  });
+  const reached = new Set(evaluated);
+  for (const c of run.companies.filter((x) => !reached.has(x.key))) {
+    assertFalse(c.verdict === "reject",
+      `${c.key} was never evaluated and may not be rejected`);
+  }
+  // AND THE STAGE STAYS RESUMABLE — this is what stops the frozen-pool bug
+  // coming back through a different door.
+  assertFalse(
+    run.state.completed_capabilities.includes("company_brain_qualification"),
+    "a continuation must be able to pick the rest up");
+});
+
+Deno.test("12. with time to spare, every eligible company is still evaluated", async () => {
+  // The guard must not become a throttle. Given room, nothing changes.
+  const { run, evaluated } = await slowQualificationRun({
+    companies: 6, budgetMs: 400_000, msPerCompany: 2_000,
+  });
+  assert(evaluated.length > 0);
+  const outcome = run.capability_outcomes.find(
+    (o) => o.capability === "company_brain_qualification");
+  assertEquals(outcome?.status, "complete", "an unhurried run completes as before");
+});

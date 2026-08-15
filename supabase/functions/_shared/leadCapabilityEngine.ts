@@ -2581,7 +2581,42 @@ export async function runCapabilityPlan(
         employee_max: opts.brain?.employee_max ?? null,
       });
 
-      for (const c of eligible) {
+      // ── THE QUALIFICATION LOOP IS DEADLINE-BOUND TOO ───────────────────────
+      //
+      // It was not, and that is what hung task 6e218eeb for an hour. This loop
+      // makes up to TWO model calls per company — the per-company grounder and
+      // the Mission evaluator, roughly 7s and 5s — and it ran the whole eligible
+      // set unconditionally. The batch stage above checks `shouldCheckpoint`
+      // between batches; this one checked nothing.
+      //
+      // It only became reachable in anger once the per-company grounder started
+      // working. Before that it returned a well-formed empty result almost
+      // instantly, so twelve seconds a company was six companies' worth of
+      // nothing. With the batch evaluator returning no rows and six companies
+      // enriched, the loop spent ~72s past an already ~75s run and the platform
+      // killed the isolate at ~150s — mid-company, before any checkpoint was
+      // written. `tasks.result` stayed null, the row stayed `running`, and no
+      // continuation was ever scheduled.
+      //
+      // A company this loop does not reach is NOT REACHED: no verdict, no
+      // rejection, still on the frontier and still resumable. That is the same
+      // rule the batch stage follows, and the reason stopping here is safe.
+      let qualificationStopped = false;
+      for (let qIndex = 0; qIndex < eligible.length; qIndex++) {
+        const c = eligible[qIndex];
+        if (deps.deadline && shouldCheckpoint({
+          elapsedMs: () => deps.deadline!.elapsedMs(),
+          remainingMs: () => deps.deadline!.remainingMs(),
+        }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)) {
+          qualificationStopped = true;
+          state.terminal_reason = "execution_deadline_checkpoint";
+          log("qualification_deadline_stop", {
+            evaluated: qIndex,
+            not_reached: eligible.length - qIndex,
+            remaining_ms: deps.deadline.remainingMs(),
+          });
+          break;
+        }
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
           company_key: c.key,
@@ -2959,14 +2994,27 @@ export async function runCapabilityPlan(
       // which reads as twenty rejections and is how a scheduling gap was
       // mistaken for an ICP that was too strict. The distinction costs one
       // branch and is the whole point of the instrumentation.
-      const reason = passed > 0
+      // A STAGE THAT STOPPED ON THE CLOCK IS NOT COMPLETE.
+      //
+      // Reporting `complete` would move the capability onto
+      // `completed_capabilities`, and a continuation skips those — so the
+      // companies the loop never reached would be skipped for the life of the
+      // lineage, exactly as the deferred identity candidates once were.
+      const reason = qualificationStopped
+        ? `the checkpoint reserve was reached during qualification; ` +
+          `${passed} passed and ${unknown} held so far, the rest were not reached`
+        : passed > 0
         ? null
         : eligible.length === 0
         ? `no company reached the Company Brain: the eligible set was empty ` +
           `(${companies.length} compan${companies.length === 1 ? "y" : "ies"} ` +
           `carried no hiring assessment) — nothing was evaluated, nothing was rejected`
         : `no company passed the Company Brain; ${unknown} held as unknown pending evidence`;
-      finish(cap, "complete", passed, [], passed > 0, reason);
+      finish(
+        cap,
+        qualificationStopped ? "incomplete" : "complete",
+        passed, [], passed > 0 && !qualificationStopped, reason,
+      );
 
       // ── THE YIELD GATE: 2 OF 10 IS NOT A FINISHED RUN ────────────────────
       //
