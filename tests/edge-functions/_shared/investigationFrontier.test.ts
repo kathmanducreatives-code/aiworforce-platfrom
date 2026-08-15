@@ -323,3 +323,103 @@ Deno.test("4d. the funnel reports the frontier as WITHHELD, never as excluded", 
     "the frontier is withheld — resumable, and not a judgement");
   assert(f.summary.awaiting_investigation >= 0);
 });
+
+// ═════════ C1-C4. THE CONTINUATION THAT NEVER RAN ══
+//
+// Across 202 sourcing tasks in this project's history:
+//
+//     tasks whose checkpoint asked for a continuation   17
+//     tasks that actually continued                      0
+//     tasks with checkpoint_version > 0                  0
+//
+// Task 74fec941 is the shape of every one of them. Ten companies investigated,
+// four qualified against a request for ten, EIGHTY-EIGHT still on the frontier
+// — and a capability ledger that read:
+//
+//     pending_capabilities:   []
+//     completed_capabilities: [discovery, identity, enrichment,
+//                              qualification, persistence]
+//
+// A continuation skips whatever it finds in `completed_capabilities`, so it
+// would have skipped all five stages and done nothing. And with nothing
+// pending, the run reported `round_limit_reached` rather than
+// `continuation_required`, so the UI never offered Continue either.
+//
+// The frontier, the ranking, the checkpoint and the resume guard were all
+// correct. Nothing ever handed them work.
+
+const PAID = [
+  "company_identity_resolution", "company_enrichment", "company_brain_qualification",
+] as const;
+
+Deno.test("C1. a run that ran out of clock leaves the paid stages PENDING", async () => {
+  // A clock that stops the yield loop mid-pool — the state a continuation exists
+  // to advance.
+  const run = await runPool({ qualifyEvery: 4, budgetMs: 120_000 });
+
+  const remaining = run.companies.filter(
+    (c) => isFrontier(c.investigation_state)).length;
+  assert(remaining > 0, `the frontier must still hold candidates, got ${remaining}`);
+  assert(
+    run.companies.filter((c) => c.verdict === "pass").length <
+      run.state.investigation_selected,
+    "and the quota is not met");
+
+  // THE ASSERTION THE PRODUCT NEEDED. Unfinished investigation is pending work.
+  for (const cap of PAID) {
+    assertFalse(run.state.completed_capabilities.includes(cap as never),
+      `${cap} cannot be complete while ${remaining} companies are uninvestigated`);
+    assert(run.state.pending_capabilities.includes(cap as never),
+      `${cap} must be pending so a continuation has something to do`);
+  }
+  assertEquals(run.state.terminal_reason, "execution_deadline_checkpoint",
+    "and the checkpoint therefore asks for a continuation");
+});
+
+Deno.test("C2. the carried frontier is exactly what the next invocation picks up",
+  async () => {
+    const first = await runPool({ qualifyEvery: 4, budgetMs: 120_000 });
+    const carried = first.companies.filter(
+      (c) => isFrontier(c.investigation_state)).length;
+    assert(carried > 0);
+
+    // The continuation, given the checkpoint the first run wrote.
+    const second = await runPool({
+      qualifyEvery: 4, budgetMs: 120_000, resume: first.resume_records,
+    });
+
+    const investigatedAgain = second.companies.filter(
+      (c) => wasInvestigated(c.investigation_state)).length;
+    assert(investigatedAgain > 0, "the continuation investigated somebody");
+    assert(
+      second.companies.filter((c) => isFrontier(c.investigation_state)).length < carried,
+      "and the frontier shrank rather than being replayed");
+  });
+
+Deno.test("C3. a run that MET the quota is finished, not carried", async () => {
+  // The guard must not make every run look unfinished. Everything qualifies, so
+  // the quota is met early and the stages are genuinely done.
+  const run = await runPool({ qualifyEvery: 1, budgetMs: 400_000 });
+  assert(run.state.qualified_company_keys.length > 0);
+  for (const cap of PAID) {
+    assertFalse(run.state.pending_capabilities.includes(cap as never),
+      `${cap} must not be re-opened once the quota is met`);
+  }
+});
+
+Deno.test("C4. a PASS-CEILING stop is carried too — the ceiling is per invocation",
+  async () => {
+    // No clock, so the yield loop runs until `MAX_INVESTIGATION_PASSES`. That
+    // bound exists to stop one invocation spending forever; it says nothing
+    // about whether the work is finished. Six passes over a 120-company pool
+    // leaves a frontier, the quota is unmet, and a continuation is entitled to
+    // a fresh set of passes over what is left.
+    const run = await runPool({ qualifyEvery: 999 });
+    const remaining = run.companies.filter(
+      (c) => isFrontier(c.investigation_state)).length;
+    assert(remaining > 0, "the ceiling stopped the loop with work left");
+    for (const cap of PAID) {
+      assert(run.state.pending_capabilities.includes(cap as never),
+        `${cap} must be pending — the ceiling is not a finding about the pool`);
+    }
+  });

@@ -3082,8 +3082,57 @@ export async function runCapabilityPlan(
           }
         }
       }
-      // NOTHING MORE TO TAKE. Whatever is still on the frontier stays there,
-      // ranked and recoverable by the next invocation.
+      // ── THE FRONTIER IS UNFINISHED WORK, AND THE LEDGER MUST SAY SO ────────
+      //
+      // Whatever is still on the frontier stays there, ranked and recoverable.
+      // But "recoverable" was only ever half true: this invocation marked all
+      // five capabilities COMPLETE and left `pending_capabilities` empty, while
+      // 88 companies sat waiting. A continuation reads `completed_capabilities`
+      // and skips what it finds there, so it would have skipped every stage and
+      // done nothing — and because nothing was pending, the run reported
+      // `round_limit_reached` rather than `continuation_required`, so the UI
+      // never offered Continue either.
+      //
+      // That is why, across 202 sourcing tasks, seventeen asked for a
+      // continuation and not one ever ran. The frontier, the checkpoint and the
+      // resume guard were all correct and were never given anything to do.
+      //
+      // A run that stopped because it ran out of CLOCK has not finished
+      // investigating. The paid stages are left PENDING so the next invocation
+      // has real work, exactly as the multi-pass path above re-opens them.
+      // Stopping because the quota was met, the frontier is empty, or the pass
+      // ceiling was hit IS finished — those leave the ledger complete.
+      // KEYED ON THE OUTCOME, NOT ON THE GATE'S REASON.
+      //
+      // Enumerating stop reasons missed a case the probe found: the gate can
+      // say TAKE and the slice still come back empty, because carried in-flight
+      // work has already consumed the allowance (`reason: "no_capacity"`). The
+      // run wants to continue and cannot — which is a continuation if anything
+      // is. Reached here at all, this invocation is making no further progress.
+      //
+      // So the question is simply: is there work left, and was it wanted?
+      // Quota met ⇒ finished. Frontier empty ⇒ finished, and any shortfall is
+      // real. Anything else is unfinished work that a continuation can advance.
+      const carryFrontier = frontierLeft > 0 &&
+        qualifiedSoFar < effectiveRequestedCount(opts.mission);
+      if (carryFrontier) {
+        for (const reopen of INVESTIGATION_CAPABILITIES) {
+          state.completed_capabilities = state.completed_capabilities.filter(
+            (x) => x !== reopen);
+          if (!state.pending_capabilities.includes(reopen)) {
+            state.pending_capabilities.push(reopen);
+          }
+        }
+        // The terminal reason the checkpoint reads to decide whether a
+        // continuation is required at all.
+        state.terminal_reason = "execution_deadline_checkpoint";
+        log("investigation_frontier_carried", {
+          frontier_remaining: frontierLeft,
+          qualified: qualifiedSoFar,
+          requested: effectiveRequestedCount(opts.mission),
+          reopened: [...INVESTIGATION_CAPABILITIES],
+        });
+      }
       closeInvestigatedSlice(companies);
 
       log("company_brain_qualification_complete", {

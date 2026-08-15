@@ -317,9 +317,20 @@ Deno.test("4. every target reaches a terminal state ⇒ the capability IS comple
     assertEquals(searched.length, TARGETS, "every target was attempted");
     assertEquals(outcome?.status, "complete");
     assertEquals(outcome?.evidence_satisfied, true);
-    assert(run.state.completed_capabilities.includes("company_identity_resolution"),
-      "a genuinely finished stage is recorded as finished");
-    assertFalse(run.state.pending_capabilities.includes("company_identity_resolution"));
+
+    // ── THE OUTCOME AND THE LEDGER ANSWER DIFFERENT QUESTIONS ─────────────
+    //
+    // The OUTCOME is about the slice: every target this pass was given reached
+    // a terminal state, so the stage did its job and says so.
+    //
+    // The LEDGER is about the RUN, and it is what a continuation reads to
+    // decide what to skip. This fixture is pinned to one pass over a
+    // twenty-five company pool, so fifteen are still uninvestigated and the
+    // quota is unmet — the stage must therefore stay OPEN, or the continuation
+    // skips identity and those fifteen are stranded exactly as ninety once
+    // were. `investigationFrontier.test.ts` C1-C4 own that behaviour.
+    assert(run.state.pending_capabilities.includes("company_identity_resolution"),
+      "a frontier that still holds candidates keeps the paid stage open");
 
     const records = targets.map(toResumeRecord);
     assertEquals(records.filter((r) => r.identity === "deferred").length, 0);
@@ -443,8 +454,12 @@ Deno.test("8. RUN 2 resumes the deferred candidates and does not re-buy the reso
     // The stage RAN again — run 1 never marked it complete, so nothing skipped it.
     assertEquals(second.outcome?.status, "complete",
       "once every candidate is terminal, and only then, the stage completes");
-    assert(second.run.state.completed_capabilities
-      .includes("company_identity_resolution"));
+    // The stage completed the slice it was given. It stays OPEN on the ledger
+    // because the pool still holds uninvestigated companies — see test 4.
+    assertEquals(
+      second.run.capability_outcomes.find(
+        (x) => x.capability === "company_identity_resolution")?.status,
+      "complete");
 
     // EVERY deferred candidate now has a real answer.
     const after = second.targets.map(toResumeRecord);
@@ -558,8 +573,12 @@ Deno.test("9. discovery complete + partial identity ⇒ resume restores and fini
       `run 2 must buy exactly the ${deferredKeys.length} deferred searches`);
     assertEquals(second.outcome?.status, "complete",
       "and only now, with every candidate terminal, does the stage complete");
-    assert(second.run.state.completed_capabilities
-      .includes("company_identity_resolution"));
+    // The stage completed the slice it was given. It stays OPEN on the ledger
+    // because the pool still holds uninvestigated companies — see test 4.
+    assertEquals(
+      second.run.capability_outcomes.find(
+        (x) => x.capability === "company_identity_resolution")?.status,
+      "complete");
 
     const after = second.run.resume_records;
     assertEquals(after.filter((r) => r.identity === "deferred").length, 0,
