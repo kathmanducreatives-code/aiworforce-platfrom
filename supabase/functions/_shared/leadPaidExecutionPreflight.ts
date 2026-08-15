@@ -66,6 +66,7 @@ export type PreflightBlockCode =
   | "empty_capability_plan"
   | "entry_capability_mismatch"
   | "provider_not_in_capability"
+  | "provider_not_capability_primary"
   | "provider_not_in_plan"
   | "input_validation_failed"
   | "startup_mission_requires_memo23"
@@ -262,6 +263,24 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     if (!approved.includes(provider)) {
       block("provider_not_in_capability",
         `provider "${provider}" is not approved for capability "${firstCapability}" (approved: ${approved.join(", ") || "none"})`);
+    } else if (approved.length > 0 && provider !== approved[0]) {
+      // MEMBERSHIP IS NOT ENOUGH FOR THE OPENING CALL.
+      //
+      // This used to be membership alone, because every capability's list was
+      // primary + fallback and a fallback could not be reached first anyway.
+      // `startup_company_discovery` now also declares
+      // `apify_linkedin_company_search` as a breadth source, and membership
+      // alone would have let it OPEN a startup mission — paying a
+      // name-matching company search to discover a cohort it cannot describe,
+      // which is precisely one of the three calls the failed task this check
+      // was written for actually paid for.
+      //
+      // The first paid call is the capability's declared primary. A fallback or
+      // a breadth source earns its call from what the primary returned, and
+      // that is a decision execution makes, never the opening move.
+      block("provider_not_capability_primary",
+        `provider "${provider}" is approved for "${firstCapability}" but is not its primary ` +
+        `("${approved[0]}"); a fallback or breadth source may not be the first paid call`);
     }
     if (plan && !plan.allowed_providers.includes(provider)) {
       block("provider_not_in_plan",

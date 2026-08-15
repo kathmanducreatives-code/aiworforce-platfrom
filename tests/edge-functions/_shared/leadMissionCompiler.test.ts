@@ -353,8 +353,10 @@ Deno.test("11. a YC query selects startup_company_discovery", () => {
   const plan = buildCapabilityGraph(compile(YC_QUERY, YC_PROPOSAL).final_mission);
   assertEquals(plan.entry_capability, "startup_company_discovery");
   assertEquals(plan.steps[0].providers,
-    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"],
-    "memo23 primary, solidcode fallback — code chose these, not the model");
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"],
+    "memo23 primary, solidcode fallback, LinkedIn company search breadth — " +
+    "code declares which actors are PERMITTED; the model may only choose among them");
   assert(plan.routing_reason.length > 0, "the choice is explainable");
 });
 

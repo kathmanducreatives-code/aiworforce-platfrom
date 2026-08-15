@@ -110,8 +110,25 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["company_profile.stages includes startup"],
     produces: ["company_candidate"],
     allowed_next: ["company_identity_resolution"],
-    // memo23 PRIMARY, solidcode FALLBACK. Order is the contract, not a hint.
-    providers: ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"],
+    // WHAT THIS CAPABILITY MAY CALL. Order is the contract, not a hint: memo23
+    // first, then solidcode, then the LinkedIn company search.
+    //
+    // The third entry is new, and it is what lets discovery answer a request
+    // that Y Combinator cannot. Both YC sources search the same cohort, so a
+    // mission for manufacturers, agencies or engineering firms had no declared
+    // route at all and was answered with YC companies tagged B2B — the pool
+    // being wrong upstream of every gate that then failed to qualify it.
+    //
+    // It stays LAST deliberately. It is the only one of the three whose own
+    // catalog entry records that its query matches company NAMES rather than
+    // concepts, that its size filter disagreed with reality in four of eight
+    // observed rows, and that its industry field is not proof. That makes it a
+    // legitimate breadth and last-resort source, and a poor first choice.
+    providers: [
+      "apify_yc_companies_memo23",
+      "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search",
+    ],
     cost_units: 1,
     max_attempts: 2,
     fallback_policy: "provider_fallback_only",

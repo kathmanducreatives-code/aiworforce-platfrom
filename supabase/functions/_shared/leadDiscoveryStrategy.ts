@@ -484,6 +484,64 @@ export function deterministicDiscoveryStrategy(
   };
 }
 
+/**
+ * What the selector is shown: the request, the compiled mission, the catalog.
+ *
+ * `original_user_query` is included ALONGSIDE the compiled profile, not instead
+ * of it. The profile is what the mission compiler decided the request meant, and
+ * it is authoritative for gating — but it is lossy by design, and the actor
+ * choice is exactly where the lost nuance matters. A mission compiled to
+ * `verticals: ["artificial intelligence"]` does not record whether the user said
+ * "AI startups" or "companies building LLM tooling", and those want different
+ * queries from a name-matching company search.
+ *
+ * The query is DATA here, never instruction. Nothing it can say changes which
+ * actors exist or which filters are legal — `validateDiscoveryStrategy` decides
+ * that against the catalog, after the model has spoken.
+ */
+export function buildDiscoveryPlannerPayload(
+  mission: LeadMissionV1, opts: DiscoveryStrategyOptions = {},
+): Record<string, unknown> {
+  const p = mission.company_profile;
+  return {
+    task: "select_discovery_actors",
+    request: {
+      original_user_query: mission.original_user_query,
+      requested_count: mission.requested_count,
+    },
+    compiled_mission: {
+      verticals: p.verticals,
+      business_models: p.business_models,
+      stages: p.stages,
+      locations: p.locations,
+      employee_range: p.employee_range ?? null,
+      required_signals: mission.required_signals,
+      source_strategy: mission.directives?.source_strategy ?? [],
+    },
+    available_actors: discoveryCatalogBriefing(),
+    limits: {
+      max_actors: opts.maxActors ?? DEFAULT_MAX_ACTORS,
+      max_items_per_actor: opts.maxItemsPerActor ?? DEFAULT_MAX_ITEMS_PER_ACTOR,
+    },
+    response_shape: {
+      actors: [{
+        actor_key: "<one of available_actors[].actor_key>",
+        role: "primary | breadth | fallback",
+        input: "<object using only that actor's supported_filters and verified_enums>",
+        rationale: "<why this actor, for this request>",
+      }],
+    },
+    rules: [
+      "Only actor_key values from available_actors may be used.",
+      "Only that actor's supported_filters may appear in its input.",
+      "Enum-valued fields must use values from that actor's verified_enums.",
+      "Exactly one actor should be primary: the one that must run.",
+      "Use breadth for actors that widen the pool, fallback for actors worth running only if nothing else returned anything.",
+      "Prefer an actor's best_for; avoid its not_for and its known_defects.",
+    ],
+  };
+}
+
 /** The actors this strategy will actually call, in execution order. */
 export function strategyActorKeys(s: DiscoveryStrategy): string[] {
   return s.selections.map((x) => x.actor_key);

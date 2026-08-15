@@ -72,9 +72,14 @@ Deno.test("1b. its capability graph is startup-first, enriches before qualifying
   assertEquals(plan.entry_capability, "startup_company_discovery");
   assertEquals(order[0], "startup_company_discovery");
 
-  // memo23 PRIMARY, solidcode FALLBACK.
+  // memo23 PRIMARY, solidcode FALLBACK, LinkedIn company search BREADTH.
+  // The third is what lets a mission Y Combinator cannot answer — manufacturers,
+  // agencies, engineering firms — reach a source that can. It is last because it
+  // is the only one whose catalog entry records that its query matches company
+  // NAMES rather than concepts.
   assertEquals(plan.steps[0].providers, [
     "apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+    "apify_linkedin_company_search",
   ]);
 
   // Enrichment strictly BEFORE qualification.
@@ -331,9 +336,17 @@ Deno.test("7. zero YC results do not silently trigger broad job discovery", () =
   assertEquals(first.status, "provider_fallback_available");
   assertEquals(first.next_provider, "apify_yc_companies_solidcode");
 
-  // Both exhausted → EXHAUSTED, an explicit reportable state. Not a job board.
+  // Every DECLARED provider exhausted → EXHAUSTED, an explicit reportable
+  // state. Not a job board.
+  //
+  // The list includes the LinkedIn company search because the capability now
+  // declares it. Note what the engine does with this: exhaustion there is
+  // measured against the STRATEGY, not this permission list, so a run whose
+  // strategy never selected an actor does not report it as an untried fallback
+  // waiting to be spent on.
   const both = onCapabilityExhausted(plan, "startup_company_discovery",
-    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"]);
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"]);
   assertEquals(both.status, "exhausted");
   assertEquals(both.next_provider, null);
   assert(both.reason.includes("rather than sourcing outside its graph"));
@@ -548,7 +561,8 @@ Deno.test("15. an old task with no mission still uses the carrier union", async 
 
 Deno.test("the provider registry maps capabilities to the approved Actors", () => {
   assertEquals(CAPABILITY_REGISTRY.startup_company_discovery.providers,
-    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"]);
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"]);
   assertEquals(CAPABILITY_REGISTRY.general_company_discovery.providers,
     ["apify_linkedin_company_search"]);
   assertEquals(CAPABILITY_REGISTRY.company_enrichment.providers,

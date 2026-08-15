@@ -140,6 +140,13 @@ import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
 import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./leadMission.ts";
+// WHICH ACTORS DISCOVER THE POOL. Replaces the frozen provider pair and the
+// hardcoded YC literal that answered every mission with the same request.
+import {
+  type DiscoveryActorSelection, type DiscoveryStrategy,
+  buildDiscoveryPlannerPayload, deterministicDiscoveryStrategy,
+  discoveryStrategyDiagnostics, shouldRunSelection, validateDiscoveryStrategy,
+} from "./leadDiscoveryStrategy.ts";
 
 /**
  * The PAID stages a new investigation slice must re-run.
@@ -268,6 +275,14 @@ export interface CapabilityExecutionState {
   contact_identities: string[];
   terminal_reason: string | null;
   fallback_reason: string | null;
+  /**
+   * WHICH ACTORS DISCOVERY CHOSE, AND WHY — field names, never the payload.
+   *
+   * The one record that answers "was this pool built for THIS request?" after
+   * the fact. Absent on runs from before the selection stage existed, and on
+   * continuations, which skip discovery entirely.
+   */
+  discovery_strategy?: Record<string, unknown>;
   /**
    * Paid Actor runs that were still RUNNING when the poll window closed.
    *
@@ -660,6 +675,23 @@ export interface CapabilityEngineDeps {
    * A null return, a throw or an unparseable response all degrade the affected
    * batch to `uncertain`. Nothing a failure here does may exclude a company.
    */
+  /**
+   * STAGE 3/4 — WHICH DISCOVERY ACTORS RUN, AND WHAT EACH IS ASKED.
+   *
+   * Absent, `deterministicDiscoveryStrategy` runs: memo23 primary, solidcode
+   * fallback, with the same literal as before. So a deployment that never wires
+   * this dependency behaves exactly as it does today, and the model can only
+   * ever widen what discovery asks — never narrow it below the current floor.
+   *
+   * The return is a PROPOSAL. `validateDiscoveryStrategy` decides what of it is
+   * allowed against the closed actor catalog; a throw, a null or an unusable
+   * shape all fall back rather than failing the capability, because a selector
+   * being unavailable is not a reason to stop discovering.
+   */
+  planDiscovery?: (i: {
+    payload: Record<string, unknown>;
+    mission_hash: string;
+  }) => Promise<unknown>;
   triageCompanies?: (i: {
     input: MissionTriageInput;
     company_keys: string[];
@@ -813,6 +845,13 @@ export interface CapabilityEngineOpts {
   ycMinSize?: string;
   ycMaxSize?: string;
   solidcodeTeamSizes?: string[];
+  /**
+   * The most discovery actors one pass may run. Every one is a paid call, and
+   * every candidate it adds costs a further paid enrichment before it can
+   * qualify — so this is a spend ceiling, not a quality knob. Unset, the
+   * strategy module's own default applies.
+   */
+  maxDiscoveryActors?: number;
   foundersPerCompany?: number;
   /**
    * The scope that makes a provider call identifiable across invocations, plus
@@ -1027,6 +1066,38 @@ export async function runCapabilityPlan(
    * from `eligible` + the same budget — which defaults to the ten the old
    * ceiling allowed. Nothing about a run changes until triage is switched on.
    */
+  /**
+   * The discovery strategy for this run, model-proposed where possible.
+   *
+   * NEVER THROWS AND NEVER RETURNS NOTHING. A selector that is absent, slow,
+   * broken, or wrong is not a reason to stop discovering — it is a reason to
+   * discover the way the system did before there was a selector at all. Every
+   * failure path lands on `deterministicDiscoveryStrategy`, so the floor of
+   * this stage is the behaviour it replaced.
+   */
+  const resolveDiscoveryStrategy = async (): Promise<DiscoveryStrategy> => {
+    const limits = {
+      maxItemsPerActor: maxCandidates,
+      ...(opts.maxDiscoveryActors != null ? { maxActors: opts.maxDiscoveryActors } : {}),
+    };
+    if (!deps.planDiscovery) return deterministicDiscoveryStrategy(opts.mission, limits);
+    try {
+      const proposed = await deps.planDiscovery({
+        payload: buildDiscoveryPlannerPayload(opts.mission, limits),
+        mission_hash: await missionHash(opts.mission),
+      });
+      // The model may answer with the list itself or wrap it in `actors`, and
+      // which one it picks is not worth a retry.
+      const actors = Array.isArray(proposed)
+        ? proposed
+        : (proposed as { actors?: unknown } | null)?.actors;
+      return validateDiscoveryStrategy(actors, opts.mission, limits);
+    } catch (e) {
+      log("discovery_strategy_planner_failed", { error: String(e) });
+      return deterministicDiscoveryStrategy(opts.mission, limits);
+    }
+  };
+
   const applyMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
     const verdicts = new Map<string, TriageVerdict>();
 
@@ -1690,7 +1761,28 @@ export async function runCapabilityPlan(
       const compileFailedFor = (provider: string) =>
         state.provider_attempts.some(
           (a) => a.capability === cap && a.provider === provider && a.outcome === "compile_failed");
-      for (const provider of step.providers) {
+      // ── WHICH ACTORS, AND WHAT EACH IS ASKED ────────────────────────────────
+      //
+      // Was `step.providers`: a frozen pair, memo23 then solidcode, with the
+      // input written as a literal right here — `industries: ["B2B"]`,
+      // `batch: ["All Batches"]`. Every mission this workflow ever ran asked
+      // that same question, so "AI startups hiring software engineers" and
+      // "manufacturers adopting automation" both fetched the same YC page and
+      // left qualification to discard the mismatch. A gate cannot qualify a
+      // company the pool never contained.
+      //
+      // Now the request itself decides. `planDiscovery` proposes actors and
+      // inputs; `validateDiscoveryStrategy` keeps only what the closed catalog
+      // permits. With no `planDiscovery` wired — or a selector that throws,
+      // returns nothing, or proposes nothing usable — the deterministic
+      // strategy runs, which is exactly the pair and the literal above.
+      const strategy = await resolveDiscoveryStrategy();
+      const strategyKeys = strategy.selections.map((s) => s.actor_key);
+      state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
+      log("discovery_strategy_resolved", state.discovery_strategy);
+
+      for (const sel of strategy.selections) {
+        const provider = sel.actor_key;
         if (schemaFailure) break;
         // A FALLBACK MUST NOT SPEND WHILE THE PRIMARY IS STILL RUNNING. The
         // primary may yet return everything the mission needs, and paying a
@@ -1698,9 +1790,11 @@ export async function runCapabilityPlan(
         // whole gate exists to stop.
         if (runPending) break;
         if (companies.length >= maxCandidates) break;
-        // solidcode is FALLBACK ONLY: it runs when the primary produced nothing,
-        // not merely when the quota is unmet.
-        if (provider === "apify_yc_companies_solidcode" && companies.length > 0) {
+        // ROLE DECIDES WHETHER THIS ONE EARNS ITS CALL. `fallback` runs only on
+        // an empty pool — the old solidcode special-case, now the contract for
+        // every actor that carries the role — and `breadth` stops widening a
+        // pool that is already big enough to satisfy the request.
+        if (!shouldRunSelection(sel, companies.length, maxCandidates)) {
           tried.push(provider);
           continue;
         }
@@ -1708,8 +1802,7 @@ export async function runCapabilityPlan(
         used.push(provider);
 
         if (provider === "apify_yc_companies_memo23") {
-    const compiled = compileMemo23YcInput({
-            mode: "companies",
+          const compiled = compileMemo23YcInput({
             queries: [],
             topCompany: false,
             nonprofit: false,
@@ -1719,10 +1812,23 @@ export async function runCapabilityPlan(
             isHiring: true,
             minEmployeeSize: opts.ycMinSize ?? MEMO23_DEFAULT_MIN_SIZE,
             maxEmployeeSize: opts.ycMaxSize ?? MEMO23_DEFAULT_MAX_SIZE,
+            maxItems: maxCandidates,
+            // THE STRATEGY'S CHOICES, over the defaults above. Only fields this
+            // Actor's schema accepts survive validation, so nothing here can be
+            // a key memo23 does not have.
+            ...sel.input,
+            // AND THESE ARE NOT THE STRATEGY'S TO CHOOSE.
+            //
+            // `scrapeOpenJobs` feeds the free prequalification pass, the hiring
+            // signal and the job evidence three stages downstream; a selector
+            // that turned it off to save time would silently remove the input
+            // those stages are built on. `mode` anchors the row shape the
+            // normalizer expects. `enrichEmails` is refused by the compiler and
+            // forbidden by this architecture outright.
+            mode: "companies" as const,
             scrapeOpenJobs: true,
             scrapeFounderDetails: false,
             enrichEmails: false,
-            maxItems: maxCandidates,
           });
           for (const r of await callProvider(cap, provider, compiled)) {
             const c = normalizeMemo23Company(r);
@@ -1741,7 +1847,9 @@ export async function runCapabilityPlan(
           // task 80501967-…-1b7db0ad46e7 — even though memo23's input was
           // perfectly valid and its run had started. A fallback nobody
           // configured is skipped, and says so.
-          if ((opts.solidcodeTeamSizes ?? []).length === 0) {
+          const bands = (sel.input.teamSize as string[] | undefined)
+            ?? opts.solidcodeTeamSizes ?? [];
+          if (bands.length === 0) {
             state.provider_attempts.push({
               capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
               rows: 0, cost_units: 0,
@@ -1749,14 +1857,55 @@ export async function runCapabilityPlan(
             });
             continue;
           }
+          // The fan-out supplies `teamSize` once per band, so it must not also
+          // appear on the base input the bands are spread over.
+          const { teamSize: _bandsAreFannedOut, ...solidcodeBase } = sel.input;
           for (const compiled of fanOutSolidcodeTeamSizes(
-            { regions: ["United States of America"], industries: ["B2B"], isHiring: true,
-              includeJobs: true, includeFounders: false, maxResults: maxCandidates },
-            opts.solidcodeTeamSizes ?? [],
+            {
+              regions: ["United States of America"], industries: ["B2B"],
+              maxResults: maxCandidates,
+              ...solidcodeBase,
+              isHiring: true, includeJobs: true, includeFounders: false,
+            },
+            bands,
           )) {
             for (const r of await callProvider(cap, provider, compiled)) {
               addCompany(companies, normalizeSolidcodeCompany(r), []);
             }
+          }
+        } else if (provider === "apify_linkedin_company_search") {
+          // BREADTH BEYOND Y COMBINATOR — the reason this stage was rebuilt.
+          //
+          // This Actor matches company NAMES, not concepts, and reports a
+          // concept query as a successful empty run, so the cost is real and
+          // the failure silent. `compileHarvestCompanySearchInput` refuses the
+          // unusable shapes; a selection with no query at all never reaches it.
+          const query = typeof sel.input.searchQuery === "string"
+            ? sel.input.searchQuery
+            : null;
+          if (!query) {
+            state.provider_attempts.push({
+              capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
+              rows: 0, cost_units: 0,
+              reason: "the strategy named this actor without a searchQuery; a query-less company search returns nothing at full price",
+            });
+            continue;
+          }
+          const compiled = compileHarvestCompanySearchInput({
+            maxItems: maxCandidates,
+            ...sel.input,
+            searchQuery: query,
+            // `full` is required: `short` returns employeeCount === null, and an
+            // unverifiable size cannot settle an employee-ceiling gate.
+            scraperMode: "full",
+          });
+          for (const r of await callProvider(cap, provider, compiled)) {
+            // DEDUPED BY `addCompany` against everything the earlier actors
+            // returned — it keys on LinkedIn URL then domain, so a company YC
+            // and LinkedIn both surface is one row, identified and enriched
+            // once. This is the diagram's "deduplication is global across all
+            // actors", and it needed no new machinery.
+            addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
           }
         }
         // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
@@ -1796,7 +1945,20 @@ export async function runCapabilityPlan(
             `provider_input_validation_failed: ${invalid.map((a) => `${a.provider}: ${a.reason}`).join(" | ")}`);
           break;
         }
-        const ex = onCapabilityExhausted(opts.plan, cap, tried);
+        // EXHAUSTION IS MEASURED AGAINST THE STRATEGY, NOT THE PERMISSION LIST.
+        //
+        // `CAPABILITY_REGISTRY` says which actors this capability MAY use; the
+        // strategy says which it WILL, for this mission. A provider the
+        // strategy declined is not a fallback sitting unused — and counting it
+        // as one made a failed run report `apify_linkedin_company_search has
+        // not been tried` about an actor the plan never contained, turning a
+        // genuinely exhausted capability into one that looked recoverable.
+        //
+        // Escalating to an unselected provider here would also be exactly the
+        // thing these guards exist to stop: spending on an actor outside the
+        // plan because the plan came back empty.
+        const declined = step.providers.filter((p) => !strategyKeys.includes(p));
+        const ex = onCapabilityExhausted(opts.plan, cap, [...tried, ...declined]);
         state.terminal_reason = ex.reason;
         state.fallback_reason = ex.status === "exhausted" ? "approved_providers_exhausted" : null;
         finish(cap, "exhausted", 0, used, false, ex.reason);
@@ -3800,8 +3962,24 @@ export function applyPrequalification(
   // be paid for — but it counted as an account found and would have reached
   // persistence, which is how Y Combinator's own page once became a qualified
   // lead. A row with no name and no website is not a prospect.
+  //
+  // BUT UNSCORED IS NOT THE SAME AS REFUSED.
+  //
+  // `prequalifyYcCompanies` reads the raw memo23 rows and nothing else, so a
+  // company discovered by any OTHER actor has no `prequal_key` and can never
+  // gain a `prequalified` verdict. While memo23 was the only source those two
+  // states were indistinguishable and this loop was right. With a second
+  // discovery actor they are opposites: a LinkedIn candidate is unscored
+  // because this pass does not know how to score it, not because it is junk —
+  // and splicing it here silently deleted every row the breadth source paid to
+  // find, leaving a run that widened its search and then investigated exactly
+  // the same YC companies as before.
+  //
+  // A company prequalification never saw is a company it has not rejected.
   for (let i = companies.length - 1; i >= 0; i--) {
-    if (companies[i].prequalified === null) companies.splice(i, 1);
+    const c = companies[i];
+    if (c.prequal_key === null) continue;
+    if (c.prequalified === null) companies.splice(i, 1);
   }
 
   state.prequalification = {

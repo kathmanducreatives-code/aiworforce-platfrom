@@ -1,0 +1,321 @@
+// WHY THIS FILE EXISTS.
+//
+// Discovery used to iterate `step.providers` — a frozen pair, memo23 then
+// solidcode — and build memo23's input from a literal written into the engine:
+// `industries: ["B2B"], batch: ["All Batches"], isHiring: true`. Every mission
+// this workflow ever ran asked that same question. "AI startups hiring software
+// engineers" and "manufacturers adopting automation" both fetched the same Y
+// Combinator page, and qualification was left to discard the mismatch.
+//
+// `leadDiscoveryStrategy` now decides, from the request. These tests cover the
+// WIRING — that the strategy reaches the provider calls — and the two
+// properties that make handing actor choice to a model safe to ship:
+//
+//   * with no selector wired, or a broken one, discovery does exactly what it
+//     did before, so the floor of the change is the previous behaviour; and
+//   * the fields the downstream stages depend on are not the strategy's to
+//     change, however plausibly it asks.
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
+import type { LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
+import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { runCapabilityPlan } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
+import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+
+const CANONICAL =
+  "Find AI startups in the United States hiring software engineers. " +
+  "Return 10 qualified leads.";
+
+const mission = (): LeadMissionV1 => {
+  const m = parseLeadMissionDeterministic(CANONICAL);
+  return {
+    ...m, requested_count: 10,
+    company_profile: { ...m.company_profile, employee_range: { min: 10, max: 500 } },
+  };
+};
+
+const BRAIN = {
+  employee_min: 10, employee_max: 500,
+  positive_industries: ["b2b saas"], excluded_industries: [] as string[],
+  required_geography: null,
+};
+
+const ycRow = (i: number) => ({
+  name: `Acme${i}`, website: `https://acme${i}.com`, teamSize: 40,
+  batch: "W20", industries: ["B2B"], id: `acme${i}`,
+  oneLiner: "B2B SaaS platform sold on subscription.",
+  openJobs: [{ title: "Backend Engineer" }],
+});
+
+const linkedInRow = (i: number) => ({
+  id: `li-${i}`, name: `Beta${i}`,
+  linkedinUrl: `https://www.linkedin.com/company/beta${i}`,
+  website: `https://beta${i}.com`, employeeCount: 44,
+  description: `Beta${i} is a B2B SaaS platform sold on subscription.`,
+});
+
+interface Seen { actorKey: string; input: Record<string, unknown> }
+
+/**
+ * DISCOVERY calls only, taken from the capability-tagged record.
+ *
+ * Filtering the raw call log by actor key is wrong: `apify_linkedin_company_search`
+ * is ALSO how `company_identity_resolution` resolves a company, so a key filter
+ * counted six identity lookups as discovery. `provider_attempts` carries the
+ * capability, which is the only thing that distinguishes the two uses.
+ */
+const discoveryProviders = (state: Record<string, unknown>): string[] =>
+  (state.provider_attempts as Array<Record<string, unknown>>)
+    .filter((a) => a.capability === "startup_company_discovery" &&
+      a.outcome !== "skipped_not_configured")
+    .map((a) => String(a.provider));
+
+/** Run the plan, recording every provider call the engine actually made. */
+const run = async (o: {
+  planDiscovery?: (i: unknown) => Promise<unknown>;
+  solidcodeTeamSizes?: string[];
+}) => {
+  const seen: Seen[] = [];
+  const result = await runCapabilityPlan({
+    invoke: (call: CompiledActorCall<unknown>) => {
+      seen.push({
+        actorKey: call.actorKey,
+        input: (call as unknown as { input: Record<string, unknown> }).input ?? {},
+      });
+      if (call.actorKey === "apify_yc_companies_memo23") {
+        return Promise.resolve(
+          Array.from({ length: 6 }, (_, i) => ycRow(i)) as Record<string, unknown>[],
+        );
+      }
+      if (call.actorKey === "apify_yc_companies_solidcode") {
+        return Promise.resolve([] as Record<string, unknown>[]);
+      }
+      if (call.actorKey === "apify_linkedin_company_search") {
+        return Promise.resolve(
+          Array.from({ length: 4 }, (_, i) => linkedInRow(i)) as Record<string, unknown>[],
+        );
+      }
+      // Identity resolution and everything downstream.
+      return Promise.resolve(
+        Array.from({ length: 6 }, (_, i) => ({
+          companyName: `Acme${i}`,
+          linkedinUrl: `https://www.linkedin.com/company/acme${i}`,
+          website: `https://acme${i}.com`, employeeCount: 42,
+          description: `Acme${i} is a B2B SaaS platform sold on subscription.`,
+        })) as Record<string, unknown>[],
+      );
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+    evaluateMission: stubMissionEvaluator({ mission_fit: "pass" }),
+    ...(o.planDiscovery ? { planDiscovery: o.planDiscovery } : {}),
+  } as never, {
+    mission: mission(), plan: buildCapabilityGraph(mission()), brain: BRAIN,
+    maxCandidates: 60, readEnv: () => undefined,
+    ...(o.solidcodeTeamSizes ? { solidcodeTeamSizes: o.solidcodeTeamSizes } : {}),
+  } as never);
+  return { seen, result: result as unknown as { state: Record<string, unknown> } };
+};
+
+/** The INPUT a discovery call was made with, for the actors we assert on. */
+const discoveryInput = (seen: Seen[], actorKey: string): Record<string, unknown> | null =>
+  seen.find((s) => s.actorKey === actorKey)?.input ?? null;
+
+Deno.test("1. with no selector wired, discovery is exactly what it was", async () => {
+  // THE FLOOR. A deployment that never wires `planDiscovery` must behave as it
+  // does today — same actor, same input — or this change is not safe to ship
+  // ahead of the selector being switched on.
+  const { seen, result } = await run({});
+
+  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"],
+    "memo23 alone; solidcode is fallback-only and memo23 returned rows");
+  const input = discoveryInput(seen, "apify_yc_companies_memo23")!;
+  assertEquals(input.mode, "companies");
+  assertEquals(input.industries, ["B2B"]);
+  assertEquals(input.batch, ["All Batches"]);
+  assertEquals(input.isHiring, true);
+  assertEquals(input.scrapeOpenJobs, true);
+  assertEquals(input.enrichEmails, false);
+});
+
+Deno.test("2. the strategy reaches the provider calls", async () => {
+  // The wiring itself: an actor the frozen pair never contained is now called,
+  // with the query the selector chose.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve({
+      actors: [
+        { actor_key: "apify_yc_companies_memo23", role: "primary", input: { industries: ["B2B"] } },
+        {
+          actor_key: "apify_linkedin_company_search", role: "breadth",
+          input: { searchQuery: "Anthropic" },
+        },
+      ],
+    }),
+  });
+
+  assert(discoveryProviders(result.state).includes("apify_linkedin_company_search"),
+    "an actor outside the frozen pair must actually run, as DISCOVERY");
+  const li = discoveryInput(seen, "apify_linkedin_company_search")!;
+  assertEquals(li.searchQuery, "Anthropic", "the selector's query must reach the call");
+});
+
+Deno.test("3. rows from every actor land in ONE deduplicated pool", async () => {
+  // The diagram's "deduplication is global across all actors". `addCompany`
+  // keys on LinkedIn URL then domain, so the union needed no new machinery —
+  // but nothing proved the union actually happened until now.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      {
+        actor_key: "apify_linkedin_company_search", role: "breadth",
+        input: { searchQuery: "Anthropic" },
+      },
+    ]),
+  });
+
+  assertEquals(discoveryProviders(result.state).length, 2);
+  const keys = result.state.company_keys as string[];
+  // Six distinct YC companies plus four distinct LinkedIn ones, none shared.
+  assertEquals(keys.length, 10);
+  assertEquals(new Set(keys).size, keys.length, "the pool must carry no duplicate key");
+});
+
+Deno.test("4. a selector that throws still discovers", async () => {
+  // A selector being unavailable is not a reason to stop discovering. Every
+  // failure path lands on the deterministic strategy.
+  const { result } = await run({
+    planDiscovery: () => Promise.reject(new Error("model timeout")),
+  });
+  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"]);
+});
+
+Deno.test("5. a selector returning nonsense still discovers", async () => {
+  for (const junk of [null, {}, { actors: "everything" }, [{ actor_key: "apify/invented" }]]) {
+    const { result } = await run({ planDiscovery: () => Promise.resolve(junk) });
+    const providers = discoveryProviders(result.state);
+    assert(providers.length >= 1, `must still discover for ${JSON.stringify(junk)}`);
+    assertEquals(providers[0], "apify_yc_companies_memo23");
+  }
+});
+
+Deno.test("6. the evidence-bearing fields are not the strategy's to change", async () => {
+  // `scrapeOpenJobs` feeds the free prequalification pass, the hiring signal
+  // and the job evidence three stages downstream. A selector could plausibly
+  // turn it off to make the run cheaper and faster, and the run would then
+  // report a discovered pool whose companies can never prove they are hiring.
+  // `mode` anchors the row shape the normalizer expects.
+  const { seen } = await run({
+    planDiscovery: () => Promise.resolve([{
+      actor_key: "apify_yc_companies_memo23", role: "primary",
+      input: { mode: "jobs", scrapeOpenJobs: false, scrapeFounderDetails: true },
+    }]),
+  });
+
+  const memo = discoveryInput(seen, "apify_yc_companies_memo23")!;
+  assertEquals(memo.scrapeOpenJobs, true, "open jobs are downstream evidence, not an option");
+  assertEquals(memo.mode, "companies");
+  assertEquals(memo.scrapeFounderDetails, false);
+});
+
+Deno.test("7. an actor the catalog does not permit never becomes a call", async () => {
+  // The closed catalog, proven at the point where money is spent rather than
+  // only in the strategy module's own unit tests.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_linkedin_company_details", role: "primary", input: {} },
+      { actor_key: "apify/some-scraper", role: "breadth", input: {} },
+    ]),
+  });
+
+  assertEquals(seen.some((s) => s.actorKey === "apify/some-scraper"), false);
+  // company_details is a real, callable actor — for ENRICHMENT. It must not be
+  // called by DISCOVERY, and the run falls back rather than using it.
+  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"]);
+});
+
+Deno.test("8. a company search named without a query is skipped, not called", async () => {
+  // This Actor matches company NAMES and reports a query-less or conceptual
+  // search as a successful empty run — the cost is real and the failure silent.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      { actor_key: "apify_linkedin_company_search", role: "breadth", input: {} },
+    ]),
+  });
+
+  assertEquals(
+    discoveryProviders(result.state).includes("apify_linkedin_company_search"), false,
+    "no query means no paid discovery call",
+  );
+  const attempts = result.state.provider_attempts as Array<Record<string, unknown>>;
+  assert(
+    attempts.some((a) =>
+      a.provider === "apify_linkedin_company_search" && a.outcome === "skipped_not_configured"),
+    "and the skip must be recorded rather than silent",
+  );
+});
+
+Deno.test("9. breadth does not run once the pool is already big enough", async () => {
+  // Widening a pool that already satisfies the request is spend with nothing to
+  // buy. `maxCandidates` is 60 here and memo23 returns 6, so breadth SHOULD
+  // run; the negative case is covered by the strategy module's unit tests.
+  const { result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      {
+        actor_key: "apify_linkedin_company_search", role: "breadth",
+        input: { searchQuery: "Anthropic" },
+      },
+    ]),
+  });
+  assertEquals(discoveryProviders(result.state).length, 2, "6 of 60 is not a full pool");
+});
+
+Deno.test("10. a fallback stays silent while the primary is producing", async () => {
+  // The old solidcode special-case, now the contract for any actor carrying the
+  // role — and the reason a fallback is not simply a second source.
+  const { result } = await run({
+    solidcodeTeamSizes: ["11-50"],
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      { actor_key: "apify_yc_companies_solidcode", role: "fallback", input: {} },
+    ]),
+  });
+  assertEquals(
+    discoveryProviders(result.state).includes("apify_yc_companies_solidcode"), false,
+    "memo23 returned rows, so the fallback must not spend",
+  );
+});
+
+Deno.test("11. the run records which actors were chosen and how", async () => {
+  // The one record that answers "was this pool built for THIS request?" after
+  // the fact. Field names only — the payload must not ride into every persisted
+  // task result, which is what made `tasks.result` a megabyte.
+  const { result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      {
+        actor_key: "apify_linkedin_company_search", role: "breadth",
+        input: { searchQuery: "Anthropic", bogusFilter: 1 },
+      },
+    ]),
+  });
+
+  const d = result.state.discovery_strategy as Record<string, unknown>;
+  assert(d, "the strategy must be recorded on the execution state");
+  assertEquals(d.source, "model_repaired", "the bogus filter was dropped");
+  const actors = d.actors as Array<Record<string, unknown>>;
+  assertEquals(actors.length, 2);
+  for (const a of actors) {
+    assert(Array.isArray(a.input_fields));
+    assertEquals("input" in a, false, "field names, never the payload");
+  }
+});
+
+Deno.test("12. the deterministic path records itself as such", async () => {
+  const { result } = await run({});
+  const d = result.state.discovery_strategy as Record<string, unknown>;
+  assertEquals(d.source, "deterministic_fallback");
+  assertEquals(d.all_require_enrichment, true,
+    "every discovery actor needs enrichment; the record must say so");
+});

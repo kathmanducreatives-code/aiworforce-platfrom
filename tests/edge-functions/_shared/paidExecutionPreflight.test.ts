@@ -97,9 +97,22 @@ Deno.test("2. a wrong first provider hard-fails before any credit is spent", () 
     assertFalse(p.ok, `${wrong} must not be an acceptable first provider`);
     const err = assertThrows(
       () => assertPaidExecutionAllowed(p), PaidExecutionBlockedError, wrong);
-    // It is refused for BOTH reasons: not in the capability, and not memo23.
+    // It is refused for BOTH reasons: it may not open this capability, and it
+    // is not memo23.
+    //
+    // `apify_linkedin_company_search` is now DECLARED for
+    // startup_company_discovery as a breadth source, so "not in the capability"
+    // no longer fires for it. `provider_not_capability_primary` is what refuses
+    // it here, and refuses it for the reason that matters: a breadth or
+    // fallback source may not be the FIRST paid call. Membership stopped being
+    // sufficient the moment a capability declared more than primary+fallback.
     const codes = p.blocked.map((b) => b.code);
-    assert(codes.includes("provider_not_in_capability") || codes.includes("provider_not_in_plan"));
+    assert(
+      codes.includes("provider_not_in_capability") ||
+      codes.includes("provider_not_capability_primary") ||
+      codes.includes("provider_not_in_plan"),
+      `${wrong} must be refused as an opening call: ${codes.join(", ")}`,
+    );
     assert(codes.includes("startup_mission_requires_memo23"));
     assert(err instanceof PaidExecutionBlockedError);
   }
