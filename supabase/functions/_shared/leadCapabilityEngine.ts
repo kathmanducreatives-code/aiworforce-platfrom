@@ -1768,7 +1768,7 @@ export async function runCapabilityPlan(
         if (compileFailedFor(provider)) { schemaFailure = true; break; }
         if (pendingFor(provider)) { runPending = true; break; }
       }
-      state.company_keys = companies.map((c) => c.key);
+      // `state.company_keys` is DERIVED once, at the return. See the note there.
 
       if (companies.length === 0 && runPending) {
         // PENDING, NOT EXHAUSTED. The capability stays incomplete and unspent-on;
@@ -1817,7 +1817,7 @@ export async function runCapabilityPlan(
         max: opts.brain?.employee_max ?? null,
       }, qualificationCtx);
       // The working set may have shrunk — artifacts are gone.
-      state.company_keys = companies.map((c) => c.key);
+      // `state.company_keys` is DERIVED once, at the return. See the note there.
       log("prequalification_complete", {
         unique: state.prequalification?.unique_companies,
         eligible: state.prequalification?.eligible_companies,
@@ -1894,7 +1894,7 @@ export async function runCapabilityPlan(
           found++;
         }
       }
-      state.company_keys = companies.map((c) => c.key);
+      // `state.company_keys` is DERIVED once, at the return. See the note there.
       if (companies.length === 0) {
         const invalid = state.provider_attempts.filter(
           (a) => a.capability === cap && a.outcome === "compile_failed");
@@ -3387,6 +3387,31 @@ export async function runCapabilityPlan(
       shortfall: pool.delivery.metrics.shortfall,
     });
   }
+
+  // ══ ONE SOURCE OF TRUTH FOR "WHICH COMPANIES THIS RUN HOLDS" ═════════════
+  //
+  // `companies` — the working set — is the only authority. `state.company_keys`
+  // is a PROJECTION of it and is derived here, immediately before the state and
+  // the resume records leave this function together.
+  //
+  // ── THE DIVERGENCE THIS ENDS ────────────────────────────────────────────
+  //
+  // `company_keys` used to be assigned in three places, all inside the
+  // discovery path. A continuation SKIPS discovery, so on task 528c2266 the
+  // field kept the 100 keys it was restored with while the working set restored
+  // EMPTY — and nothing reconciled the two. The run then persisted both halves
+  // faithfully, from two different writers:
+  //
+  //   lead_resume_checkpoint.companies   ← derived from `companies`   → 0
+  //   capability_execution_state.company_keys ← carried on `state`    → 100
+  //
+  // A row claiming a hundred companies and holding none is not a state any
+  // slice can act on, and the next continuation read it as "everything has been
+  // investigated": qualified 1 → 0, and the 83-company frontier was destroyed.
+  //
+  // Deriving it makes the two physically incapable of disagreeing, whatever
+  // path the run took to get here.
+  state.company_keys = companies.map((c) => c.key);
 
   return {
     state,

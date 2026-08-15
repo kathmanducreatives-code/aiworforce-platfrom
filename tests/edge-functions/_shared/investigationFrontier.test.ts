@@ -423,3 +423,53 @@ Deno.test("C4. a PASS-CEILING stop is carried too — the ceiling is per invocat
         `${cap} must be pending — the ceiling is not a finding about the pool`);
     }
   });
+
+// ═════════ S1-S3. ONE SOURCE OF TRUTH FOR THE WORKING SET ══
+//
+// Task 528c2266. The parent discovered 100 companies, qualified one and left 83
+// on the frontier. Its continuation restored an EMPTY working set — and the row
+// it wrote said both of these at once:
+//
+//     lead_resume_checkpoint.companies         0     ← from `companies`
+//     capability_execution_state.company_keys  100   ← carried on `state`
+//
+// `company_keys` was assigned in three places, all inside the DISCOVERY path. A
+// continuation skips discovery, so the field kept the value it was restored
+// with while the working set did not. The next slice read that row as "all 100
+// investigated, nothing left", and the frontier — the thing that made the run
+// resumable — was gone. Qualified went 1 → 0.
+//
+// `companies` is now the only authority and `company_keys` is derived from it
+// at the return, so the two cannot disagree however the run got there.
+
+Deno.test("S1. company_keys always equals the working set", async () => {
+  const run = await runPool({ qualifyEvery: 4, budgetMs: 120_000 });
+  assertEquals(run.state.company_keys.length, run.companies.length);
+  assertEquals(
+    [...run.state.company_keys].sort(),
+    run.companies.map((c) => c.key).sort(),
+    "the projection must name exactly the companies the run holds");
+});
+
+Deno.test("S2. and it agrees with the resume records the checkpoint is built from",
+  async () => {
+    // These are the two halves that diverged on the live run. They are derived
+    // from the same array one line apart, so this is now structural.
+    const run = await runPool({ qualifyEvery: 4, budgetMs: 120_000 });
+    assertEquals(
+      run.state.company_keys.length, run.resume_records.length,
+      "checkpoint records and state keys must describe the same set");
+    assertEquals(
+      [...run.state.company_keys].sort(),
+      run.resume_records.map((r) => r.company_key).sort());
+  });
+
+Deno.test("S3. a continuation that restores nothing reports nothing — not 100", async () => {
+  // THE EXACT SHAPE OF THE BUG: state carrying keys the working set does not
+  // have. Given an empty resume set the engine rediscovers, but the invariant
+  // that matters is that the two halves still agree afterwards — a run can
+  // never again claim companies it is not holding.
+  const run = await runPool({ qualifyEvery: 4, budgetMs: 120_000, resume: [] });
+  assertEquals(run.state.company_keys.length, run.companies.length);
+  assertEquals(run.state.company_keys.length, run.resume_records.length);
+});
