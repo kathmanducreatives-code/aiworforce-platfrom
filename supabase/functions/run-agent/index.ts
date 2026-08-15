@@ -2021,6 +2021,56 @@ Deno.serve(async (req) => {
         const resumeLoad = await loadLeadResumeRecords(
           supabase as never, leadResumeParentTaskId, workspace_id);
         const leadResumeRecords = resumeLoad.records;
+
+        // ══ A CONTINUATION THAT RESTORED NOTHING MUST NOT PROCEED ═══════════
+        //
+        // ARCHITECTURE: "Results are monotonic and cannot regress" and "once
+        // qualified, a company cannot be unqualified by later slices."
+        //
+        // Task 528c2266 broke both. The parent discovered 100 companies,
+        // qualified one and left 83 on the frontier. Its continuation loaded
+        // ZERO checkpoint records, skipped discovery as already-complete, and
+        // so ran with an EMPTY working set — finishing in 0.3s. It then wrote
+        // that emptiness over the parent: `qualified` 1 → 0, the funnel 100 → 0,
+        // and the checkpoint's own company list 100 → 0, destroying the
+        // frontier that made the run resumable.
+        //
+        // The row itself carries the contradiction: `capability_execution_state`
+        // still listed 100 `company_keys` while `lead_resume_checkpoint`
+        // listed none. That combination is never legitimate — a run cannot have
+        // investigated a hundred companies and hold zero — so it is refused
+        // here, before anything is written.
+        //
+        // Refusing costs one slice. Proceeding costs the whole run's results.
+        if (resume_task_id && leadResumeRecords.length === 0) {
+          const priorState = readCapabilityExecutionState(resumedTaskResult);
+          const priorKeys = priorState?.company_keys?.length ?? 0;
+          if (priorKeys > 0) {
+            console.error("[run-agent][continuation-restore-empty] refusing to overwrite", {
+              task_id: task.id,
+              expected_companies: priorKeys,
+              restored_records: 0,
+              rejection: resumeLoad.rejection,
+            });
+            if (heldClaim?.viaRpc) {
+              await releaseContinuationViaRpc({
+                db: supabase as unknown as RpcDb,
+                taskId: task.id, workspaceId: workspace_id,
+                claimId: heldClaim.claimId, rowStatus: RESUMABLE_ROW_STATUS,
+              });
+            }
+            return json({
+              success: false,
+              error: "continuation_restore_empty",
+              reason: "checkpoint_records_missing",
+              message:
+                `The continuation could not restore the ${priorKeys} companies this ` +
+                `run already holds, so it stopped rather than overwrite them. The ` +
+                `previous slice's results and checkpoint are unchanged.`,
+              task_id: task.id,
+            }, 409);
+          }
+        }
         console.log("[run-agent][resume][loaded]", {
           task_id: task.id,
           parent_task_id: leadResumeParentTaskId,

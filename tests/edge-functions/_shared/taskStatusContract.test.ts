@@ -382,3 +382,29 @@ Deno.test("WIRING: a refused continuation preserves the previous slice", async (
   // And it hands the lease back, so the run stays resumable.
   assertStringIncludes(src, "rowStatus: RESUMABLE_ROW_STATUS,");
 });
+
+Deno.test("WIRING: a continuation that restored nothing refuses to overwrite", async () => {
+  // ARCHITECTURE: results are monotonic; a company qualified by one slice
+  // cannot be unqualified by a later one.
+  //
+  // Task 528c2266 broke both. The parent discovered 100 companies, qualified
+  // one, and left 83 on the frontier. Its continuation loaded zero checkpoint
+  // records, skipped discovery as already-complete, ran with an EMPTY working
+  // set, finished in 0.3s, and wrote that emptiness over the parent —
+  // `qualified` 1 → 0, funnel 100 → 0, and the checkpoint's own company list
+  // 100 → 0, destroying the frontier that made the run resumable.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assertStringIncludes(src, '"[run-agent][continuation-restore-empty] refusing to overwrite"');
+  assertStringIncludes(src, 'error: "continuation_restore_empty"');
+  // The contradiction it keys on: state says companies exist, checkpoint has none.
+  assertStringIncludes(src, "priorState?.company_keys?.length ?? 0");
+  assertStringIncludes(src, "if (resume_task_id && leadResumeRecords.length === 0)");
+  // It returns BEFORE the engine runs, so nothing can be written.
+  const guardAt = src.indexOf("continuation-restore-empty");
+  const engineAt = src.indexOf("await runCapabilityPlan(");
+  assert(guardAt > 0 && engineAt > 0 && guardAt < engineAt,
+    "the guard must refuse before the engine executes");
+  // And it hands the lease back so the run stays resumable.
+  assertStringIncludes(src, "rowStatus: RESUMABLE_ROW_STATUS,");
+});
