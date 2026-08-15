@@ -184,6 +184,9 @@ Deno.test("11. the ceilings are configurable and capped", () => {
 
 const deps = (over: Record<string, unknown> = {}) => ({
   fetch: () => Promise.resolve({ status: 202 }),
+  // Deterministic: tests never sleep, and the window is explicit.
+  handoffWindowMs: 50,
+  wait: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
   functionsBaseUrl: "https://proj.supabase.co/functions/v1",
   serviceRoleKey: "service-key",
   ...over,
@@ -564,4 +567,53 @@ Deno.test("25. a slice that resumed nothing is BARREN and eventually stops the j
   assertFalse(d.continue);
   assertEquals(d.reason, "no_progress",
     "a chain that is not advancing must stop paying, even though the frontier looks full");
+});
+
+
+// ═════════ 26-28. THE PARENT MUST NOT WAIT FOR ITS CHILD ══
+//
+// Task b4eb3710: three slices ran and NOT ONE returned. `terminalGuard`'s
+// `finally` never executed, so no task and no plan was ever finalised — the
+// plan sat at `executing` and the Workbench polled it until the database
+// buckled, which is what made chats slow too.
+//
+// The dispatcher's own header said the parent must never await its child.
+// `await fetch(...)` does exactly that: it resolves when the RESPONSE HEADERS
+// arrive, and `run-agent` does not stream, so that is when the successor has
+// FINISHED. Each parent sat through its child's whole run and was killed at its
+// own wall clock first.
+
+Deno.test("26. a slow successor does NOT hold the parent open", async () => {
+  // The successor takes far longer than the handoff window — as a real slice
+  // does, by minutes.
+  const started = Date.now();
+  const out = await dispatchContinuation(REQ, deps({
+    handoffWindowMs: 20,
+    fetch: () => new Promise((r) => setTimeout(() => r({ status: 200 }), 5_000)),
+  }));
+  assert(out.dispatched, "the handoff counts as made");
+  assert(Date.now() - started < 2_000,
+    "the parent must return in the handoff window, not in the child's runtime");
+});
+
+Deno.test("27. a REFUSAL still arrives inside the window and is still a stop", async () => {
+  // Refusals come back in milliseconds, which is why the race keeps them
+  // legible rather than trading them away for the fix.
+  for (const status of [400, 409, 422]) {
+    const out = await dispatchContinuation(REQ, deps({
+      handoffWindowMs: 200,
+      fetch: () => Promise.resolve({ status }),
+    }));
+    assertFalse(out.dispatched, `HTTP ${status} must still be caught`);
+    assertEquals(out.dispatched === false ? out.reason : null, "rejected");
+  }
+});
+
+Deno.test("28. a transport failure inside the window is still a failure", async () => {
+  const out = await dispatchContinuation(REQ, deps({
+    handoffWindowMs: 200,
+    fetch: () => Promise.reject(new Error("connection reset")),
+  }));
+  assertFalse(out.dispatched);
+  assertEquals(out.dispatched === false ? out.reason : null, "transport_error");
 });

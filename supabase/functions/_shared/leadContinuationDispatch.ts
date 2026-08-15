@@ -24,6 +24,26 @@
 // clock — taking the whole chain with it and, worse, killing it mid-write. Each
 // slice therefore ends cleanly and independently, and the chain is held together
 // by the checkpoint rather than by a call stack.
+//
+// ── AND WHY THAT NEEDS A RACE, NOT JUST A COMMENT ────────────────────────────
+//
+// The first implementation stated the rule above and then broke it, because
+// `await fetch(...)` resolves when the RESPONSE HEADERS arrive — and `run-agent`
+// does not stream, so that is when the successor has FINISHED. The parent sat
+// waiting through its child's entire ~2 minute run and was killed at its own
+// wall clock first.
+//
+// Task b4eb3710 is what that looked like: three slices ran, and not one of them
+// ever returned. `terminalGuard`'s `finally` never executed, so no task or plan
+// was ever finalised — the plan sat at `executing` and the Workbench polled it
+// until the database buckled.
+//
+// So the request is raced against a short timer. A REFUSAL (400, 409, 422)
+// comes back in milliseconds and the race reports it, which is what keeps the
+// failure legible. A successful slice takes minutes, so the timer wins, the
+// parent records the handoff and exits cleanly — and the successor carries on
+// in its own isolate, which is the entire point.
+export const HANDOFF_WINDOW_MS = 2_000;
 
 export const CONTINUATION_DISPATCH_VERSION = "lead-continuation-dispatch-v1" as const;
 
@@ -74,6 +94,13 @@ export type DispatchOutcome =
 export interface DispatchDeps {
   /** Injected so tests exercise every branch without a network. */
   fetch: (url: string, init: RequestInit) => Promise<{ status: number }>;
+  /**
+   * How long to wait for a REFUSAL before treating the handoff as accepted.
+   * Injected so tests need no real timers. See `HANDOFF_WINDOW_MS`.
+   */
+  handoffWindowMs?: number;
+  /** Injected wait, so a test never actually sleeps. */
+  wait?: (ms: number) => Promise<void>;
   functionsBaseUrl: string | null;
   serviceRoleKey: string | null;
   log?: (msg: string, meta?: unknown) => void;
@@ -90,6 +117,26 @@ export interface DispatchDeps {
  * NEVER AWAITED BY THE CALLER for its result beyond the handoff. This resolves
  * as soon as the platform has accepted the request.
  */
+/**
+ * Resolve as soon as EITHER the request comes back or the window elapses.
+ *
+ * A rejection still surfaces — a transport error inside the window is a real
+ * failure and belongs to the caller's `catch`.
+ */
+async function raceHandoff(
+  deps: DispatchDeps, call: Promise<{ status: number }>,
+): Promise<{ status: number } | "handed_off"> {
+  const ms = deps.handoffWindowMs ?? HANDOFF_WINDOW_MS;
+  const wait = deps.wait ?? ((n: number) => new Promise<void>((r) => setTimeout(r, n)));
+  // The unresolved call must not become an unhandled rejection when the timer
+  // wins; the successor owns its own outcome from here.
+  const guarded = call.catch((e) => { throw e; });
+  return await Promise.race([
+    guarded,
+    wait(ms).then(() => "handed_off" as const),
+  ]);
+}
+
 export async function dispatchContinuation(
   req: DispatchRequest, deps: DispatchDeps,
 ): Promise<DispatchOutcome> {
@@ -108,7 +155,7 @@ export async function dispatchContinuation(
 
   const url = `${deps.functionsBaseUrl.replace(/\/+$/, "")}/run-agent`;
   try {
-    const res = await deps.fetch(url, {
+    const res = await raceHandoff(deps, deps.fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -139,7 +186,18 @@ export async function dispatchContinuation(
         auto_continuation: true,
         continuation_index: req.continuationIndex,
       }),
-    });
+    }));
+
+    // THE TIMER WON. The successor is running in its own isolate and this one
+    // must not wait for it — see the header. Recorded as accepted, because the
+    // request was sent and nothing refused it inside the window.
+    if (res === "handed_off") {
+      log("continuation_dispatched", {
+        task_id: req.resumeTaskId, index: req.continuationIndex,
+        status: null, handed_off: true,
+      });
+      return { dispatched: true, status: 202 };
+    }
 
     // A 4xx IS A REFUSAL, NOT A HANDOFF.
     //
