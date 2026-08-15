@@ -9,8 +9,8 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   LINKEDIN_RESOLUTION_CONCURRENCY, acceptLinkedInMatch, classifyJobTitle,
-  linkedInSearchQueryFor, normalizeDomain, prequalifyYcCompanies,
-  type YcCompanyInput,
+  linkedInSearchQueryFor, linkedInSlugToken, normalizeDomain,
+  prequalifyYcCompanies, type YcCompanyInput,
 } from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
 
 const c = (name: string, website: string, teamSize: number | null, jobs: string[]): YcCompanyInput =>
@@ -235,4 +235,118 @@ Deno.test("10. duplicates collapse on domain, not on row count", () => {
     c("Tara", "https://tara.ai/", 13, ["Founding Account Executive"]),
   ], SIZE);
   assertEquals(r.unique_companies, 1, "one company cannot take two shortlist slots");
+});
+
+// ═══════ M1-M6. THE IDENTITY MATCHER, against the run that lost five leads ══
+//
+// Task 9e86eb24: ten identity searches, EIGHT of which returned rows, and only
+// three accepted matches. `provider_attempts` recorded rows of 5,5,5,5,2,5,3,5
+// and two genuine empties — so five paid searches found the company and the
+// matcher threw the answer away.
+//
+// The rule was right: a bare name match is not an identity. The EVIDENCE it
+// accepted was not. Both tests were substrings against prose:
+//
+//   hay.includes("retellai")   — a description writes it "Retell AI"
+//   hay.includes("usesimple")  — cannot appear in prose at all
+//   hay.includes(one_liner.slice(0, 24))
+//                              — 24 verbatim characters shared between a YC
+//                                one-liner and a LinkedIn description
+//
+// `candidate.linkedinUrl` was on the input type and never read, and it is the
+// one independent signal available: the slug is chosen on LinkedIn, the domain
+// comes from YC, and neither is derived from the other.
+
+/** A prequalified company, as the identity stage holds it. */
+const co = (name: string, domain: string, oneLiner = "") => ({
+  name, canonical_domain: domain, one_liner: oneLiner,
+} as never);
+
+Deno.test("M1. THE FIVE THAT WERE LOST: slug and domain agree, so the name stands", () => {
+  // Every pair here is a real company from the run, with the LinkedIn slug it
+  // actually uses. All five were rejected before this change.
+  const cases: Array<[string, string, string]> = [
+    ["Retell AI", "retellai.com", "https://www.linkedin.com/company/retell-ai"],
+    ["Sixtyfour", "sixtyfour.ai", "https://www.linkedin.com/company/sixtyfour"],
+    ["Artisan", "artisan.co", "https://www.linkedin.com/company/artisan"],
+    ["Reacher", "reacherapp.com", "https://www.linkedin.com/company/reacher"],
+    ["idler", "idler.ai", "https://www.linkedin.com/company/idler"],
+  ];
+  for (const [name, domain, linkedinUrl] of cases) {
+    const r = acceptLinkedInMatch(co(name, domain), {
+      name, linkedinUrl, website: null, description: "AI startup", location: "San Francisco, CA",
+    });
+    assert(r.accepted, `${name}: ${r.reason}`);
+    assertEquals(r.strength, "name_plus_evidence");
+  }
+});
+
+Deno.test("M2. the slugs that actually resolved keep resolving", () => {
+  // Taken from `identity_restored_from_resume` on earlier runs — real pairs
+  // where the domain and the slug shorten differently in each direction.
+  const cases: Array<[string, string, string]> = [
+    ["Godela", "godela.ai", "https://www.linkedin.com/company/godela-ai"],   // slug longer
+    ["AgentMail", "agentmail.to", "https://www.linkedin.com/company/agentmailto"],
+    ["Reacher", "reacherapp.com", "https://www.linkedin.com/company/reacher"], // domain longer
+  ];
+  for (const [name, domain, url] of cases) {
+    assert(acceptLinkedInMatch(co(name, domain), { name, linkedinUrl: url }).accepted, name);
+  }
+});
+
+Deno.test("M3. a bare name is STILL not an identity", () => {
+  // The rule this whole gate exists for, unchanged. Same name, a slug that has
+  // nothing to do with our domain.
+  const wrong = acceptLinkedInMatch(co("Apollo", "apollographql.com"), {
+    name: "Apollo", website: "https://apollo.io",
+    linkedinUrl: "https://www.linkedin.com/company/apollo-io",
+    description: "sales intelligence platform", location: "San Francisco, CA",
+  });
+  assertFalse(wrong.accepted, "a different Apollo must not be accepted");
+  assertEquals(wrong.strength, "rejected_weak");
+
+  // And with no corroborating field at all.
+  const bare = acceptLinkedInMatch(co("Magic", "getmagic.com"), { name: "Magic" });
+  assertFalse(bare.accepted);
+});
+
+Deno.test("M4. short tokens are not evidence", () => {
+  // Two-letter TLD-ish fragments must not agree with everything. `co` is also
+  // the reason `tokensAgree` has a floor.
+  assertEquals(linkedInSlugToken("https://www.linkedin.com/company/ai"), "ai");
+  const r = acceptLinkedInMatch(co("Hub", "hub.co"), {
+    name: "Hub", linkedinUrl: "https://www.linkedin.com/company/hub-labs",
+  });
+  assertFalse(r.accepted, "a three-character domain token may not corroborate");
+});
+
+Deno.test("M5. the two genuinely ambiguous ones are still rejected", () => {
+  // HONEST ABOUT THE LIMIT. Where the domain and the LinkedIn name share
+  // nothing, this change does not invent a match — these stay unresolved and
+  // resumable rather than being resolved to a guess.
+  for (const [name, domain, slug] of [
+    ["Simple AI", "usesimple.ai", "simple-ai"],
+    ["David AI", "withdavid.ai", "david-ai"],
+  ] as const) {
+    const r = acceptLinkedInMatch(co(name, domain), {
+      name, linkedinUrl: `https://www.linkedin.com/company/${slug}`,
+    });
+    assertFalse(r.accepted, `${name} has no independent corroboration and must stay unresolved`);
+  }
+});
+
+Deno.test("M6. prose corroboration is compared as tokens, and domain still wins", () => {
+  // "Retell AI" in a description now corroborates the domain `retellai`.
+  const prose = acceptLinkedInMatch(co("Retell AI", "retellai.com"), {
+    name: "Retell AI", linkedinUrl: null,
+    description: "Retell AI builds voice agents", location: "San Francisco",
+  });
+  assert(prose.accepted, prose.reason);
+
+  // An exact domain is still the strongest and is still checked first.
+  const exact = acceptLinkedInMatch(co("Retell AI", "retellai.com"), {
+    name: "Something Else", website: "https://www.retellai.com/",
+  });
+  assert(exact.accepted);
+  assertEquals(exact.strength, "domain_exact");
 });

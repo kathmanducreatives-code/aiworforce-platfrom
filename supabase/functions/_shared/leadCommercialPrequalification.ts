@@ -410,6 +410,39 @@ export type MatchStrength = "domain_exact" | "name_plus_evidence" | "rejected_we
  * would attach a founder from the wrong company, which is worse than returning
  * nothing.
  */
+/**
+ * A comparable identity string: lowercase, alphanumerics only.
+ *
+ * "Retell AI", "retellai.com" and the slug "retell-ai" all reduce to
+ * `retellai`. Comparing raw strings across those three shapes is why a company
+ * could match by every human measure and none of the code's.
+ */
+const identityToken = (v: unknown) => lc(v).replace(/[^a-z0-9]/g, "");
+
+/** The `<slug>` of a `linkedin.com/company/<slug>` URL, tokenised. */
+export function linkedInSlugToken(url: unknown): string {
+  const path = lc(url).replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const m = /\/company\/([^/]+)/.exec(path);
+  return m ? identityToken(m[1]) : "";
+}
+
+/**
+ * Do two identity tokens describe the same company?
+ *
+ * A PREFIX RELATION IN EITHER DIRECTION, because the two sources shorten
+ * differently and neither is authoritative:
+ *
+ *   godela.ai      → `godela`      vs slug `godela-ai`  → `godelaai`
+ *   agentmail.to   → `agentmail`   vs slug `agentmailto`
+ *   reacherapp.com → `reacherapp`  vs slug `reacher`
+ *
+ * Four characters minimum: below that, prefixes stop being evidence.
+ */
+function tokensAgree(a: string, b: string): boolean {
+  if (a.length < 4 || b.length < 4) return false;
+  return a === b || a.startsWith(b) || b.startsWith(a);
+}
+
 export function acceptLinkedInMatch(
   company: PrequalifiedCompany, candidate: CandidateMatch,
 ): { accepted: boolean; strength: MatchStrength; reason: string } {
@@ -419,12 +452,68 @@ export function acceptLinkedInMatch(
   }
   const sameName = normalizeCompanyName(candidate.name) === normalizeCompanyName(company.name);
   if (sameName) {
-    const hay = `${lc(candidate.description)} ${lc(candidate.location)}`;
-    const token = company.canonical_domain?.split(".")[0] ?? "";
-    const supported = (token.length > 3 && hay.includes(token)) ||
-      (!!company.one_liner && hay.includes(lc(company.one_liner).slice(0, 24)));
-    if (supported) {
-      return { accepted: true, strength: "name_plus_evidence", reason: "name matches and description/location corroborates" };
+    // ── WHAT MAY CORROBORATE A NAME ─────────────────────────────────────
+    //
+    // The rule is unchanged and correct: a bare name match is not an identity.
+    // "Apollo", "Magic", "Hub" and "Streak" are real YC companies and also
+    // ordinary words, and accepting one on its name attaches a founder from
+    // the wrong company. What was wrong was the EVIDENCE the rule accepted.
+    //
+    // On task 9e86eb24 ten identity searches returned rows for eight
+    // companies and only three were accepted. Five were rejected here, with a
+    // name that matched exactly: Retell AI, David AI, Reacher, Simple AI,
+    // Artisan, Sixtyfour. Every one of them is a real company the search had
+    // found.
+    //
+    // Both old tests were substring tests against PROSE:
+    //
+    //   hay.includes(token)  `token` is the domain's first label, so
+    //                        "retellai" was looked for inside a description
+    //                        that writes it "Retell AI". "usesimple",
+    //                        "withdavid" and "reacherapp" can never appear in
+    //                        prose at all.
+    //   hay.includes(one_liner.slice(0, 24))
+    //                        requires 24 verbatim characters shared between a
+    //                        YC one-liner and a LinkedIn description — two
+    //                        independently written marketing texts. Essentially
+    //                        never true.
+    //
+    // So in practice the branch accepted almost nothing, and the identity
+    // stage's yield was set by a substring coincidence.
+    const domainToken = identityToken(company.canonical_domain?.split(".")[0] ?? "");
+    const hayToken = identityToken(`${candidate.description} ${candidate.location}`);
+
+    // ── THE SIGNAL THAT WAS SITTING UNUSED ──────────────────────────────
+    //
+    // `candidate.linkedinUrl` is on `CandidateMatch` and was never read. Its
+    // slug is chosen by the company on LinkedIn and is INDEPENDENT of the YC
+    // record we are matching against — which is exactly what corroboration
+    // needs. Deliberately compared against our DOMAIN and not our name: in
+    // this branch the names already match, and a LinkedIn slug is derived from
+    // the LinkedIn name, so slug-vs-name would only restate the thing we are
+    // trying to corroborate.
+    const slug = linkedInSlugToken(candidate.linkedinUrl);
+    if (tokensAgree(slug, domainToken)) {
+      return {
+        accepted: true, strength: "name_plus_evidence",
+        reason: `name matches and the LinkedIn slug "${slug}" agrees with domain "${domainToken}"`,
+      };
+    }
+    // Prose, compared as tokens so "Retell AI" contains "retellai".
+    if (domainToken.length > 3 && hayToken.includes(domainToken)) {
+      return {
+        accepted: true, strength: "name_plus_evidence",
+        reason: "name matches and description/location corroborates",
+      };
+    }
+    if (company.one_liner) {
+      const onelinerToken = identityToken(company.one_liner).slice(0, 24);
+      if (onelinerToken.length >= 16 && hayToken.includes(onelinerToken)) {
+        return {
+          accepted: true, strength: "name_plus_evidence",
+          reason: "name matches and the company description corroborates",
+        };
+      }
     }
     return {
       accepted: false, strength: "rejected_weak",
