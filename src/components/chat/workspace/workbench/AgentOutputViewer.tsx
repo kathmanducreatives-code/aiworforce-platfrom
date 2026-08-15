@@ -1,4 +1,5 @@
-import type { DBTask, DBToolCall, DBApproval } from '@/lib/orchestration';
+import { useEffect, useState } from 'react';
+import { fetchToolCallOutput, type DBTask, type DBToolCall, type DBApproval } from '@/lib/orchestration';
 import ScoutResultsView from './ScoutResultsView';
 import AriaRankingView from './AriaRankingView';
 import HawkResearchView from './HawkResearchView';
@@ -29,6 +30,28 @@ function pickViewer(agentSlug: string | null, toolCall: DBToolCall | null) {
 }
 
 export default function AgentOutputViewer({ task, toolCall, agentSlug, approval }: Props) {
+  // ── THE FULL PAYLOAD IS FETCHED HERE, AND ONLY HERE ────────────────────
+  //
+  // The plan list deliberately omits `output_json`: it is raw provider output,
+  // up to 1.4 MB a row, and refetching every row of a plan on every realtime
+  // event is what made the project unresponsive. The list carries a handful of
+  // scalars and marks itself `output_truncated`; the one view that renders the
+  // whole document loads it for a single row, when it is actually on screen.
+  const [fullOutput, setFullOutput] = useState<unknown | null>(null);
+  const truncated = (toolCall as unknown as { output_truncated?: boolean } | null)
+    ?.output_truncated === true;
+  const toolCallId = toolCall?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    setFullOutput(null);
+    if (!toolCallId || !truncated) return;
+    fetchToolCallOutput(toolCallId).then((o) => { if (!cancelled) setFullOutput(o); });
+    return () => { cancelled = true; };
+  }, [toolCallId, truncated]);
+
+  // The real document once it has arrived; the truncated scalars until then, so
+  // a failure banner still renders immediately rather than waiting on a fetch.
+  const outputJson = fullOutput ?? toolCall?.output_json ?? null;
   // Tool call failure
   if (toolCall && toolCall.status === 'failed') {
     return (
@@ -39,7 +62,7 @@ export default function AgentOutputViewer({ task, toolCall, agentSlug, approval 
             <div className="mt-1 text-[12px] text-rose-200/80 break-words">{toolCall.error}</div>
           )}
         </div>
-        {toolCall.output_json && <RawJsonView data={toolCall.output_json} />}
+        {outputJson && <RawJsonView data={outputJson} />}
       </div>
     );
   }
@@ -53,13 +76,13 @@ export default function AgentOutputViewer({ task, toolCall, agentSlug, approval 
             <div className="mt-1 text-[12px] text-amber-200/80 break-words">{toolCall.error}</div>
           )}
         </div>
-        {toolCall.output_json && <RawJsonView data={toolCall.output_json} defaultOpen />}
+        {outputJson && <RawJsonView data={outputJson} defaultOpen />}
       </div>
     );
   }
 
   // Prefer tool_call output when present; fall back to task output.
-  const data = toolCall?.output_json ?? task?.output ?? null;
+  const data = outputJson ?? task?.output ?? null;
 
   if (data == null) {
     const running = task?.status === 'running' || toolCall?.status === 'running' || toolCall?.status === 'queued';

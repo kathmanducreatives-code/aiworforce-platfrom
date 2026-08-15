@@ -252,12 +252,78 @@ export async function fetchApprovalsForPlan(planId: string): Promise<DBApproval[
   return (data ?? []) as unknown as DBApproval[];
 }
 
+/**
+ * The columns the plan view actually renders, and NOT the provider payload.
+ *
+ * ── WHY THIS IS NOT `select('*')` ─────────────────────────────────────────
+ *
+ * `tool_calls.output_json` holds raw provider output — a discovery call
+ * carries a hundred companies with their open jobs. Across the table that is
+ * 37 MB in 729 rows, with single rows up to 1.4 MB.
+ *
+ * This function is called on mount AND from a realtime subscription on
+ * `tool_calls`, so every insert refetched every row of the plan at full size.
+ * For one plan that was 2.4 MB per poll, and while a plan sits unfinished the
+ * poll never stops: the REST endpoint began returning 500s and then 504s, and
+ * the whole project felt slow — chats included, because they share the same
+ * connection pool.
+ *
+ * The list needs seven small scalars out of that payload. They are projected
+ * server-side and reassembled into the `output_json` shape the components
+ * already read, so nothing downstream changes. The one place that needs the
+ * whole document — the raw output viewer — fetches a single row on demand via
+ * `fetchToolCallOutput`.
+ */
+const TOOL_CALL_LIST_COLUMNS = [
+  'id', 'workspace_id', 'plan_id', 'task_id', 'agent_id',
+  'tool_name', 'provider', 'status', 'error',
+  'started_at', 'completed_at', 'created_by', 'created_at',
+  'input_json',
+  // Scalars only — each is a value the plan/workbench header renders.
+  'o_total:output_json->total',
+  'o_run_id:output_json->run_id',
+  'o_error:output_json->error',
+  'o_code:output_json->code',
+  'o_actor_output_type:output_json->actor_output_type',
+  'o_selected_actor_key:output_json->selected_actor_key',
+  'o_actor_key:output_json->actor_key',
+].join(',');
+
 export async function fetchToolCallsForPlan(planId: string): Promise<DBToolCall[]> {
   const { data, error } = await supabase
-    .from('tool_calls' as any).select('*').eq('plan_id', planId)
+    .from('tool_calls' as any).select(TOOL_CALL_LIST_COLUMNS).eq('plan_id', planId)
     .order('created_at', { ascending: true });
   if (error) { console.error('fetchToolCallsForPlan', error); return []; }
-  return (data ?? []) as unknown as DBToolCall[];
+  return ((data ?? []) as any[]).map((r) => {
+    const {
+      o_total, o_run_id, o_error, o_code,
+      o_actor_output_type, o_selected_actor_key, o_actor_key, ...rest
+    } = r;
+    return {
+      ...rest,
+      // REASSEMBLED, NOT INVENTED. Only the keys the list reads are present;
+      // everything else is absent rather than wrong, and the raw viewer loads
+      // the real document when it is opened.
+      output_json: {
+        total: o_total ?? undefined,
+        run_id: o_run_id ?? undefined,
+        error: o_error ?? undefined,
+        code: o_code ?? undefined,
+        actor_output_type: o_actor_output_type ?? undefined,
+        selected_actor_key: o_selected_actor_key ?? undefined,
+        actor_key: o_actor_key ?? undefined,
+      },
+      output_truncated: true,
+    };
+  }) as unknown as DBToolCall[];
+}
+
+/** The full provider payload for ONE tool call, fetched only when displayed. */
+export async function fetchToolCallOutput(id: string): Promise<unknown | null> {
+  const { data, error } = await supabase
+    .from('tool_calls' as any).select('output_json').eq('id', id).maybeSingle();
+  if (error) { console.error('fetchToolCallOutput', error); return null; }
+  return (data as { output_json?: unknown } | null)?.output_json ?? null;
 }
 
 export const subscribePlan = (planId: string, cb: () => void) => {
