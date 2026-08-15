@@ -49,7 +49,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   applyMissionPrecedence, decideCompanyBrain, failedHardGates,
-  gatesThatOutrankTheMission, CEILING_TOLERANCE,
+  gatesThatOutrankTheMission, groundingRefutes, CEILING_TOLERANCE,
   type HardGate, type HardGateInput,
 } from "../../../supabase/functions/_shared/companyBrainSemanticFit.ts";
 import {
@@ -220,12 +220,18 @@ Deno.test("3b. an ICP PREFERENCE never decides — it only ranks", () => {
 Deno.test("3c. grounding may DOWNGRADE a pass but never rescue a fail", () => {
   // A Mission pass whose cited evidence did not survive verification is REVIEW,
   // never a silent qualify — the model must not invent its receipts.
+  //
+  // THE COUNTS ARE PART OF THE FIXTURE. A score of 0.33 means one claim of
+  // three survived and TWO WERE REFUTED; stating the score without the counts
+  // described a verifier that can score without checking anything, and that
+  // fiction is what let "I validated nothing" be read as "I found something".
   const downgraded = decideCompanyBrain({
     gates: gates(), semantic: missionVerdict("pass"),
     policy: POLICY, hiring_verified: true,
     grounding: {
       final_grounded_decision: "review", grounding_score: 0.33,
       validated_claim_types: [], downgrade_reasons: ["grounding_score_0.33_below_0.6"],
+      validated_claims: 1, rejected_claims: 2, unacknowledged_conflicts: 0,
     },
   });
   assertEquals(downgraded.outcome, "REVIEW");
@@ -378,4 +384,112 @@ Deno.test("6. the Brain cannot QUALIFY anything the evaluator did not pass", () 
     assertFalse(d.outcome === "QUALIFIED",
       `mission_fit=${fit} may never become a qualification`);
   }
+});
+
+// ═════════ 12-16. THE VETO BY SILENCE, in the exact shape it shipped in ══
+//
+// Run bab6da1e qualified nobody. Three companies reached the Company Brain,
+// the Mission evaluator passed all three, and all three were held:
+//
+//   godela.ai       mission_fit pass, score 84, failed_requirements []
+//   afterquery.com  mission_fit pass, score 92, failed_requirements []
+//   ctgt.ai         mission_fit pass, score 92, failed_requirements []
+//
+// Each carried grounding of exactly this shape — nothing validated, nothing
+// REFUTED, and two "reasons" that are restatements of the nothing:
+//
+//   validated_claims: 0, rejected_claims: 0, unacknowledged_conflicts: 0
+//   downgrade_reasons: ["pass_without_any_validated_claim",
+//                       "grounding_score_0_below_0.6"]
+
+/** The grounding those three companies actually carried. */
+const SILENT_GROUNDING = {
+  final_grounded_decision: "review" as const,
+  grounding_score: 0,
+  validated_claim_types: [] as string[],
+  downgrade_reasons: [
+    "pass_without_any_validated_claim",
+    "grounding_score_0_below_0.6",
+  ],
+  validated_claims: 0,
+  rejected_claims: 0,
+  unacknowledged_conflicts: 0,
+};
+
+Deno.test("12. a verifier that validated NOTHING does not refute anything", () => {
+  assertFalse(groundingRefutes(SILENT_GROUNDING),
+    "zero validated AND zero rejected is silence, however many reasons it names");
+});
+
+Deno.test("13. THE BUG: three passed companies are no longer held by that silence",
+  () => {
+    for (const [company, score] of [
+      ["godela.ai", 84], ["afterquery.com", 92], ["ctgt.ai", 92],
+    ] as const) {
+      const d = decideCompanyBrain({
+        gates: gates(),
+        semantic: missionVerdict("pass", { match_score: score }),
+        policy: POLICY, hiring_verified: true,
+        grounding: SILENT_GROUNDING,
+      });
+      assertEquals(d.outcome, "QUALIFIED",
+        `${company} was passed by the Mission evaluator on cited evidence and ` +
+        `may not be held because the verifier examined nothing`);
+    }
+  });
+
+Deno.test("14. a POSITIVE finding still downgrades — the guard is not a bypass", () => {
+  // Each of the three things that count, on its own, against an otherwise
+  // identical silent verifier.
+  const refuted = { ...SILENT_GROUNDING, rejected_claims: 1 };
+  assert(groundingRefutes(refuted), "a refuted claim is a finding");
+
+  const conflicted = { ...SILENT_GROUNDING, unacknowledged_conflicts: 1 };
+  assert(groundingRefutes(conflicted), "an unaddressed registry conflict is a finding");
+
+  const material = {
+    ...SILENT_GROUNDING,
+    downgrade_reasons: ["material_conflict_unacknowledged:ev-1,ev-2"],
+  };
+  assert(groundingRefutes(material), "a named material conflict is a finding");
+
+  for (const g of [refuted, conflicted, material]) {
+    assertEquals(
+      decideCompanyBrain({
+        gates: gates(), semantic: missionVerdict("pass"),
+        policy: POLICY, hiring_verified: true, grounding: g,
+      }).outcome,
+      "REVIEW", "and the Brain holds the company for review, never rejects it");
+  }
+});
+
+Deno.test("15. THE INVERSION: agreeing with the mission cannot cost a company", () => {
+  // `groundedClaims` only emits these reasons on its `pass` branch. So the
+  // verifier that AGREED with the Mission produced reasons and vetoed it, while
+  // one that returned a bare `review` produced none and left it standing — runs
+  // 23462bc6 and dc0c76a4 qualified two companies each on exactly that.
+  //
+  // Same evidence, same silence, two verifiers of differing confidence. They
+  // must not disagree about the outcome.
+  const agreed = SILENT_GROUNDING;                                  // said pass
+  const unsure = { ...SILENT_GROUNDING, downgrade_reasons: [] };     // said review
+
+  const outcomeWith = (g: typeof SILENT_GROUNDING) =>
+    decideCompanyBrain({
+      gates: gates(), semantic: missionVerdict("pass"),
+      policy: POLICY, hiring_verified: true, grounding: g,
+    }).outcome;
+
+  assertEquals(outcomeWith(agreed), outcomeWith(unsure),
+    "a more confident verifier must never produce a worse outcome");
+  assertEquals(outcomeWith(agreed), "QUALIFIED");
+});
+
+Deno.test("16. an unrecognised downgrade reason is not a refutation", () => {
+  // Fail safe toward the Mission verdict. A verifier must say WHAT it found; a
+  // reason nobody classified is the verifier being unhappy, not evidence.
+  assertFalse(groundingRefutes({
+    ...SILENT_GROUNDING,
+    downgrade_reasons: ["some_future_reason_nobody_classified"],
+  }));
 });

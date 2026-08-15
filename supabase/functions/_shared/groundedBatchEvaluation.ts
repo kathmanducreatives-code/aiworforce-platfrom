@@ -24,7 +24,7 @@
 // PURE. No network, provider, model or database access.
 
 import {
-  parseGroundedResult, verifyGroundedResult,
+  CLAIM_TYPES, parseGroundedResult, verifyGroundedResult,
   type GroundedClassifierResult, type GroundedVerification,
 } from "./groundedClaims.ts";
 import {
@@ -112,10 +112,25 @@ export function buildBatchPayload(i: {
       established_facts: hardFactsForPrompt(m.registry.hard_facts),
       evidence: registryForPrompt(m.registry),
     })),
+    // ── THE CLAIM SHAPE IS PART OF THE CONTRACT ───────────────────────────
+    //
+    // `claims` and `supporting_claims` used to be shown as bare `[]`, with the
+    // prose instruction to "cite evidence_ids and quote a short excerpt" and
+    // nothing anywhere naming the FIELDS that carry them. The model returned
+    // what the shape showed it: empty arrays. Every run therefore verified zero
+    // claims, `grounding_score` was structurally always 0, and no company could
+    // ever be grounded — the verifier could not refute anything because it was
+    // never given anything to check.
+    //
+    // The item schema is written out here, with the claim-type vocabulary and
+    // the excerpt/evidence pairing, because a verifier that cannot receive a
+    // claim is not a verifier.
     response_shape: {
       results: [{
         company_key: "must match one of the supplied company_key values",
-        business_model: { value: "string", confidence: "number", claims: [] },
+        business_model: {
+          value: "string", confidence: "number", claims: [CLAIM_SHAPE],
+        },
         company_fit: "pass|review|fail",
         agentory_use_case: "strong|plausible|weak|none",
         mission_signal_assessment: {
@@ -123,13 +138,29 @@ export function buildBatchPayload(i: {
           signal_strength: "strong|moderate|weak|none",
           evidence_ids: [], reason: "string",
         },
-        supporting_claims: [],
+        supporting_claims: [CLAIM_SHAPE],
         conflicting_evidence_ids: [], missing_evidence: [], unknown_fields: [],
         confidence: "number", reason: "string",
       }],
     },
   };
 }
+
+/**
+ * ONE CLAIM, as `parseClaims`/`verifyGroundedResult` expect to receive it.
+ *
+ * Every field is the one the verifier actually reads: a mis-named key here is
+ * indistinguishable, downstream, from the model declining to make a claim.
+ */
+export const CLAIM_SHAPE = Object.freeze({
+  claim: "one specific, checkable statement about THIS company",
+  claim_type: CLAIM_TYPES.join("|"),
+  evidence_ids: ["evidence_id values from this company's evidence list"],
+  evidence_excerpts: [{
+    evidence_id: "one of the ids above",
+    excerpt: "a SHORT verbatim substring copied from that item's source_text",
+  }],
+});
 
 export const BATCH_EVALUATION_PROMPT = [
   "You assess several companies in one request. Judge each one SEPARATELY.",
@@ -139,6 +170,13 @@ export const BATCH_EVALUATION_PROMPT = [
   "Return exactly one result per supplied company_key, and no others.",
   "Every material claim must cite evidence_ids and quote a short verbatim excerpt",
   "from that item's source_text.",
+  // WITHOUT THIS, `company_fit: pass` and `supporting_claims: []` is a
+  // well-formed response — and it is the one that was returned every time,
+  // leaving the verifier nothing to check and the company ungroundable.
+  "A 'pass' REQUIRES at least one supporting_claims entry. If you cannot cite",
+  "evidence for a claim, do not make the claim — answer 'review' instead.",
+  "Copy excerpts character-for-character from source_text; a paraphrase does not",
+  "match and the claim is discarded.",
   "Never invent a company fact. Never restate a supplied number, job title or",
   "location differently.",
   "Absence of evidence is unknown; it is never proof that something is false.",

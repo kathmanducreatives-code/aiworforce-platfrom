@@ -190,7 +190,12 @@ function enumOr<T extends string>(v: unknown, allowed: readonly T[], fallback: T
 
 const MODELS: readonly BusinessModelValue[] =
   ["b2b_saas", "ai_saas", "b2b_software", "b2b_service", "consumer", "unknown"];
-const CLAIM_TYPES: readonly ClaimType[] = [
+/**
+ * Exported so the PROMPT and the PARSER name the same vocabulary. A claim type
+ * the model is not told about is parsed as `company_fit`, which then fails the
+ * evidence rules for the claim it was actually making.
+ */
+export const CLAIM_TYPES: readonly ClaimType[] = [
   "company_fit", "business_model", "commercial_signal",
   "agentory_use_case", "timing", "customer_type", "product_type",
 ];
@@ -420,7 +425,14 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
       decision = "review";
       downgrades.push("business_model_asserted_without_validated_evidence");
     }
-    if (grounding_score < threshold) {
+    // A SCORE OVER ZERO CLAIMS IS NOT A LOW SCORE, IT IS NO SCORE.
+    //
+    // `grounding_score` is `validated / all`, defined as 0 when `all` is empty.
+    // Emitting `grounding_score_0_below_0.6` for a response that made no claims
+    // reports a measurement that never happened, and reads downstream as though
+    // the company scored badly. `pass_without_any_validated_claim` already says
+    // the true thing about that response.
+    if (all.length > 0 && grounding_score < threshold) {
       decision = "review";
       downgrades.push(
         `grounding_score_${grounding_score}_below_${threshold}`);

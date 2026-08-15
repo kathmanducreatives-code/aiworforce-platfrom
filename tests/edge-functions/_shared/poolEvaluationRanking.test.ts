@@ -21,8 +21,9 @@ import {
 } from "../../../supabase/functions/_shared/leadEligiblePool.ts";
 import {
   buildBatchPayload, evaluateBatchResponse, planBatches, resolveBatchLimits,
-  MAX_BATCH_SIZE, DEFAULT_MAX_EVALUATED,
+  BATCH_EVALUATION_PROMPT, MAX_BATCH_SIZE, DEFAULT_MAX_EVALUATED,
 } from "../../../supabase/functions/_shared/groundedBatchEvaluation.ts";
+import { CLAIM_TYPES } from "../../../supabase/functions/_shared/groundedClaims.ts";
 import {
   applyPortfolioPolicy, buildCandidateSummary, buildPoolRankingPayload,
   deterministicOrder, validatePoolRanking,
@@ -572,4 +573,89 @@ Deno.test("S1. the compact summary carries validated claims only", () => {
   assert(text.includes("electronic-design software"));
   assertEquals(s.confidence_after_grounding, 0.45);
   assertEquals(s.missing_evidence, ["employee_count"]);
+});
+
+// ═══════ 29-32. THE VERIFIER MUST BE ABLE TO RECEIVE A CLAIM ══
+//
+// Run bab6da1e: every company came back with `validated_claims: 0` AND
+// `rejected_claims: 0` — the verifier neither confirmed nor refuted anything,
+// for every company, on every run in the history checked. Not a model failure:
+// `response_shape` showed `claims: []` and `supporting_claims: []` as bare
+// empty arrays and NOTHING anywhere named the fields a claim is made of. The
+// model returned the shape it was shown.
+//
+// `grounding_score` is `validated / all`, so with no claims it was structurally
+// 0 forever, and no company could ever be grounded.
+
+Deno.test("29. the payload TELLS the model what a claim is made of", () => {
+  const payload = buildBatchPayload({
+    batch: [member("alpha")], originalUserQuery: "q",
+  }) as Record<string, unknown>;
+  const shape = (payload.response_shape as Record<string, unknown>);
+  const result = (shape.results as Array<Record<string, unknown>>)[0];
+
+  // Both claim arrays carry an item schema, not an empty array.
+  const supporting = result.supporting_claims as unknown[];
+  const bm = (result.business_model as Record<string, unknown>).claims as unknown[];
+  assertEquals(supporting.length, 1, "supporting_claims must show one example item");
+  assertEquals(bm.length, 1, "business_model.claims must show one example item");
+
+  // AND THE FIELDS ARE THE ONES THE PARSER READS. A mis-named key here is
+  // indistinguishable downstream from the model declining to make a claim.
+  for (const item of [supporting[0], bm[0]] as Array<Record<string, unknown>>) {
+    for (const field of ["claim", "claim_type", "evidence_ids", "evidence_excerpts"]) {
+      assert(field in item, `a claim example must name '${field}'`);
+    }
+    const ex = (item.evidence_excerpts as Array<Record<string, unknown>>)[0];
+    assert("evidence_id" in ex && "excerpt" in ex,
+      "and an excerpt must pair an id with the quoted text");
+  }
+});
+
+Deno.test("30. every claim_type the parser accepts is offered to the model", () => {
+  const payload = buildBatchPayload({
+    batch: [member("alpha")], originalUserQuery: "q",
+  }) as Record<string, unknown>;
+  const text = JSON.stringify(payload);
+  for (const t of CLAIM_TYPES) {
+    assert(text.includes(t),
+      `claim_type '${t}' is accepted by parseClaims but never shown to the model`);
+  }
+});
+
+Deno.test("31. a pass with no claims is explicitly forbidden by the instruction", () => {
+  // The prose has to close the hole the shape opened: `company_fit: "pass"` with
+  // `supporting_claims: []` was a well-formed response, and it is the one that
+  // was returned every time.
+  const p = BATCH_EVALUATION_PROMPT.toLowerCase();
+  assert(p.includes("supporting_claims"),
+    "the instruction must name the field a pass depends on");
+  assert(p.includes("review"), "and must say what to answer instead");
+});
+
+Deno.test("32. a response with NO claims scores nothing — it does not score zero", () => {
+  // `grounding_score_0_below_0.6` asserts a measurement. When the model made no
+  // claims there was no measurement, and reporting one made an unexamined
+  // company look like a badly-scoring one — which is what the Brain then read
+  // as grounds to hold it.
+  const res = evaluateBatchResponse({
+    batch: [member("alpha")],
+    raw: {
+      results: [{
+        company_key: "alpha",
+        business_model: { value: "b2b_saas", confidence: 0.9, claims: [] },
+        company_fit: "pass", agentory_use_case: "strong",
+        supporting_claims: [], confidence: 0.94, reason: "looks good",
+      }],
+    },
+  });
+  const v = res.outcomes[0].verification!;
+  assertEquals(v.validated_claims.length, 0);
+  assertEquals(v.rejected_claims.length, 0, "nothing was refuted — nothing was offered");
+  assertEquals(v.final_grounded_decision, "review");
+  // The honest reason survives; the fabricated measurement does not.
+  assert(v.downgrade_reasons.includes("pass_without_any_validated_claim"),
+    "the true statement about this response is kept");
+  assertFalse(v.downgrade_reasons.some((r) => r.startsWith("grounding_score_")),
+    "a score over zero claims is not a low score, it is no score");
 });

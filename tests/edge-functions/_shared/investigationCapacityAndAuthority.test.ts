@@ -327,10 +327,30 @@ Deno.test("4. THE ea2d02f2 DEFECT: an empty verifier no longer vetoes a mission 
 
 Deno.test("4b. grounding that REFUTES with evidence still holds the company", () => {
   // The capability is intact. Each of the three positive findings downgrades.
+  //
+  // A SCORE BELOW THRESHOLD IS NOT ITSELF ONE OF THEM. This list used to carry
+  // `downgrade_reasons: ["grounding_score_0.33_below_0.6"]` with zero validated
+  // AND zero rejected claims — a fixture describing a verifier that scored 1-in-3
+  // without checking anything, which cannot happen: `grounding_score` IS
+  // `validated / (validated + rejected)`. A real sub-threshold score always comes
+  // with rejected claims, and it is those that refute. Encoding the impossible
+  // version is what let `downgrade_reasons.length > 0` look like a safe rule,
+  // and run bab6da1e then held three passed companies on two reasons that both
+  // said "I checked nothing".
   const refuting: GroundingSummary[] = [
-    { ...EMPTY_GROUNDING, rejected_claims: 1 },
-    { ...EMPTY_GROUNDING, downgrade_reasons: ["grounding_score_0.33_below_0.6"] },
+    // A claim was checked and did not survive — and the score follows from it.
+    {
+      ...EMPTY_GROUNDING, validated_claims: 1, rejected_claims: 2,
+      grounding_score: 0.33,
+      downgrade_reasons: ["grounding_score_0.33_below_0.6"],
+    },
+    // The registry contradicts itself and the model did not address it.
     { ...EMPTY_GROUNDING, unacknowledged_conflicts: 1 },
+    // Named explicitly, which is the one downgrade string that is a finding.
+    {
+      ...EMPTY_GROUNDING,
+      downgrade_reasons: ["material_conflict_unacknowledged:ev-7"],
+    },
   ];
   for (const g of refuting) {
     assert(groundingRefutes(g), JSON.stringify(g));
@@ -340,6 +360,15 @@ Deno.test("4b. grounding that REFUTES with evidence still holds the company", ()
     });
     assertEquals(d.outcome, "REVIEW", JSON.stringify(g));
   }
+
+  // AND THE COUNTERPART: the same score string with nothing behind it is the
+  // silence again, and may not hold anybody.
+  assertFalse(
+    groundingRefutes({
+      ...EMPTY_GROUNDING,
+      downgrade_reasons: ["grounding_score_0_below_0.6"],
+    }),
+    "a score reported over zero checked claims is not a finding");
 });
 
 Deno.test("4c. a grounding PASS never blocks, whatever its score", () => {

@@ -345,32 +345,73 @@ export interface GroundingSummary {
  * Reported for observability. A run where this is false for every company is a
  * broken grounder, and that should be visible rather than silently absorbed as
  * a pile of held companies.
+ *
+ * ── MEASURED IN CLAIMS CHECKED, NOT IN COMPLAINTS MADE ────────────────────
+ *
+ * `downgrade_reasons.length > 0` used to count, and that is exactly why the
+ * grounder being structurally unable to check anything went unnoticed for the
+ * whole life of the feature: it emitted `pass_without_any_validated_claim` —
+ * a reason whose CONTENT is "I checked nothing" — and this function read the
+ * existence of the string as proof that it had. The one diagnostic built to
+ * catch a dead verifier was satisfied by the verifier's own report of being
+ * dead.
+ *
+ * Claims checked, or a conflict found. Nothing else is examination.
  */
 export function groundingWasPerformed(g: GroundingSummary): boolean {
   return g.validated_claims + g.rejected_claims > 0 ||
-    g.downgrade_reasons.length > 0 || g.unacknowledged_conflicts > 0;
+    g.unacknowledged_conflicts > 0;
 }
+
+/**
+ * Downgrade reasons that are a POSITIVE FINDING about the company.
+ *
+ * Everything else the verifier emits is a statement about ITSELF — it validated
+ * nothing, it scored below a threshold, a provider it wanted did not answer.
+ * Those are absences, and an absence may not overturn a Mission verdict.
+ */
+const REFUTING_DOWNGRADES: readonly string[] = ["material_conflict_unacknowledged"];
 
 /**
  * Does grounding hold EVIDENCE that contradicts a pass?
  *
- * The only question the Brain may ask of grounding. Three things count, and all
- * three are positive findings rather than absences:
+ * The only question the Brain may ask of grounding, and it must be answerable
+ * with a POSITIVE FINDING:
  *
  *   rejected_claims          a claim was checked and did not survive
- *   downgrade_reasons        the verifier named a specific defect — an
- *                            unvalidated business model, a score below
- *                            threshold, a missing required signal
  *   unacknowledged_conflicts the registry contradicts itself and the model
  *                            did not address it
+ *   a refuting downgrade     the verifier named a defect IN THE COMPANY'S
+ *                            EVIDENCE, not in its own coverage
  *
- * A verifier that returned nothing satisfies none of them and cannot downgrade.
+ * ── WHY `downgrade_reasons.length > 0` IS NOT ON THAT LIST ─────────────────
+ *
+ * It used to be, and it is how run bab6da1e qualified nobody. `godela.ai`,
+ * `afterquery.com` and `ctgt.ai` were each passed by the Mission evaluator
+ * (scores 84, 92, 92, zero failed requirements) and each held, on:
+ *
+ *     downgrade_reasons: ["pass_without_any_validated_claim",
+ *                         "grounding_score_0_below_0.6"]
+ *
+ * Both of those reasons ARE the silence. They say the verifier validated
+ * nothing — with `rejected_claims: 0`, so it refuted nothing either. Reading
+ * them as a refutation is precisely the veto-by-silence this function exists to
+ * prevent, laundered through a string.
+ *
+ * The inversion it produced is the proof: `groundedClaims` only emits these
+ * reasons on the `pass` branch, so a verifier that AGREED with the Mission
+ * vetoed it, while one that returned a bare `review` left it standing. Runs
+ * 23462bc6 and dc0c76a4 qualified two companies each with identical zero-claim
+ * grounding and an empty `downgrade_reasons`. Confidence was inverted.
+ *
+ * An unrecognised reason is treated as non-refuting. A verifier must say what
+ * it found, not merely that it is unhappy.
  */
 export function groundingRefutes(g: GroundingSummary): boolean {
   if (g.final_grounded_decision === "pass") return false;
-  return g.rejected_claims > 0 ||
-    g.downgrade_reasons.length > 0 ||
-    g.unacknowledged_conflicts > 0;
+  if (g.rejected_claims > 0 || g.unacknowledged_conflicts > 0) return true;
+  return g.downgrade_reasons.some((r) =>
+    REFUTING_DOWNGRADES.some((prefix) => r.startsWith(prefix)));
 }
 
 /** Gates that may still overturn a Mission verdict, split by what they mean. */

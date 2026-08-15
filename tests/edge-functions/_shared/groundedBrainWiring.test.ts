@@ -593,3 +593,117 @@ Deno.test("G6. enforcing makes no people Actor reachable", async () => {
     assertFalse(rec.calls.includes(actor), `${actor} must remain unreachable`);
   }
 });
+
+// ══════════ 20-23. END TO END: run bab6da1e, which qualified nobody ══
+//
+// THE PRODUCTION SHAPE, driven through the real engine.
+//
+// Three companies reached the Company Brain. The Mission evaluator passed all
+// three on cited evidence (scores 84/92/92, zero failed requirements). The
+// grounded verifier returned, for each:
+//
+//     validated_claims: [], rejected_claims: [], grounding_score: 0
+//     downgrade_reasons: ["pass_without_any_validated_claim",
+//                         "grounding_score_0_below_0.6"]
+//
+// It refuted nothing. It merely reported that it had checked nothing — because
+// `response_shape` never told the model what a claim was, so no claim was ever
+// made. The Brain read those two strings as a refutation and held all three,
+// and the Workbench said `qualified: 0` over 100 discovered companies.
+
+/** The verification those companies actually carried. Nothing checked. */
+const silentVerification = () => ({
+  version: "grounded-claims-v1",
+  company_key: "",
+  final_grounded_decision: "review" as const,
+  grounding_score: 0,
+  validated_claims: [] as unknown[],
+  rejected_claims: [] as unknown[],
+  unacknowledged_conflicts: [] as string[],
+  downgrade_reasons: [
+    "pass_without_any_validated_claim",
+    "grounding_score_0_below_0.6",
+  ],
+  confidence_before_grounding: 0.94,
+  confidence_after_grounding: 0,
+});
+
+Deno.test("20. a mission PASS survives a verifier that checked nothing", async () => {
+  const { run } = await runWith({
+    evaluateMission: evaluatorPass,
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) =>
+      Promise.resolve({
+        ...silentVerification(), company_key: registry.company_key,
+      } as never),
+  });
+
+  const evaluated = run.companies.filter((c) => c.brain !== null);
+  assert(evaluated.length > 0, "a company must have reached the Brain");
+  for (const c of evaluated) {
+    assertEquals(c.brain!.outcome, "QUALIFIED",
+      `${c.key}: the evaluator passed it and the verifier refuted nothing`);
+    assertEquals(c.verdict, "pass");
+  }
+  // AND IT REACHES THE RUN AS QUALIFIED — the number the Workbench reads.
+  assertEquals(run.state.qualified_company_keys.length, evaluated.length,
+    "0 qualified over 100 discovered was the symptom; this is the assertion for it");
+});
+
+Deno.test("21. a verifier that REFUTED something still holds the company", async () => {
+  // The guard must not have turned grounding off. A rejected claim is a finding.
+  const { run } = await runWith({
+    evaluateMission: evaluatorPass,
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) =>
+      Promise.resolve({
+        ...silentVerification(), company_key: registry.company_key,
+        rejected_claims: [{
+          claim: "the company is hiring engineers",
+          claim_type: "commercial_signal",
+          reason: "excerpt_not_found",
+          detail: "the quoted text is not in the cited evidence",
+        }],
+      } as never),
+  });
+
+  const evaluated = run.companies.filter((c) => c.brain !== null);
+  assert(evaluated.length > 0);
+  for (const c of evaluated) {
+    assertEquals(c.brain!.outcome, "REVIEW",
+      `${c.key}: a claim was checked and failed — that is a real downgrade`);
+    assertEquals(c.verdict, "unknown", "held, never rejected");
+  }
+  assertEquals(run.state.qualified_company_keys.length, 0);
+});
+
+Deno.test("22. the hold is still available — grounding was not disabled", async () => {
+  // An unacknowledged registry conflict, the other positive finding.
+  const { run } = await runWith({
+    evaluateMission: evaluatorPass,
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) =>
+      Promise.resolve({
+        ...silentVerification(), company_key: registry.company_key,
+        unacknowledged_conflicts: ["company_location:linkedin:abc123"],
+      } as never),
+  });
+  for (const c of run.companies.filter((x) => x.brain !== null)) {
+    assertEquals(c.brain!.outcome, "REVIEW");
+  }
+});
+
+Deno.test("23. a mission FAIL is still a rejection, whatever the verifier says", async () => {
+  const { run } = await runWith({
+    evaluateMission: stubMissionEvaluator({ mission_fit: "fail" }),
+    groundingMode: "enforce",
+    groundCompany: ({ registry }) =>
+      Promise.resolve({
+        ...silentVerification(), company_key: registry.company_key,
+      } as never),
+  });
+  for (const c of run.companies.filter((x) => x.brain !== null)) {
+    assertEquals(c.brain!.outcome, "REJECT",
+      "the guard loosens grounding, it does not loosen the evaluator");
+  }
+});
