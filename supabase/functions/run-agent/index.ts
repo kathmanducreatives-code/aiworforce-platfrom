@@ -634,7 +634,24 @@ Deno.serve(async (req) => {
       ? body.lead_resume_parent_task_id
       : (typeof body.continuation_of_task_id === "string" && body.continuation_of_task_id
         ? body.continuation_of_task_id
-        : null);
+        // ── A SAME-ROW CONTINUATION IS ITS OWN PARENT ────────────────────
+        //
+        // The two fields above assume the pre-mission shape: a NEW task row
+        // pointing back at the one it continues. The auto-continuation reuses
+        // the SAME row — `resume_task_id` — so neither was ever set and
+        // `loadLeadResumeRecords` was handed null.
+        //
+        // Task b4eb3710 is what that costs. Three slices ran and every one
+        // logged `records: 0` and `already_investigated: 0`, with the frontier
+        // sitting at 89 → 88 → 89. Each continuation re-ran discovery, re-ran
+        // triage, and took a FIRST slice of ten from a frontier that never
+        // advanced. Qualified went 3 → 5 on the luck of the ranking, not
+        // because anything resumed.
+        //
+        // The checkpoint it needs is on that very row.
+        : (typeof body.resume_task_id === "string" && body.resume_task_id
+          ? body.resume_task_id
+          : null));
   const ignoredClientFields = rejectedClientFields(body as Record<string, unknown>);
   if (ignoredClientFields.length > 0) {
     console.log("[run-agent][client-fields-ignored]", { fields: ignoredClientFields });
@@ -745,6 +762,10 @@ Deno.serve(async (req) => {
   // explicitly when the round ends. Held here because the claim is taken in this
   // block but released after the sourcing outcome is written, far below.
   let heldClaim: { claimId: string; viaRpc: boolean } | null = null;
+  // THE RESUMED ROW'S OWN RESULT. A same-row continuation's engine state and
+  // checkpoint live here, not in the request body — see the `state:` argument
+  // to `runCapabilityPlan`.
+  let resumedTaskResult: Record<string, unknown> = {};
   if (resume_task_id) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
@@ -758,6 +779,7 @@ Deno.serve(async (req) => {
     // a second tab, a retry, or a poll racing the click — so the claim is taken
     // here, as a compare-and-swap on the status we just read.
     const priorResult = ((existing as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>;
+    resumedTaskResult = priorResult;
     const observedStatus = String((existing as { status?: string } | null)?.status ?? "");
     const held = priorResult[CLAIM_KEY] as ContinuationClaim | undefined;
     const attempt = decideClaimAttempt(held ?? null, Date.now());
@@ -2319,7 +2341,21 @@ Deno.serve(async (req) => {
               // no longer masquerade as a memo23 input failure. One call per
               // band: this Actor ANDs multiple values and returns zero rows.
               solidcodeTeamSizes: ["2-10", "11-50", "51-200"],
-              state: readCapabilityExecutionState(body as Record<string, unknown>),
+              // ── THE ENGINE STATE, FROM THE ROW ON A CONTINUATION ────────
+              //
+              // This read the state from the REQUEST BODY only, which is right
+              // for the legacy caller that ships it. The auto-continuation does
+              // not — the state is large and belongs to the server — so a
+              // continuation started with a null state: no
+              // `completed_capabilities`, so DISCOVERY RAN AGAIN and was paid
+              // for again, and no `investigation_ranking`, so the frontier
+              // restarted at pass one.
+              //
+              // Loaded from the resumed row instead, where the previous slice
+              // already wrote it. Body-supplied state still wins when present,
+              // so the legacy path is unchanged.
+              state: readCapabilityExecutionState(body as Record<string, unknown>) ??
+                readCapabilityExecutionState(resumedTaskResult),
               // THE RESUME GUARD'S SCOPE — supplied on EVERY run, not only on a
               // continuation.
               //

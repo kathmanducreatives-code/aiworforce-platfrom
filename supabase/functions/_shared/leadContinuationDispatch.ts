@@ -116,6 +116,14 @@ export async function dispatchContinuation(
       },
       body: JSON.stringify({
         resume_task_id: req.resumeTaskId,
+        // THE SAME ID ON THE RESUME-RECORD CARRIER TOO.
+        //
+        // `loadLeadResumeRecords` is addressed by `continuation_of_task_id` /
+        // `lead_resume_parent_task_id`, not by `resume_task_id` — a shape from
+        // when a continuation was a NEW row pointing at its parent. Sending
+        // only `resume_task_id` loaded zero records, so every slice replayed
+        // pass one over a frontier that never advanced.
+        continuation_of_task_id: req.resumeTaskId,
         workspace_id: req.workspaceId,
         // HONOURED ONLY FOR SERVICE-ROLE CALLERS, which is what this is. The
         // continuation belongs to the person who asked, not to the machine that

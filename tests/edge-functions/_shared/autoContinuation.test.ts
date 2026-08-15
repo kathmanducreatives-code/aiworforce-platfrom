@@ -512,3 +512,56 @@ Deno.test("23. the instruction carried is the USER's query, not the planner's", 
   assert(plannerString.includes("jobs matching"),
     "and the planner's string is what routed the continuation to apify_jobs");
 });
+
+
+// ═════════ 24-25. THE FRONTIER MUST ACTUALLY ADVANCE ══
+//
+// Task b4eb3710 ran THREE slices automatically — the chain worked — and made no
+// progress at all:
+//
+//   slice 1  selected 10, frontier_remaining 89, already_investigated: 0
+//   slice 2  selected 10, frontier_remaining 88, already_investigated: 0
+//   slice 3  selected 10, frontier_remaining 89, already_investigated: 0
+//
+// Every slice logged `records: 0` and re-ran discovery. `loadLeadResumeRecords`
+// is addressed by `continuation_of_task_id` / `lead_resume_parent_task_id` —
+// the shape from when a continuation was a NEW row pointing at its parent — and
+// the auto-continuation reuses the SAME row via `resume_task_id`, which none of
+// those fields sees. Qualified moved 3 → 5 on the luck of the ranking, not
+// because anything resumed.
+
+Deno.test("24. the dispatch addresses the resume-record carrier, not just the row", async () => {
+  let body: Record<string, unknown> = {};
+  await dispatchContinuation(REQ, deps({
+    fetch: (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return Promise.resolve({ status: 202 });
+    },
+  }));
+  assertEquals(body.resume_task_id, "task-1", "the row to reuse");
+  assertEquals(body.continuation_of_task_id, "task-1",
+    "and the id `loadLeadResumeRecords` is actually keyed on");
+});
+
+Deno.test("25. a slice that resumed nothing is BARREN and eventually stops the job", () => {
+  // The safety net for exactly this failure. Three slices that investigate the
+  // same ten companies produce no NEW qualified companies, so the high-water
+  // mark does not move — and `no_progress` ends the job rather than paying for
+  // the same pass indefinitely.
+  let p = newLineageProgress();
+  p = foldSlice(p, { qualified: 3, investigated: 10, costUnits: 12 });
+  // A replayed slice: same companies, same verdicts, nothing new qualified.
+  p = foldSlice(p, { qualified: 3, investigated: 0, costUnits: 12 });
+  assertEquals(p.barren_slices, 1);
+  p = foldSlice(p, { qualified: 3, investigated: 0, costUnits: 12 });
+  assertEquals(p.barren_slices, 2);
+  const d = decideAutoContinuation({
+    qualified: p.qualified_high_water, requestedCount: 10, frontierRemaining: 89,
+    continuationsUsed: p.continuations_used, maxContinuations: 10,
+    costUnitsUsed: p.cost_units_used, maxCostUnits: 120,
+    barrenSlices: p.barren_slices,
+  });
+  assertFalse(d.continue);
+  assertEquals(d.reason, "no_progress",
+    "a chain that is not advancing must stop paying, even though the frontier looks full");
+});
