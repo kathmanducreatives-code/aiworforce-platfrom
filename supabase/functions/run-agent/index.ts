@@ -3713,6 +3713,21 @@ Deno.serve(async (req) => {
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
+            // ── WRITTEN BEFORE ANYTHING IS DISPATCHED ────────────────────────
+            //
+            // The successor is fired further down and immediately begins writing
+            // this same row, so anything recorded AFTER the handoff races it.
+            // `dispatch` is filled in only when the handoff fails, which is the
+            // one case where no successor exists to collide with.
+            [LINEAGE_PROGRESS_KEY]: progress,
+            auto_continuation: {
+              version: AUTO_CONTINUATION_VERSION,
+              continuing: autoDecision.continue,
+              decision: autoDecision.reason,
+              detail: autoDecision.detail,
+              user_message: autoDecision.continue ? autoDecision.user_message : null,
+              dispatch: null,
+            },
             // ── THE CHECKPOINT THE RESUME GATE ACTUALLY READS ──────────────
             //
             // `decideResume` inspects `company_first_state.terminal_status`
@@ -3922,31 +3937,40 @@ Deno.serve(async (req) => {
           dispatched: dispatchOutcome?.dispatched ?? false,
           continuing: effectivelyContinuing,
         });
-        // MERGED INTO THE RESULT THAT WAS JUST WRITTEN, not into the one read
-        // before it. Spreading `priorTaskResult` here would roll the whole task
-        // result back to its pre-slice state and take the funnel, the workbench
-        // rows and the checkpoint with it.
-        const { data: currentRow } = await supabase
-          .from("tasks").select("result").eq("id", task.id).maybeSingle();
-        await supabase.from("tasks").update({
-          // The row stays `running` while a successor is on its way, so the
-          // Workbench shows one continuous job rather than a series of finished
-          // runs that each fell short.
-          ...(effectivelyContinuing ? { status: "running" } : {}),
-          result: {
-            ...(((currentRow as { result?: Record<string, unknown> } | null)?.result ??
-              {}) as Record<string, unknown>),
-            [LINEAGE_PROGRESS_KEY]: finalProgress,
-            auto_continuation: {
-              version: AUTO_CONTINUATION_VERSION,
-              continuing: effectivelyContinuing,
-              decision: autoDecision.reason,
-              detail: autoDecision.detail,
-              user_message: effectivelyContinuing ? autoDecision.user_message : null,
-              dispatch: dispatchOutcome,
+        // ── ONLY A FAILED HANDOFF WRITES AGAIN ─────────────────────────────
+        //
+        // THE RACE THIS REMOVES. This used to read the row and merge into it
+        // AFTER the dispatch — and the dispatch is fire-and-forget, so the
+        // successor was already running and writing its own result. Two slices
+        // read-modify-writing the same row means the slower one wins with stale
+        // data. On task b4eb3710 the final row came back with
+        // `auto_continuation: null` and `lead_lineage_progress: null` after
+        // three slices, because an earlier slice's late write landed on top of
+        // the last one's.
+        //
+        // The decision and the running totals are now written by the MAIN result
+        // update above, which happens before anything is dispatched. Nothing
+        // needs to be written here at all unless the handoff FAILED — and if it
+        // failed there is no successor to race.
+        if (autoDecision.continue && !effectivelyContinuing) {
+          const { data: currentRow } = await supabase
+            .from("tasks").select("result").eq("id", task.id).maybeSingle();
+          await supabase.from("tasks").update({
+            result: {
+              ...(((currentRow as { result?: Record<string, unknown> } | null)?.result ??
+                {}) as Record<string, unknown>),
+              [LINEAGE_PROGRESS_KEY]: finalProgress,
+              auto_continuation: {
+                version: AUTO_CONTINUATION_VERSION,
+                continuing: false,
+                decision: autoDecision.reason,
+                detail: autoDecision.detail,
+                user_message: null,
+                dispatch: dispatchOutcome,
+              },
             },
-          },
-        }).eq("id", task.id);
+          }).eq("id", task.id);
+        }
 
         // FINALIZE THE PLAN. The company-first branch returns here, far above the
         // ordinary finalization near the end of this function, so without this the
