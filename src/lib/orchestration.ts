@@ -229,11 +229,99 @@ export async function fetchPlan(planId: string): Promise<DBPlan | null> {
   return (data as unknown as DBPlan) ?? null;
 }
 
+/**
+ * The parts of `tasks.result` the UI actually reads — and none of the engine's.
+ *
+ * ── WHY THIS IS NOT `select('*')` ─────────────────────────────────────────
+ *
+ * `tasks.result` is where run-agent persists the whole structured run, and most
+ * of it exists so the NEXT slice can resume: `lead_resume_checkpoint` alone is
+ * 626 kB of the 890 kB the five most recent tasks weigh on the wire — 70% of
+ * every byte sent, for a key no component has ever read. `capability_execution_
+ * state` (269 kB), `evaluation_paths` (129 kB) and `pool_evaluation_checkpoint`
+ * are the same: backend state, shipped to a browser that discards it.
+ *
+ * This function runs on mount, on every realtime event and on a 4-second
+ * heartbeat. At roughly 800 kB a read that is ~700 MB per hour of egress from a
+ * single open tab watching a single unfinished plan — which is how a project on
+ * a 5 GB monthly allowance transferred 15 GB.
+ *
+ * So the keys are projected server-side and reassembled into the `result` shape
+ * the components already read. Two are narrowed further to the one field their
+ * reader touches: `capability_execution_state.provider_attempts` (for
+ * `hasStoredCompanyRun`) and `company_first_state.candidate_diagnostics`. The
+ * checkpoint is never sent, because nothing in the browser resumes a run.
+ */
+const TASK_LIST_COLUMNS = [
+  'id', 'plan_id', 'agent_id', 'agent_slug', 'workspace_id', 'user_id',
+  'step_index', 'description', 'status', 'input', 'output', 'payload',
+  'error_message', 'started_at', 'finished_at', 'completed_at', 'created_at',
+  'checkpoint_version',
+  // `result`, minus the engine's resume state. Each is read by a named module.
+  'r_task_status:result->task_status',
+  'r_terminal_status:result->terminal_status',
+  'r_quota:result->quota',
+  'r_company_first:result->company_first',
+  'r_workbench_progress:result->workbench_progress',
+  'r_workbench_evaluation_rows:result->workbench_evaluation_rows',
+  'r_workbench_portfolio:result->workbench_portfolio',
+  'r_candidate_diagnostics:result->company_first_state->candidate_diagnostics',
+  'r_provider_attempts:result->capability_execution_state->provider_attempts',
+].join(',');
+
 export async function fetchTasksForPlan(planId: string): Promise<DBTask[]> {
   const { data, error } = await supabase
-    .from('tasks' as any).select('*').eq('plan_id', planId).order('step_index', { ascending: true });
+    .from('tasks' as any).select(TASK_LIST_COLUMNS).eq('plan_id', planId)
+    .order('step_index', { ascending: true });
   if (error) { console.error('fetchTasksForPlan', error); return []; }
-  return (data ?? []) as unknown as DBTask[];
+  return ((data ?? []) as any[]).map((row) => {
+    const {
+      r_task_status, r_terminal_status, r_quota, r_company_first,
+      r_workbench_progress, r_workbench_evaluation_rows, r_workbench_portfolio,
+      r_candidate_diagnostics, r_provider_attempts, ...rest
+    } = row;
+
+    // ABSENT, NOT EMPTY. A task with no result at all must stay `null` —
+    // `taskResultIsPartial` and `taskQuotaUnmet` both return false for a
+    // non-object, and handing them a `{}` full of undefined would make a task
+    // that never ran indistinguishable from one that ran and reported nothing.
+    const present = [
+      r_task_status, r_terminal_status, r_quota, r_company_first,
+      r_workbench_progress, r_workbench_evaluation_rows, r_workbench_portfolio,
+      r_candidate_diagnostics, r_provider_attempts,
+    ].some((v) => v !== null && v !== undefined);
+
+    return {
+      ...rest,
+      result: present
+        ? {
+          task_status: r_task_status ?? undefined,
+          terminal_status: r_terminal_status ?? undefined,
+          quota: r_quota ?? undefined,
+          company_first: r_company_first ?? undefined,
+          workbench_progress: r_workbench_progress ?? undefined,
+          workbench_evaluation_rows: r_workbench_evaluation_rows ?? undefined,
+          workbench_portfolio: r_workbench_portfolio ?? undefined,
+          // Rebuilt at the path its reader expects, carrying only that field.
+          company_first_state: r_candidate_diagnostics
+            ? { candidate_diagnostics: r_candidate_diagnostics }
+            : undefined,
+          capability_execution_state: r_provider_attempts
+            ? { provider_attempts: r_provider_attempts }
+            : undefined,
+          result_truncated: true,
+        }
+        : null,
+    };
+  }) as unknown as DBTask[];
+}
+
+/** The complete stored result for ONE task, fetched only when something needs it. */
+export async function fetchTaskResult(taskId: string): Promise<unknown | null> {
+  const { data, error } = await supabase
+    .from('tasks' as any).select('result').eq('id', taskId).maybeSingle();
+  if (error) { console.error('fetchTaskResult', error); return null; }
+  return (data as { result?: unknown } | null)?.result ?? null;
 }
 
 export async function fetchActivityForPlan(planId: string): Promise<DBActivity[]> {
