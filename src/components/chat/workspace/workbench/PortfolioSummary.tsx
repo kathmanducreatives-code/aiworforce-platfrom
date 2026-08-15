@@ -23,7 +23,14 @@ export default function PortfolioSummary({ portfolio }: { portfolio: PortfolioVi
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {cell('Requested', portfolio.requested_opportunities)}
-        {cell('Delivered', c.delivered)}
+        {/*
+          SHOWN AND FOUND ARE DIFFERENT NUMBERS. This read "Delivered 10" for a
+          run that qualified three and filled the rest of the page with watch
+          items — the header said the request was met while the shortfall line
+          below it stayed silent, because both came from the same count.
+        */}
+        {cell('Shown', c.delivered)}
+        {cell('Opportunities', c.opportunities, 'text-emerald-300')}
         {cell('Tier A', c.tier_a, 'text-emerald-300')}
         {cell('Tier B', c.tier_b, 'text-emerald-200/80')}
         {cell('Tier C', c.tier_c, 'text-[#7D8590]')}

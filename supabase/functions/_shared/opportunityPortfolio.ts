@@ -149,7 +149,25 @@ export function floorFailure(c: PortfolioCandidate): FloorFailure | null {
   if (!c.has_factual_signal) return "no_factual_signal";
   if (!c.source_evidence) return "no_source_evidence";
   if (c.brain === "reject") return "brain_reject";
-  if (c.tier === null) return "no_tier";
+  // ── A BRAIN PASS OUTRANKS A MISSING TIER ────────────────────────────────
+  //
+  // `tier` is `signal_tier`: a deterministic label derived from the commercial
+  // ROLE VOCABULARY. It is a ranking heuristic, and it is null whenever that
+  // vocabulary did not recognise the openings — which is a statement about the
+  // keyword list, never about the company.
+  //
+  // Flooring on it deleted qualified leads. On task 55cf2ca4 `godela.ai` passed
+  // the Company Brain with a verified identity and three grounded claims that
+  // survived verification (score 1.0) — AI physics engine, San Francisco, a
+  // Founding Engineer (SWE) opening — and never reached the portfolio, because
+  // its two openings read as "technical only" to the vocabulary and left the
+  // tier null. Seven `identity_unresolved_watch` rows shipped in its place.
+  //
+  // This is the same authority inversion the Brain and the shortlist were
+  // already fixed for, surviving one layer further out. A company the evaluator
+  // qualified on verified evidence is the ANSWER; an untiered one is merely
+  // unranked, and it sorts last rather than being deleted.
+  if (c.tier === null && c.brain !== "qualified") return "no_tier";
   return null;
 }
 
@@ -171,11 +189,18 @@ export interface PortfolioResult {
   targets: PortfolioTargets;
   entries: PortfolioEntry[];
   counts: {
+    /** Rows on the page, watch items included. `tier_a+b+c` sums to this. */
     delivered: number;
     tier_a: number; tier_b: number; tier_c: number;
     qualified: number; review: number; watch: number;
     contact_ready: number;
     rejected_by_floor: number;
+    /**
+     * Rows that answer the request: `qualified` or `review`. THIS is what the
+     * shortfall is measured against — a watch item is an open question, not a
+     * delivered opportunity.
+     */
+    opportunities: number;
   };
   shortfall: {
     opportunities: number;
@@ -225,9 +250,22 @@ export function buildPortfolio(
     eligible.push(c);
   }
 
+  // ── QUALIFICATION FIRST, THEN TIER ─────────────────────────────────────
+  //
+  // Tier used to be the primary key with qualification only breaking ties
+  // WITHIN a tier, so a Tier-A company nobody could identify outranked a
+  // qualified one — and since the list is then cut to
+  // `requested_opportunity_count`, outranking meant displacing. On task
+  // 55cf2ca4 seven `identity_unresolved_watch` rows filled the portfolio.
+  //
+  // A Brain pass is what the user asked for; tier is how strong the signal
+  // looked to a keyword list. `rank` reads null-safely so an untiered company
+  // sorts last instead of poisoning the comparator with NaN.
+  const rank = (t: PortfolioCandidate["tier"]) =>
+    t === null ? TIER_RANK.C + 1 : TIER_RANK[t as SignalTier];
   eligible.sort((a, b) =>
-    TIER_RANK[a.tier as SignalTier] - TIER_RANK[b.tier as SignalTier] ||
     (b.brain === "qualified" ? 1 : 0) - (a.brain === "qualified" ? 1 : 0) ||
+    rank(a.tier) - rank(b.tier) ||
     b.score - a.score ||
     a.company_name.localeCompare(b.company_name));
 
@@ -260,9 +298,26 @@ export function buildPortfolio(
     watch: entries.filter((e) => e.state === "watch" || e.state === "identity_unresolved_watch").length,
     contact_ready: entries.filter((e) => e.contact_ready && e.actionable).length,
     rejected_by_floor: excluded.length,
+    // ── WHAT WAS ACTUALLY DELIVERED, as opposed to what is on the page ────
+    //
+    // `delivered` is the SIZE OF THE PORTFOLIO — every row shown, watch items
+    // included — and the tier counts sum to it. That is a useful number and it
+    // stays. It is not, however, an answer to "did we find what was asked
+    // for?", and it was being used as one.
+    //
+    // A watch row is an open question: `identity_unresolved_watch` means nobody
+    // could even confirm which company it is. Counting it as a delivered
+    // opportunity is what let a run that qualified three report a shortfall of
+    // zero against a request for ten.
+    opportunities: entries.filter(
+      (e) => e.state === "qualified" || e.state === "review").length,
   };
 
-  const oppShort = Math.max(0, targets.requested_opportunity_count - counts.delivered);
+  // MEASURED AGAINST OPPORTUNITIES, NOT ROWS. This read `delivered`, so filling
+  // the page with watch items made the gap disappear — the precise failure the
+  // no-padding rule above exists to prevent, arriving through the counter
+  // instead of through the list.
+  const oppShort = Math.max(0, targets.requested_opportunity_count - counts.opportunities);
   const crTarget = targets.requested_contact_ready_count;
   const crShort = crTarget == null ? 0 : Math.max(0, crTarget - counts.contact_ready);
 
@@ -271,10 +326,16 @@ export function buildPortfolio(
     targets, entries, counts,
     shortfall: {
       opportunities: oppShort,
+      // NAMES THE OPPORTUNITY COUNT, and says what the rest of the page is, so
+      // "10 shown, 3 found" reads as one coherent statement rather than two
+      // numbers that appear to contradict each other.
       opportunity_reason: oppShort === 0 ? null
-        : opts.sourcesExhausted
-        ? `only ${counts.delivered} companies met the quality floor after all allowed rounds; sources exhausted`
-        : `only ${counts.delivered} companies met the quality floor so far`,
+        : `${counts.opportunities} of ${targets.requested_opportunity_count} ` +
+          `companies qualified or are under review` +
+          (counts.watch > 0
+            ? `; ${counts.watch} more are shown as watch items pending identity or evidence`
+            : "") +
+          (opts.sourcesExhausted ? "; sources exhausted" : ""),
       contact_ready: crShort,
       contact_ready_reason: crShort === 0 ? null
         : `${counts.contact_ready} of ${crTarget} reached contact-ready; the rest lack an explicit Company Brain pass or a verified decision-maker`,

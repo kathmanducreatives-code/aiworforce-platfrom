@@ -24,10 +24,13 @@ export interface PortfolioEntryView {
 }
 
 export interface PortfolioCounts {
+  /** Rows on the page, watch items included. */
   delivered: number;
   tier_a: number; tier_b: number; tier_c: number;
   qualified: number; review: number; watch: number;
   contact_ready: number; rejected_by_floor: number;
+  /** Rows that answer the request — what the shortfall is measured against. */
+  opportunities: number;
 }
 
 export interface PortfolioView {
@@ -60,6 +63,13 @@ export function readPortfolio(result: unknown): PortfolioView | null {
       watch: Number(o.counts.watch ?? 0),
       contact_ready: Number(o.counts.contact_ready ?? 0),
       rejected_by_floor: Number(o.counts.rejected_by_floor ?? 0),
+      // Rows that answer the request, as opposed to rows on the page. Older
+      // task rows predate the field; fall back to qualified + review, which is
+      // its definition, rather than to `delivered`, which is what it replaced.
+      opportunities: Number(
+        o.counts.opportunities ??
+          (Number(o.counts.qualified ?? 0) + Number(o.counts.review ?? 0)),
+      ),
     },
     opportunity_shortfall: Number(o.shortfall?.opportunities ?? 0),
     opportunity_shortfall_reason: o.shortfall?.opportunity_reason ?? null,

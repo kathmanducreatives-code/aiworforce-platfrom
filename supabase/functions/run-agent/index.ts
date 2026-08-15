@@ -2525,9 +2525,14 @@ Deno.serve(async (req) => {
             console.log("[run-agent][capability-engine][portfolio]", {
               task_id: task.id,
               requested: portfolioTargets.requested_opportunity_count,
-              delivered: portfolio.counts.delivered,
+              // ROWS SHOWN AND OPPORTUNITIES FOUND, separately. Logging only
+              // `delivered` reported "10 delivered, 0 shortfall" for a run that
+              // qualified three and filled the rest with watch items.
+              rows_shown: portfolio.counts.delivered,
+              opportunities: portfolio.counts.opportunities,
               tiers: [portfolio.counts.tier_a, portfolio.counts.tier_b, portfolio.counts.tier_c],
               qualified: portfolio.counts.qualified,
+              watch: portfolio.counts.watch,
               contact_ready: portfolio.counts.contact_ready,
               shortfall: portfolio.shortfall.opportunities,
             });

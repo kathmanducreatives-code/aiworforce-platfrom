@@ -150,7 +150,21 @@ Deno.test("17/19. the portfolio fills A then B then C, and the counts agree", ()
   assertEquals(p.counts.tier_c, 40, "then Tier C fills the remainder");
   assertEquals(p.counts.tier_a + p.counts.tier_b + p.counts.tier_c, p.counts.delivered);
   assertEquals(p.counts.qualified, 18, "and NOT all 100 are qualified");
-  assertEquals(p.shortfall.opportunities, 0);
+
+  // ── A FULL PAGE IS NOT A MET REQUEST ────────────────────────────────────
+  //
+  // This asserted `shortfall.opportunities === 0`, because 100 rows were shown
+  // against 100 requested. Of those rows 18 qualified, 42 are under review and
+  // 40 are Tier-C watch items — open questions, not answers. Measuring the
+  // shortfall against the ROW COUNT is what let a live run that qualified three
+  // companies report a shortfall of zero.
+  assertEquals(p.counts.opportunities, 60, "qualified + review, not the page size");
+  assertEquals(p.shortfall.opportunities, 40,
+    "40 of the 100 rows are watch items and do not answer the request");
+  assert(p.shortfall.opportunity_reason?.includes("60 of 100"),
+    `the gap names both numbers, got: ${p.shortfall.opportunity_reason}`);
+  assert(p.shortfall.opportunity_reason?.includes("40 more are shown as watch"),
+    "and says what the remaining rows are");
 });
 
 Deno.test("18/22. rejects, duplicates and floor failures never fill the number", () => {
@@ -172,7 +186,19 @@ Deno.test("18/22. rejects, duplicates and floor failures never fill the number",
     "wrong_geography", "identity_mismatch", "no_factual_signal", "no_source_evidence"]) {
     assert(p.excluded.some((e) => e.failure === f), `${f} must be excluded by name`);
   }
-  assertEquals(floorFailure(cand({ tier: null })), "no_tier");
+  // ── AN UNTIERED COMPANY IS UNRANKED, NOT UNQUALIFIED ────────────────────
+  //
+  // `tier` is derived from the commercial ROLE VOCABULARY, so a null tier says
+  // the keyword list did not recognise the openings — a fact about the list,
+  // never about the company. Flooring on it unconditionally deleted a QUALIFIED
+  // lead: on task 55cf2ca4 `godela.ai` passed the Company Brain with a verified
+  // identity and three grounded claims that survived verification, and never
+  // reached the portfolio, while seven unidentifiable watch rows did.
+  assertEquals(floorFailure(cand({ tier: null, brain: null })), "no_tier",
+    "with no Brain verdict, an untiered company has nothing to stand on");
+  assertEquals(floorFailure(cand({ tier: null, brain: "review" })), "no_tier");
+  assertEquals(floorFailure(cand({ tier: null, brain: "qualified" })), null,
+    "a Brain pass is an answer; a missing ranking hint may not delete it");
 });
 
 Deno.test("21. a shortfall is reported honestly, not padded", () => {
@@ -242,4 +268,71 @@ Deno.test("the engine uses the canonical policy, not the legacy packs", async ()
     "review and watch companies must reach the Brain, not vanish");
   assertFalse(/const fromYc = keptForPacks\(c\.yc_open_jobs, packs\);/.test(src),
     "the narrow role-pack filter on YC evidence is what dropped seven companies");
+});
+
+// ═══════ P1-P3. THE PORTFOLIO MUST NOT DROP A QUALIFIED COMPANY ══
+//
+// Task 55cf2ca4 qualified four companies. The portfolio reported three, and
+// shipped seven `identity_unresolved_watch` rows — companies nobody could even
+// confirm the identity of. `godela.ai`, which had passed the Company Brain with
+// a verified identity and three grounded claims at score 1.0, was absent.
+//
+// Two mechanisms, both fixed here: the quality floor deleted it for having a
+// null tier, and the sort ranked tier ABOVE qualification so watch rows filled
+// the slice ahead of it.
+
+Deno.test("P1. THE godela.ai CASE: a qualified, untiered company is not floored", () => {
+  const godela = cand({
+    company_key: "godela.ai", company_name: "Godela", tier: null,
+    brain: "qualified", identity_status: "verified_match", score: 40,
+  });
+  const watchers = Array.from({ length: 10 }, (_, i) => cand({
+    company_key: `w${i}`, company_name: `W${i}`, tier: "A",
+    brain: null, identity_status: "unresolved", score: 200,
+  }));
+
+  const p = buildPortfolio([...watchers, godela], interpretTargets("Find 10 leads", 10));
+
+  const keys = p.entries.map((e) => e.company_key);
+  assert(keys.includes("godela.ai"),
+    `a qualified company must reach the portfolio; got ${keys.join(", ")}`);
+  assertFalse(p.excluded.some((e) => e.company_key === "godela.ai"),
+    "and it must not be floored");
+});
+
+Deno.test("P2. qualification outranks tier — watch rows cannot displace an answer", () => {
+  // Ten Tier-A watch rows with far higher scores, against one qualified
+  // company. The qualified one ranks FIRST, not eleventh-and-cut.
+  const godela = cand({
+    company_key: "godela.ai", company_name: "Godela", tier: null,
+    brain: "qualified", identity_status: "verified_match", score: 40,
+  });
+  const watchers = Array.from({ length: 10 }, (_, i) => cand({
+    company_key: `w${i}`, company_name: `W${i}`, tier: "A",
+    brain: null, identity_status: "unresolved", score: 200,
+  }));
+
+  const p = buildPortfolio([...watchers, godela], interpretTargets("Find 10 leads", 10));
+  assertEquals(p.entries[0].company_key, "godela.ai",
+    "the company the Brain qualified leads the portfolio");
+  assertEquals(p.entries[0].state, "qualified");
+  assert(p.entries[0].actionable, "and it is actionable — verified identity, Brain pass");
+  // The page is still full, and still honest about what fills it.
+  assertEquals(p.counts.delivered, 10);
+  assertEquals(p.counts.qualified, 1);
+  assertEquals(p.counts.watch, 9);
+  assertEquals(p.counts.opportunities, 1);
+  assertEquals(p.shortfall.opportunities, 9,
+    "ten rows shown, one opportunity found — the gap is nine");
+});
+
+Deno.test("P3. tier still orders companies of the same decision", () => {
+  // The fix reorders across decision classes only. Within them, tier is
+  // unchanged — A before B before C, and null last.
+  const q = (key: string, tier: PortfolioCandidate["tier"]) =>
+    cand({ company_key: key, company_name: key, tier, brain: "qualified", score: 50 });
+  const p = buildPortfolio(
+    [q("untiered", null), q("c", "C"), q("a", "A"), q("b", "B")],
+    interpretTargets("Find 10 leads", 10));
+  assertEquals(p.entries.map((e) => e.company_key), ["a", "b", "c", "untiered"]);
 });
