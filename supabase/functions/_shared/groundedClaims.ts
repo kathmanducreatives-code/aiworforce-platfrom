@@ -542,10 +542,58 @@ export const GROUNDED_CLASSIFIER_PROMPT = [
   "Distinguish facts you were given from inferences you drew.",
   "Return 'review' when the evidence is insufficient — that is the correct answer,",
   "not a failure.",
+  // Without this, `company_fit: "pass"` and `supporting_claims: []` is a
+  // well-formed response — and with no response_shape at all it was the one
+  // that came back every time.
+  "A 'pass' REQUIRES at least one supporting_claims entry. If you cannot cite",
+  "evidence for a claim, do not make the claim — answer 'review' instead.",
+  "Copy excerpts character-for-character from source_text; a paraphrase does not",
+  "match and the claim is discarded.",
   "You do not choose data providers, tools or Actors, and you never name one.",
   "You do not decide whether contact details are unlocked.",
   "Return only the requested JSON object. Do not explain your reasoning process.",
 ].join(" ");
+
+/**
+ * ONE CLAIM, as `parseClaims` expects to receive it.
+ *
+ * Lives beside the parser deliberately: every field here is one the parser
+ * actually reads, and a name that drifts apart from it is indistinguishable,
+ * downstream, from the model declining to make a claim. Both payload builders
+ * — this file's single-company one and `groundedBatchEvaluation`'s batch one —
+ * quote this same object.
+ */
+export const CLAIM_SHAPE = Object.freeze({
+  claim: "one specific, checkable statement about THIS company",
+  claim_type: CLAIM_TYPES.join("|"),
+  evidence_ids: ["evidence_id values from this company's evidence list"],
+  evidence_excerpts: [{
+    evidence_id: "one of the ids above",
+    excerpt: "a SHORT verbatim substring copied from that item's source_text",
+  }],
+});
+
+/**
+ * The JSON the classifier must return, field for field.
+ *
+ * `parseGroundedResult` reads exactly these keys and defaults every missing one
+ * — `company_fit` to "review", both claim arrays to empty. A payload that never
+ * states the shape therefore cannot fail loudly: it produces a well-formed
+ * result with nothing in it.
+ */
+export const GROUNDED_RESPONSE_SHAPE = Object.freeze({
+  business_model: { value: "string", confidence: "number", claims: [CLAIM_SHAPE] },
+  company_fit: "pass|review|fail",
+  agentory_use_case: "strong|plausible|weak|none",
+  mission_signal_assessment: {
+    strongest_signal: "string|null",
+    signal_strength: "strong|moderate|weak|none",
+    evidence_ids: [], reason: "string",
+  },
+  supporting_claims: [CLAIM_SHAPE],
+  conflicting_evidence_ids: [], missing_evidence: [], unknown_fields: [],
+  confidence: "number", reason: "string",
+});
 
 /** The payload the grounded classifier receives. */
 export function buildGroundedClassifierPayload(i: {
@@ -591,6 +639,22 @@ export function buildGroundedClassifierPayload(i: {
         never_sole_proof: v.contextual_only,
       }]),
     ),
+    // ── THE RESPONSE SHAPE WAS SIMPLY ABSENT ──────────────────────────────
+    //
+    // This payload described the evidence, the mission and the citation RULES,
+    // and then never said what JSON to return. The prose asked for claims; no
+    // field was ever named. `parseGroundedResult` defaults every missing key —
+    // `company_fit` to "review", both claim arrays to empty — so the omission
+    // could not fail loudly. It produced a well-formed verification containing
+    // nothing, for every company, forever.
+    //
+    // On task 814f193a the batch evaluator returned no rows and the engine fell
+    // back to THIS path for all four companies. Each came back `validated: 0,
+    // rejected: 0` and qualified unverified — while the previous run, which had
+    // used the batch path, validated four claims apiece. The two grounding
+    // routes were not equivalent, and only one of them had ever been given a
+    // schema.
+    response_shape: GROUNDED_RESPONSE_SHAPE,
   };
 }
 

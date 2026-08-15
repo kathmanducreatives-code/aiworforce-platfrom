@@ -23,7 +23,10 @@ import {
   buildBatchPayload, evaluateBatchResponse, planBatches, resolveBatchLimits,
   BATCH_EVALUATION_PROMPT, MAX_BATCH_SIZE, DEFAULT_MAX_EVALUATED,
 } from "../../../supabase/functions/_shared/groundedBatchEvaluation.ts";
-import { CLAIM_TYPES } from "../../../supabase/functions/_shared/groundedClaims.ts";
+import {
+  buildGroundedClassifierPayload, CLAIM_SHAPE, CLAIM_TYPES,
+  GROUNDED_CLASSIFIER_PROMPT,
+} from "../../../supabase/functions/_shared/groundedClaims.ts";
 import {
   applyPortfolioPolicy, buildCandidateSummary, buildPoolRankingPayload,
   deterministicOrder, validatePoolRanking,
@@ -658,4 +661,70 @@ Deno.test("32. a response with NO claims scores nothing — it does not score ze
     "the true statement about this response is kept");
   assertFalse(v.downgrade_reasons.some((r) => r.startsWith("grounding_score_")),
     "a score over zero claims is not a low score, it is no score");
+});
+
+// ═══════ 33-35. BOTH GROUNDING ROUTES, OR NEITHER ══
+//
+// There are TWO paths to a verification and only one of them had ever been
+// given a schema. `buildBatchPayload` describes its response; the per-company
+// `buildGroundedClassifierPayload` described the evidence, the mission and the
+// citation RULES — and then never said what JSON to return.
+//
+// `parseGroundedResult` defaults every missing key (`company_fit` to "review",
+// both claim arrays to empty), so the omission could not fail loudly. It
+// produced a well-formed verification containing nothing, every time.
+//
+// Task 814f193a is what surfaced it: the batch evaluator returned no rows, the
+// engine fell back to the per-company grounder for all four companies, and each
+// came back `validated: 0, rejected: 0` and qualified UNVERIFIED — while the
+// run before it, which used the batch path, validated four claims apiece.
+
+Deno.test("33. the single-company payload states its response shape", () => {
+  const payload = buildGroundedClassifierPayload({
+    registry: registryFor("alpha"), originalUserQuery: "q",
+  }) as Record<string, unknown>;
+
+  assert(payload.response_shape, "a payload with no response shape cannot be answered");
+  const shape = payload.response_shape as Record<string, unknown>;
+  // Every key the parser reads must be named.
+  for (const field of [
+    "business_model", "company_fit", "agentory_use_case",
+    "mission_signal_assessment", "supporting_claims",
+    "conflicting_evidence_ids", "missing_evidence", "unknown_fields",
+    "confidence", "reason",
+  ]) {
+    assert(field in shape, `parseGroundedResult reads '${field}' — the model must be told`);
+  }
+});
+
+Deno.test("34. both routes describe a claim the SAME way", () => {
+  const single = buildGroundedClassifierPayload({
+    registry: registryFor("alpha"), originalUserQuery: "q",
+  }) as Record<string, unknown>;
+  const batch = buildBatchPayload({
+    batch: [member("alpha")], originalUserQuery: "q",
+  }) as Record<string, unknown>;
+
+  const singleClaim = ((single.response_shape as Record<string, unknown>)
+    .supporting_claims as unknown[])[0];
+  const batchClaim = (((batch.response_shape as Record<string, unknown>)
+    .results as Array<Record<string, unknown>>)[0]
+    .supporting_claims as unknown[])[0];
+
+  // ONE definition, quoted twice — not two definitions that agree today.
+  assertEquals(singleClaim, batchClaim,
+    "the two grounding routes must not be able to drift apart");
+  assertEquals(singleClaim, CLAIM_SHAPE);
+});
+
+Deno.test("35. a pass with no claims is forbidden on BOTH instructions", () => {
+  for (const [name, prompt] of [
+    ["single-company", GROUNDED_CLASSIFIER_PROMPT],
+    ["batch", BATCH_EVALUATION_PROMPT],
+  ] as const) {
+    assert(prompt.toLowerCase().includes("supporting_claims"),
+      `${name}: the instruction must name the field a pass depends on`);
+    assert(prompt.toLowerCase().includes("review"),
+      `${name}: and must say what to answer instead`);
+  }
 });

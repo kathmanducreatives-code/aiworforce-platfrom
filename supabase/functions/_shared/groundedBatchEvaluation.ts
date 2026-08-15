@@ -24,7 +24,10 @@
 // PURE. No network, provider, model or database access.
 
 import {
-  CLAIM_TYPES, parseGroundedResult, verifyGroundedResult,
+  // ONE definition of a claim, beside the parser that reads it. The batch and
+  // single-company payloads must not be able to drift apart — they did, and the
+  // single-company one had no schema at all.
+  CLAIM_SHAPE, parseGroundedResult, verifyGroundedResult,
   type GroundedClassifierResult, type GroundedVerification,
 } from "./groundedClaims.ts";
 import {
@@ -145,22 +148,6 @@ export function buildBatchPayload(i: {
     },
   };
 }
-
-/**
- * ONE CLAIM, as `parseClaims`/`verifyGroundedResult` expect to receive it.
- *
- * Every field is the one the verifier actually reads: a mis-named key here is
- * indistinguishable, downstream, from the model declining to make a claim.
- */
-export const CLAIM_SHAPE = Object.freeze({
-  claim: "one specific, checkable statement about THIS company",
-  claim_type: CLAIM_TYPES.join("|"),
-  evidence_ids: ["evidence_id values from this company's evidence list"],
-  evidence_excerpts: [{
-    evidence_id: "one of the ids above",
-    excerpt: "a SHORT verbatim substring copied from that item's source_text",
-  }],
-});
 
 export const BATCH_EVALUATION_PROMPT = [
   "You assess several companies in one request. Judge each one SEPARATELY.",
