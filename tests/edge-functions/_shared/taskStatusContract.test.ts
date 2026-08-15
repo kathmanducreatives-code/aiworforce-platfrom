@@ -408,3 +408,35 @@ Deno.test("WIRING: a continuation that restored nothing refuses to overwrite", a
   // And it hands the lease back so the run stays resumable.
   assertStringIncludes(src, "rowStatus: RESUMABLE_ROW_STATUS,");
 });
+
+Deno.test("WIRING: a refusal disarms the terminal guard so it writes nothing", async () => {
+  // Task 7cd5cfb1. The restore-empty refusal worked — it stopped the ENGINE
+  // overwriting a row holding five qualified companies. Then the terminal
+  // guard's own `finally` wrote `completed / no_qualified_companies` over it
+  // anyway, because from the guard's point of view the invocation had produced
+  // no state. Returning early is not enough; the guard has to be told.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assertStringIncludes(src, 'terminalGuard.disarm("continuation_restore_empty")');
+  assertStringIncludes(src, 'terminalGuard.disarm("continuation_not_accepted")');
+
+  // Both must disarm BEFORE returning, or the finally still fires.
+  for (const reason of ["continuation_restore_empty", "continuation_not_accepted"]) {
+    const disarmAt = src.indexOf(`terminalGuard.disarm("${reason}")`);
+    const returnAt = src.indexOf(`error: "${reason}"`);
+    assert(disarmAt > 0 && returnAt > 0 && disarmAt < returnAt,
+      `${reason}: the guard must be disarmed before the refusal returns`);
+  }
+
+  // And the guard must actually honour it.
+  const guard = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/leadRunTerminalGuard.ts", import.meta.url));
+  assertStringIncludes(guard, "disarm: (reason: string) => void;");
+  assertStringIncludes(guard, "terminal_guard_disarmed");
+  // The short-circuit sits at the TOP of the finally, ahead of every write.
+  const finallyAt = guard.indexOf("} finally {");
+  const shortCircuitAt = guard.indexOf("if (disarmed !== null)");
+  const firstWriteAt = guard.indexOf("await db.writeTask(");
+  assert(finallyAt < shortCircuitAt && shortCircuitAt < firstWriteAt,
+    "the disarm check must precede any write the guard performs");
+});

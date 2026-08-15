@@ -143,6 +143,21 @@ export interface RunTerminalGuard {
   observe: (state: FinalizerState | null | undefined) => void;
   /** What the guard would write right now. Exposed for logging and tests. */
   currentRecord: () => TerminalRecord;
+  /**
+   * STAND DOWN — this invocation established nothing and must write nothing.
+   *
+   * The guard exists so a crash can never leave a row Running forever, and for
+   * a run that DID something its write is always right. A REFUSAL is different:
+   * a continuation that could not restore its checkpoint, or could not claim the
+   * mission path, has learned nothing about the work and is returning precisely
+   * so the previous slice's result survives.
+   *
+   * Without this the guard defeated that. On task 7cd5cfb1 the restore-empty
+   * refusal returned early, and the guard's `finally` then wrote
+   * `completed / no_qualified_companies` over a row holding five qualified
+   * companies — the exact overwrite the refusal existed to prevent.
+   */
+  disarm: (reason: string) => void;
   run: <T>(body: (deadline: ExecutionDeadline) => Promise<T>) => Promise<T | undefined>;
 }
 
@@ -160,6 +175,8 @@ export function createRunTerminalGuard(
   let planId: string | null = null;
   let state: FinalizerState | null = null;
   let caught: unknown = undefined;
+  // Non-null once an invocation has declared it established nothing. See `disarm`.
+  let disarmed: string | null = null;
 
   const record = () => decideTerminalRecord(state, {
     elapsedMs: deadline.elapsedMs(),
@@ -175,6 +192,9 @@ export function createRunTerminalGuard(
     },
     observe: (s) => { if (s) state = s; },
     currentRecord: record,
+    disarm: (reason: string) => {
+      disarmed = reason;
+    },
     run: async <T>(body: (d: ExecutionDeadline) => Promise<T>): Promise<T | undefined> => {
       let result: T | undefined;
       try {
@@ -189,6 +209,12 @@ export function createRunTerminalGuard(
         throw e;
       } finally {
         try {
+          if (disarmed !== null) {
+            log("terminal_guard_disarmed", {
+              task_id: taskId, plan_id: planId, reason: disarmed,
+            });
+            return;
+          }
           const rec = record();
           const rows = mapTerminalRecordToRows(rec);
           log("terminal_guard_decision", {

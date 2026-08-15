@@ -2059,6 +2059,11 @@ Deno.serve(async (req) => {
                 claimId: heldClaim.claimId, rowStatus: RESUMABLE_ROW_STATUS,
               });
             }
+            // AND THE GUARD MUST NOT WRITE EITHER. Returning early stopped the
+            // ENGINE overwriting the row; the terminal guard's `finally` then
+            // did it anyway, stamping `completed / no_qualified_companies` over
+            // five qualified companies on task 7cd5cfb1.
+            terminalGuard.disarm("continuation_restore_empty");
             return json({
               success: false,
               error: "continuation_restore_empty",
@@ -4311,6 +4316,9 @@ Deno.serve(async (req) => {
               claimId: heldClaim.claimId, rowStatus: RESUMABLE_ROW_STATUS,
             });
           }
+          // Same reason as the restore-empty refusal: nothing was established,
+          // so nothing may be written.
+          terminalGuard.disarm("continuation_not_accepted");
           return json({
             success: false,
             error: "continuation_not_accepted",
