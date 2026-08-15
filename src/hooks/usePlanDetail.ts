@@ -5,6 +5,7 @@ import {
 } from '@/lib/orchestration';
 import { deriveWorkflowUiState, type WorkflowRunUiState } from '@/lib/chat/state';
 import { decidePlanRefetch } from '@/lib/chat/planRefetch';
+import { coalesceLoads } from '@/lib/chat/coalescedLoad';
 
 function latestActivityTs(plan: DBPlan | null, tasks: DBTask[], activity: DBActivity[], toolCalls: DBToolCall[]): string | null {
   const candidates: (string | null)[] = [
@@ -57,7 +58,7 @@ export function usePlanDetail(planId: string | null) {
     }
     let cancelled = false;
 
-    const load = async () => {
+    const read = async () => {
       setLoading(true);
       const [p, t, a, ap, tc] = await Promise.all([
         fetchPlan(planId),
@@ -75,6 +76,19 @@ export function usePlanDetail(planId: string | null) {
       planRef.current = p; tasksRef.current = t; approvalsRef.current = ap;
       setPlan(p); setTasks(t); setActivity(a); setApprovals(ap); setToolCalls(tc); setLoading(false);
     };
+
+    // ONE OUTSTANDING READ, HOWEVER MANY THINGS ASK FOR ONE.
+    //
+    // `read` fans out to five queries and is triggered from four places: the
+    // heartbeat below, every realtime event, refocus, and `refresh`. Before
+    // this, none of them waited for the previous read — so once the backend
+    // answered slower than the heartbeat, reads accumulated without bound and
+    // one open tab could exhaust PostgREST's pool, timing out every other
+    // request in the app. See `coalesceLoads` for the full account.
+    const load = coalesceLoads(read, {
+      isCancelled: () => cancelled,
+      onError: () => { if (!cancelled) setLoading(false); },
+    });
     load();
 
     // PRIMARY PATH. Realtime pushes plan, task, activity, approval and tool-call
