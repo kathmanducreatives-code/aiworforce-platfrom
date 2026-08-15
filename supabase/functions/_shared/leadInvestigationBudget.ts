@@ -459,6 +459,186 @@ export function resolveGptBudget(i: {
   };
 }
 
+// ──────────────────────────────── the investigation frontier ────────────────
+//
+// THE DEFECT THIS REPLACES.
+//
+// The shortlist was a ONE-TIME PARTITION of the pool, computed inside the
+// discovery capability. A resumed run skips completed capabilities, so it was
+// computed exactly once per lineage and never revisited. A run that discovered
+// 100 companies, investigated the 10 the budget allowed and qualified 2 could
+// never look at the other 90 — not on a continuation, not ever.
+//
+// Worse, it did not fail quietly. Those 90 were checkpointed with
+// `identity: "not_started"`, which `nextStageFor` reads as "still owes
+// identity", so `buildCheckpoint` listed all 90 in `pending_company_keys` and
+// set `continuation_required`. The product offered "Continue verification"
+// forever, and every continuation restored the same frozen shortlist and did
+// nothing for them.
+//
+// ── POOL AND SLICE ARE DIFFERENT THINGS ─────────────────────────────────────
+//
+// The budget answers "how much may we spend in one pass?". It was also being
+// used to answer "how many companies exist for this mission?", which is the
+// pool — and the pool must stay open until the goal is met or genuinely
+// exhausted.
+//
+// So a company is no longer in or out. It carries a STATE, and the only state
+// that closes it forever is one somebody actually decided.
+
+export type InvestigationState =
+  /** Ranked and waiting. Not judged, not spent on — the frontier. */
+  | "pending_investigation"
+  /** Selected for the current pass. */
+  | "in_flight"
+  /** Paid for and carried to a terminal outcome. */
+  | "investigated"
+  /** Closed by a decision: GPT said irrelevant, or a mission constraint. */
+  | "excluded_permanently";
+
+export const INVESTIGATION_STATES: readonly InvestigationState[] = [
+  "pending_investigation", "in_flight", "investigated", "excluded_permanently",
+];
+
+export function asInvestigationState(v: unknown): InvestigationState {
+  const s = String(v ?? "");
+  return (INVESTIGATION_STATES as readonly string[]).includes(s)
+    ? s as InvestigationState
+    : "pending_investigation";
+}
+
+/** Is this company still available to investigate on a later pass? */
+export function isFrontier(s: InvestigationState): boolean {
+  return s === "pending_investigation";
+}
+
+/** Has anything been spent on this company? */
+export function wasInvestigated(s: InvestigationState): boolean {
+  return s === "in_flight" || s === "investigated";
+}
+
+export interface FrontierCandidate {
+  company_key: string;
+  state: InvestigationState;
+  /** Position in the persisted triage ranking. Lower is better. */
+  rank: number;
+}
+
+export interface SliceDecision {
+  /** Companies to investigate on this pass. */
+  selected: string[];
+  /** Still waiting after this slice — the size of the remaining frontier. */
+  remaining: number;
+  /** Already carried to a terminal outcome. */
+  investigated: number;
+  /** Closed by a decision and never eligible again. */
+  excluded: number;
+  /** What bounded this slice. */
+  reason: "budget" | "frontier_exhausted" | "no_capacity";
+}
+
+/**
+ * Take the next slice of the frontier, in ranked order.
+ *
+ * Deliberately dumb: the ranking was decided once by GPT triage and persisted,
+ * so selection is a cursor over it rather than a second opinion. That is what
+ * makes it safe to run on EVERY invocation — it cannot disagree with itself
+ * between passes, and it re-derives nothing.
+ *
+ * `budget` is the per-pass spend allowance, NOT the size of the pool. A slice
+ * that empties the budget leaves the rest of the frontier exactly where it was:
+ * `pending_investigation`, ranked, and recoverable by the next pass or the next
+ * invocation.
+ */
+export function selectInvestigationSlice(
+  candidates: readonly FrontierCandidate[], budget: number,
+): SliceDecision {
+  const cap = Math.max(0, Math.trunc(budget));
+  const investigated = candidates.filter((c) => c.state === "investigated").length;
+  const excluded = candidates.filter((c) => c.state === "excluded_permanently").length;
+  const frontier = candidates
+    .filter((c) => isFrontier(c.state))
+    .slice()
+    .sort((a, b) => a.rank - b.rank);
+
+  const selected = frontier.slice(0, cap).map((c) => c.company_key);
+  return {
+    selected,
+    remaining: frontier.length - selected.length,
+    investigated,
+    excluded,
+    reason: cap === 0
+      ? "no_capacity"
+      : selected.length < cap
+      ? "frontier_exhausted"
+      : "budget",
+  };
+}
+
+/**
+ * Should another slice be taken, in THIS invocation?
+ *
+ * The yield question the pipeline never asked. A run that qualified 2 of a
+ * requested 10 with 39 eligible companies untouched has not finished; it has
+ * merely spent its first slice. It continues when all four hold:
+ *
+ *   * the goal is unmet
+ *   * the frontier is non-empty
+ *   * the wall clock can carry another slice end to end
+ *   * we are under the pass ceiling
+ *
+ * The pass ceiling exists because every other guard is a measurement, and a
+ * measurement that goes wrong should cost a bounded amount. It is not the
+ * primary control — the clock is.
+ */
+export const MAX_INVESTIGATION_PASSES = 6;
+export const MAX_PASSES_ENV = "LEAD_INVESTIGATION_MAX_PASSES";
+
+/**
+ * The pass ceiling, overridable.
+ *
+ * `1` disables multi-pass entirely — one slice, as before. Useful to an
+ * operator who wants the old spend profile, and to a test whose subject is a
+ * single stage rather than the yield loop.
+ */
+export function resolveMaxPasses(read?: EnvReader): number {
+  const get: EnvReader = read ?? ((k) => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  });
+  const raw = Number(get(MAX_PASSES_ENV));
+  return Number.isFinite(raw) && raw > 0
+    ? Math.min(Math.trunc(raw), MAX_INVESTIGATION_PASSES)
+    : MAX_INVESTIGATION_PASSES;
+}
+
+export function shouldTakeAnotherSlice(i: {
+  qualified: number;
+  requestedCount: number;
+  frontierRemaining: number;
+  passesTaken: number;
+  /** Companies the remaining wall clock can still carry end to end. */
+  timeCapacity: number;
+  /** Overridable ceiling; 1 disables multi-pass. */
+  maxPasses?: number;
+}): { take: boolean; reason: string } {
+  const ceiling = i.maxPasses ?? MAX_INVESTIGATION_PASSES;
+  if (i.qualified >= i.requestedCount) {
+    return { take: false, reason: "quota_met" };
+  }
+  if (i.frontierRemaining <= 0) {
+    return { take: false, reason: "frontier_exhausted" };
+  }
+  if (i.passesTaken >= ceiling) {
+    return { take: false, reason: "pass_ceiling" };
+  }
+  if (i.timeCapacity <= 0) {
+    // NOT A FAILURE. The frontier survives in the checkpoint and the next
+    // invocation opens with a fresh window.
+    return { take: false, reason: "no_time_for_another_slice" };
+  }
+  return { take: true, reason: "quota_unmet_frontier_remains" };
+}
+
 // ─────────────────────────────────────────────────────────── smart shortlist ──
 
 /** One candidate, as the shortlist ranker sees it. */

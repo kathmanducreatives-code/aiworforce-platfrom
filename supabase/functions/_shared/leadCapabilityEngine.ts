@@ -104,9 +104,13 @@ import {
   type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
 } from "./missionTriage.ts";
 import {
-  buildSmartShortlist, identityStopThreshold, resolveGptBudget,
-  resolveInvestigationBudget, resolveTimeCapacity, resolveUntriagedPolicy,
-  type GptBudget, type InvestigationBudget, type TimeCapacity,
+  asInvestigationState, buildSmartShortlist, identityStopThreshold,
+  resolveMaxPasses,
+  isFrontier, resolveGptBudget, resolveInvestigationBudget, resolveTimeCapacity,
+  resolveUntriagedPolicy, selectInvestigationSlice, shouldTakeAnotherSlice,
+  wasInvestigated,
+  type GptBudget, type InvestigationBudget, type InvestigationState,
+  type TimeCapacity,
 } from "./leadInvestigationBudget.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson,
@@ -135,6 +139,18 @@ import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
 import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./leadMission.ts";
+
+/**
+ * The PAID stages a new investigation slice must re-run.
+ *
+ * Discovery is deliberately absent: the pool is discovered once and the
+ * frontier is a cursor over it, so another pass costs no discovery. Persistence
+ * is absent because it runs once at the end over everything that qualified.
+ */
+const INVESTIGATION_CAPABILITIES: readonly CapabilityId[] = [
+  "company_identity_resolution", "company_enrichment",
+  "hiring_verification", "company_brain_qualification",
+];
 
 export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1" as const;
 
@@ -301,7 +317,20 @@ export interface CapabilityExecutionState {
    * simply the size of the pool.
    */
   shortlist_decision: {
+    /**
+     * THE PER-PASS SPEND ALLOWANCE — what one investigation slice may buy.
+     *
+     * Not the number handed to `buildSmartShortlist`. That call is deliberately
+     * given the whole pool so it ranks without excluding anyone, and recording
+     * ITS budget here reported the pool size as though it were the spend.
+     */
     budget: InvestigationBudget;
+    /**
+     * POOL COMPOSITION from the ranking pass: how many were hard-excluded, how
+     * many each triage verdict, how many ranked. `counts.selected` is a
+     * property of THAT call and equals `ranked` — it is not the spend. Read
+     * `investigation_selected` for what was actually authorised.
+     */
     counts: Record<string, number>;
     ranking: string[];
     /** How untriaged candidates were treated. See `UntriagedPolicy`. */
@@ -311,6 +340,37 @@ export interface CapabilityExecutionState {
     /** The CHEAP budget, sized independently of the paid one. */
     gpt_budget: GptBudget;
   } | null;
+  /**
+   * THE FULL RANKED POOL, persisted so a continuation can resume the frontier.
+   *
+   * The ranking is decided once by GPT triage. Every later pass and every later
+   * invocation is a cursor over THIS list, which is why the shortlist can be
+   * re-entrant without ever re-triaging or re-deciding.
+   */
+  investigation_ranking: string[];
+  /**
+   * COMPANIES AUTHORISED FOR PAID INVESTIGATION by this invocation, summed
+   * over every pass. This — not the ranking's `counts.selected` — is what
+   * "how many did the run shortlist?" means, and it lives on the state rather
+   * than inside `shortlist_decision` because a continuation skips discovery
+   * and so has no shortlist decision of its own, yet still buys slices.
+   */
+  investigation_selected: number;
+  /** One entry per slice taken. "Why only ten?" is answerable from this. */
+  investigation_slices: Array<{
+    pass: number;
+    selected: number;
+    /**
+     * Companies this pass inherited already `in_flight` from a previous
+     * invocation. They spend the same allowance, so `selected` is reduced by
+     * this much — recorded so a small slice is explainable.
+     */
+    carried: number;
+    remaining: number;
+    investigated: number;
+    excluded: number;
+    reason: string;
+  }>;
   /**
    * The wall-clock capacity that bounded paid investigation.
    *
@@ -345,6 +405,9 @@ export function newExecutionState(
     prequalification: null,
     triage: null,
     shortlist_decision: null,
+    investigation_ranking: [],
+    investigation_selected: 0,
+    investigation_slices: [],
     investigation_capacity: null,
     progress: null,
   };
@@ -425,6 +488,19 @@ export interface EngineCompany {
    * prevent.
    */
   shortlist_exclusion: string | null;
+  /**
+   * WHERE THIS COMPANY SITS IN THE INVESTIGATION FRONTIER.
+   *
+   * `shortlisted` is now DERIVED from this — see `wasInvestigated`. The boolean
+   * could only say in-or-out, and "out" was indistinguishable between "GPT said
+   * irrelevant" and "the budget stopped at ten". The first is a decision and
+   * closes the company; the second is a queue position and must survive to the
+   * next pass. Conflating them is what stranded 90 of 100 companies while the
+   * checkpoint reported them pending forever.
+   */
+  investigation_state: InvestigationState;
+  /** Position in the persisted triage ranking. Lower is investigated first. */
+  investigation_rank: number;
   company: NormalizedHiringCompany;
   identity: IdentityResolution | null;
   /**
@@ -899,11 +975,35 @@ export async function runCapabilityPlan(
    * Idempotent — it is applied before every capability and must stay safe to
    * repeat.
    */
+  /** Companies whose frontier position has already been restored. */
+  const frontierRestored = new Set<string>();
   const restoreFromResume = (c: EngineCompany): void => {
     const prior = priorRecords.get(c.key);
     if (!prior) return;
     for (const op of prior.completed_operations) {
       if (!c.completed_operations.includes(op)) c.completed_operations.push(op);
+    }
+    // ── THE FRONTIER SURVIVES REDISCOVERY TOO ──────────────────────────────
+    //
+    // A continuation does not always skip discovery: a fresh invocation that
+    // carries only the resume RECORDS re-runs it, rebuilding the working set
+    // from the provider. Without this, those rebuilt companies arrive with a
+    // default `pending_investigation` and the ranking below hands the SAME
+    // first slice out again — a continuation that replays instead of advancing.
+    // ONCE PER COMPANY, and only the first time it is seen. `restoreFromResume`
+    // runs before EVERY capability, so re-applying the snapshot would overwrite
+    // live progress: a company selected into this pass's slice would be reset
+    // to the state run 1 left it in, and the frontier would never advance.
+    if (prior.snapshot && !frontierRestored.has(c.key)) {
+      frontierRestored.add(c.key);
+      const snap = prior.snapshot as unknown as {
+        investigation_state?: unknown; investigation_rank?: unknown;
+      };
+      c.investigation_state = asInvestigationState(snap.investigation_state);
+      if (typeof snap.investigation_rank === "number") {
+        c.investigation_rank = snap.investigation_rank;
+      }
+      c.shortlisted = wasInvestigated(c.investigation_state);
     }
     if (prior.identity === "resolved" && prior.linkedin_company_url &&
         !c.company.linkedin_company_url) {
@@ -1045,26 +1145,59 @@ export async function runCapabilityPlan(
         score: c.prequalified?.score ?? null,
         name: c.prequalified?.name ?? c.company.company_name ?? c.key,
       })),
-      budget,
+      // RANK THE WHOLE POOL. This call now decides ORDER and PERMANENT
+      // EXCLUSION only — the per-pass slice is taken separately. Passing the
+      // spend budget here would mark everything past position ten
+      // `budget_exhausted`, and this function reads that as a decision, which
+      // is exactly how 90 companies were closed for the life of a lineage.
+      { ...budget, budget: companies.length },
       // THE UNTRIAGED SPEND POLICY, read from the same env the budget uses.
       { untriaged: resolveUntriagedPolicy(opts.readEnv) },
     );
 
+    // ── THE RANKING IS THE DURABLE ARTEFACT, NOT THE SELECTION ─────────────
+    //
+    // `buildSmartShortlist` decides ORDER and permanent EXCLUSION. It no longer
+    // decides who is investigated — that is a per-pass slice, taken below and
+    // again on every later pass and every continuation.
     const chosen = new Set(decision.selected);
+    const rankOf = new Map(decision.ranking.map((k, i) => [k, i]));
     for (const c of companies) {
-      c.shortlisted = chosen.has(c.key);
-      // WHY A COMPANY WAS NOT PURSUED, on the company itself — "the budget ran
-      // out" and "GPT said this is not what you asked for" are different facts
-      // and the Workbench must never render the first as the second.
-      if (!c.shortlisted) {
-        const why = decision.excluded.find((e) => e.company_key === c.key);
-        c.shortlist_exclusion = why?.reason ?? "not_selected";
+      c.investigation_rank = rankOf.get(c.key) ?? Number.MAX_SAFE_INTEGER;
+      const why = decision.excluded.find((e) => e.company_key === c.key);
+      // ONLY A DECISION CLOSES A COMPANY. `budget_exhausted` is a queue
+      // position and must never reach this branch — the ranking call above is
+      // given the whole pool precisely so it cannot — but the guard is stated
+      // here too, because the cost of getting it wrong is silent and permanent.
+      const permanent = why != null && why.reason !== "budget_exhausted" &&
+        why.reason !== "not_selected";
+      if (permanent) {
+        // CLOSED BY A DECISION. GPT said irrelevant, or a mission-stated
+        // constraint is verifiably violated. These never re-enter the frontier.
+        c.investigation_state = "excluded_permanently";
+        c.shortlist_exclusion = why!.reason;
+      } else if (wasInvestigated(c.investigation_state)) {
+        // ALREADY PAID FOR, by an earlier pass or an earlier invocation. The
+        // ranking may reorder the frontier; it may never return a company that
+        // has been investigated to it, or the continuation re-buys the slice it
+        // just finished.
+        c.shortlist_exclusion = null;
       } else {
+        // RANKED AND WAITING. `chosen` is only the first slice; everything else
+        // stays on the frontier rather than being marked "not selected", which
+        // is what froze 90 companies for the life of a lineage.
+        c.investigation_state = "pending_investigation";
         c.shortlist_exclusion = null;
       }
+      c.shortlisted = wasInvestigated(c.investigation_state);
     }
+    state.investigation_ranking = decision.ranking.slice();
     state.shortlist_decision = {
-      budget: decision.budget, counts: decision.counts,
+      // THE SPEND BUDGET, NOT THE RANKING BUDGET. `decision.budget` carries the
+      // pool-sized number this call was given so it would rank rather than
+      // exclude; recording it here made the state claim the run had authorised
+      // one paid investigation per discovered company.
+      budget, counts: decision.counts,
       untriaged_policy: decision.untriaged_policy,
       ranking: decision.ranking.slice(0, 50),
       // BOTH BUDGETS, RECORDED SEPARATELY. "Why did this run only investigate
@@ -1074,7 +1207,7 @@ export async function runCapabilityPlan(
       gpt_budget: gptBudget,
     };
     state.investigation_capacity = capacity;
-    log("smart_shortlist_complete", {
+    log("triage_and_ranking_complete", {
       budget: budget.budget, budget_source: budget.source,
       count_budget: countBudget.budget,
       requested: budget.requested_count, pool: budget.pool_size,
@@ -1087,7 +1220,107 @@ export async function runCapabilityPlan(
       usable_ms: capacity?.usable_ms ?? null,
       gpt_read_budget: gptBudget.read_budget,
       gpt_evaluation_budget: gptBudget.evaluation_budget,
+      frontier: companies.filter((c) => isFrontier(c.investigation_state)).length,
+      excluded_permanently: companies.filter(
+        (c) => c.investigation_state === "excluded_permanently").length,
+      first_slice_preview: [...chosen].length,
     });
+  };
+
+  /**
+   * TAKE THE NEXT SLICE OF THE FRONTIER — every pass, every invocation.
+   *
+   * This is the step whose absence stranded 90 companies. Selection used to
+   * live inside `applyMissionIntelligence`, which runs inside the discovery
+   * capability, which a continuation SKIPS — so the shortlist was computed once
+   * per lineage and no later pass could widen it.
+   *
+   * It runs here instead: cheap, deterministic, a cursor over a ranking that
+   * was decided once. It re-derives nothing and cannot disagree with itself
+   * between passes.
+   *
+   * Returns how many companies were newly selected.
+   */
+  const takeInvestigationSlice = (
+    companies: EngineCompany[], pass: number,
+  ): number => {
+    // The per-pass allowance. Sized on the pool that is still open, so a slice
+    // never authorises more than the frontier holds.
+    const budget = resolveInvestigationBudget({
+      requestedCount: effectiveRequestedCount(opts.mission),
+      poolSize: companies.filter((c) => isFrontier(c.investigation_state)).length,
+      read: opts.readEnv,
+    });
+    // ── WORK ALREADY OWED SPENDS THE SAME ALLOWANCE ────────────────────────
+    //
+    // A continuation restores companies a previous invocation selected but
+    // never got to buy — the deadline stopped the identity stage mid-slice.
+    // They are already authorised, they still owe a paid search, and THIS pass
+    // will make it. So they are part of THIS pass's spend.
+    //
+    // Selecting a full fresh slice on top of them let one pass authorise budget
+    // PLUS carried work: a run resuming eight deferred candidates on a budget
+    // of ten made eighteen paid searches.
+    //
+    // Measured by what is still OWED, not by `in_flight`. A slice that was
+    // closed at the end of an invocation leaves its unbought companies
+    // `investigated` — the state says the pass is over, not that the money was
+    // spent — so keying on `in_flight` alone missed exactly the companies a
+    // continuation is about to pay for.
+    //
+    // Only the remainder is available. Zero is a valid answer: a continuation
+    // that inherits a full slice takes none, finishes what it owes, and lets
+    // the yield loop decide whether to open the frontier further.
+    const carried = companies.filter((c) =>
+      wasInvestigated(c.investigation_state) && c.identity === null &&
+      !c.company.linkedin_company_url
+    ).length;
+    const allowance = Math.max(0, budget.budget - carried);
+    const slice = selectInvestigationSlice(
+      companies.map((c) => ({
+        company_key: c.key,
+        state: c.investigation_state,
+        rank: c.investigation_rank,
+      })),
+      allowance,
+    );
+    const picked = new Set(slice.selected);
+    for (const c of companies) {
+      if (!picked.has(c.key)) continue;
+      c.investigation_state = "in_flight";
+      // `shortlisted` is the derived view every downstream stage already reads.
+      c.shortlisted = true;
+      c.shortlist_exclusion = null;
+    }
+    // THE RUNNING TOTAL OF AUTHORISED SPEND. Every downstream report of "how
+    // many did we shortlist" reads this rather than the ranking's own count.
+    // Carried work counts: this invocation buys those searches too.
+    state.investigation_selected += slice.selected.length + carried;
+    state.investigation_slices.push({
+      pass,
+      selected: slice.selected.length,
+      carried,
+      remaining: slice.remaining,
+      investigated: slice.investigated,
+      excluded: slice.excluded,
+      reason: slice.reason,
+    });
+    log("investigation_slice_taken", {
+      pass, selected: slice.selected.length, frontier_remaining: slice.remaining,
+      already_investigated: slice.investigated,
+      excluded_permanently: slice.excluded, reason: slice.reason,
+      budget: budget.budget, budget_source: budget.source,
+      // "Why did this pass only take two?" — because it inherited eight.
+      carried_in_flight: carried, allowance,
+    });
+    return slice.selected.length;
+  };
+
+  /** Everything selected on an earlier pass has had its money spent. */
+  const closeInvestigatedSlice = (companies: EngineCompany[]): void => {
+    for (const c of companies) {
+      if (c.investigation_state === "in_flight") c.investigation_state = "investigated";
+    }
   };
 
   /**
@@ -1350,7 +1583,11 @@ export async function runCapabilityPlan(
     state.current_capability = null;
   };
 
-  for (const step of opts.plan.steps) {
+  /** Investigation passes taken. One per slice; bounded by the yield gate. */
+  let investigationPass = 1;
+
+  for (let stepIndex = 0; stepIndex < opts.plan.steps.length; stepIndex++) {
+    const step = opts.plan.steps[stepIndex];
     const cap = step.capability;
 
     // RESUME. A capability already completed is not re-paid for.
@@ -1374,11 +1611,26 @@ export async function runCapabilityPlan(
       if (WORKING_SET_CAPABILITIES.has(cap) && companies.length === 0 && resumeScope) {
         const restored = restoreWorkingSet(resumeScope.records);
         for (const c of restored) companies.push(c);
+        // ── A CONTINUATION TAKES A FRESH SLICE ──────────────────────────
+        //
+        // THE FIX FOR THE FROZEN POOL. Selection used to live inside discovery,
+        // which is what we just skipped — so a continuation restored the same
+        // ten companies and did nothing for the other ninety, forever, while
+        // the checkpoint kept reporting them pending.
+        //
+        // The ranking is restored with the working set, so this is the same
+        // cheap cursor the first pass used. Nothing is re-triaged and nothing
+        // is re-decided; the frontier simply advances.
+        if (restored.some((c) => isFrontier(c.investigation_state))) {
+          takeInvestigationSlice(companies, 1);
+        }
         log("working_set_restored_from_checkpoint", {
           capability: cap,
           restored: restored.length,
           records: resumeScope.records.length,
           shortlisted: restored.filter((c) => c.shortlisted).length,
+          frontier: restored.filter(
+            (c) => isFrontier(c.investigation_state)).length,
           // Zero restored from a non-empty ledger means the checkpoint predates
           // the snapshot field — worth seeing, and not an error.
           snapshots_missing: resumeScope.records.filter((r) => !r.snapshot).length,
@@ -1551,7 +1803,20 @@ export async function runCapabilityPlan(
       // semantically worth money. That decision was a substring match, and it
       // excluded ML Engineer, Founding Engineer and Member of Technical Staff
       // from a Mission asking for software engineers.
+      // THE PRIOR FRONTIER, ONTO THE COMPANIES DISCOVERY JUST REBUILT.
+      //
+      // The loop-level restore runs before each capability, and on the discovery
+      // pass `companies` is still empty — so a continuation that RE-RUNS
+      // discovery (rather than skipping it) rebuilt every company at the
+      // default `pending_investigation` and handed out the same first slice
+      // again. Applied here, after the working set exists and before it is
+      // ranked.
+      if (resumeScope) for (const c of companies) restoreFromResume(c);
       await applyMissionIntelligence(companies);
+      // THE FIRST SLICE. Ranking and selection are now separate acts: the
+      // ranking is decided once, here; the slice is taken here and again on
+      // every later pass and every continuation.
+      takeInvestigationSlice(companies, 1);
 
       finish(cap, "complete", companies.length, used, true, null);
       await publish("prequalified");
@@ -2672,6 +2937,77 @@ export async function runCapabilityPlan(
           `carried no hiring assessment) — nothing was evaluated, nothing was rejected`
         : `no company passed the Company Brain; ${unknown} held as unknown pending evidence`;
       finish(cap, "complete", passed, [], passed > 0, reason);
+
+      // ── THE YIELD GATE: 2 OF 10 IS NOT A FINISHED RUN ────────────────────
+      //
+      // The pipeline used to stop here regardless of outcome. A run that
+      // qualified 2 of a requested 10, with 39 eligible companies never
+      // touched, reported itself complete — because the shortlist had been
+      // spent, not because the goal was met or the pool exhausted.
+      //
+      // Everything selected so far is now closed as `investigated`, the next
+      // slice is taken from the frontier, and the paid stages are re-opened for
+      // it. The four guards live in `shouldTakeAnotherSlice`; the binding one is
+      // the clock, which is measured fresh here rather than assumed.
+      const qualifiedSoFar = companies.filter((c) => c.verdict === "pass").length;
+      const frontierLeft = companies.filter(
+        (c) => isFrontier(c.investigation_state)).length;
+      const sliceCapacity = deps.deadline
+        ? resolveTimeCapacity({
+          remainingMs: deps.deadline.remainingMs(),
+          reserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
+          concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
+          enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
+          read: opts.readEnv,
+          observedIdentityMs: deps.deadline.estimateFor("apify_linkedin_company_search"),
+        }).capacity
+        // No deadline (offline callers) ⇒ the clock cannot bind.
+        : Number.MAX_SAFE_INTEGER;
+      const yieldGate = shouldTakeAnotherSlice({
+        qualified: qualifiedSoFar,
+        requestedCount: effectiveRequestedCount(opts.mission),
+        frontierRemaining: frontierLeft,
+        passesTaken: investigationPass,
+        timeCapacity: sliceCapacity,
+        maxPasses: resolveMaxPasses(opts.readEnv),
+      });
+      log("investigation_yield_gate", {
+        pass: investigationPass, qualified: qualifiedSoFar,
+        requested: effectiveRequestedCount(opts.mission),
+        frontier_remaining: frontierLeft, time_capacity: sliceCapacity,
+        take_another_slice: yieldGate.take, reason: yieldGate.reason,
+      });
+
+      if (yieldGate.take) {
+        closeInvestigatedSlice(companies);
+        const taken = takeInvestigationSlice(companies, investigationPass + 1);
+        if (taken > 0) {
+          investigationPass++;
+          // RE-OPEN THE PAID STAGES FOR THE NEW SLICE. They are complete for the
+          // companies already carried; `shouldSkipProviderCall` is what stops
+          // those being re-bought, not the completed list.
+          for (const reopen of INVESTIGATION_CAPABILITIES) {
+            state.completed_capabilities = state.completed_capabilities.filter(
+              (x) => x !== reopen);
+            if (!state.pending_capabilities.includes(reopen)) {
+              state.pending_capabilities.push(reopen);
+            }
+          }
+          const rewindTo = opts.plan.steps.findIndex(
+            (x) => x.capability === "company_identity_resolution");
+          if (rewindTo >= 0) {
+            log("investigation_next_pass", {
+              pass: investigationPass, selected: taken, rewind_to: rewindTo,
+            });
+            stepIndex = rewindTo - 1;   // the loop's ++ lands on identity
+            continue;
+          }
+        }
+      }
+      // NOTHING MORE TO TAKE. Whatever is still on the frontier stays there,
+      // ranked and recoverable by the next invocation.
+      closeInvestigatedSlice(companies);
+
       log("company_brain_qualification_complete", {
         ...summariseEvaluationPaths(companies),
         // The per-company array is already in the run result; the log carries
@@ -3009,6 +3345,12 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // continuation would report a provider error or a deadline deferral as
       // `not_attempted` — losing precisely the fact the outcome exists to keep.
       enrichment_outcome: c.enrichment_outcome,
+      // THE FRONTIER SURVIVES THE PROCESS. Without these three a continuation
+      // cannot tell a company that is waiting from one that was closed, and the
+      // pool is frozen at whatever the first invocation selected.
+      investigation_state: c.investigation_state,
+      investigation_rank: c.investigation_rank,
+      triage: (c.triage ?? null) as unknown as Record<string, unknown> | null,
     },
     updated_at: new Date().toISOString(),
   };
@@ -3055,6 +3397,16 @@ export function restoreWorkingSet(
     c.enrichment_outcome = c.enriched !== null
       ? "success"
       : asEnrichmentOutcome(s.enrichment_outcome);
+    // NARROWED, and an absent value returns the company to the FRONTIER rather
+    // than closing it — the safe direction for a pre-frontier checkpoint.
+    c.investigation_state = asInvestigationState(s.investigation_state);
+    c.investigation_rank = typeof s.investigation_rank === "number"
+      ? s.investigation_rank
+      : Number.MAX_SAFE_INTEGER;
+    c.triage = (s.triage ?? null) as unknown as TriageVerdict | null;
+    // A company already carried to a terminal outcome must not re-enter the
+    // frontier; `shortlisted` stays the derived view of that.
+    c.shortlisted = wasInvestigated(c.investigation_state);
     // THE LEDGER OF WHAT WAS BOUGHT. `shouldSkipProviderCall` reads this, and it
     // is the only thing standing between a resume and paying twice.
     for (const op of r.completed_operations) {
@@ -3453,6 +3805,9 @@ function addCompany(
   set.push({
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     triage: null, shortlist_exclusion: null,
+    // PENDING, NOT EXCLUDED. A company enters the frontier and leaves it only
+    // by being investigated or by a decision that closes it.
+    investigation_state: "pending_investigation", investigation_rank: Number.MAX_SAFE_INTEGER,
     company: c, identity: null, stage_block: null, enriched: null,
     // NOT_ATTEMPTED IS THE HONEST DEFAULT, exactly as with `evaluation_path`.
     // A company leaves it only when the stage actually tries.
@@ -3563,6 +3918,7 @@ export function toFunnelCompanies(
     triage: c.triage?.relevance ?? null,
     shortlisted: c.shortlisted,
     shortlist_exclusion: c.shortlist_exclusion,
+    awaiting_investigation: isFrontier(c.investigation_state),
     // BLOCKED IS CHECKED FIRST. A company the deadline stopped has no identity
     // outcome to report, and calling that "unresolved" would turn a clock
     // decision into a permanent fact about the company.

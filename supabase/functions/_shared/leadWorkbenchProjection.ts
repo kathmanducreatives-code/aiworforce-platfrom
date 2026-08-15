@@ -79,6 +79,7 @@ export type WorkbenchLifecycle =
   | "discovered"
   | "evaluated"
   | "not_investigated"
+  | "awaiting_investigation"
   | "shortlisted"
   | "identity_unresolved"
   | "verifying"
@@ -89,7 +90,8 @@ export type WorkbenchLifecycle =
   | "contact_ready";
 
 export const LIFECYCLE_ORDER: readonly WorkbenchLifecycle[] = [
-  "discovered", "evaluated", "not_investigated", "shortlisted",
+  "discovered", "evaluated", "not_investigated", "awaiting_investigation",
+  "shortlisted",
   "identity_unresolved", "verifying", "not_qualified",
   // ABOVE a settled rejection, deliberately. These are the run's unfinished
   // business — the rows a user can still act on by resuming — and they belong
@@ -118,7 +120,12 @@ export function lifecycleIsDecision(s: WorkbenchLifecycle): boolean {
  * "resume to finish these" truthfully rather than implying they were rejected.
  */
 const RESUMABLE: ReadonlySet<WorkbenchLifecycle> =
-  new Set<WorkbenchLifecycle>(["deferred", "held_for_evidence"]);
+  new Set<WorkbenchLifecycle>([
+    "deferred", "held_for_evidence",
+    // THE FRONTIER IS RESUMABLE WORK, and saying so is the point. These
+    // companies were ranked, never judged, and a continuation will reach them.
+    "awaiting_investigation",
+  ]);
 
 export function lifecycleIsResumable(s: WorkbenchLifecycle): boolean {
   return RESUMABLE.has(s);
@@ -129,6 +136,9 @@ export const LIFECYCLE_EXPLANATION: Readonly<Record<WorkbenchLifecycle, string>>
   discovered: "Found by company discovery; not yet evaluated.",
   evaluated: "Evaluated against the mission's hiring signals and size range.",
   not_investigated: "Not investigated — the run never spent anything on this company.",
+  awaiting_investigation:
+    "Ranked and waiting — the budget stopped before this company's turn. " +
+    "Continuing the run will investigate it.",
   shortlisted: "Strong commercial hiring signal — queued for identity resolution.",
   identity_unresolved: "LinkedIn company identity could not be resolved, so verification could not run.",
   verifying: "Identity resolved; evidence collection in progress.",
@@ -226,6 +236,16 @@ export interface ProjectableCompany {
   } | null;
   /** Set when a paid stage was skipped or failed for run-level reasons. */
   stageBlock?: { capability: string; reason: "deferred" | "provider_error" } | null;
+  /**
+   * Where this company sits in the investigation frontier.
+   *
+   * `pending_investigation` is the state the Workbench most needed and did not
+   * have: ranked, never judged, and reachable by continuing. Without it such a
+   * company rendered as `evaluated` — which claims the mission's criteria were
+   * applied to it, and none were.
+   */
+  investigationState?:
+    | "pending_investigation" | "in_flight" | "investigated" | "excluded_permanently";
   /**
    * The AUTHORITATIVE provider-supplied name, from discovery or enrichment.
    *
@@ -343,6 +363,13 @@ export function deriveLifecycle(c: ProjectableCompany): WorkbenchLifecycle {
   if (c.identityResolved) return "verifying";
   if (c.shortlisted) return "shortlisted";
 
+  // RANKED AND WAITING. Checked before `not_investigated` and `evaluated`,
+  // because it is neither: nothing was spent on it AND nothing judged it, and a
+  // continuation will pick it up. Reporting it as `evaluated` claimed the
+  // mission's criteria had been applied; reporting it as `not_investigated`
+  // reads as final.
+  if (c.investigationState === "pending_investigation") return "awaiting_investigation";
+
   // EXCLUDED BEFORE ANY MONEY WAS SPENT. Distinct from `evaluated`, which
   // implies the mission's criteria were applied to it and it merely placed
   // low; this company may never have been read at all.
@@ -422,6 +449,8 @@ export interface EvaluationProjection {
      */
     not_qualified: number;
     not_investigated: number;
+    /** Ranked, never judged, reachable by continuing. */
+    awaiting_investigation: number;
     deferred: number;
     held_for_evidence: number;
   };
@@ -445,6 +474,7 @@ export function projectEvaluationRows(
   const rows: WorkbenchEvaluationRow[] = [];
   let qualified = 0, contactReady = 0, shortlisted = 0, evaluated = 0, unresolved = 0;
   let notQualified = 0, notInvestigated = 0, deferred = 0, held = 0;
+  let awaiting = 0;
   const triageCounts: Record<TriageRelevance, number> =
     { relevant: 0, uncertain: 0, irrelevant: 0 };
   let anyTriage = false;
@@ -461,6 +491,7 @@ export function projectEvaluationRows(
     if (state === "identity_unresolved") unresolved++;
     if (state === "not_qualified") notQualified++;
     if (state === "not_investigated") notInvestigated++;
+    if (state === "awaiting_investigation") awaiting++;
     if (state === "deferred") deferred++;
     if (state === "held_for_evidence") held++;
     if (c.triage) { anyTriage = true; triageCounts[c.triage.relevance]++; }
@@ -534,6 +565,7 @@ export function projectEvaluationRows(
       contact_ready: contactReady,
       not_qualified: notQualified,
       not_investigated: notInvestigated,
+      awaiting_investigation: awaiting,
       deferred,
       held_for_evidence: held,
     },

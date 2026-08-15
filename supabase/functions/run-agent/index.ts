@@ -2391,6 +2391,28 @@ Deno.serve(async (req) => {
                   if (c.grounded) groundedAcross.set(c.key, c.grounded);
                 }
                 let latest = capabilityRun;
+                // ── THE RUN THE WORKBENCH GETS IS THE BEST ONE, NOT THE LAST ─
+                //
+                // `latest` is the right thing to RESUME from — it holds the
+                // newest checkpoint and the widest discovery. It is not
+                // necessarily the right thing to SHIP. A later round that
+                // reached nobody still carries a complete, empty engine state,
+                // and adopting it wholesale is what turned two qualified
+                // companies into `deferred` rows in task cc556f5e.
+                let best = capabilityRun;
+                const qualifiedIn = (r: NonNullable<typeof capabilityRun>) =>
+                  r.state.qualified_company_keys.length;
+                /**
+                 * Adopt a later round only when it actually did better.
+                 *
+                 * Ties keep the EARLIER run: an equal count from a round that
+                 * evaluated nobody is the unmeasured zero again, and preferring
+                 * the proven run costs at most some extra discovery rows while
+                 * preferring the newer one can cost every verdict in hand.
+                 */
+                const adopt = (r: NonNullable<typeof capabilityRun>) => {
+                  if (qualifiedIn(r) > qualifiedIn(best)) best = r;
+                };
                 const asExecution = (
                   run: NonNullable<typeof capabilityRun>,
                 ): RoundExecution => ({
@@ -2438,6 +2460,7 @@ Deno.serve(async (req) => {
                     for (const c of latest.companies) {
                       if (c.grounded) groundedAcross.set(c.key, c.grounded);
                     }
+                    adopt(latest);
                     return asExecution(latest);
                   },
                   planNextRound: multiRoundBinding.planNextRound,
@@ -2460,9 +2483,14 @@ Deno.serve(async (req) => {
                 });
 
                 multiRoundSummary = roundSummaryForWorkbench(multi);
-                capabilityRun = latest;
+                capabilityRun = best;
                 console.log("[run-agent][multi-round][complete]", {
                   task_id: task.id, ...multiRoundSummary,
+                  // WHICH ROUND'S ENGINE STATE IS BEING SHIPPED, and whether
+                  // that differs from the last one executed.
+                  adopted_qualified: qualifiedIn(best),
+                  latest_qualified: qualifiedIn(latest),
+                  adopted_latest_round: best === latest,
                 });
               } catch (e) {
                 // A ROUND-CONTROLLER FAILURE COSTS THE EXTRA ROUNDS, NOT THE
@@ -2555,6 +2583,7 @@ Deno.serve(async (req) => {
                 }
                 : null,
               shortlistExclusion: c.shortlist_exclusion,
+              investigationState: c.investigation_state,
               enrichmentOutcome: c.enrichment_outcome,
               stageBlock: c.stage_block,
               missionEvaluation: c.mission_evaluation
@@ -3813,11 +3842,11 @@ Deno.serve(async (req) => {
               companies_evaluated: capabilityRun.state.prequalification?.unique_companies ?? 0,
               open_jobs_evaluated: capabilityRun.state.prequalification?.open_jobs_evaluated ?? 0,
               commercially_eligible: capabilityRun.state.prequalification?.eligible_companies ?? 0,
-              // THE SHORTLIST THAT WAS ACTUALLY PAID FOR. Read from the smart
-              // shortlist's own decision — this used to report the deterministic
-              // pass's shortlist, which `applyMissionIntelligence` overwrote, so
-              // the number named a different set of companies than the run bought.
-              shortlisted: capabilityRun.state.shortlist_decision?.counts.selected ?? 0,
+              // THE SHORTLIST THAT WAS ACTUALLY PAID FOR — summed over every
+              // investigation pass. `counts.selected` belongs to the RANKING
+              // call, which is given the whole pool on purpose, so reading it
+              // here reported every discovered company as shortlisted.
+              shortlisted: capabilityRun.state.investigation_selected,
               identities_resolved: capabilityRun.state.progress?.identity_resolved ?? 0,
               identities_unresolved: capabilityRun.state.progress?.identity_unresolved ?? 0,
               qualified: capabilityRun.state.qualified_company_keys.length,

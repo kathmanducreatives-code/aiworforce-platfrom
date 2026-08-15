@@ -155,6 +155,23 @@ export interface CompanyWorkingSetSnapshot {
   prequal_key: string | null;
   /** Whether this company was worth paying to resolve. */
   shortlisted: boolean;
+  /**
+   * WHERE THIS COMPANY SITS IN THE INVESTIGATION FRONTIER.
+   *
+   * The field that makes a continuation able to widen the pool. Without it a
+   * restored company was only `shortlisted: true/false`, and "false" could not
+   * be told apart from "excluded by GPT" — so every continuation restored the
+   * same frozen ten and the other ninety were reported pending forever.
+   *
+   * Optional: a checkpoint written before this existed has no state, and the
+   * engine narrows an absent value to `pending_investigation`, which puts those
+   * companies back on the frontier rather than stranding them.
+   */
+  investigation_state?: string | null;
+  /** Position in the persisted triage ranking. */
+  investigation_rank?: number | null;
+  /** The triage verdict, so a continuation never re-pays for triage. */
+  triage?: Record<string, unknown> | null;
   /** Enrichment already bought, so a resume never buys it twice. */
   enriched: Record<string, unknown> | null;
   /**

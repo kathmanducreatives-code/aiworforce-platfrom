@@ -155,6 +155,38 @@ export async function runMultiRoundSourcing(
     const round = state.round_number + 1;
     const strategy = strategyForRound(round);
 
+    // ── A ROUND MUST BE AFFORDABLE WHEN IT STARTS, NOT WHEN IT WAS DECIDED ──
+    //
+    // `decideNextRound` runs immediately after the PREVIOUS round, and the
+    // planner call sits between that decision and this execution. The clock
+    // keeps running across both. Task cc556f5e decided to start round 2 with
+    // time to spare, spent it planning, and entered the round with nothing
+    // left: the identity stage attempted zero of thirteen calls, the Brain was
+    // reached by nobody, and the round's only effect was to overwrite a round
+    // that had qualified two companies.
+    //
+    // `deps.limits()` reads the live clock, so asking it again here is the
+    // difference between "we thought we could afford this" and "we can".
+    //
+    // ROUND 1 IS EXEMPT. It is the exact mission — the only round that can
+    // produce anything at all — and in the executor it is already complete and
+    // merely handed back, so refusing it would discard finished work.
+    if (round > 1) {
+      const entry = deps.limits();
+      if (entry.cancelled || entry.deadlineReserveReached) {
+        const reason = entry.cancelled ? "cancelled" : "deadline_reached";
+        terminal = entry.cancelled
+          ? "the workflow was cancelled before the round started"
+          : "the checkpoint reserve was reached before the round started";
+        state = { ...state, terminal_reason: reason };
+        log("round_entry_refused", {
+          round, strategy, reason, detail: terminal,
+          shortfall: state.remaining_shortfall,
+        });
+        break;
+      }
+    }
+
     // ── WHICH COMPANIES STILL NEED A VERDICT ──────────────────────────────
     // Computed BEFORE the round so the engine is told what to restore rather
     // than re-buying every previous company's evaluation on every round.
@@ -241,14 +273,47 @@ export async function runMultiRoundSourcing(
       model_cost_units: exec.modelCostUnits,
     };
 
+    // ── A ROUND THAT MEASURED NOTHING MUST NOT OVERWRITE ONE THAT DID ──────
+    //
+    // `recordRound` ASSIGNS these totals rather than accumulating them, and
+    // that is right: they are POOL-level facts, and a round re-evaluates the
+    // pool it inherited. But it is only right for a round that actually
+    // reached evaluation.
+    //
+    // A round that never got there — the clock died, the provider failed,
+    // discovery came back empty — reports zeros, and those zeros are ABSENCE
+    // OF MEASUREMENT, not a finding that nothing qualifies. Assigning them
+    // deletes everything the earlier rounds proved. In task cc556f5e round 1
+    // qualified `idler.ai` (score 92) and `godela.ai` (score 91); round 2
+    // reached the Brain with nobody, reported qualified 0, and both companies
+    // were persisted as `deferred` with the run claiming zero qualified.
+    //
+    // This is the same rule the Brain already follows about empty grounding:
+    // silence is not evidence. A round earns the right to restate the pool's
+    // totals by evaluating something.
+    const measured = exec.pool != null &&
+      (exec.pool.evaluated > 0 || (exec.groundedByKey?.size ?? 0) > 0);
     state = recordRound(state, record, {
+      // Always current: the controller owns the pool, and pooling is additive
+      // whether or not this round evaluated anything.
       unique_companies: pool.size,
-      eligible: exec.pool?.eligible ?? 0,
-      evaluated: exec.pool?.evaluated ?? 0,
-      qualified: exec.pool?.qualified ?? 0,
-      review: exec.pool?.review ?? 0,
-      watch: exec.pool?.watch ?? 0,
-      delivered: exec.pool?.delivered ?? 0,
+      ...(measured
+        ? {
+          eligible: exec.pool!.eligible,
+          evaluated: exec.pool!.evaluated,
+          qualified: exec.pool!.qualified,
+          review: exec.pool!.review,
+          watch: exec.pool!.watch,
+          delivered: exec.pool!.delivered,
+        }
+        : {
+          eligible: state.eligible_company_count,
+          evaluated: state.evaluated_company_count,
+          qualified: state.qualified_count,
+          review: state.review_count,
+          watch: state.watch_count,
+          delivered: state.delivered_opportunity_count,
+        }),
     });
     metrics.push(roundMetrics(record));
 
@@ -257,6 +322,10 @@ export async function runMultiRoundSourcing(
       pool_growth: pool.size - before,
       delivered: state.delivered_opportunity_count,
       shortfall: state.remaining_shortfall,
+      // "Did this round's numbers come from this round?" — the field that
+      // separates a real zero from an unmeasured one.
+      measured,
+      carried_forward_totals: !measured,
     });
 
     await deps.onCheckpoint?.({

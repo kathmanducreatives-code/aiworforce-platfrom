@@ -218,7 +218,9 @@ const runShaped = async (o: { budgetMs: number; identityMs: number }) => {
     deadline,
   } as never, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN, maxCandidates: 60,
-    readEnv: () => undefined,
+    // ONE PASS — this file pins the wall-clock reserve and the authority
+    // boundary, both of which are per-pass properties.
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
   } as never);
   return { run, deadline };
 };

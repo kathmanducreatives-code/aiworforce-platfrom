@@ -147,6 +147,11 @@ const runOnce = async (o: RunOpts) => {
     deadline,
   }, {
     mission: m, plan, brain: BRAIN, maxCandidates: 60,
+    // ONE PASS. This file's subject is the identity stage's truncation
+    // accounting, not the investigation frontier's yield loop — a second slice
+    // would change the target count mid-file and test two things at once.
+    // `investigationFrontier.test.ts` covers the multi-pass behaviour.
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
     ...(o.resume
       ? {
         resume: {
@@ -463,14 +468,42 @@ Deno.test("8. RUN 2 resumes the deferred candidates and does not re-buy the reso
         "enrichment was asked and answered — not left looking unstarted");
     }
 
-    // AND THE ALREADY-PAID-FOR ONES WERE NOT BOUGHT AGAIN.
-    assertEquals(second.searched.length, deferredKeys.length,
-      `run 2 must buy exactly the ${deferredKeys.length} outstanding searches — ` +
-      `the ${resolvedKeys.length} already resolved are restored, not re-paid for`);
+    // ── AND THE ALREADY-PAID-FOR ONES WERE NOT BOUGHT AGAIN ───────────────
+    //
+    // THIS IS THE INVARIANT, and it is about IDENTITY, not about a total.
+    //
+    // It used to assert `second.searched.length === deferredKeys.length` — run
+    // 2 buys eight searches and no more. That was only ever true because the
+    // frontier was frozen: everything past the first slice had been recorded
+    // `budget_exhausted`, so a continuation could not reach it however much
+    // time it had. Run 2 here is given 400s against run 1's 70s, and a
+    // continuation with time left is now SUPPOSED to advance the frontier.
+    //
+    // What must never happen is re-buying an answer we already hold. That is
+    // asserted directly, per company, below.
     for (const key of resolvedKeys) {
       assertFalse(second.searched.some((i) => `acme${String(i).padStart(2, "0")}.com` === key),
         `${key} was already resolved and must not be searched again`);
     }
+    // Every outstanding one WAS bought — the continuation finishes what it owes
+    // before it widens.
+    for (const key of deferredKeys) {
+      assert(second.searched.some((i) => `acme${String(i).padStart(2, "0")}.com` === key),
+        `${key} was deferred and must be picked up`);
+    }
+    // AND THE PASS STILL RESPECTS ITS BUDGET. Carried work spends the same
+    // allowance as a fresh selection: eight inherited plus a fresh ten would be
+    // eighteen paid searches on a budget of ten.
+    const budget = second.run.state.shortlist_decision!.budget.budget;
+    assertEquals(second.searched.length, budget,
+      `run 2 may buy up to its per-pass budget of ${budget} — no more, and the ` +
+      `${deferredKeys.length} it inherited count against that allowance`);
+    assertEquals(second.run.state.investigation_selected, budget);
+    // The inherited work is recorded as inherited, so the small fresh slice is
+    // explainable rather than looking like a truncation.
+    const firstSlice = second.run.state.investigation_slices[0];
+    assertEquals(firstSlice.carried, deferredKeys.length);
+    assertEquals(firstSlice.selected, budget - deferredKeys.length);
   });
 
 // ════════════════════════════ 9. resume rebuilds the candidate set it skipped ══

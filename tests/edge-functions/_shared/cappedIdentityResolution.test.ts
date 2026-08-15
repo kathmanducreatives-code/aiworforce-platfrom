@@ -170,7 +170,13 @@ async function runFixture(over: Record<string, unknown> = {}) {
     }),
     onProgress: (p) => { trace.progress.push(p); },
     ...over,
-  }, { mission: m, plan, brain: BRAIN, maxCandidates: 50 });
+  }, {
+    mission: m, plan, brain: BRAIN, maxCandidates: 50,
+    // ONE PASS. This file pins what reaches the WIRE for a single investigation
+    // slice — call counts, concurrency, batching. The frontier's multi-pass
+    // yield loop is covered by `investigationFrontier.test.ts`.
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+  });
   return { trace, run };
 }
 
@@ -214,11 +220,17 @@ Deno.test("7. the BUDGET bounds the paid search, and the role vocabulary does no
     // recognise fill the remainder rather than being deleted.
     const { trace, run } = await runFixture();
     const queries = searchQueries(trace);
+    // THE SPEND BUDGET, read from the state the run persisted. `budget.budget`
+    // is now the PER-PASS allowance; this fixture is pinned to one pass, so
+    // one slice is the whole spend. It is deliberately NOT the ranking's own
+    // `counts.selected`, which is the size of the open pool.
     const budget = run.state.shortlist_decision!.budget.budget;
 
     assertEquals(queries.length, budget,
       `the paid stage is capped by the budget, not by a keyword list; ` +
       `task c8a6e53d made 16 (got: ${queries.join(" | ")})`);
+    assertEquals(run.state.investigation_selected, budget,
+      "and the state records the spend it authorised, not the pool it ranked");
     for (const name of ELIGIBLE) {
       assert(queries.some((q) => q.startsWith(name)),
         `${name} is vocabulary-approved and must be searched`);
@@ -329,7 +341,13 @@ Deno.test("13. an unresolved identity stays not-evaluated and is never actionabl
       return Promise.resolve([]);
     },
     verifyEmployer: () => ({ verified: true, outcome: "ok" }),
-  }, { mission: m, plan, brain: BRAIN, maxCandidates: 50 });
+  }, {
+    mission: m, plan, brain: BRAIN, maxCandidates: 50,
+    // ONE PASS. This file pins what reaches the WIRE for a single investigation
+    // slice — call counts, concurrency, batching. The frontier's multi-pass
+    // yield loop is covered by `investigationFrontier.test.ts`.
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+  });
 
   assertEquals(run.state.qualified_company_keys.length, 0);
   for (const name of ELIGIBLE) {
@@ -339,14 +357,19 @@ Deno.test("13. an unresolved identity stays not-evaluated and is never actionabl
     assertEquals(co.record.stage, "identity_pending");
     assertEquals(co.founders.length, 0, "no people are ever bought for it");
   }
-  // NO RETRY LOOP. One search per SHORTLISTED company, and that is all — the
-  // property this asserts. Counted against the shortlist the run actually
-  // built rather than against the vocabulary-approved subset, so it keeps
+  // NO RETRY LOOP. One search per company the run AUTHORISED, and that is all
+  // — the property this asserts. Counted against the spend the run actually
+  // authorised rather than against the vocabulary-approved subset, so it keeps
   // measuring "no company is searched twice" instead of quietly re-asserting
   // that the role list decides the spend.
+  //
+  // `investigation_selected`, not the ranking's `counts.selected`: the ranking
+  // pass is handed the whole pool on purpose, so its count names everyone who
+  // is merely ELIGIBLE to be investigated, not everyone who was.
   assertEquals(
     trace.calls.filter((c) => c.actor === "apify_linkedin_company_search").length,
-    run.state.shortlist_decision!.counts.selected);
+    run.state.investigation_selected);
+  assert(run.state.investigation_selected > 0, "the run did buy something");
   assertFalse(trace.calls.some((c) => c.actor === "apify_linkedin_company_employees"),
     "founder discovery must not run without a qualified company");
 });
@@ -370,7 +393,13 @@ Deno.test("14. a closed deadline stops the identity stage starting new calls", a
     },
     verifyEmployer: () => ({ verified: true, outcome: "ok" }),
     deadline,
-  }, { mission: m, plan, brain: BRAIN, maxCandidates: 50 });
+  }, {
+    mission: m, plan, brain: BRAIN, maxCandidates: 50,
+    // ONE PASS. This file pins what reaches the WIRE for a single investigation
+    // slice — call counts, concurrency, batching. The frontier's multi-pass
+    // yield loop is covered by `investigationFrontier.test.ts`.
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+  });
 
   assert(deadline.expired(), "the budget is spent");
   assertEquals(trace.calls.filter((c) => c.actor === "apify_linkedin_company_search").length, 0,

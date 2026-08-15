@@ -87,6 +87,8 @@ export interface FunnelCompany {
   triage: TriageRelevance | null;
   shortlisted: boolean;
   shortlist_exclusion: string | null;
+  /** Ranked and waiting — resumable, and NOT a judgement. */
+  awaiting_investigation?: boolean;
   identity: "resolved" | "unresolved" | "mismatch" | "blocked" | "not_attempted";
   enrichment: EnrichmentOutcome;
   reached_brain: boolean;
@@ -112,6 +114,8 @@ export interface MissionFunnel {
     unknown: number;
     /** Never judged at all. */
     never_investigated: number;
+    /** Ranked and waiting for a later pass or continuation. */
+    awaiting_investigation: number;
     /** Stopped by the run — the count that makes a resume worth offering. */
     withheld: number;
   };
@@ -162,6 +166,10 @@ export function buildMissionFunnel(
 
   // ── SMART SHORTLIST + BUDGET ─────────────────────────────────────────────
   const shortlisted = companies.filter((c) => c.shortlisted).length;
+  // THE FRONTIER. Ranked, never judged, reachable by continuing — reported as
+  // WITHHELD rather than excluded, because "we have not got to it yet" and "we
+  // decided against it" are the distinction this whole funnel exists to keep.
+  const awaiting = companies.filter((c) => c.awaiting_investigation).length;
   const shortlistExcluded = companies.filter(
     (c) => !c.shortlisted && c.shortlist_exclusion !== null &&
       c.shortlist_exclusion !== "triage_irrelevant").length;
@@ -244,7 +252,8 @@ export function buildMissionFunnel(
       stage("mission_intelligence", n, n - triageExcluded,
         { excluded: triageExcluded }, triageDetail),
       stage("smart_shortlist", n - triageExcluded, shortlisted,
-        { excluded: shortlistExcluded }, { ...shortlistDetail, selected: shortlisted }),
+        { excluded: shortlistExcluded, withheld: awaiting },
+        { ...shortlistDetail, selected: shortlisted, awaiting_investigation: awaiting }),
       stage("identity_resolution", shortlisted, identityResolved,
         { decided: identityAnswered, withheld: identityBlocked }, identityDetail),
       // Enrichment determines EVIDENCE QUALITY, not membership — see above.
@@ -277,6 +286,7 @@ export function buildMissionFunnel(
       rejected,
       unknown,
       never_investigated: neverInvestigated,
+      awaiting_investigation: awaiting,
       withheld: withheldTotal,
     },
   };

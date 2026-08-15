@@ -31,8 +31,8 @@ import {
 } from "../../../supabase/functions/_shared/missionTriage.ts";
 import {
   buildSmartShortlist, DEFAULT_INVESTIGATION_BUDGET, INVESTIGATION_BUDGET_ENV,
-  MAX_INVESTIGATION_BUDGET, resolveInvestigationBudget, resolveUntriagedPolicy,
-  UNTRIAGED_POLICY_ENV,
+  isFrontier, MAX_INVESTIGATION_BUDGET, resolveInvestigationBudget,
+  resolveUntriagedPolicy, UNTRIAGED_POLICY_ENV,
 } from "../../../supabase/functions/_shared/leadInvestigationBudget.ts";
 import {
   buildMissionTriageBinding, isMissionTriageEnabled,
@@ -392,7 +392,13 @@ const runEngine = async (o: {
   } as never, {
     mission: m, plan, brain: BRAIN, maxCandidates: 60,
     readEnv: (k: string) =>
-      (k === INVESTIGATION_BUDGET_ENV ? o.budgetEnv : o.env?.[k]),
+      (k === INVESTIGATION_BUDGET_ENV
+        ? o.budgetEnv
+        // ONE PASS: this file's subject is triage and the shortlist ranking,
+        // not the frontier's yield loop.
+        : k === "LEAD_INVESTIGATION_MAX_PASSES"
+        ? "1"
+        : o.env?.[k]),
   } as never);
   return run;
 };
@@ -513,8 +519,21 @@ Deno.test("5e. the budget is honoured end to end and recorded with its source", 
   assertEquals(run.state.shortlist_decision?.budget.source, "environment");
   assertEquals(run.state.shortlist_decision?.budget.requested_count, 5,
     "the requested count is recorded and NOT multiplied into the budget");
-  // The rest were never judged.
+  // ── THE REST ARE WAITING, NOT EXCLUDED ────────────────────────────────────
+  //
+  // This used to assert eighteen companies carried `shortlist_exclusion ===
+  // "budget_exhausted"`, and that assertion was the bug written down: a queue
+  // POSITION was recorded as a REASON, the Workbench read it as a verdict, and
+  // no later pass or continuation ever reconsidered them. Ninety companies
+  // were closed this way in the run that prompted the frontier work.
+  //
+  // Being past position twelve is now a cursor, not a judgement.
+  const waiting = run.companies.filter((c) => isFrontier(c.investigation_state));
+  assertEquals(waiting.length, titles.length - 12,
+    "everyone the budget did not reach stays on the frontier");
   assertEquals(
-    run.companies.filter((c) => c.shortlist_exclusion === "budget_exhausted").length,
-    titles.length - 12);
+    run.companies.filter((c) => c.shortlist_exclusion === "budget_exhausted").length, 0,
+    "and NONE of them is given a reason — the budget is not a verdict");
+  // The spend is still bounded, and the state says so in its own field.
+  assertEquals(run.state.investigation_selected, 12);
 });

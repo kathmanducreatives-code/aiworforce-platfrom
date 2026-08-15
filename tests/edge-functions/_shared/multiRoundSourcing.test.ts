@@ -919,3 +919,157 @@ Deno.test("DEMO. a deadline after round 1 checkpoints and a continuation resumes
   assertEquals(second.state.round_history.length, 3,
     "round 1's history survived the continuation");
 });
+
+// ══════════════════════ 33-37. a later round may not destroy an earlier one ══
+//
+// THE RUN THESE COME FROM: task cc556f5e. Round 1 discovered 100 companies,
+// resolved 3 identities, enriched them, and the mission evaluator qualified
+// `idler.ai` (92) and `godela.ai` (91). The controller then decided a round 2
+// was worth it, spent the remaining clock on the planner call, and entered a
+// round with nothing left: the identity stage attempted 0 of 13 calls and the
+// Brain was reached by nobody. Round 2 reported qualified 0 — and that zero was
+// ASSIGNED over round 1's two. Both companies persisted as `deferred`, and the
+// run told the user it had qualified nobody.
+//
+// Two independent faults, so two independent guards.
+
+/** A round that reached evaluation and proved `qualified` companies. */
+const MEASURED = (qualified: number, candidates: RoundCandidate[]): RoundExecution => ({
+  candidates,
+  groundedByKey: new Map(candidates.map((c) => [`li:${c.company_key}`, { ok: true }])),
+  pool: {
+    hard_gated: 0, eligible: candidates.length, evaluated: candidates.length,
+    qualified, review: 0, watch: 0, delivered: qualified,
+  },
+  providerCostUnits: 1, modelCostUnits: 1,
+});
+
+/** A round that never reached evaluation. Its zeros mean "we did not look". */
+const UNMEASURED = (candidates: RoundCandidate[]): RoundExecution => ({
+  candidates,
+  groundedByKey: new Map(),
+  pool: {
+    hard_gated: 0, eligible: 0, evaluated: 0,
+    qualified: 0, review: 0, watch: 0, delivered: 0,
+  },
+  providerCostUnits: 1, modelCostUnits: 0,
+});
+
+Deno.test("33. a round that evaluated NOBODY cannot zero the totals a round proved",
+  async () => {
+    const r = await runMultiRoundSourcing({
+      runRound: ({ round }) =>
+        Promise.resolve(round === 1
+          // Round 1: two real qualified companies.
+          ? MEASURED(2, [
+            CAND({ company_key: "idler", linkedin_company_url: "https://www.linkedin.com/company/idler" }),
+            CAND({ company_key: "godela", linkedin_company_url: "https://www.linkedin.com/company/godela" }),
+          ])
+          // Round 2: rediscovers the pool, reaches the Brain with nobody.
+          : UNMEASURED([
+            CAND({ company_key: "new1", discovered_round: 2, website: "https://n1.com",
+              linkedin_company_url: "https://www.linkedin.com/company/n1" }),
+          ])),
+      planNextRound: () => Promise.resolve(PROPOSAL()),
+      limits: () => LIMITS(),
+    }, { mission: mission(), requestedCount: 100, maxRounds: 2 });
+
+    assertEquals(r.state.round_number, 2, "round 2 did run");
+    // THE ASSERTION THE OLD CODE FAILED: round 1's proof survives round 2.
+    assertEquals(r.state.qualified_count, 2,
+      "two companies were qualified and an unmeasured round may not un-qualify them");
+    assertEquals(r.state.delivered_opportunity_count, 2);
+    assertEquals(r.counts.qualified_count, 2, "and the Workbench summary agrees");
+    assertEquals(r.counts.remaining_shortfall, 98,
+      "the shortfall is measured against what was proved, not reset to the request");
+  });
+
+Deno.test("34. a round that DID evaluate is still authoritative, including downwards",
+  async () => {
+    // The guard must not become "counts only ever rise". A round that actually
+    // re-evaluated the pool is entitled to restate it — that is the whole point
+    // of pooling across rounds.
+    const r = await runMultiRoundSourcing({
+      runRound: ({ round }) =>
+        Promise.resolve(round === 1
+          ? MEASURED(9, [CAND({ linkedin_company_url: "https://www.linkedin.com/company/a" })])
+          : MEASURED(4, [CAND({ company_key: "co2", discovered_round: 2,
+            website: "https://beta.com",
+            linkedin_company_url: "https://www.linkedin.com/company/b" })])),
+      planNextRound: () => Promise.resolve(PROPOSAL()),
+      limits: () => LIMITS(),
+    }, { mission: mission(), requestedCount: 100, maxRounds: 2 });
+
+    assertEquals(r.state.qualified_count, 4,
+      "a round that evaluated the pool restates it, even when the number falls");
+  });
+
+Deno.test("35. a round is refused when the clock died AFTER it was decided", async () => {
+  // The exact shape of the failure: limits are fine when round 1 ends, and the
+  // reserve is reached by the time round 2 would start — the planner call is
+  // what consumed it.
+  const rounds: number[] = [];
+  let clockDead = false;
+  const r = await runMultiRoundSourcing({
+    runRound: ({ round }) => {
+      rounds.push(round);
+      return Promise.resolve(MEASURED(2, [
+        CAND({ linkedin_company_url: "https://www.linkedin.com/company/a" }),
+      ]));
+    },
+    planNextRound: () => {
+      // Planning is what burns the remaining time.
+      clockDead = true;
+      return Promise.resolve(PROPOSAL());
+    },
+    limits: () => LIMITS({ deadlineReserveReached: clockDead }),
+  }, { mission: mission(), requestedCount: 100, maxRounds: 3 });
+
+  assertEquals(rounds, [1], "round 2 must never start on a dead clock");
+  assertEquals(r.state.terminal_reason, "deadline_reached");
+  assertEquals(r.terminal_reason, "deadline_reached");
+  // AND ROUND 1'S RESULT SHIPS. Refusing the round is not failing the run.
+  assertEquals(r.state.qualified_count, 2);
+});
+
+Deno.test("36. round 1 is never refused by the entry guard", async () => {
+  // Round 1 is the exact mission and, in the executor, is already complete and
+  // merely handed back. Refusing it would discard finished work and return a
+  // run with nothing in it.
+  const rounds: number[] = [];
+  const r = await runMultiRoundSourcing({
+    runRound: ({ round }) => {
+      rounds.push(round);
+      return Promise.resolve(MEASURED(3, [
+        CAND({ linkedin_company_url: "https://www.linkedin.com/company/a" }),
+      ]));
+    },
+    planNextRound: () => Promise.resolve(PROPOSAL()),
+    limits: () => LIMITS({ deadlineReserveReached: true }),
+  }, { mission: mission(), requestedCount: 100, maxRounds: 3 });
+
+  assertEquals(rounds, [1], "round 1 ran despite the reserve already being reached");
+  assertEquals(r.state.qualified_count, 3, "and its result is kept");
+});
+
+Deno.test("37. a cancellation between rounds stops the next one before it spends",
+  async () => {
+    const rounds: number[] = [];
+    let cancelled = false;
+    const r = await runMultiRoundSourcing({
+      runRound: ({ round }) => {
+        rounds.push(round);
+        return Promise.resolve(MEASURED(1, [
+          CAND({ linkedin_company_url: "https://www.linkedin.com/company/a" }),
+        ]));
+      },
+      planNextRound: () => {
+        cancelled = true;
+        return Promise.resolve(PROPOSAL());
+      },
+      limits: () => LIMITS({ cancelled }),
+    }, { mission: mission(), requestedCount: 100, maxRounds: 3 });
+
+    assertEquals(rounds, [1]);
+    assertEquals(r.state.terminal_reason, "cancelled");
+  });
