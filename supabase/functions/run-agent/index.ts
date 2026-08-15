@@ -3762,6 +3762,13 @@ Deno.serve(async (req) => {
             userId: taskUserId,
             planId: plan_id ?? null,
             agentSlug: agent_slug,
+            // THE ORCHESTRATED CONTRACT AND THE COMPILED MISSION. `run-agent`
+            // validates both before it ever looks at `resume_task_id`, and the
+            // mission is read from the request rather than the checkpoint — a
+            // continuation without them is refused, or runs a different job.
+            stepIndex: step_index ?? 0,
+            instruction: effectiveInstruction,
+            toolInput: tool_input_body ?? null,
             continuationIndex: progress.continuations_used,
           }, {
             fetch: (url, init) => fetch(url, init),

@@ -35,13 +35,36 @@ export interface DispatchRequest {
   userId: string;
   planId: string | null;
   agentSlug: string;
+  /**
+   * THE ORCHESTRATED CONTRACT, which `run-agent` validates BEFORE it looks at
+   * `resume_task_id`. A continuation that omits these is rejected 400 as
+   * `missing_required_fields` and never reaches the resume path at all — which
+   * is exactly what happened on the first live attempt.
+   */
+  stepIndex: number;
+  instruction: string;
+  /**
+   * THE COMPILED MISSION, CARRIED.
+   *
+   * A `LeadMissionV1` is NOT part of the checkpoint. `readPersistedLeadMission`
+   * reads it from `tool_input.lead_mission` on the request, every invocation. A
+   * continuation that leaves it out does not resume the same job: it runs with
+   * `authority: "legacy_carrier_union"` and re-derives intent, which is the
+   * disagreement the compiled mission exists to remove.
+   */
+  toolInput: Record<string, unknown> | null;
   /** Which slice this will be, for logging and for the depth ceiling. */
   continuationIndex: number;
 }
 
 export type DispatchOutcome =
   | { dispatched: true; status: number }
-  | { dispatched: false; reason: "not_configured" | "transport_error"; detail: string };
+  | {
+    dispatched: false;
+    reason: "not_configured" | "transport_error" | "rejected";
+    detail: string;
+    status?: number;
+  };
 
 export interface DispatchDeps {
   /** Injected so tests exercise every branch without a network. */
@@ -95,10 +118,31 @@ export async function dispatchContinuation(
         user_id: req.userId,
         plan_id: req.planId,
         agent_slug: req.agentSlug,
+        step_index: req.stepIndex,
+        instruction: req.instruction,
+        // Carries `lead_mission`. See `DispatchRequest.toolInput`.
+        ...(req.toolInput ? { tool_input: req.toolInput } : {}),
         auto_continuation: true,
         continuation_index: req.continuationIndex,
       }),
     });
+
+    // A 4xx IS A REFUSAL, NOT A HANDOFF.
+    //
+    // This returned `dispatched: true` for any response that did not throw, so
+    // the first live attempt recorded `{ status: 400, dispatched: true }` and
+    // the task claimed to be continuing while its successor had been rejected
+    // outright. A run that says it is continuing and never does is precisely
+    // the failure this whole mechanism replaces, so the status is checked.
+    if (res.status < 200 || res.status >= 300) {
+      log("continuation_dispatch_rejected", {
+        task_id: req.resumeTaskId, index: req.continuationIndex, status: res.status,
+      });
+      return {
+        dispatched: false, reason: "rejected", status: res.status,
+        detail: `the next slice was refused with HTTP ${res.status}`,
+      };
+    }
     log("continuation_dispatched", {
       task_id: req.resumeTaskId, index: req.continuationIndex, status: res.status,
     });

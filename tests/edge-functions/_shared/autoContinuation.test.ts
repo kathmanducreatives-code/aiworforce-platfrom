@@ -189,9 +189,12 @@ const deps = (over: Record<string, unknown> = {}) => ({
   ...over,
 } as never);
 
+const MISSION = { version: "lead-mission-v1", requested_count: 10 };
 const REQ = {
   resumeTaskId: "task-1", workspaceId: "ws-1", userId: "user-1",
   planId: "plan-1", agentSlug: "scout", continuationIndex: 2,
+  stepIndex: 0, instruction: "Find 10 AI startups in the US hiring engineers",
+  toolInput: { lead_mission: MISSION },
 };
 
 Deno.test("13. the next slice resumes the SAME task and belongs to the SAME user",
@@ -213,8 +216,27 @@ Deno.test("13. the next slice resumes the SAME task and belongs to the SAME user
     // RESUME, NOT RESTART. A new task id here would re-run discovery and pay for
     // the pool a second time.
     assertEquals(seenBody.resume_task_id, "task-1");
-    assertFalse("user_instruction" in seenBody,
-      "a continuation carries no instruction — the mission is in the checkpoint");
+
+    // ── THE ORCHESTRATED CONTRACT, WHICH IS VALIDATED FIRST ─────────────────
+    //
+    // This test previously asserted the OPPOSITE — that a continuation carries
+    // no instruction "because the mission is in the checkpoint". Both halves
+    // were wrong, and the first live dispatch proved it: HTTP 400,
+    // `missing_required_fields`, before the resume path was reached.
+    //
+    // `run-agent` validates `plan_id`, `step_index`, `agent_slug`,
+    // `workspace_id` and `instruction` BEFORE it looks at `resume_task_id`.
+    assertEquals(seenBody.step_index, 0);
+    assert(typeof seenBody.instruction === "string" && seenBody.instruction.length > 0);
+    assertEquals(seenBody.plan_id, "plan-1");
+    assertEquals(seenBody.agent_slug, "scout");
+
+    // AND THE COMPILED MISSION TRAVELS WITH IT. `readPersistedLeadMission` reads
+    // it from `tool_input.lead_mission` on the REQUEST, not from the checkpoint.
+    // Without it the continuation runs as `legacy_carrier_union` and re-derives
+    // intent — a different job from the one the user asked for.
+    assertEquals(
+      (seenBody.tool_input as Record<string, unknown>).lead_mission, MISSION);
     // ATTRIBUTED TO THE REQUESTER. `user_id` is honoured only for service-role
     // callers; without it the results land outside the asker's Workbench.
     assertEquals(seenBody.user_id, "user-1");
@@ -228,6 +250,27 @@ Deno.test("14. a missing service key is a VISIBLE stop, not a silent one", async
   assertEquals(out.dispatched === false ? out.reason : null, "not_configured");
   const noUrl = await dispatchContinuation(REQ, deps({ functionsBaseUrl: null }));
   assertFalse(noUrl.dispatched);
+});
+
+Deno.test("14b. a REFUSED dispatch is a stop, not a handoff", async () => {
+  // THE FIRST LIVE ATTEMPT recorded `{ status: 400, dispatched: true }`: any
+  // response that did not throw counted as success, so the task claimed to be
+  // continuing while its successor had been rejected outright. A run that says
+  // it is continuing and never does is the exact failure this replaces.
+  for (const status of [400, 401, 403, 409, 500]) {
+    const out = await dispatchContinuation(REQ, deps({
+      fetch: () => Promise.resolve({ status }),
+    }));
+    assertFalse(out.dispatched, `HTTP ${status} must not count as dispatched`);
+    assertEquals(out.dispatched === false ? out.reason : null, "rejected");
+    assertEquals(out.dispatched === false ? out.status : null, status);
+  }
+  // 2xx is the only handoff.
+  for (const status of [200, 202]) {
+    assert((await dispatchContinuation(REQ, deps({
+      fetch: () => Promise.resolve({ status }),
+    }))).dispatched, `HTTP ${status} is a handoff`);
+  }
 });
 
 Deno.test("15. a transport failure loses the handoff, never the slice's work", async () => {
