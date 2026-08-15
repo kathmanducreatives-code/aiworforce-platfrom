@@ -314,8 +314,25 @@ export function prequalifyYcCompanies(
 // `applyMissionIntelligence` then overwrote — so it shaped the reported
 // shortlist while the smart shortlist decided the real one.
 
-/** Maximum simultaneous paid Actor starts in the resolution stage. */
-export const LINKEDIN_RESOLUTION_CONCURRENCY = 2;
+/**
+ * Maximum simultaneous paid Actor starts in the resolution stage.
+ *
+ * ── WHY THIS IS 4 AND NOT 2 ────────────────────────────────────────────────
+ *
+ * It bounds how many identity searches are IN FLIGHT, not how many are made:
+ * the slice decides that, and the count budget decides the slice. Widening the
+ * lanes changes the rate of spend, never its total.
+ *
+ * What it does change is how much of the run the identity stage can use. On
+ * task 83843770 an identity call took ~7.6s and the stage had ~19s; at two
+ * lanes that is five companies of a ten-company slice, and the other five were
+ * deferred with the run ending 8 short of the requested 10. Latency, not
+ * budget, was deciding how many companies got investigated.
+ *
+ * The ceiling on this is the provider's own concurrent-run limit rather than
+ * anything here, which is why it is a small number and not a large one.
+ */
+export const LINKEDIN_RESOLUTION_CONCURRENCY = 4;
 
 /**
  * The search query for one shortlisted company — THE BARE NAME.

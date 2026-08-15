@@ -107,7 +107,8 @@ import {
   asInvestigationState, buildSmartShortlist, identityStopThreshold,
   resolveMaxPasses,
   isFrontier, resolveGptBudget, resolveInvestigationBudget, resolveTimeCapacity,
-  resolveUntriagedPolicy, selectInvestigationSlice, shouldTakeAnotherSlice,
+  resolveTriageConcurrency, resolveUntriagedPolicy, selectInvestigationSlice,
+  shouldTakeAnotherSlice,
   wasInvestigated,
   type GptBudget, type InvestigationBudget, type InvestigationState,
   type TimeCapacity,
@@ -1031,29 +1032,53 @@ export async function runCapabilityPlan(
 
     if (deps.triageCompanies && companies.length > 0) {
       const batches = triageBatches(companies, deps.triageBatchSize ?? TRIAGE_BATCH_SIZE);
+      const allowed = deps.triageBatchesAllowed ?? batches.length;
       let made = 0;
-      for (const batch of batches) {
-        if (made >= (deps.triageBatchesAllowed ?? batches.length)) {
-          // OUT OF BATCHES IS NOT A JUDGEMENT. The rest stay uncertain and
-          // remain fully eligible for the shortlist.
-          for (const c of batch) {
-            verdicts.set(c.key, uncertainVerdict(c.key, "triage_budget_exhausted"));
-          }
-          continue;
+
+      // ── THE BATCHES RUN SIDE BY SIDE ───────────────────────────────────────
+      //
+      // WHY THIS IS THE IDENTITY STAGE'S PROBLEM. Triage is free, read-only and
+      // parallel by nature — every batch is an independent model call over a
+      // DISJOINT set of companies, and the verdicts land in a map keyed by
+      // company, so nothing about the result depends on the order.
+      //
+      // Run one after another they cost wall clock that the PAID stages then do
+      // not have. On task 83843770 four batches of 25 took 33.6s of a 125s
+      // budget — more than identity resolution got — and identity managed 5 of
+      // its 10 companies before the reserve stopped it. Five companies were
+      // deferred to pay for a stage that was waiting on network round-trips it
+      // could have overlapped.
+      //
+      // Lane count is shared with the paid stages deliberately: it is the same
+      // question (how many concurrent provider calls is this runtime willing to
+      // have outstanding) and one knob is easier to reason about than two.
+      const budgeted = batches.slice(0, Math.max(0, allowed));
+      const overflow = batches.slice(Math.max(0, allowed));
+
+      // OUT OF BATCHES IS NOT A JUDGEMENT. The rest stay uncertain and remain
+      // fully eligible for the shortlist.
+      for (const batch of overflow) {
+        for (const c of batch) {
+          verdicts.set(c.key, uncertainVerdict(c.key, "triage_budget_exhausted"));
         }
+      }
+
+      await runBounded(budgeted, resolveTriageConcurrency(opts.readEnv), async (batch) => {
         // THE DEADLINE APPLIES TO FREE WORK TOO. A model call still costs wall
         // clock, and spending it here is what leaves none for the paid stages.
+        // Checked per batch as each lane picks one up, so a run that goes long
+        // stops starting new calls rather than being decided up front.
         if (deps.deadline?.expired("mission_triage") === true) {
           for (const c of batch) {
             verdicts.set(c.key, uncertainVerdict(c.key, "triage_deadline_deferred"));
           }
-          continue;
+          return;
         }
         made++;
         const startedAt = Date.now();
         let parsed;
         try {
-          const raw = await deps.triageCompanies({
+          const raw = await deps.triageCompanies!({
             input: buildMissionTriageInput({
               ctx: qualificationCtx,
               companies: batch.map(toTriageInput),
@@ -1066,14 +1091,19 @@ export async function runCapabilityPlan(
           log("triage_batch_error", { error: String(e), size: batch.length });
           parsed = parseMissionTriageStrict(null, batch.map((c) => c.key));
         }
+        // OBSERVED PER CALL, NOT PER WAVE. `observeCall` feeds the latency
+        // estimate the capacity maths uses; handing it a wall-clock span that
+        // covered several overlapping calls would inflate it.
         deps.deadline?.observeCall(Date.now() - startedAt, "mission_triage");
+        // Disjoint batches, so these writes never contend for the same key.
         for (const [k, v] of parsed.verdicts) verdicts.set(k, v);
         log("triage_batch_complete", {
           size: batch.length, parse_status: parsed.parse_status,
           unknown_keys: parsed.raw_shape.unknown_keys.length,
           missing_keys: parsed.raw_shape.missing_keys.length,
         });
-      }
+      });
+
       state.triage = {
         ...summariseTriage(verdicts.values()),
         batches_made: made,
@@ -3538,6 +3568,13 @@ export function finalizedProgress(
  * The Actor accepts a list; this is the batch bound, not a per-company loop.
  */
 export const COMPANY_DETAILS_BATCH_SIZE = 10;
+
+// `resolveTriageConcurrency` lives in `leadInvestigationBudget.ts` with the
+// other capacity resolvers. THE ENGINE READS NO ENVIRONMENT OF ITS OWN — it
+// takes `opts.readEnv` and passes it down, which is what keeps it runnable in a
+// test without a process environment. Test 20 of `cappedIdentityResolution`
+// enforces this by scanning this file for the runtime env accessor, so even
+// naming it here would fail the guard.
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];

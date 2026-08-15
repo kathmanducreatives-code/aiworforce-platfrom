@@ -30,9 +30,10 @@ import {
   type MissionTriageInput,
 } from "../../../supabase/functions/_shared/missionTriage.ts";
 import {
-  buildSmartShortlist, DEFAULT_INVESTIGATION_BUDGET, INVESTIGATION_BUDGET_ENV,
-  isFrontier, MAX_INVESTIGATION_BUDGET, resolveInvestigationBudget,
-  resolveUntriagedPolicy, UNTRIAGED_POLICY_ENV,
+  buildSmartShortlist, DEFAULT_INVESTIGATION_BUDGET, DEFAULT_TRIAGE_CONCURRENCY,
+  INVESTIGATION_BUDGET_ENV, isFrontier, MAX_INVESTIGATION_BUDGET,
+  MAX_TRIAGE_CONCURRENCY, resolveInvestigationBudget, resolveTriageConcurrency,
+  resolveUntriagedPolicy, TRIAGE_CONCURRENCY_ENV, UNTRIAGED_POLICY_ENV,
 } from "../../../supabase/functions/_shared/leadInvestigationBudget.ts";
 import {
   buildMissionTriageBinding, isMissionTriageEnabled,
@@ -536,4 +537,116 @@ Deno.test("5e. the budget is honoured end to end and recorded with its source", 
     "and NONE of them is given a reason — the budget is not a verdict");
   // The spend is still bounded, and the state says so in its own field.
   assertEquals(run.state.investigation_selected, 12);
+});
+
+// ═════════════ 6. TRIAGE MUST NOT SPEND THE PAID STAGES' WALL CLOCK ══
+//
+// Task 83843770, a 125s budget, measured from the run's own log timestamps:
+//
+//   discovery                28.7s
+//   GPT triage               33.6s   ← four batches of 25, one after another
+//   identity resolution      19.1s   ← 5 of 10 companies; 5 deferred
+//   enrichment               10.5s
+//   evaluation + brain       11.3s
+//
+// The free, read-only stage took more wall clock than the paid stage it starves.
+// Every batch is an independent model call over a DISJOINT set of companies, so
+// the sequencing bought nothing at all.
+
+Deno.test("6. triage batches run concurrently, not one after another", async () => {
+  let inFlight = 0;
+  let peak = 0;
+  const order: string[] = [];
+
+  await runEngine({
+    titles: Array.from({ length: 100 }, () => "ML Engineer"),
+    triage: async ({ company_keys }) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      order.push(`start:${company_keys.length}`);
+      // A round trip. Sequenced, four of these are four times the latency.
+      await new Promise((r) => setTimeout(r, 10));
+      inFlight--;
+      return {
+        verdicts: company_keys.map((k) => ({
+          company_key: k, relevance: "relevant", confidence: 0.9,
+          signal_strength: 80, reasons: [], matched_roles: [],
+        })),
+      };
+    },
+  });
+
+  assert(peak > 1,
+    `four independent batches must overlap; peak concurrency was ${peak}`);
+  assertEquals(peak, DEFAULT_TRIAGE_CONCURRENCY,
+    "and the lane count is the configured one, not unbounded");
+});
+
+Deno.test("6b. concurrency changes the timing and NOTHING else", async () => {
+  // The verdicts are keyed by company and the batches are disjoint, so the
+  // result must be identical whichever order the lanes happen to finish in.
+  const triage = ({ company_keys }: { company_keys: string[] }) =>
+    Promise.resolve({
+      verdicts: company_keys.map((k, i) => ({
+        company_key: k,
+        relevance: i % 7 === 0 ? "irrelevant" : "relevant",
+        confidence: 0.9, signal_strength: 100 - i, reasons: [], matched_roles: [],
+      })),
+    });
+
+  const titles = Array.from({ length: 100 }, () => "ML Engineer");
+  const serial = await runEngine({
+    titles, triage, env: { [TRIAGE_CONCURRENCY_ENV]: "1" },
+  });
+  const parallel = await runEngine({
+    titles, triage, env: { [TRIAGE_CONCURRENCY_ENV]: "4" },
+  });
+
+  assertEquals(parallel.state.triage?.relevant, serial.state.triage?.relevant);
+  assertEquals(parallel.state.triage?.irrelevant, serial.state.triage?.irrelevant);
+  assertEquals(parallel.state.triage?.uncertain, serial.state.triage?.uncertain);
+  assertEquals(parallel.state.triage?.batches_made, serial.state.triage?.batches_made);
+  // Every company reaches the same verdict either way.
+  const verdictOf = (r: typeof serial) =>
+    r.companies.map((c) => `${c.key}:${c.triage?.relevance ?? "none"}`).sort();
+  assertEquals(verdictOf(parallel), verdictOf(serial),
+    "overlapping the calls must not move a single company");
+});
+
+Deno.test("6c. a THROWN batch still excludes nobody when lanes overlap", async () => {
+  // The concurrency guard's safety argument: if overlapping provokes a rate
+  // limit, the call throws and those companies become `uncertain` — fully
+  // investigable. Overshooting costs a ranking signal, never a candidate.
+  let n = 0;
+  const run = await runEngine({
+    titles: Array.from({ length: 100 }, () => "ML Engineer"),
+    triage: ({ company_keys }) => {
+      // Every other batch fails, whichever lane picks it up.
+      if (n++ % 2 === 0) return Promise.reject(new Error("429 rate limited"));
+      return Promise.resolve({
+        verdicts: company_keys.map((k) => ({
+          company_key: k, relevance: "relevant", confidence: 0.9,
+          signal_strength: 80, reasons: [], matched_roles: [],
+        })),
+      });
+    },
+  });
+
+  assertEquals(run.state.triage!.irrelevant, 0, "a failed call excludes nobody");
+  assertEquals(
+    (run.state.triage!.relevant ?? 0) + (run.state.triage!.uncertain ?? 0), 100,
+    "every company still carries a verdict");
+  assertEquals(
+    run.companies.filter((c) => c.shortlist_exclusion === "triage_irrelevant").length, 0);
+});
+
+Deno.test("6d. the batch ALLOWANCE still caps model calls", async () => {
+  // Concurrency must not become a way around the budget.
+  assertEquals(resolveTriageConcurrency(() => undefined), DEFAULT_TRIAGE_CONCURRENCY);
+  assertEquals(resolveTriageConcurrency((k) =>
+    k === TRIAGE_CONCURRENCY_ENV ? "999" : undefined), MAX_TRIAGE_CONCURRENCY,
+    "and it is capped, however it is configured");
+  assertEquals(resolveTriageConcurrency((k) =>
+    k === TRIAGE_CONCURRENCY_ENV ? "0" : undefined), DEFAULT_TRIAGE_CONCURRENCY,
+    "a nonsense value falls back rather than serialising or exploding");
 });

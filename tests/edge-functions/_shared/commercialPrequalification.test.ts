@@ -73,7 +73,15 @@ Deno.test("1. prequalification is pure — 25 companies cost zero Actor calls", 
 // verified fact rather than a judgement.
 
 Deno.test("2. paid resolution concurrency is bounded", () => {
-  assertEquals(LINKEDIN_RESOLUTION_CONCURRENCY, 2);
+  // BOUNDED, and small. The exact value is a latency decision — it caps calls
+  // in flight, not calls made — so pinning the literal only made tuning it look
+  // like a spend regression. What must hold is that a bound exists and stays
+  // inside a burst the provider can absorb.
+  assert(Number.isInteger(LINKEDIN_RESOLUTION_CONCURRENCY));
+  assert(LINKEDIN_RESOLUTION_CONCURRENCY >= 1,
+    "zero lanes would stall the stage entirely");
+  assert(LINKEDIN_RESOLUTION_CONCURRENCY <= 8,
+    "an unbounded burst of paid Actor starts is the failure this guards");
 });
 
 Deno.test("3b. Apollo (200) and Magic (350) are marked out of range", () => {

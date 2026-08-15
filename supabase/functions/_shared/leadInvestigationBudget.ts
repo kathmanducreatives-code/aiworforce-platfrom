@@ -811,3 +811,38 @@ export function buildSmartShortlist(
     counts: { ...counts, selected: selected.length, ranked: ranked.length },
   };
 }
+
+// ─────────────────────────────────────────── mission-triage concurrency ──
+
+/**
+ * How many mission-triage batches may be in flight at once.
+ *
+ * Triage is free, read-only, and partitioned across DISJOINT company sets, so
+ * overlapping the calls costs nothing but concurrent model requests. Run one
+ * after another, four batches took 33.6s of a 125s budget on task 83843770 —
+ * more wall clock than the paid identity stage got — and identity then deferred
+ * five of its ten companies for want of the time.
+ *
+ * FOUR IS THE POOL SHAPE, not a guess: the default pool is 100 companies and
+ * `TRIAGE_BATCH_SIZE` is 25, so four lanes retire the whole pool in one wave.
+ * Deliberately NOT tied to `LINKEDIN_RESOLUTION_CONCURRENCY` — that bounds paid
+ * Actor calls against a different provider with different limits, and making one
+ * knob serve both would mean tuning spend in order to fix latency.
+ *
+ * THE FAILURE MODE IS NON-DESTRUCTIVE. If concurrency provokes a rate limit the
+ * call throws, and a thrown triage batch excludes nobody: those companies become
+ * `uncertain`, which is fully investigable. Overshooting costs a ranking signal,
+ * never a candidate.
+ */
+export const DEFAULT_TRIAGE_CONCURRENCY = 4;
+export const MAX_TRIAGE_CONCURRENCY = 8;
+export const TRIAGE_CONCURRENCY_ENV = "LEAD_TRIAGE_CONCURRENCY";
+
+export function resolveTriageConcurrency(read?: EnvReader): number {
+  const get: EnvReader = read ?? ((k) => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  });
+  const raw = Number(get(TRIAGE_CONCURRENCY_ENV));
+  if (!Number.isFinite(raw) || raw < 1) return DEFAULT_TRIAGE_CONCURRENCY;
+  return Math.min(MAX_TRIAGE_CONCURRENCY, Math.trunc(raw));
+}

@@ -21,6 +21,9 @@ import {
   runCapabilityPlan, type EngineProgress,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
+import {
+  LINKEDIN_RESOLUTION_CONCURRENCY,
+} from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 
 // THE FIXTURE'S MISSION, AFTER MISSION-AUTHORITATIVE QUALIFICATION.
@@ -299,11 +302,27 @@ Deno.test("10. a matching role anywhere in the array is found", async () => {
 
 // ════════════════════ 11/12. concurrency and batching ══
 
-Deno.test("11. LinkedIn company search never runs more than 2 at a time", async () => {
-  const { trace } = await runFixture();
-  assertEquals(trace.peak["apify_linkedin_company_search"], 2,
-    "five simultaneous paid Actor starts is the burst this budget cannot absorb");
-});
+Deno.test("11. LinkedIn company search never exceeds its configured lane count",
+  async () => {
+    const { trace } = await runFixture();
+    // THE INVARIANT IS "BOUNDED BY THE CONSTANT", NOT "BOUNDED AT TWO".
+    //
+    // This read `assertEquals(peak, 2)` with the literal inline, so raising the
+    // lane count looked like a regression in a paid-spend guard when it is not
+    // one: the lanes bound how many searches are IN FLIGHT, while the slice and
+    // the count budget decide how many are MADE. Widening them changes the rate
+    // of spend, never its total — and it is what lets the identity stage finish
+    // a ten-company slice inside one invocation instead of five of it.
+    //
+    // What must never happen is the engine ignoring the bound, so that is what
+    // is asserted, against the constant the engine itself reads.
+    assertEquals(trace.peak["apify_linkedin_company_search"],
+      LINKEDIN_RESOLUTION_CONCURRENCY,
+      "the engine must open exactly as many lanes as it is configured for");
+    // AND THE BOUND IS REAL. An unbounded burst is the failure this guards.
+    assert(LINKEDIN_RESOLUTION_CONCURRENCY >= 1 && LINKEDIN_RESOLUTION_CONCURRENCY <= 8,
+      "paid Actor starts stay inside a burst the provider and budget can absorb");
+  });
 
 Deno.test("12. company details receives resolved LinkedIn URLs in ONE batch", async () => {
   const { trace } = await runFixture();
