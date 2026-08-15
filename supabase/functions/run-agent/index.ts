@@ -308,7 +308,7 @@ import {
   dispatchContinuation, type DispatchOutcome,
 } from "../_shared/leadContinuationDispatch.ts";
 import { isFrontier } from "../_shared/leadInvestigationBudget.ts";
-import { projectStatus } from "../_shared/taskStatusContract.ts";
+import { projectStatus, RESUMABLE_ROW_STATUS } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
 import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
@@ -3826,8 +3826,18 @@ Deno.serve(async (req) => {
             // mission is read from the request rather than the checkpoint — a
             // continuation without them is refused, or runs a different job.
             stepIndex: step_index ?? 0,
-            instruction: effectiveInstruction,
+            // THE MISSION'S OWN QUERY, NOT THE PLANNER'S INSTRUCTION.
+            //
+            // `effectiveInstruction` on this plan is the deterministic
+            // fallback planner's string — "Find 10 jobs matching: Software
+            // Engineer OR …" — which is a JOBS instruction. Forwarding it gave
+            // the continuation's router exactly the wrong thing to fall back
+            // to when the mission failed to arrive, and it duly chose
+            // `person_first` / `apify_jobs`. The mission's own words are what
+            // the user actually said.
+            instruction: persistedMission?.original_user_query ?? effectiveInstruction,
             toolInput: tool_input_body ?? null,
+            leadMission: (persistedMission ?? null) as Record<string, unknown> | null,
             continuationIndex: progress.continuations_used,
           }, {
             fetch: (url, init) => fetch(url, init),
@@ -4166,6 +4176,41 @@ Deno.serve(async (req) => {
       // It does not fall through to the generic LLM path below either — that
       // is what fabricated leads before there was a provider contract at all.
       if (shouldRun) {
+        // ── A CONTINUATION MAY NEVER DESTROY THE SLICE BEFORE IT ─────────────
+        //
+        // This overwrites `result` wholesale. On a FIRST run that is correct —
+        // there is nothing to lose. On a CONTINUATION the row already holds a
+        // completed slice, and task 9425b3fc is what that costs: three
+        // qualified companies, the funnel, the workbench rows and the
+        // checkpoint were all replaced by a `blocked: true` stub, and the task
+        // went to `failed`. The work was real and the row stopped saying so.
+        //
+        // A continuation that cannot claim the mission path has established
+        // nothing. It releases what it took and leaves the checkpoint exactly
+        // as it found it, so the run stays resumable rather than being
+        // destroyed by its own successor.
+        if (resume_task_id) {
+          console.error(
+            "[run-agent][continuation-not-accepted] prior slice preserved",
+            { task_id: task.id, resume_task_id },
+          );
+          if (heldClaim?.viaRpc) {
+            await releaseContinuationViaRpc({
+              db: supabase as unknown as RpcDb,
+              taskId: task.id, workspaceId: workspace_id,
+              claimId: heldClaim.claimId, rowStatus: RESUMABLE_ROW_STATUS,
+            });
+          }
+          return json({
+            success: false,
+            error: "continuation_not_accepted",
+            reason: "sourcing_requires_mission_architecture",
+            message:
+              "The continuation could not claim the mission architecture; the " +
+              "previous slice's results and checkpoint are unchanged.",
+            task_id: task.id,
+          }, 422);
+        }
         console.error("[run-agent][sourcing-not-accepted] no mission-driven execution claimed this request", {
           task_id: task.id,
           plan_id,

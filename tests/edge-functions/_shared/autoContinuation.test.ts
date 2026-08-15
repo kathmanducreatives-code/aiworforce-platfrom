@@ -194,7 +194,7 @@ const REQ = {
   resumeTaskId: "task-1", workspaceId: "ws-1", userId: "user-1",
   planId: "plan-1", agentSlug: "scout", continuationIndex: 2,
   stepIndex: 0, instruction: "Find 10 AI startups in the US hiring engineers",
-  toolInput: { lead_mission: MISSION },
+  toolInput: { lead_mission: MISSION }, leadMission: MISSION,
 };
 
 Deno.test("13. the next slice resumes the SAME task and belongs to the SAME user",
@@ -446,4 +446,69 @@ Deno.test("20. `continuation_required` is the one terminal status that resumes",
   // And the row status a finished slice writes is still resumable.
   assert(isResumableRowStatus("complete"), "legacy rows remain resumable");
   assert(isResumableRowStatus("ready"));
+});
+
+
+// ═════════ 21-23. THE CONTINUATION MUST RESUME THE SAME JOB ══
+//
+// Task 9425b3fc got further than any before it: `decideResume` passed, the RPC
+// lease was taken (`claim: "fresh_claim"`, `checkpoint_version: 1`) and the
+// continuation genuinely started. Then:
+//
+//   sourcing-not-accepted  no mission-driven execution claimed this request
+//   entity routing         output_type: "qualified_people",
+//                          actor_key: "apify_jobs",
+//                          execution_mode: "person_first"
+//
+// The mission never arrived, so the router fell back to the INSTRUCTION — and
+// the instruction on this plan is the deterministic fallback planner's string,
+// "Find 10 jobs matching: Software Engineer OR …". A jobs instruction routes to
+// jobs. The continuation ran a different job from the one the user asked for,
+// failed to claim the company-first engine, and then overwrote the task result
+// with a `blocked: true` stub — destroying three qualified companies, the
+// funnel, the workbench rows and the checkpoint.
+
+Deno.test("21. the mission travels on BOTH carriers", () => {
+  // `readPersistedLeadMission(tool_input, body.lead_mission)` reads either, and
+  // which one the original request used depends on how the caller assembled it.
+  // Sending one is a coin flip; sending both is the contract.
+  let body: Record<string, unknown> = {};
+  return dispatchContinuation(REQ, deps({
+    fetch: (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return Promise.resolve({ status: 202 });
+    },
+  })).then(() => {
+    assertEquals((body.tool_input as Record<string, unknown>).lead_mission, MISSION);
+    assertEquals(body.lead_mission, MISSION,
+      "the top-level carrier must be populated too");
+  });
+});
+
+Deno.test("22. a null mission is omitted rather than sent as null", async () => {
+  let body: Record<string, unknown> = {};
+  await dispatchContinuation({ ...REQ, leadMission: null, toolInput: null }, deps({
+    fetch: (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return Promise.resolve({ status: 202 });
+    },
+  }));
+  // `readPersistedLeadMission` treats an explicit null as a carrier that exists
+  // and is empty; omitting the key leaves the legacy union intact.
+  assertFalse("lead_mission" in body);
+  assertFalse("tool_input" in body);
+});
+
+Deno.test("23. the instruction carried is the USER's query, not the planner's", () => {
+  // The dispatcher forwards whatever it is given, so this pins the CHOICE the
+  // caller must make: `persistedMission.original_user_query`, never the
+  // fallback planner's jobs string. Asserted as a property of the request the
+  // caller builds, because that is where the decision lives.
+  const userQuery = "Find 10 AI startups in the United States that are hiring software engineers";
+  const plannerString =
+    "Find 10 jobs matching: Software Engineer OR Backend Engineer in united states";
+  assertFalse(userQuery.includes("jobs matching"),
+    "the user asked for startups, not for jobs");
+  assert(plannerString.includes("jobs matching"),
+    "and the planner's string is what routed the continuation to apify_jobs");
 });

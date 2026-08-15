@@ -44,15 +44,20 @@ export interface DispatchRequest {
   stepIndex: number;
   instruction: string;
   /**
-   * THE COMPILED MISSION, CARRIED.
+   * THE COMPILED MISSION, CARRIED — ON BOTH CARRIERS.
    *
    * A `LeadMissionV1` is NOT part of the checkpoint. `readPersistedLeadMission`
-   * reads it from `tool_input.lead_mission` on the request, every invocation. A
-   * continuation that leaves it out does not resume the same job: it runs with
-   * `authority: "legacy_carrier_union"` and re-derives intent, which is the
-   * disagreement the compiled mission exists to remove.
+   * reads it from `tool_input.lead_mission` OR `body.lead_mission`, every
+   * invocation, and which one the original request used depends on how the
+   * caller assembled it. Sending only `tool_input` left the continuation with
+   * no mission at all: it routed `execution_mode: "person_first"`,
+   * `actor_key: "apify_jobs"`, `output_type: "qualified_people"` — a different
+   * job from the one the user asked for — and the company-first engine refused
+   * the request entirely.
    */
   toolInput: Record<string, unknown> | null;
+  /** The resolved mission, sent alongside `tool_input`, never inferred. */
+  leadMission: Record<string, unknown> | null;
   /** Which slice this will be, for logging and for the depth ceiling. */
   continuationIndex: number;
 }
@@ -120,8 +125,9 @@ export async function dispatchContinuation(
         agent_slug: req.agentSlug,
         step_index: req.stepIndex,
         instruction: req.instruction,
-        // Carries `lead_mission`. See `DispatchRequest.toolInput`.
+        // BOTH CARRIERS. See `DispatchRequest.leadMission`.
         ...(req.toolInput ? { tool_input: req.toolInput } : {}),
+        ...(req.leadMission ? { lead_mission: req.leadMission } : {}),
         auto_continuation: true,
         continuation_index: req.continuationIndex,
       }),

@@ -360,3 +360,25 @@ Deno.test("6.F MIGRATION CONTRACT: the documented rollback drops the real signat
   // release_sourcing_continuation is (uuid, uuid, uuid, text) — a 3-arg DROP fails.
   assertStringIncludes(sql, "drop function public.release_sourcing_continuation(uuid, uuid, uuid, text);");
 });
+
+Deno.test("WIRING: a refused continuation preserves the previous slice", async () => {
+  // Task 9425b3fc: the continuation could not claim the mission architecture
+  // and the `sourcing-not-accepted` path overwrote `result` wholesale with a
+  // `blocked: true` stub and set the row to `failed`. On a first run that is
+  // correct — nothing is lost. On a continuation the row already held three
+  // qualified companies, the funnel, the workbench rows and the checkpoint, and
+  // all of it went.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  // The guard exists and is keyed on this being a continuation.
+  assertStringIncludes(src, "[run-agent][continuation-not-accepted] prior slice preserved");
+  assertStringIncludes(src, 'error: "continuation_not_accepted"');
+  // It returns BEFORE the destructive write.
+  const guardAt = src.indexOf("[run-agent][continuation-not-accepted] prior slice preserved");
+  const wipeUpdateAt = src.indexOf('error_message: "sourcing_requires_mission_architecture"');
+  assert(guardAt > 0, "the guard must exist");
+  assert(guardAt < wipeUpdateAt,
+    "the continuation guard must return before the result is overwritten");
+  // And it hands the lease back, so the run stays resumable.
+  assertStringIncludes(src, "rowStatus: RESUMABLE_ROW_STATUS,");
+});
