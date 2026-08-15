@@ -299,6 +299,15 @@ import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
+import {
+  decideAutoContinuation, foldSlice, readLineageProgress,
+  resolveMaxContinuations, resolveMaxLineageCostUnits,
+  AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
+} from "../_shared/leadAutoContinuation.ts";
+import {
+  dispatchContinuation, type DispatchOutcome,
+} from "../_shared/leadContinuationDispatch.ts";
+import { isFrontier } from "../_shared/leadInvestigationBudget.ts";
 import { projectStatus } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
@@ -3706,6 +3715,124 @@ Deno.serve(async (req) => {
             });
           }
         }
+
+        // ══ THE REQUEST CONTINUES ITSELF ═══════════════════════════════════
+        //
+        // "Find 10 qualified AI startups" is the job; this invocation was a
+        // ~125s slice of it. Until now the slice ended and the job did not
+        // resume — the checkpoint was durable, the task advertised itself as
+        // resumable, and across 202 tasks nothing and nobody ever picked one up.
+        //
+        // ORDER MATTERS AND IS DELIBERATE. The result row is already written and
+        // the lease is already released before anything is dispatched, so the
+        // slice that resumes finds a durable checkpoint and an unheld claim. A
+        // dispatch before either would race its own successor.
+        const sliceQualified = capabilityRun
+          ? capabilityRun.state.qualified_company_keys.length : 0;
+        const sliceFrontier = capabilityRun
+          ? capabilityRun.companies.filter(
+            (c) => isFrontier(c.investigation_state)).length
+          : 0;
+        const priorProgress = readLineageProgress(priorTaskResult[LINEAGE_PROGRESS_KEY]);
+        const progress = foldSlice(priorProgress, {
+          qualified: sliceQualified,
+          investigated: capabilityRun?.state.investigation_selected ?? 0,
+          costUnits: capabilityRun?.state.accumulated_cost_units ?? 0,
+        });
+        const autoDecision = decideAutoContinuation({
+          // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated
+          // nobody reports zero, and reading that as the total is how a barren
+          // round erases a productive one.
+          qualified: progress.qualified_high_water,
+          requestedCount: quota.requestedLeadCount,
+          frontierRemaining: sliceFrontier,
+          continuationsUsed: progress.continuations_used,
+          maxContinuations: resolveMaxContinuations(),
+          costUnitsUsed: progress.cost_units_used,
+          maxCostUnits: resolveMaxLineageCostUnits(),
+          barrenSlices: progress.barren_slices,
+          providerFailed: cf.status === "provider_failure",
+        });
+
+        let dispatchOutcome: DispatchOutcome | null = null;
+        if (autoDecision.continue) {
+          dispatchOutcome = await dispatchContinuation({
+            resumeTaskId: task.id,
+            workspaceId: workspace_id,
+            userId: taskUserId,
+            planId: plan_id ?? null,
+            agentSlug: agent_slug,
+            continuationIndex: progress.continuations_used,
+          }, {
+            fetch: (url, init) => fetch(url, init),
+            functionsBaseUrl: Deno.env.get("SUPABASE_URL")
+              ? `${Deno.env.get("SUPABASE_URL")}/functions/v1`
+              : null,
+            serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? null,
+            log: (m, meta) => console.log("[run-agent][auto-continuation]", m, meta),
+          });
+        }
+
+        // A DISPATCH THAT DID NOT HAPPEN IS A STOP, and must be recorded as one.
+        // Otherwise the task claims it is continuing and nothing ever arrives —
+        // which is indistinguishable, to the user, from the bug this replaces.
+        const effectivelyContinuing = autoDecision.continue &&
+          dispatchOutcome?.dispatched === true;
+        const finalProgress: LineageProgress = {
+          ...progress,
+          stopped_reason: effectivelyContinuing
+            ? null
+            : autoDecision.continue
+            ? "provider_failure"
+            : (autoDecision.reason as LineageProgress["stopped_reason"]),
+          stopped_detail: effectivelyContinuing
+            ? null
+            : autoDecision.continue
+            ? `the next slice could not be started: ${
+              dispatchOutcome && !dispatchOutcome.dispatched
+                ? dispatchOutcome.detail
+                : "unknown"
+            }`
+            : autoDecision.detail,
+        };
+        console.log("[run-agent][auto-continuation]", {
+          task_id: task.id,
+          qualified: finalProgress.qualified_high_water,
+          requested: quota.requestedLeadCount,
+          frontier_remaining: sliceFrontier,
+          continuations_used: finalProgress.continuations_used,
+          cost_units_used: finalProgress.cost_units_used,
+          barren_slices: finalProgress.barren_slices,
+          decision: autoDecision.reason,
+          detail: autoDecision.detail,
+          dispatched: dispatchOutcome?.dispatched ?? false,
+          continuing: effectivelyContinuing,
+        });
+        // MERGED INTO THE RESULT THAT WAS JUST WRITTEN, not into the one read
+        // before it. Spreading `priorTaskResult` here would roll the whole task
+        // result back to its pre-slice state and take the funnel, the workbench
+        // rows and the checkpoint with it.
+        const { data: currentRow } = await supabase
+          .from("tasks").select("result").eq("id", task.id).maybeSingle();
+        await supabase.from("tasks").update({
+          // The row stays `running` while a successor is on its way, so the
+          // Workbench shows one continuous job rather than a series of finished
+          // runs that each fell short.
+          ...(effectivelyContinuing ? { status: "running" } : {}),
+          result: {
+            ...(((currentRow as { result?: Record<string, unknown> } | null)?.result ??
+              {}) as Record<string, unknown>),
+            [LINEAGE_PROGRESS_KEY]: finalProgress,
+            auto_continuation: {
+              version: AUTO_CONTINUATION_VERSION,
+              continuing: effectivelyContinuing,
+              decision: autoDecision.reason,
+              detail: autoDecision.detail,
+              user_message: effectivelyContinuing ? autoDecision.user_message : null,
+              dispatch: dispatchOutcome,
+            },
+          },
+        }).eq("id", task.id);
 
         // FINALIZE THE PLAN. The company-first branch returns here, far above the
         // ordinary finalization near the end of this function, so without this the

@@ -493,3 +493,65 @@ Deno.test("16. an unrecognised downgrade reason is not a refutation", () => {
     downgrade_reasons: ["some_future_reason_nobody_classified"],
   }));
 });
+
+// ═════════ 17-19. WHAT "QUALIFIED" REQUIRES — AND WHAT IT DOES NOT ══
+//
+// The count the user reads must mean: a US company, an AI startup, a current
+// software-engineering hiring signal, and Company Brain evidence that survived
+// verification. Nothing weaker may reach it.
+//
+// There are three cheaper verdicts in the pipeline that could each be mistaken
+// for qualification, and every one of them is a different thing:
+//
+//   triage `relevant`    a ranking hint from a cheap batched read, on discovery
+//                        fields. It decides ORDER, never membership.
+//   mission_fit `review`  the evaluator looked and could not settle it.
+//   grounded `review`     the verifier could not confirm the claims cited.
+
+Deno.test("17. triage RELEVANT is not qualification — it only ranks", () => {
+  // A company triage loved, that the evaluator has not passed. It must not
+  // qualify, and it must not be rejected either.
+  const d = decideCompanyBrain({
+    gates: gates(),
+    semantic: missionVerdict("review", { match_score: 99, confidence: 0.99 }),
+    policy: POLICY, hiring_verified: true, grounding: null,
+  });
+  assertEquals(d.outcome, "REVIEW",
+    "a strong relevance signal is not a Company Brain pass");
+  assertFalse(d.outcome === "QUALIFIED");
+});
+
+Deno.test("18. QUALIFIED requires an explicit evaluator pass — nothing infers it", () => {
+  // With no semantic verdict at all, the deterministic gates cannot qualify
+  // anybody however clean they are.
+  const noVerdict = decideCompanyBrain({
+    gates: gates(), semantic: null,
+    policy: POLICY, hiring_verified: true, grounding: null,
+  });
+  assertFalse(noVerdict.outcome === "QUALIFIED",
+    "clean gates plus verified hiring is still not a qualification");
+
+  // And with the pass, it qualifies.
+  const passed = decideCompanyBrain({
+    gates: gates(), semantic: missionVerdict("pass"),
+    policy: POLICY, hiring_verified: true, grounding: null,
+  });
+  assertEquals(passed.outcome, "QUALIFIED");
+});
+
+Deno.test("19. a REFUTED claim keeps a company out of the qualified count", () => {
+  // The evaluator passed it; the verifier checked its citations and one did not
+  // survive. That is a hold — the company is neither qualified nor rejected.
+  const d = decideCompanyBrain({
+    gates: gates(), semantic: missionVerdict("pass"),
+    policy: POLICY, hiring_verified: true,
+    grounding: {
+      final_grounded_decision: "review", grounding_score: 0.5,
+      validated_claim_types: ["company_fit"],
+      downgrade_reasons: ["grounding_score_0.5_below_0.6"],
+      validated_claims: 1, rejected_claims: 1, unacknowledged_conflicts: 0,
+    },
+  });
+  assertEquals(d.outcome, "REVIEW",
+    "this is the live godela.ai case: passed by GPT, one claim refuted, held");
+});
