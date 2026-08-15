@@ -231,7 +231,15 @@ Deno.test("WIRING: run-agent prefers the RPC and falls back only when it is abse
   // quota travels with it — without that argument a terminal-but-unfilled run
   // (`search_exhausted` with 0 of 5) projects as `completed`, which is what
   // production plan 43fb7313 reported to the user.
-  assertStringIncludes(src, "const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation, {");
+  // PROJECTED FROM `effectiveTerminal`, NOT `cf.status`. The legacy quota
+  // controller reports its ROUND COUNT — `round_limit_reached` after one round
+  // — which is in NON_RESUMABLE, so projecting it made `decideResume` refuse
+  // the run's own automatic continuation with 409 `already_terminal` while 88
+  // candidates were still on the frontier. When work remains and the quota is
+  // unmet the run is `continuation_required`; otherwise this IS `cf.status`.
+  assertStringIncludes(src, "const statuses = projectStatus(");
+  assertStringIncludes(src, "effectiveTerminal, cf.writeBoundary.invariantViolation, {");
+  assertStringIncludes(src, "const effectiveTerminal = autoDecision.continue");
   assertStringIncludes(src, "contactReady: cf.quota.eligible_leads,");
   assertStringIncludes(src, "requested: cf.quota.requested_leads,");
   assertStringIncludes(src, "status: statuses.rowStatus,");

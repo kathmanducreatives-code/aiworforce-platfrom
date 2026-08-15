@@ -3598,10 +3598,71 @@ Deno.serve(async (req) => {
         // stops a terminal-but-unfilled run (`search_exhausted` with 0 of 5)
         // reporting itself as Complete. `cf.quota` is the existing authority —
         // no second quota controller is introduced.
-        const statuses = projectStatus(cf.status, cf.writeBoundary.invariantViolation, {
-          contactReady: cf.quota.eligible_leads,
-          requested: cf.quota.requested_leads,
+        // ══ THE FRONTIER DECIDES WHETHER THE JOB IS FINISHED ═══════════════
+        //
+        // TWO AUTHORITIES DISAGREED AND THE WRONG ONE WON. `cf.status` comes
+        // from the legacy quota controller's ROUND COUNT — it reported
+        // `round_limit_reached` after its one round — while the capability
+        // engine held 88 companies on the investigation frontier and the user
+        // had asked for ten leads and been given three.
+        //
+        // `round_limit_reached` is in NON_RESUMABLE, so `decideResume` refused
+        // the automatic continuation with `already_terminal` (HTTP 409) on two
+        // separate gates: `result.terminal_status` and the copy inside
+        // `company_first_state`. The run declared itself finished and then
+        // enforced it against its own successor.
+        //
+        // A job with candidates still to investigate and an unmet quota is
+        // `continuation_required` — the one terminal status that means "not
+        // over". This is the same correction already made to the capability
+        // ledger, applied to the status the resume gate actually reads.
+        const sliceQualified = capabilityRun
+          ? capabilityRun.state.qualified_company_keys.length : 0;
+        const sliceFrontier = capabilityRun
+          ? capabilityRun.companies.filter(
+            (c) => isFrontier(c.investigation_state)).length
+          : 0;
+        const priorTaskRow = await supabase
+          .from("tasks").select("result").eq("id", task.id).maybeSingle();
+        const priorProgress = readLineageProgress(
+          (((priorTaskRow.data as { result?: Record<string, unknown> } | null)
+            ?.result ?? {}) as Record<string, unknown>)[LINEAGE_PROGRESS_KEY]);
+        const progress = foldSlice(priorProgress, {
+          qualified: sliceQualified,
+          investigated: capabilityRun?.state.investigation_selected ?? 0,
+          costUnits: capabilityRun?.state.accumulated_cost_units ?? 0,
         });
+        const autoDecision = decideAutoContinuation({
+          // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated
+          // nobody reports zero, and reading that as the total is how a barren
+          // round erases a productive one.
+          qualified: progress.qualified_high_water,
+          requestedCount: quota.requestedLeadCount,
+          frontierRemaining: sliceFrontier,
+          continuationsUsed: progress.continuations_used,
+          maxContinuations: resolveMaxContinuations(),
+          costUnitsUsed: progress.cost_units_used,
+          maxCostUnits: resolveMaxLineageCostUnits(),
+          barrenSlices: progress.barren_slices,
+          providerFailed: cf.status === "provider_failure",
+        });
+        // The status the REST of this branch persists and projects from.
+        const effectiveTerminal = autoDecision.continue
+          ? "continuation_required"
+          : cf.status;
+        if (effectiveTerminal !== cf.status) {
+          console.log("[run-agent][auto-continuation] terminal_status_overridden", {
+            task_id: task.id, from: cf.status, to: effectiveTerminal,
+            frontier_remaining: sliceFrontier,
+            qualified: progress.qualified_high_water,
+            requested: quota.requestedLeadCount,
+          });
+        }
+        const statuses = projectStatus(
+          effectiveTerminal, cf.writeBoundary.invariantViolation, {
+            contactReady: cf.quota.eligible_leads,
+            requested: cf.quota.requested_leads,
+          });
         const taskStatus = statuses.taskStatus;
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
@@ -3616,6 +3677,27 @@ Deno.serve(async (req) => {
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
+            // ── THE CHECKPOINT THE RESUME GATE ACTUALLY READS ──────────────
+            //
+            // `decideResume` inspects `company_first_state.terminal_status`
+            // BEFORE the top-level one and refuses on either. The controller
+            // writes `round_limit_reached` there from its own round count, so
+            // overriding only the top-level status would have changed nothing
+            // and the continuation would still 409.
+            //
+            // Cleared — not rewritten to a different terminal — because the
+            // job genuinely has not reached one: candidates remain and the
+            // quota is unmet.
+            ...(autoDecision.continue
+              ? {
+                company_first_state: {
+                  ...((priorTaskResult.company_first_state ?? {}) as Record<string, unknown>),
+                  terminal_status: null,
+                  terminal_reason: null,
+                  next_action: "start_round",
+                },
+              }
+              : {}),
             // Carried in the task row too, so the Workbench can render the run
             // context after a page reload without re-reading the response.
             qualified_lead_run_context: runContext,
@@ -3727,33 +3809,10 @@ Deno.serve(async (req) => {
         // the lease is already released before anything is dispatched, so the
         // slice that resumes finds a durable checkpoint and an unheld claim. A
         // dispatch before either would race its own successor.
-        const sliceQualified = capabilityRun
-          ? capabilityRun.state.qualified_company_keys.length : 0;
-        const sliceFrontier = capabilityRun
-          ? capabilityRun.companies.filter(
-            (c) => isFrontier(c.investigation_state)).length
-          : 0;
-        const priorProgress = readLineageProgress(priorTaskResult[LINEAGE_PROGRESS_KEY]);
-        const progress = foldSlice(priorProgress, {
-          qualified: sliceQualified,
-          investigated: capabilityRun?.state.investigation_selected ?? 0,
-          costUnits: capabilityRun?.state.accumulated_cost_units ?? 0,
-        });
-        const autoDecision = decideAutoContinuation({
-          // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated
-          // nobody reports zero, and reading that as the total is how a barren
-          // round erases a productive one.
-          qualified: progress.qualified_high_water,
-          requestedCount: quota.requestedLeadCount,
-          frontierRemaining: sliceFrontier,
-          continuationsUsed: progress.continuations_used,
-          maxContinuations: resolveMaxContinuations(),
-          costUnitsUsed: progress.cost_units_used,
-          maxCostUnits: resolveMaxLineageCostUnits(),
-          barrenSlices: progress.barren_slices,
-          providerFailed: cf.status === "provider_failure",
-        });
-
+        // `progress` and `autoDecision` were computed BEFORE the status
+        // projection — the terminal status depends on them, so they cannot be
+        // decided after it. Only the dispatch happens here, once the result is
+        // durable and the lease released.
         let dispatchOutcome: DispatchOutcome | null = null;
         if (autoDecision.continue) {
           dispatchOutcome = await dispatchContinuation({
@@ -3790,7 +3849,9 @@ Deno.serve(async (req) => {
           stopped_reason: effectivelyContinuing
             ? null
             : autoDecision.continue
-            ? "provider_failure"
+            // WANTED TO CONTINUE, COULD NOT. Not a provider failure — a fault
+            // in the handoff, and it must be named as one.
+            ? "dispatch_failed"
             : (autoDecision.reason as LineageProgress["stopped_reason"]),
           stopped_detail: effectivelyContinuing
             ? null

@@ -67,7 +67,14 @@ export type StopReason =
   | "cost_ceiling"
   | "no_progress"
   | "provider_failure"
-  | "cancelled";
+  | "cancelled"
+  /**
+   * The job wanted to continue and the handoff did not happen — a refused or
+   * unreachable dispatch. Its own reason because it is a fault in OUR plumbing,
+   * not a finding about the candidates, and conflating it with
+   * `provider_failure` blames Apify for a bug in the continuation path.
+   */
+  | "dispatch_failed";
 
 export interface AutoContinuationInput {
   /** Qualified companies PERSISTED so far, across every slice of this request. */

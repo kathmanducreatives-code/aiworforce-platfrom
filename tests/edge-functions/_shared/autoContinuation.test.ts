@@ -361,3 +361,89 @@ Deno.test("16b. a thin pool ends honestly short rather than looping", () => {
   assertEquals(pool, 0);
   assertEquals(progress.qualified_high_water, 3, "three found, and the run says so");
 });
+
+// ═════════ 17-20. THE RESUME GATE MUST NOT REFUSE OUR OWN CONTINUATION ══
+//
+// Task d9b341aa: 3 qualified of 10 requested, 88 candidates still on the
+// frontier, the decision correctly `quota_unmet_frontier_remains` — and the
+// dispatch refused with HTTP 409, `already_terminal`.
+//
+// TWO AUTHORITIES DISAGREED AND THE WRONG ONE WON. `cf.status` comes from the
+// legacy quota controller's ROUND COUNT, which reported `round_limit_reached`
+// after its single round. `round_limit_reached` is in NON_RESUMABLE, so
+// `decideResume` refused the continuation the same run had just asked for. The
+// run declared itself finished and then enforced it against its own successor.
+//
+// And it refused on TWO gates, not one: the top-level `result.terminal_status`
+// AND the copy inside `company_first_state`, which is read first. Fixing either
+// alone changes nothing.
+
+import {
+  decideResume,
+} from "../../../supabase/functions/_shared/sourcingContinuation.ts";
+import {
+  isTerminalOutcome, isResumableRowStatus,
+} from "../../../supabase/functions/_shared/taskStatusContract.ts";
+
+const SOURCING_STATE_KEY = "company_first_state";
+
+/** The task row as task d9b341aa actually looked when its successor was refused. */
+const rowAfterSlice = (over: {
+  terminal: string | null;
+  stateTerminal: string | null;
+  status?: string;
+}) => ({
+  id: "task-1", workspace_id: "ws-1", status: over.status ?? "complete",
+  payload: { instruction: "Find 10 AI startups in the US hiring engineers" },
+  result: {
+    terminal_status: over.terminal,
+    [SOURCING_STATE_KEY]: {
+      version: "company-first-state-1.0.0",
+      terminal_status: over.stateTerminal,
+      current_round: 1,
+    },
+  },
+});
+
+Deno.test("17. THE 409: a round-limit terminal refuses the run's own continuation", () => {
+  const d = decideResume(
+    rowAfterSlice({ terminal: "round_limit_reached", stateTerminal: "round_limit_reached" }),
+    "ws-1", "task-1");
+  assertFalse(d.ok, "this is the observed failure, kept so the fix cannot regress");
+  assertEquals(d.ok === false ? d.reason : null, "already_terminal");
+});
+
+Deno.test("18. with the frontier as authority, the same run IS resumable", () => {
+  // What the fix writes: `continuation_required` in BOTH places, because a job
+  // with candidates left and an unmet quota has not reached a terminal state.
+  const d = decideResume(
+    rowAfterSlice({ terminal: "continuation_required", stateTerminal: null }),
+    "ws-1", "task-1");
+  assert(d.ok, `expected resumable, got ${d.ok === false ? d.reason : ""}`);
+});
+
+Deno.test("19. BOTH gates must be cleared — either one alone still refuses", () => {
+  // The nested copy is read first, so fixing only the top level changes nothing.
+  const topOnly = decideResume(
+    rowAfterSlice({ terminal: "continuation_required", stateTerminal: "round_limit_reached" }),
+    "ws-1", "task-1");
+  assertFalse(topOnly.ok, "the nested checkpoint still says the run is over");
+
+  // And fixing only the nested one leaves the top-level terminal in force.
+  const nestedOnly = decideResume(
+    rowAfterSlice({ terminal: "round_limit_reached", stateTerminal: null }),
+    "ws-1", "task-1");
+  assertFalse(nestedOnly.ok);
+});
+
+Deno.test("20. `continuation_required` is the one terminal status that resumes", () => {
+  // The property the fix depends on, asserted against the contract itself
+  // rather than assumed.
+  assertFalse(isTerminalOutcome("continuation_required"),
+    "continuation_required must not be treated as an ending");
+  assert(isTerminalOutcome("round_limit_reached"));
+  assert(isTerminalOutcome("completed"));
+  // And the row status a finished slice writes is still resumable.
+  assert(isResumableRowStatus("complete"), "legacy rows remain resumable");
+  assert(isResumableRowStatus("ready"));
+});
