@@ -1,7 +1,7 @@
 import { Sparkles, Radar, ShieldCheck, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassPanel } from "./GlassPanel";
-import atlasPortrait from "@/assets/atlas-portrait.png";
+import atlasPortrait from "@/assets/atlas-portrait.webp";
 import type { LeadRow } from "@/lib/leadLibrary/types";
 
 const CAPABILITIES = [

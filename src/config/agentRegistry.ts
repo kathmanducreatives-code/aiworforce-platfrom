@@ -19,10 +19,10 @@
 // Canonical public identity assets. Legacy files (scout.png, aria.png,
 // hawk.png, penn.png, scribe.png) remain on disk for backend-history
 // compatibility but are no longer imported by public UI as of Phase 1.6.
-import pilotImg from '@/assets/agents/pilot.png';
-import atlasImg from '@/assets/agents/public/atlas.png';
-import miraImg from '@/assets/agents/public/mira.png';
-import orionImg from '@/assets/agents/public/orion.png';
+import pilotImg from '@/assets/agents/pilot.webp';
+import atlasImg from '@/assets/agents/public/atlas.webp';
+import miraImg from '@/assets/agents/public/mira.webp';
+import orionImg from '@/assets/agents/public/orion.webp';
 import lyraAsset from '@/assets/agents/public/lyra.png.asset.json';
 import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
 

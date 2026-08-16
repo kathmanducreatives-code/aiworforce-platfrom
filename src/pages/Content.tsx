@@ -29,7 +29,7 @@ import ContentDetailDrawer from '@/components/content/ContentDetailDrawer';
 import ManualContentSource from '@/components/content/ManualContentSource';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
 import { MiraCopilot } from '@/components/content/MiraCopilot';
-import scribeImg from '@/assets/agents/scribe.png';
+import scribeImg from '@/assets/agents/scribe.webp';
 
 const dispatch = (text: string) =>
   void sendAgentCommand(text, { success: 'Sent to your workforce', action_source: 'content_action' });

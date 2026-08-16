@@ -1,5 +1,5 @@
 import firecrawlLogo from '@/assets/ai-logos/firecrawl.png';
-import elevenlabsLogo from '@/assets/ai-logos/elevenlabs.png';
+import elevenlabsLogo from '@/assets/ai-logos/elevenlabs.webp';
 
 export interface AiTool {
   key: string;

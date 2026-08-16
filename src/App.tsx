@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ClientProvider } from "./contexts/ClientContext";
@@ -13,58 +14,115 @@ import PreviewDiagnostics from "./components/dev/PreviewDiagnostics";
 import EnvironmentBadge from "./components/dev/EnvironmentBadge";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
-import Landing from "./pages/Landing";
 
-import Dashboard from "./pages/Dashboard";
-import Signals from "./pages/Signals";
-import AwaitingYou from "./pages/AwaitingYou";
 
-import Candidates from "./pages/Candidates";
-import Features from "./pages/Features";
-import Pricing from "./pages/Pricing";
-import NotFound from "./pages/NotFound";
-import FolderView from "./pages/FolderView";
-import EmailSequenceSetup from "./pages/EmailSequenceSetup";
-import EmailSequences from "./pages/EmailSequences";
-import GetDemo from "./pages/GetDemo";
-import Auth from "./pages/Auth";
-import ResetPassword from "./pages/ResetPassword";
-import ClientMetrics from "./pages/ClientMetrics";
-import ClientDetail from "./pages/ClientDetail";
-import InterviewScheduler from "./pages/InterviewScheduler";
-import InterviewSettings from "./pages/InterviewSettings";
-import BookInterview from "./pages/BookInterview";
-import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
-import CandidateApply from "./pages/CandidateApply";
-import OnboardingCompanyBrain from "./pages/OnboardingCompanyBrain";
-import CompanyBrainDashboard from "./pages/CompanyBrainDashboard";
+// ── ROUTE-LEVEL CODE SPLITTING ───────────────────────────────────────────────
+//
+// These 45 pages were eagerly imported, so every visitor downloaded all
+// of them to render one — a single 3.1 MB chunk, which Vite had been warning
+// about. Someone landing on the marketing page was paying for the Workbench,
+// the screening pilot and the dialer before anything appeared.
+//
+// Providers, layouts and guards above stay EAGER on purpose: they mount on
+// every route, so deferring them buys no bytes and costs a suspense flash on
+// each navigation.
+const Landing = lazy(() => import("./pages/Landing"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Signals = lazy(() => import("./pages/Signals"));
+const AwaitingYou = lazy(() => import("./pages/AwaitingYou"));
+const Candidates = lazy(() => import("./pages/Candidates"));
+const Features = lazy(() => import("./pages/Features"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const FolderView = lazy(() => import("./pages/FolderView"));
+const EmailSequenceSetup = lazy(() => import("./pages/EmailSequenceSetup"));
+const EmailSequences = lazy(() => import("./pages/EmailSequences"));
+const GetDemo = lazy(() => import("./pages/GetDemo"));
+const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ClientMetrics = lazy(() => import("./pages/ClientMetrics"));
+const ClientDetail = lazy(() => import("./pages/ClientDetail"));
+const InterviewScheduler = lazy(() => import("./pages/InterviewScheduler"));
+const InterviewSettings = lazy(() => import("./pages/InterviewSettings"));
+const BookInterview = lazy(() => import("./pages/BookInterview"));
+const GoogleOAuthCallback = lazy(() => import("./pages/GoogleOAuthCallback"));
+const CandidateApply = lazy(() => import("./pages/CandidateApply"));
+const OnboardingCompanyBrain = lazy(() => import("./pages/OnboardingCompanyBrain"));
+const CompanyBrainDashboard = lazy(() => import("./pages/CompanyBrainDashboard"));
+const ICPManager = lazy(() => import("./pages/ICPManager"));
+const ICPResultsPage = lazy(() => import("./pages/ICPResultsPage"));
+const ICPCandidateDetail = lazy(() => import("./pages/ICPCandidateDetail"));
+const ScreeningJobs = lazy(() => import("./pages/ScreeningJobs"));
+const Leads = lazy(() => import("./pages/Leads"));
+const LeadScraper = lazy(() => import("./pages/LeadScraper"));
+const DeepSearch = lazy(() => import("./pages/DeepSearch"));
+const Competitors = lazy(() => import("./pages/Competitors"));
+const Content = lazy(() => import("./pages/Content"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
+const Agents = lazy(() => import("./pages/Agents"));
+const SettingsIntegrations = lazy(() => import("./pages/SettingsIntegrations"));
+const SettingsBilling = lazy(() => import("./pages/SettingsBilling"));
+const JobApplicants = lazy(() => import("./pages/JobApplicants"));
+const JobDistribution = lazy(() => import("./pages/JobDistribution"));
+const ExpertMarketplace = lazy(() => import("./pages/ExpertMarketplace"));
+const PostInterceptor = lazy(() => import("./pages/PostInterceptor"));
+const LeadCRM = lazy(() => import("./pages/LeadCRM"));
+const OutreachEngine = lazy(() => import("./pages/OutreachEngine"));
+const CandidateDossier = lazy(() => import("./pages/candidates/CandidateDossier"));
+const TaskPlanPage = lazy(() => import("./pages/TaskPlanPage"));
+const Workflows = lazy(() => import("./pages/Workflows"));
 
-import ICPManager from "./pages/ICPManager";
-import ICPResultsPage from "./pages/ICPResultsPage";
-import ICPCandidateDetail from "./pages/ICPCandidateDetail";
-import ScreeningJobs from "./pages/ScreeningJobs";
-import Leads from "./pages/Leads";
-import LeadScraper from "./pages/LeadScraper";
-import DeepSearch from "./pages/DeepSearch";
-import Competitors from "./pages/Competitors";
-import Content from "./pages/Content";
-import OAuthConsent from "./pages/OAuthConsent";
-import Agents from "./pages/Agents";
-import SettingsIntegrations from "./pages/SettingsIntegrations";
-import SettingsBilling from "./pages/SettingsBilling";
-import JobApplicants from "./pages/JobApplicants";
-import JobDistribution from "./pages/JobDistribution";
-import ExpertMarketplace from "./pages/ExpertMarketplace";
-import PostInterceptor from "./pages/PostInterceptor";
-import LeadCRM from "./pages/LeadCRM";
-import OutreachEngine from "./pages/OutreachEngine";
-import CandidateDossier from "./pages/candidates/CandidateDossier";
-import TaskPlanPage from "./pages/TaskPlanPage";
-import Workflows from "./pages/Workflows";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
 // import InterviewDashboard from "./pages/interviews/InterviewDashboard";
@@ -103,6 +161,7 @@ const App = () => (
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
                   <RouteErrorBoundary>
+                  <Suspense fallback={<div className="min-h-screen bg-background" />}>
                   <Routes>
 
                     {/* Public Routes */}
@@ -389,6 +448,7 @@ const App = () => (
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
+                </Suspense>
                   </RouteErrorBoundary>
                 </div>
 

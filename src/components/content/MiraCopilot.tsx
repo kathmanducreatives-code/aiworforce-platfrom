@@ -10,7 +10,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, Send, Sparkles, X, PenLine, MessageSquare, BarChart3, Calendar, Lightbulb } from 'lucide-react';
 import { sendAgentCommand } from '@/lib/agentCommand';
-import scribeImg from '@/assets/agents/scribe.png';
+import scribeImg from '@/assets/agents/scribe.webp';
 
 // ---- canonical display names (UI only; backend slugs unchanged) ---------------
 

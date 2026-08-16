@@ -1,5 +1,5 @@
 import { GlassPanel } from "./GlassPanel";
-import atlasPortrait from "@/assets/atlas-portrait.png";
+import atlasPortrait from "@/assets/atlas-portrait.webp";
 
 export function AtlasEmptyState({ title, body }: { title: string; body: string }) {
   return (
