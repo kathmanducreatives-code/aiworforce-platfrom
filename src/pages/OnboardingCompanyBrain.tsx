@@ -13,7 +13,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { companyBrainKey } from '@/hooks/useCompanyBrain';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -48,6 +50,7 @@ const FN = 'generate-company-brain-draft';
 
 export default function OnboardingCompanyBrain() {
   const { workspaceId } = useWorkspace();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const [scene, setScene] = useState<SceneId>('founder_name');
@@ -202,7 +205,26 @@ export default function OnboardingCompanyBrain() {
           ? 'Leads, Signal Radar, Content, Agents and Outreach now use it.'
           : 'You can finish later.',
       });
-      if (activate) setTimeout(() => navigate('/dashboard'), 900);
+      if (activate) {
+        // THE ACTIVATION HAS TO REACH THE CACHE, NOT JUST THE DATABASE.
+        //
+        // `useCompanyBrain` holds this row with a five-minute staleTime and no
+        // refetch on focus — both deliberate, and both correct for a value that
+        // almost never changes. But it DOES change here, exactly once, and this
+        // is the moment.
+        //
+        // Without this the row on the client stayed `onboarding_completed:
+        // false` while the database said true, so `OnboardingGate` read its own
+        // stale cache and bounced the user straight back to onboarding. The
+        // dashboard was visible for the moment between navigation and the
+        // gate's decision, which made it look like a loop rather than a
+        // redirect.
+        //
+        // `await` before navigating: refetching after the route change would
+        // race the gate and reintroduce the same bounce, just less often.
+        await queryClient.invalidateQueries({ queryKey: companyBrainKey(workspaceId) });
+        setTimeout(() => navigate('/dashboard'), 900);
+      }
     } catch {
       setError({ title: 'Save failed', body: 'Nothing was lost — try again.' });
     } finally { setBusy(null); }
