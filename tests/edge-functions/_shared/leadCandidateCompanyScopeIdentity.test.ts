@@ -264,7 +264,7 @@ Deno.test("I2. an unverifiable company binds no account and stays non-contactabl
 // ═════════════════ J. the database-level contract ══════════════════════════
 
 const MIGRATION = Deno.readTextFileSync(
-  new URL("../../../supabase/migrations/20260812090000_lead_candidate_company_scope_uniq.sql",
+  new URL("../../../supabase/migrations-archive/20260812090000_lead_candidate_company_scope_uniq.sql",
     import.meta.url),
 );
 

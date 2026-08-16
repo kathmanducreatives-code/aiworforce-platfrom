@@ -17,11 +17,11 @@ import {
 } from "../../../supabase/functions/_shared/executionLedger.ts";
 
 const MIGRATION = new URL(
-  "../../../supabase/migrations/20260810090000_lead_execution_calls.sql", import.meta.url);
+  "../../../supabase/migrations-archive/20260810090000_lead_execution_calls.sql", import.meta.url);
 // Planner provenance and record_kind arrived in a follow-up migration, so the
 // "every column exists" check reads the whole schema, not one file.
 const MIGRATION_2 = new URL(
-  "../../../supabase/migrations/20260810100000_lead_execution_calls_provenance.sql", import.meta.url);
+  "../../../supabase/migrations-archive/20260810100000_lead_execution_calls_provenance.sql", import.meta.url);
 async function schemaSql(): Promise<string> {
   return (await Deno.readTextFile(MIGRATION)) + "\n" + (await Deno.readTextFile(MIGRATION_2));
 }

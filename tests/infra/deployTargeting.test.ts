@@ -165,7 +165,7 @@ Deno.test("verify-deploy-target refuses an unknown ref", async () => {
 Deno.test("every migration file carries a version prefix", async () => {
   // An unversioned file cannot be ordered and cannot be correlated with remote
   // history. `outreach.sql` was the only one; Phase 0b renamed it.
-  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const dir = new URL("../../supabase/migrations-archive/", import.meta.url);
   const bad: string[] = [];
   for await (const e of Deno.readDir(dir)) {
     if (e.isFile && e.name.endsWith(".sql") && !/^\d{14}_/.test(e.name)) bad.push(e.name);
@@ -174,7 +174,7 @@ Deno.test("every migration file carries a version prefix", async () => {
 });
 
 Deno.test("the outreach base migration is ordered before the ALTER that needs it", async () => {
-  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const dir = new URL("../../supabase/migrations-archive/", import.meta.url);
   const names: string[] = [];
   for await (const e of Deno.readDir(dir)) if (e.isFile) names.push(e.name);
   const base = names.find((n) => n.includes("outreach_engine_base"));
@@ -188,7 +188,7 @@ Deno.test("the baseline snapshot still declares itself informational", async () 
   // It must never be executed, and it says so itself. If that header ever goes,
   // someone is about to apply an 83-table snapshot over a live schema.
   const sql = await Deno.readTextFile(new URL(
-    "../../supabase/migrations/20260526000000_baseline_from_prod.sql", import.meta.url));
+    "../../supabase/migrations-archive/20260526000000_baseline_from_prod.sql", import.meta.url));
   assertStringIncludes(sql, "INFORMATIONAL ONLY");
   assertStringIncludes(sql, "NOT meant to be applied");
 });

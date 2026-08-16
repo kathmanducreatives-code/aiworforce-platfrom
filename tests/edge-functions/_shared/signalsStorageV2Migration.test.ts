@@ -7,15 +7,15 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const MIGRATION_PATH = new URL(
-  "../../../supabase/migrations/20260717170000_signals_storage_v2_hybrid.sql",
+  "../../../supabase/migrations-archive/20260717170000_signals_storage_v2_hybrid.sql",
   import.meta.url,
 );
 const LEGACY_SIGNALS_MIGRATION = new URL(
-  "../../../supabase/migrations/20260611080445_c6dc2c5b-bff7-45a2-9445-d56a4d3d0ca2.sql",
+  "../../../supabase/migrations-archive/20260611080445_c6dc2c5b-bff7-45a2-9445-d56a4d3d0ca2.sql",
   import.meta.url,
 );
 const SIGNAL_REVIEWS_MIGRATION = new URL(
-  "../../../supabase/migrations/20260613130000_phase6_signal_reviews.sql",
+  "../../../supabase/migrations-archive/20260613130000_phase6_signal_reviews.sql",
   import.meta.url,
 );
 

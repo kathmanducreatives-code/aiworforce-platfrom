@@ -22,7 +22,7 @@ const fnSrc = () =>
 
 /** Columns declared on public.company_brain across all migration files. */
 async function declaredColumns(): Promise<Set<string>> {
-  const dirUrl = new URL("../../../supabase/migrations/", import.meta.url);
+  const dirUrl = new URL("../../../supabase/migrations-archive/", import.meta.url);
   const cols = new Set<string>();
   for await (const entry of Deno.readDir(dirUrl)) {
     if (!entry.isFile || !entry.name.endsWith(".sql")) continue;
