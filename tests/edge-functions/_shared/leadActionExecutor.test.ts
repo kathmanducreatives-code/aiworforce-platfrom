@@ -73,6 +73,7 @@ function fakeAdmin(seedRows: any[]) {
         select: () => chain,
         in: (_col: string, ids: string[]) => { ctx._in = ids; return chain; },
         eq: () => chain,
+        maybeSingle: () => Promise.resolve({ data: null }),
         update: (patch: any) => { state.updates.push({ table, patch }); return { eq: () => Promise.resolve({ data: null }) }; },
         insert: (vals: any) => { state.inserts.push({ table, vals }); return { select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: `${table}-new` } }) }) }; },
         upsert: (vals: any) => { state.inserts.push({ table, vals, upsert: true }); return { select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: `${table}-up` } }) }) }; },

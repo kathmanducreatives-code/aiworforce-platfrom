@@ -58,10 +58,24 @@ export function normalizeApifyJobToCandidate(row: unknown, now?: number): ApifyH
   const n = normalizeApifyJobRow(row);
   const extraMissingEvidence: string[] = [];
 
-  // Never use a URL shortener as the company website/domain.
+  // NEVER USE A URL SHORTENER AS THE COMPANY WEBSITE/DOMAIN.
+  //
+  // The row normalizer already does this — `apifyJobsNormalizer` nulls the
+  // website and records `raw.website_shortener_dropped`. So by the time this
+  // runs, `n.website` is ALREADY null and re-testing it always returned false:
+  // the drop happened, but this layer's `extraMissingEvidence` never fired, and
+  // a candidate with a bit.ly for a website carried no note saying why its
+  // website was missing.
+  //
+  // Two layers doing the same job, with the inner one winning silently — and
+  // they did not even agree on how to detect it (`isShortenerUrl` there,
+  // `isShortenerDomain` here). Read the flag the normalizer already set, and
+  // keep the local check only for a website this layer received directly.
   let website = n.website;
   let domain = n.domain;
-  if (isShortenerDomain(n.website) || isShortenerDomain(n.domain)) {
+  const droppedUpstream = (n as { raw?: { website_shortener_dropped?: unknown } })
+    .raw?.website_shortener_dropped === true;
+  if (droppedUpstream || isShortenerDomain(n.website) || isShortenerDomain(n.domain)) {
     website = null;
     domain = null;
     extraMissingEvidence.push("verified company website");

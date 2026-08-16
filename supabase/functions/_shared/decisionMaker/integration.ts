@@ -228,9 +228,18 @@ export async function runDecisionMakerAction(
         });
         persisted_count += 1;
         frontend.push({ ...toFrontend(dm), contact_id: id, persisted: true });
-      } catch (_e) {
+      } catch (e) {
         // Per-candidate failure: the lead is not abandoned, and the raw database
-        // error is never surfaced.
+        // error is never surfaced TO THE USER.
+        //
+        // It is logged, though. Discarding it entirely left an operator with
+        // `persistence_failed_count: 3` and no way to learn why — and this is
+        // the path a changed database call shape fails down, so the count can
+        // go to zero-persisted while every other counter still reads healthy.
+        console.error("[decision-maker] contact persistence failed", {
+          lead_candidate_id: lead.lead_candidate_id,
+          error: e instanceof Error ? e.message : String(e),
+        });
         persistence_failed_count += 1;
         frontend.push({ ...toFrontend(dm), persisted: false });
       }
