@@ -145,8 +145,14 @@ import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./lead
 import {
   type DiscoveryActorSelection, type DiscoveryStrategy,
   buildDiscoveryPlannerPayload, deterministicDiscoveryStrategy,
-  discoveryStrategyDiagnostics, shouldRunSelection, validateDiscoveryStrategy,
+  discoveryStrategyDiagnostics, shouldRunSelection, strategyActorKeys,
+  validateDiscoveryStrategy,
 } from "./leadDiscoveryStrategy.ts";
+// REQUIRED SIGNALS → ACTORS. Joins what the mission asked for to what can
+// actually supply it, so an unserved requirement is stated rather than dropped.
+import {
+  coverMissionSignals, coverageDiagnostics, signalsUnservedByStrategy,
+} from "./signalActorCoverage.ts";
 
 /**
  * The PAID stages a new investigation slice must re-run.
@@ -283,6 +289,14 @@ export interface CapabilityExecutionState {
    * continuations, which skip discovery entirely.
    */
   discovery_strategy?: Record<string, unknown>;
+  /**
+   * WHICH REQUIRED SIGNALS THIS RUN COULD ANSWER, and why any could not.
+   *
+   * The record that separates "no more candidates" from "no source could ever
+   * have answered this" — the two endings a shortfall can have, which look
+   * identical in a count alone.
+   */
+  signal_coverage?: Record<string, unknown>;
   /**
    * Paid Actor runs that were still RUNNING when the poll window closed.
    *
@@ -1777,9 +1791,39 @@ export async function runCapabilityPlan(
       // returns nothing, or proposes nothing usable — the deterministic
       // strategy runs, which is exactly the pair and the literal above.
       const strategy = await resolveDiscoveryStrategy();
-      const strategyKeys = strategy.selections.map((s) => s.actor_key);
+      const strategyKeys = strategyActorKeys(strategy);
       state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
       log("discovery_strategy_resolved", state.discovery_strategy);
+
+      // ── WHICH REQUIRED SIGNALS THIS RUN CAN ACTUALLY ANSWER ─────────────────
+      //
+      // The mission records what evidence the request needs; the scenario matrix
+      // knows which Actors produce it. Nothing joined them, so a mission asking
+      // for companies that are hiring AND raised recently would discover
+      // companies, qualify them on hiring, and report success having never asked
+      // a funding source anything. The requirement sat in the persisted result,
+      // visible and silently unserved.
+      //
+      // Recorded, not enforced. A signal with no source is not a reason to
+      // refuse the whole mission — most of such a request is still answerable,
+      // and refusing it would be worse than answering the part that works and
+      // saying which part did not. This is what makes the run's ending honest:
+      // "no more candidates" and "no source could ever have answered this" are
+      // different results, and the user is owed the difference.
+      const coverage = coverMissionSignals(opts.mission);
+      state.signal_coverage = coverageDiagnostics(coverage);
+      const unserved = signalsUnservedByStrategy(coverage, strategyKeys);
+      if (unserved.length > 0) {
+        log("signals_not_served_by_discovery", {
+          signals: unserved.map((s) => s.signal),
+          // A later stage may still prove these during enrichment, which is why
+          // this is a log line and not a refusal.
+          needed_actors: unserved.flatMap((s) => s.actors),
+        });
+      }
+      if (!coverage.fully_covered) {
+        log("signal_coverage_shortfall", { statement: coverage.shortfall_statement });
+      }
 
       for (const sel of strategy.selections) {
         const provider = sel.actor_key;
