@@ -14,6 +14,8 @@ interface GuideCardProps {
   onSkip: () => void;
   onOpen: () => void;
   isLast: boolean;
+  /** Route-aware CTA label from `ctaLabelFor`; falls back to the static label. */
+  ctaLabel?: string;
 }
 
 const CARD_W = 360;
@@ -82,7 +84,7 @@ function clamp(v: number, lo: number, hi: number) {
 }
 
 export default function GuideCard({
-  step, index, total, rect, onBack, onNext, onSkip, onOpen, isLast,
+  step, index, total, rect, onBack, onNext, onSkip, onOpen, isLast, ctaLabel,
 }: GuideCardProps) {
   const [cardH, setCardH] = useState(360);
   const [cardRef, setCardRef] = useState<HTMLDivElement | null>(null);
@@ -191,7 +193,9 @@ export default function GuideCard({
             onClick={onSkip}
             className="h-8 px-2.5 rounded-md text-[12px] font-medium text-neutral-400 hover:text-foreground hover:bg-white/[0.05]"
           >
-            {isLast ? 'Open Dashboard' : 'Skip'}
+            {/* "Open Dashboard" was shown even when the user was already on the
+                dashboard. "Finish" is accurate wherever the tour ends. */}
+            {isLast ? 'Finish' : 'Skip'}
           </button>
         </div>
         <div className="flex items-center gap-1.5">
@@ -201,7 +205,7 @@ export default function GuideCard({
               onClick={onOpen}
               className="h-8 px-2.5 rounded-md text-[12px] font-medium text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/[0.06]"
             >
-              {step.ctaLabel}
+              {ctaLabel ?? step.ctaLabel}
             </button>
           )}
           <button

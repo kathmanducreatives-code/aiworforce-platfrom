@@ -27,7 +27,7 @@ describe('projectEnvironment', () => {
   });
 
   it('projectRefFromUrl extracts the ref', () => {
-    expect(projectRefFromUrl('https://wqnigjhcwjxtmordrwno.supabase.co')).toBe('wqnigjhcwjxtmordrwno');
+    expect(projectRefFromUrl('https://luvostyizefajbltukkc.supabase.co')).toBe('luvostyizefajbltukkc');
     expect(projectRefFromUrl(null)).toBeNull();
   });
 

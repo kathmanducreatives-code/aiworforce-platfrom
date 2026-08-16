@@ -24,9 +24,30 @@ import type { AgentoryEnvironmentMode } from "./mission.ts";
 import { type EnvReader } from "../signalsV2Flag.ts";
 
 /** The two canonical Supabase projects. Mirrors scripts/verify-deploy-target.mjs. */
+/**
+ * SINGLE-PROJECT DEPLOYMENT. Both keys hold the SAME ref, deliberately.
+ *
+ * Agentory previously ran two projects, and this map existed to stop one being
+ * mistaken for the other — the audit that created it found the frontend talking
+ * to production while the tooling talked to test. As of the migration to
+ * `luvostyizefajbltukkc` there is one project serving both roles, so that
+ * particular confusion is no longer possible: there is nowhere else to send a
+ * request.
+ *
+ * The map is kept rather than collapsed because the guard it feeds is still
+ * worth having, and its meaning has simply changed. It no longer answers "is
+ * this test or production" — it answers "is this the project we are supposed to
+ * be talking to at all", which is the question that matters while two abandoned
+ * projects still exist and still accept credentials.
+ *
+ * Resolution order puts `production` first, so a ref matching both classifies as
+ * production. That is correct: with one live project, everything IS production.
+ * No behaviour is lost — every capability in `capabilityRegistry` is enabled for
+ * all environments, so nothing was ever test-only.
+ */
 export const CANONICAL_PROJECT_REFS: Readonly<Record<"production" | "test", string>> = {
-  production: "wqnigjhcwjxtmordrwno",
-  test: "zbwsbnqqpkvdhqwavjke",
+  production: "luvostyizefajbltukkc",
+  test: "luvostyizefajbltukkc",
 };
 
 /** Hosts that mean "a developer's machine", not a deployed project. */

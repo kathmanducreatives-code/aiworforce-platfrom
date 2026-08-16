@@ -296,12 +296,20 @@ Deno.test("J2. the migration neither restores lc_dedupe_uniq nor drops anything"
   assert(!/\bDELETE\b|\bUPDATE\s+public\./i.test(MIGRATION), "and mutates no existing data");
 });
 
-Deno.test("J3. the migration records the data audit and the production gap", () => {
-  assert(/zbwsbnqqpkvdhqwavjke/.test(MIGRATION), "the audited environment is named");
-  assert(
-    /PRODUCTION \(wqnigjhcwjxtmordrwno\) HAS NOT BEEN AUDITED/.test(MIGRATION),
-    "and the un-audited one is named too, with the query to run",
-  );
+Deno.test("J3. the migration records which environment was audited, and how", () => {
+  // WAS also asserting a warning that production had not been audited. That
+  // caveat existed because two environments held different data; after the
+  // consolidation onto one project — which starts empty — there is no second
+  // environment to audit, and asserting the warning would pin a statement that
+  // is no longer true.
+  //
+  // What still matters is that the migration says which database the numbers
+  // came from and leaves the query behind, so a future environment with real
+  // data can be checked the same way.
+  assert(/zbwsbnqqpkvdhqwavjke/.test(MIGRATION), "the audited database is named");
+  assert(/2026-08-12/.test(MIGRATION), "and when it was audited");
+  assert(/select workspace_id, account_id, count\(\*\)/.test(MIGRATION),
+    "the reproducing query survives for any future environment");
 });
 
 Deno.test("J4. the writer resolves the same identity the index enforces", () => {

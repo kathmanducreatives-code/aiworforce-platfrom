@@ -16,8 +16,8 @@
 // Exits non-zero on any mismatch. READ-ONLY: it deploys nothing.
 
 const CANONICAL = {
-  production: "wqnigjhcwjxtmordrwno",
-  test: "zbwsbnqqpkvdhqwavjke",
+  production: "luvostyizefajbltukkc",
+  test: "luvostyizefajbltukkc",
 };
 
 function arg(name) {
@@ -44,9 +44,15 @@ const projectRef =
   refFromUrl(process.env.VITE_SUPABASE_URL) ||
   null;
 
+// SINGLE-PROJECT DEPLOYMENT. Both role names map to the same ref, so the role
+// a caller asks for is now cosmetic and the ref is the whole question. A script
+// still passing `--expect test` must not break, and must not be able to reach a
+// project other than the canonical one.
 const environment =
   projectRef === CANONICAL.production ? "production" :
   projectRef === CANONICAL.test ? "test" : "unknown";
+const isCanonical =
+  projectRef === CANONICAL.production || projectRef === CANONICAL.test;
 
 console.log(`[verify-deploy-target] resolved ref=${projectRef ?? "(none)"} environment=${environment} expected=${expected}`);
 
@@ -54,9 +60,18 @@ if (environment === "unknown") {
   console.error(`[verify-deploy-target] FAIL: unknown project ref ${projectRef ?? "(none)"} — not a canonical environment.`);
   process.exit(1);
 }
-if (environment !== expected) {
-  console.error(`[verify-deploy-target] FAIL: refusing to treat ${environment} project as ${expected}.`);
+// The old check refused a ref whose environment did not match `--expect`. That
+// guarded against deploying test code to production while both existed. With one
+// project it would reject every `--expect test` invocation for no benefit, so
+// what is enforced instead is the property that still protects a deploy: the
+// target must BE the canonical project. The two retired refs — and anything
+// else — fall through to `unknown` above and exit non-zero.
+if (!isCanonical) {
+  console.error(`[verify-deploy-target] FAIL: ${projectRef} is not the canonical project.`);
   process.exit(1);
 }
 
-console.log(`[verify-deploy-target] OK: target is ${environment}.`);
+console.log(
+  `[verify-deploy-target] OK: target is the canonical project ${projectRef}` +
+  ` (requested as ${expected}; one project serves both roles).`,
+);

@@ -1,7 +1,7 @@
 // Hard runtime environment guard.
 //
 // The benchmark refuses to run against anything other than the TEST project
-// (zbwsbnqqpkvdhqwavjke). It terminates BEFORE any provider request when it
+// (luvostyizefajbltukkc). It terminates BEFORE any provider request when it
 // detects the production ref, an unknown project, a missing TEST workspace
 // identity, missing required credentials, or unbounded Apify settings.
 //

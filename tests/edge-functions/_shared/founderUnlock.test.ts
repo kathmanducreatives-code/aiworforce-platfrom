@@ -308,7 +308,7 @@ Deno.test("33-36. the endpoint reserves before spending and cannot be bypassed",
   // The ledger is the only source of truth — never the client-writable blob.
   assertFalse(src.includes("company_brain"));
   for (const line of src.split("\n")) {
-    if (line.includes("wqnigjhcwjxtmordrwno")) {
+    if (line.includes("luvostyizefajbltukkc")) {
       assert(line.trim().startsWith("//"), "production ref only in a comment");
     }
   }

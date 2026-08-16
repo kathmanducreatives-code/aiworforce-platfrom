@@ -10,7 +10,7 @@ import type { GenerateJsonFn } from "../../../supabase/functions/_shared/intelli
 import type { GenerateResult } from "../../../supabase/functions/_shared/aiProvider.ts";
 
 const PRIMARY = "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
-const WS = "zbwsbnqqpkvdhqwavjke-workspace";
+const WS = "luvostyizefajbltukkc-workspace";
 
 function spec(): JobSearchSpecSlice {
   return {
@@ -24,7 +24,7 @@ function spec(): JobSearchSpecSlice {
 }
 
 /** The canonical TEST project. Enabled cases resolve to environment "test". */
-const TEST_SUPABASE_URL = "https://zbwsbnqqpkvdhqwavjke.supabase.co";
+const TEST_SUPABASE_URL = "https://luvostyizefajbltukkc.supabase.co";
 
 function env(vars: Record<string, string>) {
   const all: Record<string, string> = { SUPABASE_URL: TEST_SUPABASE_URL, ...vars };

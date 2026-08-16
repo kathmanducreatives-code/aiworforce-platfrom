@@ -35,8 +35,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const CANONICAL = {
-  production: "wqnigjhcwjxtmordrwno",
-  test: "zbwsbnqqpkvdhqwavjke",
+  production: "luvostyizefajbltukkc",
+  test: "luvostyizefajbltukkc",
 };
 
 /**

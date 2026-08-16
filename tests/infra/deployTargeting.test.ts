@@ -14,24 +14,36 @@ import {
   resolveTarget, configuredRef, environmentOf, refusalFor,
 } from "../../scripts/supabase-target.mjs";
 
-const TEST_REF = "zbwsbnqqpkvdhqwavjke";
-const PROD_REF = "wqnigjhcwjxtmordrwno";
+const TEST_REF = "luvostyizefajbltukkc";
+const PROD_REF = "luvostyizefajbltukkc";
 const CONFIG = new URL("../../supabase/config.toml", import.meta.url).pathname;
 
 // ═══ THE CHECKED-IN DEFAULT ═══════════════════════════════════════════════
 
-Deno.test("config.toml names TEST, not production", () => {
+Deno.test("config.toml names the one canonical project", () => {
+  // WAS "names TEST, not production" — a guard against the repo defaulting to a
+  // project that could damage live data. Agentory now runs a SINGLE project, so
+  // the danger is no longer "the wrong one of two" but "one of the two RETIRED
+  // ones", which still exist and still accept credentials.
   const ref = configuredRef(CONFIG);
-  assertEquals(ref, TEST_REF, "the checked-in default project must be TEST");
-  assertEquals(environmentOf(ref), "test");
-  assert(ref !== PROD_REF, "production must never be the repo default again");
+  assertEquals(ref, PROD_REF, "the checked-in default must be the live project");
+  for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
+    assert(ref !== retired, `${retired} is retired and must never be the default`);
+  }
 });
 
-Deno.test("the canonical refs are not confused with each other", () => {
-  assertEquals(environmentOf(TEST_REF), "test");
-  assertEquals(environmentOf(PROD_REF), "production");
-  assertEquals(environmentOf("something-else"), "unknown",
-    "an unrecognised ref must be 'unknown' so callers can fail closed on it");
+Deno.test("an unrecognised ref still fails closed", () => {
+  // The half of the old test that survives consolidation. TEST_REF and PROD_REF
+  // are now the same value, so "not confused with each other" is vacuous — but
+  // the property that actually protects a deploy is unchanged: anything the
+  // model does not recognise must classify as `unknown`, never fall through to
+  // a default, so every caller can refuse it.
+  assertEquals(environmentOf(PROD_REF), "production", "the live project resolves");
+  assertEquals(environmentOf("something-else"), "unknown");
+  for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
+    assertEquals(environmentOf(retired), "unknown",
+      `${retired} is retired; a deploy naming it must fail closed`);
+  }
 });
 
 // ═══ FAIL-CLOSED TARGET RESOLUTION ════════════════════════════════════════
@@ -111,17 +123,36 @@ async function verifyDeployTarget(expect: string, ref: string) {
   return code;
 }
 
-Deno.test("verify-deploy-target refuses a PROD ref when TEST was expected", async () => {
-  assertEquals(await verifyDeployTarget("test", PROD_REF), 1,
-    "treating production as test must be a non-zero exit, not a warning");
+Deno.test("verify-deploy-target refuses a deploy with no ref at all", async () => {
+  // REPLACES "refuses a PROD ref when TEST was expected". That assertion is the
+  // direct contradiction of single-project consolidation — the two roles now
+  // share a ref, so refusing it would break every `--expect test` caller — and
+  // it is already superseded by the retired-ref test above.
+  //
+  // The property worth keeping from it is that the verifier fails CLOSED rather
+  // than warning. An unresolvable target is the sharpest version of that: a
+  // deploy that cannot say where it is going must not proceed.
+  assertEquals(await verifyDeployTarget("test", ""), 1,
+    "an unresolvable target must be a non-zero exit, not a warning");
 });
 
-Deno.test("verify-deploy-target refuses a TEST ref when PROD was expected", async () => {
-  assertEquals(await verifyDeployTarget("production", TEST_REF), 1);
+Deno.test("verify-deploy-target refuses a RETIRED ref for either environment", async () => {
+  // Replaces "refuses a TEST ref when PROD was expected". With one project that
+  // mismatch cannot occur; the live mistake now is deploying at the old account,
+  // whose credentials still work.
+  for (const env of ["test", "production"] as const) {
+    for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
+      assertEquals(await verifyDeployTarget(env, retired), 1,
+        `${env} must refuse the retired ${retired}`);
+    }
+  }
 });
 
-Deno.test("verify-deploy-target accepts the matching pair", async () => {
-  assertEquals(await verifyDeployTarget("test", TEST_REF), 0);
+Deno.test("verify-deploy-target accepts the live project under either name", async () => {
+  // Both role names resolve to the same project, so both must be accepted — a
+  // script still saying `--production` must not break after consolidation.
+  assertEquals(await verifyDeployTarget("test", PROD_REF), 0);
+  assertEquals(await verifyDeployTarget("production", PROD_REF), 0);
 });
 
 Deno.test("verify-deploy-target refuses an unknown ref", async () => {

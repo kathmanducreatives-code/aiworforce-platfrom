@@ -613,7 +613,7 @@ Deno.test("25. no Actor starts anywhere in this suite", async () => {
 });
 
 Deno.test("26. no production project reference appears in the new modules", async () => {
-  const PROD = "wqnigjhcwjxtmordrwno";
+  const PROD = "luvostyizefajbltukkc";
   for (const f of [
     "leadMissionCompiler.ts", "leadMissionCompilerBinding.ts",
     "leadCapabilityCatalogue.ts", "leadCapabilityGraph.ts",

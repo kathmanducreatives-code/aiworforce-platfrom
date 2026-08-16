@@ -716,7 +716,7 @@ Deno.test("50-53. no provider, no production and no protected file is reachable"
     }
     // 52. Production is never referenced except in a comment.
     for (const line of src.split("\n")) {
-      if (line.includes("wqnigjhcwjxtmordrwno")) {
+      if (line.includes("luvostyizefajbltukkc")) {
         assert(line.trim().startsWith("//"), `${f}: production ref only in a comment`);
       }
     }

@@ -29,12 +29,16 @@ Deno.test("E1 development resolves as development", () => {
   }
 });
 
-Deno.test("E2 the TEST project resolves as test", () => {
-  assertEquals(resolveRuntimeEnvironment(env({ SUPABASE_URL: TEST_URL })), { ok: true, mode: "test" });
-  assertEquals(
-    resolveRuntimeEnvironment(env({ SUPABASE_PROJECT_ID: CANONICAL_PROJECT_REFS.test })),
-    { ok: true, mode: "test" },
-  );
+Deno.test("E2 the canonical project resolves, by URL and by id alike", () => {
+  // WAS "the TEST project resolves as test". Agentory now runs a SINGLE project
+  // serving both roles, so the canonical ref resolves as `production` — which is
+  // correct, because with one live project everything is production. What still
+  // matters, and is asserted here, is that the ref resolves at all and resolves
+  // the SAME way however it is supplied.
+  const byUrl = resolveRuntimeEnvironment(env({ SUPABASE_URL: TEST_URL }));
+  const byId = resolveRuntimeEnvironment(env({ SUPABASE_PROJECT_ID: CANONICAL_PROJECT_REFS.test }));
+  assertEquals(byUrl, { ok: true, mode: "production" });
+  assertEquals(byId, byUrl, "a URL and a project id must never disagree");
 });
 
 Deno.test("E3 the PRODUCTION project resolves as production", () => {
@@ -45,10 +49,20 @@ Deno.test("E3 the PRODUCTION project resolves as production", () => {
   );
 });
 
-Deno.test("E4 the two canonical refs are distinct and neither is empty", () => {
+Deno.test("E4 the single-project deployment is deliberate, not a copy-paste", () => {
+  // The old invariant was that the two refs DIFFER. It was right while two
+  // projects existed and is wrong now, so it is inverted rather than deleted:
+  // the two keys must hold the SAME non-empty ref, and that ref must be the one
+  // project this deployment is allowed to talk to.
+  //
+  // Asserting the equality keeps it a decision. If someone later reintroduces a
+  // second project by editing one key, this fails and forces them to also
+  // restore the isolation guarantees that were removed alongside it.
   assert(CANONICAL_PROJECT_REFS.production.length > 0);
-  assert(CANONICAL_PROJECT_REFS.test.length > 0);
-  assert(CANONICAL_PROJECT_REFS.production !== CANONICAL_PROJECT_REFS.test);
+  assertEquals(
+    CANONICAL_PROJECT_REFS.test, CANONICAL_PROJECT_REFS.production,
+    "one project serves both roles; see the note on CANONICAL_PROJECT_REFS",
+  );
 });
 
 // ------------------------------------------------------------- fail closed ----
@@ -91,13 +105,23 @@ Deno.test("E8 projectRefFromUrl does not confuse a subdomain prefix for a projec
 
 // ------------------------------------------------- TEST / production isolation ---
 
-Deno.test("E9 TEST and production never resolve to each other", () => {
+Deno.test("E9 the retired projects no longer resolve to anything", () => {
+  // WAS "TEST and production never resolve to each other" — an isolation
+  // guarantee between two live projects. With one project that guarantee is
+  // vacuous, and the risk it protected against has been replaced by a sharper
+  // one: the two ABANDONED projects still exist and still accept credentials.
+  //
+  // So this now asserts the thing that actually protects the migration — a
+  // retired ref must resolve to NOT-OK, never quietly to a mode. Anything that
+  // still points at the old account fails closed instead of writing there.
+  for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
+    const r = resolveRuntimeEnvironment(env({ SUPABASE_PROJECT_ID: retired }));
+    assertEquals(r.ok, false, `${retired} is retired and must not resolve`);
+  }
   const t = resolveRuntimeEnvironment(env({ SUPABASE_URL: TEST_URL }));
   const p = resolveRuntimeEnvironment(env({ SUPABASE_URL: PROD_URL }));
   assert(t.ok && p.ok);
-  assertEquals(t.mode, "test");
-  assertEquals(p.mode, "production");
-  assert(t.mode !== p.mode);
+  assertEquals(t.mode, p.mode, "one project, one mode");
 });
 
 Deno.test("E10 an explicit project id does not override into the wrong environment", () => {

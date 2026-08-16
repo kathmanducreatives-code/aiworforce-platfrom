@@ -57,7 +57,7 @@
 -- DATA AUDIT BEFORE CREATION
 -- ---------------------------------------------------------------------------
 --
--- Run read-only against TEST (zbwsbnqqpkvdhqwavjke) on 2026-08-12:
+-- Run read-only against the then-TEST project zbwsbnqqpkvdhqwavjke on 2026-08-12:
 --
 --   lead_type='account' rows ......................... 0
 --   rows matching the index predicate ................ 0
@@ -67,8 +67,14 @@
 -- For context, the table held 257 legacy `lead_type='company'` rows (all with
 -- signal_id, so all outside this predicate) and 219 `'person'` rows.
 --
--- PRODUCTION (wqnigjhcwjxtmordrwno) HAS NOT BEEN AUDITED. Run the same query
--- there before deploying this migration:
+-- THE SECOND-ENVIRONMENT CAVEAT NO LONGER APPLIES. This note used to warn that
+-- production (wqnigjhcwjxtmordrwno) had not been audited and had to be checked
+-- before deploying. Agentory has since consolidated onto a single project,
+-- luvostyizefajbltukkc, which starts EMPTY — so there is no unaudited second
+-- environment and no legacy row that could violate the index.
+--
+-- Kept, rather than deleted, because the query below is still the right one to
+-- run against any future environment that inherits real data:
 --
 --   select workspace_id, account_id, count(*)
 --   from public.lead_candidates

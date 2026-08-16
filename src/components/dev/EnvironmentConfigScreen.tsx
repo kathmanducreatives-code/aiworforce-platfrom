@@ -29,7 +29,7 @@ export default function EnvironmentConfigScreen({ gate }: { gate: EnvironmentGat
 
         <pre className="mt-4 rounded-lg border border-white/[0.08] bg-black/40 p-3 text-[12px] text-[#8B949E] overflow-x-auto">
 {`# .env.local  (gitignored — never commit it)
-VITE_SUPABASE_URL=https://zbwsbnqqpkvdhqwavjke.supabase.co
+VITE_SUPABASE_URL=https://luvostyizefajbltukkc.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<the TEST project's publishable key>`}
         </pre>
 

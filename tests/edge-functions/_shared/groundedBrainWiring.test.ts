@@ -462,7 +462,7 @@ Deno.test("33-35. run-agent wires grounding without touching the protected file"
     "no new model budget may be introduced by this stage");
   // No production, no mcp import.
   for (const line of src.split("\n")) {
-    if (line.includes("wqnigjhcwjxtmordrwno")) {
+    if (line.includes("luvostyizefajbltukkc")) {
       assert(line.trim().startsWith("//"), "production ref may appear only in a comment");
     }
   }

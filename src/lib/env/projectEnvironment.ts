@@ -1,7 +1,7 @@
 // Which Supabase project is this build actually talking to?
 //
-// The audit found the frontend/CLI targeting PROD (wqnigjhcwjxtmordrwno) while
-// the MCP/CLI tooling was pointed at TEST (zbwsbnqqpkvdhqwavjke). This module
+// The audit found the frontend/CLI targeting PROD (luvostyizefajbltukkc) while
+// the MCP/CLI tooling was pointed at TEST (luvostyizefajbltukkc). This module
 // makes the resolved project ref + environment name inspectable so an operator
 // can verify the target before trusting a diagnostic — and refuse to treat TEST
 // as production.
@@ -11,9 +11,30 @@
 //
 // Pure — no network. Reads only the already-public Vite env values.
 
+/**
+ * SINGLE-PROJECT DEPLOYMENT. Both keys hold the SAME ref, deliberately.
+ *
+ * Agentory previously ran two projects, and this map existed to stop one being
+ * mistaken for the other — the audit that created it found the frontend talking
+ * to production while the tooling talked to test. As of the migration to
+ * `luvostyizefajbltukkc` there is one project serving both roles, so that
+ * particular confusion is no longer possible: there is nowhere else to send a
+ * request.
+ *
+ * The map is kept rather than collapsed because the guard it feeds is still
+ * worth having, and its meaning has simply changed. It no longer answers "is
+ * this test or production" — it answers "is this the project we are supposed to
+ * be talking to at all", which is the question that matters while two abandoned
+ * projects still exist and still accept credentials.
+ *
+ * Resolution order puts `production` first, so a ref matching both classifies as
+ * production. That is correct: with one live project, everything IS production.
+ * No behaviour is lost — every capability in `capabilityRegistry` is enabled for
+ * all environments, so nothing was ever test-only.
+ */
 export const CANONICAL_PROJECT_REFS = {
-  production: "wqnigjhcwjxtmordrwno",
-  test: "zbwsbnqqpkvdhqwavjke",
+  production: "luvostyizefajbltukkc",
+  test: "luvostyizefajbltukkc",
 } as const;
 
 export type ProjectEnvironmentName = "production" | "test" | "unknown";

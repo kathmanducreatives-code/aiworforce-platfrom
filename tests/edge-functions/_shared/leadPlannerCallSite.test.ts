@@ -64,7 +64,7 @@ async function planWithCounters(opts: {
   // and these counts mean something. Read only; nothing connects to it.
   const env: Record<string, string> = opts.recogniseProject === false
     ? {}
-    : { SUPABASE_PROJECT_ID: "zbwsbnqqpkvdhqwavjke" };
+    : { SUPABASE_PROJECT_ID: "luvostyizefajbltukkc" };
   if (opts.gptEnabled) {
     env.GPT_LEAD_STRATEGY = "true";
     env.GPT_LEAD_STRATEGY_WORKSPACES = WORKSPACE;

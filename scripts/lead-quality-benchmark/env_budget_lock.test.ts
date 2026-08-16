@@ -13,15 +13,31 @@ const base = {
   limits: DEFAULT_LIMITS, estimatedMaxUsd: boundedEstimate,
 };
 
-Deno.test("1. TEST ref is accepted", () => {
-  assertEquals(resolveEnvironment(TEST_PROJECT_REF), "test");
+// ── THE BENCHMARK HAS NOWHERE SAFE TO SPEND ─────────────────────────────────
+//
+// This tool runs PAID Apify actors. Its whole safety model was "there exists a
+// non-production project to spend money against": TEST was allowed, production
+// was refused in every mode.
+//
+// Consolidating onto one project removed that place. `TEST_PROJECT_REF` and
+// `PROD_PROJECT_REF` are now the same value, it resolves as production, and the
+// benchmark therefore refuses to run at all.
+//
+// THAT IS THE CORRECT OUTCOME AND IT IS LEFT IN PLACE. The alternative — an
+// override that lets a paid benchmark loose on the only live database — is a
+// decision about money and blast radius that belongs to an operator, not to a
+// test being made green. These two tests are inverted to assert the refusal, so
+// the day someone adds that override they have to come here and say so.
+
+Deno.test("1. with one project, the benchmark refuses to run live", () => {
+  assertEquals(resolveEnvironment(TEST_PROJECT_REF), "production");
   const p = assertBenchmarkPreflight({ mode: "live", projectRef: TEST_PROJECT_REF, ...base });
-  assert(p.ok, p.blockers.join("; "));
-  assertEquals(p.environment, "test");
+  assertFalse(p.ok, "a paid run against the only live project must not proceed");
+  assert(p.blockers.some((b) => /PRODUCTION/i.test(b)));
 });
 
-Deno.test("2. production ref is rejected in every mode", () => {
-  assertEquals(resolveEnvironment(PROD_PROJECT_REF), "production");
+Deno.test("2. the live ref is rejected in every mode, under either name", () => {
+  assertEquals(TEST_PROJECT_REF, PROD_PROJECT_REF, "one project serves both roles");
   for (const mode of ["dry-run", "live", "replay"] as const) {
     const p = assertBenchmarkPreflight({ mode, projectRef: PROD_PROJECT_REF, ...base });
     assertFalse(p.ok);

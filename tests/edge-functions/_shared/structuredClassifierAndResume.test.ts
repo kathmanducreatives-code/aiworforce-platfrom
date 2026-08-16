@@ -278,7 +278,7 @@ Deno.test("25/26/27/28. the modules are pure and contact no project", async () =
     const src = await Deno.readTextFile(
       new URL(`../../../supabase/functions/_shared/${f}`, import.meta.url));
     for (const forbidden of ["fetch(", "apifyFetch", "createClient", "Deno.env",
-      "wqnigjhcwjxtmordrwno", "SERVICE_ROLE"]) {
+      "luvostyizefajbltukkc", "SERVICE_ROLE"]) {
       assertFalse(src.includes(forbidden), `${forbidden} must not appear in ${f}`);
     }
   }

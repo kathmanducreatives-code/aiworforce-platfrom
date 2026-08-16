@@ -25,7 +25,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const FUNCTIONS_DIR = "supabase/functions";
-const TEST_REF = "zbwsbnqqpkvdhqwavjke";
+const TEST_REF = "luvostyizefajbltukkc";
 
 /** Shared modules that constitute the lead-intelligence architecture. */
 const LEAD_INTELLIGENCE_MODULES = [

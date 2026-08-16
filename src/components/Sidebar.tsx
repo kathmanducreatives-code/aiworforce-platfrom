@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import CreditPill from './credits/CreditPill';
 import ProfileMenu from './account/ProfileMenu';
+import { TOUR_TAG_BY_NAV_KEY } from './tour/tourSteps';
 
 type Accent = 'emerald' | 'teal' | 'amber' | 'violet' | 'blue' | 'neutral';
 
@@ -63,13 +64,10 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-const TOUR_TAG_BY_KEY: Record<string, string | undefined> = {
-  dashboard: 'sidebar-dashboard',
-  pilot: 'sidebar-conversations',
-  workflows: 'sidebar-workflows',
-  awaiting: 'sidebar-awaiting',
-  'company-brain': 'sidebar-company-brain',
-};
+// Anchor tags come from the canonical tour config so the sidebar cannot emit a
+// `data-tour` the guide does not look for (or vice versa). Previously this was a
+// second hand-maintained map that could silently drift.
+const TOUR_TAG_BY_KEY: Record<string, string | undefined> = TOUR_TAG_BY_NAV_KEY;
 
 const ACCENT: Record<Accent, {
   bar: string;

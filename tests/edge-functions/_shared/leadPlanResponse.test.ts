@@ -35,7 +35,7 @@ const WS = "11111111-1111-1111-1111-555555555555";
 const on: EnvReader = (k) =>
   k === "CLAUDE_FIRST_LEAD_PLANNING" ? "true"
     : k === "CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES" ? WS
-    : k === "SUPABASE_URL" ? "https://wqnigjhcwjxtmordrwno.supabase.co"
+    : k === "SUPABASE_URL" ? "https://luvostyizefajbltukkc.supabase.co"
     : undefined;
 const off: EnvReader = () => undefined;
 

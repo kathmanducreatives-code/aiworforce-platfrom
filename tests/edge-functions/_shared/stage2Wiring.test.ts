@@ -649,7 +649,7 @@ Deno.test("47-50. run-agent wires Stage 2 server-side only", async () => {
   assertFalse(src.includes("body.pool_summaries"));
   assertFalse(src.includes("body.ranked_candidates"));
   for (const line of src.split("\n")) {
-    if (line.includes("wqnigjhcwjxtmordrwno")) {
+    if (line.includes("luvostyizefajbltukkc")) {
       assert(line.trim().startsWith("//"), "production ref only in a comment");
     }
   }
