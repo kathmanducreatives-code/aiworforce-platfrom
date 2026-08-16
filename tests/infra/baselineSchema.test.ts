@@ -43,9 +43,9 @@ Deno.test("the baseline is the only migration", async () => {
 Deno.test("it creates every class of object, not just tables", () => {
   // The failure mode of the PREVIOUS baseline, encoded. It had tables and
   // nothing else, and that was only discoverable by reading its header.
-  assertEquals(count(/^CREATE TABLE /gm), 109, "tables");
-  assertEquals(count(/^CREATE POLICY /gm), 269, "RLS policies");
-  assertEquals(count(/^CREATE FUNCTION /gm), 21, "functions");
+  assertEquals(count(/^CREATE TABLE /gm), 111, "tables");
+  assertEquals(count(/^CREATE POLICY /gm), 271, "RLS policies");
+  assertEquals(count(/^CREATE FUNCTION /gm), 23, "functions");
   assertEquals(count(/^CREATE TRIGGER /gm), 39, "triggers");
   assertEquals(count(/^CREATE TYPE /gm), 18, "enums");
   assert(count(/^CREATE (UNIQUE )?INDEX /gm) >= 180, "indexes");
@@ -58,7 +58,7 @@ Deno.test("every table has row-level security enabled", () => {
   // healthy — right table count, right column types, application boots — while
   // exposing every row to any authenticated user.
   assertEquals(
-    count(/ENABLE ROW LEVEL SECURITY/g), 109,
+    count(/ENABLE ROW LEVEL SECURITY/g), 111,
     "one per table; a shortfall here is a data leak, not a formatting change",
   );
 });
@@ -113,5 +113,5 @@ Deno.test("the archive is preserved, not deleted", async () => {
   const dir = new URL("../../supabase/migrations-archive/", import.meta.url);
   let n = 0;
   for await (const e of Deno.readDir(dir)) if (e.name.endsWith(".sql")) n++;
-  assertEquals(n, 99, "all 99 archived migrations must remain");
+  assertEquals(n, 103, "every archived migration must remain — 99 from the\n    // original chain plus the four repair migrations folded into the baseline");
 });
