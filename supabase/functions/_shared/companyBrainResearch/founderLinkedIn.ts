@@ -18,9 +18,23 @@ export const FOUNDER_ACTOR_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER";
 // env with the actor your Apify account can actually run — a non-existent actor
 // id makes every run 404, which reads as "enrichment not working".
 export const FOUNDER_ACTOR_FALLBACK = "apimaestro/linkedin-profile-detail";
-/** Secondary actor tried when the primary returns nothing or sparse data. */
+/**
+ * Secondary actor tried when the primary returns nothing or sparse data.
+ *
+ * WAS `curious_coder/linkedin-profile-scraper`, which could never have worked.
+ * Its live schema REQUIRES `cookie` and `userAgent` — a LinkedIn session
+ * exported from a browser — and this workflow supplies neither, so every
+ * fallback attempt failed on input validation before it scraped anything. It is
+ * also rated 1.25 from 14 ratings and down to 31 monthly users from 5834
+ * lifetime, which is what an abandoned actor looks like.
+ *
+ * `harvestapi/linkedin-profile-scraper` needs no cookies, is the
+ * best-adopted LinkedIn profile actor on the Store (62332 lifetime, 10513
+ * monthly, 4.54 from 80), and takes `urls` — a field `buildProfileActorInput`
+ * already sends. Verified against the live Store on 2026-08-16.
+ */
 export const FOUNDER_ACTOR_FALLBACK_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER_FALLBACK";
-export const FOUNDER_ACTOR_FALLBACK_DEFAULT = "curious_coder/linkedin-profile-scraper";
+export const FOUNDER_ACTOR_FALLBACK_DEFAULT = "harvestapi/linkedin-profile-scraper";
 
 /** The `/in/<username>` handle from a profile URL (some actors key on it). */
 export function profileUsername(profileUrl: string): string {
