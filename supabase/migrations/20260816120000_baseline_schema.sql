@@ -11798,3 +11798,46 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 
 \unrestrict ZVGPgfAQ9FYwDdBQkoHrTScfJAcPjpk6t9sk1uXaRlFNqRBoBc1dnsdnhykc3by
 
+
+-- ============================================================================
+-- CROSS-SCHEMA OBJECTS — appended after the pg_dump body
+-- ============================================================================
+--
+-- `pg_dump --schema=public` cannot see these, and their absence is silent:
+-- the database restores cleanly, every count matches, and the application is
+-- subtly broken. Both were found by a readiness check on the migrated project,
+-- not by the restore.
+--
+--   * The signup trigger lives on `auth.users`, outside the dumped schema. Its
+--     FUNCTION came across; the TRIGGER did not. A new signup created an auth
+--     row with no profile, no workspace and no membership.
+--
+--   * Publication membership is catalog state, not schema. Nineteen tables were
+--     published to `supabase_realtime` in the source and none in the restore,
+--     so the Workbench would have updated only on its 4-second heartbeat and a
+--     live run would have looked frozen between polls.
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Idempotent: `add table` errors if the table is already published, and a
+-- baseline must be re-runnable against a database that has some of this.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'activity_feed','activity_logs','adaptive_screening_sessions','agents','approvals',
+    'collaboration_candidate_attachments','collaboration_candidate_comments',
+    'collaboration_candidate_tags','collaboration_messages','collaboration_room_members',
+    'collaboration_rooms','icp_lookalike_sessions','interviews','job_steps','jobs',
+    'linkedin_leads','scraping_sessions','task_plans','tasks'
+  ] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

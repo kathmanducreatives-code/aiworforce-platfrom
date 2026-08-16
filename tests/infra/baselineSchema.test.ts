@@ -91,6 +91,22 @@ Deno.test("it does not schedule the cron job that filled the disk", () => {
   assert(!/net\.http_post/i.test(BASELINE), "and must post to nothing");
 });
 
+Deno.test("it carries the cross-schema objects a public-only dump misses", () => {
+  // Both of these were absent from the first restore and neither showed up in
+  // any object count — the database looked perfect and the app was broken.
+  assert(
+    /create trigger on_auth_user_created/i.test(BASELINE),
+    "the signup trigger lives on auth.users and must be restored explicitly",
+  );
+  assert(
+    /alter publication supabase_realtime add table/i.test(BASELINE),
+    "realtime publication membership is catalog state, not schema",
+  );
+  // Re-runnable: a baseline that errors on an already-published table cannot be
+  // applied to a database that has part of this.
+  assert(/if not exists \(/i.test(BASELINE), "the publication block must be idempotent");
+});
+
 Deno.test("the archive is preserved, not deleted", async () => {
   // The history is how the schema got here and is still read by the
   // schema-contract tests. Squashing must not destroy it.
