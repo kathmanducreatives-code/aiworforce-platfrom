@@ -4,6 +4,24 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/**
+ * The client type this function actually holds.
+ *
+ * `ReturnType<typeof createClient>` looks like the obvious way to say this, but
+ * it resolves the DECLARED generic defaults rather than the ones a call without
+ * a `Database` type produces. In current supabase-js v2 typings those defaults
+ * make the schema `never`, so every table resolved to `never` and every
+ * `.insert({...})` failed to typecheck against a value of type `never` — while
+ * the same call at runtime is completely fine.
+ *
+ * Spelling the permissive generics explicitly says what is true: this function
+ * has no generated `Database` type, so its tables are untyped. The honest fix is
+ * to generate and apply that type, which would make these calls genuinely
+ * checked instead of merely accepted — recorded here as the real remedy.
+ */
+type UntypedClient = SupabaseClient<any, any, any>;
 import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
@@ -932,7 +950,7 @@ async function showWorkflowConfirmation(
 // ---------- Delegation helper ----------
 
 interface DelegateArgs {
-  admin: ReturnType<typeof createClient>;
+  admin: UntypedClient;
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
   authHeader: string;
@@ -1124,6 +1142,23 @@ Deno.serve(async (req) => {
   let conversationId: string | null = typeof body?.conversation_id === "string" ? body.conversation_id : null;
   const actionSource: string | null = typeof body?.action_source === "string" ? body.action_source : null;
   const actionMetadata: Record<string, unknown> | null = body?.metadata && typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : null;
+  /**
+   * `metadata.workflow_inputs`, accepted only if it is actually an object.
+   *
+   * This is CLIENT-SUPPLIED — see the note on `actionMetadata` above — so it is
+   * `unknown`, and it was being handed to `delegateToOrchestrate` as though it
+   * were a record. A cast would have silenced the compiler while still passing a
+   * string, a number or an array straight through to the orchestrator as
+   * "workflow inputs". Validating instead means a malformed value becomes null,
+   * which every consumer already handles, rather than a shape nothing downstream
+   * expects.
+   */
+  const actionWorkflowInputs: Record<string, any> | null =
+    actionMetadata?.workflow_inputs &&
+      typeof actionMetadata.workflow_inputs === "object" &&
+      !Array.isArray(actionMetadata.workflow_inputs)
+      ? actionMetadata.workflow_inputs as Record<string, any>
+      : null;
   const isPreConfirmed = !!actionMetadata?.confirmed;
 
   if (!message || !workspaceId) {
@@ -1176,6 +1211,24 @@ Deno.serve(async (req) => {
     }
     conversationId = created.id;
   }
+
+  // NARROWED BY A REAL CHECK, NOT A CAST.
+  //
+  // Both branches above are meant to leave a conversation id: one validated the
+  // supplied one, the other created a row and read its id back. The compiler
+  // cannot see that, and the usual fix — asserting non-null — would hide the
+  // case that actually matters: an insert that returns a row whose `id` is
+  // missing. That would persist `conversation_id: null` on every message of the
+  // turn, producing messages attached to no conversation, invisible to the
+  // history query and impossible to attribute afterwards.
+  //
+  // Failing loudly here costs one request; the silent version costs the
+  // conversation.
+  if (!conversationId) {
+    console.error("[pilot-chat] no conversation id after resolve/create");
+    return json({ error: "failed to resolve conversation" }, 500);
+  }
+  const conversation_id: string = conversationId;
 
   // 5. Persist user message (carries card-action metadata when applicable)
   await admin.from("messages").insert({
@@ -1729,12 +1782,16 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 5c.ii Unsafe / unsupported → safe canned reply with alternatives.
-  if (decision.workflow_category === "unsafe_or_unsupported") {
-    const msg =
-      "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
-    return await replyAndReturn(msg, { unsafe: true });
-  }
+  // 5c.ii — the unsafe/unsupported reply used to be repeated here.
+  //
+  // DELETED AS PROVABLY DEAD, not as a guess: the "Safety FIRST" check earlier
+  // in this same function returns unconditionally for this category, so the
+  // compiler had already narrowed it out of `decision.workflow_category` by this
+  // point and reported the comparison as having no overlap. The two blocks
+  // carried the identical message and the identical `{ unsafe: true }` metadata,
+  // so nothing observable is lost — and a second copy of a safety refusal is
+  // worse than none, because the next person to reword one will not know to
+  // reword the other.
 
   // 5c.ii-a Contact discovery — "Find decision-makers at these companies".
   // Operates over the remembered ACCOUNT opportunities; targets the inferred
@@ -2516,7 +2573,7 @@ Deno.serve(async (req) => {
           : "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
-      workflowInputs: actionMetadata?.workflow_inputs,
+      workflowInputs: actionWorkflowInputs,
     });
   }
 
@@ -2579,7 +2636,7 @@ Deno.serve(async (req) => {
         reason: "classifier: people_sourcing → people search (mission-carried)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
-      workflowInputs: actionMetadata?.workflow_inputs,
+      workflowInputs: actionWorkflowInputs,
     });
   }
 
@@ -2733,7 +2790,7 @@ Deno.serve(async (req) => {
       toolInput,
       modelUsed: "google/gemini-3-flash-preview",
       providerUsed: "lovable-ai",
-      workflowInputs: actionMetadata?.workflow_inputs,
+      workflowInputs: actionWorkflowInputs,
     });
   }
 

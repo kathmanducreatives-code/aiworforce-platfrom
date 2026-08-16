@@ -172,9 +172,29 @@ export function flattenQueryGroups(groups: SearchQueryGroups, max = 8): string[]
   return Array.from(new Set(ordered)).slice(0, Math.max(1, max));
 }
 
+/**
+ * The tools this plan builder actually emits.
+ *
+ * Was `string | null`, which was both too loose and — because the orchestrator's
+ * step type is a closed union — the reason a deterministic, literal-only builder
+ * failed to typecheck at the boundary. Every value below appears verbatim in
+ * `buildCompetitorDiscoveryPlan`; nothing here is aspirational.
+ *
+ * Narrow rather than widening the consumer: this builder is deterministic, so
+ * the compiler can prove it never names a tool that does not exist, and a future
+ * edit that invents one fails here instead of at a runtime dispatch.
+ */
+export type DiscoveryToolName =
+  | "scrape_url"
+  | "extract_structured"
+  | "source_with_apify"
+  | "summarize_text"
+  | "draft_outreach"
+  | null;
+
 export interface DiscoveryPlanStep {
   agent_slug: "hawk" | "scout" | "aria" | "scribe" | "penn";
-  tool_needed: string | null;
+  tool_needed: DiscoveryToolName;
   task_title: string;
   task_description: string;
   requires_approval?: boolean;

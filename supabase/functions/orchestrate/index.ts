@@ -38,8 +38,21 @@ const json = (body: unknown, status = 200) =>
 
 // ---------- Types ----------
 
+// A LOCAL COPY OF THE REGISTRY'S TOOL NAMES, and it had drifted.
+//
+// `search_web` — broad grounded web search, backed by GEMINI_SEARCH — is a real
+// registered tool (`toolRegistry.ts`) and a member of the planner's own
+// `ToolName` in `toolInputPlanner.ts`. It was missing here, so two call sites
+// that correctly select it produced a step whose `tool_needed` did not
+// typecheck: the "intelligence" plan's non-hiring branch, and the live-pulse
+// step that explicitly prefers it over Perplexity when configured.
+//
+// The type was wrong, not the code — which is why the fix is to admit the tool
+// rather than to rewrite the selection as `research_web` and silently downgrade
+// every broad-research step to the optional fallback.
 type ToolName =
   | "research_web"
+  | "search_web"
   | "scrape_url"
   | "source_with_apify"
   | "summarize_text"
