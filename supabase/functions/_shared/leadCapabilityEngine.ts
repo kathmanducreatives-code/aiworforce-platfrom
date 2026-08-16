@@ -153,6 +153,8 @@ import {
 import {
   coverMissionSignals, coverageDiagnostics, signalsUnservedByStrategy,
 } from "./signalActorCoverage.ts";
+import { hiringActorCard } from "./hiringActorCatalog.ts";
+import { toRepoKey } from "./actorIdentity.ts";
 
 /**
  * The PAID stages a new investigation slice must re-run.
@@ -1791,7 +1793,7 @@ export async function runCapabilityPlan(
       // returns nothing, or proposes nothing usable — the deterministic
       // strategy runs, which is exactly the pair and the literal above.
       const strategy = await resolveDiscoveryStrategy();
-      const strategyKeys = strategyActorKeys(strategy);
+      const strategyKeys = [...strategyActorKeys(strategy)];
       state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
       log("discovery_strategy_resolved", state.discovery_strategy);
 
@@ -1812,13 +1814,66 @@ export async function runCapabilityPlan(
       // different results, and the user is owed the difference.
       const coverage = coverMissionSignals(opts.mission);
       state.signal_coverage = coverageDiagnostics(coverage);
-      const unserved = signalsUnservedByStrategy(coverage, strategyKeys);
+      // ── MULTI-SIGNAL EXECUTION ──────────────────────────────────────────────
+      //
+      // A signal whose source this capability can call, and which the strategy
+      // does NOT already serve, is added to the run — so a request needing two
+      // kinds of evidence actually asks for both.
+      //
+      // ORDER MATTERS HERE, and getting it wrong is expensive. The first version
+      // added every runnable Actor a signal named. But a hiring scenario names
+      // the discovery sources too — discovery is how you find the company the
+      // role belongs to — so it re-added company search on top of a strategy
+      // that had deliberately declined it, overrode the strategy's own cost
+      // decision, and broke the guarantee that a resumed run costs strictly less
+      // than the first. A signal already served needs nothing added.
+      //
+      // Bounded by the same containment rule as everything else: the Actor must
+      // be declared by THIS capability or it is not added. One the registry
+      // describes but no capability declares stays in `described_only` and is
+      // reported, never quietly called.
+      let unserved = signalsUnservedByStrategy(coverage, strategyKeys);
+      if (unserved.length > 0) {
+        const declaredHere = new Set(step.providers as readonly string[]);
+        const wanted = dedupeKeys(
+          unserved.flatMap((sig) => sig.actors.map((a) => toRepoKey(a)))
+            .filter((k): k is string => k !== null));
+        for (const key of wanted) {
+          if (strategyKeys.includes(key)) continue;
+          if (!declaredHere.has(key)) continue;
+          const card = hiringActorCard(key);
+          if (!card) continue;
+          strategy.selections.push({
+            actor_key: key,
+            // BREADTH, NOT PRIMARY. A signal source earns its call from the pool
+            // the primary produced; making it primary would let a job source
+            // open a mission with no companies to ask about.
+            role: "breadth",
+            input: {},
+            rationale: "required by a mission signal the strategy left unserved",
+            dropped_filters: [],
+            requires_enrichment: card.requires_enrichment_before_qualification,
+          });
+          strategyKeys.push(key);
+          log("signal_actor_added_to_run", { actor_key: key });
+        }
+        // Recomputed against what the run will now actually do.
+        unserved = signalsUnservedByStrategy(coverage, strategyKeys);
+      }
       if (unserved.length > 0) {
         log("signals_not_served_by_discovery", {
           signals: unserved.map((s) => s.signal),
           // A later stage may still prove these during enrichment, which is why
           // this is a log line and not a refusal.
           needed_actors: unserved.flatMap((s) => s.actors),
+        });
+      }
+      if (coverage.described_only.length > 0) {
+        // KNOWN BUT NOT CALLABLE. The registry describes these; no capability
+        // declares them. Recorded so a run that needed funding evidence and
+        // never asked for it cannot look like a run that asked and found none.
+        log("signal_actors_not_declared_by_capability", {
+          store_ids: coverage.described_only,
         });
       }
       if (!coverage.fully_covered) {
@@ -4164,6 +4219,14 @@ export function compileCompanySearchConcepts(
 
 function packTitles(packs: readonly RolePack[]): string[] {
   return [...new Set(packs.flatMap((p) => p.titles))].slice(0, 20);
+}
+
+/** First-seen order, no duplicates. */
+function dedupeKeys(xs: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of xs) { if (!seen.has(x)) { seen.add(x); out.push(x); } }
+  return out;
 }
 
 function addCompany(

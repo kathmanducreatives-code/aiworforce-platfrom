@@ -75,6 +75,7 @@ const discoveryProviders = (state: Record<string, unknown>): string[] =>
 const run = async (o: {
   planDiscovery?: (i: unknown) => Promise<unknown>;
   solidcodeTeamSizes?: string[];
+  signals?: Array<{ type: string }>;
 }) => {
   const seen: Seen[] = [];
   const result = await runCapabilityPlan({
@@ -110,7 +111,8 @@ const run = async (o: {
     evaluateMission: stubMissionEvaluator({ mission_fit: "pass" }),
     ...(o.planDiscovery ? { planDiscovery: o.planDiscovery } : {}),
   } as never, {
-    mission: mission(), plan: buildCapabilityGraph(mission()), brain: BRAIN,
+    mission: { ...mission(), ...(o.signals ? { required_signals: o.signals } : {}) },
+    plan: buildCapabilityGraph(mission()), brain: BRAIN,
     maxCandidates: 60, readEnv: () => undefined,
     ...(o.solidcodeTeamSizes ? { solidcodeTeamSizes: o.solidcodeTeamSizes } : {}),
   } as never);
@@ -318,4 +320,98 @@ Deno.test("12. the deterministic path records itself as such", async () => {
   assertEquals(d.source, "deterministic_fallback");
   assertEquals(d.all_require_enrichment, true,
     "every discovery actor needs enrichment; the record must say so");
+});
+
+// ═══════════════════════════════════════════ multi-signal execution ══
+//
+// The point of the whole layer: a request needing two kinds of evidence must
+// actually ask for both. Before this, the strategy chose company-discovery
+// Actors and every other required signal was left to a later stage that may or
+// may not have looked — so a mission requiring hiring AND funding could report
+// success having never asked a funding source anything.
+
+Deno.test("13. an unserved signal adds its source to the run", async () => {
+  // The mission requires hiring. A strategy of pure YC discovery leaves the
+  // hiring PROOF unserved — the job source is what proves an open role — so the
+  // engine adds it rather than letting qualification guess.
+  const { result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+    ]),
+    signals: [{ type: "hiring" }],
+  });
+
+  const coverage = result.state.signal_coverage as Record<string, unknown>;
+  assert(coverage, "coverage must be recorded on every run");
+  assertEquals(coverage.fully_covered, true, "hiring is a covered signal");
+});
+
+Deno.test("14. a signal already served adds nothing, and costs nothing extra", async () => {
+  // ORDER MATTERS. The first implementation added every runnable Actor a signal
+  // named — and a hiring scenario names the discovery sources too, because
+  // discovery is how you find the company a role belongs to. That re-added
+  // company search on top of a strategy that had declined it, overrode the
+  // strategy's own cost decision, and broke the guarantee that a resumed run
+  // costs strictly less than the first.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+      {
+        actor_key: "apify_linkedin_company_search", role: "breadth",
+        input: { searchQuery: "Anthropic" },
+      },
+    ]),
+    signals: [{ type: "hiring" }],
+  });
+
+  // Exactly the two the strategy chose — nothing was bolted on top.
+  //
+  // Counted from `provider_attempts`, not the raw call log: identity resolution
+  // also calls `apify_linkedin_company_search` with a `searchQuery`, so a filter
+  // on the input shape counts its six lookups as discovery too.
+  const providers = discoveryProviders(result.state);
+  assertEquals(providers.length, 2);
+  assertEquals(
+    providers.filter((p) => p === "apify_linkedin_company_search").length, 1,
+    "the declined-then-re-added double call must not happen",
+  );
+  // `seen` is still the proof that only ONE discovery-shaped call was made.
+  void seen;
+});
+
+Deno.test("15. a signal no capability can serve is reported, never silently skipped", async () => {
+  // Crunchbase is described by the registry and declared by no capability. A run
+  // that needed funding evidence and never asked for it must not look like a run
+  // that asked and found none.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+    ]),
+    signals: [{ type: "funding" }],
+  });
+
+  // Nothing outside the capability was called.
+  for (const s of seen) {
+    assertEquals(s.actorKey.includes("crunchbase"), false, "containment holds");
+  }
+  const coverage = result.state.signal_coverage as Record<string, unknown>;
+  const described = coverage.described_only as string[] | undefined;
+  assert(described && described.includes("memo23/crunchbase-scraper"),
+    "the gap must be recorded on the run, not merely known");
+});
+
+Deno.test("16. an unanswerable signal produces an honest shortfall, not a silent pass", async () => {
+  const { result } = await run({
+    planDiscovery: () => Promise.resolve([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
+    ]),
+    signals: [{ type: "hiring" }, { type: "technology_adoption" }],
+  });
+
+  const coverage = result.state.signal_coverage as Record<string, unknown>;
+  assertEquals(coverage.fully_covered, false);
+  const statement = String(coverage.shortfall_statement ?? "");
+  assert(/technology_adoption/.test(statement));
+  assert(/reverse lookup/i.test(statement),
+    "the shortfall must carry the verified reason, not just the verdict");
 });

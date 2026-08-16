@@ -31,9 +31,10 @@
 
 import {
   SCENARIO_MATRIX, type ScenarioId, type ScenarioSpec,
-  scenarioIsServable,
+  executableScenarioActors, scenarioIsServable,
 } from "./discoveryScenarioMatrix.ts";
 import type { LeadMissionV1, MissionSignal } from "./leadMission.ts";
+import { toStoreId } from "./actorIdentity.ts";
 
 /**
  * The signal vocabulary, normalised.
@@ -111,8 +112,21 @@ export interface SignalCoverage {
 
 export interface CoverageReport {
   signals: SignalCoverage[];
-  /** Every Actor any required signal needs, deduplicated, in first-seen order. */
+  /** Every Actor any required signal needs, as Store ids, in first-seen order. */
   required_actors: string[];
+  /**
+   * THE SUBSET THE ENGINE CAN ACTUALLY RUN, as repo keys.
+   *
+   * This is what makes multi-signal execution real rather than reported. A
+   * hiring signal needs a discovery source AND a job source; both are declared
+   * capabilities, so both resolve here and both get run. A funding signal needs
+   * Crunchbase, which no capability declares — it resolves to nothing, appears
+   * in `described_only`, and the shortfall says so instead of the run quietly
+   * skipping it.
+   */
+  runnable_actors: string[];
+  /** Store ids a signal needs that no capability can call. Never silent. */
+  described_only: string[];
   /** True when every recorded signal is fully covered. */
   fully_covered: boolean;
   /**
@@ -197,9 +211,29 @@ export function coverMissionSignals(mission: LeadMissionV1): CoverageReport {
   const required_actors = dedupe(signals.flatMap((s) => s.actors));
   const unmet = signals.filter((s) => s.status !== "covered");
 
+  // Split what a signal NEEDS from what this system can CALL. The engine may
+  // only run a declared capability's provider; anything else is knowledge we
+  // have and permission we lack, and the difference has to survive into the
+  // record or a run will look like it covered a signal it never asked about.
+  const runnable: string[] = [];
+  const described_only: string[] = [];
+  for (const sig of signals) {
+    for (const id of sig.scenarios) {
+      const spec = SCENARIO_MATRIX[id];
+      if (!spec) continue;
+      const split = executableScenarioActors(spec);
+      for (const k of split.runnable) if (!runnable.includes(k)) runnable.push(k);
+      for (const d of split.described_only) {
+        if (sig.actors.includes(d) && !described_only.includes(d)) described_only.push(d);
+      }
+    }
+  }
+
   return {
     signals,
     required_actors,
+    runnable_actors: runnable,
+    described_only,
     fully_covered: unmet.length === 0,
     shortfall_statement: unmet.length === 0 ? "" : buildShortfallStatement(unmet),
   };
@@ -241,10 +275,18 @@ export function buildShortfallStatement(unmet: SignalCoverage[]): string {
 export function signalsUnservedByStrategy(
   report: CoverageReport, strategyActorIds: readonly string[],
 ): SignalCoverage[] {
-  const selected = new Set(strategyActorIds);
+  // COMPARE CANONICALLY, NEVER BY STRING.
+  //
+  // A signal's Actors are Store ids; a strategy's are repo keys. Comparing them
+  // directly reported EVERY signal as unserved, including ones the strategy was
+  // running — the exact two-names-for-one-thing defect `actorIdentity` exists to
+  // remove, reproduced here the moment the matrix moved to Store ids.
+  const selected = new Set(
+    strategyActorIds.map((k) => toStoreId(k) ?? k),
+  );
   return report.signals.filter((s) =>
     s.status === "covered" && s.actors.length > 0 &&
-    !s.actors.some((a) => selected.has(a)));
+    !s.actors.some((a) => selected.has(toStoreId(a) ?? a)));
 }
 
 /** Compact record for the execution state. Reasons kept; payloads never. */
@@ -259,6 +301,8 @@ export function coverageDiagnostics(r: CoverageReport): Record<string, unknown> 
       ...(s.limitation ? { limitation: s.limitation } : {}),
     })),
     required_actors: r.required_actors,
+    runnable_actors: r.runnable_actors,
+    ...(r.described_only.length ? { described_only: r.described_only } : {}),
     ...(r.shortfall_statement ? { shortfall_statement: r.shortfall_statement } : {}),
   };
 }

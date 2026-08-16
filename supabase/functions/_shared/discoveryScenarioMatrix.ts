@@ -32,6 +32,7 @@
 import {
   type ActorCapability, actorIntelligence, actorsWithCapability,
 } from "./apifyIntelligenceRegistry.ts";
+import { toRepoKey } from "./actorIdentity.ts";
 
 export type ScenarioId =
   // hiring
@@ -75,9 +76,17 @@ export interface ScenarioSpec {
   blocked_reason?: string;
 }
 
-/** Actors that discover, in the order the evidence supports. */
-const YC_DISCOVERY = ["apify_yc_companies_memo23", "haketa/ycombinator-companies-scraper"];
-const COMPANY_SEARCH = ["apify_linkedin_company_search"];
+// STORE IDS ONLY, EVERYWHERE.
+//
+// This file used to mix the two vocabularies — `apify_yc_companies_memo23`
+// beside `harvestapi/linkedin-post-search` — which meant a scenario and a
+// capability could name the same Actor and never be comparable. The Store id is
+// the canonical identity; `actorIdentity.toRepoKey` is what turns one into the
+// name the engine can execute, and it returns null for an Actor no capability
+// declares rather than letting the caller guess.
+const YC_DISCOVERY = ["memo23/y-combinator-scraper", "haketa/ycombinator-companies-scraper"];
+const COMPANY_SEARCH = ["harvestapi/linkedin-company-search"];
+const JOB_SEARCH = ["harvestapi/linkedin-job-search"];
 const NEWS = ["data_xplorer/google-news-scraper-fast"];
 const SERP = ["apidojo/google-search-scraper"];
 const POST_SEARCH = ["harvestapi/linkedin-post-search"];
@@ -93,7 +102,9 @@ const CRUNCHBASE = ["memo23/crunchbase-scraper"];
 const hiring = (id: ScenarioId, role: string): ScenarioSpec => ({
   id,
   required_capabilities: ["company_discovery", "hiring_signal"],
-  preferred_actors: [...YC_DISCOVERY, ...COMPANY_SEARCH],
+  // Discovery finds the company; the JOB SOURCE proves the role. Both are
+  // preferred because neither alone answers a hiring request.
+  preferred_actors: [...YC_DISCOVERY, ...COMPANY_SEARCH, ...JOB_SEARCH],
   fallback_actors: [],
   corroborating_actors: [...POST_SEARCH, ...COMPANY_POSTS],
   minimum_evidence:
@@ -111,7 +122,7 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
   job_growth_signal: {
     id: "job_growth_signal",
     required_capabilities: ["company_discovery", "hiring_signal"],
-    preferred_actors: [...YC_DISCOVERY, ...COMPANY_SEARCH],
+    preferred_actors: [...YC_DISCOVERY, ...JOB_SEARCH],
     fallback_actors: [],
     corroborating_actors: [...COMPANY_POSTS],
     minimum_evidence:
@@ -488,11 +499,32 @@ export function unresolvedIntelligenceIds(): string[] {
   const out = new Set<string>();
   for (const s of Object.values(SCENARIO_MATRIX)) {
     for (const id of scenarioActors(s)) {
-      if (!id.includes("/")) continue; // a repo capability key, not a Store id
       if (!actorIntelligence(id)) out.add(id);
     }
   }
   return [...out];
+}
+
+/**
+ * The Actors a scenario names that the engine can ACTUALLY run, as repo keys.
+ *
+ * Most of the matrix is not executable today: Crunchbase, the news sources and
+ * the post scrapers are described but no capability declares them, so calling
+ * one would bypass the containment guard. Returning them separately is what
+ * keeps the plan honest — a scenario that promises a funding source must not
+ * quietly produce a run that never asks for funding.
+ */
+export function executableScenarioActors(
+  s: ScenarioSpec,
+): { runnable: string[]; described_only: string[] } {
+  const runnable: string[] = [];
+  const described_only: string[] = [];
+  for (const id of [...s.preferred_actors, ...s.fallback_actors]) {
+    const key = toRepoKey(id);
+    if (key) { if (!runnable.includes(key)) runnable.push(key); }
+    else described_only.push(id);
+  }
+  return { runnable, described_only };
 }
 
 /** Capabilities a scenario needs that no registered Actor can produce. */

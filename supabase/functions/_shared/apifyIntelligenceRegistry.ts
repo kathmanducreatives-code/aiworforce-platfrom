@@ -368,6 +368,156 @@ export const APIFY_INTELLIGENCE: Readonly<Record<string, ActorIntelligenceRecord
     },
 
     // ── STARTUP DISCOVERY ────────────────────────────────────────────────────
+    //
+    // THE TWO ACTORS THE PIPELINE HAS ALWAYS DEPENDED ON, verified at last.
+    // They were declared by `startup_company_discovery` long before this
+    // registry existed, so every run to date has spent on them with no recorded
+    // adoption, price or reliability evidence. What the verification found is
+    // not reassuring, and is recorded here rather than softened.
+    "memo23/y-combinator-scraper": {
+      actor_id: "memo23/y-combinator-scraper",
+      actor_name: "Y Combinator · YC · Jobs & Companies scraper",
+      provider: "memo23",
+      source_url: "https://apify.com/memo23/y-combinator-scraper",
+      input_entities: ["query"],
+      capabilities: ["company_discovery", "hiring_signal"],
+      best_for: [
+        "the YC cohort with its open-jobs array in one call",
+        "the only registered discovery source that returns hiring evidence with the company",
+      ],
+      not_for: ["anything outside Y Combinator", "proving headcount — teamSize is self-reported"],
+      supported_filters: ["mode", "regions", "industries", "batch", "isHiring",
+        "minEmployeeSize", "maxEmployeeSize", "queries", "scrapeOpenJobs", "scrapeFounderDetails"],
+      verified_enums: {},
+      input_limits: { maxItems: "PER start-URL / per filter run — NOT a global cap" },
+      output_fields: [],
+      cost: { model: "PAY_PER_EVENT", start_usd: 0.008, per_result_usd: 0.001 },
+      adoption: { total_users: 171, monthly_users: 38, rating: 4.62, rating_count: 2 },
+      freshness: "firmographic",
+      // THE ONLY FIELD-TESTED RECORD HERE. `hiringActorCatalog` carries defects
+      // observed on real runs of this Actor, which no other entry can claim.
+      evidence_level: "field_tested",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api_and_live_runs",
+      actor_modified_at: "2026-08-08",
+      known_defects: [
+        {
+          id: "memo23_yc_thin_adoption",
+          summary: "171 lifetime users, 38 monthly, rated 4.62 by TWO people — " +
+            "for the Actor every startup mission opens with. Its standing rests " +
+            "on this repo's own live-run evidence, not on the community's.",
+          mitigation: "Keep the field-tested defect list current; it is the only " +
+            "real reliability evidence this Actor has.",
+        },
+      ],
+      fallback_actors: ["haketa/ycombinator-companies-scraper"],
+      requires_enrichment: true,
+      confidence: 0.7,
+    },
+
+    "solidcode/ycombinator-scraper": {
+      actor_id: "solidcode/ycombinator-scraper",
+      actor_name: "Y Combinator Scraper",
+      provider: "solidcode",
+      source_url: "https://apify.com/solidcode/ycombinator-scraper",
+      input_entities: ["query"],
+      capabilities: ["company_discovery"],
+      best_for: ["a second YC pass when the primary returned nothing"],
+      not_for: ["anything the primary can answer — it duplicates YC at 2x the row price"],
+      supported_filters: ["searchQuery", "status", "regions", "industries",
+        "teamSize", "isHiring", "includeJobs", "includeFounders"],
+      verified_enums: {},
+      input_limits: { teamSize: 1, maxResults: "0 = uncapped (internal 10k limit)" },
+      output_fields: [],
+      cost: { model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.002 },
+      adoption: { total_users: 17, monthly_users: 2, rating: null, rating_count: 0 },
+      freshness: "firmographic",
+      evidence_level: "verified_schema",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api",
+      actor_modified_at: "2026-08-14",
+      known_defects: [
+        {
+          id: "solidcode_below_our_own_rejection_bar",
+          summary: "17 lifetime users, 2 monthly, no rating. That is LESS " +
+            "adoption than xtracto/google-news-scraper, which this registry " +
+            "rejected outright on exactly that evidence — and this Actor is the " +
+            "declared fallback for the pipeline's primary discovery capability.",
+          mitigation: "It is already fallback-only and skipped unless the primary " +
+            "returns nothing, which bounds the exposure. It should be replaced by " +
+            "haketa or removed; keeping it is a decision, not an oversight.",
+        },
+      ],
+      fallback_actors: ["haketa/ycombinator-companies-scraper"],
+      requires_enrichment: true,
+      confidence: 0.25,
+    },
+
+    "harvestapi/linkedin-company-search": {
+      actor_id: "harvestapi/linkedin-company-search",
+      actor_name: "LinkedIn Company Search Scraper (No Cookies)",
+      provider: "harvestapi",
+      source_url: "https://apify.com/harvestapi/linkedin-company-search",
+      input_entities: ["query"],
+      capabilities: ["company_discovery"],
+      best_for: ["company candidates outside YC, with a LinkedIn identity URL"],
+      not_for: [
+        "concept queries — it matches company NAMES and reports a concept search as a successful empty run",
+        "proving industry or employee size",
+      ],
+      supported_filters: ["searchQuery", "locations", "industryIds", "companySize", "scraperMode"],
+      verified_enums: {},
+      input_limits: { locations: 20, industryIds: 20, maxItems: 1000, takePages: 20 },
+      output_fields: [],
+      cost: { model: "PAY_PER_EVENT", start_usd: 0.001, per_result_usd: 0.004 },
+      adoption: { total_users: 5924, monthly_users: 1417, rating: 5, rating_count: 4 },
+      freshness: "firmographic",
+      evidence_level: "field_tested",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api_and_live_runs",
+      actor_modified_at: "2026-06-07",
+      known_defects: [
+        {
+          id: "company_search_matches_names_not_concepts",
+          summary: "Observed on live runs: a conceptual query returns a successful " +
+            "EMPTY run, so the cost is real and the failure silent. Its size filter " +
+            "disagreed with reality in four of eight observed rows.",
+          mitigation: "Named companies or name-like queries only; size and industry " +
+            "from enrichment, never from this Actor.",
+        },
+      ],
+      fallback_actors: [],
+      requires_enrichment: true,
+      confidence: 0.8,
+    },
+
+    "harvestapi/linkedin-job-search": {
+      actor_id: "harvestapi/linkedin-job-search",
+      actor_name: "Advanced Linkedin Job Scraper (No Cookies)",
+      provider: "harvestapi",
+      source_url: "https://apify.com/harvestapi/linkedin-job-search",
+      input_entities: ["query", "company_url"],
+      capabilities: ["hiring_signal"],
+      best_for: ["proving a named company has an open role, with a date and a title"],
+      not_for: ["company discovery — a job posting is evidence about a company, not a company"],
+      supported_filters: ["search", "location", "companyIds", "postedLimit",
+        "workplaceType", "employmentType", "sortBy", "maxItems"],
+      verified_enums: {},
+      input_limits: {},
+      output_fields: [],
+      cost: { model: "PAY_PER_EVENT", start_usd: 0.001, per_result_usd: 0.001 },
+      adoption: { total_users: 7553, monthly_users: 702, rating: 4.85, rating_count: 3 },
+      freshness: "recent_signal",
+      evidence_level: "field_tested",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api_and_live_runs",
+      actor_modified_at: "2026-06-07",
+      known_defects: [],
+      fallback_actors: [],
+      requires_enrichment: false,
+      confidence: 0.85,
+    },
+
     "haketa/ycombinator-companies-scraper": {
       actor_id: "haketa/ycombinator-companies-scraper",
       actor_name: "YCombinator Companies Scraper | 5,900+ YC Startup Directory",
