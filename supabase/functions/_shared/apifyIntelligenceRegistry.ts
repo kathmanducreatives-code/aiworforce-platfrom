@@ -162,11 +162,40 @@ export const REJECTED_ACTORS: ReadonlyArray<{
       "Rating is also the lowest of the candidates at 3.92 from 9.",
   },
   {
+    actor_id: "crawlerbros/producthunt-scraper",
+    reason: "no adoption evidence, and needs a credential we do not hold",
+    evidence: "20 lifetime users, 4 monthly, no rating. Its schema also states " +
+      "that a Product Hunt API token is REQUIRED for topic, userLaunches and " +
+      "productDetail modes; without one only dailyLeaderboard works, 'with " +
+      "limited fields (no description/makers/media)'. Product-launch discovery " +
+      "therefore has no usable Actor in an unattended deployment.",
+  },
+  {
+    actor_id: "mikolabs/google-search-results-scraper",
+    reason: "not present in Store search results",
+    evidence: "Named in the source catalog. A search for Google SERP Actors " +
+      "returned five candidates and this was not among them. Not registered on " +
+      "the strength of a document.",
+  },
+  {
+    actor_id: "prodiger/google-search-scraper",
+    reason: "not present in Store search results",
+    evidence: "As above — named in the source catalog, absent from the Store " +
+      "search. `apidojo/google-search-scraper` is registered instead.",
+  },
+  {
     actor_id: "harvestapi/linkedin-profile-scraper",
     reason: "not verified in this pass",
     evidence: "Named in the source catalog but not fetched from the Store API " +
       "here. It must not be registered on the strength of a document — the " +
-      "same document also named the two Actors rejected above.",
+      "same document also named the Actors rejected above.",
+  },
+  {
+    actor_id: "datacach/yc-companies-detail-scraper",
+    reason: "not verified in this pass",
+    evidence: "One of three YC Actors named in the source catalog. " +
+      "`haketa/ycombinator-companies-scraper` was verified and registered; the " +
+      "repo's existing memo23 YC Actor remains the field-tested primary.",
   },
 ]);
 
@@ -283,6 +312,174 @@ export const APIFY_INTELLIGENCE: Readonly<Record<string, ActorIntelligenceRecord
       fallback_actors: [],
       requires_enrichment: true,
       confidence: 0.8,
+    },
+
+    "harvestapi/linkedin-profile-posts": {
+      actor_id: "harvestapi/linkedin-profile-posts",
+      actor_name: "LinkedIn Profile Posts Scraper (No Cookies)",
+      provider: "harvestapi",
+      source_url: "https://apify.com/harvestapi/linkedin-profile-posts",
+      input_entities: ["profile_url", "company_url"],
+      capabilities: ["social_activity", "hiring_signal", "funding_signal"],
+      best_for: [
+        "what a KNOWN founder has said recently",
+        "founder hiring and expansion signals stated before a job is posted",
+      ],
+      not_for: [
+        "finding companies or people — it must be given the URLs it reads",
+        "any firmographic fact",
+      ],
+      supported_filters: [
+        "targetUrls", "maxPosts", "postedLimit", "postedLimitDate",
+        "includeQuotePosts", "includeReposts", "scrapeReactions", "maxReactions",
+        "scrapeComments", "maxComments", "commentsPostedLimit", "contextCountry",
+      ],
+      verified_enums: {
+        postedLimit: ["any", "1h", "24h", "week", "month", "3months", "6months", "year"],
+        commentsPostedLimit: ["any", "1h", "24h", "week", "month"],
+        contextCountry: ["any", "US", "GB", "DE", "FR"],
+      },
+      input_limits: { maxPosts: "0 means all posts" },
+      output_fields: [],
+      cost: {
+        model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.002,
+        notes: "a URL with no posts still costs $0.001",
+      },
+      // THE BEST-ADOPTED ACTOR REGISTERED: 30204 lifetime, 8001 monthly, 4.9
+      // from twenty ratings. Where an Actor's evidence is this strong it is
+      // worth saying so, because most of this registry's entries are not.
+      adoption: { total_users: 30204, monthly_users: 8001, rating: 4.9, rating_count: 20 },
+      freshness: "recent_signal",
+      evidence_level: "verified_schema",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api",
+      actor_modified_at: "2026-08-08",
+      known_defects: [
+        {
+          id: "profile_posts_needs_resolved_identity",
+          summary: "Takes profile URLs. Nothing can be asked of it until " +
+            "identity resolution has produced one.",
+          mitigation: "Sequence it after identity, never as a discovery step.",
+        },
+      ],
+      fallback_actors: ["harvestapi/linkedin-post-search"],
+      requires_enrichment: true,
+      confidence: 0.9,
+    },
+
+    // ── STARTUP DISCOVERY ────────────────────────────────────────────────────
+    "haketa/ycombinator-companies-scraper": {
+      actor_id: "haketa/ycombinator-companies-scraper",
+      actor_name: "YCombinator Companies Scraper | 5,900+ YC Startup Directory",
+      provider: "haketa",
+      source_url: "https://apify.com/haketa/ycombinator-companies-scraper",
+      input_entities: ["query"],
+      capabilities: ["company_discovery", "hiring_signal"],
+      best_for: [
+        "YC discovery driven by a KEYWORD across name, one-liner, description, industry and tags",
+        "geography far finer than the incumbent YC source offers — 76 named regions and countries",
+        "filtering YC by funding stage, batch, status and hiring flag in one call",
+      ],
+      not_for: [
+        "anything outside the Y Combinator directory",
+        "proving headcount or industry — both are YC's own self-reported values",
+      ],
+      supported_filters: [
+        "query", "batches", "statuses", "industries", "regions", "stages",
+        "hiringOnly", "topCompaniesOnly", "maxRecords", "hitsPerPage",
+      ],
+      verified_enums: {
+        statuses: ["Active", "Acquired", "Public", "Inactive"],
+        industries: ["B2B", "Consumer", "Fintech", "Healthcare", "Education",
+          "Government", "Industrials", "Real Estate and Construction", "Unspecified"],
+        stages: ["Seed", "Early", "Growth"],
+      },
+      input_limits: { maxRecords: "0 means no limit", hitsPerPage: 1000 },
+      output_fields: [],
+      cost: { model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.002 },
+      adoption: { total_users: 96, monthly_users: 29, rating: null, rating_count: 0 },
+      freshness: "firmographic",
+      evidence_level: "verified_schema",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api",
+      actor_modified_at: "2026-08-09",
+      known_defects: [
+        {
+          id: "haketa_yc_unrated",
+          summary: "96 lifetime users, 29 monthly, and no rating at all — despite " +
+            "having the richest YC filter set of anything examined. Capability " +
+            "and reliability evidence point in opposite directions here.",
+          mitigation: "Not a primary. The repo's field-tested memo23 YC source " +
+            "keeps that role; this is the alternative to reach for when a " +
+            "mission needs a keyword or a region memo23 cannot express.",
+        },
+      ],
+      fallback_actors: [],
+      requires_enrichment: true,
+      confidence: 0.45,
+    },
+
+    // ── WEB CORROBORATION ────────────────────────────────────────────────────
+    "apidojo/google-search-scraper": {
+      actor_id: "apidojo/google-search-scraper",
+      actor_name: "Google Search Results Scraper (SERP)",
+      provider: "apidojo",
+      source_url: "https://apify.com/apidojo/google-search-scraper",
+      input_entities: ["query"],
+      capabilities: ["news_signal", "company_enrichment"],
+      best_for: [
+        "confirming a company exists and resolving its real domain",
+        "a last-resort check when no structured source covers the claim",
+      ],
+      not_for: [
+        "company discovery — a SERP returns PAGES, and ranking is not an ICP",
+        "any structured firmographic field",
+      ],
+      supported_filters: [
+        "startUrls", "searchTerms", "countryCode", "languageCode", "maxItems",
+        "maxPagesPerQuery", "mobileResults",
+      ],
+      verified_enums: {
+        // Truncated to what the planner has any use for; the live enum is the
+        // full ISO country list and is validated against the schema at compile
+        // time, not against this excerpt.
+        languageCode: ["ar", "bg", "ca", "cs", "da", "de", "el", "en", "es", "et",
+          "fi", "fr", "hr", "hu", "id", "is", "it", "iw", "ja", "ko", "lt", "lv",
+          "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv", "tr",
+          "zh-CN", "zh-TW"],
+      },
+      input_limits: { maxPagesPerQuery: "Google returns ~200 results per search" },
+      output_fields: [],
+      cost: {
+        model: "PAY_PER_EVENT", start_usd: 0, per_result_usd: 0.0002,
+        notes: "$0.002 per QUERY including the first 10 results, then $0.0002 per extra item",
+      },
+      adoption: { total_users: 944, monthly_users: 215, rating: 3.9, rating_count: 11 },
+      freshness: "realtime",
+      evidence_level: "verified_schema",
+      last_verified_at: VERIFIED,
+      verified_via: "apify_store_api",
+      actor_modified_at: "2026-08-16",
+      known_defects: [
+        {
+          id: "serp_pricing_reported_inconsistently",
+          summary: "The Store's search endpoint reports PAY_PER_EVENT at $0.002 " +
+            "per query; the detail endpoint reported `model: FREE` on the same " +
+            "day, while the description still states the per-query price. The " +
+            "two endpoints disagree.",
+          mitigation: "Budget against the per-query figure, which is the " +
+            "conservative reading. Re-verify before relying on it at volume.",
+        },
+        {
+          id: "serp_lowest_rated_registered",
+          summary: "3.9 from 11 ratings — the lowest score of anything registered, " +
+            "and from enough ratings to mean something, unlike the 5.0s here.",
+          mitigation: "Corroboration only, never a source of record.",
+        },
+      ],
+      fallback_actors: ["s-r/free-google-search-results-serp---only-0-25-per-1-000-results"],
+      requires_enrichment: true,
+      confidence: 0.55,
     },
 
     // ── FUNDING ──────────────────────────────────────────────────────────────
