@@ -70,7 +70,7 @@
 -- THE SECOND-ENVIRONMENT CAVEAT NO LONGER APPLIES. This note used to warn that
 -- production (wqnigjhcwjxtmordrwno) had not been audited and had to be checked
 -- before deploying. Agentory has since consolidated onto a single project,
--- luvostyizefajbltukkc, which starts EMPTY — so there is no unaudited second
+-- ohsdatpvfdjdemstoiuj, which starts EMPTY — so there is no unaudited second
 -- environment and no legacy row that could violate the index.
 --
 -- Kept, rather than deleted, because the query below is still the right one to

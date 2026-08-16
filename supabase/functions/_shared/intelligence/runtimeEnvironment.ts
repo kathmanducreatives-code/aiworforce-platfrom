@@ -30,7 +30,7 @@ import { type EnvReader } from "../signalsV2Flag.ts";
  * Agentory previously ran two projects, and this map existed to stop one being
  * mistaken for the other — the audit that created it found the frontend talking
  * to production while the tooling talked to test. As of the migration to
- * `luvostyizefajbltukkc` there is one project serving both roles, so that
+ * `ohsdatpvfdjdemstoiuj` there is one project serving both roles, so that
  * particular confusion is no longer possible: there is nowhere else to send a
  * request.
  *
@@ -46,8 +46,8 @@ import { type EnvReader } from "../signalsV2Flag.ts";
  * all environments, so nothing was ever test-only.
  */
 export const CANONICAL_PROJECT_REFS: Readonly<Record<"production" | "test", string>> = {
-  production: "luvostyizefajbltukkc",
-  test: "luvostyizefajbltukkc",
+  production: "ohsdatpvfdjdemstoiuj",
+  test: "ohsdatpvfdjdemstoiuj",
 };
 
 /** Hosts that mean "a developer's machine", not a deployed project. */

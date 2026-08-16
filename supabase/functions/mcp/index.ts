@@ -104,7 +104,7 @@ var list_leads_default = defineTool3({
 });
 
 // src/lib/mcp/index.ts
-var projectRef = "luvostyizefajbltukkc";
+var projectRef = "ohsdatpvfdjdemstoiuj";
 var mcp_default = defineMcp({
   name: "agentory-mcp",
   title: "Agentory",

@@ -14,9 +14,9 @@
 // -------------------------------------------------------------- constants ----
 
 /** The only Supabase project this benchmark is allowed to touch. */
-export const TEST_PROJECT_REF = "luvostyizefajbltukkc";
+export const TEST_PROJECT_REF = "ohsdatpvfdjdemstoiuj";
 /** Production — the benchmark must terminate before any request if it sees this. */
-export const PROD_PROJECT_REF = "luvostyizefajbltukkc";
+export const PROD_PROJECT_REF = "ohsdatpvfdjdemstoiuj";
 
 /** The fixed benchmark query. Never paraphrased; never changed between runs. */
 export const FIXED_QUERY =

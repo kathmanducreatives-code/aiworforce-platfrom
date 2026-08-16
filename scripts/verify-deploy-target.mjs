@@ -16,8 +16,8 @@
 // Exits non-zero on any mismatch. READ-ONLY: it deploys nothing.
 
 const CANONICAL = {
-  production: "luvostyizefajbltukkc",
-  test: "luvostyizefajbltukkc",
+  production: "ohsdatpvfdjdemstoiuj",
+  test: "ohsdatpvfdjdemstoiuj",
 };
 
 function arg(name) {

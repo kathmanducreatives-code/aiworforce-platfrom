@@ -55,7 +55,7 @@ function mission(over: Partial<LeadMissionV1> = {}): LeadMissionV1 {
 /** Run the call site with the GPT adapter enabled and its model stubbed out. */
 async function plan(leadMission: LeadMissionV1 | null) {
   const env: Record<string, string> = {
-    SUPABASE_PROJECT_ID: "luvostyizefajbltukkc",
+    SUPABASE_PROJECT_ID: "ohsdatpvfdjdemstoiuj",
     GPT_LEAD_STRATEGY: "true",
     GPT_LEAD_STRATEGY_WORKSPACES: WORKSPACE,
   };

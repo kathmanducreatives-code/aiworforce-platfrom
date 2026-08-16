@@ -4,8 +4,8 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { resolveEnvironmentGate, environmentBadge, containsSecret } from "./environmentGate.ts";
 
-const TEST_URL = "https://luvostyizefajbltukkc.supabase.co";
-const PROD_URL = "https://luvostyizefajbltukkc.supabase.co";
+const TEST_URL = "https://ohsdatpvfdjdemstoiuj.supabase.co";
+const PROD_URL = "https://ohsdatpvfdjdemstoiuj.supabase.co";
 // Deliberately not a real key — only its SHAPE matters for the leak assertion.
 const FAKE_KEY = "eyJhbGciOiJIUzI1NiJ9.ZmFrZQ.ZmFrZQ";
 
@@ -22,7 +22,7 @@ Deno.test("local development never silently defaults to the production project",
   const g = resolveEnvironmentGate({ DEV: true });
   assertEquals(g.projectRef, null, "no production ref may be resolved implicitly");
   assertEquals(g.environment, "unknown");
-  assertFalse(JSON.stringify(g).includes("luvostyizefajbltukkc"));
+  assertFalse(JSON.stringify(g).includes("ohsdatpvfdjdemstoiuj"));
 });
 
 Deno.test("a URL without a key is also blocked", () => {
@@ -35,7 +35,7 @@ Deno.test("TEST URL → TEST badge", () => {
   const g = resolveEnvironmentGate({ DEV: true, VITE_SUPABASE_URL: TEST_URL, VITE_SUPABASE_PUBLISHABLE_KEY: FAKE_KEY });
   assertEquals(g.status, "ok");
   assertEquals(g.environment, "test");
-  assertEquals(g.badge, "TEST — luvostyizefajbltukkc");
+  assertEquals(g.badge, "TEST — ohsdatpvfdjdemstoiuj");
 });
 
 Deno.test("an explicit local PRODUCTION target boots but is loudly labelled", () => {
@@ -74,7 +74,7 @@ Deno.test("no secret can reach the rendered output", () => {
 });
 
 Deno.test("environmentBadge is null only for production", () => {
-  assertEquals(environmentBadge("production", "luvostyizefajbltukkc"), null);
-  assert(environmentBadge("test", "luvostyizefajbltukkc") !== null);
+  assertEquals(environmentBadge("production", "ohsdatpvfdjdemstoiuj"), null);
+  assert(environmentBadge("test", "ohsdatpvfdjdemstoiuj") !== null);
   assert(environmentBadge("unknown", null) !== null);
 });

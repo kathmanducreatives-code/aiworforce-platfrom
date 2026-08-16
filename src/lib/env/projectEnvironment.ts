@@ -1,7 +1,7 @@
 // Which Supabase project is this build actually talking to?
 //
-// The audit found the frontend/CLI targeting PROD (luvostyizefajbltukkc) while
-// the MCP/CLI tooling was pointed at TEST (luvostyizefajbltukkc). This module
+// The audit found the frontend/CLI targeting PROD (ohsdatpvfdjdemstoiuj) while
+// the MCP/CLI tooling was pointed at TEST (ohsdatpvfdjdemstoiuj). This module
 // makes the resolved project ref + environment name inspectable so an operator
 // can verify the target before trusting a diagnostic — and refuse to treat TEST
 // as production.
@@ -17,7 +17,7 @@
  * Agentory previously ran two projects, and this map existed to stop one being
  * mistaken for the other — the audit that created it found the frontend talking
  * to production while the tooling talked to test. As of the migration to
- * `luvostyizefajbltukkc` there is one project serving both roles, so that
+ * `ohsdatpvfdjdemstoiuj` there is one project serving both roles, so that
  * particular confusion is no longer possible: there is nowhere else to send a
  * request.
  *
@@ -33,8 +33,8 @@
  * all environments, so nothing was ever test-only.
  */
 export const CANONICAL_PROJECT_REFS = {
-  production: "luvostyizefajbltukkc",
-  test: "luvostyizefajbltukkc",
+  production: "ohsdatpvfdjdemstoiuj",
+  test: "ohsdatpvfdjdemstoiuj",
 } as const;
 
 export type ProjectEnvironmentName = "production" | "test" | "unknown";

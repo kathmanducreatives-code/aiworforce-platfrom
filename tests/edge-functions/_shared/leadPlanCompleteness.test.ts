@@ -194,7 +194,7 @@ Deno.test("PC7 an incomplete plan is never REPORTED as Claude-generated", async 
     readEnv: (k) =>
       k === "CLAUDE_FIRST_LEAD_PLANNING" ? "true"
         : k === "CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES" ? "ws-1"
-        : k === "SUPABASE_URL" ? "https://luvostyizefajbltukkc.supabase.co"
+        : k === "SUPABASE_URL" ? "https://ohsdatpvfdjdemstoiuj.supabase.co"
         : undefined,
   });
 

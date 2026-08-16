@@ -23,11 +23,11 @@ describe('projectEnvironment', () => {
   });
 
   it('classifies an unknown ref as unknown', () => {
-    expect(classifyEnvironment('luvostyizefajbltukkc')).toBe('unknown');
+    expect(classifyEnvironment('ohsdatpvfdjdemstoiuj')).toBe('unknown');
   });
 
   it('projectRefFromUrl extracts the ref', () => {
-    expect(projectRefFromUrl('https://luvostyizefajbltukkc.supabase.co')).toBe('luvostyizefajbltukkc');
+    expect(projectRefFromUrl('https://ohsdatpvfdjdemstoiuj.supabase.co')).toBe('ohsdatpvfdjdemstoiuj');
     expect(projectRefFromUrl(null)).toBeNull();
   });
 

@@ -39,7 +39,7 @@ export interface EnvInput {
 
 const SETUP_INSTRUCTIONS = [
   'Create a gitignored .env.local in the project root.',
-  'Set VITE_SUPABASE_URL to the TEST project URL (https://luvostyizefajbltukkc.supabase.co).',
+  'Set VITE_SUPABASE_URL to the TEST project URL (https://ohsdatpvfdjdemstoiuj.supabase.co).',
   'Set VITE_SUPABASE_PUBLISHABLE_KEY to that project\'s publishable (anon) key.',
   'Restart the dev server so Vite reloads the environment.',
 ];

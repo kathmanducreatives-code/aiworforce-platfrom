@@ -14,8 +14,8 @@ import {
   resolveTarget, configuredRef, environmentOf, refusalFor,
 } from "../../scripts/supabase-target.mjs";
 
-const TEST_REF = "luvostyizefajbltukkc";
-const PROD_REF = "luvostyizefajbltukkc";
+const TEST_REF = "ohsdatpvfdjdemstoiuj";
+const PROD_REF = "ohsdatpvfdjdemstoiuj";
 const CONFIG = new URL("../../supabase/config.toml", import.meta.url).pathname;
 
 // ═══ THE CHECKED-IN DEFAULT ═══════════════════════════════════════════════

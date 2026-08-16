@@ -9,16 +9,16 @@ import type { Database } from './types';
 // PRODUCTION-BY-DEFAULT SAFETY. The 2026-07-26 manual "TEST" run actually hit
 // PRODUCTION because these defaults apply silently when .env.local is absent.
 // Production builds keep the defaults; local development must be explicit.
-export const PRODUCTION_SUPABASE_URL = "https://luvostyizefajbltukkc.supabase.co";
+export const PRODUCTION_SUPABASE_URL = "https://ohsdatpvfdjdemstoiuj.supabase.co";
 
 export function resolveSupabaseUrl(envUrl: string | undefined, isDev: boolean): string {
   if (envUrl) return envUrl;
   if (isDev) {
     throw new Error(
       "Supabase is unconfigured in local development. Refusing to silently fall back " +
-      "to PRODUCTION (luvostyizefajbltukkc). Set VITE_SUPABASE_URL and " +
+      "to PRODUCTION (ohsdatpvfdjdemstoiuj). Set VITE_SUPABASE_URL and " +
       "VITE_SUPABASE_PUBLISHABLE_KEY in a gitignored .env.local (use the TEST project " +
-      "luvostyizefajbltukkc for QA).",
+      "ohsdatpvfdjdemstoiuj for QA).",
     );
   }
   return PRODUCTION_SUPABASE_URL;
@@ -26,7 +26,7 @@ export function resolveSupabaseUrl(envUrl: string | undefined, isDev: boolean): 
 
 /** Visible banner text for non-production targets; null in production. */
 export function environmentLabel(url: string): string | null {
-  if (url.includes("luvostyizefajbltukkc")) return "TEST environment (luvostyizefajbltukkc)";
+  if (url.includes("ohsdatpvfdjdemstoiuj")) return "TEST environment (ohsdatpvfdjdemstoiuj)";
   if (url === PRODUCTION_SUPABASE_URL) return null;
   return `Non-production Supabase target: ${url.replace(/^https?:\/\//, "")}`;
 }

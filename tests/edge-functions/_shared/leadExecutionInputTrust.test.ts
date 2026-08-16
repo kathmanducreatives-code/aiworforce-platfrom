@@ -140,7 +140,7 @@ Deno.test("31-33. no Actor, no production, no protected file", () => {
   // which backend the schema was aligned against. That is documentation, not a
   // connection: what matters is that no URL, client or fetch is built from it.
   // Asserting its total absence would fail on a comment and prove nothing.
-  const PROD = "luvostyizefajbltukkc";
+  const PROD = "ohsdatpvfdjdemstoiuj";
   for (const [name, src] of [["run-agent", runAgentSrc], ["continue-workflow", continueSrc]] as const) {
     for (const line of src.split("\n")) {
       if (!line.includes(PROD)) continue;

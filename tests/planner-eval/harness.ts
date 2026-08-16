@@ -99,7 +99,7 @@ export async function runPlanner(
   planner: PlannerName, c: EvalCase, stubs: ModelStubs,
 ): Promise<NeutralPlan> {
   const env: Record<string, string> = {
-    SUPABASE_PROJECT_ID: "luvostyizefajbltukkc",
+    SUPABASE_PROJECT_ID: "ohsdatpvfdjdemstoiuj",
     ...(planner === "gpt"
       ? { GPT_LEAD_STRATEGY: "true", GPT_LEAD_STRATEGY_WORKSPACES: WORKSPACE }
       : { CLAUDE_FIRST_LEAD_PLANNING: "true", CLAUDE_FIRST_LEAD_PLANNING_WORKSPACES: WORKSPACE }),

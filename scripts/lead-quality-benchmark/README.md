@@ -17,7 +17,7 @@ Founders of SaaS startups hiring Sales Operations in the United States
 ## Safety model (read first)
 
 - **TEST only.** The harness refuses to run unless the resolved Supabase project
-  ref is exactly `luvostyizefajbltukkc`. Production (`luvostyizefajbltukkc`),
+  ref is exactly `ohsdatpvfdjdemstoiuj`. Production (`ohsdatpvfdjdemstoiuj`),
   unknown projects, missing credentials, missing TEST workspace identity, or
   unbounded Apify settings all terminate the run **before any request**
   (`env-guard.ts`).
@@ -88,7 +88,7 @@ npm run qa:lead-quality -- --mode=replay  --run-id=<id>
 ### Environment for a LIVE run (operator-supplied; never committed)
 
 ```
-VITE_SUPABASE_PROJECT_ID=luvostyizefajbltukkc   # or a TEST *.supabase.co URL
+VITE_SUPABASE_PROJECT_ID=ohsdatpvfdjdemstoiuj   # or a TEST *.supabase.co URL
 VITE_SUPABASE_ANON_KEY=<test anon key>
 SUPABASE_SERVICE_ROLE_KEY=<test service role>    # optional; used as bearer
 APIFY_API_TOKEN=<apify token>                    # configured in TEST edge runtime
