@@ -31,9 +31,23 @@ export function getBrainDefaults() {
   };
 }
 
+/**
+ * Merge a patch over an existing profile.
+ *
+ * The patch parameter was `StructuredBrainPatch & Record<string, unknown>`,
+ * which no caller could ever satisfy with the very type it names: an INTERFACE
+ * never gains an implicit index signature, so `StructuredBrainPatch` is not
+ * assignable to `Record<string, unknown>` and the intersection was
+ * unsatisfiable. The one edge-function caller passed exactly that type and
+ * failed to typecheck.
+ *
+ * A union says what was actually meant — a structured patch, OR a bag of keys
+ * from an untyped source — and every index access in the body was already
+ * casting, so nothing here relied on the intersection being true.
+ */
 export function mergeProfile(
   existing: Record<string, unknown> | null | undefined,
-  patch: StructuredBrainPatch & Record<string, unknown>,
+  patch: StructuredBrainPatch | Record<string, unknown>,
 ): Record<string, unknown> {
   const base: Record<string, unknown> = existing && typeof existing === 'object' ? { ...existing } : {};
   const defaults = getBrainDefaults() as Record<string, Record<string, unknown>>;

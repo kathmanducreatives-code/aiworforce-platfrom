@@ -101,11 +101,20 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token);
-    if (claimsErr || !claimsData?.claims?.sub) {
+    // `getUser`, like every other function in this repo.
+    //
+    // This was the sole caller of `auth.getClaims`, which the pinned
+    // supabase-js@2 typings do not carry — the one thing standing between this
+    // function and a clean typecheck. Aligning it is also the safer of the two:
+    // `getClaims` verifies the JWT locally, so a session revoked seconds ago
+    // still presents a valid signature, while `getUser` asks the auth server and
+    // rejects it. For a token arriving from a browser that is the difference
+    // that matters.
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !userData?.user?.id) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    const userId = claimsData.claims.sub as string;
+    const userId = userData.user.id;
 
     const body = await req.json().catch(() => null);
     const message = typeof body?.message === 'string' ? body.message.trim() : '';

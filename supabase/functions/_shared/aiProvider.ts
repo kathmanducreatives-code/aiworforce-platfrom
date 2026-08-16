@@ -10,6 +10,14 @@ export type TaskType =
   | "orchestration_plan"
   | "agent_execution"
   | "tool_input_planning"
+  // COMPANY BRAIN. These were being PASSED already, by `setup-company-brain`,
+  // without being members — so `DEFAULT_MODELS[opts.taskType]` returned
+  // `undefined` and the first provider attempt went out with no model at all.
+  // Lovable rejected it, and the call quietly succeeded on the alt-model
+  // fallback: a wasted round trip and an unasked-for model on every Company
+  // Brain request, invisible because the end result still arrived.
+  | "company_brain_analyze"
+  | "company_brain_followups"
   | "helper";
 
 export interface ChatMessage {
@@ -46,11 +54,18 @@ export interface GenerateResult {
 const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// `Record<TaskType, string>` on purpose: a new task type cannot be added
+// without choosing a model for it, which is what would have caught the two
+// below before they reached production.
 const DEFAULT_MODELS: Record<TaskType, string> = {
   pilot_chat: "google/gemini-3-flash-preview",
   orchestration_plan: "google/gemini-3-flash-preview",
   agent_execution: "google/gemini-3-flash-preview",
   tool_input_planning: "google/gemini-3-flash-preview",
+  // Both are substantive generation over a company's own material, so they get
+  // the same model as the other real tasks rather than the helper tier.
+  company_brain_analyze: "google/gemini-3-flash-preview",
+  company_brain_followups: "google/gemini-3-flash-preview",
   helper: "google/gemini-2.5-flash-lite",
 };
 
