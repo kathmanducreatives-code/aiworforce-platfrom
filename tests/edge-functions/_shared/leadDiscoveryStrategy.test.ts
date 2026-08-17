@@ -38,6 +38,10 @@ const MISSION = {
     business_models: [], verticals: ["artificial intelligence"], stages: ["startup"],
     locations: ["United States"], employee_range: { min: 5, max: 200 },
   },
+  // Named companies: these suites test SELECTION MECHANICS, and a name matcher
+  // is legitimately usable for a lookup mission. Without this they would be
+  // concept missions, which `actor_not_for_semantic_discovery` now refuses.
+  known_companies: ["Anthropic", "Figma"],
   required_signals: [], decision_makers: { roles: [], current_employment_required: true },
   hard_constraints: {}, soft_preferences: {},
   required_capabilities: [], prohibited_capabilities: [],

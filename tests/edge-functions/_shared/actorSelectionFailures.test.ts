@@ -177,9 +177,14 @@ Deno.test("11. a valid multi-actor proposal is allowed through intact", () => {
       rationale: "YC covers early-stage US startups and carries hiring state",
     },
     {
-      actor_key: "apify_linkedin_company_search", role: "breadth",
-      input: { searchQuery: "Anthropic" },
-      rationale: "reaches companies outside YC",
+      // NOT the LinkedIn name matcher: this MISSION is a concept cohort
+      // ("AI startups"), and that actor declares itself `not_for`
+      // semantic/concept search — so it is now correctly refused here. Using it
+      // as the multi-actor control would have asserted the very defect this
+      // file exists to prevent.
+      actor_key: "apify_yc_companies_solidcode", role: "fallback",
+      input: {},
+      rationale: "a second registered startup source",
     },
   ], MISSION);
 

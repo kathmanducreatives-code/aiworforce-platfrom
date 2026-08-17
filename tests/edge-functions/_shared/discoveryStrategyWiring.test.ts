@@ -31,6 +31,10 @@ const mission = (): LeadMissionV1 => {
   const m = parseLeadMissionDeterministic(CANONICAL);
   return {
     ...m, requested_count: 10,
+    // Named companies: this suite tests WIRING, and a name matcher is
+    // legitimately usable for a lookup mission. Without this it is a concept
+    // mission, which `actor_not_for_semantic_discovery` now refuses.
+    known_companies: ["Anthropic", "Figma"],
     company_profile: { ...m.company_profile, employee_range: { min: 10, max: 500 } },
   };
 };

@@ -287,6 +287,46 @@ export function compileActorInput(
  * deterministic one, so the caller never has to handle "no strategy" — the
  * floor of this whole mechanism is the behaviour it replaces.
  */
+/** The concept terms a mission discovers by, when it names no companies. */
+export function conceptTermsOf(mission: LeadMissionV1): string[] {
+  const p = mission.company_profile ?? {} as LeadMissionV1["company_profile"];
+  return [...new Set([
+    ...(p.verticals ?? []),
+    ...(p.business_models ?? []),
+    ...(p.stages ?? []),
+  ].map((s) => String(s).trim()).filter(Boolean))];
+}
+
+/**
+ * Is this mission asking for a COHORT rather than named companies?
+ *
+ * The distinction the 2026-08-17 run turned on. "AI startups in the US" names
+ * no company — it describes a kind. Resolving it requires an actor that can
+ * search by concept. "Find contacts at Anthropic and Figma" names two, and a
+ * name matcher is exactly the right tool for that.
+ */
+export function missionNeedsSemanticDiscovery(mission: LeadMissionV1): boolean {
+  const named = (mission as { known_companies?: unknown[] }).known_companies ?? [];
+  if (Array.isArray(named) && named.length > 0) return false;
+  return conceptTermsOf(mission).length > 0;
+}
+
+/**
+ * Terms in `not_for` that mean "cannot discover a concept cohort".
+ *
+ * `"primary discovery"` is deliberately NOT here, though it reads like it
+ * belongs. It is a ROLE constraint — solidcode says "do not open a run with
+ * me", which is about ordering — not a CAPABILITY one. Including it blocked
+ * solidcode as a legitimate fallback and broke three passing tests, which is
+ * how the distinction surfaced. Role is enforced by the primary → breadth →
+ * fallback ordering; this regex is only about what an actor can SEARCH BY.
+ */
+const SEMANTIC_UNFIT = /semantic|concept/i;
+
+export function declaresUnfitForSemantic(card: HiringActorCard): boolean {
+  return (card.not_for ?? []).some((n) => SEMANTIC_UNFIT.test(String(n)));
+}
+
 export function validateDiscoveryStrategy(
   proposals: unknown, mission: LeadMissionV1, opts: DiscoveryStrategyOptions = {},
 ): DiscoveryStrategy {
@@ -339,6 +379,34 @@ export function validateDiscoveryStrategy(
       violations.push({
         code: "actor_not_for_discovery", actor_key: key,
         message: `${key} is registered for ${card.purposes.join(", ")}, not ${DISCOVERY_PURPOSE}`,
+        severity: "block",
+      });
+      continue;
+    }
+    // ── `not_for` IS ENFORCED, NOT JUST BRIEFED ────────────────────────────
+    //
+    // The catalog has always carried `not_for`, and the planner prompt has
+    // always shown it — "An actor listed as not_for a task…". Nothing checked
+    // it. On 2026-08-17 (task e01dbd5b) that gap cost a whole run: the mission
+    // was "AI startups", GPT selected `apify_linkedin_company_search`, and that
+    // actor's own card says `not_for: [… "semantic/concept search" …]`.
+    //
+    // It is a company-NAME matcher. Asked to discover a concept it returned 20
+    // LinkedIn pages whose names contain the words: `AI Central | ChatGPT &
+    // Generative AI Tutorials`, `Startup San Diego`, `AWS AI`, `NVIDIA AI`.
+    // Two of twenty were plausibly companies. Everything downstream —
+    // 6 enriched, 0 evaluated, 0 qualified — was that pool, not a budget.
+    //
+    // A mission that names no specific companies and discovers by concept
+    // (vertical, stage, business model) IS a semantic search. An actor that
+    // declares itself unfit for one may not perform it.
+    if (missionNeedsSemanticDiscovery(mission) && declaresUnfitForSemantic(card)) {
+      violations.push({
+        code: "actor_not_for_semantic_discovery", actor_key: key,
+        message:
+          `${key} declares not_for "${card.not_for.join('", "')}" — this mission ` +
+          `discovers by concept (${conceptTermsOf(mission).join(", ")}) and names no ` +
+          `specific companies, so a name matcher cannot produce this cohort`,
         severity: "block",
       });
       continue;
