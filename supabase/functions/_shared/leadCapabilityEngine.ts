@@ -694,10 +694,11 @@ export interface CapabilityEngineDeps {
   /**
    * STAGE 3/4 — WHICH DISCOVERY ACTORS RUN, AND WHAT EACH IS ASKED.
    *
-   * Absent, `deterministicDiscoveryStrategy` runs: memo23 primary, solidcode
-   * fallback, with the same literal as before. So a deployment that never wires
-   * this dependency behaves exactly as it does today, and the model can only
-   * ever widen what discovery asks — never narrow it below the current floor.
+   * REQUIRED. Absent, the run BLOCKS. There is no longer a floor beneath this
+   * stage: the old one ran memo23 with `industries: ["B2B"]`, which answered
+   * every mission with the same question and is deleted. A deployment that does
+   * not wire this cannot discover, which is the honest outcome — the previous
+   * behaviour was to discover the wrong thing confidently.
    *
    * The return is a PROPOSAL. `validateDiscoveryStrategy` decides what of it is
    * allowed against the closed actor catalog; a throw, a null or an unusable
@@ -1085,11 +1086,12 @@ export async function runCapabilityPlan(
   /**
    * The discovery strategy for this run, model-proposed where possible.
    *
-   * NEVER THROWS AND NEVER RETURNS NOTHING. A selector that is absent, slow,
-   * broken, or wrong is not a reason to stop discovering — it is a reason to
-   * discover the way the system did before there was a selector at all. Every
-   * failure path lands on `deterministicDiscoveryStrategy`, so the floor of
-   * this stage is the behaviour it replaced.
+   * NEVER THROWS; RETURNS A `blocked` STRATEGY INSTEAD. A selector that is
+   * absent, slow, broken or wrong IS a reason to stop discovering. It used to
+   * be a reason to discover the way the system did before selectors existed,
+   * and that floor is what made a model outage indistinguishable from a
+   * deliberate YC search. The caller — not this function — turns `blocked` into
+   * the raised error, so the strategy is recorded before the run stops.
    */
   const resolveDiscoveryStrategy = async (): Promise<DiscoveryStrategy> => {
     const limits = {
