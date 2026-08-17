@@ -53,10 +53,14 @@ export interface GptRequest {
   system: string;
   user: string;
   /**
-   * REQUIRED. Every call in this workflow returns a typed object, never prose.
-   * A stage that cannot state its output shape has not been designed yet.
+   * The output contract, when this caller has no validator of its own.
+   *
+   * OMIT IT ONLY when a downstream parser already owns the shape — see the
+   * `response_format` note in `gptStructured`. Every call still returns a JSON
+   * object either way; the question is only which layer defines its contents,
+   * and there must be exactly one.
    */
-  schema: GptSchema;
+  schema?: GptSchema;
   maxTokens?: number;
   /**
    * Defaults to 0. These are decisions, not drafts — the same request should
@@ -160,10 +164,28 @@ export async function gptStructured<T>(
         // unable to return a shape the schema forbids, which removes the whole
         // class of "the model answered in prose today" failures that a
         // parse-and-hope approach lives with.
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: req.schema.name, strict: true, schema: req.schema.schema },
-        },
+        //
+        // ── WHY A SCHEMA IS OPTIONAL ──────────────────────────────────────
+        //
+        // A schema here is a SECOND statement of what a valid answer is. Where
+        // the caller has no other validator that is exactly what you want. But
+        // several lead-intelligence stages answer through
+        // `intelligence/plannerWrapper`, which already parses the envelope,
+        // scans it for injection, and makes one constrained repair — it IS the
+        // authority on their shape. Declaring a strict schema in front of it
+        // would create two definitions of one contract, and two definitions
+        // drift; that drift is precisely how a field the parser reads becomes
+        // unemittable and a constraint silently disappears.
+        //
+        // So a caller WITH its own validator asks for `json_object` — the
+        // answer is still guaranteed to be JSON, and the existing parser stays
+        // the single authority on what the JSON must contain.
+        response_format: req.schema
+          ? {
+            type: "json_schema",
+            json_schema: { name: req.schema.name, strict: true, schema: req.schema.schema },
+          }
+          : { type: "json_object" },
       }),
     });
 

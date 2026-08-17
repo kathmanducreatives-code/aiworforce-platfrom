@@ -188,7 +188,7 @@ Deno.test("D. new_architecture without a mission fails closed, no parser", async
 // exemption was the rule, and every run spent against a regex reading.
 Deno.test("E. an uncompiled mission is refused even in a legacy workspace", () => {
   const deterministic = getLeadIntelligenceCapabilities(MY, () => undefined);
-  assertEquals(deterministic.mode, "deterministic", "the legacy label is unchanged");
+  assertEquals(deterministic.mode, "new_architecture", "one mode, everywhere");
   assert(deterministic.expects_compiled_mission, "but compilation is now expected");
 
   const mission = parseLeadMissionDeterministic(QUERY, { requestedCount: 10 });

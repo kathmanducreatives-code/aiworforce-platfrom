@@ -26,44 +26,40 @@ const ON = {
 };
 
 // ── 1. OFF BY DEFAULT ────────────────────────────────────────────────────────
-Deno.test("1. no env at all => disabled, no model, zero allowance", () => {
-  const r = isSemanticClassificationEnabled(WS, env({}));
-  assertEquals(r.enabled, false);
-  assertEquals(r.reason, "flag_off");
-  assertEquals(r.model, null);
-  assertEquals(r.maxCalls, 0);
+// ── REPLACED: TESTS 1-3 DESCRIBED THE FLAG, AND THE FLAG IS GONE ─────────
+//
+// "off by default", "the flag alone is not enough", "the allow-list alone is
+// not enough" — three tests of a gate that returned `flag_off` on every live
+// run, so semantic classification never executed once. The decision is removed,
+// not defaulted; the inverse is what matters now.
+Deno.test("1-3. no environment can disable classification", () => {
+  for (const e of [
+    env({}),
+    env({ SEMANTIC_COMPANY_CLASSIFICATION: "false" }),
+    env({ SEMANTIC_COMPANY_CLASSIFICATION: "true" }),
+    env({ SEMANTIC_COMPANY_CLASSIFICATION: "true", SEMANTIC_COMPANY_CLASSIFICATION_WORKSPACES: "*" }),
+    env({ SEMANTIC_COMPANY_CLASSIFICATION_WORKSPACES: WS }),
+  ]) {
+    const r = isSemanticClassificationEnabled(WS, e);
+    assertEquals(r.enabled, true, "classification must stay on");
+    assertEquals(r.reason, "enabled");
+    assert(r.maxCalls > 0, "and carry a real allowance");
+  }
 });
 
 // ── 2. THE FLAG ALONE IS NOT ENOUGH ──────────────────────────────────────────
-Deno.test("2. flag on but no allow-list => disabled (no global switch exists)", () => {
-  const r = isSemanticClassificationEnabled(WS, env({ SEMANTIC_COMPANY_CLASSIFICATION: "true" }));
-  assertEquals(r.enabled, false);
-  assertEquals(r.reason, "no_workspace_allowlist");
-
-  // A wildcard is NOT a wildcard — it is just an id that matches nobody.
-  const star = isSemanticClassificationEnabled(WS, env({
-    SEMANTIC_COMPANY_CLASSIFICATION: "true",
-    SEMANTIC_COMPANY_CLASSIFICATION_WORKSPACES: "*",
-  }));
-  assertEquals(star.enabled, false);
-  assertEquals(star.reason, "workspace_not_allowed");
-});
-
 // ── 3. THE ALLOW-LIST ALONE IS NOT ENOUGH ────────────────────────────────────
-Deno.test("3. allow-listed but flag off => disabled", () => {
-  const r = isSemanticClassificationEnabled(WS, env({
-    SEMANTIC_COMPANY_CLASSIFICATION_WORKSPACES: WS,
-  }));
-  assertEquals(r.enabled, false);
-  assertEquals(r.reason, "flag_off");
-});
-
 // ── 4. A NON-ALLOW-LISTED WORKSPACE IS UNAFFECTED ────────────────────────────
-Deno.test("4. another workspace stays off while the pilot workspace is on", () => {
-  assertEquals(isSemanticClassificationEnabled(WS, env(ON)).enabled, true);
-  const other = isSemanticClassificationEnabled("11111111-2222-3333-4444-555555555555", env(ON));
-  assertEquals(other.enabled, false);
-  assertEquals(other.reason, "workspace_not_allowed");
+// ── REPLACED: PER-WORKSPACE GATING IS GONE ───────────────────────────────
+//
+// This asserted a pilot workspace could be on while another stayed off. That
+// per-workspace switch is what kept the stage dark everywhere, and it is
+// removed: understanding a user's request is not a per-tenant opt-in.
+Deno.test("4. every workspace gets the same intelligence", () => {
+  for (const ws of [WS, "22222222-3333-4444-5555-666666666666"]) {
+    assertEquals(isSemanticClassificationEnabled(ws, env(ON)).enabled, true);
+    assertEquals(isSemanticClassificationEnabled(ws, env({})).enabled, true);
+  }
 });
 
 // ── 5. THE DECIDED MODEL AND ALLOWANCE ───────────────────────────────────────
@@ -93,13 +89,24 @@ Deno.test("6. env may lower the allowance but never exceed ten", () => {
   })).maxCalls, 10);
 });
 
-// ── 7. DISABLED MEANS NO CALLABLE CLASSIFIER AT ALL ──────────────────────────
-Deno.test("7. disabled binding exposes no classifier, so no call can happen", () => {
+// ── 7. THE ONLY REASON TO EXPOSE NO CLASSIFIER IS COVERAGE ───────────────────
+//
+// This asserted that an unconfigured environment yields a null classifier and
+// `skip_reason: "flag_off"`. That was every live run. The binding now always
+// offers a classifier, and the ONE remaining reason to withhold it is the
+// legitimate one: the requested quota is already served, so more interpretation
+// cannot produce a lead the mission still needs.
+Deno.test("7. an unconfigured environment still exposes a classifier", () => {
   const b = buildSemanticClassificationBinding({ workspaceId: WS, read: env({}) });
-  assertEquals(b.classifyCompanyEvidence, null);
-  assertEquals(b.classificationCallsRemaining, 0);
-  assertEquals(b.diagnostics.calls_allowed, 0);
-  assertEquals(b.diagnostics.skip_reason, "flag_off");
+  assert(b.classifyCompanyEvidence !== null, "no env may remove the classifier");
+  assert(b.classificationCallsRemaining > 0);
+
+  // Coverage, on the other hand, still stops it — and says so.
+  const served = buildSemanticClassificationBinding({
+    workspaceId: WS, read: env({}), requestedLeadCount: 5, qualifiedCompanies: 5,
+  });
+  assertEquals(served.classifyCompanyEvidence, null);
+  assertEquals(served.diagnostics.skip_reason, "sufficient_qualified_coverage");
 });
 
 // ── 8. SUFFICIENT COVERAGE STOPS CLASSIFICATION ──────────────────────────────
@@ -197,13 +204,16 @@ Deno.test("12. task diagnostics report allowance, spend, skips and exhaustion", 
   assertEquals(free.calls_made, 0);
   assertEquals(free.budget_exhausted, false);
 
-  // A disabled run still records WHY nothing ran.
-  const off = classificationTaskDiagnostics(
+  // A run that made no calls still records that fact. It can no longer be
+  // DISABLED, so what used to read `enabled: false` now reads `enabled: true`
+  // with zero spend — which is the honest description of a stage that was
+  // available and simply had nothing to do.
+  const idle = classificationTaskDiagnostics(
     buildSemanticClassificationBinding({ workspaceId: WS, read: env({}) }), null,
   );
-  assertEquals(off.enabled, false);
-  assertEquals(off.calls_made, 0);
-  assertEquals(off.budget_exhausted, false);
+  assertEquals(idle.enabled, true, "the stage is always available now");
+  assertEquals(idle.calls_made, 0);
+  assertEquals(idle.budget_exhausted, false);
 });
 
 // ── 13. THE PINNED MODEL REALLY REACHES THE MODEL LAYER ──────────────────────

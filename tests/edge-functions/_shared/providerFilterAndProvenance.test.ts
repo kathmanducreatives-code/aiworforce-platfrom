@@ -187,7 +187,7 @@ Deno.test("6. a model-compiled mission proceeds", () => {
 // is now the architecture. So the assertion flips.
 Deno.test("7. a deterministic mission is refused in EVERY workspace", () => {
   const deterministicWs = getLeadIntelligenceCapabilities(MY, () => undefined);
-  assertEquals(deterministicWs.mode, "deterministic", "the legacy label is unchanged");
+  assertEquals(deterministicWs.mode, "new_architecture", "one mode, everywhere");
 
   const mission = missionWith({
     mission_parser_source: "deterministic_fallback",

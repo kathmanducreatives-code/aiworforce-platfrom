@@ -499,28 +499,23 @@ Deno.test("31b. review and watch can be excluded by policy", () => {
 
 // ═══════════════════════════════════════════════ 41-45. flags & safety ══
 
-Deno.test("41-44. both features are off by default and QA-only when on", () => {
-  assertEquals(isFullPoolEvaluationEnabled(WS, env({})).reason, "flag_off");
-  assertEquals(
-    isFullPoolEvaluationEnabled(WS, env({ [FULL_POOL_FLAG]: "true" })).reason,
-    "no_workspace_allowlist");
-  assertEquals(
-    isFullPoolEvaluationEnabled("other-ws", env({
-      [FULL_POOL_FLAG]: "true", [FULL_POOL_WORKSPACES_ENV]: WS,
-    })).reason, "workspace_not_allowed");
-  assert(isFullPoolEvaluationEnabled(WS, env({
-    [FULL_POOL_FLAG]: "true", [FULL_POOL_WORKSPACES_ENV]: WS,
-  })).enabled);
-
-  // Ranking mode must be spelled exactly to enforce.
-  const on = { [POOL_RANKING_FLAG]: "true", [POOL_RANKING_WORKSPACES_ENV]: WS };
-  assertEquals(isPoolRankingEnabled(WS, env(on)).mode, "shadow");
-  assertEquals(
-    isPoolRankingEnabled(WS, env({ ...on, [POOL_RANKING_MODE_ENV]: "ENFORCED" })).mode,
-    "shadow", "a misspelled mode must not enforce");
-  assertEquals(
-    isPoolRankingEnabled(WS, env({ ...on, [POOL_RANKING_MODE_ENV]: "enforce" })).mode,
-    "enforce");
+// ── REPLACED: THE FLAG ARCHITECTURE IS GONE ───────────────────────────────
+//
+// This asserted the flag's own semantics — off by default, an empty allow-list
+// enabling nobody, a non-listed workspace refused. Every one of those states
+// meant "not enabled", and the flag was never set on the live project, so the
+// stage never ran once. The decision was REMOVED rather than defaulted, so what
+// is asserted now is the inverse: no environment can switch understanding off.
+Deno.test("41-44. no environment can disable pool evaluation or ranking", () => {
+  for (const e of [
+    env({}),
+    env({ [FULL_POOL_FLAG]: "false" }),
+    env({ [FULL_POOL_FLAG]: "true" }),
+    env({ [FULL_POOL_FLAG]: "true", [FULL_POOL_WORKSPACES_ENV]: "someone-else" }),
+  ]) {
+    assert(isFullPoolEvaluationEnabled(WS, e).enabled, "full-pool evaluation must stay on");
+    assert(isPoolRankingEnabled(WS, e).enabled, "ranking must stay on");
+  }
 });
 
 Deno.test("45. nothing in this stage can reach a person", () => {

@@ -77,79 +77,35 @@ const preflight = (
 
 // ═════════════════════════════ A. workspace consistency ══
 
-Deno.test("A1. the production inversion is detected and refuses to spend", () => {
-  // EXACTLY what TEST held: Stage 1-4 for QA only, and My Company gets none of
-  // them while other model-spending features are on for it.
-  const live = env(allOn(QA));
-  const my = getLeadIntelligenceCapabilities(MY, live);
-
-  assertEquals(my.mode, "deterministic",
-    "with every required stage off, the deterministic path is intended");
-  assertFalse(my.paid_new_architecture_allowed);
-  // ── UPDATED 2026-08-17: EVERY WORKSPACE EXPECTS A COMPILED MISSION ─────
-  //
-  // This asserted `expects_compiled_mission` followed the flag. That is what
-  // made the preflight's `mission_not_model_compiled` block dead on every live
-  // run: flag unset ⇒ no compiled mission expected ⇒ spending against a regex
-  // reading was permitted. Compilation is now unconditional, so the
-  // expectation is too.
-  assert(my.expects_compiled_mission, "compilation is no longer optional");
-
-  // And QA gets the whole thing.
-  const qa = getLeadIntelligenceCapabilities(QA, live);
-  assertEquals(qa.mode, "new_architecture");
-  assert(qa.paid_new_architecture_allowed);
-  assert(qa.expects_compiled_mission);
-});
-
-Deno.test("A2. a PARTIAL architecture is unsupported and blocks paid execution", () => {
-  // The dangerous shape: compiler on, evaluation and rounds off.
-  const partial = getLeadIntelligenceCapabilities(MY, env({
-    ...allOn(MY),
-    FULL_POOL_GROUNDED_EVALUATION: "false",
-    MULTI_ROUND_SOURCING: "false",
-  }));
-
-  assertEquals(partial.mode, "inconsistent");
-  assertFalse(partial.paid_new_architecture_allowed, "half-in must never spend");
-  assertEquals(partial.missing_required.sort(),
-    ["full_pool_evaluation", "multi_round"]);
-  assert(partial.reason.includes("unsupported partial architecture"));
-
-  // …and the preflight refuses it, on a mission that is otherwise perfect.
-  const pf = preflight(compiled(hiringMission()), partial);
-  assertFalse(pf.ok);
-  assert(pf.blocked.some((b) => b.code === "inconsistent_intelligence_configuration"));
-
-  let threw = false;
-  try { assertPaidExecutionAllowed(pf); } catch { threw = true; }
-  assert(threw, "the block must be enforced, not merely recorded");
-});
-
-Deno.test("A3. every required stage together is what makes a workspace whole", () => {
-  const full = allOn(MY);
-  // Turning off ANY ONE required stage breaks the whole.
-  for (const stage of REQUIRED_FOR_PAID_SOURCING) {
-    const flag: string = {
-      mission_compiler: "GPT_LEAD_MISSION_COMPILER",
-      grounded_brain: "GROUNDED_COMPANY_BRAIN",
-      full_pool_evaluation: "FULL_POOL_GROUNDED_EVALUATION",
-      multi_round: "MULTI_ROUND_SOURCING",
-      pool_ranking: "GPT_POOL_RANKING",
-    }[stage];
-    const c = getLeadIntelligenceCapabilities(MY, env({ ...full, [flag]: "false" }));
-    assertEquals(c.mode, "inconsistent", `${stage} off must be inconsistent`);
-    assertFalse(c.paid_new_architecture_allowed);
+// ── REPLACED: A1-A3 DESCRIBED A MODE THAT NO LONGER EXISTS ───────────────
+//
+// These covered the three modes the stage flags could produce:
+//   `deterministic`  — no stage on. The live state of every workspace, and the
+//                      policy called it "the INTENDED behaviour".
+//   `inconsistent`   — some stages on, some off. Blocks paid execution.
+//   `new_architecture` — all five on. Never reached in production.
+//
+// With the flags removed there is exactly one mode. `inconsistent` in
+// particular was a live hazard during this refactor: after five stages were
+// ungated but `isMissionCompilerEnabled` still read its flag, the policy
+// returned `inconsistent` and would have blocked every paid run.
+Deno.test("A1-A3. there is one mode, and every workspace is in it", () => {
+  for (const ws of [MY, QA]) {
+    for (const read of [() => undefined, env(allOn(QA)), env({})]) {
+      const c = getLeadIntelligenceCapabilities(ws, read as never);
+      assertEquals(c.mode, "new_architecture", `${ws} must be on the canonical path`);
+      assert(c.paid_new_architecture_allowed, "and permitted to spend");
+      assert(c.expects_compiled_mission, "and to expect a compiled mission");
+      assertEquals(c.missing_required, [], "with no stage missing");
+    }
   }
-  // Ranking is deliberately NOT required — it has a shadow mode.
-  const noRanking = getLeadIntelligenceCapabilities(MY, env({
-    ...full, GPT_POOL_RANKING: "false",
-  }));
-  assertEquals(noRanking.mode, "new_architecture",
-    "ranking must not block: shadow rollout depends on it being optional");
-});
 
-// ═══════════════════════════════ B. compiler failure ══
+  // Every required stage is genuinely on, not merely reported as such.
+  const stages = getLeadIntelligenceCapabilities(MY, () => undefined).stages;
+  for (const [name, on] of Object.entries(stages)) {
+    assert(on, `${name} must be enabled — no stage may be dark`);
+  }
+});
 
 Deno.test("B1. compiler enabled + no directives ⇒ compilation failed ⇒ zero spend", () => {
   const whole = getLeadIntelligenceCapabilities(MY, env(allOn(MY)));
@@ -187,9 +143,10 @@ Deno.test("B2. compiler enabled + directives present ⇒ the run proceeds", () =
 // What survives is the part that was always right — a mission the model DID
 // compile must not be accused of a failed compilation.
 Deno.test("C1. a model-compiled mission is not accused of failing to compile", () => {
+  // Once labelled "deterministic" for this workspace; there is one mode now.
   const det = getLeadIntelligenceCapabilities(MY, env(allOn(QA)));
-  assertEquals(det.mode, "deterministic", "the legacy mode label is unchanged");
-  assert(det.expects_compiled_mission, "but a compiled mission is expected regardless");
+  assertEquals(det.mode, "new_architecture");
+  assert(det.expects_compiled_mission, "a compiled mission is expected everywhere");
 
   // `compiled()` adds `directives`, the provenance marker of a real model
   // reading. The bare `hiringMission()` fixture is a DETERMINISTIC mission, and

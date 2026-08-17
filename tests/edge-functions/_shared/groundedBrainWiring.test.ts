@@ -215,19 +215,22 @@ Deno.test("7. the Workbench explanation is built from validated claims only", as
 
 // ═══════════════════════════════════════════════════ 8-14. feature flags ══
 
-Deno.test("8-10. disabled, empty allow-list and non-listed workspace all stay legacy", () => {
-  assertEquals(isGroundedBrainEnabled(WS, env({})).reason, "flag_off");
-  assertEquals(
-    isGroundedBrainEnabled(WS, env({ [GROUNDED_BRAIN_FLAG]: "true" })).reason,
-    "no_workspace_allowlist");
-  assertEquals(
-    isGroundedBrainEnabled(WS, env({
-      [GROUNDED_BRAIN_FLAG]: "true", [GROUNDED_BRAIN_WORKSPACES_ENV]: "someone-else",
-    })).reason, "workspace_not_allowed");
-  // Disabled means NO binding at all — not a binding that returns nothing.
-  assertEquals(
-    buildGroundedBrainBinding({ workspaceId: WS, read: env({}), originalUserQuery: null })
-      .groundCompany, null);
+// ── REPLACED: THE FLAG ARCHITECTURE IS GONE ───────────────────────────────
+//
+// This asserted the flag's own semantics — off by default, an empty allow-list
+// enabling nobody, a non-listed workspace refused. Every one of those states
+// meant "not enabled", and the flag was never set on the live project, so the
+// stage never ran once. The decision was REMOVED rather than defaulted, so what
+// is asserted now is the inverse: no environment can switch understanding off.
+Deno.test("8-10. no environment can disable grounded qualification", () => {
+  for (const e of [
+    env({}),
+    env({ [GROUNDED_BRAIN_FLAG]: "false" }),
+    env({ [GROUNDED_BRAIN_FLAG]: "true" }),
+    env({ [GROUNDED_BRAIN_FLAG]: "true", [GROUNDED_BRAIN_WORKSPACES_ENV]: "someone-else" }),
+  ]) {
+    assert(isGroundedBrainEnabled(WS, e).enabled, "grounded qualification must stay on");
+  }
 });
 
 Deno.test("11. an unrecognised or absent mode observes rather than enforces", () => {

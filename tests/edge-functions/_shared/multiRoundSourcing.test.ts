@@ -727,34 +727,22 @@ Deno.test("50-53. no provider, no production and no protected file is reachable"
   }
 });
 
-Deno.test("flag: off by default, and an empty allow-list enables nobody", () => {
+// ── REPLACED: THE FLAG ARCHITECTURE IS GONE ───────────────────────────────
+//
+// This asserted the flag's own semantics — off by default, an empty allow-list
+// enabling nobody, a non-listed workspace refused. Every one of those states
+// meant "not enabled", and the flag was never set on the live project, so the
+// stage never ran once. The decision was REMOVED rather than defaulted, so what
+// is asserted now is the inverse: no environment can switch understanding off.
+Deno.test("flag: no environment can disable multi-round sourcing", () => {
   const QA = "11111111-2222-4333-8444-555555555555";
-  const env = (o: Record<string, string>) => (k: string) => o[k];
-
-  assertFalse(isMultiRoundEnabled(QA, env({})).enabled);
-  assertEquals(isMultiRoundEnabled(QA, env({})).reason, "flag_off");
-  assertEquals(
-    isMultiRoundEnabled(QA, env({ MULTI_ROUND_SOURCING: "true" })).reason,
-    "no_workspace_allowlist");
-  assertEquals(
-    isMultiRoundEnabled("other", env({
-      MULTI_ROUND_SOURCING: "true", MULTI_ROUND_SOURCING_WORKSPACES: QA,
-    })).reason, "workspace_not_allowed");
-
-  const on = isMultiRoundEnabled(QA, env({
-    MULTI_ROUND_SOURCING: "true", MULTI_ROUND_SOURCING_WORKSPACES: QA,
-  }));
-  assert(on.enabled);
-  assertEquals(on.maxRounds, 3);
-
-  // A misconfigured ceiling makes a run SMALLER, never unbounded.
-  const huge = isMultiRoundEnabled(QA, env({
-    MULTI_ROUND_SOURCING: "true", MULTI_ROUND_SOURCING_WORKSPACES: QA,
-    MULTI_ROUND_SOURCING_MAX_ROUNDS: "99",
-    MULTI_ROUND_SOURCING_MAX_COST_UNITS: "9999",
-  }));
-  assertEquals(huge.maxRounds, 3);
-  assertEquals(huge.maxProviderCostUnits, 12);
+  const e = (o: Record<string, string>) => (k: string) => o[k];
+  for (const r of [
+    e({}), e({ MULTI_ROUND_SOURCING: "false" }), e({ MULTI_ROUND_SOURCING: "true" }),
+    e({ MULTI_ROUND_SOURCING: "true", MULTI_ROUND_SOURCING_WORKSPACES: "other" }),
+  ]) {
+    assert(isMultiRoundEnabled(QA, r).enabled, "multi-round must stay on");
+  }
 });
 
 // ═══════════════════════ PART 18 — the offline three-round demonstration ══

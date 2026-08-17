@@ -149,14 +149,16 @@ export function isMissionCompilerEnabled(
   const off = (reason: CompilerEnablementReason): CompilerEnablement =>
     ({ enabled: false, reason, model: null });
 
-  const raw = get(MISSION_COMPILER_FLAG);
-  if (typeof raw !== "string" || !ENABLED_VALUES.has(raw.trim().toLowerCase())) {
-    return off("flag_off");
-  }
-  const allow = String(get(MISSION_COMPILER_WORKSPACES_ENV) ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length === 0) return off("no_workspace_allowlist");
-  if (!allow.includes(String(workspaceId))) return off("workspace_not_allowed");
+  // ── THE FLAG NO LONGER DECIDES ──────────────────────────────────────────
+  //
+  // Commit 2 stopped `buildMissionCompilerBinding` consulting this, but left
+  // the function itself flag-driven — and `getLeadIntelligenceCapabilities`
+  // reads it. So a workspace whose mission WAS GPT-compiled still reported
+  // `mission_compiler: false`, and with the other five stages now on, the policy
+  // returned `inconsistent`: a mode that blocks paid execution outright. The
+  // last remnant of the flag architecture, and it would have failed every run.
+  void workspaceId;
+  void off;
 
   return {
     enabled: true,

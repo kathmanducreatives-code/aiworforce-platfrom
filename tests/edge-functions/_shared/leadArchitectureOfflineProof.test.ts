@@ -360,12 +360,11 @@ Deno.test("6. all five enabled model stages reach the transport", async () => {
   for (const [name, drive] of stages) {
     const { calls } = await offline(MODEL_PROPOSAL, drive);
     assertEquals(calls.length, 1, `${name} did not reach the model transport`);
-    // The mission compiler is the one stage that has moved to GPT. The other
-    // four are still strategist-backed; migrating them is later commits' work,
-    // and asserting per stage is what keeps that migration honest rather than
-    // letting a loosened assertion cover all five.
-    const expected = name === "mission compiler" ? GPT_MODEL : DEFAULT_LEAD_INTELLIGENCE_MODEL;
-    assertEquals(calls[0].model, expected, `${name} sent an unexpected model id`);
+    // ALL FIVE STAGES ARE GPT NOW. This asserted per-stage while the migration
+    // was half done — mission compiler on GPT, the rest on the strategist. With
+    // the last four moved there is one expectation, and a stage that quietly
+    // reverted to Claude would fail here.
+    assertEquals(calls[0].model, GPT_MODEL, `${name} must run on GPT`);
     reached.push(name);
   }
 

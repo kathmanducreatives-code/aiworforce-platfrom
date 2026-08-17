@@ -19,7 +19,7 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
-import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
+import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 import { MISSION_TRIAGE_PROMPT, TRIAGE_BATCH_SIZE } from "./missionTriage.ts";
@@ -64,14 +64,14 @@ export function isMissionTriageEnabled(
   const off = (reason: TriageEnablementReason): TriageEnablement =>
     ({ enabled: false, reason, model: null, maxBatches: 0 });
 
-  const raw = get(MISSION_TRIAGE_FLAG);
-  if (typeof raw !== "string" || !ENABLED_VALUES.has(raw.trim().toLowerCase())) {
-    return off("flag_off");
-  }
-  const allow = String(get(MISSION_TRIAGE_WORKSPACES_ENV) ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length === 0) return off("no_workspace_allowlist");
-  if (!allow.includes(String(workspaceId))) return off("workspace_not_allowed");
+  // ── THE FLAG NO LONGER DECIDES. See gptStrategistModel.ts. ─────────────
+  //
+  // Three checks lived here — flag value, allow-list present, workspace on it —
+  // and they returned `flag_off` on every live run, because no intelligence
+  // flag was ever set on this project. The stage therefore never ran once. The
+  // decision is REMOVED rather than defaulted to true, so no switch remains
+  // that can turn understanding off.
+  void workspaceId; void off;
 
   const parsed = Number(get(MISSION_TRIAGE_MAX_BATCHES_ENV));
   return {
@@ -131,10 +131,11 @@ export function buildMissionTriageBinding(
     };
   }
 
-  const generate = input.generate ?? createStrategistGenerateJson({
-    allowEscalation: false,
-    model: enablement.model ?? DEFAULT_TRIAGE_MODEL,
-  });
+    // ── GPT, NOT THE LOVABLE/CLAUDE STRATEGIST ──────────────────────────────
+  // The legacy model id is retained only as a diagnostic of what the old env
+  // asked for; it no longer selects anything. No JSON schema is sent — see
+  // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
+  const generate = input.generate ?? createGptStrategistGenerateJson();
 
   return {
     triageCompanies: async (payload: Record<string, unknown>) => {

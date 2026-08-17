@@ -35,7 +35,7 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
-import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
+import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
   buildGroundedClassifierPayload, parseGroundedResult, verifyGroundedResult,
@@ -90,14 +90,14 @@ export function isGroundedBrainEnabled(
   const off = (reason: GroundedEnablementReason): GroundedEnablement =>
     ({ enabled: false, reason, mode: "shadow", model: null, threshold: DEFAULT_THRESHOLD });
 
-  const raw = get(GROUNDED_BRAIN_FLAG);
-  if (typeof raw !== "string" || !ENABLED_VALUES.has(raw.trim().toLowerCase())) {
-    return off("flag_off");
-  }
-  const allow = String(get(GROUNDED_BRAIN_WORKSPACES_ENV) ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length === 0) return off("no_workspace_allowlist");
-  if (!allow.includes(String(workspaceId))) return off("workspace_not_allowed");
+  // ── THE FLAG NO LONGER DECIDES. See gptStrategistModel.ts. ─────────────
+  //
+  // Three checks lived here — flag value, allow-list present, workspace on it —
+  // and they returned `flag_off` on every live run, because no intelligence
+  // flag was ever set on this project. The stage therefore never ran once. The
+  // decision is REMOVED rather than defaulted to true, so no switch remains
+  // that can turn understanding off.
+  void workspaceId; void off;
 
   // ENFORCE MUST BE SPELLED EXACTLY. Anything else observes.
   const mode: GroundingMode =
@@ -154,10 +154,11 @@ export function buildGroundedBrainBinding(
     return { groundCompany: null, mode: "shadow", enablement, diagnostics: base };
   }
 
-  const generate = input.generate ?? createStrategistGenerateJson({
-    allowEscalation: false,
-    model: enablement.model ?? DEFAULT_GROUNDED_MODEL,
-  });
+    // ── GPT, NOT THE LOVABLE/CLAUDE STRATEGIST ──────────────────────────────
+  // The legacy model id is retained only as a diagnostic of what the old env
+  // asked for; it no longer selects anything. No JSON schema is sent — see
+  // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
+  const generate = input.generate ?? createGptStrategistGenerateJson();
 
   // THE SAME BUDGET, NOT AN EXTRA ONE. When the shared allowance is spent the
   // binding stops calling and the company is held for review — a grounded run

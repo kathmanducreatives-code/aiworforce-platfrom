@@ -24,6 +24,7 @@
 // ZERO network and ZERO model spend: `fetch` is replaced and restored.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { GPT_MODEL } from "../../../supabase/functions/_shared/gptProvider.ts";
 import {
   DEFAULT_LEAD_INTELLIGENCE_MODEL,
 } from "../../../supabase/functions/_shared/leadIntelligenceModel.ts";
@@ -214,8 +215,16 @@ interface WireCall { url: string; model: unknown }
 /** Run `fn` with `fetch` replaced. Returns every request that reached the wire. */
 async function withStubbedFetch(fn: () => Promise<unknown>): Promise<WireCall[]> {
   const realFetch = globalThis.fetch;
+  // ── EVERY SEAM NOW SPEAKS TO OPENAI ────────────────────────────────────
+  //
+  // All four remaining stages moved off the Lovable/Claude strategist, so the
+  // credential this suite must provide is OPENAI_API_KEY; without it
+  // `gptProvider` returns `no_api_key` before any transport and the seam looks
+  // like it made no call.
   const realKey = Deno.env.get("LOVABLE_API_KEY");
   Deno.env.set("LOVABLE_API_KEY", "test-key-not-a-credential");
+  const realOpenAi = Deno.env.get("OPENAI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "sk-test-not-a-credential");
   const calls: WireCall[] = [];
 
   globalThis.fetch = ((url: string, init: RequestInit) => {
@@ -235,6 +244,8 @@ async function withStubbedFetch(fn: () => Promise<unknown>): Promise<WireCall[]>
     globalThis.fetch = realFetch;
     if (realKey === undefined) Deno.env.delete("LOVABLE_API_KEY");
     else Deno.env.set("LOVABLE_API_KEY", realKey);
+    if (realOpenAi === undefined) Deno.env.delete("OPENAI_API_KEY");
+    else Deno.env.set("OPENAI_API_KEY", realOpenAi);
   }
 }
 
@@ -267,22 +278,33 @@ for (const seam of SEAMS) {
       calls.length, 1,
       `${seam.feature} made ${calls.length} wire calls; it must reach the transport exactly once`,
     );
+    // The canonical id was the STRATEGIST's. These stages are GPT now, so the
+    // id that must reach the wire is OpenAI's — asserting the old one would
+    // assert the architecture this refactor removed.
     assertEquals(
-      calls[0].model, DEFAULT_LEAD_INTELLIGENCE_MODEL,
-      `${seam.feature} must send the canonical model id`,
+      calls[0].model, GPT_MODEL,
+      `${seam.feature} must run on GPT, not the strategist`,
     );
-    assert(calls[0].url.includes("chat/completions"), "the strategist endpoint is the target");
+    assert(calls[0].url.includes("openai.com"), `${seam.feature} must target OpenAI`);
   });
 
-  // THE REGRESSION ITSELF. Not "the constant is spelled right" — the actual
-  // runtime failure: an unprefixed id is refused before a request is built.
-  Deno.test(`4.${seam.feature}: the legacy unprefixed id never reaches the wire`, async () => {
+  // ── REPLACED: THE MODEL ENV NO LONGER SELECTS ANYTHING ─────────────────
+  //
+  // This proved that an unprefixed wire id (`gpt-5.6-luna`) was refused by the
+  // strategist adapter's allow-list before a request was built — a real
+  // regression when the binding's model env chose the model.
+  //
+  // These stages are pinned to GPT now, so that env var is a diagnostic only.
+  // The guarantee worth keeping is the stronger one it implied: a stale or
+  // hostile model id in the environment cannot change which model runs.
+  Deno.test(`4.${seam.feature}: a stale model env cannot change the model`, async () => {
     const calls = await withStubbedFetch(() =>
       seam.drive(env({ ...seam.flags, [seam.modelEnvKey]: LEGACY_WIRE_ID }))
     );
+    assertEquals(calls.length, 1, `${seam.feature} must still reach the transport`);
     assertEquals(
-      calls.length, 0,
-      `${seam.feature} sent the unprefixed id to the wire; the adapter must refuse it first`,
+      calls[0].model, GPT_MODEL,
+      `${seam.feature} must ignore the env override and run GPT`,
     );
   });
 }

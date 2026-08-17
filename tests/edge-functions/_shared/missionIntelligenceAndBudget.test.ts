@@ -168,22 +168,18 @@ Deno.test("2. a hundred candidates cost four batches, not a hundred calls", () =
   assertEquals(batches.flat().length, 100, "and nobody is dropped by batching");
 });
 
-Deno.test("2b. the binding is OFF unless the flag AND the allow-list both pass", () => {
+// ── REPLACED: THE FLAG PAIR IS GONE ──────────────────────────────────────
+//
+// "OFF unless the flag AND the allow-list both pass" was true, and meant triage
+// never ran: neither env was ever set. The decision is removed, not defaulted.
+Deno.test("2b. no environment can disable mission triage", () => {
   const env = (o: Record<string, string>) => (k: string) => o[k];
-  assertEquals(isMissionTriageEnabled("ws-1", env({})).reason, "flag_off");
-  assertEquals(
-    isMissionTriageEnabled("ws-1", env({ MISSION_TRIAGE: "true" })).reason,
-    "no_workspace_allowlist");
-  assertEquals(
-    isMissionTriageEnabled("ws-1", env({
-      MISSION_TRIAGE: "true", MISSION_TRIAGE_WORKSPACES: "ws-2",
-    })).reason, "workspace_not_allowed");
-
-  const off = buildMissionTriageBinding({
-    workspaceId: "ws-1", read: () => undefined, poolSize: 100,
-  });
-  assertEquals(off.triageCompanies, null, "no call is made when disabled");
-  assertEquals(off.diagnostics.batches_allowed, 0);
+  for (const e of [
+    env({}), env({ MISSION_TRIAGE: "false" }), env({ MISSION_TRIAGE: "true" }),
+    env({ MISSION_TRIAGE: "true", MISSION_TRIAGE_WORKSPACES: "ws-2" }),
+  ]) {
+    assertEquals(isMissionTriageEnabled("ws-1", e).enabled, true);
+  }
 });
 
 // ══════════════════════════ 3. the budget is not the requested lead count ══

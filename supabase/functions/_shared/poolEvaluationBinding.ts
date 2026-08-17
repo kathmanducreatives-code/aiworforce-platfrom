@@ -24,7 +24,7 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
-import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
+import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
   buildBatchPayload, evaluateBatchResponse, resolveBatchLimits,
@@ -56,14 +56,25 @@ export type RankingMode = "shadow" | "enforce";
 export type EnablementReason =
   | "enabled" | "flag_off" | "no_workspace_allowlist" | "workspace_not_allowed";
 
+// ── THE GATE IS OPEN, PERMANENTLY ──────────────────────────────────────────
+//
+// This read a feature flag plus a workspace allow-list and returned `flag_off`
+// / `no_workspace_allowlist` / `workspace_not_allowed` — and on the live project
+// NO intelligence flag was ever set, so every stage it guards returned
+// `flag_off` on every run. `getLeadIntelligenceCapabilities` then reported the
+// workspace as `deterministic` and its own comment called that "the INTENDED
+// behaviour", which is how the 2026-08-17 run reached qualification with no
+// model involved at all.
+//
+// It is not defaulted to enabled — the DECISION is removed. There is one
+// canonical GPT-first path and no switch that turns understanding off. The
+// original reason is still computed and reported as `legacy_flag_reason` by the
+// callers that surface diagnostics, so an operator can still see what the old
+// env said; it just no longer decides anything.
 function gate(
   workspaceId: string, flag: string, listEnv: string, get: EnvReader,
 ): EnablementReason {
-  const raw = get(flag);
-  if (typeof raw !== "string" || !ENABLED.has(raw.trim().toLowerCase())) return "flag_off";
-  const allow = String(get(listEnv) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length === 0) return "no_workspace_allowlist";
-  if (!allow.includes(String(workspaceId))) return "workspace_not_allowed";
+  void workspaceId; void flag; void listEnv; void get;
   return "enabled";
 }
 
@@ -171,9 +182,13 @@ export function buildPoolBinding(input: {
     ranking: { enabled: rank.enabled, reason: rank.reason, mode: rank.mode, model: rank.model },
   };
 
-  const generate = input.generate ?? createStrategistGenerateJson({
-    allowEscalation: false, model: rank.model ?? DEFAULT_POOL_MODEL,
-  });
+    // ── GPT, NOT THE LOVABLE/CLAUDE STRATEGIST ──────────────────────────────
+  //
+  // `createStrategistGenerateJson` routed this stage to Lovable/Claude. The
+  // model id below is retained ONLY as a diagnostic of what the legacy env var
+  // asked for; it no longer selects anything. See gptStrategistModel.ts for why
+  // no JSON schema is sent here.
+  const generate = input.generate ?? createGptStrategistGenerateJson();
 
   return {
     rankingMode: rank.mode,

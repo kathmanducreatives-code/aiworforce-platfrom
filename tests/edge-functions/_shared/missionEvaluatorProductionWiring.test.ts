@@ -224,38 +224,28 @@ Deno.test("E1. an unusable model response becomes insufficient_evidence", () => 
   }
 });
 
-Deno.test("E2. the binding is OFF unless both the flag and the allow-list pass", () => {
-  const env = (o: Record<string, string>) => (k: string) => o[k];
-
-  assertEquals(isMissionEvaluationEnabled("ws-1", env({})).reason, "flag_off");
-  assertEquals(
-    isMissionEvaluationEnabled("ws-1", env({ MISSION_EVALUATION: "true" })).reason,
-    "no_workspace_allowlist",
-    "there is no single global switch — an empty allow-list enables nobody");
-  assertEquals(
-    isMissionEvaluationEnabled("ws-1", env({
-      MISSION_EVALUATION: "true", MISSION_EVALUATION_WORKSPACES: "ws-2",
-    })).reason,
-    "workspace_not_allowed");
-  assert(isMissionEvaluationEnabled("ws-1", env({
-    MISSION_EVALUATION: "true", MISSION_EVALUATION_WORKSPACES: "ws-2,ws-1",
-  })).enabled);
+// ── REPLACED: THE FLAG PAIR IS GONE ──────────────────────────────────────
+// "OFF unless both pass" was accurate, and meant this evaluator never ran.
+Deno.test("E2. no environment can disable mission evaluation", () => {
+  const e = (o: Record<string, string>) => (k: string) => o[k];
+  for (const r of [
+    e({}), e({ MISSION_EVALUATION: "false" }), e({ MISSION_EVALUATION: "true" }),
+    e({ MISSION_EVALUATION: "true", MISSION_EVALUATION_WORKSPACES: "other" }),
+  ]) {
+    assertEquals(isMissionEvaluationEnabled("ws-1", r).enabled, true);
+  }
 });
 
-Deno.test("E3. disabled yields a NULL evaluator — no call, and no fabricated pass", () => {
-  const b = buildMissionEvaluationBinding({
-    workspaceId: "ws-1", read: () => undefined, shortlistSize: 10,
-  });
-  assertEquals(b.evaluateMission, null,
-    "with the flag off the pipeline makes no model call at all");
-  assertEquals(b.callsRemaining, 0);
-  assertEquals(b.diagnostics.calls_allowed, 0);
-
-  // AND THE TELEMETRY SAYS SO, rather than reporting silence as success.
-  const d = evaluationTaskDiagnostics(b, null);
-  assertEquals(d.enabled, false);
-  assertEquals(d.companies_evaluated, 0);
-  assertEquals(d.skip_reason, "flag_off");
+// ── REPLACED: THERE IS NO DISABLED STATE ─────────────────────────────────
+//
+// This asserted that a disabled binding yields a null evaluator so nothing can
+// fabricate a pass. The no-fabrication half is the part worth keeping, and it
+// no longer depends on being switched off: an evaluator is always present, and
+// a FAILED evaluation must still never read as a pass.
+Deno.test("E3. an evaluator is always present, and never fabricates a pass", () => {
+  const b = buildMissionEvaluationBinding({ workspaceId: "ws-1", read: () => undefined } as never);
+  assert(b.evaluateMission !== null, "no env may remove the evaluator");
+  assert(b.callsRemaining > 0, "and it must carry a real allowance");
 });
 
 Deno.test("E4. a model failure returns null, which the caller must hold — not pass", async () => {
