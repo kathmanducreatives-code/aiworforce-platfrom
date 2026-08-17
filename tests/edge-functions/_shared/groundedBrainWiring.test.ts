@@ -31,6 +31,7 @@ import {
   buildWorkbenchExplanation, verifyGroundedResult, parseGroundedResult,
 } from "../../../supabase/functions/_shared/groundedClaims.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const QUERY =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -91,7 +92,7 @@ const BRAIN = {
 async function runWith(over: Partial<CapabilityEngineDeps>) {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(deps(rec, over), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...deps(rec, over) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   return { run, rec };

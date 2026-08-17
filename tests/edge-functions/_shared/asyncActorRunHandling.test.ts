@@ -20,6 +20,7 @@ import {
   runCapabilityPlan, type CapabilityEngineDeps,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -64,6 +65,7 @@ const BANDS = ["2-10", "11-50", "51-200"];
 Deno.test("1. a RUNNING Actor is persisted as pending, with its run and dataset", async () => {
   const m = mission();
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: () => Promise.reject(runningError()),
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
     readPendingRun,
@@ -87,6 +89,7 @@ Deno.test("1. a RUNNING Actor is persisted as pending, with its run and dataset"
 Deno.test("2. the pending run's cost is recorded, not zeroed", async () => {
   const m = mission();
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: () => Promise.reject(runningError()),
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
     readPendingRun,
@@ -102,6 +105,7 @@ Deno.test("2. the pending run's cost is recorded, not zeroed", async () => {
 Deno.test("3. the capability stays pending and is never completed", async () => {
   const m = mission();
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: () => Promise.reject(runningError()),
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
     readPendingRun,
@@ -121,6 +125,7 @@ Deno.test("4. the fallback does NOT run while the primary run is pending", async
   const m = mission();
   const calls: string[] = [];
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       calls.push(c.actorKey);
       if (c.actorKey === "apify_yc_companies_memo23") return Promise.reject(runningError());
@@ -144,6 +149,7 @@ Deno.test("5/6. resume adopts the same run id and starts no second Actor", async
 
   // First pass leaves the run pending.
   const first = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: () => Promise.reject(runningError()),
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
     readPendingRun,
@@ -154,6 +160,7 @@ Deno.test("5/6. resume adopts the same run id and starts no second Actor", async
   const resumeIds: Array<string | undefined> = [];
   const starts: string[] = [];
   const second = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       const rid = (c as { resumeRunId?: string }).resumeRunId;
       resumeIds.push(rid);
@@ -184,6 +191,12 @@ Deno.test("5/6. resume adopts the same run id and starts no second Actor", async
 Deno.test("7. SolidCode missing configuration does not fake a schema failure", async () => {
   const m = mission();
   const run = await runCapabilityPlan({
+    // A fallback role is a STRATEGY choice, so the strategy states it. This
+    // used to arrive via the production default, which is deleted.
+    planDiscovery: stubDiscoverySelector([
+      { actor_key: "apify_yc_companies_memo23", role: "primary", input: { mode: "companies" } },
+      { actor_key: "apify_yc_companies_solidcode", role: "fallback", input: {} },
+    ]),
     invoke: () => Promise.resolve([]),          // memo23 succeeds but returns nothing
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
     readPendingRun,

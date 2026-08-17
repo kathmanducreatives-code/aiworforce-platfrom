@@ -26,6 +26,7 @@
 // PURE AND OFFLINE. No network, no provider, no model, no database.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const RUN_AGENT_URL = new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url);
 

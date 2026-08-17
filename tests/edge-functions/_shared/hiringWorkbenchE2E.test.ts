@@ -48,6 +48,7 @@ import { projectEvaluationRows } from "../../../supabase/functions/_shared/leadW
 import { identityIsActionable } from "../../../supabase/functions/_shared/companyIdentityResolution.ts";
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 // THE FRONTEND READERS. Pure modules, no React — the same code the Workbench
 // panel calls. Importing them here is what makes this test end-to-end rather
 // than "the edge function produced something".
@@ -190,7 +191,7 @@ async function runHiring(
   let run = null as Awaited<ReturnType<typeof runCapabilityPlan>> | null;
   if (preflight.ok) {
     assertPaidExecutionAllowed(preflight);
-    run = await runCapabilityPlan(deps(rows, rec, over), { mission: m, plan, brain: BRAIN });
+    run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...deps(rows, rec, over) }, { mission: m, plan, brain: BRAIN });
   }
 
   // The `tasks.result` object, assembled exactly as run-agent assembles it.

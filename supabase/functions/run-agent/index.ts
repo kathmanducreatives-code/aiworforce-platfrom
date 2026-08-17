@@ -2252,17 +2252,22 @@ Deno.serve(async (req) => {
               // are all rejected there, so nothing the model returns can become
               // a call the catalog does not permit.
               //
-              // NOT GATED ON A FLAG, and gated on a credential instead: with no
-              // OPENAI_API_KEY the provider returns `no_api_key`, the planner
-              // returns null, and the engine runs the deterministic strategy —
-              // the exact behaviour of every run before this line existed. So
-              // the floor is unchanged and there is no second switch to forget.
-              planDiscovery: gptAvailable(readEnvSafe)
-                ? makeGptDiscoveryPlanner({
-                  readEnv: readEnvSafe,
-                  log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
-                })
-                : undefined,
+              // ── UNCONDITIONAL. THE CREDENTIAL GATE IS GONE TOO. ──────────
+              //
+              // This was `gptAvailable(readEnvSafe) ? planner : undefined`, on
+              // the reasoning that a missing key should leave "the floor
+              // unchanged". The floor was the problem: `undefined` meant the
+              // engine ran the YC/B2B literal, so an absent credential produced
+              // a confident search for something the user had not asked for.
+              //
+              // Now the planner is always supplied. With no key the provider
+              // returns `no_api_key`, the planner returns null, and the engine
+              // blocks the run with a stated reason — which is the honest
+              // answer to "we cannot decide what to search for".
+              planDiscovery: makeGptDiscoveryPlanner({
+                readEnv: readEnvSafe,
+                log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
+              }),
 
               // ── STAGE 2 WIRING: GPT MISSION INTELLIGENCE ─────────────────
               //

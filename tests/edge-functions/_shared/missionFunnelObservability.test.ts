@@ -37,6 +37,7 @@ import {
   runCapabilityPlan, missionFunnelFor,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 /** A company that sailed all the way through. */
 const co = (over: Partial<FunnelCompany> = {}): FunnelCompany => ({
@@ -238,6 +239,7 @@ const runEngine = async (o: {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   return await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         return Promise.resolve(ycRows(n));

@@ -24,6 +24,7 @@ import {
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { parseSemanticFitStrict } from "../../../supabase/functions/_shared/companyBrainSemanticFit.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -141,7 +142,7 @@ Deno.test("1. the capability graph IS the execution order", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
   const plan = buildCapabilityGraph(m);
-  const run = await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan, brain: BRAIN,
   });
 
@@ -157,7 +158,7 @@ Deno.test("1. the capability graph IS the execution order", async () => {
 Deno.test("2. memo23 is the FIRST provider called for the canonical query", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   assertEquals(rec.calls[0], "apify_yc_companies_memo23");
@@ -168,7 +169,7 @@ Deno.test("2. memo23 is the FIRST provider called for the canonical query", asyn
 Deno.test("3. enrichment happens BEFORE qualification, and qualification uses it", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   const order = run.capability_outcomes.map((o) => o.capability);
@@ -183,7 +184,7 @@ Deno.test("3. enrichment happens BEFORE qualification, and qualification uses it
 Deno.test("4. founder discovery does not run automatically at all", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   // THE CONTRACT CHANGED, DELIBERATELY.
@@ -252,7 +253,7 @@ Deno.test("5. legacy job Actors cannot run for a non-job mission", async () => {
 
   // (b) And on a REAL run the engine never reaches for one in the first place.
   const rec: Recorder = { calls: [] };
-  await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), { mission: m, plan, brain: BRAIN });
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, { mission: m, plan, brain: BRAIN });
   assert(rec.calls.length > 0, "the run must actually have called providers");
   for (const k of rec.calls) {
     assert(plan.allowed_providers.includes(k), `${k} is outside the mission graph`);
@@ -263,8 +264,17 @@ Deno.test("6. zero YC results use ONLY the approved startup fallback", async () 
   const rec: Recorder = { calls: [] };
   const m = mission();
   const plan = buildCapabilityGraph(m);
+  // THE TEST NOW SAYS WHICH FALLBACK IT WANTS. It used to rely on the
+  // production default proposing solidcode; a fallback role is a strategy
+  // choice, so the strategy has to state it.
   const run = await runCapabilityPlan(
-    mockDeps({ apify_yc_companies_memo23: [] }, rec),
+    {
+      planDiscovery: stubDiscoverySelector([
+        { actor_key: "apify_yc_companies_memo23", role: "primary", input: { mode: "companies" } },
+        { actor_key: "apify_yc_companies_solidcode", role: "fallback", input: {} },
+      ]),
+      ...mockDeps({ apify_yc_companies_memo23: [] }, rec),
+    },
     { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["2-10", "11-50"] },
   );
 
@@ -290,6 +300,7 @@ Deno.test("7. a provider failure cannot escape the graph", async () => {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call) => {
       rec.calls.push(call.actorKey);
       if (call.actorKey === "apify_yc_companies_memo23") {
@@ -319,15 +330,14 @@ Deno.test("8. resume continues at the next incomplete capability", async () => {
 
   // First run: discovery + identity succeed, then enrichment is where we stop.
   const first: Recorder = { calls: [] };
-  const run1 = await runCapabilityPlan(
-    mockDeps({ apify_yc_companies_memo23: HAPPY_ROWS.apify_yc_companies_memo23 }, first),
+  const run1 = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps({ apify_yc_companies_memo23: HAPPY_ROWS.apify_yc_companies_memo23 }, first) },
     { mission: m, plan, brain: BRAIN },
   );
   assert(run1.state.completed_capabilities.includes("startup_company_discovery"));
 
   // Second run RESUMES from that state.
   const second: Recorder = { calls: [] };
-  const run2 = await runCapabilityPlan(mockDeps(HAPPY_ROWS, second), {
+  const run2 = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, second) }, {
     mission: m, plan, brain: BRAIN, state: run1.state,
   });
 
@@ -346,7 +356,7 @@ Deno.test("8b. a state from a DIFFERENT mission is refused", async () => {
   alien.completed_capabilities = ["startup_company_discovery"];
 
   const rec: Recorder = { calls: [] };
-  await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan, brain: BRAIN, state: alien,
   });
   // Discovery ran, because the alien state was discarded rather than trusted.
@@ -388,8 +398,7 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
   // evaluator that `mockDeps` now supplies. Absence of a decider is not a fact
   // about the company.
   const recA: Recorder = { calls: [] };
-  const runA = await runCapabilityPlan(
-    mockDeps(thin, recA, { evaluateMission: undefined }), {
+  const runA = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(thin, recA, { evaluateMission: undefined }) }, {
       mission: m, plan, brain: BRAIN,
     });
   assertEquals(runA.state.qualified_company_keys.length, 0);
@@ -429,7 +438,7 @@ Deno.test("9. UNKNOWN qualification is resolved, never auto-rejected", async () 
 Deno.test("10. execution telemetry records attempts, outcomes and cost", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(HAPPY_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   const s = run.state;
@@ -478,10 +487,9 @@ Deno.test("10b. run-agent persists the execution state and consults classificati
 Deno.test("11. only VERIFIED people are offered for persistence", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(
-    mockDeps(HAPPY_ROWS, rec, {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(HAPPY_ROWS, rec, {
       verifyEmployer: () => ({ verified: false, outcome: "employer_mismatch" }),
-    }),
+    }) },
     { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN },
   );
   const shaped = toRouteResultShape(run);

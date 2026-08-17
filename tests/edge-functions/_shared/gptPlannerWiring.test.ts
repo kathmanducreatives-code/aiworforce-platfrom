@@ -26,8 +26,8 @@ Deno.test("1. run-agent constructs the GPT planner and passes it to the engine",
     "run-agent must import the planner factory",
   );
   assert(
-    /planDiscovery:\s*gptAvailable\(/.test(RUN_AGENT),
-    "planDiscovery must be supplied to runCapabilityPlan",
+    /planDiscovery:\s*makeGptDiscoveryPlanner\(\{/.test(RUN_AGENT),
+    "planDiscovery must be supplied to runCapabilityPlan, unconditionally",
   );
   assert(
     /makeGptDiscoveryPlanner\(\{/.test(RUN_AGENT),
@@ -35,21 +35,30 @@ Deno.test("1. run-agent constructs the GPT planner and passes it to the engine",
   );
 });
 
-Deno.test("2. it is gated on the credential, not on a feature flag", () => {
-  // A flag is a second switch to forget, and forgetting it looks identical to
-  // the bug this file exists to catch. The credential is the honest condition:
-  // with no key the provider returns `no_api_key`, the planner returns null,
-  // and the engine runs the deterministic strategy — exactly what every run did
-  // before this was connected.
+// ── UPDATED 2026-08-17: THE CREDENTIAL GATE IS GONE TOO ──────────────────
+//
+// This asserted the planner was gated on `gptAvailable(readEnvSafe)` and
+// `undefined` without a key, "so the engine falls back". That fallback was the
+// YC/B2B literal, so a missing credential produced a confident search for
+// something the user had not asked for. With the literal deleted there is
+// nothing to fall back TO, and the gate would only convert a blocked run into
+// a wrong one.
+Deno.test("2. the planner is unconditional — no flag AND no credential gate", () => {
   const block = RUN_AGENT.slice(
     RUN_AGENT.indexOf("planDiscovery:"),
     RUN_AGENT.indexOf("planDiscovery:") + 400,
   );
-  assert(/gptAvailable\(readEnvSafe\)/.test(block), "gate on OPENAI_API_KEY presence");
-  assert(/:\s*undefined/.test(block), "and be undefined without it, so the engine falls back");
+  assertEquals(
+    /gptAvailable\(/.test(block), false,
+    "a missing key must block the run, not select a default actor",
+  );
+  assertEquals(
+    /:\s*undefined/.test(block), false,
+    "there is no `undefined` branch left for the engine to interpret",
+  );
   assertEquals(
     /INTELLIGENCE_FLAG|isIntelligenceFlagEnabled|FEATURE_/.test(block), false,
-    "no feature flag — the credential is the only condition",
+    "and no feature flag either",
   );
 });
 

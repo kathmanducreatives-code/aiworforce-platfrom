@@ -123,19 +123,47 @@ const run = async (o: {
 const discoveryInput = (seen: Seen[], actorKey: string): Record<string, unknown> | null =>
   seen.find((s) => s.actorKey === actorKey)?.input ?? null;
 
-Deno.test("1. with no selector wired, discovery is exactly what it was", async () => {
-  // THE FLOOR. A deployment that never wires `planDiscovery` must behave as it
-  // does today — same actor, same input — or this change is not safe to ship
-  // ahead of the selector being switched on.
-  const { seen, result } = await run({});
+// ── INVERTED: THE "FLOOR" WAS THE DEFECT ─────────────────────────────────
+//
+// This asserted that an unwired selector behaves "exactly as it does today" —
+// memo23 with `industries: ["B2B"], batch: ["All Batches"]`. That floor is why
+// every mission asked the same question, and the literals it pins are deleted.
+//
+// What replaces it is the property that matters now: a selector's input is the
+// ONLY source of search terms, and the engine adds none of its own.
+Deno.test("1. the engine contributes no search terms of its own", async () => {
+  // NOTE, AND IT MATTERS FOR ACTOR CHOICE: memo23's `industries` is a CLOSED
+  // enum — All industries / B2B / Consumer / Healthcare / Fintech / … — with no
+  // "AI" value. The YC scraper cannot express "AI startups" as an industry
+  // filter at all; its free-text `queries` field is the only place that term
+  // can go. This is exactly the kind of fact the playbook exists to tell a
+  // selector, and exactly why "startup ⇒ YC" was never a safe mapping.
+  const { seen, result } = await run({
+    planDiscovery: () => Promise.resolve([{
+      actor_key: "apify_yc_companies_memo23", role: "primary",
+      input: { queries: ["AI"], industries: ["AI"] },
+    }]),
+  });
 
-  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"],
-    "memo23 alone; solidcode is fallback-only and memo23 returned rows");
   const input = discoveryInput(seen, "apify_yc_companies_memo23")!;
+  assertEquals(input.queries, ["AI"], "the selector's own search term must reach the call");
+  assertEquals(input.batch, undefined, "no `All Batches` literal is added");
+  assertEquals(input.regions, undefined, "no default geography is added");
+  assertEquals(input.minEmployeeSize, undefined, "no default size band is added");
+  assertEquals(input.industries, undefined, "an off-enum value is dropped, not sent");
+
+  // AND THE DROP IS RECORDED. A filter that silently disappears is how a run
+  // ends up searching for something nobody asked for.
+  const d = result.state.discovery_strategy as Record<string, unknown>;
+  const actors = d.actors as Array<Record<string, unknown>>;
+  const dropped = actors[0].dropped_filters as Array<Record<string, unknown>>;
+  assert(
+    dropped.some((f) => String(f.field) === "industries"),
+    "the rejected enum value must appear in dropped_filters",
+  );
+  // The evidence-bearing fields are still the engine's, because downstream
+  // stages are built on them — see test 6.
   assertEquals(input.mode, "companies");
-  assertEquals(input.industries, ["B2B"]);
-  assertEquals(input.batch, ["All Batches"]);
-  assertEquals(input.isHiring, true);
   assertEquals(input.scrapeOpenJobs, true);
   assertEquals(input.enrichEmails, false);
 });
@@ -182,21 +210,34 @@ Deno.test("3. rows from every actor land in ONE deduplicated pool", async () => 
   assertEquals(new Set(keys).size, keys.length, "the pool must carry no duplicate key");
 });
 
-Deno.test("4. a selector that throws still discovers", async () => {
-  // A selector being unavailable is not a reason to stop discovering. Every
-  // failure path lands on the deterministic strategy.
-  const { result } = await run({
-    planDiscovery: () => Promise.reject(new Error("model timeout")),
-  });
-  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"]);
+// ── INVERTED: A MODEL OUTAGE IS NOT A REASON TO SEARCH SOMETHING ELSE ────
+Deno.test("4. a selector that throws blocks the run", async () => {
+  let msg = "";
+  try {
+    await run({ planDiscovery: () => Promise.reject(new Error("model timeout")) });
+  } catch (e) { msg = String(e); }
+  assert(
+    msg.includes("discovery actor selection was blocked"),
+    `a selector outage must block; got: ${msg || "no error"}`,
+  );
+  assert(msg.includes("discovery_selector_failed"), "and must name the cause");
 });
 
-Deno.test("5. a selector returning nonsense still discovers", async () => {
+// ── INVERTED 2026-08-17: NONSENSE NO LONGER DISCOVERS ────────────────────
+//
+// This asserted that a selector returning junk "still discovers", landing on
+// memo23. That was the defect stated as a guarantee: a model that answered
+// gibberish and a model that deliberately chose YC produced identical runs, and
+// the user got a confident pool built from a proposal nobody could read.
+Deno.test("5. a selector returning nonsense BLOCKS rather than discovering", async () => {
   for (const junk of [null, {}, { actors: "everything" }, [{ actor_key: "apify/invented" }]]) {
-    const { result } = await run({ planDiscovery: () => Promise.resolve(junk) });
-    const providers = discoveryProviders(result.state);
-    assert(providers.length >= 1, `must still discover for ${JSON.stringify(junk)}`);
-    assertEquals(providers[0], "apify_yc_companies_memo23");
+    let blocked = false;
+    try {
+      await run({ planDiscovery: () => Promise.resolve(junk) });
+    } catch (e) {
+      blocked = String(e).includes("discovery actor selection was blocked");
+    }
+    assert(blocked, `must block for ${JSON.stringify(junk)}, never fall back to YC`);
   }
 });
 
@@ -222,17 +263,27 @@ Deno.test("6. the evidence-bearing fields are not the strategy's to change", asy
 Deno.test("7. an actor the catalog does not permit never becomes a call", async () => {
   // The closed catalog, proven at the point where money is spent rather than
   // only in the strategy module's own unit tests.
-  const { seen, result } = await run({
-    planDiscovery: () => Promise.resolve([
-      { actor_key: "apify_linkedin_company_details", role: "primary", input: {} },
-      { actor_key: "apify/some-scraper", role: "breadth", input: {} },
-    ]),
-  });
+  const seen: Seen[] = [];
+  let blockedMessage = "";
+  try {
+    const r = await run({
+      planDiscovery: () => Promise.resolve([
+        { actor_key: "apify_linkedin_company_details", role: "primary", input: {} },
+        { actor_key: "apify/some-scraper", role: "breadth", input: {} },
+      ]),
+    });
+    seen.push(...r.seen);
+  } catch (e) { blockedMessage = String(e); }
 
   assertEquals(seen.some((s) => s.actorKey === "apify/some-scraper"), false);
-  // company_details is a real, callable actor — for ENRICHMENT. It must not be
-  // called by DISCOVERY, and the run falls back rather than using it.
-  assertEquals(discoveryProviders(result.state), ["apify_yc_companies_memo23"]);
+  // company_details is a real, callable actor — for ENRICHMENT. Neither is
+  // permitted for DISCOVERY, so nothing survives validation and the run blocks
+  // rather than quietly substituting the YC scraper.
+  assert(blockedMessage.includes("discovery actor selection was blocked"));
+  assert(
+    blockedMessage.includes("No deterministic strategy was substituted"),
+    "and states plainly that YC was not quietly used instead",
+  );
 });
 
 Deno.test("8. a company search named without a query is skipped, not called", async () => {
@@ -336,12 +387,20 @@ Deno.test("11. the run records which actors were chosen, how, and with what inpu
   );
 });
 
-Deno.test("12. the deterministic path records itself as such", async () => {
-  const { result } = await run({});
-  const d = result.state.discovery_strategy as Record<string, unknown>;
-  assertEquals(d.source, "deterministic_fallback");
-  assertEquals(d.all_require_enrichment, true,
-    "every discovery actor needs enrichment; the record must say so");
+// ── REPLACED: THERE IS NO DETERMINISTIC PATH TO RECORD ───────────────────
+Deno.test("12. no selector at all is a blocked run, and says so", async () => {
+  let msg = "";
+  try {
+    await run({ planDiscovery: undefined });
+  } catch (e) { msg = String(e); }
+  assert(
+    msg.includes("discovery actor selection was blocked"),
+    `a run with no selector must block; got: ${msg || "no error"}`,
+  );
+  assert(
+    msg.includes("No deterministic strategy was substituted"),
+    "and must say plainly that nothing was substituted in its place",
+  );
 });
 
 // ═══════════════════════════════════════════ multi-signal execution ══

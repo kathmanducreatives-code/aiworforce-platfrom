@@ -35,6 +35,7 @@ import {
   type CompanyResumeRecord,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ─────────────────────────────────────────────────────────────── the fixture ──
 
@@ -129,6 +130,7 @@ const runOnce = async (o: RunOpts) => {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === DISCOVERY_ACTOR) {
         now += o.discoveryMs;
@@ -679,6 +681,7 @@ const slowQualificationRun = async (o: {
   const plan = buildCapabilityGraph(m);
   const evaluated: string[] = [];
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === DISCOVERY_ACTOR) {
         now += 1_000;

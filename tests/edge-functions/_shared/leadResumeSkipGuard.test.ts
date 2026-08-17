@@ -33,6 +33,7 @@ import {
   type CompanyResumeRecord,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -117,7 +118,7 @@ const IDENTITY_PROVIDER = "apify_linkedin_company_search";
 async function firstRun() {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
     resume: { workspace_id: WORKSPACE, lineage_root_task_id: ROOT_TASK, records: [] },
   });
@@ -128,7 +129,7 @@ async function firstRun() {
 async function unscopedRun() {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   return { run, rec };
@@ -160,7 +161,7 @@ Deno.test("2. a resume does not re-buy identity resolution", async () => {
 
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const second = await runCapabilityPlan(mockDeps(rec), {
+  const second = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
     resume: {
       workspace_id: WORKSPACE, lineage_root_task_id: ROOT_TASK, records,
@@ -191,7 +192,7 @@ Deno.test("3. the resumed run costs strictly less", async () => {
   const first = await firstRun();
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const second = await runCapabilityPlan(mockDeps(rec), {
+  const second = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
     resume: {
       workspace_id: WORKSPACE, lineage_root_task_id: ROOT_TASK,
@@ -232,7 +233,7 @@ Deno.test("4. a terminal identity is never paid for again", async () => {
 
   const rec: Recorder = { calls: [] };
   const m = mission();
-  const run = await runCapabilityPlan(mockDeps(rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
     resume: {
       workspace_id: WORKSPACE, lineage_root_task_id: ROOT_TASK,
@@ -275,7 +276,7 @@ Deno.test("5. a first run spends exactly what an unscoped run spends", async () 
 Deno.test("6. records belonging to other companies never skip anything", async () => {
   const rec: Recorder = { calls: [] };
   const m = mission();
-  await runCapabilityPlan(mockDeps(rec), {
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(rec) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
     resume: {
       workspace_id: WORKSPACE, lineage_root_task_id: ROOT_TASK,

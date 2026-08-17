@@ -51,6 +51,7 @@ import {
 } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { CHECKPOINT_RESERVE_MS } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ═══════════════ 1. THE BUDGETS ARE SEPARATE, AND NEITHER IS requested_count ══
 
@@ -206,6 +207,7 @@ const runShaped = async (o: { budgetMs: number; identityMs: number }) => {
   });
   const m = mission();
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         now += 15_000;

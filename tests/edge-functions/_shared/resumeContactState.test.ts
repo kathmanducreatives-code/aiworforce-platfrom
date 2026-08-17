@@ -5,6 +5,7 @@
 // any paid boundary. ZERO network, ZERO paid Actor runs.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 import {
   computeCompanyFirstQuotaProgress, loadPriorContactIdentities,
   nextAdaptiveAction, reconcilePriorIdentities,

@@ -19,7 +19,7 @@ import {
   DEFAULT_MAX_ACTORS,
   DISCOVERY_STRATEGY_VERSION,
   compileActorInput,
-  deterministicDiscoveryStrategy,
+  blockedDiscoveryStrategy,
   discoveryCatalogBriefing,
   discoveryStrategyDiagnostics,
   shouldRunSelection,
@@ -53,7 +53,9 @@ Deno.test("1. an actor that is not in the catalog cannot be selected", () => {
     MISSION,
   );
   assert(!strategyActorKeys(s).includes("apify/some-actor-the-model-invented"));
-  assertEquals(s.source, "deterministic_fallback");
+  // Nothing survived, so the run is BLOCKED rather than quietly redirected to
+  // the YC scraper — which is what `deterministic_fallback` used to mean here.
+  assertEquals(s.source, "blocked");
   assert(s.violations.some((v) => v.code === "unknown_actor"));
 });
 
@@ -218,28 +220,36 @@ Deno.test("12. a duplicate actor is taken once", () => {
   assert(s.violations.some((v) => v.code === "duplicate_actor"));
 });
 
-Deno.test("13. garbage in any shape falls back rather than throwing", () => {
-  // The caller must never have to handle "no strategy" — the floor of this
-  // mechanism is the behaviour it replaces.
+// ── INVERTED: GARBAGE BLOCKS, IT DOES NOT "STILL PRODUCE A RUNNABLE STRATEGY"
+//
+// The old claim — "the caller must never have to handle 'no strategy'" — is
+// exactly why nobody ever handled it: every unreadable proposal produced a
+// confident YC search instead. The validator is still TOTAL (it never throws),
+// which is the part worth keeping; what changes is that its answer to garbage
+// is now a refusal the caller must deal with.
+Deno.test("13. garbage in any shape blocks, without throwing", () => {
   for (const bad of [null, undefined, 42, "actors", {}, [null], [42], [{}]]) {
     const s = validateDiscoveryStrategy(bad, MISSION);
-    assertEquals(s.version, DISCOVERY_STRATEGY_VERSION);
-    assert(s.selections.length > 0, `must still produce a runnable strategy for ${String(bad)}`);
+    assertEquals(s.version, DISCOVERY_STRATEGY_VERSION, "still a well-formed record");
+    assertEquals(s.source, "blocked", `must block for ${String(bad)}`);
+    assertEquals(s.selections, [], "and select nothing");
+    assert(s.violations.length > 0, "and say why");
   }
 });
 
-Deno.test("14. the deterministic strategy is today's behaviour", () => {
-  // memo23 primary, solidcode fallback. If this ever changes shape, the claim
-  // that the worst case of model selection equals the current system is no
-  // longer true, and this test is where that must be noticed.
-  const s = deterministicDiscoveryStrategy(MISSION);
-  assertEquals(s.source, "deterministic_fallback");
-  assertEquals(strategyActorKeys(s), [
-    "apify_yc_companies_memo23", "apify_yc_companies_solidcode",
-  ]);
-  assertEquals(s.selections[0].role, "primary");
-  assertEquals(s.selections[1].role, "fallback");
-  assertEquals(s.violations.length, 0);
+// ── REPLACED: `deterministicDiscoveryStrategy` IS DELETED ────────────────
+//
+// This asserted the fallback's shape — memo23 primary, solidcode fallback — so
+// that "the worst case of model selection equals the current system" stayed
+// true. That equality was the problem: the worst case answered every mission
+// with the same YC page. There is no worst-case strategy any more, only a
+// refusal.
+Deno.test("14. a blocked strategy selects nothing and names the reason", () => {
+  const s = blockedDiscoveryStrategy("no_discovery_selector", "no selector was supplied");
+  assertEquals(s.source, "blocked");
+  assertEquals(s.selections, []);
+  assertEquals(s.violations[0].code, "no_discovery_selector");
+  assertEquals(s.violations[0].severity, "block");
 });
 
 Deno.test("15. a fallback runs only on an empty pool; breadth stops once full", () => {

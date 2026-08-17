@@ -36,6 +36,7 @@ import type {
   EvidenceRegistry,
 } from "../../../supabase/functions/_shared/leadEvidenceRegistry.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ─────────────────────────────────────────────────────────────── the fixture ──
 
@@ -91,6 +92,7 @@ const runWithEvaluator = async (
   const plan = buildCapabilityGraph(m);
   const seen: Array<{ registry: EvidenceRegistry; dropped: string[] }> = [];
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") return Promise.resolve(ROWS);
       if (call.actorKey === "apify_linkedin_company_search") {
@@ -271,6 +273,7 @@ Deno.test("3. with no evaluator at all, nobody qualifies and nobody is rejected"
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") return Promise.resolve(ROWS);
       if (call.actorKey === "apify_linkedin_company_search") {

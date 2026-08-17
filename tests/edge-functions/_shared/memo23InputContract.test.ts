@@ -34,6 +34,7 @@ import {
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -170,6 +171,7 @@ Deno.test("9. the real 10-150 bound is enforced AFTER enrichment, not by the Act
   // A YC company whose ENRICHED headcount is 400 — inside the broad 10+..500
   // discovery filter, outside the mission's 10-150.
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       if (c.actorKey === "apify_yc_companies_memo23") {
         // YC SELF-REPORTS 40. LinkedIn says 400.
@@ -229,6 +231,7 @@ Deno.test("9b. a Brain-only size bound does NOT reject when the Mission is silen
     "the fixture Mission must genuinely express no size opinion");
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       if (c.actorKey === "apify_yc_companies_memo23") {
         return Promise.resolve([{
@@ -272,6 +275,7 @@ Deno.test("10. YC isHiring is not treated as Sales-Ops verification", async () =
   const plan = buildCapabilityGraph(m);
   // isHiring=true at YC, but NO matching open role anywhere.
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       if (c.actorKey === "apify_yc_companies_memo23") {
         // Generic hiring only — a backend engineer, not a commercial role.
@@ -298,32 +302,63 @@ Deno.test("10. YC isHiring is not treated as Sales-Ops verification", async () =
 
 // ══════════════════════ 11/12/13. a schema failure stops everything ══
 
-Deno.test("11/12. a schema failure stops before every paid fallback", async () => {
+// ── REWRITTEN: THE OLD TRIGGER IS NO LONGER REACHABLE ────────────────────
+//
+// This forced a compiler rejection with `ycIndustries: ["NotARealIndustry"]`, an
+// engine option that no longer exists — the engine contributes no search terms.
+// Reaching the memo23 compiler with a bad enum now requires a MODEL proposal,
+// and the strategy validator sanitises every verified enum before the compiler
+// sees it, while the engine pins `mode`, `scrapeOpenJobs` and `enrichEmails`.
+//
+// So the compiler can no longer be made to fail from a proposal. That is
+// defence in depth working, not a lost guarantee — but it means the guarantee
+// has to be asserted where it can still be violated. Both halves are kept:
+// the compiler still refuses bad input, and the engine still spends nothing
+// extra when a filter is refused.
+Deno.test("11/12. a refused filter costs nothing, and refusal still stops the compiler", async () => {
+  // Half one: the compiler's own contract, asserted directly.
+  const rejected = compileMemo23YcInput({
+    mode: "companies", industries: ["NotARealIndustry"], maxItems: 10,
+  } as never);
+  assertFalse(rejected.ok, "an off-enum industry must fail compilation");
+
+  // Half two: through the engine, a model proposing a bad enum has it dropped
+  // before the call, and NOTHING else is tried to compensate.
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const calls: string[] = [];
-  // Force the compiler to reject by supplying an unsupported region.
   const run = await runCapabilityPlan({
+    planDiscovery: stubDiscoverySelector([{
+      actor_key: "apify_yc_companies_memo23", role: "primary",
+      input: { mode: "companies", industries: ["NotARealIndustry"] },
+    }]),
     invoke: (c: CompiledActorCall<unknown>) => { calls.push(c.actorKey); return Promise.resolve([]); },
     verifyEmployer: () => ({ verified: false, outcome: "no" }),
-  }, {
-    mission: m, plan, brain: BRAIN,
-    ycIndustries: ["NotARealIndustry"],       // compiler rejects this
-    solidcodeTeamSizes: ["2-10"],
-  });
+  }, { mission: m, plan, brain: BRAIN, solidcodeTeamSizes: ["2-10"] });
 
-  assertEquals(run.state.terminal_reason, "provider_input_validation_failed");
-  assertFalse(calls.includes("apify_yc_companies_memo23"),
-    "an input that fails validation is never sent");
-  // No fallback of any kind ran — not solidcode, and certainly not a job board.
-  assertFalse(calls.includes("apify_yc_companies_solidcode"));
+  const d = run.state.discovery_strategy as Record<string, unknown>;
+  const memo = (d.actors as Array<Record<string, unknown>>)
+    .find((a) => a.actor_key === "apify_yc_companies_memo23")!;
+  // Dropped entirely here (rather than emptied) because every proposed member
+  // was invalid and `industries` carries no valid remainder to keep.
+  assertEquals(
+    (memo.input as Record<string, unknown>).industries, undefined,
+    "the off-enum industry must never reach the provider",
+  );
+  assert(
+    (memo.dropped_filters as Array<Record<string, unknown>>)
+      .some((f) => String(f.field) === "industries"),
+    "and the drop must be on the record, not silent",
+  );
+
+  // No unrequested fallback ran to make up for the refused filter.
+  assertFalse(calls.includes("apify_yc_companies_solidcode"),
+    "a fallback the strategy did not name must not run");
   for (const job of ["apify_jobs", "apify_indeed_jobs_automation_lab", "apify_glassdoor_jobs"]) {
-    assertFalse(calls.includes(job), `${job} must not run after a schema failure`);
+    assertFalse(calls.includes(job), `${job} must not run to compensate`);
   }
   assertFalse(calls.includes("apify_people_search"));
   assertFalse(calls.includes("apify_linkedin_company_employees"));
-  // And discovery is NOT marked complete.
-  assertFalse(run.state.completed_capabilities.includes("startup_company_discovery"));
 });
 
 Deno.test("13. run-agent sends the compiled input through the passthrough contract", async () => {

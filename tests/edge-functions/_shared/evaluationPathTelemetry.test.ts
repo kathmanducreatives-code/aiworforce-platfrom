@@ -34,6 +34,7 @@ import {
 } from "../../../supabase/functions/_shared/leadMission.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { parseMissionEvaluationStrict } from "../../../supabase/functions/_shared/missionEvaluation.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const QUERY =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -128,7 +129,7 @@ async function runWith(
 ) {
   const rec: Recorder = { actors: [], classifierCalls: 0 };
   const m = { ...parseLeadMissionDeterministic(QUERY), ...missionOver } as LeadMissionV1;
-  const run = await runCapabilityPlan(deps(rec, over), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...deps(rec, over) }, {
     mission: m, plan: buildCapabilityGraph(m), brain: BRAIN,
   });
   return { run, rec };
@@ -327,7 +328,7 @@ Deno.test("9. PHASE 1: a mission that buys no verification still evaluates its c
 Deno.test("10. PHASE 1: the free assessment costs nothing", async () => {
   const rec: Recorder = { actors: [], classifierCalls: 0 };
   const m = { ...parseLeadMissionDeterministic(QUERY), ...NO_PAID_VERIFICATION } as LeadMissionV1;
-  await runCapabilityPlan(deps(rec), { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...deps(rec) }, { mission: m, plan: buildCapabilityGraph(m), brain: BRAIN });
 
   assertFalse(rec.actors.includes("apify_linkedin_job_search"),
     "no paid job search may be bought to assess evidence already held");

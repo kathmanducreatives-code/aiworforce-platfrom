@@ -98,10 +98,19 @@ export interface DiscoveryStrategy {
   /**
    * HOW THIS STRATEGY WAS PRODUCED, so a run can be read after the fact.
    *
-   * `deterministic_fallback` is not a failure state — it is the floor, and it
-   * is what runs whenever the model is off, unavailable, or wrong.
+   * `deterministic_fallback` is GONE. It used to be described here as "the
+   * floor — what runs whenever the model is off, unavailable, or wrong", and
+   * that floor was the defect: it mapped `startup_company_discovery` to the YC
+   * scraper with `industries: ["B2B"]` written as a literal, so every mission
+   * this workflow ever ran asked the same question. "AI startups hiring
+   * software engineers" and "manufacturers adopting automation" fetched the
+   * same YC page, and qualification was left to discard the mismatch.
+   *
+   * `blocked` replaces it. When the model cannot produce a usable selection the
+   * run STOPS and says so, rather than silently searching for something else.
+   * A blocked run is recoverable; a confident, unrelated pool is not.
    */
-  source: "model_validated" | "model_repaired" | "deterministic_fallback";
+  source: "model_validated" | "model_repaired" | "blocked";
   violations: StrategyViolation[];
 }
 
@@ -287,7 +296,9 @@ export function validateDiscoveryStrategy(
 
   if (!Array.isArray(proposals)) {
     return {
-      ...deterministicDiscoveryStrategy(mission, opts),
+      version: DISCOVERY_STRATEGY_VERSION,
+      selections: [],
+      source: "blocked",
       violations: [{
         code: "proposal_not_a_list",
         message: "the selector returned no list of actors",
@@ -400,7 +411,20 @@ export function validateDiscoveryStrategy(
   }
 
   if (selections.length === 0) {
-    return { ...deterministicDiscoveryStrategy(mission, opts), violations };
+    // NOTHING SURVIVED VALIDATION. Previously this fell to the YC literal, so a
+    // model proposing three unusable actors produced the same B2B/YC search as
+    // a model proposing nothing — and the run looked healthy either way.
+    violations.push({
+      code: "no_valid_selection",
+      message: "no proposed actor survived validation against the catalog",
+      severity: "block",
+    });
+    return {
+      version: DISCOVERY_STRATEGY_VERSION,
+      selections: [],
+      source: "blocked",
+      violations,
+    };
   }
 
   // THE COST CEILING TRIMS BREADTH, NEVER THE PRIMARY. Ordered primary →
@@ -429,60 +453,57 @@ export function validateDiscoveryStrategy(
 }
 
 /**
- * THE FLOOR: what discovery does today, expressed as a strategy.
+ * Raised when no usable actor selection exists.
  *
- * memo23 primary, solidcode fallback, with the engine's existing literal. This
- * runs whenever the model is disabled, unreachable, or proposes nothing usable
- * — so the worst case of the whole selection stage is the behaviour it
- * replaces, not a degraded one.
+ * A distinct class, so a blocked selection cannot be mistaken for a provider
+ * outage or an empty result set further down. It carries the violations because
+ * "why was nothing selected?" is the only question anyone will ask.
  */
-export function deterministicDiscoveryStrategy(
-  mission: LeadMissionV1, opts: DiscoveryStrategyOptions = {},
+export class DiscoveryStrategyBlockedError extends Error {
+  readonly violations: StrategyViolation[];
+  constructor(violations: StrategyViolation[]) {
+    const first = violations[0];
+    super(
+      `discovery actor selection was blocked (${first?.code ?? "unknown"}): ` +
+      `${first?.message ?? "no actors were selected"}. No deterministic ` +
+      `strategy was substituted and no provider work was scheduled.`,
+    );
+    this.name = "DiscoveryStrategyBlockedError";
+    this.violations = violations;
+  }
+}
+
+/**
+ * A strategy that selects nothing, and says why.
+ *
+ * The replacement for `deterministicDiscoveryStrategy`: where the old code
+ * answered a failed selection with the YC literal, this answers it with a
+ * refusal the engine turns into a stopped run.
+ */
+export function blockedDiscoveryStrategy(
+  code: string, message: string,
 ): DiscoveryStrategy {
-  const maxItems = opts.maxItemsPerActor ?? DEFAULT_MAX_ITEMS_PER_ACTOR;
-  const selections: DiscoveryActorSelection[] = [];
-
-  const primary = hiringActorCard("apify_yc_companies_memo23");
-  if (primary) {
-    const proposed = opts.fallbackInput ?? {
-      mode: "companies",
-      isHiring: true,
-      maxItems,
-    };
-    const { input, dropped } = compileActorInput(primary, proposed, maxItems);
-    selections.push({
-      actor_key: primary.actor_key, role: "primary", input,
-      rationale: "deterministic default: the verified startup-company source",
-      dropped_filters: dropped,
-      requires_enrichment: primary.requires_enrichment_before_qualification,
-    });
-  }
-
-  const fallback = hiringActorCard("apify_yc_companies_solidcode");
-  if (fallback) {
-    const { input, dropped } = compileActorInput(fallback, { maxItems }, maxItems);
-    selections.push({
-      actor_key: fallback.actor_key, role: "fallback", input,
-      rationale: "runs only when the primary produced nothing",
-      dropped_filters: dropped,
-      requires_enrichment: fallback.requires_enrichment_before_qualification,
-    });
-  }
-
-  // `mission` is accepted so the deterministic path has the same signature as
-  // the validated one and can grow mission-derived defaults without a caller
-  // change. It deliberately reads nothing today: the literal above IS the
-  // current behaviour, and deriving from the mission here would make the
-  // fallback something other than the floor it exists to be.
-  void mission;
-
   return {
     version: DISCOVERY_STRATEGY_VERSION,
-    selections,
-    source: "deterministic_fallback",
-    violations: [],
+    selections: [],
+    source: "blocked",
+    violations: [{ code, message, severity: "block" }],
   };
 }
+
+// ── `deterministicDiscoveryStrategy` WAS HERE, AND IS DELETED ──────────────
+//
+// It pinned `startup_company_discovery` to the YC scraper and handed it a
+// literal input — `mode: "companies", isHiring: true` — with the engine layering
+// `industries: ["B2B"]` on top. Its own comment called it "the floor ... the
+// current behaviour", and that was accurate: it answered every mission with the
+// same question.
+//
+// Deleting it rather than leaving it unreferenced is deliberate. An unreachable
+// fallback is one edit away from being reachable again, and this one had the
+// property that reaching it produced a confident, plausible, entirely unrelated
+// pool. `validateDiscoveryStrategy` now returns `source: "blocked"` where this
+// used to be called, and the engine refuses the run.
 
 /**
  * What the selector is shown: the request, the compiled mission, the catalog.

@@ -1,4 +1,5 @@
 // THE EVALUATOR MUST BE WIRED IN PRODUCTION, NOT ONLY IN TESTS.
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 //
 // `missionEvaluation.ts` and `missionEvaluationBinding.ts` were built, tested
 // and committed, and `run-agent/index.ts` contained ZERO references to either.

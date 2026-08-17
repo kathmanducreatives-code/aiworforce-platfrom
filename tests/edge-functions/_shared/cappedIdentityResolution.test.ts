@@ -25,6 +25,7 @@ import {
   LINKEDIN_RESOLUTION_CONCURRENCY,
 } from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // THE FIXTURE'S MISSION, AFTER MISSION-AUTHORITATIVE QUALIFICATION.
 //
@@ -167,6 +168,7 @@ async function runFixture(over: Record<string, unknown> = {}) {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     ...tracingDeps(trace, {
       apify_yc_companies_memo23: REAL_25,
       apify_linkedin_company_details: ENRICH_ROWS,
@@ -353,6 +355,7 @@ Deno.test("13. an unresolved identity stays not-evaluated and is never actionabl
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     // The search Actor finds NOTHING for anyone.
     invoke: (call: CompiledActorCall<unknown>) => {
       trace.calls.push({ actor: call.actorKey, input: call.input as Record<string, unknown> });
@@ -404,6 +407,7 @@ Deno.test("14. a closed deadline stops the identity stage starting new calls", a
   const m = mission();
   const plan = buildCapabilityGraph(m);
   await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       trace.calls.push({ actor: call.actorKey, input: call.input as Record<string, unknown> });
       // Discovery burns the whole budget.

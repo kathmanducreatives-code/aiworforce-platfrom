@@ -23,6 +23,7 @@ import {
 } from "../../../supabase/functions/_shared/leadCompanyEvidence.ts";
 import { normalizeLinkedInJob } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const AUTOMATION_QUERY =
   "Find industrial automation integrators in Germany expanding commercially.";
@@ -142,7 +143,7 @@ Deno.test("10. an industrial-automation query ENTERS general_company_discovery",
 Deno.test("10b. and it now EXECUTES instead of reporting skipped_no_input", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  const run = await runCapabilityPlan(mockDeps(AUTOMATION_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m),
   });
   const discovery = run.capability_outcomes
@@ -173,7 +174,7 @@ Deno.test("12. an industrial query is not broadened into SaaS or YC", async () =
   const rec: Recorder = { calls: [], inputs: [] };
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
   const plan = buildCapabilityGraph(m);
-  await runCapabilityPlan(mockDeps(AUTOMATION_ROWS, rec), { mission: m, plan });
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, { mission: m, plan });
 
   for (const yc of ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"]) {
     assertFalse(rec.calls.includes(yc), `${yc} must never run for an industrial query`);
@@ -191,10 +192,10 @@ Deno.test("13. an agency-partner query requires no job verification", async () =
   const m = compile(PARTNER_QUERY, PARTNER_PROPOSAL).final_mission;
   const plan = buildCapabilityGraph(m);
   assertFalse(plan.steps.map((s) => s.capability).includes("hiring_verification"));
-  await runCapabilityPlan(mockDeps({
+  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps({
     apify_linkedin_company_search: [searchRow("Growth Agency", "growth-agency")],
     apify_linkedin_company_details: [enrichRow("Growth Agency", "growth-agency")],
-  }, rec), { mission: m, plan });
+  }, rec) }, { mission: m, plan });
   assertFalse(rec.calls.includes("apify_linkedin_job_search"),
     "nothing about partner fit is proven by a job posting");
 });
@@ -202,7 +203,7 @@ Deno.test("13. an agency-partner query requires no job verification", async () =
 Deno.test("14. company results are normalized and deduplicated", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  const run = await runCapabilityPlan(mockDeps(AUTOMATION_ROWS, rec), {
+  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m),
   });
   // Three rows came back; two of them are the same company.
@@ -221,6 +222,7 @@ Deno.test("15. the Company Brain receives the accepted mission, not a new one", 
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
   const seen: string[] = [];
   await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     ...mockDeps(AUTOMATION_ROWS, rec),
     classifyCompany: (input) => {
       seen.push(String(input.original_user_query ?? ""));
@@ -239,7 +241,7 @@ Deno.test("16. no founder or contact Actor is scheduled on the general route", a
     const rec: Recorder = { calls: [], inputs: [] };
     const m = compile(q, p).final_mission;
     const plan = buildCapabilityGraph(m);
-    await runCapabilityPlan(mockDeps(AUTOMATION_ROWS, rec), { mission: m, plan });
+    await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, { mission: m, plan });
     for (const actor of PEOPLE_ACTORS) {
       assertFalse(rec.calls.includes(actor), `${q}: ${actor} must not run`);
       assertFalse(plan.allowed_providers.includes(actor), `${q}: ${actor} must be unreachable`);

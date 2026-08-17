@@ -26,6 +26,7 @@ import {
   compileFirstProviderCall, newExecutionState, runCapabilityPlan, stateMatchesMission,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
@@ -198,6 +199,7 @@ Deno.test("3b. the engine itself refuses founder discovery with nothing qualifie
   // Brain cannot qualify anything. Founder discovery must NOT be reachable.
   const calls: string[] = [];
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => {
       calls.push(c.actorKey);
       if (c.actorKey === "apify_yc_companies_memo23") {
@@ -222,6 +224,7 @@ Deno.test("4. a capability with no usable records is NOT marked completed", asyn
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) =>
       c.actorKey === "apify_yc_companies_memo23"
         ? Promise.resolve([{ id: "x", name: "Acme", website: "https://acme.com", jobs: [] }])
@@ -259,6 +262,7 @@ Deno.test("5. stale execution state cannot be reused for a different mission", a
 
   const calls: string[] = [];
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (c: CompiledActorCall<unknown>) => { calls.push(c.actorKey); return Promise.resolve([]); },
     verifyEmployer: () => ({ verified: false, outcome: "no_match" }),
   }, { mission: m, plan, state: stale, brain: BRAIN });

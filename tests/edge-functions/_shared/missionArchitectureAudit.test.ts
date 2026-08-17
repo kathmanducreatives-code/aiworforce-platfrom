@@ -44,6 +44,7 @@ import { nextStageFor } from "../../../supabase/functions/_shared/leadResumeStat
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import type { CapabilityEngineDeps } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 const CANONICAL =
   "Find founders of SaaS startups hiring software engineers in the United States. " +
@@ -132,6 +133,7 @@ const runPipeline = async (o: {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   return await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         return Promise.resolve(YC_ROWS);
@@ -319,6 +321,7 @@ Deno.test("3b. a THROWN triage call excludes nobody", async () => {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) =>
       Promise.resolve((call.actorKey === "apify_yc_companies_memo23"
         ? YC_ROWS

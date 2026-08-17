@@ -50,6 +50,7 @@ import {
 } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ═════════════════════════ 1. the frontier is a state, not a boolean ════════
 
@@ -224,6 +225,7 @@ const runPool = async (
     })
     : undefined;
   return await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         now += 5_000;

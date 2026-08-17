@@ -39,6 +39,7 @@ import {
   buildMissionTriageBinding, isMissionTriageEnabled,
 } from "../../../supabase/functions/_shared/missionTriageBinding.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ─────────────────────────────────────────────────────────────── the fixture ──
 
@@ -382,6 +383,7 @@ const runEngine = async (o: {
   const m = mission();
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         return Promise.resolve(rows(o.titles));

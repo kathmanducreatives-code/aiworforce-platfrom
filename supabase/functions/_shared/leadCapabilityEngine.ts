@@ -144,7 +144,7 @@ import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./lead
 // hardcoded YC literal that answered every mission with the same request.
 import {
   type DiscoveryActorSelection, type DiscoveryStrategy,
-  buildDiscoveryPlannerPayload, deterministicDiscoveryStrategy,
+  buildDiscoveryPlannerPayload, blockedDiscoveryStrategy, DiscoveryStrategyBlockedError,
   discoveryStrategyDiagnostics, shouldRunSelection, strategyActorKeys,
   validateDiscoveryStrategy,
 } from "./leadDiscoveryStrategy.ts";
@@ -1096,7 +1096,17 @@ export async function runCapabilityPlan(
       maxItemsPerActor: maxCandidates,
       ...(opts.maxDiscoveryActors != null ? { maxActors: opts.maxDiscoveryActors } : {}),
     };
-    if (!deps.planDiscovery) return deterministicDiscoveryStrategy(opts.mission, limits);
+    // ── NO SELECTOR IS A BLOCK, NOT A DEFAULT ───────────────────────────────
+    //
+    // This returned the YC literal. Combined with `planDiscovery` being gated on
+    // a credential, that meant a missing key produced a confident search for
+    // B2B YC companies whatever the user had asked for.
+    if (!deps.planDiscovery) {
+      return blockedDiscoveryStrategy(
+        "no_discovery_selector",
+        "no actor selector was supplied, so no actors were chosen for this request",
+      );
+    }
     try {
       const proposed = await deps.planDiscovery({
         payload: buildDiscoveryPlannerPayload(opts.mission, limits),
@@ -1110,7 +1120,12 @@ export async function runCapabilityPlan(
       return validateDiscoveryStrategy(actors, opts.mission, limits);
     } catch (e) {
       log("discovery_strategy_planner_failed", { error: String(e) });
-      return deterministicDiscoveryStrategy(opts.mission, limits);
+      // A THROWN SELECTOR IS A BLOCKED RUN. Falling back here is what made a
+      // model outage indistinguishable from a model that chose YC on purpose.
+      return blockedDiscoveryStrategy(
+        "discovery_selector_failed",
+        `the actor selector failed: ${String(e).slice(0, 300)}`,
+      );
     }
   };
 
@@ -1789,13 +1804,25 @@ export async function runCapabilityPlan(
       //
       // Now the request itself decides. `planDiscovery` proposes actors and
       // inputs; `validateDiscoveryStrategy` keeps only what the closed catalog
-      // permits. With no `planDiscovery` wired — or a selector that throws,
-      // returns nothing, or proposes nothing usable — the deterministic
-      // strategy runs, which is exactly the pair and the literal above.
+      // permits.
+      //
+      // AND THERE IS NO LONGER ANYWHERE ELSE TO LAND. With no selector, a
+      // selector that throws, or a proposal that survives no validation, the
+      // strategy comes back `blocked` and this run stops. The old code reached
+      // the literal above in all three cases, which is why a model outage, a
+      // missing credential and a genuinely-chosen YC search were
+      // indistinguishable from the outside.
       const strategy = await resolveDiscoveryStrategy();
       const strategyKeys = [...strategyActorKeys(strategy)];
       state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
       log("discovery_strategy_resolved", state.discovery_strategy);
+
+      if (strategy.source === "blocked") {
+        // Recorded BEFORE throwing, so the refusal is inspectable on the task
+        // row rather than only in a log line — the Commit 1 lesson.
+        state.fallback_reason = strategy.violations[0]?.code ?? "discovery_blocked";
+        throw new DiscoveryStrategyBlockedError(strategy.violations);
+      }
 
       // ── WHICH REQUIRED SIGNALS THIS RUN CAN ACTUALLY ANSWER ─────────────────
       //
@@ -1901,16 +1928,25 @@ export async function runCapabilityPlan(
         used.push(provider);
 
         if (provider === "apify_yc_companies_memo23") {
+          // ── THE INPUT IS THE MODEL'S, NOT A LITERAL WITH AN OVERRIDE ──────
+          //
+          // This block used to open with the answer already written:
+          //
+          //     queries: [], industries: opts.ycIndustries ?? ["B2B"],
+          //     regions: ["United States of America"], isHiring: true,
+          //     minEmployeeSize: "10+", maxEmployeeSize: "500",
+          //
+          // and `...sel.input` layered the model's choices ON TOP. That reads
+          // like a safe default and is not: a model that says nothing about
+          // industry silently searches B2B, and a model that is never asked —
+          // which was every run before Commit 2 — searches B2B always. On
+          // 2026-08-17 that is precisely what happened to "AI startups".
+          //
+          // Only `maxItems` remains as a pre-set, because it is a COST ceiling
+          // rather than a search term: it bounds what the run may spend and is
+          // clamped again by the validator against the actor's published limit.
+          // Everything describing WHAT to look for now comes from `sel.input`.
           const compiled = compileMemo23YcInput({
-            queries: [],
-            topCompany: false,
-            nonprofit: false,
-            batch: ["All Batches"],
-            regions: opts.ycRegions ?? ["United States of America"],
-            industries: opts.ycIndustries ?? ["B2B"],
-            isHiring: true,
-            minEmployeeSize: opts.ycMinSize ?? MEMO23_DEFAULT_MIN_SIZE,
-            maxEmployeeSize: opts.ycMaxSize ?? MEMO23_DEFAULT_MAX_SIZE,
             maxItems: maxCandidates,
             // THE STRATEGY'S CHOICES, over the defaults above. Only fields this
             // Actor's schema accepts survive validation, so nothing here can be

@@ -54,6 +54,7 @@ import {
   type ProjectableCompany, type WorkbenchLifecycle,
 } from "../../../supabase/functions/_shared/leadWorkbenchProjection.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 // ─────────────────────────────────────────────────────────────── the fixture ──
 
@@ -107,6 +108,7 @@ const runEngine = async (o: {
   const plan = buildCapabilityGraph(m);
   let enrichBatch = 0;
   return await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
     invoke: (call: CompiledActorCall<unknown>) => {
       if (call.actorKey === "apify_yc_companies_memo23") {
         return Promise.resolve(ycRows(n));
@@ -234,6 +236,7 @@ Deno.test("2d. a company that never reached the stage is not_attempted, not empt
     const m = mission();
     const plan = buildCapabilityGraph(m);
     const run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
       invoke: (call: CompiledActorCall<unknown>) =>
         Promise.resolve(call.actorKey === "apify_yc_companies_memo23"
           ? ycRows(3)

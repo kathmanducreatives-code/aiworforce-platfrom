@@ -50,6 +50,7 @@ import {
 import { createPersistPlan } from "../../../supabase/functions/_shared/qualifiedLeadPersistence.ts";
 import { identityIsActionable } from "../../../supabase/functions/_shared/companyIdentityResolution.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 import {
   readEvaluationRows,
 } from "../../../src/lib/workbench/evaluationRows.ts";
@@ -236,6 +237,7 @@ async function runHiringWithPersistence(
   if (preflight.ok) {
     assertPaidExecutionAllowed(preflight);
     run = await runCapabilityPlan({
+      planDiscovery: stubDiscoverySelector(),
       invoke: (call: CompiledActorCall<unknown>) => {
         calls.push(call.actorKey);
         return Promise.resolve(rows[call.actorKey] ?? []);
