@@ -564,17 +564,47 @@ export function shouldRunSelection(
 }
 
 /** Compact record of what the strategy decided, for the execution state. */
+/**
+ * The record a run leaves behind about HOW its actors were chosen.
+ *
+ * ── WHY THIS CARRIES THE INPUTS AND THE REASONS, NOT COUNTS ────────────────
+ *
+ * This used to report `input_fields` (key names only), `dropped_filters` as a
+ * NUMBER, and `blocked`/`repaired` as counts. Auditing the 2026-08-17 run then
+ * had to infer which interpreter had chosen the actors by comparing the live
+ * Apify input against the hardcoded literals in the engine, character by
+ * character, and concluding "these match, so it must have been deterministic".
+ *
+ * That is not observability, it is archaeology. A run must be able to answer,
+ * from its own record: did the model choose this actor, WHY, what input did it
+ * generate, and what did the validator change or refuse? So the reasons, the
+ * inputs and the violations are all carried in full.
+ *
+ * The inputs are small — a compiled actor input is tens of fields at most — and
+ * they are the single most valuable thing to have when a run returns a pool
+ * nobody expected.
+ */
 export function discoveryStrategyDiagnostics(s: DiscoveryStrategy): Record<string, unknown> {
   return {
     version: s.version,
     source: s.source,
+    /** True when a model chose these actors; false when code did. */
+    model_chosen: s.source === "model_validated" || s.source === "model_repaired",
     actors: s.selections.map((x) => ({
       actor_key: x.actor_key,
       role: x.role,
+      // WHY THIS ACTOR. Empty on the deterministic path, which is itself the
+      // answer to "did a model choose this?".
+      rationale: x.rationale,
+      // WHAT WAS ACTUALLY SENT. The field that would have made the "where did
+      // industries: ['B2B'] come from?" question a lookup instead of a hunt.
+      input: x.input,
       input_fields: Object.keys(x.input).sort(),
-      dropped_filters: x.dropped_filters.length,
+      dropped_filters: x.dropped_filters,
       requires_enrichment: x.requires_enrichment,
     })),
+    // WHAT THE VALIDATOR DID, in full — not just how many times it did it.
+    violations: s.violations,
     blocked: s.violations.filter((v) => v.severity === "block").length,
     repaired: s.violations.filter((v) => v.severity === "repair").length,
     // TRUE for every discovery actor registered today. Surfaced because it is

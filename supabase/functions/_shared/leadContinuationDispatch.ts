@@ -89,11 +89,53 @@ export type DispatchOutcome =
     reason: "not_configured" | "transport_error" | "rejected";
     detail: string;
     status?: number;
+    /**
+     * THE REFUSAL, VERBATIM AND BOUNDED.
+     *
+     * `status` alone maps to six different `500` returns in run-agent and
+     * separates none of them. These four fields are what turn "it stopped" into
+     * "it stopped BECAUSE", and they are why a continuation failure no longer
+     * needs a code archaeology session to interpret.
+     */
+    response_body?: string;
+    error_code?: string;
+    error_message?: string;
+    plan_id?: string | null;
+    task_id?: string;
+    continuation_index?: number;
   };
 
+/** Bounded read of an error envelope. Never throws; a body is never required. */
+async function readErrorBody(
+  res: { text?: () => Promise<string> },
+): Promise<{ text: string; error?: string; message?: string }> {
+  if (typeof res.text !== "function") return { text: "<body not captured>" };
+  let raw: string;
+  try {
+    raw = (await res.text()).slice(0, 2000);
+  } catch {
+    return { text: "<body unreadable>" };
+  }
+  try {
+    const j = JSON.parse(raw) as Record<string, unknown>;
+    const pick = (k: string) => typeof j[k] === "string" ? j[k] as string : undefined;
+    return { text: raw, error: pick("error"), message: pick("details") ?? pick("message") };
+  } catch {
+    // Not JSON — an edge-runtime or gateway error page. The raw text is still
+    // the most useful thing anyone will have.
+    return { text: raw };
+  }
+}
+
 export interface DispatchDeps {
-  /** Injected so tests exercise every branch without a network. */
-  fetch: (url: string, init: RequestInit) => Promise<{ status: number }>;
+  /**
+   * Injected so tests exercise every branch without a network.
+   *
+   * `text` is OPTIONAL so the many existing fakes that return only a status
+   * keep compiling; a fake without it simply records `<body not captured>`,
+   * which is exactly what the old code always recorded.
+   */
+  fetch: (url: string, init: RequestInit) => Promise<{ status: number; text?: () => Promise<string> }>;
   /**
    * How long to wait for a REFUSAL before treating the handoff as accepted.
    * Injected so tests need no real timers. See `HANDOFF_WINDOW_MS`.
@@ -124,8 +166,8 @@ export interface DispatchDeps {
  * failure and belongs to the caller's `catch`.
  */
 async function raceHandoff(
-  deps: DispatchDeps, call: Promise<{ status: number }>,
-): Promise<{ status: number } | "handed_off"> {
+  deps: DispatchDeps, call: Promise<{ status: number; text?: () => Promise<string> }>,
+): Promise<{ status: number; text?: () => Promise<string> } | "handed_off"> {
   const ms = deps.handoffWindowMs ?? HANDOFF_WINDOW_MS;
   const wait = deps.wait ?? ((n: number) => new Promise<void>((r) => setTimeout(r, n)));
   // The unresolved call must not become an unhandled rejection when the timer
@@ -207,12 +249,35 @@ export async function dispatchContinuation(
     // outright. A run that says it is continuing and never does is precisely
     // the failure this whole mechanism replaces, so the status is checked.
     if (res.status < 200 || res.status >= 300) {
+      // ── READ THE BODY. THE STATUS ALONE IS NOT A DIAGNOSIS. ────────────────
+      //
+      // This recorded `status: 500` and threw the body away. The 2026-08-17 run
+      // stopped at 30 of 110 candidates with 80 still to investigate, and the
+      // only thing the record could say was "refused with HTTP 500" — which
+      // narrows the cause to six different `500` returns in run-agent and
+      // distinguishes none of them.
+      //
+      // run-agent answers with `{ error, details }`, so the body IS the
+      // diagnosis. It is bounded and carries no credentials: these are this
+      // system's own error envelopes, and the Authorization header travels in
+      // the REQUEST, never the response.
+      const body = await readErrorBody(res);
       log("continuation_dispatch_rejected", {
-        task_id: req.resumeTaskId, index: req.continuationIndex, status: res.status,
+        task_id: req.resumeTaskId, index: req.continuationIndex,
+        status: res.status, error: body.error, body: body.text,
       });
       return {
         dispatched: false, reason: "rejected", status: res.status,
-        detail: `the next slice was refused with HTTP ${res.status}`,
+        detail: body.error
+          ? `the next slice was refused with HTTP ${res.status}: ${body.error}` +
+            (body.message ? ` — ${body.message}` : "")
+          : `the next slice was refused with HTTP ${res.status}: ${body.text}`,
+        response_body: body.text,
+        error_code: body.error,
+        error_message: body.message,
+        plan_id: req.planId,
+        task_id: req.resumeTaskId,
+        continuation_index: req.continuationIndex,
       };
     }
     log("continuation_dispatched", {

@@ -289,10 +289,21 @@ Deno.test("10. a fallback stays silent while the primary is producing", async ()
   );
 });
 
-Deno.test("11. the run records which actors were chosen and how", async () => {
+Deno.test("11. the run records which actors were chosen, how, and with what input", async () => {
   // The one record that answers "was this pool built for THIS request?" after
-  // the fact. Field names only — the payload must not ride into every persisted
-  // task result, which is what made `tasks.result` a megabyte.
+  // the fact.
+  //
+  // ── WHY THE PAYLOAD IS NOW ON THE RECORD ─────────────────────────────────
+  //
+  // This asserted field names only, to keep `tasks.result` from growing. The
+  // size lesson behind that was real but was about PROVIDER payloads — scraped
+  // rows measured in megabytes — not about actor inputs, which are a few dozen
+  // scalars capped at `DEFAULT_MAX_ACTORS` (3).
+  //
+  // The 2026-08-17 audit paid the price of the omission: with names only,
+  // "where did `industries: ['B2B']` come from?" could not be answered from the
+  // run at all, and had to be reconstructed by matching the live Apify input
+  // against hardcoded literals in the engine. The values are the evidence.
   const { result } = await run({
     planDiscovery: () => Promise.resolve([
       { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
@@ -310,8 +321,19 @@ Deno.test("11. the run records which actors were chosen and how", async () => {
   assertEquals(actors.length, 2);
   for (const a of actors) {
     assert(Array.isArray(a.input_fields));
-    assertEquals("input" in a, false, "field names, never the payload");
+    assertEquals("input" in a, true, "the input actually sent must be recorded");
+    assert("rationale" in a, "and the reason it was chosen");
   }
+  // The repaired filter must be nameable, not merely counted — "one filter was
+  // dropped" does not tell you WHICH, and that is the whole question when a
+  // pool comes back wrong.
+  const violations = d.violations as Array<Record<string, unknown>>;
+  assert(Array.isArray(violations) && violations.length > 0);
+  assert(
+    violations.some((v) => String(v.message ?? "").includes("bogusFilter") ||
+      String(v.code ?? "").length > 0),
+    "the validator's decision must be readable from the record",
+  );
 });
 
 Deno.test("12. the deterministic path records itself as such", async () => {

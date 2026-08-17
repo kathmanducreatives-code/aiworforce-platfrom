@@ -292,7 +292,24 @@ Deno.test("17. every briefed actor is genuinely registered for discovery", () =>
   }
 });
 
-Deno.test("18. diagnostics record the decision without the payload", () => {
+// ── REVERSED DELIBERATELY, 2026-08-17 ──────────────────────────────────────
+//
+// This test used to assert `"input" in first === false`: field NAMES only, to
+// keep the payload out of every persisted task result. That was a defensible
+// size trade-off and it turned out to be the wrong one.
+//
+// Auditing the run of 2026-08-17 required answering "where did
+// `industries: ['B2B']` come from?", and with only field names on the record
+// the answer had to be reconstructed by diffing the live Apify input against
+// the hardcoded literals in `leadCapabilityEngine` and arguing that an exact
+// match implied the deterministic branch. The record could not distinguish
+// "the model chose this" from "the model was never asked".
+//
+// The size worry does not survive contact with the numbers: a compiled actor
+// input is a few dozen scalar fields, and `DEFAULT_MAX_ACTORS` is 3. That is
+// kilobytes on a row that already carries provider payloads measured in
+// megabytes. Being unable to explain a run is the more expensive failure.
+Deno.test("18. diagnostics record the decision AND the payload that was sent", () => {
   const s = validateDiscoveryStrategy([
     { actor_key: "apify_yc_companies_memo23", role: "primary", input: { mode: "companies" } },
     { actor_key: "apify_linkedin_company_search", role: "breadth", input: { bogus: 1 } },
@@ -302,11 +319,14 @@ Deno.test("18. diagnostics record the decision without the payload", () => {
   assertEquals(d.source, "model_repaired");
   assertEquals((d.actors as unknown[]).length, 2);
   assert(Number(d.repaired) > 0, "a dropped filter must be counted");
-  // Field NAMES, not values: the record proves what was asked without carrying
-  // the payload into every persisted task result.
+  // Field names stay — they are the quick scan — but the VALUES are now the
+  // point: a run must be able to say what it actually sent to the provider.
   const first = (d.actors as Array<Record<string, unknown>>)[0];
   assert(Array.isArray(first.input_fields));
-  assertEquals("input" in first, false);
+  assertEquals("input" in first, true, "the compiled input must be on the record");
+  assertEquals((first.input as Record<string, unknown>).mode, "companies");
+  // And WHO decided, in one boolean, without parsing the source enum.
+  assertEquals(d.model_chosen, true);
 });
 
 Deno.test("19. the default ceiling leaves room for breadth beyond the primary pair", () => {

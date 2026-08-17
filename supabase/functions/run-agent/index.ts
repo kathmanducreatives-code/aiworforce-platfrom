@@ -3832,6 +3832,19 @@ Deno.serve(async (req) => {
             // `dispatch` is filled in only when the handoff fails, which is the
             // one case where no successor exists to collide with.
             [LINEAGE_PROGRESS_KEY]: progress,
+            // ── WHO CHOSE THESE ACTORS, AND WHY ─────────────────────────────
+            //
+            // The engine has always computed this and logged it; nothing ever
+            // persisted it. Auditing the 2026-08-17 run therefore could not say
+            // whether the model had been asked and refused or had never been
+            // consulted — the only available evidence was that the live Apify
+            // input matched the engine's hardcoded literals exactly, which is
+            // inference, not a record.
+            //
+            // `null` is itself informative: it means discovery never ran in
+            // this slice (a resumed run reusing a stored pool), which is a
+            // different thing from "ran deterministically".
+            discovery_strategy: capabilityRun?.state.discovery_strategy ?? null,
             auto_continuation: {
               version: AUTO_CONTINUATION_VERSION,
               continuing: autoDecision.continue,
