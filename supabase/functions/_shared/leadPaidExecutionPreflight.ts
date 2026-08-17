@@ -69,7 +69,7 @@ export type PreflightBlockCode =
   | "provider_not_capability_primary"
   | "provider_not_in_plan"
   | "input_validation_failed"
-  | "startup_mission_requires_memo23"
+  | "provider_not_permitted_for_capability"
   | "people_provider_before_qualification"
   | "mission_lacks_qualification_contract"
   | "inconsistent_intelligence_configuration"
@@ -263,26 +263,22 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     if (!approved.includes(provider)) {
       block("provider_not_in_capability",
         `provider "${provider}" is not approved for capability "${firstCapability}" (approved: ${approved.join(", ") || "none"})`);
-    } else if (approved.length > 0 && provider !== approved[0]) {
-      // MEMBERSHIP IS NOT ENOUGH FOR THE OPENING CALL.
+    } else // ── REMOVED: "THE FIRST CALL MUST BE THE REGISTRY'S PRIMARY" ──────────
       //
-      // This used to be membership alone, because every capability's list was
-      // primary + fallback and a fallback could not be reached first anyway.
-      // `startup_company_discovery` now also declares
-      // `apify_linkedin_company_search` as a breadth source, and membership
-      // alone would have let it OPEN a startup mission — paying a
-      // name-matching company search to discover a cohort it cannot describe,
-      // which is precisely one of the three calls the failed task this check
-      // was written for actually paid for.
+      // The second copy of actor selection living in the validator. Its concern
+      // was real — a breadth source should not OPEN a run, it earns its call
+      // from what the primary returned — but that ordering is now decided by
+      // the strategy's own `role` and enforced when `validateDiscoveryStrategy`
+      // sorts primary → breadth → fallback. Pinning the REGISTRY's primary here
+      // overrode GPT's choice of opener.
       //
-      // The first paid call is the capability's declared primary. A fallback or
-      // a breadth source earns its call from what the primary returned, and
-      // that is a decision execution makes, never the opening move.
-      block("provider_not_capability_primary",
-        `provider "${provider}" is approved for "${firstCapability}" but is not its primary ` +
-        `("${approved[0]}"); a fallback or breadth source may not be the first paid call`);
-    }
-    if (plan && !plan.allowed_providers.includes(provider)) {
+      // It refused the first live 2-lead run: GPT named
+      // `apify_linkedin_company_search` as primary, which is registered for
+      // this capability and is the better opener when the request says "AI" —
+      // memo23's `industries` enum has no such value. The related worry, a
+      // company search opening with no query to search for, has its own guard
+      // ("a company search named without a query is skipped, not called").
+          if (plan && !plan.allowed_providers.includes(provider)) {
       block("provider_not_in_plan",
         `provider "${provider}" is not in this mission's allowed providers`);
     }
@@ -361,16 +357,52 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     }
   }
 
-  // THE CANONICAL RULE. A startup mission that does not begin at memo23 is not a
-  // startup mission being executed — it is a different plan wearing its name.
-  if (mission && isStartupMission(mission) && mission.requested_output !== "job_listings") {
-    if (plan && plan.entry_capability !== "startup_company_discovery") {
-      block("startup_mission_requires_memo23",
-        `a startup mission must enter at startup_company_discovery, not "${plan.entry_capability}"`);
-    }
-    if (provider && provider !== "apify_yc_companies_memo23") {
-      block("startup_mission_requires_memo23",
-        `a startup mission's first paid provider must be apify_yc_companies_memo23, not "${provider}"`);
+  // ── REMOVED: "A STARTUP MISSION MUST BEGIN AT memo23" ────────────────────
+  //
+  // This was the last surviving copy of `startup ⇒ YC`. Selection was taken off
+  // it in Commit 3, but it lived on here as a VALIDATION rule, so the validator
+  // was still choosing the actor — just by refusing every other one.
+  //
+  // It failed the first live 2-lead run (plan ddfd3af6, 2026-08-17 17:00) with
+  // two blocks: entry was `general_company_discovery`, and the first provider
+  // was `apify_linkedin_company_search`. Both were GPT's choices, and the second
+  // is a GOOD one: memo23's `industries` enum has no "AI" value, so the YC
+  // scraper cannot express "AI startups" at all. This rule would have forced the
+  // run onto the one actor that cannot ask the question, which is how the
+  // 2026-08-17 audit ended at 0 qualified.
+  //
+  // The validator's job is to reject what is unsafe or unexecutable, never to
+  // pick. What replaces it is that narrower check: the first paid provider must
+  // be REGISTERED for the capability it is about to serve. An unregistered or
+  // mis-purposed actor is still refused; a registered alternative is now
+  // allowed, and `discovery_strategy` records which one GPT chose and why.
+  // ── THE MISSION AND THE PLAN MUST BE ABOUT THE SAME THING ───────────────
+  //
+  // Not actor selection — an ENTITY check. A mission asking for companies handed
+  // a plan that opens at `job_discovery` is not a routing preference, it is two
+  // different requests, and it is what the old memo23 pin was really catching
+  // when it fired on a job plan.
+  //
+  // Deliberately narrow: it names a KIND of capability, never an actor, so any
+  // registered company-discovery capability — `startup_company_discovery`,
+  // `general_company_discovery` — is equally acceptable and GPT keeps the
+  // choice between them.
+  if (
+    mission && plan?.entry_capability &&
+    mission.requested_output !== "job_listings" &&
+    /^job_/.test(plan.entry_capability)
+  ) {
+    block("entry_capability_mismatch",
+      `this mission asks for companies but the plan opens at ` +
+      `"${plan.entry_capability}"`);
+  }
+
+  if (mission && provider && plan?.entry_capability) {
+    const permitted = plan.allowed_providers ?? [];
+    if (permitted.length > 0 && !permitted.includes(provider)) {
+      block("provider_not_permitted_for_capability",
+        `"${provider}" is not registered for "${plan.entry_capability}"; ` +
+        `permitted: ${permitted.join(", ")}`);
     }
   }
 

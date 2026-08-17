@@ -90,8 +90,18 @@ Deno.test("2. a wrong first provider hard-fails before any credit is spent", () 
   const m = mission();
   const plan = buildCapabilityGraph(m);
 
-  // Each of these is an Actor the failed task actually paid for.
-  for (const wrong of ["apify_jobs", "apify_people_search", "apify_linkedin_company_search"]) {
+  // ── `apify_linkedin_company_search` IS NO LONGER "WRONG" ────────────────
+  //
+  // It was in this list because a startup mission was pinned to memo23. That
+  // pin is removed: it forced every startup request onto the one actor whose
+  // `industries` enum has no "AI" value, and it failed the first live 2-lead
+  // run by refusing GPT's better choice. LinkedIn company search is REGISTERED
+  // for company discovery, so it is a legitimate selection now.
+  //
+  // The two that remain are the ones this test was really built for — a job
+  // board and a people search running before any company work. Those are not
+  // registered for discovery and are still refused.
+  for (const wrong of ["apify_jobs", "apify_people_search"]) {
     const p = buildPaidExecutionPreflight({
       mission: m, plan, firstProvider: wrong, firstProviderCompileOk: true,
     });
@@ -110,26 +120,50 @@ Deno.test("2. a wrong first provider hard-fails before any credit is spent", () 
     const codes = p.blocked.map((b) => b.code);
     assert(
       codes.includes("provider_not_in_capability") ||
-      codes.includes("provider_not_capability_primary") ||
+      codes.includes("provider_not_permitted_for_capability") ||
       codes.includes("provider_not_in_plan"),
       `${wrong} must be refused as an opening call: ${codes.join(", ")}`,
     );
-    assert(codes.includes("startup_mission_requires_memo23"));
     assert(err instanceof PaidExecutionBlockedError);
   }
 });
 
-Deno.test("2b. a startup mission entering anywhere but startup discovery is refused", () => {
+// ── REWRITTEN: THE PIN IS GONE, THE PROTECTION IS NOT ────────────────────
+//
+// This asserted `startup_mission_requires_memo23` — that a startup mission must
+// open at memo23. That pin forced every startup request onto the one actor
+// whose `industries` enum has no "AI" value, and it refused the first live
+// 2-lead run by rejecting GPT's better opener.
+//
+// What it was really protecting is unchanged and still asserted: a job board
+// must not open a company mission.
+Deno.test("2b. a job board cannot open a company mission", () => {
   const m = mission();
   const jobPlan = buildCapabilityGraph(
     parseLeadMissionDeterministic("Find 100 Sales Operations jobs in the United States"));
-  // A startup MISSION handed a job-discovery PLAN: the exact mismatch that would
-  // let a job board run first.
   const p = buildPaidExecutionPreflight({
     mission: m, plan: jobPlan, firstProvider: "apify_jobs", firstProviderCompileOk: true,
   });
   assertFalse(p.ok);
-  assert(p.blocked.some((b) => b.code === "startup_mission_requires_memo23"));
+  const codes = p.blocked.map((b) => b.code);
+  // `entry_capability_mismatch` is the honest reason: the mission asks for
+  // companies and the plan opens at job discovery. The refusal names the
+  // MISMATCH rather than demanding a particular actor.
+  assert(
+    codes.includes("entry_capability_mismatch") ||
+      codes.includes("provider_not_permitted_for_capability") ||
+      codes.includes("provider_not_in_capability") ||
+      codes.includes("provider_not_in_plan"),
+    `expected a permission or mismatch refusal, got: ${codes.join(", ")}`,
+  );
+
+  // And the actor GPT actually chose IS allowed — the point of the change.
+  const ok = buildPaidExecutionPreflight({
+    mission: m, plan: buildCapabilityGraph(m),
+    firstProvider: "apify_linkedin_company_search", firstProviderCompileOk: true,
+  });
+  assert(ok.ok, `a registered discovery actor must be permitted: ${
+    ok.blocked.map((b) => b.code).join(",")}`);
 });
 
 Deno.test("2c. an input that fails validation blocks the call", () => {
