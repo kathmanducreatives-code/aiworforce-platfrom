@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
+import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -4840,13 +4841,17 @@ Deno.serve(async (req) => {
       metadata: { step_index, task_id: task.id, next_agent_slug: nextStep.agent_slug },
     });
 
-    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-      },
-      body: JSON.stringify({
+    // THE SAME BACKGROUND HANDOFF AS orchestrate'S KICKOFF, AND THE SAME BUG.
+    //
+    // This is the second half of the stall: even once a run starts, an
+    // unregistered floating fetch could be dropped when this isolate returns,
+    // leaving the plan parked one step further along with a completed step 0
+    // and nothing driving step 1. Identical symptom, later checkpoint.
+    invokeInBackground({
+      url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`,
+      token: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      log: (m, meta) => console.error("[run-agent][chain]", m, meta),
+      body: {
         plan_id,
         step_index: (step_index as number) + 1,
         agent_slug: nextStep.agent_slug,
@@ -4863,8 +4868,31 @@ Deno.serve(async (req) => {
         // For competitor discovery, nextToolInput carries Hawk's inferred queries.
         tool_input: nextToolInput,
         execution_mode: execution_mode_body,
-      }),
-    }).catch((e) => console.error("[run-agent] chain fetch failed:", e));
+      },
+      // Step 0's work is already persisted and is NOT discarded — only the plan
+      // is marked, so the completed step's findings stay readable and the run
+      // stays resumable rather than looking like it never happened.
+      onFailure: async (failure) => {
+        const reason = describeFailure(failure);
+        await supabase.from("task_plans")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("id", plan_id);
+        await supabase.from("activity_feed").insert({
+          workspace_id,
+          plan_id,
+          agent_id: agent.id,
+          event_type: "plan_failed",
+          title: "Next step could not be started",
+          body: reason,
+          metadata: {
+            stage: "run_agent_chain",
+            from_step_index: step_index,
+            next_step_index: (step_index as number) + 1,
+            failure,
+          },
+        });
+      },
+    });
 
     return json({
       success: true,

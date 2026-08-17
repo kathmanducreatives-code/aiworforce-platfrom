@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission } from "../_shared/qualifiedLeadRouting.ts";
+import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import {
   planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
 } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
@@ -1387,13 +1388,20 @@ Return ONLY valid JSON, no prose, no markdown:
       ? effectiveRequestedCount(missionForRouting)
       : DEFAULT_REQUESTED_COUNT;
 
-    fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({
+    // THE HANDOFF STAYS IN THE BACKGROUND, BUT IS NO LONGER SILENT.
+    //
+    // It cannot be awaited — run-agent runs the whole step, Actor calls
+    // included, and holding this request open for that would turn a slow
+    // success into a 504. What it CAN stop being is invisible. See
+    // _shared/backgroundInvoke.ts: the call is registered with the Edge Runtime
+    // so the isolate is not torn down before the request is sent, and a
+    // rejected handoff is now observed instead of resolving quietly into a
+    // `.catch` that HTTP errors never reach.
+    invokeInBackground({
+      url: `${SUPABASE_URL}/functions/v1/run-agent`,
+      token: SUPABASE_SERVICE_ROLE_KEY,
+      log: (m, meta) => console.error("[orchestrate][kickoff]", m, meta),
+      body: {
         plan_id: taskPlan.id,
         step_index: 0,
         agent_slug: firstStep.agent_slug,
@@ -1424,8 +1432,29 @@ Return ONLY valid JSON, no prose, no markdown:
         // run-agent planning the same mission a second time — one initial planner
         // request per run, and the strategy that executes is the one on screen.
         ...(qlPlan ? { qualified_lead_plan: qlPlan.artifact } : {}),
-      }),
-    }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
+      },
+      // A PLAN MUST NEVER SIT IN `executing` WITH NOTHING RUNNING.
+      //
+      // Nothing else writes to `task_plans` until run-agent takes ownership, so
+      // if the handoff does not land this is the ONLY chance to record it. Three
+      // live runs stalled here and left a plan that the UI reported as
+      // "preparing the workflow" indefinitely; a failed row is worse news and
+      // far better behaviour, because it can be seen and retried.
+      onFailure: async (failure) => {
+        const reason = describeFailure(failure);
+        await admin.from("task_plans")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("id", taskPlan.id);
+        await admin.from("activity_feed").insert({
+          workspace_id,
+          plan_id: taskPlan.id,
+          event_type: "plan_failed",
+          title: "Workflow could not be started",
+          body: reason,
+          metadata: { stage: "run_agent_kickoff", failure },
+        });
+      },
+    });
 
     return json({
       success: true,
