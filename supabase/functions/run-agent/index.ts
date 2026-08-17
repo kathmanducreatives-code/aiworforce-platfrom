@@ -67,6 +67,15 @@ import {
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+// GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
+// decides which of its choices are allowed; this only supplies the proposal.
+import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
+import { gptAvailable } from "../_shared/gptProvider.ts";
+
+/** Env reader passed to the GPT layer, so tests can inject one. */
+const readEnvSafe = (key: string): string | undefined => {
+  try { return Deno.env.get(key); } catch { return undefined; }
+};
 import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
 } from "../_shared/leadMissionRuntime.ts";
@@ -2207,6 +2216,31 @@ Deno.serve(async (req) => {
               // pre-Phase-4 semantic classifier onto the engine. The engine no
               // longer accepts it: one semantic authority, one call site, and
               // that is `evaluateMission` below.
+              // ── STAGE 3/4 WIRING: GPT CHOOSES THE DISCOVERY ACTORS ───────
+              //
+              // The seam the engine has accepted since `leadDiscoveryStrategy`
+              // landed, finally filled. Before this, `planDiscovery` was never
+              // constructed, so `resolveDiscoveryStrategy` always took the
+              // deterministic branch and the request had no influence on which
+              // Actors ran.
+              //
+              // GPT proposes; `validateDiscoveryStrategy` decides. An
+              // unregistered Actor, an unsupported filter and an invalid enum
+              // are all rejected there, so nothing the model returns can become
+              // a call the catalog does not permit.
+              //
+              // NOT GATED ON A FLAG, and gated on a credential instead: with no
+              // OPENAI_API_KEY the provider returns `no_api_key`, the planner
+              // returns null, and the engine runs the deterministic strategy —
+              // the exact behaviour of every run before this line existed. So
+              // the floor is unchanged and there is no second switch to forget.
+              planDiscovery: gptAvailable(readEnvSafe)
+                ? makeGptDiscoveryPlanner({
+                  readEnv: readEnvSafe,
+                  log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
+                })
+                : undefined,
+
               // ── STAGE 2 WIRING: GPT MISSION INTELLIGENCE ─────────────────
               //
               // Undefined when the flag is down, and the engine then keeps the
