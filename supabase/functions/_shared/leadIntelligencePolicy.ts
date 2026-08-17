@@ -137,7 +137,20 @@ export function getLeadIntelligenceCapabilities(
     // THE PROVENANCE RULE. Only a workspace whose compiler is ON should be
     // holding a GPT-compiled mission; that is what makes "compilation failed"
     // distinguishable from "compilation was never meant to happen".
-    expects_compiled_mission: stages.mission_compiler,
+    // ── ALWAYS TRUE: COMPILATION IS NO LONGER OPTIONAL ────────────────────
+    //
+    // This mirrored `stages.mission_compiler`, i.e. the flag. That made the
+    // paid-execution preflight's `mission_not_model_compiled` block dead on
+    // every live run: the flag was unset, so the system did not "expect" a
+    // compiled mission, so spending against a regex reading was permitted —
+    // which is exactly what happened on 2026-08-17.
+    //
+    // `buildMissionCompilerBinding` now always offers GPT, so every mission is
+    // expected to be model-compiled and a `deterministic_fallback` reaching a
+    // paid boundary is a genuine fault. This is the second gate, independent of
+    // pilot-chat's refusal: one covers where a mission is PRODUCED, this covers
+    // where one is SPENT against.
+    expects_compiled_mission: true,
     reason,
   };
 }

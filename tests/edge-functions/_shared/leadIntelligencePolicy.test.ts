@@ -86,7 +86,14 @@ Deno.test("A1. the production inversion is detected and refuses to spend", () =>
   assertEquals(my.mode, "deterministic",
     "with every required stage off, the deterministic path is intended");
   assertFalse(my.paid_new_architecture_allowed);
-  assertFalse(my.expects_compiled_mission);
+  // ── UPDATED 2026-08-17: EVERY WORKSPACE EXPECTS A COMPILED MISSION ─────
+  //
+  // This asserted `expects_compiled_mission` followed the flag. That is what
+  // made the preflight's `mission_not_model_compiled` block dead on every live
+  // run: flag unset ⇒ no compiled mission expected ⇒ spending against a regex
+  // reading was permitted. Compilation is now unconditional, so the
+  // expectation is too.
+  assert(my.expects_compiled_mission, "compilation is no longer optional");
 
   // And QA gets the whole thing.
   const qa = getLeadIntelligenceCapabilities(QA, live);
@@ -170,16 +177,35 @@ Deno.test("B2. compiler enabled + directives present ⇒ the run proceeds", () =
 
 // ═════════════════════ C. deterministic paths still work ══
 
-Deno.test("C1. an intentionally deterministic workspace is NOT blocked", () => {
-  // Compiler off for this workspace ⇒ a deterministic mission is what was
-  // designed, and the blunt rule "no GPT mission, no spend" would break it.
+// ── REPLACED 2026-08-17: THERE IS NO "INTENTIONALLY DETERMINISTIC" WORKSPACE
+//
+// This asserted that a workspace with the compiler off could spend against a
+// deterministic mission, because that was "what was designed". It is no longer
+// designed: there is one canonical interpretation path, and it is GPT. A
+// workspace cannot opt out of understanding the user's request.
+//
+// What survives is the part that was always right — a mission the model DID
+// compile must not be accused of a failed compilation.
+Deno.test("C1. a model-compiled mission is not accused of failing to compile", () => {
   const det = getLeadIntelligenceCapabilities(MY, env(allOn(QA)));
-  assertEquals(det.mode, "deterministic");
+  assertEquals(det.mode, "deterministic", "the legacy mode label is unchanged");
+  assert(det.expects_compiled_mission, "but a compiled mission is expected regardless");
 
-  const pf = preflight(hiringMission(), det);
+  // `compiled()` adds `directives`, the provenance marker of a real model
+  // reading. The bare `hiringMission()` fixture is a DETERMINISTIC mission, and
+  // blocking that is now the correct answer — which is the whole change.
+  const pf = preflight(compiled(hiringMission()), det);
   assertFalse(pf.blocked.some((b) => b.code === "mission_compilation_failed"),
-    "a deterministic workspace must not be accused of a failed compilation");
+    "a mission carrying directives must not be accused of a failed compilation");
   assertFalse(pf.blocked.some((b) => b.code === "inconsistent_intelligence_configuration"));
+
+  // The negative control, so the assertion above cannot pass vacuously: an
+  // uncompiled mission IS refused now, in every workspace.
+  const bare = preflight(hiringMission(), det);
+  assert(
+    bare.blocked.some((b) => b.code === "mission_compilation_failed"),
+    "an uncompiled mission must be refused regardless of workspace configuration",
+  );
   // It still has to satisfy the qualification contract — a different guard.
   assert(pf.ok, "a deterministic mission with a real signal may still run");
 });

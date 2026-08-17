@@ -22,6 +22,7 @@
 // ZERO network, ZERO provider calls, ZERO model spend.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { GPT_MODEL } from "../../../supabase/functions/_shared/gptProvider.ts";
 import {
   buildMissionCompilerBinding,
 } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
@@ -107,6 +108,16 @@ async function offline(
   const realFetch = globalThis.fetch;
   const realKey = Deno.env.get("LOVABLE_API_KEY");
   Deno.env.set("LOVABLE_API_KEY", "test-key-not-a-credential");
+  // ── THE COMPILER NOW SPEAKS TO OPENAI ─────────────────────────────────
+  //
+  // Mission compilation moved off the Lovable/Claude strategist onto GPT, and
+  // without a key `gptProvider` returns `no_api_key` before any transport —
+  // which reaches this suite as "the compiler made no wire call" and then as a
+  // paid-execution block on `deterministic_fallback`. The stub body below is
+  // already the OpenAI chat-completions shape, so only the credential is
+  // needed; nothing about what this suite proves changes.
+  const realOpenAi = Deno.env.get("OPENAI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "sk-test-not-a-credential");
   const calls: WireCall[] = [];
 
   globalThis.fetch = ((_u: string, init: RequestInit) => {
@@ -125,6 +136,8 @@ async function offline(
     globalThis.fetch = realFetch;
     if (realKey === undefined) Deno.env.delete("LOVABLE_API_KEY");
     else Deno.env.set("LOVABLE_API_KEY", realKey);
+    if (realOpenAi === undefined) Deno.env.delete("OPENAI_API_KEY");
+    else Deno.env.set("OPENAI_API_KEY", realOpenAi);
   }
 }
 
@@ -140,7 +153,14 @@ Deno.test("1. the LeadMission model call reaches transport and the mission is mo
 
   // The transport was reached with the canonical id — not refused beforehand.
   assertEquals(calls.length, 1, "exactly one compiler call must reach the transport");
-  assertEquals(calls[0].model, DEFAULT_LEAD_INTELLIGENCE_MODEL);
+  // ── THE COMPILER'S MODEL CHANGED, THE CLAIM DID NOT ────────────────────
+  //
+  // This asserted the canonical strategist id. Mission compilation now runs on
+  // OpenAI — the point of the GPT-first refactor — so the canonical id here
+  // would assert the architecture that produced the 2026-08-17 failure. What
+  // the test proves is unchanged: transport was reached, with the id this
+  // stage is supposed to send.
+  assertEquals(calls[0].model, GPT_MODEL, "mission compilation must run on GPT");
   assert(proposal !== null, "a successful model call must yield a proposal");
 
   const compiled = compileLeadMission({
@@ -340,7 +360,12 @@ Deno.test("6. all five enabled model stages reach the transport", async () => {
   for (const [name, drive] of stages) {
     const { calls } = await offline(MODEL_PROPOSAL, drive);
     assertEquals(calls.length, 1, `${name} did not reach the model transport`);
-    assertEquals(calls[0].model, DEFAULT_LEAD_INTELLIGENCE_MODEL, `${name} sent a non-canonical id`);
+    // The mission compiler is the one stage that has moved to GPT. The other
+    // four are still strategist-backed; migrating them is later commits' work,
+    // and asserting per stage is what keeps that migration honest rather than
+    // letting a loosened assertion cover all five.
+    const expected = name === "mission compiler" ? GPT_MODEL : DEFAULT_LEAD_INTELLIGENCE_MODEL;
+    assertEquals(calls[0].model, expected, `${name} sent an unexpected model id`);
     reached.push(name);
   }
 

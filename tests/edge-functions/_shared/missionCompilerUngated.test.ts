@@ -74,9 +74,22 @@ Deno.test("the model still reaches the compiler, bounded and refusable", () => {
     /MissionCompilationFailedError/.test(COMPILER),
     "and a failed compilation must still refuse explicitly rather than substitute",
   );
+  // ── UPDATED 2026-08-17: THE REFUSAL IS NOW UNCONDITIONAL ────────────────
+  //
+  // This asserted the refusal stayed keyed on `intelligence.mode ===
+  // "new_architecture"`, which required all five intelligence flags. None was
+  // ever set on the live project, so the check never fired and the regex
+  // reading was returned as the mission on every real run — the 2026-08-17
+  // failure. Keying the guard to a mode nobody enabled made it decorative.
   assert(
-    /getLeadIntelligenceCapabilities\(/.test(COMPILER) && /new_architecture/.test(COMPILER),
-    "the refusal must remain keyed on the workspace's intelligence mode",
+    /if \(mission\.mission_parser_source === "deterministic_fallback"\)/.test(COMPILER),
+    "a mission still carrying deterministic_fallback must be refused outright",
+  );
+  assertEquals(
+    /intelligence\.mode === "new_architecture" &&\s*\n?\s*mission\.mission_parser_source/
+      .test(COMPILER),
+    false,
+    "and the refusal must NOT be gated on the intelligence mode again",
   );
 });
 

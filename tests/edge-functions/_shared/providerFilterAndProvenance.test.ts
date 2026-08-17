@@ -174,11 +174,20 @@ Deno.test("6. a model-compiled mission proceeds", () => {
   }
 });
 
-Deno.test("7. a deterministic WORKSPACE is unaffected by the provenance rule", () => {
-  // Compiler off ⇒ deterministic compilation is the designed behaviour, and
-  // demanding model provenance would break a legitimate workflow.
+// ── INVERTED 2026-08-17 ────────────────────────────────────────────────────
+//
+// This asserted that a workspace with the compiler flag off could spend against
+// a `deterministic_fallback` mission, because "deterministic compilation is the
+// designed behaviour". That is the behaviour being removed: the flag was never
+// set on the live project, so this exemption covered EVERY run, and on
+// 2026-08-17 it let a regex reading of "AI startups" be spent against as though
+// a model had produced it.
+//
+// The rule the old comment called "blunt" — always require a compiled mission —
+// is now the architecture. So the assertion flips.
+Deno.test("7. a deterministic mission is refused in EVERY workspace", () => {
   const deterministicWs = getLeadIntelligenceCapabilities(MY, () => undefined);
-  assertEquals(deterministicWs.mode, "deterministic");
+  assertEquals(deterministicWs.mode, "deterministic", "the legacy label is unchanged");
 
   const mission = missionWith({
     mission_parser_source: "deterministic_fallback",
@@ -189,8 +198,11 @@ Deno.test("7. a deterministic WORKSPACE is unaffected by the provenance rule", (
     firstProvider: graph.allowed_providers[0] ?? null, firstProviderCompileOk: true,
     intelligence: deterministicWs, contract: null,
   });
-  assertFalse(pf.blocked.some((b) => b.code === "mission_not_model_compiled"),
-    "a deterministic workspace may compile deterministically");
+  assert(
+    pf.blocked.some((b) => b.code === "mission_not_model_compiled"),
+    "spending against a mission the model did not produce must be refused, " +
+    "whatever the workspace's legacy flags say",
+  );
 });
 
 Deno.test("8. a mission predating the field is not retroactively accused", () => {

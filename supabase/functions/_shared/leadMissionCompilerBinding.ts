@@ -56,13 +56,17 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
-import { createStrategistGenerateJson } from "./leadStrategyFeedbackOwner.ts";
+// `createStrategistGenerateJson` (Lovable/Claude) is deliberately NOT imported
+// here any more. Leaving the import would leave the old transport one edit away
+// from being reachable again, and `gptMissionCompiler.test.ts` asserts its
+// absence rather than merely that it is unused.
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
   buildMissionCompilerPayload, MISSION_COMPILER_SYSTEM_PROMPT,
   type CompilerPromptContext,
 } from "./leadMissionCompiler.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
+import { createGptMissionGenerateJson, GPT_MISSION_MODEL_ID } from "./gptMissionModel.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -175,22 +179,39 @@ export function buildMissionCompilerBinding(input: {
   /** Injected in tests. Production uses the configured strategist adapter. */
   generate?: GenerateJsonFn;
 }): MissionCompilerBinding {
+  // ── THE COMPILER IS NO LONGER OPTIONAL ──────────────────────────────────
+  //
+  // `isMissionCompilerEnabled` used to decide whether a model read the user's
+  // sentence at all. `GPT_LEAD_MISSION_COMPILER` has never been set on the live
+  // project, so `proposeMission` was null on every run and a regex reading
+  // became the mission — which is the whole of the 2026-08-17 failure.
+  //
+  // The flag is not defaulted to true, it is REMOVED from this decision. A
+  // hidden switch that changes what a user's request means is the thing being
+  // eliminated, and defaulting it would leave the switch in place, just harder
+  // to notice when someone sets it back.
+  //
+  // `enablement` is still computed and still reported, because the model id
+  // override and the diagnostics remain useful — but it can no longer turn
+  // interpretation off.
   const enablement = isMissionCompilerEnabled(input.workspaceId, input.read);
   const base = {
-    enabled: enablement.enabled,
-    reason: enablement.reason,
-    model: enablement.model,
-    calls_allowed: enablement.enabled ? MAX_COMPILATION_ATTEMPTS : 0,
+    enabled: true,
+    // The legacy reason is kept under its own name so a run can still show
+    // whether the old flag was set, without that answer gating anything.
+    legacy_flag_reason: enablement.reason,
+    model: GPT_MISSION_MODEL_ID,
+    provider: "openai",
+    calls_allowed: MAX_COMPILATION_ATTEMPTS,
   };
 
-  if (!enablement.enabled) {
-    return { proposeMission: null, enablement, diagnostics: base };
-  }
-
-  const generate = input.generate ?? createStrategistGenerateJson({
-    allowEscalation: false,
-    model: enablement.model ?? DEFAULT_MISSION_COMPILER_MODEL,
-  });
+  // ── GPT, NOT THE STRATEGIST ─────────────────────────────────────────────
+  //
+  // `createStrategistGenerateJson` routes to the Lovable/Claude strategist.
+  // Even with the old flag ON, this stage was never GPT — so "enable the flag"
+  // would not have produced the GPT-first architecture, only a different
+  // non-GPT one.
+  const generate = input.generate ?? createGptMissionGenerateJson();
 
   return {
     enablement,

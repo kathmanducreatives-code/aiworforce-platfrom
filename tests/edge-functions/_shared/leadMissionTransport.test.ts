@@ -181,13 +181,15 @@ Deno.test("D. new_architecture without a mission fails closed, no parser", async
     "parseLeadMissionDeterministic must follow the fail-closed branch, not precede it");
 });
 
-Deno.test("E. a deterministic workspace still parses deterministically", () => {
-  // Compiler off for this workspace ⇒ deterministic is the DESIGNED path and
-  // must not be blocked. This is the case a blunt 'always require a compiled
-  // mission' rule would have broken.
+// ── INVERTED 2026-08-17: THE "BLUNT RULE" IS NOW THE ARCHITECTURE ─────────
+//
+// This protected a workspace that had deliberately not adopted the compiler.
+// No workspace ever adopted it — the flag was unset everywhere — so the
+// exemption was the rule, and every run spent against a regex reading.
+Deno.test("E. an uncompiled mission is refused even in a legacy workspace", () => {
   const deterministic = getLeadIntelligenceCapabilities(MY, () => undefined);
-  assertEquals(deterministic.mode, "deterministic");
-  assertFalse(deterministic.expects_compiled_mission);
+  assertEquals(deterministic.mode, "deterministic", "the legacy label is unchanged");
+  assert(deterministic.expects_compiled_mission, "but compilation is now expected");
 
   const mission = parseLeadMissionDeterministic(QUERY, { requestedCount: 10 });
   const graph = buildCapabilityGraph(mission);
@@ -197,8 +199,10 @@ Deno.test("E. a deterministic workspace still parses deterministically", () => {
     firstProviderCompileOk: true,
     intelligence: deterministic, contract: null,
   });
-  assertFalse(pf.blocked.some((b) => b.code === "mission_compilation_failed"),
-    "a deterministic workspace must not be accused of a failed compilation");
+  assert(
+    pf.blocked.some((b) => b.code === "mission_compilation_failed"),
+    "a mission the model never produced must not reach a paid boundary",
+  );
 });
 
 // ══════════════════════════ F/G/H. no bypass may execute ══

@@ -115,23 +115,23 @@ interface Seam {
 
 const ALLOW = { WS_LIST: `${WS},11111111-2222-4333-8444-555555555555` };
 
+// ── THE MISSION COMPILER IS NO LONGER A STRATEGIST SEAM ───────────────────
+//
+// It used to appear here, and it belonged here: with its flag ON it reached the
+// Lovable/Claude strategist at `chat/completions` with the canonical lead
+// intelligence model id. That is precisely what the 2026-08-17 audit found —
+// the stage was never GPT, so enabling the flag would have produced a different
+// non-GPT architecture rather than the intended one.
+//
+// It now reaches OpenAI through `createGptMissionGenerateJson`, so asserting it
+// against the strategist endpoint and model id would assert the old design.
+// Its transport is covered instead by:
+//   * gptMissionCompiler.test.ts       — calls openai.com, strict schema, temp 0
+//   * leadMissionCompilerBinding.test.ts #4 — real facade → OpenAI transport
+//
+// The remaining seams below are unchanged and still strategist-backed; moving
+// them is later commits' work, not this one's.
 const SEAMS: Seam[] = [
-  {
-    feature: "mission compiler",
-    flags: {
-      GPT_LEAD_MISSION_COMPILER: "true",
-      GPT_LEAD_MISSION_COMPILER_WORKSPACES: ALLOW.WS_LIST,
-    },
-    modelEnvKey: "GPT_LEAD_MISSION_COMPILER_MODEL",
-    drive: (read) => {
-      const b = buildMissionCompilerBinding({ workspaceId: WS, read });
-      assert(b.proposeMission, "mission compiler must be enabled in this fixture");
-      return b.proposeMission({
-        originalUserQuery: "Find 10 founders at B2B SaaS companies hiring sales teams.",
-        requestedCount: 10,
-      });
-    },
-  },
   {
     feature: "grounded brain",
     flags: {

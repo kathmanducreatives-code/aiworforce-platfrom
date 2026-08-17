@@ -107,11 +107,22 @@ Deno.test("an ok response with a null body is not a usable proposal", async () =
   assert(p != null);
 });
 
-Deno.test("a disabled workspace still spends nothing and offers no proposer", () => {
+// ── REPLACED 2026-08-17: THERE IS NO LONGER A DISABLED WORKSPACE ──────────
+//
+// This asserted that an unset `GPT_LEAD_MISSION_COMPILER` produced
+// `proposeMission: null`. That was the whole defect: the flag has never been
+// set on the live project, so no model ever read a user's request and a regex
+// reading became the mission.
+//
+// The flag was REMOVED from the decision rather than defaulted to true — a
+// hidden switch that changes what a request means is the thing being
+// eliminated. What replaces the old assertion is its opposite: interpretation
+// cannot be switched off, whatever the environment says.
+Deno.test("interpretation cannot be switched off by an unset flag", () => {
   const off = buildMissionCompilerBinding({ workspaceId: WS, read: () => undefined });
-  assertEquals(off.proposeMission, null);
-  assertEquals(off.diagnostics.calls_allowed, 0);
-  assertEquals(isMissionCompilerEnabled(WS, () => undefined).enabled, false);
+  assert(off.proposeMission !== null, "a model must be offered regardless of the old flag");
+  assertEquals(off.diagnostics.calls_allowed, MAX_COMPILATION_ATTEMPTS);
+  assertEquals(off.diagnostics.provider, "openai", "and it must be the GPT adapter");
 });
 
 Deno.test("the explicit failure is a distinct class that says what did NOT happen", () => {
@@ -134,15 +145,25 @@ const PILOT_CHAT_SRC = Deno.readTextFileSync(
   new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
 );
 
-Deno.test("pilot-chat refuses a compiled-mission workspace rather than substituting", () => {
+// ── UPDATED 2026-08-17: THE REFUSAL NO LONGER KEYS ON THE MODE ────────────
+//
+// This required the refusal to check BOTH `new_architecture` and the parser
+// source. Keying on the mode is what made it decorative: the mode needs five
+// flags, none was ever set, so the second half of the condition was never
+// evaluated on a real run and every run returned a regex reading as its
+// mission. The parser source alone is the honest condition.
+Deno.test("pilot-chat refuses an uncompiled mission rather than substituting", () => {
   assert(
-    /getLeadIntelligenceCapabilities\(/.test(PILOT_CHAT_SRC),
-    "pilot-chat must consult the intelligence-mode policy",
-  );
-  assert(
-    /new_architecture/.test(PILOT_CHAT_SRC) &&
     /mission_parser_source === "deterministic_fallback"/.test(PILOT_CHAT_SRC),
-    "the refusal must key on BOTH the mode and the parser source",
+    "the refusal must key on the parser source",
+  );
+  // BOTH producers refuse: the canonical mission and the confirmation card.
+  // The card is what the user approves before money moves, so an unverified
+  // reading there is worse than one deeper in the pipeline, not better.
+  assertEquals(
+    (PILOT_CHAT_SRC.match(/mission_parser_source === "deterministic_fallback"/g) ?? []).length,
+    2,
+    "both the canonical path and the confirmation card must refuse",
   );
   assert(
     /throw new MissionCompilationFailedError\(/.test(PILOT_CHAT_SRC),

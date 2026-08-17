@@ -60,10 +60,18 @@ Deno.test("3. enablement is unchanged by the model id", () => {
 
 // THE ONE THAT WOULD HAVE CAUGHT IT. No injected `generate`: the production
 // facade is exercised end-to-end down to the transport seam.
-Deno.test("4. the real facade reaches the transport and returns a proposal", async () => {
+//
+// ── RETARGETED 2026-08-17: THE TRANSPORT IS NOW OPENAI ────────────────────
+//
+// This asserted the Lovable gateway and the strategist model id. That was
+// accurate and was itself the finding: even with `GPT_LEAD_MISSION_COMPILER`
+// ON, mission compilation went to Lovable/Claude — so "enable the flag" would
+// never have produced a GPT-first architecture, only a different non-GPT one.
+// The seam still matters; the endpoint behind it changed.
+Deno.test("4. the real facade reaches the OpenAI transport and returns a proposal", async () => {
   const realFetch = globalThis.fetch;
-  const realKey = Deno.env.get("LOVABLE_API_KEY");
-  Deno.env.set("LOVABLE_API_KEY", "test-key-not-a-credential");
+  const realKey = Deno.env.get("OPENAI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "sk-test-not-a-credential");
 
   const seen: Array<{ url: string; model: unknown }> = [];
   globalThis.fetch = ((url: string, init: RequestInit) => {
@@ -86,15 +94,14 @@ Deno.test("4. the real facade reaches the transport and returns a proposal", asy
     });
 
     assertEquals(seen.length, 1, "the model must be called exactly once");
-    assertEquals(
-      seen[0].model,
-      DEFAULT_MISSION_COMPILER_MODEL,
-      "the pinned model must be the one that reaches the wire",
+    assert(
+      seen[0].url.includes("openai.com"),
+      `mission compilation must reach OpenAI, reached ${seen[0].url}`,
     );
     assertEquals(proposal, { proposed: true }, "a successful call must yield a proposal");
   } finally {
     globalThis.fetch = realFetch;
-    if (realKey === undefined) Deno.env.delete("LOVABLE_API_KEY");
-    else Deno.env.set("LOVABLE_API_KEY", realKey);
+    if (realKey === undefined) Deno.env.delete("OPENAI_API_KEY");
+    else Deno.env.set("OPENAI_API_KEY", realKey);
   }
 });

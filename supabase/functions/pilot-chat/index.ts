@@ -655,11 +655,25 @@ async function compileCanonicalLeadMission(i: {
   //
   // A workspace NOT in `new_architecture` mode is unaffected: there the
   // deterministic reading is the intended planner, not error recovery.
-  const intelligence = getLeadIntelligenceCapabilities(i.workspaceId);
-  if (
-    intelligence.mode === "new_architecture" &&
-    mission.mission_parser_source === "deterministic_fallback"
-  ) {
+  // ── UNCONDITIONAL. THIS IS WHAT MAKES THE DETERMINISTIC READING UNREACHABLE.
+  //
+  // The guard used to fire only for a workspace in `new_architecture` mode —
+  // which required all five intelligence flags, none of which were ever set. So
+  // on every real run this check was skipped and the regex reading was returned
+  // as the mission.
+  //
+  // There is now ONE interpretation path. `deterministic()` still exists inside
+  // the compiler and is still used as the SCAFFOLD that a validated proposal is
+  // overlaid onto — that part is structure, not interpretation, and removing it
+  // would mean rewriting the validator for no gain. What it can no longer be is
+  // the ANSWER: any mission that reaches here still carrying
+  // `deterministic_fallback` means the model did not produce a usable reading,
+  // and the run is refused rather than silently answered by a different
+  // interpreter.
+  if (mission.mission_parser_source === "deterministic_fallback") {
+    // The legacy enablement reason is passed through unchanged — it is a closed
+    // union, and the error class already states the part that matters: that no
+    // deterministic mission was substituted and nothing was scheduled.
     throw new MissionCompilationFailedError(i.workspaceId, compilerBinding.enablement.reason);
   }
 
@@ -763,10 +777,12 @@ async function generateWorkflowConfirmation(
     // compiled-mission architecture may not be shown a card built from a
     // deterministic reading wearing the compiler's shape.
     const cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal);
-    if (
-      getLeadIntelligenceCapabilities(workspaceId).mode === "new_architecture" &&
-      cardMission.mission_parser_source === "deterministic_fallback"
-    ) {
+    // UNCONDITIONAL, for the same reason as the canonical path above: the mode
+    // gate required five flags nobody set, so a card built from a regex reading
+    // was shown on every real run. The card is what the user approves before
+    // money is spent, which makes an unverified reading here worse than one
+    // deeper in the pipeline, not better.
+    if (cardMission.mission_parser_source === "deterministic_fallback") {
       throw new MissionCompilationFailedError(workspaceId, compilerBinding.enablement.reason);
     }
     return buildHiringConfirmation(prompt, cardMission, company, cardBrainLite);
