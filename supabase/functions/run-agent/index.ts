@@ -740,8 +740,30 @@ Deno.serve(async (req) => {
     if (!access.ok) return json({ error: access.error }, access.status);
   }
 
-  // Resolve agent (by slug, falling back to id).
-  let agentQuery = supabase.from("agents").select("id, slug, name, model, role_prompt, department");
+  // Resolve agent (by slug, falling back to id) WITHIN THIS WORKSPACE.
+  //
+  // ── WHY THE WORKSPACE FILTER IS NOT OPTIONAL ───────────────────────────────
+  //
+  // This query used to match on `slug` alone. That worked only because every
+  // agent lived in a single sentinel workspace, so `scout` identified exactly
+  // one row globally. Seeding agents per workspace — the fix for users seeing an
+  // empty roster — made slugs deliberately non-unique across workspaces, and
+  // `maybeSingle()` errors the moment two rows match:
+  //
+  //   404 agent_not_found / "JSON object requested, multiple (or no) rows returned"
+  //
+  // which is what stalled every run once a second workspace existed. The
+  // unique index is on (workspace_id, slug), so scoping here restores the
+  // "exactly one row" the query always assumed.
+  //
+  // It is also an ISOLATION fix, and would be right even if only one row
+  // matched: an unscoped lookup can resolve `scout` to another workspace's
+  // agent row and run this step under it. `workspace_id` is validated as
+  // present above, before this point, so there is no path where this filter is
+  // silently absent.
+  let agentQuery = supabase.from("agents")
+    .select("id, slug, name, model, role_prompt, department")
+    .eq("workspace_id", workspace_id);
   if (agent_slug) agentQuery = agentQuery.eq("slug", agent_slug);
   else agentQuery = agentQuery.eq("id", agent_id_in!);
   const { data: agent, error: agentErr } = await agentQuery.maybeSingle();
