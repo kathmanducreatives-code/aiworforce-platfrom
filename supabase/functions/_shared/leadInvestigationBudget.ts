@@ -124,9 +124,17 @@ export const MAX_INVESTIGATION_BUDGET = 100;
 export type BudgetSource =
   | "default"
   | "environment"
-  | "pool_bound"
-  /** The wall clock could not fit the configured count. See `applyTimeCapacity`. */
-  | "time_bound";
+  | "pool_bound";
+
+// NO `time_bound`. There used to be, and it described the opposite of the rule
+// the engine actually follows: THE CLOCK DOES NOT SHRINK THE SHORTLIST.
+// Shrinking it would strand companies permanently, because the shortlist is
+// computed once per lineage and a resume skips completed capabilities — a
+// company cut for want of time would never be reconsidered. `resolveTimeCapacity`
+// therefore bounds the per-pass SLICE, inside the identity stage, where stopping
+// early is deferral and a continuation picks the work up. The variant was
+// declared, never produced and never read; leaving it implied a spend rule that
+// does not exist.
 
 export interface InvestigationBudget {
   version: typeof INVESTIGATION_BUDGET_VERSION;
@@ -154,9 +162,11 @@ export interface InvestigationBudget {
  * `stage2Ceiling` is GONE. See the header: a GPT batch-read limit is not a
  * provider spend authorisation.
  *
- * This answers the COUNT question only. `applyTimeCapacity` then reconciles it
- * with the wall clock, which is the other half and the one that actually bound
- * on run ea2d02f2.
+ * This answers the COUNT question only. `resolveTimeCapacity` answers the other
+ * half — how many companies the wall clock can actually reach, which is what
+ * bound on run ea2d02f2 — and it is applied to the per-pass slice rather than
+ * to this number, so a short invocation defers companies instead of deleting
+ * them.
  */
 export function resolveInvestigationBudget(i: {
   requestedCount: number;

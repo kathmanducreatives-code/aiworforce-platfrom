@@ -39,6 +39,9 @@ import {
   buildDiscoveryPlannerPayload, type DiscoveryStrategyOptions,
 } from "./leadDiscoveryStrategy.ts";
 import { scenarioBriefing } from "./discoveryScenarioMatrix.ts";
+import {
+  buildAgentoryBriefing, type CompanyBrainBriefing, type DiscoveryResultsSummary,
+} from "./agentoryBriefing.ts";
 import { coverMissionSignals } from "./signalActorCoverage.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 
@@ -91,7 +94,18 @@ const RESPONSE_SCHEMA = {
   },
 } as const;
 
-const SYSTEM = `You choose which Apify Actors run for a lead-sourcing request, and what each is asked.
+// ── THE CANONICAL BRIEFING PREFIXES THE STAGE PROMPT ──────────────────────
+//
+// This stage used to be told only its own job — "choose which Actors run" —
+// with no idea what Agentory is, what happens to the pool it produces, or that
+// "nothing here can serve this" was an allowed answer. It made a locally
+// sensible choice that was globally wrong (2026-08-17: a name matcher asked to
+// discover a concept, 20 newsletters and communities, 0 qualified).
+//
+// `buildAgentoryBriefing` supplies the whole picture; the rules below stay,
+// because they are this stage's specific output contract rather than general
+// knowledge.
+const STAGE_RULES = `You choose which Apify Actors run for a lead-sourcing request, and what each is asked.
 
 RULES, in order of importance:
 
@@ -118,6 +132,10 @@ can prove.`;
 export interface GptPlanDiscoveryInput {
   mission: LeadMissionV1;
   options?: DiscoveryStrategyOptions;
+  /** The user's standing ICP. Context for the choice, never the mission. */
+  brain?: CompanyBrainBriefing | null;
+  /** What the previous attempt produced, when re-planning after poor results. */
+  results?: DiscoveryResultsSummary | null;
 }
 
 /**
@@ -125,13 +143,18 @@ export interface GptPlanDiscoveryInput {
  * without a network call — the briefing IS the constraint, so it is worth
  * pinning.
  */
+/** The stage prompt, prefixed by everything GPT should know about Agentory. */
+function systemPromptFor(brain: CompanyBrainBriefing | null, results?: DiscoveryResultsSummary | null): string {
+  return [buildAgentoryBriefing({ brain, results }), "", STAGE_RULES].join("\n");
+}
+
 export function buildPrompt(i: GptPlanDiscoveryInput): { system: string; user: string } {
   const opts = i.options ?? {};
   const payload = buildDiscoveryPlannerPayload(i.mission, opts);
   const coverage = coverMissionSignals(i.mission);
 
   return {
-    system: SYSTEM,
+    system: systemPromptFor(i.brain ?? null, i.results ?? null),
     user: JSON.stringify({
       ...payload,
       // WHAT THE REQUEST NEEDS, resolved. The model is not asked to work out
@@ -175,8 +198,17 @@ export function makeGptDiscoveryPlanner(deps: GptDeps = {}) {
   return async (i: { payload: Record<string, unknown>; mission_hash: string }): Promise<unknown> => {
     // The engine builds a payload for the generic seam; this planner needs the
     // richer briefing, so it is rebuilt here from what the engine passed.
+    // THE LIVE PATH. `buildPrompt` above is test-facing; THIS is what a real
+    // run sends, so the briefing has to be applied here too. Wiring only the
+    // helper is exactly the "correct, covered and unreachable" failure this
+    // codebase has already paid for once.
+    //
+    // `brain: null` is honest rather than convenient: the Company Brain is not
+    // threaded to this seam yet, and `companyBrainSection(null)` tells the model
+    // to judge on the user's request alone — which is the safe reading and
+    // cannot reintroduce the Brain silently overriding a mission.
     const { system, user } = {
-      system: SYSTEM,
+      system: systemPromptFor(null, null),
       user: JSON.stringify(i.payload, null, 2),
     };
     const r: GptResult<GptDiscoveryProposal> = await gptStructured<GptDiscoveryProposal>({
