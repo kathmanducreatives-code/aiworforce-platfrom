@@ -21,6 +21,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   runCapabilityPlan, summariseDiscoveryPool, DEFAULT_DISCOVERY_PASSES,
+  discoveryAttemptFeedback,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -293,4 +294,114 @@ Deno.test("9. the thrown refusal carries that sentence with it", async () => {
   assert(caught, "a concept mission with only a name matcher must refuse");
   assert(caught!.userMessage.length > 0);
   assert(/stopped before spending/i.test(caught!.userMessage), caught!.userMessage);
+});
+
+// ══════ 10-13. THE GENERAL RULE: a failed attempt becomes information ══
+//
+// Production run 53c99b8a (2026-08-19) is the case these pin. memo23 was asked
+// for `industries: ["Engineering, Product and Design"]` and returned ZERO rows.
+// The obvious recovery — ask memo23 again WITHOUT that filter — was structurally
+// impossible, because the repeat guard keyed on the ACTOR. The capability
+// exhausted and the user got nothing.
+//
+// Two changes, both general to every actor and every request:
+//   * "already tried" means actor + INPUT, so a better question is reachable
+//   * every attempt outcome (`empty`, `error`, `not_configured`) is fed back
+
+Deno.test("10. a zero-row actor CAN be asked a better question", async () => {
+  const h = { plans: [] as Array<Array<{ code: string }> | undefined> };
+  const m = mission();
+  let n = 0;
+  const called: Array<Record<string, unknown>> = [];
+  await runCapabilityPlan({
+    planDiscovery: (i: { validation_feedback?: Array<{ code: string }> }) => {
+      h.plans.push(i.validation_feedback);
+      // Same actor both times. The FIRST input over-narrows; the second drops
+      // the offending filter — exactly the 53c99b8a recovery.
+      const input = n === 0
+        ? { mode: "companies", isHiring: true, industries: ["Engineering, Product and Design"] }
+        : { mode: "companies", isHiring: true };
+      n++;
+      return Promise.resolve([{
+        actor_key: COHORT, role: "primary", input, rationale: "scenario",
+      }]);
+    },
+    invoke: (call: CompiledActorCall<unknown>) => {
+      const input = call.input as Record<string, unknown>;
+      called.push(input);
+      // The over-narrow question returns nothing; the widened one returns rows.
+      const narrow = Array.isArray(input.industries) && input.industries.length > 0;
+      return Promise.resolve(narrow ? [] : [row(1, 2), row(2, 3)]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+  } as never, {
+    mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20,
+  } as never);
+
+  // THE PROPERTY, not a call count. What matters is that the same actor was
+  // reachable a second time with a DIFFERENT question — the recovery that was
+  // structurally impossible before. How many passes the loop needs to get there
+  // is a budget decision, pinned separately in test 5.
+  assert(called.length >= 2, `the actor must be re-askable; ran ${called.length}x`);
+  assert(called.some((i) => Array.isArray(i.industries) && i.industries.length > 0),
+    "the narrow question was asked");
+  assert(called.some((i) => !("industries" in i) || (i.industries as unknown[])?.length === 0),
+    "and the widened one was too — which is the whole point");
+});
+
+Deno.test("11. but the IDENTICAL question is never bought twice", async () => {
+  const called: Array<Record<string, unknown>> = [];
+  const m = mission();
+  await runCapabilityPlan({
+    // The planner insists on the same input both times.
+    planDiscovery: () => Promise.resolve([{
+      actor_key: COHORT, role: "primary",
+      input: { mode: "companies", isHiring: true, industries: ["B2B"] },
+      rationale: "scenario",
+    }]),
+    invoke: (call: CompiledActorCall<unknown>) => {
+      called.push(call.input as Record<string, unknown>);
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+  } as never, {
+    mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20,
+  } as never).catch(() => {/* an empty pool may end the capability */});
+
+  assertEquals(called.length, 1,
+    "re-asking an identical question buys the identical nothing");
+});
+
+Deno.test("12. a zero-row result is TOLD to the planner, not just recorded", () => {
+  const fb = discoveryAttemptFeedback([{
+    capability: "startup_company_discovery", provider: COHORT, attempt: 1,
+    outcome: "empty", rows: 0, cost_units: 1, reason: null,
+  }] as never);
+  assertEquals(fb.length, 1);
+  assertEquals(fb[0].code, "actor_returned_no_rows");
+  assertEquals(fb[0].actor_key, COHORT);
+  assert(/too narrow/.test(fb[0].message), fb[0].message);
+  assert(/Do not repeat the identical input/.test(fb[0].message),
+    "and it says what NOT to do next");
+});
+
+Deno.test("13. a provider REJECTION is distinguished from an empty result", () => {
+  // These need different responses and used to be indistinguishable to the
+  // planner, because neither was reported at all. An empty result means the
+  // question was wrong; a rejection means our catalog disagrees with the live
+  // schema, and no retry of that input can ever succeed.
+  const fb = discoveryAttemptFeedback([
+    { capability: "startup_company_discovery", provider: SECOND, attempt: 1,
+      outcome: "error", rows: 0, cost_units: 0,
+      reason: "Error: apify_input_schema_error" },
+    { capability: "startup_company_discovery", provider: SECOND, attempt: 2,
+      outcome: "error", rows: 0, cost_units: 0,
+      reason: "Error: apify_input_schema_error" },
+  ] as never);
+
+  assertEquals(fb.length, 1, "a repeated identical failure is stated once, not twice");
+  assertEquals(fb[0].code, "actor_rejected_input");
+  assert(/apify_input_schema_error/.test(fb[0].message), "the provider's own words");
+  assert(/contract failure rather than an empty result/.test(fb[0].message),
+    "and the distinction is spelled out, because the right response differs");
 });

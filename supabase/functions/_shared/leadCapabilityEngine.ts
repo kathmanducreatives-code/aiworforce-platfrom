@@ -233,6 +233,78 @@ export interface ProviderAttempt {
   rows: number;
   cost_units: number;
   reason: string | null;
+  /**
+   * A stable digest of the input this attempt actually sent.
+   *
+   * The unit of "already tried". Without it the only available key is the actor,
+   * and keying on the actor blocks the single most useful recovery there is:
+   * the same actor, asked a better question. See `withoutRepeats`.
+   */
+  input_fingerprint?: string;
+}
+
+/**
+ * Turn what the providers DID into something the planner can act on.
+ *
+ * ── THE GENERAL RULE THIS IMPLEMENTS ────────────────────────────────────────
+ *
+ * The engine classifies every attempt — `ok`, `empty`, `error`, `compile_failed`
+ * — and used to tell the planner about exactly one of them. So a re-plan was
+ * made blind to the two failures that most needed explaining:
+ *
+ *   empty  the actor worked and the QUESTION was wrong — too narrow a filter,
+ *          an over-specific enum. Recoverable, usually by the same actor.
+ *   error  the actor REJECTED the input. Our catalog and the live schema
+ *          disagree, and no retry of the same input will ever succeed.
+ *
+ * Both are now stated in the planner's own feedback channel, in the same shape
+ * as a validator refusal, because to the planner they are the same kind of fact:
+ * "this did not work, here is why, choose again."
+ *
+ * PURE. Reads attempts, returns sentences.
+ */
+export function discoveryAttemptFeedback(
+  attempts: readonly ProviderAttempt[],
+): Array<{ code: string; message: string; actor_key?: string }> {
+  const out: Array<{ code: string; message: string; actor_key?: string }> = [];
+  const seen = new Set<string>();
+  for (const a of attempts) {
+    const key = `${a.provider}|${a.outcome}`;
+    if (seen.has(key)) continue;
+
+    if (a.outcome === "empty") {
+      seen.add(key);
+      out.push({
+        code: "actor_returned_no_rows", actor_key: a.provider,
+        message:
+          `${a.provider} ran successfully and returned ZERO rows for the input it ` +
+          `was given. The actor works; the question was too narrow. Widen or drop ` +
+          `the most restrictive filters — an over-specific enum value is the usual ` +
+          `cause — and ask it again, or choose a different source. Do not repeat ` +
+          `the identical input: it will return zero again.`,
+      });
+    } else if (a.outcome === "error") {
+      seen.add(key);
+      out.push({
+        code: "actor_rejected_input", actor_key: a.provider,
+        message:
+          `${a.provider} REJECTED the input: ${a.reason ?? "unknown provider error"}. ` +
+          `This is a contract failure rather than an empty result — the fields or ` +
+          `values sent are not what the live actor accepts, so no retry of the ` +
+          `same input can succeed. Send only fields you are confident of, or use ` +
+          `a different actor.`,
+      });
+    } else if (a.outcome === "skipped_not_configured") {
+      seen.add(key);
+      out.push({
+        code: "actor_not_configured", actor_key: a.provider,
+        message:
+          `${a.provider} could not run: ${a.reason ?? "it is not configured in this " +
+          "environment"}. Treat it as unavailable for this run.`,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -1212,8 +1284,23 @@ export async function runCapabilityPlan(
      * happened.
      */
     results?: DiscoveryResultsSummary | null,
-    /** Actors already run this capability. Never proposed twice, never re-paid. */
-    alreadyRun: readonly string[] = [],
+    /**
+     * What the provider attempts of THIS capability actually produced.
+     *
+     * Replaces an `alreadyRun: string[]` list of actor keys. The list was the
+     * wrong unit: it blocked "the same actor asked a better question", which is
+     * the correct response to a zero-row result and was therefore unreachable.
+     */
+    attemptsSoFar: readonly ProviderAttempt[] = [],
+    /**
+     * Questions already asked this capability, as `actor|fingerprint(input)`.
+     *
+     * Built from the SELECTIONS, not from the provider attempts. The attempt
+     * records the COMPILED input — defaults filled in, cost ceilings applied —
+     * and a proposal carries the raw one, so fingerprinting the two and
+     * comparing them never matches. Like is compared with like here.
+     */
+    askedAlready: ReadonlySet<string> = new Set(),
   ): Promise<DiscoveryStrategy> => {
     const limits = discoveryLimits;
     // ── NO SELECTOR IS A BLOCK, NOT A DEFAULT ───────────────────────────────
@@ -1236,33 +1323,59 @@ export async function runCapabilityPlan(
           ? proposed
           : (proposed as { actors?: unknown } | null)?.actors;
       /**
-       * An actor already run this capability may not be proposed again.
+       * THE SAME QUESTION MAY NOT BE BOUGHT TWICE. A BETTER ONE MAY.
        *
-       * Not a correctness guard so much as a SPEND guard: a re-plan exists to
-       * change the mechanism, and re-running the actor that just produced an
-       * unusable pool buys the same pool at the same price. Dropped silently
-       * rather than refused, because proposing it is a reasonable thing for a
-       * model to do and there is nothing to teach it — the run simply moves on
-       * to whatever else it named.
+       * ── WHAT THIS REPLACED, AND WHY IT WAS WRONG ────────────────────────
+       *
+       * This dropped any proposal naming an actor that had already run, keyed on
+       * the ACTOR. The intent was a spend guard — do not re-buy a pool the run
+       * already has — and the unit was wrong.
+       *
+       * Production run 53c99b8a (2026-08-19): the planner asked memo23 for
+       * `industries: ["Engineering, Product and Design"]` and got ZERO rows. The
+       * obvious next move — ask memo23 again without that filter — was
+       * structurally impossible, because "memo23" was on the already-run list.
+       * The capability exhausted and the run returned nothing.
+       *
+       * An actor that returned nothing sold nothing. What must not repeat is the
+       * QUESTION, so the key is the actor plus a fingerprint of its input.
+       *
+       * ── APPLIED AFTER VALIDATION, DELIBERATELY ──────────────────────────
+       *
+       * `validateDiscoveryStrategy` normalises what it keeps: it drops
+       * unsupported filters and clamps counts to published limits. Fingerprinting
+       * a RAW proposal and comparing it to a VALIDATED selection therefore never
+       * matches, and the guard silently passes everything. Both sides are
+       * fingerprinted after validation, where they are the same shape.
        */
-      const withoutRepeats = (proposed: unknown) => {
-        const list = actorsOf(proposed);
-        if (!Array.isArray(list) || alreadyRun.length === 0) return list;
-        const kept = list.filter((x) =>
-          !alreadyRun.includes(String((x as { actor_key?: unknown })?.actor_key ?? "")));
-        if (kept.length !== list.length) {
-          log("discovery_replan_dropped_repeat_actors", {
-            proposed: list.length, kept: kept.length, already_run: alreadyRun,
-          });
-        }
-        return kept;
+      const dropRepeats = (strategy: DiscoveryStrategy): DiscoveryStrategy => {
+        if (askedAlready.size === 0) return strategy;
+        const kept = strategy.selections.filter((sel) =>
+          !askedAlready.has(`${sel.actor_key}|${inputFingerprint(sel.input ?? {})}`));
+        if (kept.length === strategy.selections.length) return strategy;
+        log("discovery_replan_dropped_identical_questions", {
+          proposed: strategy.selections.length, kept: kept.length,
+        });
+        return { ...strategy, selections: kept };
       };
 
-      const first = validateDiscoveryStrategy(
-        withoutRepeats(await deps.planDiscovery({
+      // ── EVERY FAILED ATTEMPT BECOMES SOMETHING THE PLANNER CAN ACT ON ────
+      //
+      // The engine already classified every attempt — `ok`, `empty`, `error`,
+      // `compile_failed` — and told the planner about exactly one of them. A
+      // provider that REJECTED the input and a provider that returned nothing
+      // were both recorded and then discarded, so the planner re-planned blind.
+      //
+      // On run 53c99b8a solidcode was rejected by Apify three times with
+      // `apify_input_schema_error` and the planner was never told; memo23
+      // returned zero rows and the planner was never told that either.
+      const providerFeedback = discoveryAttemptFeedback(attemptsSoFar);
+      const first = dropRepeats(validateDiscoveryStrategy(
+        actorsOf(await deps.planDiscovery({
           payload, mission_hash: hash, ...(results ? { results } : {}),
+          ...(providerFeedback.length ? { validation_feedback: providerFeedback } : {}),
         })),
-        opts.mission, limits);
+        opts.mission, limits));
 
       // ── THE VALIDATOR IS A GUARDRAIL, NOT THE STRATEGIST ──────────────────
       //
@@ -1304,14 +1417,14 @@ export async function runCapabilityPlan(
         actors: blocking.map((v) => v.actor_key ?? null),
       });
 
-      const repaired = validateDiscoveryStrategy(
-        withoutRepeats(await deps.planDiscovery({
+      const repaired = dropRepeats(validateDiscoveryStrategy(
+        actorsOf(await deps.planDiscovery({
           payload, mission_hash: hash, ...(results ? { results } : {}),
           validation_feedback: blocking.map((v) => ({
             code: v.code, message: v.message, actor_key: v.actor_key,
           })),
         })),
-        opts.mission, limits);
+        opts.mission, limits));
 
       if (repaired.source !== "blocked" && repaired.selections.length > 0) {
         log("discovery_strategy_repaired", {
@@ -1729,6 +1842,10 @@ export async function runCapabilityPlan(
     // COUNTED AT RECORD TIME, not before the await. The resolution stage runs two
     // calls concurrently; computing the number up front gave both of them
     // "attempt 1" and made the ledger unreadable.
+    // FINGERPRINTED FROM THE COMPILED INPUT, when there is one. A compile
+    // failure has no input to fingerprint and needs none: it never reached a
+    // provider, so there is no question to avoid repeating.
+    const attemptFingerprint = compiled.ok ? inputFingerprint(compiled.input) : undefined;
     const record = (outcome: ProviderAttempt["outcome"], rows: number, reason: string | null) => {
       const attempt = state.provider_attempts
         .filter((a) => a.capability === capability && a.provider === provider).length + 1;
@@ -1736,6 +1853,7 @@ export async function runCapabilityPlan(
         capability, provider, attempt, outcome, rows,
         cost_units: outcome === "ok" || outcome === "empty" ? spec.cost_units : 0,
         reason,
+        ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
       });
       if (outcome === "ok" || outcome === "empty") {
         state.accumulated_cost_units += spec.cost_units;
@@ -2510,6 +2628,17 @@ export async function runCapabilityPlan(
       //
       // A re-plan that proposes nothing usable is not an error: the first pass's
       // pool stands and the run continues with what it has.
+      /**
+       * Every question this capability has already put to a provider.
+       *
+       * `actor|fingerprint(proposed input)`. A re-plan may name the same actor
+       * again — that is the correct move after a zero-row result — but not with
+       * the identical input, which would buy the identical nothing.
+       */
+      const askedQuestions = new Set<string>(
+        strategy.selections.map((sel) =>
+          `${sel.actor_key}|${inputFingerprint(sel.input ?? {})}`),
+      );
       const passLimit = Math.max(1, opts.maxDiscoveryPasses ?? DEFAULT_DISCOVERY_PASSES);
       // ── EVERY ACTOR THE STRATEGY ALREADY CONSIDERED, NOT ONLY THOSE THAT RAN ──
       //
@@ -2540,7 +2669,13 @@ export async function runCapabilityPlan(
           pass, pool: companies.length, target: maxCandidates,
           problems: summary.observed_problems,
         });
-        const next = await resolveDiscoveryStrategy(summary, actorsRun);
+        // THE ATTEMPTS THEMSELVES, so the planner is told what each actor did
+        // and can ask a better question rather than only a different actor.
+        const next = await resolveDiscoveryStrategy(
+          summary,
+          state.provider_attempts.filter((a) => a.capability === cap),
+          askedQuestions,
+        );
         if (next.source === "blocked" || next.selections.length === 0) {
           // NOT A FAILURE. The model looked at what came back and had nothing
           // better to offer, which is a legitimate answer and leaves the run
@@ -2555,6 +2690,7 @@ export async function runCapabilityPlan(
         });
         await executeSelections(next.selections);
         for (const sel of next.selections) {
+          askedQuestions.add(`${sel.actor_key}|${inputFingerprint(sel.input ?? {})}`);
           actorsRun.push(sel.actor_key);
           if (!strategyKeys.includes(sel.actor_key)) strategyKeys.push(sel.actor_key);
           strategy.selections.push(sel);
