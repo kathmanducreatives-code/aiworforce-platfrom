@@ -304,10 +304,24 @@ export function compileSolidcodeYcInput(i: SolidcodeYcCompanyInput): CompileResu
     e.push(`unsupported field(s) for solidcode/ycombinator-scraper: ${foreign.join(", ")}`);
   }
   if (e.length) return fail(K, e);
+  // ── NORMALISED ON THE WAY OUT, SAME AS memo23 ─────────────────────────────
+  //
+  // The live build schema types `status`, `regions`, `industries`, `teamSize`
+  // and `batches` as ARRAYS. On production run 53c99b8a the planner sent
+  // `status: "Active"` — the right value in the wrong container — and Apify
+  // rejected the whole run with `apify_input_schema_error`, three times.
+  // `checkEnum` tolerates the scalar so the VALUE can be judged; the object
+  // actually sent has to carry the array, or the run is validated against one
+  // shape and billed against another.
+  const SOLIDCODE_LIST_FIELDS = new Set([
+    "status", "regions", "industries", "teamSize", "batches", "startUrls",
+  ]);
   const clean: SolidcodeYcCompanyInput = { maxResults: i.maxResults };
   for (const k of SOLIDCODE_FIELDS) {
     const v = (i as unknown as Record<string, unknown>)[k];
-    if (v !== undefined && v !== null) (clean as unknown as Record<string, unknown>)[k] = v;
+    if (v === undefined || v === null) continue;
+    (clean as unknown as Record<string, unknown>)[k] =
+      SOLIDCODE_LIST_FIELDS.has(k) ? asList(v) : v;
   }
   w.push("fallback Actor only — prefer memo23 for primary YC discovery");
   return build(K, clean, "company", cost(K, i.maxResults), w, i.teamSize?.[0] ?? "any-size");

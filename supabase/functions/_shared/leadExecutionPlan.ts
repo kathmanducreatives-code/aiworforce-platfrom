@@ -41,6 +41,7 @@ import {
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
+import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
 import {
   cohortRefusalFor, declaresUnfitForSemantic, missionNeedsSemanticDiscovery,
   conceptTermsOf, type StrategyViolation,
@@ -456,6 +457,18 @@ export function buildExecutionPlannerPayload(
                 card.requires_enrichment_before_qualification,
               ...(card.cohort_scope ? { only_returns: card.cohort_scope.label } : {}),
               known_defects: card.known_defects.map((d) => d.summary),
+              // The live input shape and the store's own maturity signal. A
+              // planner that knows a field is an ARRAY of enum values does not
+              // send a bare string, which is how three runs died in one week.
+              ...(ACTOR_INPUT_CONTRACTS[key]
+                ? {
+                  input_contract: {
+                    fields: ACTOR_INPUT_CONTRACTS[key].fields,
+                    example: ACTOR_INPUT_CONTRACTS[key].example,
+                  },
+                  quality: ACTOR_INPUT_CONTRACTS[key].quality,
+                }
+                : {}),
             }
             : { actor_key: key, uncarded: true };
         }),

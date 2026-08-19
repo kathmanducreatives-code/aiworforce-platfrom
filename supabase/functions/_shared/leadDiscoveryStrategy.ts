@@ -50,6 +50,7 @@ import {
 } from "./hiringActorCatalog.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { coverMissionSignals } from "./signalActorCoverage.ts";
+import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
 import { scenarioBriefing } from "./discoveryScenarioMatrix.ts";
 
 export const DISCOVERY_STRATEGY_VERSION = "lead-discovery-strategy-v1" as const;
@@ -193,6 +194,19 @@ export function discoveryCatalogBriefing(): Array<Record<string, unknown>> {
     outputs: c.outputs,
     best_for: c.best_for,
     not_for: c.not_for,
+    // WHAT A WELL-FORMED INPUT LOOKS LIKE, from the live build schema. Field
+    // NAMES alone left the model guessing at types, and three production
+    // failures in one week were exactly that guess going wrong.
+    ...(ACTOR_INPUT_CONTRACTS[c.actor_key]
+      ? {
+        input_contract: {
+          fields: ACTOR_INPUT_CONTRACTS[c.actor_key].fields,
+          example: ACTOR_INPUT_CONTRACTS[c.actor_key].example,
+          verified_at: ACTOR_INPUT_CONTRACTS[c.actor_key].verified_at,
+        },
+        quality: ACTOR_INPUT_CONTRACTS[c.actor_key].quality,
+      }
+      : {}),
     confidence: c.confidence,
     cost_tier: c.cost_model.tier,
     per_result_usd: c.cost_model.per_result_usd ?? null,
