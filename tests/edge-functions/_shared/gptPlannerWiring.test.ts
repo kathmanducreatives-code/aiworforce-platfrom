@@ -71,10 +71,25 @@ Deno.test("3. the planner returns a proposal and validates nothing itself", () =
     "the planner must not CALL the validator — that is the engine's job. Naming " +
     "it in a comment is fine; invoking it would create a second authority.",
   );
-  assert(
-    /return \{ actors: r\.value\.actors/.test(PLANNER),
-    "it returns the raw proposal for the engine to validate",
-  );
+  // IT RETURNS THE PROPOSAL, and the only thing it does to it is DESERIALISE.
+  //
+  // This asserted the literal `return { actors: r.value.actors`, which broke the
+  // moment the actor input became a JSON string — a change forced by OpenAI's
+  // strict structured-output mode, which refuses an open object outright. The
+  // property that matters is unchanged: the planner shapes the answer and judges
+  // none of it.
+  assert(/r\.value\.actors/.test(PLANNER),
+    "it returns the model's own actor list");
+  assert(/parsePlannedInput/.test(PLANNER),
+    "deserialising the input string is shaping, not judging — the values are " +
+    "still checked against that actor's supported_filters and verified_enums " +
+    "by the validator");
+  // NOTE: the planner's PROMPT names `not_for` — it tells the model to read the
+  // catalog's own field. That is briefing, not enforcement, and the assertion
+  // above (it never calls `validateDiscoveryStrategy`) is what separates them.
+  assertEquals(/declaresUnfitForSemantic|cohortRefusalFor/.test(PLANNER_CODE), false,
+    "it imports no refusal helper — a rule applied here would be a second " +
+    "authority on what is allowed");
 });
 
 Deno.test("4. a planner failure returns null rather than throwing", () => {

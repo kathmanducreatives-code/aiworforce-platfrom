@@ -71,6 +71,10 @@ import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
 import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
+import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
+import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
+import { ModelRoutingLedger } from "../_shared/gptModelRouter.ts";
+import { buildLeadRunTrace, describeLeadRunTrace } from "../_shared/leadRunTrace.ts";
 import { gptAvailable } from "../_shared/gptProvider.ts";
 
 /** Env reader passed to the GPT layer, so tests can inject one. */
@@ -1852,8 +1856,16 @@ Deno.serve(async (req) => {
         // investigated. The wall clock can only reduce the real shortlist, so
         // an allowance sized here is never too small, and the engine's own
         // `gpt_budget.evaluation_budget` records what it actually needed.
+        // ── ONE LEDGER FOR EVERY MODEL DECISION THIS RUN MAKES ─────────────
+        //
+        // Which model ran which stage is spread across six modules, and a cost
+        // regression and a quality regression look identical without it: both
+        // read as "the bill went up" or "the answers got worse", and only the
+        // routing decision says which one somebody chose.
+        const modelRouting = new ModelRoutingLedger();
         const missionEvaluationBinding = buildMissionEvaluationBinding({
           workspaceId: workspace_id,
+          requestedCount: quota.requestedLeadCount,
           shortlistSize: resolveInvestigationBudget({
             requestedCount: quota.requestedLeadCount,
             // The discovery ceiling, not MAX_SAFE_INTEGER: the pool bound is
@@ -1885,6 +1897,9 @@ Deno.serve(async (req) => {
         const triageBinding = buildMissionTriageBinding({
           workspaceId: workspace_id,
           poolSize: Math.max(10, quota.requestedLeadCount * 10),
+          // THE ROUTER'S SIGNAL. Triage is the same work at any quota; what the
+          // quota changes is whether a misordering costs a position or a lead.
+          requestedCount: quota.requestedLeadCount,
         });
         console.log("[run-agent][mission-triage][binding]", {
           task_id: task.id, ...triageBinding.diagnostics,
@@ -2264,9 +2279,66 @@ Deno.serve(async (req) => {
               // returns `no_api_key`, the planner returns null, and the engine
               // blocks the run with a stated reason — which is the honest
               // answer to "we cannot decide what to search for".
+              //
+              // ── AND IT SEES THE COMPANY BRAIN ───────────────────────────
+              //
+              // Second argument, previously hardcoded `null` inside the planner
+              // with a comment admitting the Brain "is not threaded to this seam
+              // yet". The stage that decides which paid Actors run could not see
+              // who the workspace sells to, so it could not prefer a source whose
+              // cohort matches the ICP, and could not say when the request and
+              // the ICP genuinely disagree.
+              //
+              // SAFE BY CONSTRUCTION, not by omission: `companyBrainSection`
+              // states the precedence in the prompt — the sentence the user just
+              // typed outranks the standing ICP, always — which is the same rule
+              // `mergeCompanyBrainIntoMission` enforces on the mission itself.
               planDiscovery: makeGptDiscoveryPlanner({
                 readEnv: readEnvSafe,
                 log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
+              }, {
+                brain: {
+                  positive_industries: brainIcpCtx.icp.industries ?? [],
+                  excluded_industries:
+                    effectivePolicy.constraints.negative_industries ?? [],
+                  employee_min: effectivePolicy.constraints.min_employees ?? null,
+                  employee_max: effectivePolicy.constraints.max_employees ?? null,
+                  required_geography: null,
+                  disqualifiers: brainIcpCtx.disqualifiers?.keywords ?? [],
+                  business_models: brainIcpCtx.icp.business_models ?? [],
+                },
+                requestedCount: quota.requestedLeadCount,
+                onRoute: (r) => modelRouting.record(r),
+              }),
+
+              // ── STAGE 3/4 WIRING: GPT PLANS THE WHOLE CHAIN ──────────────
+              //
+              // `planDiscovery` above chooses Actors for ONE stage. This chooses
+              // the chain — discover → verify → enrich — and, the part nothing
+              // could express before, which stages are UNNECESSARY because an
+              // earlier Actor's output already carries what they exist to fetch.
+              //
+              // Wired unconditionally, like the discovery planner. Its absence
+              // is a test seam, not a production mode: with no key the provider
+              // returns `no_api_key`, the planner returns null, and the engine
+              // runs the graph's own authorised order — which is code, and is
+              // the sequence this system ran before chains existed.
+              planExecution: makeGptExecutionPlanner({
+                readEnv: readEnvSafe,
+                log: (m, meta) => console.log(`[gpt-execution-plan] ${m}`, meta ?? ""),
+              }, {
+                brain: {
+                  positive_industries: brainIcpCtx.icp.industries ?? [],
+                  excluded_industries:
+                    effectivePolicy.constraints.negative_industries ?? [],
+                  employee_min: effectivePolicy.constraints.min_employees ?? null,
+                  employee_max: effectivePolicy.constraints.max_employees ?? null,
+                  required_geography: null,
+                  disqualifiers: brainIcpCtx.disqualifiers?.keywords ?? [],
+                  business_models: brainIcpCtx.icp.business_models ?? [],
+                },
+                requestedCount: quota.requestedLeadCount,
+                onRoute: (r) => modelRouting.record(r),
               }),
 
               // ── STAGE 2 WIRING: GPT MISSION INTELLIGENCE ─────────────────
@@ -2536,8 +2608,46 @@ Deno.serve(async (req) => {
             // ── ROUND 1 IS THE EXACT MISSION, ALWAYS ─────────────────────
             // Never broadened because a large number was requested. Asking for
             // 100 does not make a weaker company a better match.
-            capabilityRun = await executeRound(
-              persistedMission, missionPlan, leadResumeRecords, restoredPoolResults);
+            // ── A REFUSAL IS AN ANSWER, AND MUST READ LIKE ONE ───────────
+            //
+            // `DiscoveryStrategyBlockedError` was thrown by the engine and
+            // caught by nothing on this path, so the honest outcome the
+            // architecture chose — stop rather than answer with the wrong tool —
+            // reached the user as an unhandled failure. "0 of 10 leads" and
+            // "nothing I have can discover that cohort" are different facts and
+            // only the second one is actionable.
+            //
+            // Rethrown, deliberately: the run genuinely did not produce a pool
+            // and must not continue into stages that assume one. What changes is
+            // that it now carries a stated reason and a sentence for the user.
+            try {
+              capabilityRun = await executeRound(
+                persistedMission, missionPlan, leadResumeRecords, restoredPoolResults);
+            } catch (e) {
+              if (!(e instanceof DiscoveryStrategyBlockedError)) throw e;
+              console.log("[run-agent][discovery-refused]", {
+                task_id: task.id,
+                violations: e.violations.map((v) => v.code),
+              });
+              await supabase.from("tasks").update({
+                status: "failed",
+                error_message: e.userMessage,
+                result: {
+                  discovery_refusal: {
+                    version: "discovery-refusal-v1",
+                    // NO SPEND. Asserted by the tests, and the reason a refusal
+                    // is a better product than a pool of newsletters.
+                    provider_calls_made: 0,
+                    violations: e.violations.map((v) => ({
+                      code: v.code, actor_key: v.actor_key ?? null, message: v.message,
+                    })),
+                    user_message: e.userMessage,
+                  },
+                },
+                finished_at: new Date().toISOString(),
+              }).eq("id", task.id);
+              throw e;
+            }
 
             // ── ROUNDS 2-3, QA-FLAGGED ──────────────────────────────────
             //
@@ -2661,9 +2771,39 @@ Deno.serve(async (req) => {
               }
             }
 
+            // ── THE TRACE, ASSEMBLED WHERE EVERY PIECE IS IN SCOPE ──────────
+            //
+            // The 2026-08-18 audit needed two Supabase projects, seven queries
+            // and a `git show` to establish that the mission asked for one
+            // capability, the gate approved it, and the router ran another.
+            // Every piece was persisted; no row contained the contradiction.
+            //
+            // Built defensively — a trace that throws while explaining a failed
+            // run is the worst possible time to throw.
+            let leadRunTrace: Record<string, unknown> | null = null;
+            try {
+              leadRunTrace = buildLeadRunTrace({
+                mission: persistedMission,
+                graph: missionPlan,
+                state: capabilityRun.state as never,
+                capability_outcomes: capabilityRun.capability_outcomes,
+                model_routing: modelRouting.summary(),
+                funnel: capabilityRun.funnel as unknown as Record<string, unknown>,
+                qualified: capabilityRun.companies.filter(
+                  (c) => c.verdict === "pass").length,
+                requested: quota.requestedLeadCount,
+              }) as unknown as Record<string, unknown>;
+              for (const line of describeLeadRunTrace(leadRunTrace as never)) {
+                console.log("[run-agent][trace]", line);
+              }
+            } catch (e) {
+              console.error("[run-agent][trace][failed]", String(e));
+            }
+
             companyFirstRoute = {
               ...toRouteResultShape(capabilityRun),
               diagnostics: emptyCapabilityDiagnostics(capabilityRun),
+              ...(leadRunTrace ? { agentory_trace: leadRunTrace } : {}),
             } as never;
             // THE EVIDENCE OF WORK DONE, kept apart from the leads.
             //

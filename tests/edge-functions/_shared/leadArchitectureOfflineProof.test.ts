@@ -28,6 +28,7 @@ import {
 } from "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts";
 import {
   compileLeadMission,
+  MissionCompilationBlockedError,
 } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import {
   buildCapabilityGraph,
@@ -177,11 +178,23 @@ Deno.test("1. the LeadMission model call reaches transport and the mission is mo
 
 // The negative control. Without it, test 1 could pass on a compiler that is
 // wired to nothing — this proves the assertion is actually load-bearing.
-Deno.test("2. with no proposal the same input is deterministic_fallback", () => {
-  const compiled = compileLeadMission({
-    originalUserQuery: LIVE_QUERY, requestedCount: 10, proposal: null,
-  });
-  assertEquals(compiled.parser_source, "deterministic_fallback");
+//
+// It used to assert `deterministic_fallback`. There is no such reading any more:
+// a request nobody could compile STOPS, because a regex reading of the sentence
+// is a different question, not a coarser version of the same one.
+Deno.test("2. with no proposal the request is BLOCKED, not read by regex", () => {
+  let blocked: MissionCompilationBlockedError | null = null;
+  try {
+    compileLeadMission({
+      originalUserQuery: LIVE_QUERY, requestedCount: 10, proposal: null,
+    });
+  } catch (e) {
+    if (e instanceof MissionCompilationBlockedError) blocked = e;
+    else throw e;
+  }
+  assert(blocked, "no proposal must not silently produce a mission");
+  assertEquals(blocked!.reasons, ["no_model_proposal"]);
+  assert(blocked!.userMessage.includes("stopped before spending"));
 });
 
 // ══════════════════════════ 3. the mission the run will execute ══

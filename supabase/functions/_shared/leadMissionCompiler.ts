@@ -25,16 +25,26 @@
 // The model is given `catalogueForPrompt()`, which is built from three fields and
 // contains no provider name. It therefore has no vocabulary in which to request
 // `memo23/y-combinator-scraper`, and if it invents one anyway, `UNSAFE_VALUE`
-// below rejects the whole proposal and the deterministic parser answers instead.
+// below rejects the whole proposal.
 //
-// THAT LAST CLAUSE IS MIGRATION-ERA BEHAVIOUR, NOT THE TARGET. The rule is:
-// a new request compiles to a canonical Mission, and a compilation that fails or
-// returns invalid output RETRIES and then fails explicitly. It never silently
-// falls back to regex interpretation of the sentence, because that is a
-// different reading of the request rather than a coarser copy of the same one.
-// The deterministic path survives here only for shadow comparison, historical
-// compatibility and migration verification. See the doctrine block in
-// leadMissionCompilerBinding.ts; R2 implements it.
+// ── AND A REJECTED PROPOSAL NOW STOPS THE REQUEST ───────────────────────────
+//
+// It used to fall back to the regex reading, under a doctrine block that called
+// its own behaviour "MIGRATION-ERA, NOT THE TARGET" and said the rule was to
+// retry and then fail explicitly. That migration is finished: `compileLeadMission`
+// throws `MissionCompilationBlockedError` when there is no usable proposal, and
+// `proposeMission` has already retried twice by then.
+//
+// The reason is the one this whole architecture keeps arriving at. A regex
+// reading of a sentence is not a coarser version of the model's reading; it is a
+// DIFFERENT reading. The mission is the root of every later decision, so a
+// mission nobody understood does not produce a cheaper run — it produces an
+// expensive run answering a different question, which is exactly what run
+// 25f3ff57 was, one layer further down.
+//
+// `parseLeadMissionDeterministic` survives for the shadow comparison below,
+// which records when the model's `output_intent` disagrees with the literal
+// reading. Diagnosing a disagreement is not substituting an answer for one.
 //
 // PURE. No network, provider, model or database access — the caller injects the
 // model call and passes its raw output in.
@@ -47,6 +57,7 @@ import {
   type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
   type MissionDirectives, type RequestedOutput, type TargetEntity, type MissionType,
 } from "./leadMission.ts";
+import { buildMissionBriefing } from "./agentoryBriefing.ts";
 import { isCapabilityId, type CapabilityId } from "./leadCapabilityGraph.ts";
 import {
   catalogueForPrompt, isPublicCapability, offersFrom, toInternalCapabilities,
@@ -193,6 +204,36 @@ export const SOURCE_STRATEGIES = [
   "evidence_reuse_first",
 ] as const;
 export type SourceStrategy = typeof SOURCE_STRATEGIES[number];
+
+/**
+ * What each strategy means, shown to the model alongside the bare vocabulary.
+ *
+ * ORDER IS THE MEANING. This is a ranked preference — first entry first — and
+ * nothing downstream may read membership alone. That is exactly the bug run
+ * 25f3ff57 turned on: the router matched `job_signal_first` anywhere in the
+ * array and discarded the capability the mission had asked for and the gate had
+ * approved.
+ */
+export const SOURCE_STRATEGY_GUIDE: ReadonlyArray<{
+  strategy: SourceStrategy; means: string;
+}> = Object.freeze([
+  { strategy: "startup_cohort_first",
+    means: "Open with a startup-cohort source. Right when the request names " +
+      "startups, early-stage or venture-backed companies; such sources carry " +
+      "stage, team size and hiring state that a general index cannot prove." },
+  { strategy: "job_signal_first",
+    means: "The request is defined by an open role. Note that discovery still " +
+      "has to find the EMPLOYER — prefer a source carrying embedded hiring " +
+      "evidence, or plan discovery first and hiring verification second." },
+  { strategy: "company_profile_first",
+    means: "Open by company profile — industry, size, geography — when the " +
+      "request describes a kind of company rather than a cohort or an event." },
+  { strategy: "known_companies_only",
+    means: "The request names its companies. Resolve and enrich those; " +
+      "discover nothing." },
+  { strategy: "evidence_reuse_first",
+    means: "Prefer evidence already held over buying it again." },
+]);
 
 // ------------------------------------------------------ the safety scanner ----
 
@@ -352,6 +393,26 @@ export function buildMissionCompilerPayload(
 ): Record<string, unknown> {
   return {
     schema_version: MISSION_COMPILER_SCHEMA_VERSION,
+    // ── THE STAGE NOW KNOWS WHAT SYSTEM IT IS PART OF ─────────────────────
+    //
+    // `buildAgentoryBriefing` had exactly one production consumer — the
+    // discovery planner — and this stage, which made the consequential decision
+    // on run 25f3ff57, saw none of it. It was told its own output contract and
+    // nothing about Agentory, the pipeline, or the fact that no later stage can
+    // repair the pool discovery produces.
+    //
+    // `buildMissionBriefing` deliberately withholds the actor playbook: this
+    // stage must never name a provider, and the `instruction` below still says
+    // so. What it adds is the reasoning that makes a capability choice good.
+    agentory_briefing: buildMissionBriefing(
+      ctx.companyBrain
+        ? {
+          positive_industries: ctx.companyBrain.industries ?? [],
+          employee_min: ctx.companyBrain.employee_min ?? null,
+          employee_max: ctx.companyBrain.employee_max ?? null,
+        }
+        : null,
+    ),
     instruction: MISSION_COMPILER_SYSTEM_PROMPT,
     user_query: String(ctx.originalUserQuery ?? ""),
     company_brain_context: {
@@ -366,7 +427,19 @@ export function buildMissionCompilerPayload(
       employee_max: ctx.companyBrain?.employee_max ?? null,
     },
     capability_catalogue: catalogueForPrompt(),
-    source_strategy_vocabulary: SOURCE_STRATEGIES,
+    // ── WHAT EACH STRATEGY ACTUALLY MEANS ─────────────────────────────────
+    //
+    // This was `SOURCE_STRATEGIES` — five bare strings, no descriptions. The
+    // model populated the field with no way to know what any value did, and one
+    // of them was silently a ROUTING TRIGGER: `buildCapabilityGraph` matched
+    // `job_signal_first` anywhere in the array and overrode the entry
+    // capability. On run 25f3ff57 the model ranked `startup_cohort_first` first
+    // and `job_signal_first` second, and the second one won.
+    //
+    // That override is deleted. These stay a stated PREFERENCE ORDER, and
+    // describing them is what makes the order mean something the model can use
+    // deliberately rather than a list it fills in.
+    source_strategy_vocabulary: SOURCE_STRATEGY_GUIDE,
     limits: {
       min_requested_opportunity_count: MIN_REQUESTED_OPPORTUNITIES,
       max_requested_opportunity_count: MAX_REQUESTED_OPPORTUNITIES,
@@ -702,6 +775,38 @@ export interface CompileMissionInput {
  * The model NEVER supplies `original_user_query`; `validateLeadMission`
  * overwrites it from the caller's copy unconditionally.
  */
+/**
+ * Raised when a lead request could not be compiled into a mission.
+ *
+ * The mission is the root of every later decision. A run that proceeds without
+ * one is not degraded, it is answering a different question — so this stops the
+ * request instead, with the reason and a sentence for the user.
+ */
+export class MissionCompilationBlockedError extends Error {
+  readonly reasons: string[];
+  readonly userMessage: string;
+  constructor(query: string, reasons: string[]) {
+    super(
+      `the request could not be compiled into a mission (${reasons.join(", ") || "unknown"}); ` +
+      `no deterministic reading was substituted`,
+    );
+    this.name = "MissionCompilationBlockedError";
+    this.reasons = reasons;
+    this.userMessage = [
+      "I could not reliably work out what to look for, so I stopped before " +
+      "spending anything.",
+      "",
+      "I would rather say that than guess at your request and buy the wrong " +
+      "companies — a confident wrong answer costs more than this does.",
+      "",
+      "Try naming the kind of company, the place, and what makes one worth " +
+      "contacting. For example: \"AI startups in the US that are hiring " +
+      "software engineers\".",
+    ].join("\n");
+    void query;
+  }
+}
+
 export function compileLeadMission(i: CompileMissionInput): CompiledMissionResult {
   const query = String(i.originalUserQuery ?? "");
   const changes: string[] = [];
@@ -716,18 +821,34 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   let approvedCaps: PublicCapabilityId[] = [];
   const rejectedCaps: CapabilityDecisionRecord["rejected"] = [];
 
+  // ── NO PROPOSAL IS A BLOCKED RUN, NOT A REGEX READING ─────────────────────
+  //
+  // These two branches used to answer `mission = deterministic()`, with the
+  // comment "a bad proposal must never cost the user a workflow". That reasoning
+  // is what this architecture has spent every other commit removing: a
+  // deterministic reading of "Find 10 qualified AI startups in the US that are
+  // currently hiring software engineers" is a marker-table guess at what the
+  // sentence meant, and a guess that is confidently wrong costs the user far
+  // more than a stated failure does.
+  //
+  // The mission is the root of every later decision — capabilities, actors,
+  // evidence, qualification — so a mission nobody understood is not a cheaper
+  // run, it is an expensive run answering a different question. Exactly the
+  // shape of 25f3ff57, one layer earlier.
+  //
+  // `parseLeadMissionDeterministic` SURVIVES, and is still called below: it
+  // supplies the shadow comparison that records when the model's `output_intent`
+  // disagrees with the literal reading. Diagnosing a disagreement is not the
+  // same as substituting an answer for one.
   if (i.proposal === undefined || i.proposal === null) {
-    changes.push("no_model_proposal:deterministic_parser_used");
-    mission = deterministic();
+    throw new MissionCompilationBlockedError(query, ["no_model_proposal"]);
   } else {
     parsed = parseMissionProposal(i.proposal);
     if (!parsed.proposal) {
-      // UNSAFE OR UNREADABLE. The run continues on the deterministic reading
-      // rather than failing — a bad proposal must never cost the user a workflow.
-      for (const v of parsed.violations) {
-        changes.push(`proposal_rejected:${v.kind}:${v.path || "root"}`);
-      }
-      mission = deterministic();
+      // UNSAFE OR UNREADABLE, and therefore not a mission. The violations travel
+      // with the refusal so the caller can say WHICH part was unusable.
+      throw new MissionCompilationBlockedError(
+        query, parsed.violations.map((v) => `${v.kind}:${v.path || "root"}`));
     } else {
       requestedCaps = [...parsed.proposal.required_capabilities];
       for (const r of parsed.repairs) {

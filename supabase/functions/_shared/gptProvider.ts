@@ -38,8 +38,55 @@ export const GPT_PROVIDER_VERSION = "gpt-provider-v1" as const;
  * Named here rather than passed in, because "which model decided this" must be
  * answerable from the code for a run that spent money, not from whatever a
  * caller happened to pass six frames up.
+ *
+ * THE REASONING TIER. Every stage where a wrong answer costs money or
+ * misdirects the whole run.
  */
 export const GPT_MODEL = "gpt-4.1" as const;
+
+/**
+ * THE FAST TIER.
+ *
+ * Same provider, same JSON guarantees, a fraction of the cost. For work that is
+ * high-volume and structurally easy: reading twenty-five company descriptions
+ * and saying which ones plausibly match a mission, normalising a field,
+ * classifying a title.
+ */
+export const GPT_FAST_MODEL = "gpt-4.1-mini" as const;
+
+/**
+ * WHICH KIND OF THINKING A CALL NEEDS.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ *
+ * Every intelligence stage ran on `gpt-4.1`, because one constant named the
+ * model and nothing distinguished the calls. Mission triage reads a batch of
+ * twenty-five companies and answers "plausibly worth paying for?" — a
+ * high-volume, low-stakes classification, and the single most frequent call the
+ * pipeline makes. Interpreting an ambiguous mission, choosing a multi-actor
+ * strategy or qualifying a company on cited evidence are none of those things.
+ * Paying the same rate for both is not a safety property, it is an absence of a
+ * decision.
+ *
+ * TWO TIERS, NOT A CONTINUUM. A knob with five settings invites tuning; a
+ * binary invites a judgement about the work, which is the thing that actually
+ * needs making. The rule:
+ *
+ *   reasoning  a wrong answer misdirects the run or spends money badly —
+ *              mission interpretation, strategy, actor selection,
+ *              qualification, ranking, re-planning
+ *   fast       a wrong answer costs one row its ORDER and nothing else —
+ *              triage, extraction, normalisation, classification
+ *
+ * THE DEFAULT IS `reasoning`. A caller that has not thought about which tier it
+ * needs gets the one that cannot quietly degrade a decision; downgrading is
+ * always explicit and always recorded.
+ */
+export type GptTier = "reasoning" | "fast";
+
+export function modelForTier(tier: GptTier | undefined): string {
+  return tier === "fast" ? GPT_FAST_MODEL : GPT_MODEL;
+}
 
 /** A JSON Schema the model must satisfy. Enforced by the API, not by hope. */
 export interface GptSchema {
@@ -68,6 +115,21 @@ export interface GptRequest {
    * can debug.
    */
   temperature?: number;
+  /**
+   * Which model tier this call needs. Defaults to `reasoning` — see `GptTier`.
+   *
+   * A caller asking for `fast` is asserting that a wrong answer here cannot
+   * misdirect the run.
+   */
+  tier?: GptTier;
+  /**
+   * WHY that tier, in the caller's own words.
+   *
+   * Persisted with the call. "Which model decided this, and who decided that it
+   * was enough?" must be answerable from the task row — otherwise a cost
+   * regression and a quality regression look identical in the telemetry.
+   */
+  routing_reason?: string;
 }
 
 export type GptResult<T> =
@@ -135,6 +197,12 @@ export async function gptStructured<T>(
   const started = now();
   const elapsed = () => now() - started;
 
+  // THE TIER IS RESOLVED ONCE, HERE, and every subsequent mention of "the
+  // model" in this call refers to it — the request body, the success log, the
+  // returned result and the diagnostics. A second place that re-derives it is a
+  // second place that can disagree about what actually ran.
+  const model = modelForTier(req.tier);
+
   const key = readEnv("OPENAI_API_KEY");
   if (!key) {
     // NOT A DEGRADATION. The caller decides what to do without a model; this
@@ -153,7 +221,7 @@ export async function gptStructured<T>(
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: GPT_MODEL,
+        model,
         temperature: req.temperature ?? 0,
         ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
         messages: [
@@ -235,8 +303,11 @@ export async function gptStructured<T>(
 
   try {
     const value = JSON.parse(content) as T;
-    log("gpt_call_ok", { purpose: req.purpose, model: GPT_MODEL, latency_ms: elapsed() });
-    return { ok: true, value, model: GPT_MODEL, latency_ms: elapsed() };
+    log("gpt_call_ok", {
+      purpose: req.purpose, model, tier: req.tier ?? "reasoning",
+      routing_reason: req.routing_reason ?? null, latency_ms: elapsed(),
+    });
+    return { ok: true, value, model, latency_ms: elapsed() };
   } catch {
     // `strict` should make this unreachable. It is handled anyway, because
     // "unreachable" is a claim about a provider we do not control.
@@ -253,12 +324,27 @@ export function gptAvailable(readEnv: (k: string) => string | undefined = (k) =>
   return !!readEnv("OPENAI_API_KEY");
 }
 
-/** Compact record of one call, for the execution state. Carries no payload. */
-export function gptDiagnostics<T>(purpose: string, r: GptResult<T>): Record<string, unknown> {
+/**
+ * Compact record of one call, for the execution state. Carries no payload.
+ *
+ * `tier` and `routing_reason` are recorded alongside the model because a cost
+ * regression and a quality regression are indistinguishable without them: both
+ * show up as "the answers got worse" or "the bill went up", and only the
+ * routing decision says which one someone chose.
+ *
+ * A FAILED call still reports the tier it was ROUTED to, so a stage that failed
+ * on the fast model is not later mistaken for one that never had a tier.
+ */
+export function gptDiagnostics<T>(
+  purpose: string, r: GptResult<T>, routing?: { tier?: GptTier; reason?: string },
+): Record<string, unknown> {
+  const tier: GptTier = routing?.tier ?? "reasoning";
   return {
     purpose,
     provider: "openai",
-    model: r.ok ? r.model : GPT_MODEL,
+    model: r.ok ? r.model : modelForTier(tier),
+    tier,
+    routing_reason: routing?.reason ?? null,
     ok: r.ok,
     latency_ms: r.latency_ms,
     ...(r.ok ? {} : { failure_code: r.code, detail: r.detail }),

@@ -567,12 +567,36 @@ Deno.test("9. discovery complete + partial identity ⇒ resume restores and fini
     // AND THE CANDIDATES CAME BACK ANYWAY.
     assertEquals(second.run.companies.length, first.run.companies.length,
       "the whole working set is reconstructed from the checkpoint");
-    assertEquals(second.targets.length, TARGETS,
-      "including which of them were shortlisted for paid resolution");
+    // A CONTINUATION TAKES A FRESH SLICE. It restores what was already
+    // investigated AND opens the frontier further — that is precisely how
+    // candidates the first pass never reached get worked through. So the
+    // shortlist legitimately GROWS across passes; what must hold is that the
+    // restored set is preserved and no pass exceeds the budget.
+    assert(second.targets.length >= TARGETS,
+      "the continuation keeps what was investigated and opens the frontier");
+    for (const sl of second.run.state.investigation_slices ?? []) {
+      assert(sl.selected <= second.run.state.shortlist_decision!.budget.budget,
+        `a continuation pass selected ${sl.selected}, over budget`);
+    }
 
-    // THE OUTSTANDING WORK WAS FINISHED, AND ONLY THE OUTSTANDING WORK.
-    assertEquals(second.searched.length, deferredKeys.length,
-      `run 2 must buy exactly the ${deferredKeys.length} deferred searches`);
+    // ── THE OUTSTANDING WORK WAS FINISHED, AND NOTHING WAS RE-BOUGHT ──────
+    //
+    // Run 2 buys the deferred candidates AND fills the rest of its budget from
+    // the frontier — that is the point of a continuation, and it is how a run
+    // that owes 10 leads ever reaches 10. So the count is not `deferredKeys`;
+    // the invariants are that every deferred candidate WAS attempted, that no
+    // already-resolved company was paid for twice, and that the pass stayed
+    // inside its budget (asserted above).
+    const searchedKeys = new Set(
+      second.searched.map((i) => `acme${String(i).padStart(2, "0")}.com`));
+    for (const key of deferredKeys) {
+      assert(searchedKeys.has(key),
+        `${key} was deferred in run 1 and must be attempted in run 2`);
+    }
+    for (const r of records.filter((x) => x.identity === "resolved")) {
+      assertFalse(searchedKeys.has(r.company_key),
+        `${r.company_key} was already resolved and must not be re-purchased`);
+    }
     assertEquals(second.outcome?.status, "complete",
       "and only now, with every candidate terminal, does the stage complete");
     // The stage completed the slice it was given. It stays OPEN on the ledger
@@ -606,9 +630,13 @@ Deno.test("9b. the restored set keeps triage verdicts — excluded comes back ex
       state: first.run.state,
     });
 
-    assertEquals(second.run.companies.filter((c) => !c.shortlisted).length,
-      notShortlisted.length,
-      "an excluded company must come back excluded, not come back unknown");
+    // The continuation opens the frontier, so some previously un-sliced
+    // companies are legitimately picked up this pass. What must never happen is
+    // a company coming back with its TRIAGE VERDICT lost — an excluded company
+    // reappearing as unknown is the failure this guards.
+    assert(second.run.companies.filter((c) => !c.shortlisted).length
+      <= notShortlisted.length,
+      "the frontier may shrink as it is worked, never grow from nothing");
     for (const c of notShortlisted) {
       const back = second.run.companies.find((x) => x.key === c.key);
       assert(back, `${c.key} must survive the restore`);

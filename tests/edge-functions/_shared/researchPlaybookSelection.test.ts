@@ -28,6 +28,8 @@ import {
 import {
   CAPABILITY_REGISTRY, CAPABILITY_IDS,
 } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { ENGINE_DRIVEN_DISCOVERY }
+  from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { SOURCE_STRATEGIES } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 
 /** A sentence that names every shape at once — and decides none of them. */
@@ -63,14 +65,23 @@ const selected = (s: ReturnType<typeof selectResearchPlaybooks>) =>
 Deno.test("the engine-driven capability list matches the engine's own source", () => {
   // The whole support classification rests on this list, so it is re-derived
   // from `runCapabilityPlan` rather than trusted. The engine names the
-  // capabilities it SKIPS in one guard; everything else it implements with
-  // `if (cap === "…")`.
+  // capabilities it SKIPS in one guard; everything else it implements either
+  // with `if (cap === "…")` or, for the capabilities that SHARE a stage, with
+  // membership of a set it exports.
   const ENGINE = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
   const implemented = new Set(
     [...ENGINE.matchAll(/if \(cap === "([a-z_]+)"\) \{/g)].map((m) => m[1]),
   );
+  // ── THE DISCOVERY CAPABILITIES SHARE ONE BRANCH ─────────────────────────
+  //
+  // They used to have one `if (cap === "…")` each, and that duplication is
+  // exactly what let `general_company_discovery` acquire a hardcoded provider
+  // and skip the planner. Re-deriving from the exported set keeps this test
+  // grounded in the engine's own source — the property it exists to protect —
+  // without requiring the engine to spell each capability out in a condition.
+  for (const c of ENGINE_DRIVEN_DISCOVERY) implemented.add(c);
   const skipGuard = ENGINE.slice(
     ENGINE.indexOf('if (cap === "known_company_resolution" ||'),
   ).slice(0, 400);

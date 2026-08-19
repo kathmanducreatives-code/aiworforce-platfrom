@@ -49,6 +49,8 @@ import {
   actorsForPurpose, hiringActorCard, type HiringActorCard,
 } from "./hiringActorCatalog.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
+import { coverMissionSignals } from "./signalActorCoverage.ts";
+import { scenarioBriefing } from "./discoveryScenarioMatrix.ts";
 
 export const DISCOVERY_STRATEGY_VERSION = "lead-discovery-strategy-v1" as const;
 
@@ -93,6 +95,15 @@ export interface StrategyViolation {
 }
 
 export interface DiscoveryStrategy {
+  /**
+   * Violation codes from a FIRST proposal that was rejected and then repaired.
+   *
+   * Present only when the model needed a second attempt. A run that got it
+   * right immediately and a run that recovered from a refusal are different
+   * facts about the strategy, and the trace must be able to tell them apart —
+   * a silently-repaired plan looks identical to a correct one otherwise.
+   */
+  repaired_after?: string[];
   version: typeof DISCOVERY_STRATEGY_VERSION;
   selections: DiscoveryActorSelection[];
   /**
@@ -135,6 +146,14 @@ export interface DiscoveryStrategyOptions {
   maxItemsPerActor?: number;
   /** Today's literal, used by the deterministic strategy. Injected for tests. */
   fallbackInput?: Record<string, unknown>;
+  /**
+   * Execution facts the router knows and the model cannot infer.
+   *
+   * Carried from `CapabilityPlan.routing_advisories`. These used to be routing
+   * BRANCHES that silently rewrote the plan; as text in the payload they inform
+   * the choice instead of replacing it.
+   */
+  routingAdvisories?: string[];
 }
 
 export const DEFAULT_MAX_ACTORS = 3;
@@ -327,6 +346,49 @@ export function declaresUnfitForSemantic(card: HiringActorCard): boolean {
   return (card.not_for ?? []).some((n) => SEMANTIC_UNFIT.test(String(n)));
 }
 
+/**
+ * Is this mission inside the fixed population a cohort-scoped Actor can return?
+ *
+ * ── WHY THIS IS A PREDICATE AND NOT A PREFERENCE ────────────────────────────
+ *
+ * `not_for: "semantic/concept search"` stops a name matcher discovering a
+ * cohort. This is the mirror: it stops a COHORT source being pointed at a
+ * mission whose companies are not in that cohort. `memo23` asked for German
+ * industrial-automation integrators returns YC companies — not fewer results,
+ * not worse ones, the wrong population entirely — and every gate downstream
+ * then rejects a pool that was never right.
+ *
+ * ── AND WHY IT IS DELIBERATELY SMALL ────────────────────────────────────────
+ *
+ * One entry per cohort, each a plain statement of who is in it. This is the
+ * line the architecture keeps having to hold: the validator may say "that Actor
+ * physically cannot return this population", and it may NOT grow into a table
+ * of which actor suits which query. If a future cohort needs a paragraph of
+ * judgement to decide membership, that judgement belongs to the planner and the
+ * card's `best_for`, not here.
+ *
+ * An unknown cohort id is permissive — an Actor whose population nobody has
+ * described yet is not blocked on a guess.
+ */
+const COHORT_MEMBERSHIP: Record<string, (m: LeadMissionV1) => boolean> = {
+  y_combinator: (m) => {
+    const stages = (m.company_profile?.stages ?? []).map((s) => String(s).toLowerCase());
+    if (stages.some((s) => /startup|seed|series a|early|venture|pre-seed/.test(s))) return true;
+    // The user naming the cohort is the other way in, and outranks the profile.
+    return /\by ?combinator\b|\byc\b/i.test(String(m.original_user_query ?? ""));
+  },
+};
+
+export function cohortRefusalFor(
+  card: HiringActorCard, mission: LeadMissionV1,
+): { cohort: string; label: string } | null {
+  const scope = card.cohort_scope;
+  if (!scope) return null;
+  const inCohort = COHORT_MEMBERSHIP[scope.id];
+  if (!inCohort) return null;
+  return inCohort(mission) ? null : { cohort: scope.id, label: scope.label };
+}
+
 export function validateDiscoveryStrategy(
   proposals: unknown, mission: LeadMissionV1, opts: DiscoveryStrategyOptions = {},
 ): DiscoveryStrategy {
@@ -407,6 +469,31 @@ export function validateDiscoveryStrategy(
           `${key} declares not_for "${card.not_for.join('", "')}" — this mission ` +
           `discovers by concept (${conceptTermsOf(mission).join(", ")}) and names no ` +
           `specific companies, so a name matcher cannot produce this cohort`,
+        severity: "block",
+      });
+      continue;
+    }
+    // ── THE MIRROR OF `not_for`: A COHORT SOURCE OUTSIDE ITS COHORT ────────
+    //
+    // `general_company_discovery` used to declare one provider, and widening it
+    // to the discovery universe is what lets a startup mission reach a startup
+    // source. The same widening makes `memo23` reachable for a German
+    // industrial-automation mission, where it can only return YC companies.
+    //
+    // Containment used to carry this guarantee — the capability simply did not
+    // list the actor — and a permission list cannot tell "this actor is wrong
+    // here" from "this actor is unavailable". Stated on the card and enforced
+    // here, the refusal is specific, it is explained, and it is handed back to
+    // the planner as feedback it can act on.
+    const cohort = cohortRefusalFor(card, mission);
+    if (cohort) {
+      violations.push({
+        code: "actor_outside_mission_cohort", actor_key: key,
+        message:
+          `${key} can only return companies from ${cohort.label} — this mission ` +
+          `does not target that cohort, so the actor would return the wrong ` +
+          `population rather than fewer results. Choose a source whose index ` +
+          `covers ${conceptTermsOf(mission).join(", ") || "this mission's companies"}.`,
         severity: "block",
       });
       continue;
@@ -527,8 +614,62 @@ export function validateDiscoveryStrategy(
  * outage or an empty result set further down. It carries the violations because
  * "why was nothing selected?" is the only question anyone will ask.
  */
+/**
+ * Say, in the user's terms, why nothing ran.
+ *
+ * ── WHY THE REFUSAL NEEDS ITS OWN SENTENCE ──────────────────────────────────
+ *
+ * The architecture decision of 2026-08-19 is that a mission no registered Actor
+ * can serve STOPS, rather than being answered with the nearest tool. That is
+ * only the better answer if the person reading it can tell a refusal from a
+ * crash — "0 of 10 leads" and "nothing here can discover that cohort, here is
+ * what would" are different facts, and the second one is actionable.
+ *
+ * Written from the violation codes, which already carry the specifics.
+ */
+export function refusalMessageFor(violations: readonly StrategyViolation[]): string {
+  const blocking = violations.filter((v) => v.severity === "block");
+  const semantic = blocking.find((v) => v.code === "actor_not_for_semantic_discovery");
+  const cohort = blocking.find((v) => v.code === "actor_outside_mission_cohort");
+
+  if (semantic) {
+    return [
+      "I stopped before spending anything, because no source I have can find " +
+      "that KIND of company.",
+      "",
+      "The company index I can search matches company NAMES, not what a company " +
+      "does — asking it for a concept returns whatever happens to be CALLED " +
+      "that: newsletters, communities and consultancies that look like results " +
+      "and qualify as nothing.",
+      "",
+      "What would work instead:",
+      "  • name the companies you want evaluated, and I will research them; or",
+      "  • narrow to a cohort I do have a real source for, such as venture-backed " +
+      "startups; or",
+      "  • add a source that can search companies by what they do.",
+    ].join("\n");
+  }
+  if (cohort) {
+    return [
+      "I stopped before spending anything. The sources I have for this kind of " +
+      "request only cover a fixed population, and the companies you asked for " +
+      "are not in it.",
+      "",
+      cohort.message,
+    ].join("\n");
+  }
+  return [
+    "I stopped before spending anything, because I could not choose a source " +
+    "that would genuinely answer this request.",
+    "",
+    ...blocking.map((v) => `  • ${v.message}`),
+  ].join("\n");
+}
+
 export class DiscoveryStrategyBlockedError extends Error {
   readonly violations: StrategyViolation[];
+  /** The refusal in the user's terms. See `refusalMessageFor`. */
+  readonly userMessage: string;
   constructor(violations: StrategyViolation[]) {
     const first = violations[0];
     super(
@@ -538,6 +679,7 @@ export class DiscoveryStrategyBlockedError extends Error {
     );
     this.name = "DiscoveryStrategyBlockedError";
     this.violations = violations;
+    this.userMessage = refusalMessageFor(violations);
   }
 }
 
@@ -608,9 +750,39 @@ export function buildDiscoveryPlannerPayload(
       source_strategy: mission.directives?.source_strategy ?? [],
     },
     available_actors: discoveryCatalogBriefing(),
+    // ── WHAT THE REQUEST NEEDS, RESOLVED ──────────────────────────────────
+    //
+    // These three lived in `buildPrompt`, which is the TEST-facing helper. The
+    // live path built its payload here and never had them, so the prompt that
+    // was pinned by tests and the prompt a real run sent were different
+    // objects — the "correct, covered and unreachable" shape this codebase has
+    // already paid for once. Built here, there is one payload and both callers
+    // get it.
+    //
+    // The model is not asked to work out which signals map to which actor:
+    // that is deterministic and already done, and asking twice invites the two
+    // answers to disagree.
+    signal_coverage: coverMissionSignals(mission).signals.map((s) => ({
+      signal: s.signal,
+      status: s.status,
+      actors_that_serve_it: s.actors,
+      minimum_evidence: s.minimum_evidence,
+      ...(s.limitation ? { limitation: s.limitation } : {}),
+    })),
+    // Scenarios NO actor can serve, with the verified reason. A planner that
+    // cannot see what is impossible keeps proposing it.
+    unserveable_scenarios: scenarioBriefing()
+      .filter((s) => s.servable === false)
+      .map((s) => ({ scenario: s.scenario, why: s.blocked_reason })),
+    // Facts the router knows: an actor family with no verified schema, a cohort
+    // whose stage data only one source carries.
+    ...(opts.routingAdvisories?.length
+      ? { execution_advisories: opts.routingAdvisories }
+      : {}),
     limits: {
       max_actors: opts.maxActors ?? DEFAULT_MAX_ACTORS,
       max_items_per_actor: opts.maxItemsPerActor ?? DEFAULT_MAX_ITEMS_PER_ACTOR,
+      requested_lead_count: mission.requested_count,
     },
     response_shape: {
       actors: [{
@@ -692,6 +864,16 @@ export function discoveryStrategyDiagnostics(s: DiscoveryStrategy): Record<strin
       dropped_filters: x.dropped_filters,
       requires_enrichment: x.requires_enrichment,
     })),
+    /**
+     * VIOLATIONS FROM A FIRST PLAN THAT WAS REFUSED AND THEN REPAIRED.
+     *
+     * Absent on a plan that validated first time. Without it a run that
+     * recovered from a refusal is indistinguishable from one that never needed
+     * to — and a RISING repair rate is the signal that the briefing is teaching
+     * the model the wrong thing, which is a prompt problem rather than a reason
+     * for another validator rule.
+     */
+    ...(s.repaired_after ? { repaired_after: s.repaired_after } : {}),
     // WHAT THE VALIDATOR DID, in full — not just how many times it did it.
     violations: s.violations,
     blocked: s.violations.filter((v) => v.severity === "block").length,

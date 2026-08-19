@@ -140,10 +140,36 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["company_profile.verticals or company_profile.locations"],
     produces: ["company_candidate"],
     allowed_next: ["company_identity_resolution"],
-    providers: ["apify_linkedin_company_search"],
+    // ── THE SAME DISCOVERY UNIVERSE AS THE STARTUP ENTRY ──────────────────
+    //
+    // This declared ONE provider — the LinkedIn company search — and that made
+    // the capability a trap rather than a route. `guardedInvoker` enforces
+    // containment per capability, so a single-provider capability is not a
+    // preference the planner may weigh; it is the only call it can make. On run
+    // 25f3ff57 (2026-08-18) a mission for "AI startups" was routed here and had
+    // to be answered with a company-NAME matcher, whose own card declares it
+    // `not_for: ["semantic/concept search"]`. It returned 50 newsletters, 26
+    // accelerator communities and a podcast. Nothing downstream could recover.
+    //
+    // `providers` is a CONTAINMENT boundary — which Actors this capability may
+    // reach — not a ranking. Widening it to the discovery universe does not
+    // make a bad choice more likely: `validateDiscoveryStrategy` still refuses
+    // an unregistered key, a non-discovery purpose and a `not_for` violation,
+    // and the planner is shown every card's `best_for` and `known_defects`
+    // before it chooses. What it does make possible is the RIGHT choice — a
+    // profile mission that happens to describe startups can now reach a startup
+    // cohort source instead of being answered by a name index.
+    providers: [
+      "apify_yc_companies_memo23",
+      "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search",
+    ],
     cost_units: 1,
     max_attempts: 2,
-    fallback_policy: "terminal_on_exhaustion",
+    // WAS `terminal_on_exhaustion`, which was honest when there was one
+    // provider and nothing to fall back TO. With a real provider set, an
+    // exhausted primary has somewhere to go.
+    fallback_policy: "provider_fallback_only",
     evidence_required: ["company_name"],
   },
   known_company_resolution: {
@@ -401,6 +427,20 @@ export interface CapabilityPlan {
   offered_capabilities: string[];
   /** Why the entry capability was chosen. Persisted for "why YC?" questions. */
   routing_reason: string;
+  /**
+   * Facts about THIS mission's execution constraints, for the planner to weigh.
+   *
+   * These are things deterministic code knows and the model cannot infer — an
+   * Actor family with no verified schema, a signal with no discovery source.
+   * They used to be encoded as routing branches that silently changed the plan;
+   * carried here instead, they inform a decision rather than replacing one.
+   *
+   * ADVISORY. Nothing reads these to gate execution. If one ever needs to be
+   * enforced it belongs in `validateDiscoveryStrategy`, where a refusal is
+   * recorded and handed back to the model — not in the router, where it is
+   * invisible.
+   */
+  routing_advisories: string[];
 }
 
 function step(
@@ -470,24 +510,35 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   } else if (mission.requested_output === "job_listings") {
     entry = "job_discovery";
     entryReason = "the requested output is job listings";
-  } else if (strategy.includes("job_signal_first")) {
-    // HIRING-FIRST, ROUTED THROUGH CARDED ACTORS.
-    //
-    // The natural shape is "search the openings, then look at their employers".
-    // The Actors that can do that — the four job boards — have no card in
-    // `hiringActorCatalog`, so no bounded input can be compiled and no cost
-    // estimated for them. Running one anyway would mean sending an unvalidated
-    // payload to a paid Actor, which is the exact failure `compileFirstProviderCall`
-    // exists to prevent.
-    //
-    // So a hiring-first mission discovers companies by profile and then verifies
-    // hiring INSIDE that set with the company-scoped LinkedIn job search, which
-    // is carded, bounded and priced. Same deliverable — companies with proven
-    // current openings — reached with Actors whose schemas are verified.
-    entry = "general_company_discovery";
-    entryReason =
-      "the mission is hiring-first; discovery is by company profile and hiring is " +
-      "verified per company, because open job-board discovery has no verified Actor schema";
+
+  // ── WHAT USED TO SIT HERE, AND WHY IT IS GONE ─────────────────────────────
+  //
+  //     else if (strategy.includes("job_signal_first"))
+  //       entry = "general_company_discovery";
+  //
+  // A hiring-first mission was rerouted to profile discovery, on the honest
+  // reasoning that the four job-board Actors are uncarded and cannot be given a
+  // bounded, priced input. The reasoning was sound. Expressing it as a ROUTE
+  // OVERRIDE was not, for three reasons that run 25f3ff57 (2026-08-18)
+  // demonstrated in one pass:
+  //
+  //   1. It tested MEMBERSHIP, not order. The mission's own preference was
+  //      ["startup_cohort_first", "job_signal_first"] — startup cohort FIRST —
+  //      and the second entry silently won.
+  //   2. It overrode a capability the gate had already APPROVED.
+  //      `capability_decision` recorded `requested: [startup_company_discovery]`,
+  //      `approved: [startup_company_discovery]`, `rejected: []` — and then the
+  //      plan ran general discovery. Nothing in the record said otherwise.
+  //   3. `general_company_discovery` declared one provider, so the override was
+  //      not a route change but a tool change: a concept cohort was handed to a
+  //      company-NAME matcher, which returned newsletters.
+  //
+  // The constraint it encoded is REAL and has not been discarded — it is now
+  // knowledge rather than a branch. `routing_advisories` below carries it into
+  // the planner briefing, where the model can weigh "no carded actor discovers
+  // open job postings" against everything else it knows, and answer with an
+  // Actor that carries embedded hiring evidence instead. That is the same fact
+  // reaching the same decision, at a layer that can act on it intelligently.
   } else if (missionSaysSo && asked("startup_company_discovery")) {
     entry = "startup_company_discovery";
     entryReason = "the mission requires startup-cohort discovery";
@@ -627,6 +678,31 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   // inferred from capability membership.
   const allowed_providers = [...new Set(steps.flatMap((s) => s.providers))];
 
+  // ── WHAT THE ROUTER KNOWS AND THE MODEL CANNOT INFER ──────────────────────
+  //
+  // Each of these was, or could easily have become, a routing branch. Stated as
+  // knowledge they reach the planner's briefing and inform an actor choice;
+  // stated as branches they silently replace one.
+  const routing_advisories: string[] = [];
+  if (strategy.includes("job_signal_first") || hasSignal(mission, "hiring")) {
+    routing_advisories.push(
+      "This mission is hiring-first. No registered Actor can DISCOVER open job " +
+      "postings across employers: the four job-board Actors have no verified " +
+      "schema card, so no bounded input can be compiled for them, and " +
+      "apify_linkedin_job_search is company-scoped by contract — it verifies " +
+      "hiring inside a company set it is given and cannot find employers. " +
+      "Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan " +
+      "discovery first and hiring verification second over the pool it returns.",
+    );
+  }
+  if (mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
+    routing_advisories.push(
+      "The mission targets startups. Startup-cohort sources carry stage, team " +
+      "size and hiring state natively; a general company index does not and " +
+      "cannot prove any of them.",
+    );
+  }
+
   return {
     version: CAPABILITY_GRAPH_VERSION,
     steps,
@@ -636,6 +712,7 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     estimated_cost_units: steps.reduce((n, s) => n + s.cost_units * s.max_attempts, 0),
     offered_capabilities,
     routing_reason: entryReason,
+    routing_advisories,
   };
 }
 

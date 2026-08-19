@@ -22,7 +22,9 @@
 // the pipeline behaves exactly as measured, and every deviation is deliberate.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
+import {
+  compileLeadMission, MissionCompilationBlockedError,
+} from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { EVAL_SET } from "../../planner-eval/dataset.ts";
 import { GOLD_BY_ID, GOLD_MISSIONS, type GoldMission } from "../../planner-eval/goldMissions.ts";
 
@@ -415,17 +417,23 @@ Deno.test("recency is clamped, not trusted, and never invents a window", () => {
   }
 });
 
-Deno.test("an unsafe proposal still falls back rather than half-applying the new fields", () => {
-  const r = compileLeadMission({
-    originalUserQuery: "Find exactly 5 SDR hiring leads in London. Do not broaden outside London.",
-    proposal: {
-      ...perfectProposal(GOLD_BY_ID.get("noBroaden-01")!),
-      actor_id: "memo23/some-scraper",
-    },
-  });
-  assertEquals(r.parser_source, "deterministic_fallback");
-  assert(r.safety_violations.length > 0);
-  // The model contributed NOTHING, so its constraints must not appear either.
-  assertEquals(r.final_mission.no_broadening_requested ?? false, false);
-  assertEquals(r.final_mission.required_signal_terms ?? [], []);
+Deno.test("an unsafe proposal BLOCKS rather than half-applying the new fields", () => {
+  // The property is unchanged: a proposal that tries to name an Actor must not
+  // be sanitised and partly used. What changed is the answer to "then what?" —
+  // it used to be the regex reading, and is now a stated refusal.
+  let blocked: MissionCompilationBlockedError | null = null;
+  try {
+    compileLeadMission({
+      originalUserQuery: "Find exactly 5 SDR hiring leads in London. Do not broaden outside London.",
+      proposal: {
+        ...perfectProposal(GOLD_BY_ID.get("noBroaden-01")!),
+        actor_id: "memo23/some-scraper",
+      },
+    });
+  } catch (e) {
+    if (e instanceof MissionCompilationBlockedError) blocked = e;
+    else throw e;
+  }
+  assert(blocked, "an unsafe proposal must not produce a mission at all");
+  assert(blocked!.reasons.length > 0, "and the refusal names what was unsafe");
 });

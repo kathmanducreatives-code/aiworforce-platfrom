@@ -76,6 +76,23 @@ export interface HiringActorCard {
    * as a software company.
    */
   requires_enrichment_before_qualification: boolean;
+  /**
+   * The FIXED population this Actor can return, when it has one.
+   *
+   * A cohort-scoped Actor is not merely better at its cohort — it is incapable
+   * of returning anything else. `memo23/y-combinator-scraper` reads the Y
+   * Combinator directory; asked for German industrial-automation integrators it
+   * does not return worse results, it returns YC companies, and every gate
+   * downstream then correctly rejects a pool that was never the right one.
+   *
+   * This is a CAPABILITY FACT, which is why it lives on the card rather than in
+   * a routing branch. `validateDiscoveryStrategy` reads it to refuse a mission
+   * the Actor cannot serve and hands the reason back to the planner, exactly as
+   * it does for `not_for`.
+   *
+   * Absent means unrestricted — the Actor searches an open index.
+   */
+  cohort_scope?: { id: string; label: string };
 }
 
 // ── VERIFIED ENUMS ───────────────────────────────────────────────────────────
@@ -177,8 +194,26 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
         summary: "102 live open jobs contained zero Sales/Revenue/GTM Ops roles (50 were engineering).",
         mitigation: "Do not plan an ops-role mission on the YC route alone.",
         evidence_ref: `${EV}/final_recommendation.md#2` },
+      { id: "yc_industries_is_coarse_and_over_narrows",
+        summary:
+          "`industries` accepts every value in the enum but is a COARSE top-level " +
+          "bucket, and combining it with regions + isHiring commonly returns ZERO " +
+          "rows. Verified live 2026-08-19: industries:['Engineering, Product and " +
+          "Design'] + regions:['United States of America'] + isHiring:true returned " +
+          "0 companies, twice. The enum says what the schema ACCEPTS, not what " +
+          "returns data.",
+        mitigation:
+          "Omit `industries` unless the mission is squarely one bucket. The cohort " +
+          "is small enough to filter on tags, oneLiner and subindustry after the " +
+          "fact, and a zero-row discovery cannot be repaired downstream.",
+        evidence_ref: "live end-to-end run 2026-08-19" },
     ],
     requires_enrichment_before_qualification: true,
+    // THE POPULATION THIS ACTOR IS, not the population it prefers. It reads the
+    // Y Combinator directory and can return nothing else, so a mission for
+    // manufacturers, agencies or integrators is not served worse here — it is
+    // not served at all.
+    cohort_scope: { id: "y_combinator", label: "the Y Combinator company directory" },
   },
 
   // ── YC DISCOVERY (FALLBACK) ───────────────────────────────────────────────
@@ -212,6 +247,11 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
         evidence_ref: `${EV}/raw_outputs/probeC_solidcode.json` },
     ],
     requires_enrichment_before_qualification: true,
+    // THE POPULATION THIS ACTOR IS, not the population it prefers. It reads the
+    // Y Combinator directory and can return nothing else, so a mission for
+    // manufacturers, agencies or integrators is not served worse here — it is
+    // not served at all.
+    cohort_scope: { id: "y_combinator", label: "the Y Combinator company directory" },
   },
 
   // ── GENERAL DISCOVERY — CANDIDATES ONLY ───────────────────────────────────

@@ -20,6 +20,7 @@
 // Pure apart from the injected facade. No provider import, no network.
 
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
+import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 import { MISSION_TRIAGE_PROMPT, TRIAGE_BATCH_SIZE } from "./missionTriage.ts";
@@ -101,6 +102,14 @@ export interface BuildTriageBindingInput {
   generate?: GenerateJsonFn;
   /** Candidates expected, so the batch allowance is never larger than the work. */
   poolSize?: number;
+  /**
+   * Leads the user asked for.
+   *
+   * Read ONLY by the model router. Triage is the same work at any quota; what
+   * the quota changes is whether a misordering costs a position or costs a
+   * lead, and that is a routing decision rather than a triage one.
+   */
+  requestedCount?: number;
 }
 
 export function buildMissionTriageBinding(
@@ -135,7 +144,35 @@ export function buildMissionTriageBinding(
   // The legacy model id is retained only as a diagnostic of what the old env
   // asked for; it no longer selects anything. No JSON schema is sent — see
   // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
-  const generate = input.generate ?? createGptStrategistGenerateJson();
+  // ── THE FAST TIER, AND WHY THIS STAGE EARNS IT ──────────────────────────
+  //
+  // Triage is the most frequent model call the pipeline makes — one per 25
+  // companies, on every run — and the least consequential per call. It answers
+  // "plausibly worth paying to investigate?", and its own failure mode is
+  // already safe: anything it cannot decide becomes `uncertain`, which costs a
+  // company its PRIORITY and never its place in the run. A wrong answer here
+  // reorders a shortlist; a wrong answer in strategy or qualification
+  // misdirects the whole run or qualifies a company on bad evidence.
+  //
+  // So this is the one stage that is explicitly downgraded, and the reason
+  // travels with every call into the task record.
+  // THE ROUTER DECIDES, NOT THIS FILE.
+  //
+  // This file named its own tier with its own prose reason, which was correct
+  // and was also a CONSTANT — so it could not tell twenty-five companies being
+  // sorted from four companies each deciding a lead. `routeModel` sees the run,
+  // and escalates this stage when the pool stops being much larger than the
+  // quota.
+  const route = routeModel("mission_triage", {
+    batch_size: TRIAGE_BATCH_SIZE,
+    requested_count: input.requestedCount ?? undefined,
+    pool_size: input.poolSize ?? undefined,
+  });
+  const generate = input.generate ?? createGptStrategistGenerateJson({}, {
+    tier: route.tier,
+    purpose: route.stage,
+    reason: route.reason,
+  });
 
   return {
     triageCompanies: async (payload: Record<string, unknown>) => {

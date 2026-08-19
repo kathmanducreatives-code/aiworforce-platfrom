@@ -126,7 +126,12 @@ export class MissionCompilationFailedError extends Error {
 }
 
 export type CompilerEnablementReason =
-  | "enabled" | "flag_off" | "no_workspace_allowlist" | "workspace_not_allowed";
+  | "enabled" | "flag_off" | "no_workspace_allowlist" | "workspace_not_allowed"
+  // THE COMPILER ITSELF REFUSED. Distinct from every reason above, which are
+  // about whether the stage was allowed to RUN: this one means it ran, was asked
+  // twice, and could not read the request into a mission. `compileLeadMission`
+  // no longer answers that with a regex reading of the sentence.
+  | "compilation_blocked";
 
 export interface CompilerEnablement {
   enabled: boolean;

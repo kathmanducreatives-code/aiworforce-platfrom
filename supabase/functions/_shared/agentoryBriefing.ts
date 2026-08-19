@@ -239,6 +239,45 @@ export function resultsSection(r: DiscoveryResultsSummary | null | undefined): s
   ].join("\n");
 }
 
+/**
+ * The briefing for a stage that must NOT know about Actors.
+ *
+ * ── WHY A SECOND COMPOSITION AND NOT JUST THE FULL ONE ──────────────────────
+ *
+ * The mission compiler is deliberately blind to providers: its prompt says "You
+ * do NOT choose data providers, tools, scrapers or Actors, and you never name
+ * one", and `catalogueForPrompt()` gives it outcome language with no provider in
+ * it. That boundary is load-bearing — it is what stops a model with an
+ * unbounded spending instruction naming `memo23/y-combinator-scraper`.
+ *
+ * But blind to Actors is not the same as blind to Agentory, and the compiler was
+ * both. On run 25f3ff57 it chose a capability well and had no way to know that
+ * discovery is the only stage that can decide what the pool contains, or that a
+ * request describing a KIND of company is a different job from one naming
+ * companies. That knowledge changes a capability choice without naming a single
+ * tool.
+ *
+ * So: role, workflow and the discovery modes — everything about what Agentory
+ * does and what the stages after this one can and cannot repair — and NOT the
+ * playbook.
+ */
+export function buildMissionBriefing(brain: CompanyBrainBriefing | null): string {
+  return [
+    AGENTORY_ROLE,
+    "",
+    AGENTORY_WORKFLOW,
+    "",
+    DISCOVERY_MODES,
+    "",
+    companyBrainSection(brain),
+    "",
+    "YOUR STAGE IS STAGE 1. You are naming the OBJECTIVE and the capabilities it",
+    "needs — never the tools. A later stage picks the Actors, and it can only",
+    "pick from what your capability choice makes reachable. Choose the capability",
+    "that matches the KIND of discovery this request actually needs.",
+  ].join("\n");
+}
+
 /** The canonical briefing every GPT decision stage is given. */
 export function buildAgentoryBriefing(i: BriefingInput): string {
   return [

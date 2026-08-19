@@ -49,6 +49,8 @@ import { identityIsActionable } from "../../../supabase/functions/_shared/compan
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
+import { DiscoveryStrategyBlockedError }
+  from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
 // THE FRONTEND READERS. Pure modules, no React — the same code the Workbench
 // panel calls. Importing them here is what makes this test end-to-end rather
 // than "the edge function produced something".
@@ -377,21 +379,61 @@ Deno.test("variation: multiple constraints (vertical + geography + size) all hol
   assertEquals(sortly!.enriched?.employee_count, 42, "inside the stated range");
 });
 
-Deno.test("variation: a general (non-startup) hiring mission enters company discovery", async () => {
+Deno.test("variation: a general (non-startup) hiring mission is authorised, then honestly refused", async () => {
+  // THE BOUNDARY AUTHORISES; THE VALIDATOR STILL GETS THE LAST WORD.
+  //
+  // "manufacturing" names a KIND of company and no company, so this is a
+  // concept cohort. The playbook boundary is happy — the entry capability is a
+  // real discovery capability the mission asked for — and the run still stops,
+  // because no registered Actor can discover that cohort: the YC sources read
+  // one directory, and the LinkedIn company search matches NAMES.
+  //
+  // Those two answers are not in conflict. Authorisation asks "may this route
+  // run?", the validator asks "can any Actor actually serve it?", and a run
+  // that cannot be served must say so rather than name-match its way to a pool
+  // of newsletters. This is the 2026-08-19 decision, asserted end to end.
   const m = hiringMission({
     company_profile: {
       business_models: [], verticals: ["manufacturing"], stages: [],
       locations: ["United States"],
     },
   });
-  const r = await runHiring(m, {
-    ...HAPPY,
-    apify_linkedin_company_search: [searchRow("Acme", "acme")],
-    apify_linkedin_company_details: [enrichRow("Acme", "acme")],
+  let refusal: string[] | null = null;
+  try {
+    const r = await runHiring(m, {
+      ...HAPPY,
+      apify_linkedin_company_search: [searchRow("Acme", "acme")],
+      apify_linkedin_company_details: [enrichRow("Acme", "acme")],
+    });
+    assertEquals(r.plan.entry_capability, "general_company_discovery");
+    assertEquals(r.authorization.entry_source, "playbook_discovery");
+    assert(r.authorization.authorized, r.authorization.reason);
+  } catch (e) {
+    if (!(e instanceof DiscoveryStrategyBlockedError)) throw e;
+    refusal = e.violations.map((v) => v.code);
+  }
+  assert(refusal, "a manufacturing cohort has no capable discovery Actor today");
+  assert(
+    refusal.includes("actor_outside_mission_cohort") ||
+    refusal.includes("actor_not_for_semantic_discovery"),
+    `the refusal must name the capability gap; got ${refusal.join(", ")}`,
+  );
+});
+
+Deno.test("variation: the same mission IS authorised at the playbook boundary", () => {
+  // Kept separate from the run so the authorisation guarantee is asserted on
+  // its own terms and cannot be lost inside a refusal.
+  const m = hiringMission({
+    company_profile: {
+      business_models: [], verticals: ["manufacturing"], stages: [],
+      locations: ["United States"],
+    },
   });
-  assertEquals(r.plan.entry_capability, "general_company_discovery");
-  assertEquals(r.authorization.entry_source, "playbook_discovery");
-  assert(r.authorization.authorized, r.authorization.reason);
+  const plan = buildCapabilityGraph(m);
+  const authorization = authorizePlaybookExecution(selectResearchPlaybooks(m), plan, m);
+  assertEquals(plan.entry_capability, "general_company_discovery");
+  assertEquals(authorization.entry_source, "playbook_discovery");
+  assert(authorization.authorized, authorization.reason);
 });
 
 Deno.test("variation: a supplied-company hiring mission is authorised but does not discover", async () => {

@@ -1,10 +1,29 @@
-// THE GENERAL-COMPANY ROUTE ACTUALLY EXECUTES NOW.
+// THE GENERAL-COMPANY ROUTE, AND WHAT IT HONESTLY CANNOT DO.
 //
-// It was declared in the graph and never driven: a manufacturer, integrator or
-// agency mission planned a sensible route and then recorded `skipped_no_input` —
-// a correct answer to nothing. These tests drive the real engine over mocked
-// Actors and prove the route reaches companies, keeps the mission's hard
-// constraints, and never touches a person.
+// This file used to prove the route "reaches companies". It did — by handing a
+// concept cohort to `apify_linkedin_company_search`, whose own card declares
+// `not_for: ["semantic/concept search"]`. Run 25f3ff57 (2026-08-18) is what that
+// bought in production: "AI startups in the United States" compiled to
+// `searchQuery: "AI"` and `searchQuery: "startup"`, returned 50 accelerators,
+// newsletters and a podcast, and qualified nothing.
+//
+// The route now goes through the same planner and the same validator as every
+// other discovery capability, so the refusal that was always correct is now the
+// one that actually happens. A concept cohort with no capable Actor STOPS, with
+// a stated reason and no spend — which is the honest answer and, per the
+// architecture decision of 2026-08-19, the chosen one.
+//
+// WHAT THIS FILE NOW PROVES:
+//   * a concept cohort refuses rather than name-matching        (10b)
+//   * a cohort source is refused OUTSIDE its cohort             (12)
+//   * a refusal spends NOTHING                                  (10b, 13, 16)
+//   * the name matcher still serves the job it is good at       (14, 15)
+//   * no person is ever reachable on this route                 (16)
+//
+// THREE TESTS WERE DELETED WITH THE CODE THEY TESTED. #11, #12b and C1 all
+// exercised `compileCompanySearchConcepts` — the deterministic query compiler
+// that authored `searchQuery: "AI"`. It has no production caller and is gone;
+// keeping tests for it would keep it alive.
 //
 // ZERO network, ZERO Actor runs, ZERO model calls, ZERO database writes.
 
@@ -12,9 +31,7 @@ import {
   assert, assertEquals, assertFalse,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  runCapabilityPlan, compileCompanySearchConcepts,
-  MAX_COMPANY_SEARCH_QUERIES, MAX_COMPANY_SEARCH_ROWS,
-  type CapabilityEngineDeps,
+  runCapabilityPlan, type CapabilityEngineDeps,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -24,6 +41,31 @@ import {
 import { normalizeLinkedInJob } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
+import { DiscoveryStrategyBlockedError }
+  from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
+
+/**
+ * Run the plan, and return the refusal instead of throwing it.
+ *
+ * A blocked discovery strategy is a RESULT in this architecture, not an
+ * accident: the planner proposed, the validator refused, and the run stopped
+ * before spending. Tests that assert "nothing paid ran" need to see the calls
+ * that were made, which means catching the refusal rather than letting it
+ * escape the assertion.
+ */
+async function runOrRefusal(
+  deps: CapabilityEngineDeps, opts: Parameters<typeof runCapabilityPlan>[1],
+): Promise<{ refused: string[] | null }> {
+  try {
+    await runCapabilityPlan(deps, opts);
+    return { refused: null };
+  } catch (e) {
+    if (e instanceof DiscoveryStrategyBlockedError) {
+      return { refused: e.violations.map((v) => v.code) };
+    }
+    throw e;
+  }
+}
 
 const AUTOMATION_QUERY =
   "Find industrial automation integrators in Germany expanding commercially.";
@@ -137,53 +179,58 @@ Deno.test("10. an industrial-automation query ENTERS general_company_discovery",
   const plan = buildCapabilityGraph(
     compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission);
   assertEquals(plan.entry_capability, "general_company_discovery");
-  assertEquals(plan.steps[0].providers, ["apify_linkedin_company_search"]);
+  // CONTAINMENT, NOT RANKING. This asserted a single provider, which made the
+  // capability a forced move rather than a choice — see the note on
+  // `general_company_discovery.providers`. The set is now the discovery
+  // universe; WHICH of them runs is the planner's decision, refused by
+  // `validateDiscoveryStrategy` when the card says the actor cannot do it.
+  assertEquals(plan.steps[0].providers,
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"]);
 });
 
-Deno.test("10b. and it now EXECUTES instead of reporting skipped_no_input", async () => {
+Deno.test("10b. a concept cohort with no capable Actor REFUSES, and spends nothing", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, {
-    mission: m, plan: buildCapabilityGraph(m),
-  });
-  const discovery = run.capability_outcomes
-    .find((o) => o.capability === "general_company_discovery");
-  assert(discovery, "the capability must be attempted");
-  assertEquals(discovery!.status, "complete",
-    `expected complete, got ${discovery!.status}: ${discovery!.reason}`);
-  assert(rec.calls.includes("apify_linkedin_company_search"),
-    "the approved company-search Actor is the one that ran");
-  assert(run.companies.length > 0, "the route must reach companies");
+  // The planner names the only general-index Actor there is. Its card says
+  // `not_for: ["semantic/concept search"]`, and "industrial automation
+  // integrators" names no company — so this IS a concept cohort.
+  const { refused } = await runOrRefusal(
+    { planDiscovery: stubDiscoverySelector([{
+        actor_key: "apify_linkedin_company_search",
+        role: "primary",
+        input: { searchQuery: "industrial automation" },
+        rationale: "the only general company index available",
+      }]), ...mockDeps(AUTOMATION_ROWS, rec) },
+    { mission: m, plan: buildCapabilityGraph(m) });
+
+  // The specific refusal, plus the run-level "nothing survived" that follows it.
+  assert(refused?.includes("actor_not_for_semantic_discovery"),
+    `a name matcher may not discover a concept cohort; got ${refused?.join(", ")}`);
+  assert(refused?.includes("no_valid_selection"),
+    "and with it refused, no strategy remains");
+  // THE PART THAT MATTERS COMMERCIALLY: the refusal happens BEFORE the call.
+  assertEquals(rec.calls, [], "a refused strategy costs nothing");
 });
 
-Deno.test("11. Germany stays a HARD geography, as a filter and not a query string", () => {
-  const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  assertEquals(m.company_profile.locations, ["Germany"]);
-  const concepts = compileCompanySearchConcepts(m, 20);
-  assertEquals(concepts.locations, ["Germany"]);
-  // THE GEOGRAPHY IS NOT PASTED INTO THE CONCEPT. `searchQuery` is a name index;
-  // a query carrying a country name returns nothing, which is how six live
-  // searches returned zero rows.
-  for (const q of concepts.queries) {
-    assertFalse(/germany/i.test(q), `"${q}" must not carry the geography`);
-  }
-  assert(concepts.queries.length > 0);
-});
-
-Deno.test("12. an industrial query is not broadened into SaaS or YC", async () => {
+Deno.test("12. a cohort source is refused OUTSIDE its cohort, with the reason", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
   const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
   const plan = buildCapabilityGraph(m);
-  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, { mission: m, plan });
 
+  // `general_company_discovery` now PERMITS the YC sources — containment is the
+  // discovery universe, so the planner has a real choice to make. This asserts
+  // the safety net under that choice: memo23 reads the Y Combinator directory
+  // and can return nothing else, so pointing it at German integrators is not a
+  // worse search, it is the wrong population.
+  const { refused } = await runOrRefusal(
+    { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) },
+    { mission: m, plan });
+
+  assert(refused?.includes("actor_outside_mission_cohort"),
+    `expected a cohort refusal; got ${refused?.join(", ")}`);
   for (const yc of ["apify_yc_companies_memo23", "apify_yc_companies_solidcode"]) {
     assertFalse(rec.calls.includes(yc), `${yc} must never run for an industrial query`);
-    assertFalse(plan.allowed_providers.includes(yc));
-  }
-  const concepts = compileCompanySearchConcepts(m, 20);
-  for (const q of concepts.queries) {
-    assertFalse(/saas|software as a service|y combinator/i.test(q),
-      `"${q}" must not broaden the mission`);
   }
 });
 
@@ -192,7 +239,9 @@ Deno.test("13. an agency-partner query requires no job verification", async () =
   const m = compile(PARTNER_QUERY, PARTNER_PROPOSAL).final_mission;
   const plan = buildCapabilityGraph(m);
   assertFalse(plan.steps.map((s) => s.capability).includes("hiring_verification"));
-  await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps({
+  // Whether discovery proceeds or refuses, the guarantee is the same: partner
+  // fit is not proven by a job posting, so no job Actor may run either way.
+  await runOrRefusal({ planDiscovery: stubDiscoverySelector(), ...mockDeps({
     apify_linkedin_company_search: [searchRow("Growth Agency", "growth-agency")],
     apify_linkedin_company_details: [enrichRow("Growth Agency", "growth-agency")],
   }, rec) }, { mission: m, plan });
@@ -200,10 +249,36 @@ Deno.test("13. an agency-partner query requires no job verification", async () =
     "nothing about partner fit is proven by a job posting");
 });
 
+// ── 14-15 RUN ON A MISSION THE NAME MATCHER IS ACTUALLY GOOD AT ────────────
+//
+// Their subject is normalization, dedupe and which query the Brain is asked
+// about — none of which is about concept discovery. They used the automation
+// mission only because it was the file's fixture, and that mission now refuses
+// before reaching either stage.
+//
+// `NAMED_PROPOSAL` describes no vertical, business model or stage, so
+// `missionNeedsSemanticDiscovery` is false and the LinkedIn company search is
+// doing exactly its `best_for`: turning company names into identity URLs.
+const NAMED_QUERY = "Research Siemens Integrator GmbH and Bosch Automation Partners.";
+const NAMED_PROPOSAL = proposal({
+  geographies: ["Germany"],
+  required_capabilities: [
+    "general_company_discovery", "company_details_enrichment",
+    "company_semantic_evaluation", "portfolio_ranking",
+  ],
+  preferred_source_strategy: ["company_profile_first"],
+});
+const NAMED_SELECTOR = () => stubDiscoverySelector([{
+  actor_key: "apify_linkedin_company_search",
+  role: "primary",
+  input: { searchQuery: "Siemens Integrator GmbH" },
+  rationale: "the user named the companies; a name matcher is exactly right",
+}]);
+
 Deno.test("14. company results are normalized and deduplicated", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
-  const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  const run = await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, {
+  const m = compile(NAMED_QUERY, NAMED_PROPOSAL).final_mission;
+  const run = await runCapabilityPlan( { planDiscovery: NAMED_SELECTOR(), ...mockDeps(AUTOMATION_ROWS, rec) }, {
     mission: m, plan: buildCapabilityGraph(m),
   });
   // Three rows came back; two of them are the same company.
@@ -219,10 +294,10 @@ Deno.test("14. company results are normalized and deduplicated", async () => {
 
 Deno.test("15. the Company Brain receives the accepted mission, not a new one", async () => {
   const rec: Recorder = { calls: [], inputs: [] };
-  const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
+  const m = compile(NAMED_QUERY, NAMED_PROPOSAL).final_mission;
   const seen: string[] = [];
   await runCapabilityPlan({
-      planDiscovery: stubDiscoverySelector(),
+      planDiscovery: NAMED_SELECTOR(),
     ...mockDeps(AUTOMATION_ROWS, rec),
     classifyCompany: (input) => {
       seen.push(String(input.original_user_query ?? ""));
@@ -230,8 +305,12 @@ Deno.test("15. the Company Brain receives the accepted mission, not a new one", 
     },
   } as CapabilityEngineDeps, { mission: m, plan: buildCapabilityGraph(m) });
   // Whatever the classifier was asked about, it was asked about THIS query.
-  for (const q of seen) assertEquals(q, AUTOMATION_QUERY);
-  assertEquals(m.directives?.disallowed_broadening, ["geography", "business_model"]);
+  for (const q of seen) assertEquals(q, NAMED_QUERY);
+  // The automation mission's own broadening rules are asserted where they are
+  // compiled, on the mission itself.
+  const automation = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
+  assertEquals(automation.directives?.disallowed_broadening,
+    ["geography", "business_model"]);
 });
 
 Deno.test("16. no founder or contact Actor is scheduled on the general route", async () => {
@@ -241,7 +320,9 @@ Deno.test("16. no founder or contact Actor is scheduled on the general route", a
     const rec: Recorder = { calls: [], inputs: [] };
     const m = compile(q, p).final_mission;
     const plan = buildCapabilityGraph(m);
-    await runCapabilityPlan( { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) }, { mission: m, plan });
+    await runOrRefusal(
+      { planDiscovery: stubDiscoverySelector(), ...mockDeps(AUTOMATION_ROWS, rec) },
+      { mission: m, plan });
     for (const actor of PEOPLE_ACTORS) {
       assertFalse(rec.calls.includes(actor), `${q}: ${actor} must not run`);
       assertFalse(plan.allowed_providers.includes(actor), `${q}: ${actor} must be unreachable`);
@@ -254,36 +335,6 @@ Deno.test("16. no founder or contact Actor is scheduled on the general route", a
 });
 
 // ═══════════════════════════════ concept compilation is bounded ══
-
-Deno.test("C1. search concepts are bounded, and rejections are named", () => {
-  const m = compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission;
-  const hostile = {
-    ...m,
-    company_profile: {
-      ...m.company_profile,
-      verticals: [
-        "industrial automation",
-        "https://evil.example.com/scrape",          // a URL
-        "apify/linkedin-company-search",            // a provider
-        "companies that might conceivably be interested in buying something", // a sentence
-        "a", "b", "c", "d", "e", "f",               // beyond the cap
-      ],
-    },
-  };
-  const c = compileCompanySearchConcepts(hostile, 100);
-  assert(c.queries.length <= MAX_COMPANY_SEARCH_QUERIES);
-  assert(c.maxItemsPerQuery <= MAX_COMPANY_SEARCH_ROWS);
-  for (const q of c.queries) {
-    assertFalse(/https?:\/\//i.test(q), "no URLs reach the provider");
-    assertFalse(/apify|harvestapi/i.test(q), "no provider names reach the provider");
-  }
-  const reasons = c.rejected.map((r) => r.reason).join(" ");
-  assert(/URL|domain/i.test(reasons), "a URL rejection is named");
-  assert(/provider|tool/i.test(reasons), "a provider rejection is named");
-  assert(/cap/i.test(reasons), "the cap is named");
-});
-
-// ══════════════════════════════════ employer evidence from job rows ══
 
 Deno.test("E1. job rows collapse onto employers, newest evidence first", () => {
   const rows = [

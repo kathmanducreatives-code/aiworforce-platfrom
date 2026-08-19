@@ -42,7 +42,9 @@
 // second interpreter by another name. A failure here is reported as a failure,
 // and the caller decides — which for qualification means recording an ungrounded
 // verdict rather than inventing a grounded one.
-import { gptStructured, GPT_MODEL, type GptDeps } from "./gptProvider.ts";
+import {
+  gptStructured, GPT_MODEL, modelForTier, type GptDeps, type GptTier,
+} from "./gptProvider.ts";
 import type { GenerateOpts, GenerateResult } from "./aiProvider.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 
@@ -58,7 +60,26 @@ export const GPT_STRATEGIST_MODEL_ID = `openai:${GPT_MODEL}` as const;
  * Drop-in for `createStrategistGenerateJson`: same signature, same result type,
  * different provider and no escalation.
  */
-export function createGptStrategistGenerateJson(deps: GptDeps = {}): GenerateJsonFn {
+export interface StrategistRouting {
+  /** Which model tier this stage needs. Defaults to `reasoning`. */
+  tier?: GptTier;
+  /** Why, in the caller's words. Persisted with the call. */
+  reason?: string;
+  /** Names the stage in diagnostics, so calls are separable per stage. */
+  purpose?: string;
+}
+
+/**
+ * @param routing Which tier this STAGE needs — see `GptTier`.
+ *
+ * Omitting it keeps the reasoning tier, which is the safe default: a stage that
+ * has not stated what it needs must not be quietly downgraded.
+ */
+export function createGptStrategistGenerateJson(
+  deps: GptDeps = {}, routing: StrategistRouting = {},
+): GenerateJsonFn {
+  const tier: GptTier = routing.tier ?? "reasoning";
+  const modelId = `openai:${modelForTier(tier)}`;
   return async (gen: GenerateOpts): Promise<GenerateResult> => {
     const started = Date.now();
 
@@ -69,12 +90,14 @@ export function createGptStrategistGenerateJson(deps: GptDeps = {}): GenerateJso
       .join("\n\n");
 
     const r = await gptStructured<Record<string, unknown>>({
-      purpose: "lead_intelligence_stage",
+      purpose: routing.purpose ?? "lead_intelligence_stage",
       system,
       user,
       // No `schema`: see the header. `plannerWrapper` owns the contract.
       temperature: gen.temperature ?? 0,
       maxTokens: gen.maxTokens ?? 4000,
+      tier,
+      routing_reason: routing.reason,
     }, deps);
 
     const latencyMs = Date.now() - started;
@@ -89,7 +112,7 @@ export function createGptStrategistGenerateJson(deps: GptDeps = {}): GenerateJso
         // unanswerable, which is the question the 2026-08-17 audit could not
         // answer for any stage.
         provider: "none",
-        model: GPT_STRATEGIST_MODEL_ID,
+        model: modelId,
         latencyMs,
       };
     }
@@ -98,7 +121,7 @@ export function createGptStrategistGenerateJson(deps: GptDeps = {}): GenerateJso
       ok: false,
       content: "",
       provider: "none",
-      model: GPT_STRATEGIST_MODEL_ID,
+      model: modelId,
       error: r.detail,
       errorCode: r.code,
       latencyMs,

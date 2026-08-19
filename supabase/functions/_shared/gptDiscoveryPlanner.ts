@@ -22,27 +22,35 @@
 // judgement here — "this actor looks right" — would move the decision out of the
 // layer that can prove it.
 //
-// ── AND WHY A FAILURE HERE IS NOT A FAILED RUN ───────────────────────────────
+// ── AND WHY A FAILURE HERE STOPS THE RUN ─────────────────────────────────────
 //
-// If GPT is unavailable, slow, or answers unusably, discovery still happens:
-// `resolveDiscoveryStrategy` in the engine falls back to the deterministic
-// strategy. That is not a Claude/Lovable fallback — no second model is
-// consulted — it is a fallback to CODE. The distinction matters: a
-// deterministic plan is inspectable and its cost is known, whereas a quietly
-// substituted model is neither.
+// This comment used to say the opposite: that if GPT was unavailable, slow or
+// unusable, "discovery still happens" because the engine fell back to the
+// deterministic strategy. That fallback is DELETED, and describing it here
+// outlasted it by several commits.
+//
+// The floor WAS the defect. It pinned `startup_company_discovery` to the YC
+// scraper with `industries: ["B2B"]` written as a literal, so a missing
+// credential, a model outage and a deliberately-chosen YC search were
+// indistinguishable from outside — and every mission asked the same question.
+//
+// Now an unusable answer returns null, `resolveDiscoveryStrategy` returns a
+// `blocked` strategy, and the run stops with a stated reason and no spend.
+// "We could not decide what to search for" is the honest answer to that
+// situation, and a stopped run is recoverable in a way that a confident,
+// unrelated pool is not.
 //
 // PURE apart from the injected model call.
 
 import { gptStructured, type GptDeps, type GptResult } from "./gptProvider.ts";
+import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
+import { parsePlannedInput } from "./gptExecutionPlanner.ts";
 import {
-  DEFAULT_MAX_ACTORS, DEFAULT_MAX_ITEMS_PER_ACTOR,
   buildDiscoveryPlannerPayload, type DiscoveryStrategyOptions,
 } from "./leadDiscoveryStrategy.ts";
-import { scenarioBriefing } from "./discoveryScenarioMatrix.ts";
 import {
   buildAgentoryBriefing, type CompanyBrainBriefing, type DiscoveryResultsSummary,
 } from "./agentoryBriefing.ts";
-import { coverMissionSignals } from "./signalActorCoverage.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 
 export const GPT_DISCOVERY_PLANNER_VERSION = "gpt-discovery-planner-v1" as const;
@@ -54,7 +62,7 @@ export const GPT_DISCOVERY_PLANNER_VERSION = "gpt-discovery-planner-v1" as const
  * shape, so the engine's validator is checking semantics — is this Actor
  * registered, is this filter supported — rather than re-checking structure.
  */
-const RESPONSE_SCHEMA = {
+export const RESPONSE_SCHEMA = {
   name: "discovery_actor_strategy",
   schema: {
     type: "object",
@@ -72,19 +80,40 @@ const RESPONSE_SCHEMA = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["actor_key", "role", "input", "rationale"],
+          required: ["actor_key", "role", "input_json", "rationale"],
           properties: {
             actor_key: {
               type: "string",
               description: "EXACTLY one of the actor_key values in available_actors.",
             },
             role: { type: "string", enum: ["primary", "breadth", "fallback"] },
-            input: {
-              type: "object",
-              additionalProperties: true,
+            // ── A JSON STRING, NOT AN OPEN OBJECT ──────────────────────
+            //
+            // This was `{ type: "object", additionalProperties: true }`, which
+            // OpenAI's strict structured-output mode REFUSES outright:
+            //
+            //   HTTP 400 — Invalid schema for response_format: in context
+            //   ('properties','input'), 'additionalProperties' is required to
+            //   be supplied and to be false.
+            //
+            // So every call this planner ever made failed, and the failure was
+            // invisible because `gptStructured` reports `!r.ok` and the caller
+            // treats that as "the model had nothing to say". Found by running
+            // the thing against the real API; no unit test could see it,
+            // because every test injects the model.
+            //
+            // Strict mode cannot express "an object with actor-specific keys",
+            // and dropping strict to get one would trade a guaranteed shape for
+            // a convenient field. The input travels as a JSON STRING and is
+            // parsed here — the schema stays strict, and the actor input is
+            // validated where it always was: against that actor's own
+            // supported_filters and verified_enums.
+            input_json: {
+              type: "string",
               description:
-                "Actor-specific input. Only that actor's supported_filters, and " +
-                "only values from its verified_enums.",
+                "Actor-specific input as a JSON OBJECT serialised to a string. " +
+                "Only that actor's supported_filters, and only values from its " +
+                "verified_enums. Send \"{}\" if no filters are needed.",
             },
             rationale: { type: "string" },
           },
@@ -149,41 +178,28 @@ function systemPromptFor(brain: CompanyBrainBriefing | null, results?: Discovery
 }
 
 export function buildPrompt(i: GptPlanDiscoveryInput): { system: string; user: string } {
-  const opts = i.options ?? {};
-  const payload = buildDiscoveryPlannerPayload(i.mission, opts);
-  const coverage = coverMissionSignals(i.mission);
-
+  // ONE PAYLOAD, BUILT ONCE. `signal_coverage`, `unserveable_scenarios` and
+  // `limits.requested_lead_count` used to be assembled HERE, on top of
+  // `buildDiscoveryPlannerPayload`. The live planner below calls the payload
+  // builder directly, so it never saw any of them: this helper — the one the
+  // tests pin — described a richer prompt than a real run ever sent.
+  //
+  // They now live in `buildDiscoveryPlannerPayload` itself, so there is a
+  // single definition and the two callers cannot drift.
   return {
     system: systemPromptFor(i.brain ?? null, i.results ?? null),
-    user: JSON.stringify({
-      ...payload,
-      // WHAT THE REQUEST NEEDS, resolved. The model is not asked to work out
-      // which signals map to which capability — that is deterministic and
-      // already done, and asking twice invites the two answers to disagree.
-      signal_coverage: coverage.signals.map((s) => ({
-        signal: s.signal,
-        status: s.status,
-        actors_that_serve_it: s.actors,
-        minimum_evidence: s.minimum_evidence,
-        ...(s.limitation ? { limitation: s.limitation } : {}),
-      })),
-      // Scenarios NO actor can serve, with the verified reason. A planner that
-      // cannot see what is impossible keeps proposing it.
-      unserveable_scenarios: scenarioBriefing()
-        .filter((s) => s.servable === false)
-        .map((s) => ({ scenario: s.scenario, why: s.blocked_reason })),
-      limits: {
-        max_actors: opts.maxActors ?? DEFAULT_MAX_ACTORS,
-        max_items_per_actor: opts.maxItemsPerActor ?? DEFAULT_MAX_ITEMS_PER_ACTOR,
-        requested_lead_count: i.mission.requested_count,
-      },
-    }, null, 2),
+    user: JSON.stringify(
+      buildDiscoveryPlannerPayload(i.mission, i.options ?? {}), null, 2),
   };
 }
 
 export interface GptDiscoveryProposal {
   reasoning: string;
-  actors: Array<{ actor_key: string; role: string; input: Record<string, unknown>; rationale: string }>;
+  actors: Array<{
+    actor_key: string; role: string; rationale: string;
+    /** A JSON object serialised as a string. See the schema note. */
+    input_json?: string;
+  }>;
 }
 
 /**
@@ -194,8 +210,67 @@ export interface GptDiscoveryProposal {
  * authority on what is allowed — the exact duplication this architecture keeps
  * removing.
  */
-export function makeGptDiscoveryPlanner(deps: GptDeps = {}) {
-  return async (i: { payload: Record<string, unknown>; mission_hash: string }): Promise<unknown> => {
+/**
+ * Render the validator's refusal as instructions the model can act on.
+ *
+ * PLAIN AND SPECIFIC. The model is told which actor was refused and why, and
+ * that the catalog it already has is the whole option space — so the useful
+ * move is a DIFFERENT actor, not the same one with the filter renamed.
+ */
+function validationFeedbackSection(
+  feedback: ReadonlyArray<{ code: string; message: string; actor_key?: string }>,
+): string {
+  if (feedback.length === 0) return "";
+  return [
+    "",
+    "── YOUR PREVIOUS PLAN WAS REFUSED ──────────────────────────────────────",
+    "",
+    "You already proposed a strategy for this mission and the runtime refused it.",
+    "The refusals are below, verbatim:",
+    "",
+    ...feedback.map((v) =>
+      `  • ${v.actor_key ? `${v.actor_key}: ` : ""}${v.message} [${v.code}]`),
+    "",
+    "Choose again. These are not style notes — a refused actor cannot run, so",
+    "repeating it produces nothing. Read what the mission actually requires and",
+    "pick an actor from the catalog whose capabilities match it. If an actor was",
+    "refused for being a NAME matcher on a CONCEPT mission, you need an actor",
+    "that can discover a cohort, not the same one with different filters.",
+    "",
+    "If no actor in the catalog can serve this mission, return an empty list",
+    "rather than a plan you expect to be refused again.",
+  ].join("\n");
+}
+
+export interface GptDiscoveryPlannerContext {
+  /** Leads the user asked for. Read only by the model router. */
+  requestedCount?: number;
+  /** Every routing decision, so the run can report which model ran what. */
+  onRoute?: (route: ModelRoute) => void;
+  /**
+   * The user's standing ICP, threaded from the caller that actually has it.
+   *
+   * This was hardcoded `null` with a comment saying the Brain "is not threaded
+   * to this seam yet". Honest, and still a gap: the stage choosing which actors
+   * to pay for could not see who the user sells to, so it could not prefer a
+   * source whose cohort matches the ICP or warn when the request and the ICP
+   * disagree. `companyBrainSection` states the precedence — the user's typed
+   * request always wins — so supplying it cannot reintroduce the Brain silently
+   * overriding a mission.
+   */
+  brain?: CompanyBrainBriefing | null;
+}
+
+export function makeGptDiscoveryPlanner(
+  deps: GptDeps = {}, ctx: GptDiscoveryPlannerContext = {},
+) {
+  return async (i: {
+    payload: Record<string, unknown>;
+    mission_hash: string;
+    validation_feedback?: Array<{ code: string; message: string; actor_key?: string }>;
+    /** What the previous pass produced, on a re-plan. See `resultsSection`. */
+    results?: DiscoveryResultsSummary | null;
+  }): Promise<unknown> => {
     // The engine builds a payload for the generic seam; this planner needs the
     // richer briefing, so it is rebuilt here from what the engine passed.
     // THE LIVE PATH. `buildPrompt` above is test-facing; THIS is what a real
@@ -203,20 +278,36 @@ export function makeGptDiscoveryPlanner(deps: GptDeps = {}) {
     // helper is exactly the "correct, covered and unreachable" failure this
     // codebase has already paid for once.
     //
-    // `brain: null` is honest rather than convenient: the Company Brain is not
-    // threaded to this seam yet, and `companyBrainSection(null)` tells the model
-    // to judge on the user's request alone — which is the safe reading and
-    // cannot reintroduce the Brain silently overriding a mission.
+    // THE BRAIN AND THE LAST ATTEMPT BOTH REACH THIS CALL NOW. `brain` comes
+    // from the caller that compiled it; `results` comes from the engine when it
+    // is re-planning, and is what turns a one-shot chooser into something that
+    // can notice its own strategy failing.
+    const feedback = i.validation_feedback ?? [];
     const { system, user } = {
-      system: systemPromptFor(null, null),
+      system: systemPromptFor(ctx.brain ?? null, i.results ?? null) +
+        validationFeedbackSection(feedback),
       user: JSON.stringify(i.payload, null, 2),
     };
+    // ROUTED, NOT DEFAULTED. This call passed no tier at all, so it inherited
+    // `reasoning` silently — the right answer, arrived at by nobody, and absent
+    // from the cost trace. The router states it, and the repair round is a
+    // SEPARATE stage so the trace shows how often a first plan is refused: a
+    // rising repair rate is a prompt problem, not a reason for another rule.
+    const route = routeModel(
+      feedback.length > 0
+        ? "discovery_actor_selection_repair"
+        : "discovery_actor_selection",
+      { requested_count: ctx.requestedCount ?? undefined },
+    );
+    ctx.onRoute?.(route);
     const r: GptResult<GptDiscoveryProposal> = await gptStructured<GptDiscoveryProposal>({
-      purpose: "discovery_actor_selection",
+      purpose: route.stage,
       system,
       user,
       schema: RESPONSE_SCHEMA as unknown as { name: string; schema: Record<string, unknown> },
       maxTokens: 2000,
+      tier: route.tier,
+      routing_reason: route.reason,
     }, deps);
 
     if (!r.ok) {
@@ -228,7 +319,15 @@ export function makeGptDiscoveryPlanner(deps: GptDeps = {}) {
       // rather than a different model.
       return null;
     }
-    return { actors: r.value.actors, reasoning: r.value.reasoning };
+    return {
+      reasoning: r.value.reasoning,
+      actors: (r.value.actors ?? []).map((a) => ({
+        ...a,
+        input: parsePlannedInput(
+          (a as { input_json?: unknown; input?: unknown }).input_json ??
+          (a as { input?: unknown }).input),
+      })),
+    };
   };
 }
 

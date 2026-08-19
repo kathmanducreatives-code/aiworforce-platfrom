@@ -22,6 +22,22 @@ const CODE = Deno.readTextFileSync(
   new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
 ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 
+/** A well-formed proposal that states nothing but the count. */
+const proposalWithCount = (n: number | null) => ({
+  requested_opportunity_count: n,
+  requested_contact_ready_count: null, company_types: [], geographies: [],
+  employee_range: { min: null, max: null }, decision_maker_roles: [],
+  hard_constraints: [], soft_preferences: [], preferred_signals: [],
+  adjacent_signals: [], excluded_signals: [],
+  allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } },
+  disallowed_broadening: [], required_evidence: [], required_capabilities: [],
+  preferred_source_strategy: [], evaluation_instructions: "",
+  founder_unlock_recommended: false, confidence: 0.9, unknowns: [],
+  known_companies: [], signal_recency_days: null, required_signal_terms: [],
+  no_broadening_requested: false, geography_is_hard: false, prohibitions: [],
+  output_intent: null, strategies: [],
+});
+
 Deno.test("no lead path injects a regex count into mission compilation", () => {
   const injections = [...CODE.matchAll(/requestedCount:\s*extractRequestedLeadCount\(/g)];
   assertEquals(
@@ -44,29 +60,54 @@ Deno.test("every compiler call site states the count as null", () => {
   }
 });
 
-Deno.test("a supplied count overrides the sentence's own reading — which is why none is supplied", () => {
-  // Proves the mechanism the change removes rather than asserting its absence.
+Deno.test("an injected count can no longer override the model's stated answer", () => {
+  // ── THE MECHANISM THIS TEST EXISTED TO DEMONSTRATE IS GONE ────────────────
   //
-  // On the GPT path R2-4 already neutralised it: an explicit null from the model
-  // is a STATEMENT and wins over opts.requestedCount. The injection still bites
-  // on the DETERMINISTIC path, which every non-new-architecture workspace uses —
-  // `parseLeadMissionDeterministic(query, { requestedCount })` takes the injected
-  // value ahead of what the query says, and provenance then credits the user.
+  // It used to prove the injection still bit on the DETERMINISTIC path:
+  // `parseLeadMissionDeterministic(query, { requestedCount })` took the injected
+  // value ahead of what the query said, and provenance then credited the user
+  // with a number they never typed. That path is deleted — a request with no
+  // model proposal now blocks rather than being read by regex.
+  //
+  // What remains is the R2-4 rule, and it is the one worth pinning: an explicit
+  // `null` from the model is a STATEMENT — "this request names no count" — and a
+  // caller-supplied number does not overrule a statement.
   const q = "Find B2B SaaS companies hiring SDRs";
 
-  const clean = compileLeadMission({ originalUserQuery: q });
+  const clean = compileLeadMission({
+    originalUserQuery: q, proposal: proposalWithCount(null),
+  });
   assertEquals(clean.final_mission.requested_count, null, "the query names no count");
   assertEquals(clean.final_mission.field_provenance["requested_count"], "system_default");
 
-  const injected = compileLeadMission({ originalUserQuery: q, requestedCount: 7 });
+  const injected = compileLeadMission({
+    originalUserQuery: q, requestedCount: 7, proposal: proposalWithCount(null),
+  });
   assertEquals(
-    injected.final_mission.requested_count, 7,
-    "an injected count replaces the reading of the sentence",
+    injected.final_mission.requested_count, null,
+    "the model said the request names no count; an injected 7 does not overrule it",
   );
+  // ── A RESIDUAL MISLABEL, ASSERTED RATHER THAN HIDDEN ──────────────────────
+  //
+  // The VALUE is right: null, because the model said the request names no count.
+  // The PROVENANCE is not — it still reads `explicit_user_request`, credited to
+  // a caller-supplied 7 that did not survive into the mission. So the mission
+  // says "no count stated" and its provenance says "the user stated it".
+  //
+  // Left as-is deliberately. It is a labelling bug in `validateLeadMission`,
+  // reached by every caller of that function rather than only the lead path, and
+  // fixing it belongs in its own change with its own blast radius. Pinned here
+  // so it is a known defect rather than a surprise.
   assertEquals(
     injected.final_mission.field_provenance["requested_count"], "explicit_user_request",
-    "and is then attributed to the user, who never said it",
+    "KNOWN DEFECT: provenance credits the user for a count that did not survive",
   );
+
+  // AND A COUNT THE MODEL DOES STATE IS KEPT, whatever the caller injects.
+  const stated = compileLeadMission({
+    originalUserQuery: q, requestedCount: 7, proposal: proposalWithCount(30),
+  });
+  assertEquals(stated.final_mission.requested_count, 30);
 });
 
 Deno.test("execution still gets a number, from the Mission and its default only", () => {
@@ -75,20 +116,7 @@ Deno.test("execution still gets a number, from the Mission and its default only"
 });
 
 Deno.test("the count the model states survives compilation untouched", () => {
-  const mk = (n: number | null) => ({
-    requested_opportunity_count: n,
-    requested_contact_ready_count: null, company_types: [], geographies: [],
-    employee_range: { min: null, max: null }, decision_maker_roles: [],
-    hard_constraints: [], soft_preferences: [], preferred_signals: [],
-    adjacent_signals: [], excluded_signals: [],
-    allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } },
-    disallowed_broadening: [], required_evidence: [], required_capabilities: [],
-    preferred_source_strategy: [], evaluation_instructions: "",
-    founder_unlock_recommended: false, confidence: 0.9, unknowns: [],
-    known_companies: [], signal_recency_days: null, required_signal_terms: [],
-    no_broadening_requested: false, geography_is_hard: false, prohibitions: [],
-    output_intent: null, strategies: [],
-  });
+  const mk = proposalWithCount;
   assertEquals(
     compileLeadMission({ originalUserQuery: "Find 30 SaaS companies", proposal: mk(30) })
       .final_mission.requested_count, 30);

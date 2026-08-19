@@ -18,6 +18,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   compileLeadMission, parseMissionProposal, scanProposalForViolations,
+  MissionCompilationBlockedError,
   buildMissionCompilerPayload, needsExternalHiringVerification,
   MAX_REQUESTED_OPPORTUNITIES, MISSION_COMPILER_SCHEMA_VERSION,
 } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -222,19 +223,23 @@ Deno.test("5. GPT can interpret a known-company query", () => {
   assertEquals(r.final_mission.directives?.source_strategy, ["known_companies_only"]);
 });
 
-Deno.test("6. invalid GPT output falls back deterministically", () => {
+Deno.test("6. invalid GPT output BLOCKS the request", () => {
+  // This asserted "a bad proposal costs precision, never a workflow" and let the
+  // regex reading answer. That trade is the wrong way round: the mission is the
+  // root of every later decision, so an unreadable proposal does not produce a
+  // cheaper run, it produces an expensive run answering a different question.
   for (const bad of [
     null, undefined, "not an object", 42, [],
     { requested_opportunity_count: "many" },
   ]) {
-    const r = compile(YC_QUERY, bad);
-    assertEquals(r.parser_source, "deterministic_fallback",
-      `${JSON.stringify(bad)} must fall back`);
-    // AND THE RUN STILL HAS A MISSION. A bad proposal costs precision, never a
-    // workflow.
-    assertEquals(r.final_mission.original_user_query, YC_QUERY);
-    assert(r.final_mission.company_profile.verticals.includes("b2b saas"),
-      "the deterministic reading still finds what the sentence says");
+    let blocked = false;
+    try {
+      compile(YC_QUERY, bad);
+    } catch (e) {
+      blocked = e instanceof MissionCompilationBlockedError;
+      if (!blocked) throw e;
+    }
+    assert(blocked, `${JSON.stringify(bad)} must block rather than fall back`);
   }
 });
 
@@ -330,12 +335,17 @@ Deno.test("10. GPT cannot return arbitrary Actor IDs, prices or workspace ids", 
   for (const [label, p] of unsafe) {
     assert(scanProposalForViolations(p).length > 0, `${label} must be detected`);
     assertEquals(parseMissionProposal(p).proposal, null, `${label} must be refused`);
-    const r = compile(YC_QUERY, p);
-    assertEquals(r.parser_source, "deterministic_fallback",
-      `${label} must fall back rather than be sanitised`);
-    assert(r.safety_violations.length > 0, `${label} must be recorded`);
-    // AND THE RUN SURVIVES. Refusing the proposal is not refusing the user.
-    assertEquals(r.final_mission.original_user_query, YC_QUERY);
+    // REFUSED, AND THE REQUEST STOPS. Sanitising an unsafe proposal would keep a
+    // model that tried to name an Actor in the driving seat; falling back to the
+    // regex reading would answer a different question. Neither is acceptable.
+    let blocked = false;
+    try {
+      compile(YC_QUERY, p);
+    } catch (e) {
+      blocked = e instanceof MissionCompilationBlockedError;
+      if (!blocked) throw e;
+    }
+    assert(blocked, `${label} must block rather than be sanitised`);
   }
   // The catalogue the model receives cannot leak a provider in the first place.
   const promptText = JSON.stringify(buildMissionCompilerPayload({
@@ -364,28 +374,40 @@ Deno.test("12. a general company query selects general_company_discovery", () =>
   const plan = buildCapabilityGraph(
     compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission);
   assertEquals(plan.entry_capability, "general_company_discovery");
-  assertEquals(plan.steps[0].providers, ["apify_linkedin_company_search"]);
-  // No YC broadening for a query that never mentioned startups.
-  assertFalse(isProviderAllowed(plan, "apify_yc_companies_memo23"));
+  // The discovery universe is PERMITTED; the planner decides which member runs,
+  // and `validateDiscoveryStrategy` refuses one whose card cannot serve the
+  // mission. "No YC for an industrial query" is asserted where it is now
+  // enforced — on the calls actually made, in leadGeneralCompanyRoute #12.
+  assertEquals(plan.steps[0].providers,
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"]);
 });
 
 Deno.test("13. a hiring-first non-YC query reaches external hiring evidence", () => {
   const r = compile(MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL);
   const plan = buildCapabilityGraph(r.final_mission);
-  // HIRING-FIRST, THROUGH CARDED ACTORS.
+  // HIRING-FIRST IS NOW AN ADVISORY, NOT A ROUTE OVERRIDE.
   //
-  // The natural route is "search openings, then look at the employers", and the
-  // Actors that can do that have no verified schema card — so no bounded input
-  // can be compiled and no cost estimated for them. A hiring-first mission
-  // therefore discovers by company profile and verifies hiring INSIDE that set
-  // with the company-scoped LinkedIn job search, which is carded and priced.
+  // The constraint is unchanged and still true: no carded Actor can DISCOVER
+  // open job postings across employers, so a hiring-first mission cannot open
+  // with a job search. What changed is where that fact lives. It used to be a
+  // branch in `buildCapabilityGraph` that rewrote the entry capability, which
+  // on run 25f3ff57 discarded a startup-cohort route the gate had already
+  // approved and handed an "AI startups" mission to a name matcher.
+  //
+  // The entry here is STILL general discovery — because this mission's own
+  // proposal asks for `general_company_discovery`, which is the honest reason —
+  // and the hiring constraint reaches the planner as knowledge it can act on.
   assertEquals(plan.entry_capability, "general_company_discovery");
-  assert(plan.routing_reason.includes("hiring-first"));
+  assert(plan.routing_reason.includes("general company discovery"),
+    "the entry is explained by what the mission asked for");
+  assert(plan.routing_advisories.some((a) => /hiring-first/i.test(a)),
+    "the hiring-first constraint still reaches the planner, as an advisory");
+  assert(plan.routing_advisories.some((a) => /company-scoped by contract/i.test(a)),
+    "including WHY a job search cannot open the run");
   assert(plan.steps.map((s) => s.capability).includes("hiring_verification"),
     "hiring is still verified, per company");
   assert(r.capability_decision.approved.includes("external_hiring_verification"));
-  assertFalse(isProviderAllowed(plan, "apify_yc_companies_memo23"),
-    "a manufacturer query has no YC requirement");
 });
 
 Deno.test("14. embedded YC evidence prevents an unnecessary job-search call", () => {
@@ -405,10 +427,12 @@ Deno.test("14. embedded YC evidence prevents an unnecessary job-search call", ()
     compile(MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL).final_mission);
   assert(mfg.steps.map((s) => s.capability).includes("hiring_verification"),
     "a mission that needs verified hiring buys exactly one company-scoped check");
+  // Both missions come from their own proposals — a compile with none now blocks.
   assert(needsExternalHiringVerification(
-    ["external_hiring_verification"], compile(MANUFACTURER_QUERY).final_mission));
+    ["external_hiring_verification"],
+    compile(MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL).final_mission));
   assertFalse(needsExternalHiringVerification(
-    ["embedded_hiring_evidence"], compile(YC_QUERY).final_mission));
+    ["embedded_hiring_evidence"], compile(YC_QUERY, YC_PROPOSAL).final_mission));
 });
 
 Deno.test("15. a known company list does not trigger broad discovery", () => {
@@ -460,8 +484,9 @@ Deno.test("19. founder discovery is absent from every automatic graph", () => {
     [YC_QUERY, YC_PROPOSAL], [MANUFACTURER_QUERY, MANUFACTURER_PROPOSAL],
     [AUTOMATION_QUERY, AUTOMATION_PROPOSAL], [PARTNER_QUERY, PARTNER_PROPOSAL],
     [KNOWN_QUERY, KNOWN_PROPOSAL],
-    // …and on the deterministic path, which is what runs today.
-    [YC_QUERY, undefined], ["Find founders of SaaS startups hiring sales ops", undefined],
+    // The two `undefined` cases are GONE with the deterministic path they
+    // exercised: a request with no proposal no longer produces a graph at all,
+    // so there is no graph left in which founder discovery could appear.
   ];
   for (const [q, p] of cases) {
     const r = compile(q, p);

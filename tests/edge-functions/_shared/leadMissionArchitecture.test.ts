@@ -563,8 +563,12 @@ Deno.test("the provider registry maps capabilities to the approved Actors", () =
   assertEquals(CAPABILITY_REGISTRY.startup_company_discovery.providers,
     ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
       "apify_linkedin_company_search"]);
+  // THE SAME DISCOVERY UNIVERSE AS THE STARTUP ENTRY. A single-provider
+  // capability is not a permission list, it is a forced move — see the note on
+  // the spec itself.
   assertEquals(CAPABILITY_REGISTRY.general_company_discovery.providers,
-    ["apify_linkedin_company_search"]);
+    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"]);
   assertEquals(CAPABILITY_REGISTRY.company_enrichment.providers,
     ["apify_linkedin_company_details"]);
   assertEquals(CAPABILITY_REGISTRY.hiring_verification.providers,

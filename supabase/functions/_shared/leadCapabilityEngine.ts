@@ -148,6 +148,11 @@ import {
   discoveryStrategyDiagnostics, shouldRunSelection, strategyActorKeys,
   validateDiscoveryStrategy,
 } from "./leadDiscoveryStrategy.ts";
+import type { DiscoveryResultsSummary } from "./agentoryBriefing.ts";
+import {
+  buildExecutionPlannerPayload, validateExecutionPlan, capabilityIsPlanned,
+  plannedActorsFor, ExecutionPlanBlockedError, type ExecutionPlan,
+} from "./leadExecutionPlan.ts";
 // REQUIRED SIGNALS → ACTORS. Joins what the mission asked for to what can
 // actually supply it, so an unserved requirement is stated rather than dropped.
 import {
@@ -179,6 +184,33 @@ export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1
  * `teamSize` is advisory and was up to 23x wrong in the live benchmark.
  * Both values appear in the published schema and in the in-repo pinned enums.
  */
+/**
+ * Discovery passes per capability: plan, run, look, choose again.
+ *
+ * TWO, not more. The second pass is what lets a run notice its pool cannot
+ * answer the mission; a third mostly buys another planning call to reach the
+ * same conclusion. Callers that want the old strictly-one-shot behaviour pass 1.
+ */
+export const DEFAULT_DISCOVERY_PASSES = 2;
+
+/**
+ * Stages a planned chain may legitimately DESELECT.
+ *
+ * Deliberately short. These are the stages whose necessity depends on what an
+ * earlier Actor returned — a discovery source carrying embedded open roles makes
+ * a paid hiring check redundant — which is a judgement only something that has
+ * seen the chain can make.
+ *
+ * Everything else is structural. Identity resolution, enrichment, qualification
+ * and persistence are what turn rows into leads, and a chain that omits one is
+ * not expressing a preference; it is proposing a run that cannot finish. The
+ * graph keeps those.
+ */
+const OPTIONAL_BY_CHAIN: ReadonlySet<CapabilityId> = new Set<CapabilityId>([
+  "hiring_verification",
+  "expansion_signal_verification",
+]);
+
 export const MEMO23_DEFAULT_MIN_SIZE = "10+";
 export const MEMO23_DEFAULT_MAX_SIZE = "500";
 
@@ -291,6 +323,14 @@ export interface CapabilityExecutionState {
    * continuations, which skip discovery entirely.
    */
   discovery_strategy?: Record<string, unknown>;
+  /**
+   * The cross-capability chain the model planned, and what it left out.
+   *
+   * Persisted because "why did this run buy a hiring search?" and "why did it
+   * NOT?" are the same question asked twice, and neither was answerable from a
+   * task row. The reasoning is the model's own, recorded and never acted on.
+   */
+  execution_plan?: Record<string, unknown> | null;
   /**
    * WHICH REQUIRED SIGNALS THIS RUN COULD ANSWER, and why any could not.
    *
@@ -708,6 +748,42 @@ export interface CapabilityEngineDeps {
   planDiscovery?: (i: {
     payload: Record<string, unknown>;
     mission_hash: string;
+    /**
+     * WHY THE PREVIOUS PROPOSAL WAS REJECTED — present only on a repair round.
+     *
+     * The validator is a guardrail, not the strategist. Blocking a plan and
+     * discovering nothing teaches the model nothing and leaves the user with
+     * zero leads; handing back the specific violations lets it choose an actor
+     * that can actually serve the request.
+     */
+    validation_feedback?: Array<{ code: string; message: string; actor_key?: string }>;
+    /** What the previous pass produced, on a re-plan. See `resultsSection`. */
+    results?: DiscoveryResultsSummary | null;
+  }) => Promise<unknown>;
+  /**
+   * PLAN THE WHOLE JOB, ACROSS CAPABILITIES.
+   *
+   * `planDiscovery` chooses Actors for ONE stage. This chooses the chain:
+   * discover → verify → enrich, which Actor serves each, and — the part nothing
+   * could express before — which stages are unnecessary because an earlier
+   * Actor's output already carries the evidence they exist to fetch.
+   *
+   * ── ABSENT IS THE GRAPH'S ORDER, AND THAT IS NOT A SILENT WRONG ANSWER ────
+   *
+   * Unlike `planDiscovery`, whose absence BLOCKS the run, an absent chain
+   * planner leaves the capability sequence exactly as `buildCapabilityGraph`
+   * built it. The distinction is deliberate and is the one this architecture
+   * has been drawing all along: a deterministic ACTOR or QUERY choice is a
+   * confident answer to a question nobody asked, whereas a deterministic
+   * capability ORDER is inspectable, was authorised by the mission, and is the
+   * sequence this system ran correctly for months. Production wires the planner
+   * unconditionally; the seam exists so a test can pin one stage at a time.
+   */
+  planExecution?: (i: {
+    payload: Record<string, unknown>;
+    mission_hash: string;
+    validation_feedback?: Array<{ code: string; message: string; actor_key?: string }>;
+    results?: DiscoveryResultsSummary | null;
   }) => Promise<unknown>;
   triageCompanies?: (i: {
     input: MissionTriageInput;
@@ -869,6 +945,19 @@ export interface CapabilityEngineOpts {
    * strategy module's own default applies.
    */
   maxDiscoveryActors?: number;
+  /**
+   * How many times discovery may look at what it got and choose again.
+   *
+   * 1 is the old behaviour exactly: plan once, run it, live with the pool. 2 —
+   * the default — lets the model see a factual summary of the pass and change
+   * the MECHANISM once, which is the difference between a run that notices its
+   * pool carries none of the required evidence and one that reports that fact
+   * at the very end beside `qualified: 0`.
+   *
+   * A pass costs one planning call and only spends on an Actor if the model
+   * proposes one it has not already run.
+   */
+  maxDiscoveryPasses?: number;
   foundersPerCompany?: number;
   /**
    * The scope that makes a provider call identifiable across invocations, plus
@@ -1093,11 +1182,40 @@ export async function runCapabilityPlan(
    * deliberate YC search. The caller — not this function — turns `blocked` into
    * the raised error, so the strategy is recorded before the run stops.
    */
-  const resolveDiscoveryStrategy = async (): Promise<DiscoveryStrategy> => {
-    const limits = {
-      maxItemsPerActor: maxCandidates,
-      ...(opts.maxDiscoveryActors != null ? { maxActors: opts.maxDiscoveryActors } : {}),
-    };
+  /**
+   * Ceilings and advisories every discovery proposal is validated against.
+   *
+   * Hoisted out of `resolveDiscoveryStrategy` because the CHAIN's own discovery
+   * steps are validated too, and validating them against a different set of
+   * limits than a single-stage proposal would make "how many rows may this
+   * actor return" depend on which planner named it.
+   */
+  const discoveryLimits = {
+    maxItemsPerActor: maxCandidates,
+    ...(opts.maxDiscoveryActors != null ? { maxActors: opts.maxDiscoveryActors } : {}),
+    // WHAT THE ROUTER KNOWS, HANDED TO THE PLANNER RATHER THAN ACTED ON.
+    // These were routing branches; as advisories they inform the actor choice
+    // instead of silently replacing the capability it was made for.
+    ...(opts.plan.routing_advisories?.length
+      ? { routingAdvisories: opts.plan.routing_advisories }
+      : {}),
+  };
+
+  const resolveDiscoveryStrategy = async (
+    /**
+     * What the previous pass produced, on a re-plan.
+     *
+     * Absent on the first pass — there is nothing to report yet. Present, it is
+     * what lets the model judge its own strategy rather than re-propose it: a
+     * pool that carried none of the evidence the mission required is a reason
+     * to change the MECHANISM, and without this the model cannot see that it
+     * happened.
+     */
+    results?: DiscoveryResultsSummary | null,
+    /** Actors already run this capability. Never proposed twice, never re-paid. */
+    alreadyRun: readonly string[] = [],
+  ): Promise<DiscoveryStrategy> => {
+    const limits = discoveryLimits;
     // ── NO SELECTOR IS A BLOCK, NOT A DEFAULT ───────────────────────────────
     //
     // This returned the YC literal. Combined with `planDiscovery` being gated on
@@ -1110,16 +1228,104 @@ export async function runCapabilityPlan(
       );
     }
     try {
-      const proposed = await deps.planDiscovery({
-        payload: buildDiscoveryPlannerPayload(opts.mission, limits),
-        mission_hash: await missionHash(opts.mission),
+      const payload = buildDiscoveryPlannerPayload(opts.mission, limits);
+      const hash = await missionHash(opts.mission);
+      /** The model may answer with the list itself or wrap it in `actors`. */
+      const actorsOf = (proposed: unknown) =>
+        Array.isArray(proposed)
+          ? proposed
+          : (proposed as { actors?: unknown } | null)?.actors;
+      /**
+       * An actor already run this capability may not be proposed again.
+       *
+       * Not a correctness guard so much as a SPEND guard: a re-plan exists to
+       * change the mechanism, and re-running the actor that just produced an
+       * unusable pool buys the same pool at the same price. Dropped silently
+       * rather than refused, because proposing it is a reasonable thing for a
+       * model to do and there is nothing to teach it — the run simply moves on
+       * to whatever else it named.
+       */
+      const withoutRepeats = (proposed: unknown) => {
+        const list = actorsOf(proposed);
+        if (!Array.isArray(list) || alreadyRun.length === 0) return list;
+        const kept = list.filter((x) =>
+          !alreadyRun.includes(String((x as { actor_key?: unknown })?.actor_key ?? "")));
+        if (kept.length !== list.length) {
+          log("discovery_replan_dropped_repeat_actors", {
+            proposed: list.length, kept: kept.length, already_run: alreadyRun,
+          });
+        }
+        return kept;
+      };
+
+      const first = validateDiscoveryStrategy(
+        withoutRepeats(await deps.planDiscovery({
+          payload, mission_hash: hash, ...(results ? { results } : {}),
+        })),
+        opts.mission, limits);
+
+      // ── THE VALIDATOR IS A GUARDRAIL, NOT THE STRATEGIST ──────────────────
+      //
+      // A rejected plan used to end the run's discovery outright: `selections`
+      // empty, nothing discovered, zero qualified leads — and the only record
+      // of why was a violation code nobody had acted on. `not_for` enforcement
+      // made that reachable in one move, because an actor that name-matches is
+      // now correctly refused for a concept mission, and refusing was the whole
+      // response.
+      //
+      // A rejection now becomes FEEDBACK first and a block second. The model is
+      // told which actor was refused and why, and chooses again against the
+      // same closed catalog.
+      //
+      // EXACTLY ONE REPAIR ROUND. A second failure means the model cannot serve
+      // this request with the actors that exist, and saying so is the honest
+      // answer. One round is also one extra cheap planning call, so this cannot
+      // become unbounded spend.
+      if (first.source !== "blocked" && first.selections.length > 0) return first;
+
+      // ── A RE-PLAN IS NOT REPAIRED, IT IS SIMPLY DECLINED ──────────────────
+      //
+      // The repair round exists to teach a model whose plan was REFUSED. On a
+      // re-plan there is nothing to teach: the run already has a working pool
+      // and is asking whether anything would improve it, so "no" is a complete
+      // answer. Repairing here also produced a spurious second call whenever the
+      // model proposed an actor that had already run and the repeat guard
+      // emptied the list — a refusal that was never made.
+      if (results) {
+        log("discovery_replan_no_further_actor", {
+          proposed_but_unusable: first.violations.map((v) => v.code),
+        });
+        return first;
+      }
+
+      const blocking = first.violations.filter((v) => v.severity === "block");
+      log("discovery_strategy_repair_attempt", {
+        violations: blocking.map((v) => v.code),
+        actors: blocking.map((v) => v.actor_key ?? null),
       });
-      // The model may answer with the list itself or wrap it in `actors`, and
-      // which one it picks is not worth a retry.
-      const actors = Array.isArray(proposed)
-        ? proposed
-        : (proposed as { actors?: unknown } | null)?.actors;
-      return validateDiscoveryStrategy(actors, opts.mission, limits);
+
+      const repaired = validateDiscoveryStrategy(
+        withoutRepeats(await deps.planDiscovery({
+          payload, mission_hash: hash, ...(results ? { results } : {}),
+          validation_feedback: blocking.map((v) => ({
+            code: v.code, message: v.message, actor_key: v.actor_key,
+          })),
+        })),
+        opts.mission, limits);
+
+      if (repaired.source !== "blocked" && repaired.selections.length > 0) {
+        log("discovery_strategy_repaired", {
+          first_violations: blocking.map((v) => v.code),
+          actors: repaired.selections.map((sel) => sel.actor_key),
+        });
+        return { ...repaired, repaired_after: blocking.map((v) => v.code) };
+      }
+
+      log("discovery_strategy_repair_failed", {
+        first: blocking.map((v) => v.code),
+        second: repaired.violations.filter((v) => v.severity === "block").map((v) => v.code),
+      });
+      return repaired;
     } catch (e) {
       log("discovery_strategy_planner_failed", { error: String(e) });
       // A THROWN SELECTOR IS A BLOCKED RUN. Falling back here is what made a
@@ -1130,6 +1336,14 @@ export async function runCapabilityPlan(
       );
     }
   };
+
+  /**
+   * True once triage + budget + ranking have been applied to this working set.
+   * See `ensureMissionIntelligence`: the stage is demanded by the paid stages
+   * rather than volunteered by one discovery branch, and this makes asking
+   * twice free.
+   */
+  let missionIntelligenceApplied = false;
 
   const applyMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
     const verdicts = new Map<string, TriageVerdict>();
@@ -1359,6 +1573,7 @@ export async function runCapabilityPlan(
         (c) => c.investigation_state === "excluded_permanently").length,
       first_slice_preview: [...chosen].length,
     });
+    missionIntelligenceApplied = true;
   };
 
   /**
@@ -1470,6 +1685,37 @@ export async function runCapabilityPlan(
    * Reset at the start of every call, read immediately after.
    */
   let lastCallBlock: "deferred" | "provider_error" | null = null;
+
+  /**
+   * NOTHING ENTERS A PAID STAGE UNTRIAGED AND UNBUDGETED.
+   *
+   * `applyMissionIntelligence` was called from exactly one place: inside the
+   * `startup_company_discovery` branch, beside the YC prequalification it grew
+   * up next to. Every other route into discovery — `general_company_discovery`,
+   * `known_company_resolution` — reached identity resolution having run no
+   * triage, taken no slice and consulted no budget.
+   *
+   * On run 130adf73 (2026-08-18) that is exactly what happened. GPT chose
+   * `general_company_discovery` for "AI startups in the United States", and that
+   * branch had none of the intelligence wired into it: 100 companies went to
+   * paid identity resolution against a budget of 10, the wall clock afforded 7,
+   * 93 were deferred, and qualification saw six companies out of a hundred.
+   *
+   * So the stage is no longer OFFERED by a discovery branch. It is REQUIRED by
+   * the first paid stage — the one place that can state the invariant for every
+   * route at once. Idempotent, so a branch that already ran it pays nothing to
+   * ask again, and a discovery capability added later inherits the guarantee
+   * without anyone remembering to wire it.
+   */
+  const ensureMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
+    if (missionIntelligenceApplied || companies.length === 0) return;
+    log("mission_intelligence_deferred_apply", {
+      reason: "a paid stage was reached before triage ran; applying now",
+      companies: companies.length,
+    });
+    await applyMissionIntelligence(companies);
+    takeInvestigationSlice(companies, 1);
+  };
 
   /** One provider call: idempotency, cost, attempt record, never off-graph. */
   const callProvider = async (
@@ -1720,6 +1966,122 @@ export async function runCapabilityPlan(
   /** Investigation passes taken. One per slice; bounded by the yield gate. */
   let investigationPass = 1;
 
+  // ── THE CHAIN, PLANNED ONCE, BEFORE ANYTHING IS SPENT ────────────────────
+  //
+  // `buildCapabilityGraph` decided the stage list from mission fields BEFORE any
+  // Actor had been chosen — so the decision "does this run need a paid hiring
+  // check?" was made by code that could not know what the discovery Actor would
+  // return. A source carrying embedded `openJobs` makes that step redundant; one
+  // that does not makes it essential, and nothing could express the difference.
+  //
+  // The chain does not widen what is reachable. `validateExecutionPlan` refuses
+  // any capability the mission did not authorise and any Actor the capability
+  // does not declare, so this decides how to move through the graph, never what
+  // the graph contains.
+  let executionPlan: ExecutionPlan | null = null;
+  if (deps.planExecution) {
+    try {
+      const payload = buildExecutionPlannerPayload(opts.mission, opts.plan);
+      const hash = await missionHash(opts.mission);
+      const stepsOf = (proposed: unknown) =>
+        Array.isArray(proposed)
+          ? proposed
+          : (proposed as { steps?: unknown } | null)?.steps;
+
+      const first = validateExecutionPlan(
+        stepsOf(await deps.planExecution({ payload, mission_hash: hash })),
+        opts.mission, opts.plan);
+
+      // ONE REPAIR ROUND, for the same reason discovery gets one: a refusal the
+      // model is TOLD about is a plan it can fix, and a refusal it never hears
+      // is just a dead run.
+      if (first.source !== "blocked") {
+        executionPlan = first;
+      } else {
+        const blocking = first.violations.filter((v) => v.severity === "block");
+        log("execution_plan_repair_attempt", { violations: blocking.map((v) => v.code) });
+        const repaired = validateExecutionPlan(
+          stepsOf(await deps.planExecution({
+            payload, mission_hash: hash,
+            validation_feedback: blocking.map((v) => ({
+              code: v.code, message: v.message, actor_key: v.actor_key,
+            })),
+          })),
+          opts.mission, opts.plan);
+        if (repaired.source === "blocked") {
+          // ── A WIRED PLANNER THAT CANNOT PLAN STOPS THE RUN ──────────────
+          //
+          // This set `executionPlan = null` and carried on into the graph's own
+          // order. That is the exact shape of the defect this whole architecture
+          // was rebuilt to remove: a model that was SUPPOSED to decide, did not,
+          // and the run proceeded anyway on a decision nobody made — which from
+          // the outside is indistinguishable from a plan the model chose.
+          //
+          // An ABSENT planner is a different fact and still falls through to the
+          // graph (see the note on `planExecution`). A planner that is present,
+          // was asked twice, and produced nothing usable is a failure, and the
+          // honest answer to a failure is to say so before spending.
+          state.terminal_reason = "execution_plan_blocked";
+          state.fallback_reason = repaired.violations[0]?.code ?? "execution_plan_blocked";
+          log("execution_plan_blocked", {
+            first: blocking.map((v) => v.code),
+            second: repaired.violations.filter((v) => v.severity === "block").map((v) => v.code),
+          });
+          throw new ExecutionPlanBlockedError(repaired.violations);
+        }
+        executionPlan = repaired;
+        log("execution_plan_repaired", {
+          first: blocking.map((v) => v.code),
+        });
+      }
+    } catch (e) {
+      // The refusal above is deliberate and must not be swallowed by the guard
+      // that catches provider trouble.
+      if (e instanceof ExecutionPlanBlockedError) throw e;
+      // A THROWN PLANNER — a timeout, a transport error — is the same fact as a
+      // planner that answered unusably: it was asked and did not decide.
+      state.terminal_reason = "execution_plan_blocked";
+      state.fallback_reason = "execution_planner_failed";
+      log("execution_planner_failed", { error: String(e) });
+      throw new ExecutionPlanBlockedError([{
+        code: "execution_planner_failed",
+        message: `the execution planner failed: ${String(e).slice(0, 300)}`,
+        severity: "block",
+      }]);
+    }
+  }
+  state.execution_plan = executionPlan
+    ? {
+      version: executionPlan.version,
+      source: executionPlan.source,
+      reasoning: executionPlan.reasoning,
+      steps: executionPlan.steps.map((s) => ({
+        step: s.step, capability: s.capability, actor_key: s.actor_key,
+        purpose: s.purpose, depends_on: s.depends_on,
+      })),
+      violations: executionPlan.violations.map((v) => v.code),
+    }
+    : null;
+  if (executionPlan) {
+    log("execution_plan_resolved", {
+      steps: executionPlan.steps.map((s) => `${s.capability}:${s.actor_key ?? "-"}`),
+      source: executionPlan.source,
+    });
+  }
+
+  /**
+   * Did the CHAIN deselect this capability?
+   *
+   * Only ever consulted for stages the graph marks optional. A chain that omits
+   * `hiring_verification` because its discovery Actor already returns open roles
+   * is making the decision this planner exists to make; a chain that omits
+   * identity resolution is not offering an opinion the engine should take, and
+   * `OPTIONAL_BY_CHAIN` is what keeps that distinction explicit.
+   */
+  const chainSkips = (cap: CapabilityId): boolean =>
+    !!executionPlan && OPTIONAL_BY_CHAIN.has(cap) &&
+    !capabilityIsPlanned(executionPlan, cap);
+
   for (let stepIndex = 0; stepIndex < opts.plan.steps.length; stepIndex++) {
     const step = opts.plan.steps[stepIndex];
     const cap = step.capability;
@@ -1779,7 +2141,25 @@ export async function runCapabilityPlan(
     if (resumeScope) for (const c of companies) restoreFromResume(c);
 
     // ── DISCOVERY ────────────────────────────────────────────────────────────
-    if (cap === "startup_company_discovery") {
+    //
+    // ONE DISCOVERY STAGE, SHARED BY EVERY DISCOVERY CAPABILITY.
+    //
+    // This branch read `cap === "startup_company_discovery"`, and it was the
+    // only place `resolveDiscoveryStrategy()` was called. That single condition
+    // was the whole of the 2026-08-18 failure: `general_company_discovery` had
+    // its own branch 300 lines below with a HARDCODED provider and a
+    // deterministic query compiler, so a mission routed there never reached the
+    // planner, the closed catalog, `not_for`, the repair round or the briefing.
+    // Every guarantee this architecture spent five commits building was
+    // attached to a capability the router had just steered away from.
+    //
+    // The capability now decides WHAT KIND of discovery this is — which the
+    // graph is the right authority for — and this stage decides HOW, the same
+    // way, for all of them. A discovery capability added later inherits the
+    // planner, the validator and the refusal path without anyone remembering to
+    // wire them, which is the same reasoning that made `ensureMissionIntelligence`
+    // a demand of the paid stages rather than an offer from one branch.
+    if (ENGINE_DRIVEN_DISCOVERY.has(cap)) {
       const used: string[] = [];
       const tried: string[] = [];
       /** Raw provider rows, kept for the FREE prequalification pass below. */
@@ -1814,7 +2194,40 @@ export async function runCapabilityPlan(
       // the literal above in all three cases, which is why a model outage, a
       // missing credential and a genuinely-chosen YC search were
       // indistinguishable from the outside.
-      const strategy = await resolveDiscoveryStrategy();
+      // ── THE CHAIN'S OWN DISCOVERY STEPS, WHEN IT PLANNED ANY ─────────────
+      //
+      // A planned chain has ALREADY chosen the Actors for this capability, with
+      // the whole job in view — including which later stages its choice makes
+      // unnecessary. Asking `planDiscovery` again would be a second, narrower
+      // opinion about the same decision, and two authorities on one question is
+      // the duplication this architecture keeps deleting. Worse, the narrower
+      // one cannot see the chain, so it could pick a source that silently
+      // invalidates a step the chain planned around.
+      //
+      // The chain's steps go through `validateDiscoveryStrategy` exactly as a
+      // single-stage proposal would: same catalog, same `not_for`, same cohort
+      // rule, same limits. Nothing is trusted because it arrived by a longer
+      // route.
+      const plannedHere = plannedActorsFor(executionPlan, cap);
+      const strategy = plannedHere.length > 0
+        ? validateDiscoveryStrategy(
+          plannedHere.map((s, i) => ({
+            actor_key: s.actor_key,
+            // The chain's ORDER is its role: the step it planned first is the
+            // one that must run.
+            role: i === 0 ? "primary" : "breadth",
+            input: s.input,
+            rationale: s.purpose,
+          })),
+          opts.mission, discoveryLimits)
+        : await resolveDiscoveryStrategy();
+      if (plannedHere.length > 0) {
+        log("discovery_actors_from_execution_plan", {
+          actors: plannedHere.map((s) => s.actor_key),
+          source: strategy.source,
+          violations: strategy.violations.map((v) => v.code),
+        });
+      }
       const strategyKeys = [...strategyActorKeys(strategy)];
       state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
       log("discovery_strategy_resolved", state.discovery_strategy);
@@ -1909,150 +2322,244 @@ export async function runCapabilityPlan(
         log("signal_coverage_shortfall", { statement: coverage.shortfall_statement });
       }
 
-      for (const sel of strategy.selections) {
-        const provider = sel.actor_key;
-        if (schemaFailure) break;
-        // A FALLBACK MUST NOT SPEND WHILE THE PRIMARY IS STILL RUNNING. The
-        // primary may yet return everything the mission needs, and paying a
-        // second source to answer a question already in flight is the waste this
-        // whole gate exists to stop.
-        if (runPending) break;
-        if (companies.length >= maxCandidates) break;
-        // ROLE DECIDES WHETHER THIS ONE EARNS ITS CALL. `fallback` runs only on
-        // an empty pool — the old solidcode special-case, now the contract for
-        // every actor that carries the role — and `breadth` stops widening a
-        // pool that is already big enough to satisfy the request.
-        if (!shouldRunSelection(sel, companies.length, maxCandidates)) {
-          tried.push(provider);
-          continue;
-        }
-        tried.push(provider);
-        used.push(provider);
-
-        if (provider === "apify_yc_companies_memo23") {
-          // ── THE INPUT IS THE MODEL'S, NOT A LITERAL WITH AN OVERRIDE ──────
-          //
-          // This block used to open with the answer already written:
-          //
-          //     queries: [], industries: opts.ycIndustries ?? ["B2B"],
-          //     regions: ["United States of America"], isHiring: true,
-          //     minEmployeeSize: "10+", maxEmployeeSize: "500",
-          //
-          // and `...sel.input` layered the model's choices ON TOP. That reads
-          // like a safe default and is not: a model that says nothing about
-          // industry silently searches B2B, and a model that is never asked —
-          // which was every run before Commit 2 — searches B2B always. On
-          // 2026-08-17 that is precisely what happened to "AI startups".
-          //
-          // Only `maxItems` remains as a pre-set, because it is a COST ceiling
-          // rather than a search term: it bounds what the run may spend and is
-          // clamped again by the validator against the actor's published limit.
-          // Everything describing WHAT to look for now comes from `sel.input`.
-          const compiled = compileMemo23YcInput({
-            maxItems: maxCandidates,
-            // THE STRATEGY'S CHOICES, over the defaults above. Only fields this
-            // Actor's schema accepts survive validation, so nothing here can be
-            // a key memo23 does not have.
-            ...sel.input,
-            // AND THESE ARE NOT THE STRATEGY'S TO CHOOSE.
-            //
-            // `scrapeOpenJobs` feeds the free prequalification pass, the hiring
-            // signal and the job evidence three stages downstream; a selector
-            // that turned it off to save time would silently remove the input
-            // those stages are built on. `mode` anchors the row shape the
-            // normalizer expects. `enrichEmails` is refused by the compiler and
-            // forbidden by this architecture outright.
-            mode: "companies" as const,
-            scrapeOpenJobs: true,
-            scrapeFounderDetails: false,
-            enrichEmails: false,
-          });
-          for (const r of await callProvider(cap, provider, compiled)) {
-            const c = normalizeMemo23Company(r);
-            rawYcRows.push(r as YcCompanyInput);
-            // The prequalification key is derived by the PREQUALIFICATION module
-            // from the same raw row, so the shortlist and the working set cannot
-            // drift apart.
-            addCompany(companies, c, normalizeMemo23OpenJobs(r),
-              prequalificationKey(r as YcCompanyInput));
-          }
-        } else if (provider === "apify_yc_companies_solidcode") {
-          // NOT CONFIGURED IS NOT INVALID INPUT.
-          //
-          // Reporting a missing fallback configuration as `compile_failed` made
-          // the whole capability read `provider_input_validation_failed` on TEST
-          // task 80501967-…-1b7db0ad46e7 — even though memo23's input was
-          // perfectly valid and its run had started. A fallback nobody
-          // configured is skipped, and says so.
-          const bands = (sel.input.teamSize as string[] | undefined)
-            ?? opts.solidcodeTeamSizes ?? [];
-          if (bands.length === 0) {
-            state.provider_attempts.push({
-              capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
-              rows: 0, cost_units: 0,
-              reason: "no team-size bands configured; a bandless call duplicates memo23 at 2x price",
-            });
+      // ── ONE PASS OVER A SET OF SELECTIONS ────────────────────────────────
+      //
+      // Extracted from the loop it used to BE so that a second pass can reuse
+      // it. Discovery was strictly one-shot: the planner chose, the engine ran
+      // the choice, and whatever came back was the pool the rest of the run had
+      // to live with. On 25f3ff57 that pool was 100 rows with zero hiring
+      // evidence for a mission whose required evidence WAS hiring, and nothing
+      // between discovery and the final count could say so.
+      //
+      // Nothing inside has changed. It is the same dispatch, the same guards and
+      // the same break conditions; only its shape is different.
+      const executeSelections = async (
+        sels: readonly DiscoveryActorSelection[],
+      ): Promise<void> => {
+        for (const sel of sels) {
+          const provider = sel.actor_key;
+          if (schemaFailure) break;
+          // A FALLBACK MUST NOT SPEND WHILE THE PRIMARY IS STILL RUNNING. The
+          // primary may yet return everything the mission needs, and paying a
+          // second source to answer a question already in flight is the waste this
+          // whole gate exists to stop.
+          if (runPending) break;
+          if (companies.length >= maxCandidates) break;
+          // ROLE DECIDES WHETHER THIS ONE EARNS ITS CALL. `fallback` runs only on
+          // an empty pool — the old solidcode special-case, now the contract for
+          // every actor that carries the role — and `breadth` stops widening a
+          // pool that is already big enough to satisfy the request.
+          if (!shouldRunSelection(sel, companies.length, maxCandidates)) {
+            tried.push(provider);
             continue;
           }
-          // The fan-out supplies `teamSize` once per band, so it must not also
-          // appear on the base input the bands are spread over.
-          const { teamSize: _bandsAreFannedOut, ...solidcodeBase } = sel.input;
-          for (const compiled of fanOutSolidcodeTeamSizes(
-            {
-              regions: ["United States of America"], industries: ["B2B"],
-              maxResults: maxCandidates,
-              ...solidcodeBase,
-              isHiring: true, includeJobs: true, includeFounders: false,
-            },
-            bands,
-          )) {
+          tried.push(provider);
+          used.push(provider);
+
+          if (provider === "apify_yc_companies_memo23") {
+            // ── THE INPUT IS THE MODEL'S, NOT A LITERAL WITH AN OVERRIDE ──────
+            //
+            // This block used to open with the answer already written:
+            //
+            //     queries: [], industries: opts.ycIndustries ?? ["B2B"],
+            //     regions: ["United States of America"], isHiring: true,
+            //     minEmployeeSize: "10+", maxEmployeeSize: "500",
+            //
+            // and `...sel.input` layered the model's choices ON TOP. That reads
+            // like a safe default and is not: a model that says nothing about
+            // industry silently searches B2B, and a model that is never asked —
+            // which was every run before Commit 2 — searches B2B always. On
+            // 2026-08-17 that is precisely what happened to "AI startups".
+            //
+            // Only `maxItems` remains as a pre-set, because it is a COST ceiling
+            // rather than a search term: it bounds what the run may spend and is
+            // clamped again by the validator against the actor's published limit.
+            // Everything describing WHAT to look for now comes from `sel.input`.
+            const compiled = compileMemo23YcInput({
+              maxItems: maxCandidates,
+              // THE STRATEGY'S CHOICES, over the defaults above. Only fields this
+              // Actor's schema accepts survive validation, so nothing here can be
+              // a key memo23 does not have.
+              ...sel.input,
+              // AND THESE ARE NOT THE STRATEGY'S TO CHOOSE.
+              //
+              // `scrapeOpenJobs` feeds the free prequalification pass, the hiring
+              // signal and the job evidence three stages downstream; a selector
+              // that turned it off to save time would silently remove the input
+              // those stages are built on. `mode` anchors the row shape the
+              // normalizer expects. `enrichEmails` is refused by the compiler and
+              // forbidden by this architecture outright.
+              mode: "companies" as const,
+              scrapeOpenJobs: true,
+              scrapeFounderDetails: false,
+              enrichEmails: false,
+            });
             for (const r of await callProvider(cap, provider, compiled)) {
-              addCompany(companies, normalizeSolidcodeCompany(r), []);
+              const c = normalizeMemo23Company(r);
+              rawYcRows.push(r as YcCompanyInput);
+              // The prequalification key is derived by the PREQUALIFICATION module
+              // from the same raw row, so the shortlist and the working set cannot
+              // drift apart.
+              addCompany(companies, c, normalizeMemo23OpenJobs(r),
+                prequalificationKey(r as YcCompanyInput));
+            }
+          } else if (provider === "apify_yc_companies_solidcode") {
+            // NOT CONFIGURED IS NOT INVALID INPUT.
+            //
+            // Reporting a missing fallback configuration as `compile_failed` made
+            // the whole capability read `provider_input_validation_failed` on TEST
+            // task 80501967-…-1b7db0ad46e7 — even though memo23's input was
+            // perfectly valid and its run had started. A fallback nobody
+            // configured is skipped, and says so.
+            const bands = (sel.input.teamSize as string[] | undefined)
+              ?? opts.solidcodeTeamSizes ?? [];
+            if (bands.length === 0) {
+              state.provider_attempts.push({
+                capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
+                rows: 0, cost_units: 0,
+                reason: "no team-size bands configured; a bandless call duplicates memo23 at 2x price",
+              });
+              continue;
+            }
+            // The fan-out supplies `teamSize` once per band, so it must not also
+            // appear on the base input the bands are spread over.
+            const { teamSize: _bandsAreFannedOut, ...solidcodeBase } = sel.input;
+            for (const compiled of fanOutSolidcodeTeamSizes(
+              {
+                regions: ["United States of America"], industries: ["B2B"],
+                maxResults: maxCandidates,
+                ...solidcodeBase,
+                isHiring: true, includeJobs: true, includeFounders: false,
+              },
+              bands,
+            )) {
+              for (const r of await callProvider(cap, provider, compiled)) {
+                addCompany(companies, normalizeSolidcodeCompany(r), []);
+              }
+            }
+          } else if (provider === "apify_linkedin_company_search") {
+            // BREADTH BEYOND Y COMBINATOR — the reason this stage was rebuilt.
+            //
+            // This Actor matches company NAMES, not concepts, and reports a
+            // concept query as a successful empty run, so the cost is real and
+            // the failure silent. `compileHarvestCompanySearchInput` refuses the
+            // unusable shapes; a selection with no query at all never reaches it.
+            const query = typeof sel.input.searchQuery === "string"
+              ? sel.input.searchQuery
+              : null;
+            if (!query) {
+              state.provider_attempts.push({
+                capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
+                rows: 0, cost_units: 0,
+                reason: "the strategy named this actor without a searchQuery; a query-less company search returns nothing at full price",
+              });
+              continue;
+            }
+            const compiled = compileHarvestCompanySearchInput({
+              maxItems: maxCandidates,
+              ...sel.input,
+              searchQuery: query,
+              // `full` is required: `short` returns employeeCount === null, and an
+              // unverifiable size cannot settle an employee-ceiling gate.
+              scraperMode: "full",
+            });
+            for (const r of await callProvider(cap, provider, compiled)) {
+              // DEDUPED BY `addCompany` against everything the earlier actors
+              // returned — it keys on LinkedIn URL then domain, so a company YC
+              // and LinkedIn both surface is one row, identified and enriched
+              // once. This is the diagram's "deduplication is global across all
+              // actors", and it needed no new machinery.
+              addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
             }
           }
-        } else if (provider === "apify_linkedin_company_search") {
-          // BREADTH BEYOND Y COMBINATOR — the reason this stage was rebuilt.
+          // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
           //
-          // This Actor matches company NAMES, not concepts, and reports a
-          // concept query as a successful empty run, so the cost is real and
-          // the failure silent. `compileHarvestCompanySearchInput` refuses the
-          // unusable shapes; a selection with no query at all never reaches it.
-          const query = typeof sel.input.searchQuery === "string"
-            ? sel.input.searchQuery
-            : null;
-          if (!query) {
-            state.provider_attempts.push({
-              capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
-              rows: 0, cost_units: 0,
-              reason: "the strategy named this actor without a searchQuery; a query-less company search returns nothing at full price",
-            });
-            continue;
-          }
-          const compiled = compileHarvestCompanySearchInput({
-            maxItems: maxCandidates,
-            ...sel.input,
-            searchQuery: query,
-            // `full` is required: `short` returns employeeCount === null, and an
-            // unverifiable size cannot settle an employee-ceiling gate.
-            scraperMode: "full",
-          });
-          for (const r of await callProvider(cap, provider, compiled)) {
-            // DEDUPED BY `addCompany` against everything the earlier actors
-            // returned — it keys on LinkedIn URL then domain, so a company YC
-            // and LinkedIn both surface is one row, identified and enriched
-            // once. This is the diagram's "deduplication is global across all
-            // actors", and it needed no new machinery.
-            addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
-          }
+          // Continuing to the next approved provider would still be spending on
+          // the back of a call we never validly made, and the whole point of
+          // catching this locally is that nothing downstream gets to reinterpret
+          // it as "the source came back empty".
+          if (compileFailedFor(provider)) { schemaFailure = true; break; }
+          if (pendingFor(provider)) { runPending = true; break; }
         }
-        // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
-        //
-        // Continuing to the next approved provider would still be spending on
-        // the back of a call we never validly made, and the whole point of
-        // catching this locally is that nothing downstream gets to reinterpret
-        // it as "the source came back empty".
-        if (compileFailedFor(provider)) { schemaFailure = true; break; }
-        if (pendingFor(provider)) { runPending = true; break; }
+      };
+
+      await executeSelections(strategy.selections);
+
+      // ── EXECUTE → INSPECT → REPLAN ────────────────────────────────────────
+      //
+      // The stage that was missing. Discovery used to be one-shot: the planner
+      // chose once, the engine ran the choice, and whatever came back was the
+      // pool every later stage had to work with. No later stage can repair an
+      // earlier one — that is the first property in the Agentory briefing — so a
+      // pool that could never answer the mission was simply the run's answer.
+      //
+      // Run 25f3ff57 is the case. 100 rows came back carrying no hiring state at
+      // all, for a mission whose `required_evidence` was `embedded_hiring_evidence`.
+      // The engine had that fact the moment discovery finished, and reported it
+      // 90 seconds later as `open_jobs_evaluated: 0` next to `qualified: 0`.
+      //
+      // Now the engine STATES what it got — counts only, never a verdict — and
+      // the model decides whether its strategy is working. Three properties keep
+      // this from becoming unbounded:
+      //
+      //   * it only runs when the pass fell short of what the mission needs;
+      //   * an actor already run cannot be proposed again, so a re-plan must
+      //     change the mechanism rather than repeat it at the same price;
+      //   * `maxDiscoveryPasses` bounds it, and one extra planning call is cheap
+      //     next to the paid Actor it may avoid.
+      //
+      // A re-plan that proposes nothing usable is not an error: the first pass's
+      // pool stands and the run continues with what it has.
+      const passLimit = Math.max(1, opts.maxDiscoveryPasses ?? DEFAULT_DISCOVERY_PASSES);
+      // ── EVERY ACTOR THE STRATEGY ALREADY CONSIDERED, NOT ONLY THOSE THAT RAN ──
+      //
+      // Briefly changed to `[...used]` on the reasoning that an actor which never
+      // ran "sold nothing" and should stay proposable. That is true about COST
+      // and wrong about ROLE: an actor the strategy deliberately declined —
+      // `fallback`, held back precisely because the primary was producing — would
+      // be re-proposed by the next pass and spend anyway, which is the guarantee
+      // `shouldRunSelection` exists to make.
+      //
+      // A pass is one decision about a set of actors. The re-plan is for a
+      // DIFFERENT set; if the right answer is one this pass already weighed, the
+      // answer is not to buy it behind the strategy's back.
+      const actorsRun = [...strategyKeys];
+      for (let pass = 2; pass <= passLimit; pass++) {
+        if (schemaFailure || runPending) break;
+        if (companies.length >= maxCandidates) break;
+        const summary = summariseDiscoveryPool(
+          actorsRun[actorsRun.length - 1] ?? "(none)", companies, opts.mission);
+        // ENOUGH IS ENOUGH. A pool that met the target and carries no stated
+        // problem is not re-planned — the cheapest planning call is the one that
+        // does not happen.
+        const shortfall = companies.length < maxCandidates ||
+          summary.observed_problems.length > 0;
+        if (!shortfall) break;
+
+        log("discovery_replan_considering", {
+          pass, pool: companies.length, target: maxCandidates,
+          problems: summary.observed_problems,
+        });
+        const next = await resolveDiscoveryStrategy(summary, actorsRun);
+        if (next.source === "blocked" || next.selections.length === 0) {
+          // NOT A FAILURE. The model looked at what came back and had nothing
+          // better to offer, which is a legitimate answer and leaves the run
+          // exactly as the first pass left it.
+          log("discovery_replan_declined", {
+            pass, reason: next.violations[0]?.code ?? "no_further_actor_proposed",
+          });
+          break;
+        }
+        log("discovery_replan_running", {
+          pass, actors: next.selections.map((s) => s.actor_key),
+        });
+        await executeSelections(next.selections);
+        for (const sel of next.selections) {
+          actorsRun.push(sel.actor_key);
+          if (!strategyKeys.includes(sel.actor_key)) strategyKeys.push(sel.actor_key);
+          strategy.selections.push(sel);
+        }
+        state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
       }
       // `state.company_keys` is DERIVED once, at the return. See the note there.
 
@@ -2111,18 +2618,41 @@ export async function runCapabilityPlan(
       // is paid for. Task c8a6e53d skipped this step and bought 16 identity
       // lookups for companies that were only hiring engineers, or had 350 staff
       // against a 10-150 mission.
-      applyPrequalification(state, companies, rawYcRows, {
-        min: opts.brain?.employee_min ?? null,
-        max: opts.brain?.employee_max ?? null,
-      }, qualificationCtx);
-      // The working set may have shrunk — artifacts are gone.
-      // `state.company_keys` is DERIVED once, at the return. See the note there.
-      log("prequalification_complete", {
-        unique: state.prequalification?.unique_companies,
-        eligible: state.prequalification?.eligible_companies,
-        size_excluded: state.prequalification?.employee_size_excluded,
-        technical_only: state.prequalification?.technical_only_companies,
-      });
+      // ── ONLY WHEN THERE ARE YC ROWS TO PREQUALIFY ────────────────────────
+      //
+      // `applyPrequalification` reads the memo23 row shape — full `openJobs`,
+      // `teamSize`, `website`. It ran unconditionally because this branch was
+      // the YC branch; now that every discovery capability shares the stage, a
+      // pool assembled entirely by the LinkedIn company search has no such rows
+      // and calling it would score a hundred companies off fields that are not
+      // there.
+      //
+      // Skipping it is NOT skipping the shortlist. `applyMissionIntelligence`
+      // below owns triage, budget and ranking for every route — that is the
+      // invariant `ensureMissionIntelligence` states for the paid stages — so a
+      // non-YC pool is still triaged and still sliced. What it loses is the
+      // FREE pre-pass, which is exactly what a source that returns no embedded
+      // jobs cannot support.
+      if (rawYcRows.length > 0) {
+        applyPrequalification(state, companies, rawYcRows, {
+          min: opts.brain?.employee_min ?? null,
+          max: opts.brain?.employee_max ?? null,
+        }, qualificationCtx);
+        // The working set may have shrunk — artifacts are gone.
+        // `state.company_keys` is DERIVED once, at the return. See the note there.
+        log("prequalification_complete", {
+          unique: state.prequalification?.unique_companies,
+          eligible: state.prequalification?.eligible_companies,
+          size_excluded: state.prequalification?.employee_size_excluded,
+          technical_only: state.prequalification?.technical_only_companies,
+        });
+      } else {
+        log("prequalification_skipped", {
+          capability: cap,
+          reason: "no embedded-jobs rows in this pool; the free pre-pass has nothing to read",
+          companies: companies.length,
+        });
+      }
 
       // ── STAGE 2: GPT MISSION INTELLIGENCE, THEN THE SMART SHORTLIST ────────
       //
@@ -2147,77 +2677,89 @@ export async function runCapabilityPlan(
       // every later pass and every continuation.
       takeInvestigationSlice(companies, 1);
 
+      // ── WHAT DO I STILL NEED? ────────────────────────────────────────────
+      //
+      // The chain was planned BEFORE any Actor ran, from what the catalog said
+      // each one returns. Now the pool exists and the answer is a fact rather
+      // than a prediction — so the remaining steps are worth reconsidering
+      // against it.
+      //
+      // The concrete case: a chain that skipped paid hiring verification because
+      // its discovery Actor "carries openJobs" is right only if the rows
+      // actually came back carrying them. If they did not, the step it dropped
+      // is the one the mission needs, and finding that out at the END of the run
+      // is exactly the 25f3ff57 failure in a different costume.
+      //
+      // BOUNDED AND BACKWARD-SAFE. One extra planning call; it can only change
+      // stages that have NOT run yet, because `chainSkips` is consulted as the
+      // loop reaches each capability; and an unusable answer leaves the original
+      // chain standing.
+      if (deps.planExecution && executionPlan) {
+        try {
+          const summary = summariseDiscoveryPool(
+            used[used.length - 1] ?? strategyKeys[0] ?? "(none)", companies, opts.mission);
+          const amended = validateExecutionPlan(
+            ((p: unknown) => Array.isArray(p) ? p : (p as { steps?: unknown } | null)?.steps)(
+              await deps.planExecution({
+                payload: buildExecutionPlannerPayload(opts.mission, opts.plan),
+                mission_hash: await missionHash(opts.mission),
+                results: summary,
+              })),
+            opts.mission, opts.plan);
+          if (amended.source !== "blocked") {
+            const before = executionPlan.steps.map((s) => s.capability);
+            const after = amended.steps.map((s) => s.capability);
+            executionPlan = amended;
+            state.execution_plan = {
+              ...(state.execution_plan ?? {}),
+              amended_after_discovery: true,
+              amended_reasoning: amended.reasoning,
+              steps: amended.steps.map((s) => ({
+                step: s.step, capability: s.capability, actor_key: s.actor_key,
+                purpose: s.purpose, depends_on: s.depends_on,
+              })),
+            };
+            log("execution_plan_amended_after_discovery", {
+              observed: summary.observed_problems,
+              before, after,
+            });
+          }
+        } catch (e) {
+          // The original chain stands. A failed amendment is not a failed run.
+          log("execution_plan_amend_failed", { error: String(e) });
+        }
+      }
+
       finish(cap, "complete", companies.length, used, true, null);
-      await publish("prequalified");
+      // The event names what actually happened to the pool, so a route with no
+      // free pre-pass does not report a prequalification it never ran.
+      await publish(state.prequalification ? "prequalified" : "accounts_found");
       continue;
     }
 
-    // ── GENERAL COMPANY DISCOVERY ────────────────────────────────────────────
+    // ── THE SECOND DISCOVERY BRANCH IS GONE, NOT MOVED ───────────────────────
     //
-    // The route for everything that is not a startup cohort and not a supplied
-    // list: manufacturers, integrators, agencies, engineering firms. It was
-    // DECLARED in the graph and never driven, so those missions planned a
-    // sensible route and then reported `skipped_no_input` — a correct answer to
-    // nothing.
+    // `general_company_discovery` had its own implementation here: a hardcoded
     //
-    // The concepts searched for are compiled from the VALIDATED MISSION, never
-    // from free model text. `compileCompanySearchConcepts` strips URLs and
-    // vendor names, enforces the mission's hard geography, and caps both the
-    // number of queries and the rows each may return, so an over-eager
-    // interpretation costs a bounded amount rather than an open one.
-    if (cap === "general_company_discovery") {
-      const provider = "apify_linkedin_company_search";
-      const concepts = compileCompanySearchConcepts(opts.mission, maxCandidates);
-      if (concepts.queries.length === 0) {
-        finish(cap, "skipped_no_input", 0, [], false,
-          "the mission carries no company type, vertical or geography to search on");
-        continue;
-      }
-      let found = 0;
-      for (const q of concepts.queries) {
-        if (companies.length >= maxCandidates) break;
-        const compiled = compileHarvestCompanySearchInput({
-          searchQuery: q,
-          // `full` is required: `short` returns employeeCount === null, and an
-          // unverifiable size cannot settle an employee-ceiling gate.
-          scraperMode: "full",
-          maxItems: concepts.maxItemsPerQuery,
-          ...(concepts.locations.length ? { locations: concepts.locations } : {}),
-        });
-        for (const r of await callProvider(cap, provider, compiled)) {
-          const c = normalizeLinkedInCompanyCandidate(r);
-          // DEDUPED BY `addCompany`, which keys on LinkedIn URL / domain / id —
-          // so the same company surfacing under two concepts is one row, and is
-          // therefore identified and enriched once.
-          addCompany(companies, c, []);
-          found++;
-        }
-      }
-      // `state.company_keys` is DERIVED once, at the return. See the note there.
-      if (companies.length === 0) {
-        const invalid = state.provider_attempts.filter(
-          (a) => a.capability === cap && a.outcome === "compile_failed");
-        if (invalid.length > 0) {
-          state.terminal_reason = "provider_input_validation_failed";
-          finish(cap, "incomplete", 0, [provider], false,
-            `provider_input_validation_failed: ${invalid.map((a) => a.reason).join(" | ")}`);
-          break;
-        }
-        const ex = onCapabilityExhausted(opts.plan, cap, [provider]);
-        state.terminal_reason = ex.reason;
-        state.fallback_reason = ex.status === "exhausted" ? "approved_providers_exhausted" : null;
-        finish(cap, "exhausted", 0, [provider], false, ex.reason);
-        break;
-      }
-      finish(cap, "complete", companies.length, [provider], true, null);
-      log("general_company_discovery_complete", {
-        queries: concepts.queries, locations: concepts.locations,
-        rows: found, unique_companies: companies.length,
-      });
-      await publish("accounts_found");
-      continue;
-    }
-
+    //     const provider = "apify_linkedin_company_search";
+    //
+    // and `compileCompanySearchConcepts(mission)`, which authored the paid
+    // Actor's input from two mission fields — `verticals` and `business_models`
+    // — and dropped `stages`, `required_signals`, `required_signal_terms`,
+    // `employee_range` and every hard constraint on the way past.
+    //
+    // On run 25f3ff57 (2026-08-18) that compiled "Find 10 qualified AI startups
+    // in the United States that are currently hiring software engineers" into
+    // two calls: `searchQuery: "AI"` and `searchQuery: "startup"`. The actor's
+    // own card says `not_for: ["semantic/concept search"]`; nothing on this path
+    // consulted it, because `not_for` is enforced in `validateDiscoveryStrategy`
+    // and this branch never called it. 100 rows came back — 50 accelerators,
+    // newsletters and one podcast — and 0 qualified.
+    //
+    // Both capabilities now share the stage above, so there is no second place
+    // for a provider to be chosen or an input to be written. That is the point:
+    // this was not a bug in the query compiler, it was a bug in there BEING a
+    // second query compiler.
     if (cap === "known_company_resolution" ||
         cap === "job_discovery" || cap === "funding_signal_discovery" ||
         cap === "expansion_signal_discovery" || cap === "job_deduplication" ||
@@ -2246,12 +2788,18 @@ export async function runCapabilityPlan(
     // only, at most two at a time.
     if (cap === "company_identity_resolution") {
       const provider = "apify_linkedin_company_search";
-      // ONLY THE SHORTLIST. A company nobody decided was worth identifying is
-      // never paid for. When prequalification did not run (a non-YC entry
-      // capability), everything is a target — the old behaviour, unchanged.
-      const targets = state.prequalification
-        ? companies.filter((c) => c.shortlisted)
-        : companies.slice();
+      // TRIAGE AND BUDGET FIRST, whatever route produced this pool.
+      await ensureMissionIntelligence(companies);
+      // ONLY THE SLICE. A company nobody decided was worth identifying is never
+      // paid for.
+      //
+      // This used to read `state.prequalification ? shortlisted : companies.slice()`,
+      // and `state.prequalification` is set only by the YC branch — so every
+      // other discovery route fell through to "everything is a target". That is
+      // how a budget of 10 authorised 100 paid lookups. The fallback is gone:
+      // `shortlisted` is the derived view of the investigation slice, and
+      // `ensureMissionIntelligence` guarantees it has been computed.
+      const targets = companies.filter((c) => c.shortlisted);
       let resolved = 0;
       let unresolved = 0;
 
@@ -2611,6 +3159,27 @@ export async function runCapabilityPlan(
     // The canonical policy is now the only vocabulary, and paid verification is
     // a fallback for the lone-Tier-B case alone.
     if (cap === "hiring_verification") {
+      // ── THE CHAIN MAY SAY THIS STEP IS ALREADY ANSWERED ──────────────────
+      //
+      // The one decision that genuinely needed to be made ACROSS capabilities.
+      // Whether a paid job search is worth buying depends entirely on what the
+      // discovery Actor returned: memo23 carries every company's full `openJobs`
+      // array, so for a hiring mission served by it this stage re-buys evidence
+      // already in hand — and `buildCapabilityGraph` scheduled it from mission
+      // fields, before any Actor had been chosen, so it could not know.
+      //
+      // A chain that omits it has said "an earlier step proves this". A chain
+      // that includes it has said the opposite. Either way the reasoning is
+      // recorded, and the free assessment below still runs on every route.
+      if (chainSkips(cap)) {
+        finish(cap, "skipped_no_input", 0, [], false,
+          "the planned chain proves hiring from evidence an earlier step already " +
+          "returned; a paid verification would re-buy it");
+        log("hiring_verification_skipped_by_chain", {
+          reasoning: executionPlan?.reasoning?.slice(0, 300) ?? null,
+        });
+        continue;
+      }
       const targets = companies.filter((c) => c.identity && identityIsActionable(c.identity));
       let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
       for (const c of targets) {
@@ -3878,6 +4447,24 @@ const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Discovery capabilities this engine actually drives, through ONE shared stage.
+ *
+ * Membership here means: the planner chooses this capability's actors, the
+ * validator refuses what it may not run, and a refusal ends the run honestly.
+ * A discovery capability NOT listed is declared in the graph and reported as
+ * `skipped_no_input` — visible, never silently treated as done.
+ *
+ * `funding_signal_discovery` and `expansion_signal_discovery` are deliberately
+ * absent: they are declared but undriven, and adding them here would claim a
+ * normalizer and a signal contract that do not exist yet. That is a separate
+ * piece of work, not a set membership.
+ */
+export const ENGINE_DRIVEN_DISCOVERY: ReadonlySet<CapabilityId> = new Set<CapabilityId>([
+  "startup_company_discovery",
+  "general_company_discovery",
+]);
+
+/**
  * Project the engine's working set into portfolio candidates.
  *
  * The portfolio module has existed and been tested since the previous change and
@@ -4161,99 +4748,89 @@ function keptForPacks(
 }
 
 /** Concepts a general company search may be run for, already bounded. */
-export interface CompanySearchConcepts {
-  queries: string[];
-  locations: string[];
-  maxItemsPerQuery: number;
-  /** Concepts that were dropped, and why. Persisted for audit. */
-  rejected: Array<{ value: string; reason: string }>;
-}
-
-/** At most this many separate searches, whatever the mission asks for. */
-export const MAX_COMPANY_SEARCH_QUERIES = 4;
-/** At most this many rows per search. */
-export const MAX_COMPANY_SEARCH_ROWS = 50;
-
-const CONCEPT_URL = /https?:\/\/|www\.|\.[a-z]{2,6}(\/|$)/i;
-const CONCEPT_VENDOR =
-  /\b(apify|harvestapi|memo23|solidcode|crawlworks|actor|scraper|linkedin\.com)\b/i;
-
 /**
- * Compile the concepts a general company search may look for.
+ * What the last discovery pass actually produced — FACTS, not a verdict.
  *
- * THE MISSION IS THE SOURCE, not free model text. Company types and verticals
- * come from the validated mission — which the user's own words already outrank —
- * and geography is applied as a FILTER rather than pasted into the query string,
- * because `searchQuery` is a name/concept index and a query carrying a country
- * name returns nothing.
+ * ── THE LINE THIS FUNCTION IS CAREFUL ABOUT ─────────────────────────────────
  *
- * Everything is bounded and everything rejected is named:
- *   * URLs and vendor names are stripped — a concept is a business description,
- *     and a model that puts a provider or a link here is reaching for a control
- *     it does not have;
- *   * the query count is capped, because each one is a separate paid Actor run;
- *   * rows per query are capped;
- *   * a concept unrelated to the mission's own verticals is dropped, so an
- *     industrial-automation query cannot quietly acquire "SaaS".
+ * It would be easy to make this the place that decides a pool is bad: match
+ * names against /newsletter|community|magazine/, score relevance, and hand the
+ * planner a conclusion. That is precisely the deterministic intelligence this
+ * architecture keeps removing — it would be a second opinion about mission fit,
+ * competing with the evaluator that already exists, encoded as a regex.
+ *
+ * So everything here is countable and checkable:
+ *   * how many rows came back;
+ *   * how many carry an identity anything downstream could resolve;
+ *   * how many carry the evidence the MISSION said it required;
+ *   * and problems stated as observations ("0 of 100 carry hiring evidence"),
+ *     never as judgements ("this pool is mostly newsletters").
+ *
+ * GPT reads the facts and decides whether its strategy is working. That is the
+ * division of labour: the engine can count, the model can judge.
  */
-export function compileCompanySearchConcepts(
-  mission: LeadMissionV1, maxCandidates: number,
-): CompanySearchConcepts {
-  const rejected: CompanySearchConcepts["rejected"] = [];
-  const seen = new Set<string>();
-  const queries: string[] = [];
+export function summariseDiscoveryPool(
+  actorKey: string, companies: readonly EngineCompany[], mission: LeadMissionV1,
+): DiscoveryResultsSummary {
+  const identified = companies.filter((c) =>
+    !!c.company.canonical_domain || !!c.company.linkedin_company_url);
+  const needsHiring = (mission.directives?.required_evidence ?? [])
+    .some((e) => /hiring/i.test(String(e))) ||
+    (mission.required_signals ?? []).some((s) => /hiring/i.test(String(s.type)));
+  const withHiring = companies.filter((c) => c.yc_open_jobs.length > 0);
 
-  // The mission's own verticals first, then any soft company-type preference.
-  const raw: string[] = [
-    ...mission.company_profile.verticals,
-    ...mission.company_profile.business_models,
-  ];
-
-  for (const value of raw) {
-    const v = String(value ?? "").trim();
-    if (!v) continue;
-    if (CONCEPT_URL.test(v)) {
-      rejected.push({ value: v, reason: "looks like a URL or domain, not a business concept" });
-      continue;
-    }
-    if (CONCEPT_VENDOR.test(v)) {
-      rejected.push({ value: v, reason: "names a provider or tool rather than a business" });
-      continue;
-    }
-    // A NAME INDEX WANTS A SHORT CONCEPT. A whole sentence returns nothing, and
-    // `compileHarvestCompanySearchInput` refuses it anyway — better to drop it
-    // here with a reason than to spend a compile failure on it.
-    if (v.split(/\s+/).length > 6) {
-      rejected.push({ value: v, reason: "too long for a company-name index" });
-      continue;
-    }
-    const key = v.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (queries.length >= MAX_COMPANY_SEARCH_QUERIES) {
-      rejected.push({ value: v, reason: `beyond the ${MAX_COMPANY_SEARCH_QUERIES}-query cap` });
-      continue;
-    }
-    queries.push(v);
+  const observed_problems: string[] = [];
+  if (companies.length === 0) {
+    observed_problems.push("the actor returned no rows at all");
+  }
+  const unidentified = companies.length - identified.length;
+  if (unidentified > 0) {
+    observed_problems.push(
+      `${unidentified} of ${companies.length} rows carry neither a domain nor a ` +
+      `LinkedIn URL, so nothing downstream can resolve or enrich them`);
+  }
+  if (needsHiring && withHiring.length === 0 && companies.length > 0) {
+    // THE OBSERVATION THAT WAS MISSING ON 25f3ff57. The mission required
+    // embedded hiring evidence and the pool carried none; the run reported
+    // `open_jobs_evaluated: 0` at the very end and nothing acted on it.
+    observed_problems.push(
+      `the mission requires hiring evidence and NONE of the ${companies.length} ` +
+      `rows carry an open role — this actor does not return hiring state, so no ` +
+      `amount of enrichment will produce it`);
+  } else if (needsHiring && withHiring.length < companies.length) {
+    observed_problems.push(
+      `${companies.length - withHiring.length} of ${companies.length} rows carry ` +
+      `no open role, and the mission requires hiring evidence`);
   }
 
-  // HARD GEOGRAPHY IS A FILTER, NOT A SEARCH TERM. Concatenating it into the
-  // query is what turned "SnapMagic" into "SnapMagic snapmagic.com" and returned
-  // zero rows six times.
-  const locations = [...new Set(
-    mission.company_profile.locations.map((l) => String(l).trim()).filter(Boolean),
-  )].slice(0, 20);
-
   return {
-    queries,
-    locations,
-    maxItemsPerQuery: Math.max(1, Math.min(
-      MAX_COMPANY_SEARCH_ROWS,
-      Math.ceil(maxCandidates / Math.max(1, queries.length)),
-    )),
-    rejected,
+    actor_key: actorKey,
+    candidates_returned: companies.length,
+    likely_companies: identified.length,
+    irrelevant: unidentified,
+    observed_problems,
   };
 }
+// ── THE DETERMINISTIC QUERY COMPILER IS DELETED ────────────────────────────
+//
+// `compileCompanySearchConcepts` lived here, with `CompanySearchConcepts`,
+// `MAX_COMPANY_SEARCH_QUERIES` and `MAX_COMPANY_SEARCH_ROWS`. It authored a
+// paid Actor's `searchQuery` from two mission fields — `verticals` and
+// `business_models` — and dropped `stages`, `required_signals`,
+// `required_signal_terms`, `employee_range` and every hard constraint on the
+// way past. On run 25f3ff57 it compiled "10 qualified AI startups in the US
+// currently hiring software engineers" into `searchQuery: "AI"` and
+// `searchQuery: "startup"`.
+//
+// It lost its last production caller when both discovery capabilities moved
+// onto the shared planner-driven stage. Kept as dead code it would be exactly
+// what this architecture keeps deleting: deterministic intelligence sitting
+// one import away from becoming a fallback again.
+//
+// GPT writes actor inputs now. `compileHarvestCompanySearchInput` and the
+// catalog's `supported_filters` / `verified_enums` bound what it may say, and
+// `known_defects` — including `company_search_query_is_name_match` — is what
+// tells it not to put a concept in a name index.
 
 function packTitles(packs: readonly RolePack[]): string[] {
   return [...new Set(packs.flatMap((p) => p.titles))].slice(0, 20);

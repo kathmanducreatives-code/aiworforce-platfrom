@@ -46,6 +46,7 @@ import {
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { MissionCompilationBlockedError } from "../_shared/leadMissionCompiler.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
@@ -638,7 +639,27 @@ async function compileCanonicalLeadMission(i: {
     proposal_received: gptProposal != null,
   });
 
-  const mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal);
+  // ── THE REFUSAL MOVED UPSTREAM, AND IS TRANSLATED HERE ──────────────────
+  //
+  // `compileLeadMission` now THROWS rather than returning a regex reading, so
+  // the `deterministic_fallback` check below is unreachable in practice — kept
+  // because it is a cheap invariant and an unreachable guard that costs nothing
+  // is better than a removed one that used to matter.
+  //
+  // Translated into this function's existing error so every downstream handler,
+  // status code and user message is unchanged.
+  let mission: ReturnType<typeof buildMissionForPrompt>;
+  try {
+    mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal);
+  } catch (e) {
+    if (e instanceof MissionCompilationBlockedError) {
+      console.log("[pilot-chat][mission-compilation-blocked]", {
+        workspace_id: i.workspaceId, reasons: e.reasons,
+      });
+      throw new MissionCompilationFailedError(i.workspaceId, "compilation_blocked");
+    }
+    throw e;
+  }
 
   // ── NO SILENT REGEX SUBSTITUTION FOR A COMPILED-MISSION WORKSPACE ────────
   //
@@ -776,7 +797,18 @@ async function generateWorkflowConfirmation(
     // refusal rule as `compileCanonicalLeadMission`: a workspace running the
     // compiled-mission architecture may not be shown a card built from a
     // deterministic reading wearing the compiler's shape.
-    const cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal);
+    let cardMission: ReturnType<typeof buildMissionForPrompt>;
+    try {
+      cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal);
+    } catch (e) {
+      if (e instanceof MissionCompilationBlockedError) {
+        console.log("[pilot-chat][card-mission-compilation-blocked]", {
+          workspace_id: workspaceId, reasons: e.reasons,
+        });
+        throw new MissionCompilationFailedError(workspaceId, "compilation_blocked");
+      }
+      throw e;
+    }
     // UNCONDITIONAL, for the same reason as the canonical path above: the mode
     // gate required five flags nobody set, so a card built from a regex reading
     // was shown on every real run. The card is what the user approves before

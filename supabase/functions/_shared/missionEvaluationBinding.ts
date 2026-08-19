@@ -23,6 +23,7 @@
 // Pure apart from the injected facade. No provider import, no network.
 
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
+import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 import { MISSION_EVALUATION_PROMPT } from "./missionEvaluation.ts";
@@ -112,6 +113,8 @@ export interface BuildEvaluationBindingInput {
   generate?: GenerateJsonFn;
   /** The run's shortlist size, so the cap is never larger than the work. */
   shortlistSize?: number;
+  /** Leads the user asked for. Read only by the model router. */
+  requestedCount?: number;
 }
 
 /**
@@ -156,7 +159,25 @@ export function buildMissionEvaluationBinding(
   // The legacy model id is retained only as a diagnostic of what the old env
   // asked for; it no longer selects anything. No JSON schema is sent — see
   // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
-  const generate = input.generate ?? createGptStrategistGenerateJson();
+  // ── THE REASONING TIER, STATED RATHER THAN INHERITED ────────────────────
+  //
+  // This is the qualification authority. Its answer decides whether a company
+  // the run has already paid to identify and enrich becomes a lead, and it must
+  // read cited evidence closely enough that a misquoted excerpt does not pass.
+  // The default is already `reasoning`; naming it here means a future change to
+  // the default cannot silently downgrade the one call that decides.
+  // THE ROUTER DECIDES, NOT THIS FILE. The answer is the same — qualification
+  // reasons — but it is now stated in one place, alongside every other stage,
+  // and recorded on the run rather than living in this file's prose.
+  const route = routeModel("mission_evaluation", {
+    requested_count: input.requestedCount ?? undefined,
+    pool_size: input.shortlistSize ?? undefined,
+  });
+  const generate = input.generate ?? createGptStrategistGenerateJson({}, {
+    tier: route.tier,
+    purpose: route.stage,
+    reason: route.reason,
+  });
 
   return {
     evaluateMission: async (payload: Record<string, unknown>) => {

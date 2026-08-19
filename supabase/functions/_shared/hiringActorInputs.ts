@@ -164,10 +164,45 @@ function canonical(v: unknown): string {
 const LINKEDIN_COMPANY_URL =
   /^https?:\/\/([a-z0-9-]+\.)?linkedin\.com\/(company|school|showcase)\/[A-Za-z0-9_\-%.]+\/?$/i;
 
-function checkEnum(errors: string[], field: string, values: string[] | undefined,
+/**
+ * A SCALAR WHERE A LIST BELONGS IS ONE VALUE, NOT A LIST OF CHARACTERS.
+ *
+ * `for (const v of values)` over a STRING iterates its characters. On the live
+ * end-to-end run of 2026-08-19 the planner sent
+ *
+ *     industries: "Engineering, Product and Design"
+ *
+ * — a correct enum value, in the wrong container — and the compiler answered
+ * with thirty-one violations reading `industries: "E" is not a verified enum
+ * value`, `"n"`, `"g"`, `"i"`… roughly four kilobytes of it. The capability died
+ * with `provider_input_validation_failed` and the whole run returned zero.
+ *
+ * Wrapping a scalar is the "useful normalization" side of the split: it changes
+ * no decision, cannot admit a value the enum forbids, and turns a container slip
+ * into the call the model plainly meant. An actually-invalid value is still
+ * refused below, once, by name.
+ */
+export function asList<T = string>(values: unknown): T[] {
+  if (values == null) return [];
+  if (Array.isArray(values)) return values as T[];
+  return [values as T];
+}
+
+function enumValues(values: unknown): string[] {
+  if (values == null) return [];
+  if (Array.isArray(values)) return values.map((v) => String(v));
+  return [String(values)];
+}
+
+function checkEnum(errors: string[], field: string, values: unknown,
                    allowed: readonly string[]): void {
-  for (const v of values ?? []) {
-    if (!allowed.includes(v)) {
+  // DEDUPED. A repeated value produced a repeated sentence, and the repair round
+  // is handed this text — a model reading the same violation thirty-one times
+  // learns nothing it did not learn the first time.
+  const seen = new Set<string>();
+  for (const v of enumValues(values)) {
+    if (!allowed.includes(v) && !seen.has(v)) {
+      seen.add(v);
       errors.push(`${field}: "${v}" is not a verified enum value (allowed: ${allowed.join(" | ")})`);
     }
   }
@@ -228,7 +263,18 @@ export function compileMemo23YcInput(i: Memo23YcCompanyInput): CompileResult<Mem
   if (e.length) return fail(K, e);
   w.push("teamSize from this Actor is advisory and may be stale — never satisfies a size gate");
   w.push("this Actor supplies no LinkedIn company URL");
-  return build(K, { ...i, enrichEmails: false as const }, "company",
+  // NORMALISED ON THE WAY OUT, not merely accepted on the way in. `checkEnum`
+  // tolerates a scalar where a list belongs; the object actually SENT to Apify
+  // has to carry the list, or the run is validated against one shape and billed
+  // against another.
+  return build(K, {
+    ...i,
+    ...(i.industries !== undefined ? { industries: asList<string>(i.industries) } : {}),
+    ...(i.regions !== undefined ? { regions: asList<string>(i.regions) } : {}),
+    ...(i.batch !== undefined ? { batch: asList<string>(i.batch) } : {}),
+    ...(i.queries !== undefined ? { queries: asList<string>(i.queries) } : {}),
+    enrichEmails: false as const,
+  }, "company",
     cost(K, i.maxItems, undefined, "maxItems is a PER-URL / per-filter-run cap, not a global cap"),
     w, i.mode);
 }
