@@ -400,6 +400,23 @@ export interface CapabilityExecutionState {
    */
   discovery_strategy?: Record<string, unknown>;
   /**
+   * Stage removals the chain PROPOSED and containment refused.
+   *
+   * `validateExecutionPlan` polices what a plan contains, never what it omits,
+   * and `chainSkips` only honours `OPTIONAL_BY_CHAIN` — so an amendment that
+   * dropped identity resolution was inert AND unrecorded. The stage ran, which
+   * was correct, and nothing said the model had asked otherwise.
+   *
+   * Recording it keeps the architecture's own claim honest: GPT proposed X,
+   * code refused X because Y — rather than a plan that silently did not mean
+   * what it said.
+   */
+  amendment_refusals?: Array<{
+    capability: CapabilityId;
+    reason: "structural_requirement";
+    detail: string;
+  }>;
+  /**
    * The cross-capability chain the model planned, and what it left out.
    *
    * Persisted because "why did this run buy a hiring search?" and "why did it
@@ -2834,7 +2851,35 @@ export async function runCapabilityPlan(
       // stages that have NOT run yet, because `chainSkips` is consulted as the
       // loop reaches each capability; and an unusable answer leaves the original
       // chain standing.
-      if (deps.planExecution && executionPlan) {
+      // ── IS THERE ANYTHING THIS CALL COULD CHANGE? ────────────────────────
+      //
+      // The amendment costs a reasoning-model call — ~6s on run 1af9b9ea — and
+      // its effective surface is narrower than it looks. `executionPlan` has two
+      // consumers: `chainSkips`, which reads ONLY `OPTIONAL_BY_CHAIN`, and
+      // `plannedActorsFor`, which supplies discovery actors. This runs AFTER
+      // discovery, and a graph never holds more than one discovery capability,
+      // so the second consumer is already spent. Chain-skipping an optional
+      // stage is the only lever left.
+      //
+      // The predicate is deliberately the GRAPH, not the current plan. Asking
+      // "is an optional stage still selected?" would skip the call precisely
+      // when the initial chain had dropped one — removing GPT's chance to put
+      // it BACK after seeing the pool, which is the case this amendment exists
+      // for. If the mission's graph contains no optional stage at all, no answer
+      // the model gives can alter this run, and the call is pure cost.
+      const amendableSurface = opts.plan.steps
+        .map((s) => s.capability)
+        .filter((c) => OPTIONAL_BY_CHAIN.has(c) && !state.completed_capabilities.includes(c));
+
+      if (deps.planExecution && executionPlan && amendableSurface.length === 0) {
+        log("execution_plan_amendment_skipped", {
+          reason: "no_amendable_surface",
+          detail:
+            "no OPTIONAL_BY_CHAIN capability remains in this mission's graph, so " +
+            "no amendment could change what still runs",
+          optional_by_chain: [...OPTIONAL_BY_CHAIN],
+        });
+      } else if (deps.planExecution && executionPlan) {
         try {
           const summary = summariseDiscoveryPool(
             used[used.length - 1] ?? strategyKeys[0] ?? "(none)", companies, opts.mission);
@@ -2849,20 +2894,67 @@ export async function runCapabilityPlan(
           if (amended.source !== "blocked") {
             const before = executionPlan.steps.map((s) => s.capability);
             const after = amended.steps.map((s) => s.capability);
+
+            // ── A REMOVAL CODE REFUSES IS SAID OUT LOUD ─────────────────────
+            //
+            // `validateExecutionPlan` checks what a plan CONTAINS — containment,
+            // the people guard, declared actors. It says nothing about what a
+            // plan OMITS. So an amendment dropping identity resolution was
+            // accepted into the plan object, ignored by `chainSkips` (which
+            // reads only OPTIONAL_BY_CHAIN), executed anyway, and recorded
+            // nowhere.
+            //
+            // That is the df00b2cd mystery: correct behaviour, invisible
+            // reasoning. The stage still runs — that part was always right —
+            // but the refusal is now a fact on the record rather than something
+            // a reader has to reconstruct from two files.
+            const refusedRemovals = before
+              .filter((c) => !after.includes(c) && !OPTIONAL_BY_CHAIN.has(c));
+            if (refusedRemovals.length > 0) {
+              state.amendment_refusals = [
+                ...(state.amendment_refusals ?? []),
+                ...refusedRemovals.map((capability) => ({
+                  capability,
+                  reason: "structural_requirement" as const,
+                  detail:
+                    `the plan proposed dropping ${capability}, which is not ` +
+                    `chain-optional; it runs regardless and the proposal is ` +
+                    `recorded rather than applied`,
+                })),
+              ];
+              log("amendment_stage_removal_refused", {
+                capabilities: refusedRemovals,
+                reason: "structural_requirement",
+              });
+            }
+
             executionPlan = amended;
+
+            // ── ONLY CLAIM AN AMENDMENT WHEN ONE HAPPENED ───────────────────
+            //
+            // Run 1af9b9ea recorded `amended_after_discovery: true` with an
+            // identical before and after, so the trace reported a decision that
+            // changed nothing. A no-op is worth knowing about — it is the
+            // signal that this call is not earning its latency — but it is not
+            // an amendment.
+            const changed = before.join(">") !== after.join(">");
             state.execution_plan = {
               ...(state.execution_plan ?? {}),
-              amended_after_discovery: true,
-              amended_reasoning: amended.reasoning,
+              amended_after_discovery: changed,
+              ...(changed ? { amended_reasoning: amended.reasoning } : {
+                amendment_considered_no_change: true,
+              }),
               steps: amended.steps.map((s) => ({
                 step: s.step, capability: s.capability, actor_key: s.actor_key,
                 purpose: s.purpose, depends_on: s.depends_on,
               })),
             };
-            log("execution_plan_amended_after_discovery", {
-              observed: summary.observed_problems,
-              before, after,
-            });
+            log(
+              changed
+                ? "execution_plan_amended_after_discovery"
+                : "execution_plan_amendment_no_change",
+              { observed: summary.observed_problems, before, after },
+            );
           }
         } catch (e) {
           // The original chain stands. A failed amendment is not a failed run.

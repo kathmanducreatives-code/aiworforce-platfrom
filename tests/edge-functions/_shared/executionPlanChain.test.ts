@@ -396,7 +396,118 @@ Deno.test("15. a pool that matched the prediction changes nothing", async () => 
     { ...ROWS, [MEMO23]: [ycRow(1, 3), ycRow(2, 2)] },
   );
   assertFalse(calls.includes(JOB_SEARCH), "no paid re-buy of evidence already in hand");
-  const persisted = run.state.execution_plan as { amended_after_discovery?: boolean };
-  assertEquals(persisted.amended_after_discovery, true,
-    "the reconsideration is recorded even when it changes nothing");
+
+  // ── THE RECONSIDERATION IS STILL RECORDED, BUT NOT AS AN AMENDMENT ───────
+  //
+  // This asserted `amended_after_discovery: true` "even when it changes
+  // nothing", which is how run 1af9b9ea came to report an amendment whose
+  // before and after were identical. The fact worth keeping is that the
+  // reconsideration happened; calling it an amendment made the trace claim a
+  // decision that never occurred.
+  const persisted = run.state.execution_plan as {
+    amended_after_discovery?: boolean;
+    amendment_considered_no_change?: boolean;
+  };
+  assertEquals(persisted.amended_after_discovery, false,
+    "an identical plan is not an amendment");
+  assertEquals(persisted.amendment_considered_no_change, true,
+    "but the reconsideration must still be on the record");
+});
+
+// ═══════════════════════ 17-20. amendment authority and its cost ══
+//
+// Run 1af9b9ea spent ~6.1s of a reasoning model on an amendment whose before
+// and after were identical, and finished ~2.4s short of the wall-clock reserve
+// qualification needs. These four pin what that call may change, when it is
+// worth making, and what happens when the model asks for something containment
+// will not grant.
+
+Deno.test("17. no amendable surface ⇒ the reasoning call is not made", async () => {
+  // `executionPlan` has two consumers: `chainSkips`, which honours ONLY
+  // OPTIONAL_BY_CHAIN, and `plannedActorsFor`, which is already spent by the
+  // time this fires (a graph holds one discovery capability, and it has run).
+  // With no optional stage in the graph, no answer could alter this run.
+  const rec: Rec = { calls: [] };
+  let planCalls = 0;
+  // A funding mission: its graph carries no OPTIONAL_BY_CHAIN capability.
+  // Same fixture, with hiring verification dropped from what the mission
+  // AUTHORISES — so the graph carries no chain-optional stage at all.
+  const m = mission({
+    preferred_signals: [],
+    required_evidence: [],
+    required_capabilities: [
+      "startup_company_discovery", "company_details_enrichment",
+      "company_semantic_evaluation", "portfolio_ranking",
+    ],
+  });
+  const graph = buildCapabilityGraph(m);
+  assertEquals(
+    graph.steps.some((s) => s.capability === "hiring_verification"), false,
+    "premise: this mission's graph has no chain-optional stage",
+  );
+
+  await runCapabilityPlan({
+    planDiscovery: stubDiscoverySelector(),
+    planExecution: () => {
+      planCalls++;
+      return Promise.resolve({ steps: CHAIN_WITHOUT_HIRING, reasoning: "test" });
+    },
+    ...deps(ROWS, rec),
+  } as never, { mission: m, plan: graph, maxCandidates: 20 } as never);
+
+  assertEquals(planCalls, 1, "planned once up front; NOT re-asked after discovery");
+});
+
+Deno.test("18. an amendable surface ⇒ the call is still made", async () => {
+  // The negative control. Skipping must key on the GRAPH, never on whether the
+  // stage is currently selected — otherwise the call is skipped exactly when
+  // the opening chain dropped an optional stage, which is the case the
+  // amendment exists to reverse.
+  const { shown } = await runAmendable(
+    [CHAIN_WITHOUT_HIRING, CHAIN_WITH_HIRING],
+    { ...ROWS, [MEMO23]: [ycRow(1, 0), ycRow(2, 0)] },
+  );
+  assertEquals(shown.length, 2, "a hiring mission keeps its amendment call");
+});
+
+Deno.test("19. a refused stage removal runs anyway, and says so", async () => {
+  // `validateExecutionPlan` polices what a plan CONTAINS, never what it omits.
+  // So an amendment dropping identity resolution was accepted into the plan
+  // object, ignored by `chainSkips`, executed regardless, and recorded nowhere
+  // — the df00b2cd mystery. The stage still runs; the refusal is now a fact.
+  const DROPS_IDENTITY = [
+    step("startup_company_discovery", MEMO23, "discovery"),
+    step("company_enrichment", ENRICH, "details", [1]),
+  ];
+  const { run, calls } = await runAmendable(
+    [CHAIN_WITHOUT_HIRING, DROPS_IDENTITY],
+    { ...ROWS, [MEMO23]: [ycRow(1, 3), ycRow(2, 2)] },
+  );
+
+  const refusals = (run.state as {
+    amendment_refusals?: Array<{ capability: string; reason: string }>;
+  }).amendment_refusals ?? [];
+  assert(
+    refusals.some((r) => r.capability === "company_identity_resolution"),
+    `the refused removal must be recorded: ${JSON.stringify(refusals)}`,
+  );
+  assertEquals(refusals[0].reason, "structural_requirement");
+  // And the behaviour is unchanged — this was always correct.
+  assert(calls.includes(NAME_MATCHER), "identity resolution still runs");
+});
+
+Deno.test("20. dropping a CHAIN-OPTIONAL stage is honoured, not refused", async () => {
+  // The distinction the whole guard rests on: hiring verification is a
+  // judgement the chain is allowed to make, identity resolution is not.
+  const { run } = await runAmendable(
+    [CHAIN_WITH_HIRING, CHAIN_WITHOUT_HIRING],
+    { ...ROWS, [MEMO23]: [ycRow(1, 3), ycRow(2, 2)] },
+  );
+  const refusals = (run.state as {
+    amendment_refusals?: Array<{ capability: string }>;
+  }).amendment_refusals ?? [];
+  assertEquals(
+    refusals.some((r) => r.capability === "hiring_verification"), false,
+    "an optional stage the chain deselects is a legitimate decision, not a refusal",
+  );
 });
