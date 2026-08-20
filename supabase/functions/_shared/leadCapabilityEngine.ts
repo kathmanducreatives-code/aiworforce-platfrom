@@ -67,7 +67,7 @@ import {
 } from "./leadMissionFunnel.ts";
 import {
   BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
-  withDeadlineBudget, type ExecutionDeadline,
+  QUALIFICATION_PREGROUNDED_OP, withDeadlineBudget, type ExecutionDeadline,
 } from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
@@ -3677,6 +3677,27 @@ export async function runCapabilityPlan(
       /** Wall clock a single company's model calls may consume, right now. */
       const qualificationCallBudgetMs = (): number =>
         deps.deadline ? deps.deadline.remainingMs() - qualificationReserveMs : 0;
+
+      // ── WHAT THIS COMPANY WILL ACTUALLY COST ────────────────────────────────
+      //
+      // A company the Stage-2 batch already grounded needs ONE model call: its
+      // verification is read out of `groundedByKey` and the grounder is never
+      // invoked. Pricing it as two is how run df00b2cd threw away three
+      // verifications it had just spent 13 seconds buying.
+      const isPreGrounded = (c: EngineCompany) => groundedByKey.has(c.key);
+      const opFor = (c: EngineCompany) =>
+        isPreGrounded(c) ? QUALIFICATION_PREGROUNDED_OP : QUALIFICATION_OP;
+
+      // ── FINISH WHAT IS ALREADY PAID FOR, FIRST ──────────────────────────────
+      //
+      // A stable partition, not a sort: pre-grounded companies keep their
+      // relative order and so do the rest. Under a clock that may stop the loop
+      // at any point, the order companies are attempted in decides which ones
+      // get verdicts — and the right ones to spend the last seconds on are those
+      // whose expensive half is already bought and would otherwise be discarded.
+      const eligibleOrdered = deps.deadline
+        ? [...eligible.filter(isPreGrounded), ...eligible.filter((c) => !isPreGrounded(c))]
+        : eligible;
       let qualificationStopped = false;
       /** Set to the call's label the moment one overruns the ceiling. */
       let qualificationClockExpired: string | null = null;
@@ -3705,19 +3726,24 @@ export async function runCapabilityPlan(
           throw e;
         }
       };
-      for (let qIndex = 0; qIndex < eligible.length; qIndex++) {
-        const c = eligible[qIndex];
+      for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
+        const c = eligibleOrdered[qIndex];
+        const qualificationOp = opFor(c);
         if (deps.deadline && !shouldStartWork({
           elapsedMs: () => deps.deadline!.elapsedMs(),
           remainingMs: () => deps.deadline!.remainingMs(),
-        }, deps.deadline.estimateFor(QUALIFICATION_OP), qualificationReserveMs)) {
+        }, deps.deadline.estimateFor(qualificationOp), qualificationReserveMs)) {
           qualificationStopped = true;
           state.terminal_reason = "execution_deadline_checkpoint";
           log("qualification_deadline_stop", {
             evaluated: qIndex,
-            not_reached: eligible.length - qIndex,
+            not_reached: eligibleOrdered.length - qIndex,
             remaining_ms: deps.deadline.remainingMs(),
-            per_company_estimate_ms: deps.deadline.estimateFor(QUALIFICATION_OP),
+            per_company_estimate_ms: deps.deadline.estimateFor(qualificationOp),
+            // WHICH price refused it, so a stop is readable without guessing
+            // whether the company still owed a grounding call.
+            priced_as: qualificationOp,
+            pre_grounded_remaining: eligibleOrdered.slice(qIndex).filter(isPreGrounded).length,
           });
           break;
         }
@@ -3838,14 +3864,14 @@ export async function runCapabilityPlan(
         // per company is monotonic — the later reading simply subsumes the
         // earlier one.
         deps.deadline?.observeCall(
-          deps.deadline.elapsedMs() - qualificationStartedAt, QUALIFICATION_OP);
+          deps.deadline.elapsedMs() - qualificationStartedAt, qualificationOp);
         if (qualificationClockExpired) {
           qualificationStopped = true;
           state.terminal_reason = "execution_deadline_checkpoint";
           log("qualification_call_deadline_stop", {
             call: qualificationClockExpired,
             evaluated: qIndex,
-            not_reached: eligible.length - qIndex,
+            not_reached: eligibleOrdered.length - qIndex,
             remaining_ms: deps.deadline?.remainingMs() ?? 0,
           });
           break;
@@ -3987,7 +4013,7 @@ export async function runCapabilityPlan(
           }))
           : null;
         deps.deadline?.observeCall(
-          deps.deadline.elapsedMs() - qualificationStartedAt, QUALIFICATION_OP);
+          deps.deadline.elapsedMs() - qualificationStartedAt, qualificationOp);
         // STOPPING BEATS HOLDING. Falling through would record this company as
         // insufficient_evidence — accurate, but it spends the reserve deciding
         // how to describe a company nobody evaluated. Breaking leaves it NOT
@@ -3999,7 +4025,7 @@ export async function runCapabilityPlan(
           log("qualification_call_deadline_stop", {
             call: qualificationClockExpired,
             evaluated: qIndex,
-            not_reached: eligible.length - qIndex,
+            not_reached: eligibleOrdered.length - qIndex,
             remaining_ms: deps.deadline?.remainingMs() ?? 0,
           });
           break;

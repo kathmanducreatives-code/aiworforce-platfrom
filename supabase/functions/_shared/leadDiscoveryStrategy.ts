@@ -203,6 +203,13 @@ export function discoveryCatalogBriefing(): Array<Record<string, unknown>> {
           fields: ACTOR_INPUT_CONTRACTS[c.actor_key].fields,
           example: ACTOR_INPUT_CONTRACTS[c.actor_key].example,
           verified_at: ACTOR_INPUT_CONTRACTS[c.actor_key].verified_at,
+          // HOW TO AIM IT, not merely what it accepts. A schema-valid input can
+          // still ask the wrong question — run df00b2cd sent a legal
+          // `industries` array for a mission about AI and got 100 legal,
+          // irrelevant rows.
+          ...(ACTOR_INPUT_CONTRACTS[c.actor_key].selection_notes
+            ? { selection_notes: ACTOR_INPUT_CONTRACTS[c.actor_key].selection_notes }
+            : {}),
         },
         quality: ACTOR_INPUT_CONTRACTS[c.actor_key].quality,
       }

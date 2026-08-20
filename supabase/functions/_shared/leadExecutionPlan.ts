@@ -465,6 +465,9 @@ export function buildExecutionPlannerPayload(
                   input_contract: {
                     fields: ACTOR_INPUT_CONTRACTS[key].fields,
                     example: ACTOR_INPUT_CONTRACTS[key].example,
+                    ...(ACTOR_INPUT_CONTRACTS[key].selection_notes
+                      ? { selection_notes: ACTOR_INPUT_CONTRACTS[key].selection_notes }
+                      : {}),
                   },
                   quality: ACTOR_INPUT_CONTRACTS[key].quality,
                 }

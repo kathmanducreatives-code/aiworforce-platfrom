@@ -80,6 +80,60 @@ export const DEFAULT_BUDGET_MS = EDGE_WALL_CLOCK_MS - SAFETY_MARGIN_MS;
  */
 export type DeadlineOperation = string;
 
+// ── WHAT EACH STAGE IS ASSUMED TO COST ──────────────────────────────────────
+
+export const QUALIFICATION_OP = "company_qualification";
+
+/**
+ * The deadline operation key for a company the batch stage ALREADY GROUNDED.
+ *
+ * ── WHY THIS IS A SEPARATE PRICE ────────────────────────────────────────────
+ *
+ * `QUALIFICATION_OP` prices a company that needs both model calls: the
+ * per-company grounder AND the Mission evaluator. A company whose verification
+ * came back from the Stage-2 batch needs only the second — the engine reads its
+ * result out of `groundedByKey` and never calls the grounder at all.
+ *
+ * Charging it for a call that will not happen is not a rounding error, it is
+ * the difference between finishing and discarding. On run df00b2cd the batch
+ * stage spent 13 seconds grounding three companies, and one millisecond later
+ * the admission gate refused to start the loop — 23.9s remaining against a
+ * 12s + 18s requirement priced for work already done. The funnel recorded
+ * `company_brain: 4 -> 0 UNACCOUNTED=4`: three paid-for verifications thrown
+ * away to protect a reserve they were never going to spend.
+ *
+ * MONEY ALREADY SPENT IS THE CHEAPEST WORK IN THE RUN. Finishing it should be
+ * the LAST thing a deadline gives up, not the first.
+ */
+export const QUALIFICATION_PREGROUNDED_OP = "company_qualification_pregrounded";
+
+/**
+ * The deadline operation key for one Stage-2 batch evaluation.
+ *
+ * Kept separate from `QUALIFICATION_OP` because a batch judges many companies
+ * in one call and a per-company estimate would badly under-price it — and this
+ * table's whole purpose is that one stage's latency never speaks for another's.
+ */
+export const BATCH_EVALUATION_OP = "stage2_batch_evaluation";
+
+/**
+ * Per-operation floors, for stages whose real cost is known to differ from the
+ * global assumption.
+ *
+ * `assumedCallMs` is one conservative number covering every provider call, and
+ * conservative is right when nothing is known. But a stage the engine KNOWS is
+ * cheaper — a company the batch already grounded needs one model call, not two —
+ * is not served by pessimism: it gets refused admission for work it will never
+ * do, and the money already spent on it is discarded. A floor below the global
+ * one is only ever declared here, never inferred.
+ */
+const ASSUMED_MS_BY_OP: Readonly<Record<string, number>> = Object.freeze({
+  // One evaluator call. Observed evaluator latency is ~5s; 7s leaves headroom
+  // and is still less than half the two-call assumption.
+  [QUALIFICATION_PREGROUNDED_OP]: 7_000,
+});
+
+
 export interface ExecutionDeadline {
   startedAt: number;
   budgetMs: number;
@@ -128,7 +182,9 @@ export function createExecutionDeadline(
   const byOp = new Map<DeadlineOperation, number>();
   const estimateFor = (op?: DeadlineOperation): number => {
     if (!op) return slowest;
-    return Math.max(assumed, byOp.get(op) ?? 0);
+    // The floor is `assumed` unless this operation declares a cheaper one it is
+    // KNOWN to beat. Observation still only ever moves the estimate UP.
+    return Math.max(ASSUMED_MS_BY_OP[op] ?? assumed, byOp.get(op) ?? 0);
   };
 
   return {
@@ -163,16 +219,6 @@ export function createExecutionDeadline(
  * lets the deadline learn what a company actually costs on THIS workspace's
  * data, the same way it learned that memo23 starts take 24s.
  */
-export const QUALIFICATION_OP = "company_qualification";
-
-/**
- * The deadline operation key for one Stage-2 batch evaluation.
- *
- * Kept separate from `QUALIFICATION_OP` because a batch judges many companies
- * in one call and a per-company estimate would badly under-price it — and this
- * table's whole purpose is that one stage's latency never speaks for another's.
- */
-export const BATCH_EVALUATION_OP = "stage2_batch_evaluation";
 
 /**
  * Raised when a unit of work was still running at the moment the caller had to
