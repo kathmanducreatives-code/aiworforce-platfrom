@@ -143,7 +143,9 @@ import { guardedInvoker } from "./leadMissionRuntime.ts";
 import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
-import { effectiveRequestedCount, missionHash, type LeadMissionV1 } from "./leadMission.ts";
+import {
+  effectiveRequestedCount, isHiringSignal, missionHash, type LeadMissionV1,
+} from "./leadMission.ts";
 // WHICH ACTORS DISCOVER THE POOL. Replaces the frozen provider pair and the
 // hardcoded YC literal that answered every mission with the same request.
 import {
@@ -470,6 +472,7 @@ export interface CapabilityExecutionState {
     companies_with_technical_roles: number;
     /** Which way the mission read those facts. */
     technical_roles_satisfy_signal: boolean;
+    any_open_role_satisfies_signal: boolean;
     /** EVERY job seen across every company, commercial or not. */
     open_jobs_evaluated: number;
     // `shortlist_keys` DELETED. Prequalification no longer decides the
@@ -3663,7 +3666,7 @@ export async function runCapabilityPlan(
         });
 
         const requiresSignal =
-          opts.mission.required_signals.some((s) => s.type === "hiring");
+          opts.mission.required_signals.some(isHiringSignal);
         const limits = deps.batchLimits ?? resolveBatchLimits({});
         const { batches, beyond_cap } = planBatches(toEvaluate, limits);
         const batchReserveMs = deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS;
@@ -4004,7 +4007,7 @@ export async function runCapabilityPlan(
 
         // ── GROUNDING: DOES THE MODEL'S STORY SURVIVE ITS OWN EVIDENCE? ─────
         const requiresCommercialSignal =
-          opts.mission.required_signals.some((s) => s.type === "hiring");
+          opts.mission.required_signals.some(isHiringSignal);
         // STAGE 2 FIRST. When the pool phase above evaluated this company, its
         // verified result is used; the per-company grounder is the path for the
         // non-Stage-2 case and is not called twice for the same company.
@@ -4963,8 +4966,21 @@ export function toPortfolioCandidates(
         // floor only re-checks what it can see here.
         geography_ok: true,
         b2b_use_case: c.brain ? c.brain.outcome !== "REJECT" : true,
+        // ── "FACTUAL SIGNAL" IS NOT "COMMERCIAL SIGNAL" ──────────────────
+        //
+        // These two disjuncts both ask whether a COMMERCIAL role was found, so
+        // a company with three open engineering roles read as having no
+        // factual signal at all and `floorFailure` deleted it. That is the
+        // same authority inversion the `no_tier` rung below already carries a
+        // paragraph about, surviving one layer further out.
+        //
+        // `pq.eligible` is the mission's own verdict on this company's
+        // openings — see `roleEvidence` in `leadCommercialPrequalification`.
+        // Adding it, rather than replacing the two above, keeps a company with
+        // a real commercial tier but an out-of-range headcount reporting
+        // exactly what it reported before.
         has_factual_signal: (c.hiring_assessment?.commercial_jobs.length ?? 0) > 0 ||
-          pq.best_tier !== null,
+          pq.best_tier !== null || pq.eligible,
         source_evidence: !!pq.yc_url || !!pq.canonical_domain,
         source_url: pq.yc_url ?? (pq.canonical_domain ? `https://${pq.canonical_domain}` : null),
         contact_ready: c.contact_identities.length > 0,
@@ -5132,26 +5148,50 @@ export function applyPrequalification(
   const bounds = qualification
     ? resolveEmployeeBounds(qualification, { employee_min: size.min, employee_max: size.max })
     : { min: size.min, max: size.max, enforceable: true, source: "brain_advisory" as const };
+
+  // THE TWO FACTS THE POLICY BELOW IS BUILT FROM, read once.
+  //
+  // `isHiringSignal` canonicalises the type rather than comparing it: GPT
+  // wrote `{ type: "currently hiring" }` on run 486928e8, and a literal
+  // `=== "hiring"` said that mission required no hiring at all.
+  const hiringSignals = (requiredSignals ?? []).filter((sig) =>
+    isHiringSignal({ type: String(sig?.type ?? "") }));
+  const missionRequiresHiring = hiringSignals.length > 0;
+  const hiringRoleFamilies = hiringSignals
+    .flatMap((sig) => sig?.role_families ?? []).map((f) => String(f).trim())
+    .filter((f) => f.length > 0);
+
   const result = prequalifyYcCompanies(
     rawRows,
     { min: bounds.min, max: bounds.max },
     {
       vocabulary: qualification?.role_vocabulary ?? null,
       size_enforceable: bounds.enforceable,
-      // ── DOES THE MISSION ACCEPT A TECHNICAL ROLE AS ITS EVIDENCE? ────────
+      // ── WHAT DOES THIS MISSION ACCEPT AS HIRING EVIDENCE? ───────────────
       //
       // Derived from the mission's compiled `required_signals`, never from the
-      // sentence. A hiring signal naming an engineering/technical role family
-      // means an engineering opening IS what the user asked to see, so calling
-      // that company `technical_only` and ineligible states the opposite of
-      // the truth. A mission asking for SALES hiring is unaffected: its role
-      // families do not match, and an engineering opening still proves nothing
-      // about GTM expansion.
-      technical_roles_satisfy_signal: (requiredSignals ?? []).some((sig) =>
-        String(sig?.type ?? "").toLowerCase() === "hiring" &&
-        (sig?.role_families ?? []).some((f) =>
-          /engineer|technical|developer|software|data|infra|platform|ml|ai/i.test(String(f)))
-      ),
+      // sentence. Both answers below come from the SAME two facts — does the
+      // mission require hiring, and did it name any role family — so they are
+      // computed once, above, rather than twice from two different readings.
+      //
+      // NAMED an engineering family → a technical opening is what the user
+      // asked to see, and calling that company `technical_only` states the
+      // opposite of the truth.
+      //
+      // NAMED NO family at all → the user constrained the COMPANY, not the
+      // vacancy: "AI startups in the US currently hiring". Any opening is the
+      // evidence. This is the case TEST run 486928e8 got wrong; the clause
+      // below only tested for a named engineering family, so an unqualified
+      // hiring mission fell through to the commercial-roles rule and excluded
+      // all 100 companies it had just discovered.
+      //
+      // A mission asking for SALES hiring is unaffected by both: it names a
+      // commercial family, so neither flag is set and an engineering opening
+      // still proves nothing about GTM expansion.
+      technical_roles_satisfy_signal: hiringRoleFamilies.some((f) =>
+        /engineer|technical|developer|software|data|infra|platform|ml|ai/i.test(f)),
+      any_open_role_satisfies_signal:
+        missionRequiresHiring && hiringRoleFamilies.length === 0,
     },
   );
   const byKey = new Map(result.companies.map((c) => [c.company_key, c]));
@@ -5209,6 +5249,7 @@ export function applyPrequalification(
     companies_with_commercial_roles: result.companies_with_commercial_roles,
     companies_with_technical_roles: result.companies_with_technical_roles,
     technical_roles_satisfy_signal: result.technical_roles_satisfy_signal,
+    any_open_role_satisfies_signal: result.any_open_role_satisfies_signal,
     open_jobs_evaluated: result.companies.reduce((n, c) => n + c.jobs.length, 0),
     companies: result.companies.map((c) => ({
       company_key: c.company_key,

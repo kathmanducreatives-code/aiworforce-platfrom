@@ -158,6 +158,8 @@ export interface PrequalificationResult {
   companies_with_technical_roles: number;
   /** Whether the mission accepted technical roles as its hiring evidence. */
   technical_roles_satisfy_signal: boolean;
+  /** Whether the mission accepted ANY open role as its hiring evidence. */
+  any_open_role_satisfies_signal: boolean;
   /** Real commercial signal but a KNOWN out-of-range headcount. */
   employee_size_excluded: number;
   eligible_companies: number;
@@ -193,6 +195,29 @@ export interface PrequalificationMissionPolicy {
    * Absent means the previous behaviour: only a commercial tier counts.
    */
   technical_roles_satisfy_signal?: boolean;
+  /**
+   * Does the MISSION's required signal accept ANY open role as evidence?
+   *
+   * True when the mission requires hiring and names NO role family — "AI
+   * startups in the US currently hiring". The user constrained the company,
+   * not the vacancy, so the evidence they asked for is "this company has an
+   * opening", full stop. Which department it is in is a fact about the
+   * company, not a condition on it.
+   *
+   * THIS IS THE RULE TEST RUN 486928e8 WAS MISSING. `technical_roles_satisfy_
+   * signal` only fires when the mission NAMES an engineering role family, and
+   * an unqualified "currently hiring" names none — so all 100 discovered
+   * companies were judged against a commercial-roles rule the user never
+   * asked for: 78 excluded as `technical_only`, 20 more as
+   * `insufficient_commercial` despite having open roles that classified as
+   * neither. Eligible: zero. Nothing was shortlisted, enriched or qualified,
+   * and the run reported "0 of 10" as though the pool had been bad.
+   *
+   * A mission that DOES name a role family is unaffected: it keeps its
+   * narrower rule, and an engineering opening still proves nothing about GTM
+   * expansion when GTM expansion is what was asked for.
+   */
+  any_open_role_satisfies_signal?: boolean;
 }
 
 /**
@@ -211,6 +236,17 @@ export function prequalifyYcCompanies(
   const sizeEnforceable = missionPolicy.size_enforceable !== false;
   /** See `technical_roles_satisfy_signal`. Defaults to the previous behaviour. */
   const technicalSatisfies = missionPolicy.technical_roles_satisfy_signal === true;
+  /** See `any_open_role_satisfies_signal`. Defaults to the previous behaviour. */
+  const anyOpenRoleSatisfies = missionPolicy.any_open_role_satisfies_signal === true;
+  /**
+   * Does this company's non-commercial hiring count as the mission's evidence?
+   *
+   * One predicate, read twice below — by `eligible` and by `exclusion`. They
+   * were two copies of the same expression, which is how a verdict and its
+   * stated reason drift apart.
+   */
+  const roleEvidence = (openRoles: number, technical: number): boolean =>
+    (anyOpenRoleSatisfies && openRoles > 0) || (technicalSatisfies && technical > 0);
   const excluded: ExcludedArtifact[] = [];
   const byKey = new Map<string, PrequalifiedCompany>();
 
@@ -262,7 +298,15 @@ export function prequalifyYcCompanies(
     else if (size_status === "below_min") reasons.push(`team size ${team} is below the minimum — excluded before any paid call`);
     else reasons.push("team size unverified — ranks below every verified in-range company");
     if ((r.industries ?? []).some((i) => lc(i) === "b2b")) { score += 10; reasons.push("YC industry B2B"); }
-    if (technical > 0 && commercial === 0) reasons.push(`${technical} technical role(s) only — not commercial evidence`);
+    // THE MISSION DECIDES WHETHER THIS SENTENCE IS TRUE. Under a mission that
+    // asked only for "currently hiring", a technical opening IS the evidence,
+    // and printing "not commercial evidence" beside it states the opposite of
+    // what the run concluded — the reason line and the verdict must agree.
+    if (technical > 0 && commercial === 0) {
+      reasons.push(anyOpenRoleSatisfies || technicalSatisfies
+        ? `${technical} technical role(s) — the mission accepts these as hiring evidence`
+        : `${technical} technical role(s) only — not commercial evidence`);
+    }
 
     const strongest = jobs.find((j) => j.tier === "A") ?? jobs.find((j) => j.tier === "B")
       ?? (best_tier === "C" ? jobs.find((j) => j.tier === "C") : undefined);
@@ -296,11 +340,17 @@ export function prequalifyYcCompanies(
       // `technicalSatisfies` is derived from the mission's own required signal,
       // never from the request's wording — there is no "if AI startup" here and
       // there must not be.
-      eligible: (best_tier !== null || (technicalSatisfies && technical > 0)) &&
+      //
+      // `roleEvidence` is the whole of that interpretation, in one place.
+      // Widest first: a mission that constrained no role family accepts any
+      // opening; one that named engineering families accepts a technical
+      // opening; a missionless run keeps the commercial-only rule it always
+      // had.
+      eligible: (best_tier !== null || roleEvidence(jobs.length, technical)) &&
         (!sizeEnforceable || (size_status !== "above_max" && size_status !== "below_min")),
       exclusion: (sizeEnforceable && (size_status === "above_max" || size_status === "below_min"))
         ? "employee_size"
-        : (best_tier === null && !(technicalSatisfies && technical > 0))
+        : (best_tier === null && !roleEvidence(jobs.length, technical))
         ? (technical > 0 ? "technical_only" : "insufficient_commercial")
         : null,
       reasons,
@@ -329,6 +379,7 @@ export function prequalifyYcCompanies(
     companies_with_commercial_roles: companies.filter((c) => c.best_tier !== null).length,
     companies_with_technical_roles: companies.filter((c) => c.technical > 0).length,
     technical_roles_satisfy_signal: technicalSatisfies,
+    any_open_role_satisfies_signal: anyOpenRoleSatisfies,
     employee_size_excluded: companies.filter((c) => c.exclusion === "employee_size").length,
     eligible_companies: companies.filter((c) => c.eligible).length,
   };

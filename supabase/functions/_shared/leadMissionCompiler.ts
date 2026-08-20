@@ -53,7 +53,7 @@ import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
   EXECUTION_PREFERENCES,
-  REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy,
+  REQUESTED_OUTPUTS, MISSION_STRATEGIES, isMissionStrategy, canonicalSignalType, isHiringSignal,
   type BrainMergeInput, type MissionStrategy, type ExecutionPreference, type LeadMissionV1,
   type MissionDirectives, type RequestedOutput, type TargetEntity, type MissionType,
 } from "./leadMission.ts";
@@ -1133,8 +1133,24 @@ function proposalToMissionCandidate(
     },
     // RECENCY travels ON the signal, which is the only place it means anything:
     // "recently funded" constrains the funding signal, not the mission at large.
+    //
+    // ── THE VOCABULARY BOUNDARY ──────────────────────────────────────────
+    //
+    // `preferred_signals` is PROSE. It is written by the model in the user's
+    // own terms and reaches `companyBrainSemanticFit` and `missionEvaluation`
+    // as prompt text, where "currently hiring" says more than "hiring" does —
+    // so `directives.preferred_signals` keeps it verbatim.
+    //
+    // `required_signals[].type` is not prose. It is an ENUM, compared with
+    // `===` and used as an object key throughout the lead path. Copying the
+    // prose into it is what broke TEST run 486928e8: `{ type: "currently
+    // hiring" }` matched none of those comparisons, so a hiring mission was
+    // treated as having no hiring signal at all.
+    //
+    // This is the seam where the two part company, and it is the ONLY place
+    // the conversion is done — see `canonicalSignalType`.
     required_signals: p.preferred_signals.map((s) => ({
-      type: s,
+      type: canonicalSignalType(s),
       ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
     })),
     decision_makers: {
@@ -1168,7 +1184,7 @@ export function needsExternalHiringVerification(
 ): boolean {
   if (caps.length > 0) return caps.includes("external_hiring_verification");
   // No model proposal: fall back to the mission's own required signals.
-  return mission.required_signals.some((s) => s.type === "hiring");
+  return mission.required_signals.some(isHiringSignal);
 }
 
 /** Human-readable reason a capability was chosen. Persisted, not logged. */

@@ -162,6 +162,74 @@ export interface MissionSignal {
   timeframe_days?: number;
 }
 
+/**
+ * THE MACHINE VOCABULARY FOR `MissionSignal.type`.
+ *
+ * `type` is compared with `===` in six places across the lead path
+ * (`leadCapabilityEngine`, `leadEntityIntent`, `leadMissionCompiler`,
+ * `leadCommercialPrequalification`'s caller) and looked up by key in two more
+ * (`SIGNAL_RESEARCH_ROLES`, `SIGNAL_SYNONYMS`). That makes it an ENUM, not
+ * prose — and until now nothing said so.
+ *
+ * TEST run 486928e8 is what an unstated enum costs. GPT compiled "Find 10
+ * qualified AI startups in the US currently hiring" into
+ * `required_signals: [{ type: "currently hiring" }]`. Every one of those
+ * comparisons is false against that string, so the run's ONLY signal was
+ * invisible to the hiring-aware code: coverage called it "unrecognised", no
+ * source was selected for it, and the commercial-roles rule excluded all 100
+ * discovered companies. Two runs earlier the same day GPT had said "hiring" —
+ * the free-text field is not even stable between calls, which is the proof
+ * that it must be normalized rather than trusted.
+ *
+ * Kept beside `MissionSignal` so the type and its legal values are one
+ * statement. `signalVocabularyAlignment.test.ts` asserts this list still
+ * covers `SIGNAL_RESEARCH_ROLES`.
+ */
+export const MISSION_SIGNAL_TYPES = [
+  "hiring",
+  "funding",
+  "expansion",
+  "leadership_change",
+  "technology",
+  "product_launch",
+] as const;
+export type MissionSignalType = typeof MISSION_SIGNAL_TYPES[number];
+
+/**
+ * Reduce a signal phrase to the vocabulary above, or leave it alone.
+ *
+ * NOT an interpreter. It normalizes separators and case, then accepts a phrase
+ * ONLY when it contains a vocabulary term as a whole word — "currently hiring"
+ * and "actively_hiring" are the word `hiring` with an adverb attached, and
+ * reading them as `hiring` is spelling, not inference.
+ *
+ * An unmatched phrase is returned VERBATIM (trimmed). That matters: the
+ * downstream coverage report says "X is not a signal this system recognises",
+ * and that sentence must keep naming what the model actually asked for. This
+ * function exists to stop the vocabulary breaking, never to make an
+ * unrecognised signal look recognised.
+ */
+export function canonicalSignalType(raw: string): string {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return trimmed;
+  const normalized = trimmed.toLowerCase().replace(/[\s-]+/g, "_");
+  for (const term of MISSION_SIGNAL_TYPES) {
+    if (normalized === term) return term;
+  }
+  for (const term of MISSION_SIGNAL_TYPES) {
+    // Whole-word (underscore-delimited) containment only. `hiring` matches
+    // `currently_hiring` and `hiring_signal`; it does NOT match `rehiring`,
+    // where the term is a fragment of a different word.
+    if (new RegExp(`(^|_)${term}($|_)`).test(normalized)) return term;
+  }
+  return trimmed;
+}
+
+/** Does this signal ask for hiring evidence, whatever wording produced it? */
+export function isHiringSignal(signal: Pick<MissionSignal, "type">): boolean {
+  return canonicalSignalType(signal?.type ?? "") === "hiring";
+}
+
 export interface MissionCompanyProfile {
   business_models: string[];
   verticals: string[];
