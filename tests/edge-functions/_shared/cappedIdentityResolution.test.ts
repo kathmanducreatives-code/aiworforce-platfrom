@@ -203,7 +203,13 @@ Deno.test("6. prequalification decides the shortlist before anything is bought",
   assert(run.state.prequalification, "the free verdict must be persisted");
   assertEquals(run.state.prequalification!.total_rows, 25);
   assertEquals(run.state.prequalification!.unique_companies, 20);
-  assertEquals(run.state.prequalification!.eligible_companies, 4);
+  // 4 → 7: the mission is "hiring software engineers", so a company whose only
+  // openings are engineering now counts as having the evidence the mission
+  // asked for. It used to read `technical_only / ineligible` — the free
+  // pre-pass answering a question the user never posed. The five
+  // `employee_size` exclusions are unchanged: that IS a constraint the mission
+  // expressed.
+  assertEquals(run.state.prequalification!.eligible_companies, 7);
 });
 
 // ═══════════ 7/8. only the eligible five reach the paid company search ══
@@ -438,7 +444,13 @@ Deno.test("19. progress is published per stage and never qualifies prematurely",
   // the engine's own dedupe, and prequalification drops it from the working set
   // rather than counting a row with no name and no website as an account found.
   assertEquals(prequal.accounts_found, 20);
-  assertEquals(prequal.eligible_opportunities, 4);
+  // 4 → 7: the mission is "hiring software engineers", so a company whose only
+  // openings are engineering now counts as having the evidence the mission
+  // asked for. It used to read `technical_only / ineligible` — the free
+  // pre-pass answering a question the user never posed. The five
+  // `employee_size` exclusions are unchanged: that IS a constraint the mission
+  // expressed.
+  assertEquals(prequal.eligible_opportunities, 7);
   assertEquals(prequal.exclusion_reasons["employee_size"], 5);
   assertEquals(prequal.qualified_companies, 0,
     "nothing may be reported qualified before the Company Brain has run");

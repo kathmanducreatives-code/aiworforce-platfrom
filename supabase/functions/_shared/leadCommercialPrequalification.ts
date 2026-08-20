@@ -106,6 +106,14 @@ export interface PrequalifiedCompany {
   locations: string | null;
   /** Every job, classified. The FULL array — never just the first. */
   jobs: Array<{ title: string; tier: SignalTier | "technical" | "other" }>;
+  /**
+   * A FACT, not a verdict: does this company have any open role at all?
+   *
+   * Separated from `best_tier` deliberately. "Is it hiring?" and "is it hiring
+   * someone commercial?" are different questions, and collapsing them is what
+   * made a mission asking for engineering hires read as `technical_only`.
+   */
+  has_open_roles: boolean;
   tier_a: number;
   tier_b: number;
   tier_c: number;
@@ -144,6 +152,12 @@ export interface PrequalificationResult {
   tier_b_companies: number;
   tier_c_only_companies: number;
   technical_only_companies: number;
+  /** How many companies have ANY open role. A fact, independent of policy. */
+  companies_with_open_roles: number;
+  companies_with_commercial_roles: number;
+  companies_with_technical_roles: number;
+  /** Whether the mission accepted technical roles as its hiring evidence. */
+  technical_roles_satisfy_signal: boolean;
   /** Real commercial signal but a KNOWN out-of-range headcount. */
   employee_size_excluded: number;
   eligible_companies: number;
@@ -168,6 +182,17 @@ export interface PrequalificationMissionPolicy {
    * 7 `employee_size` exclusions from TEST run cf6cce3d.
    */
   size_enforceable?: boolean;
+  /**
+   * Does the MISSION's required signal accept a technical role as evidence?
+   *
+   * True when the user asked for hiring in an engineering/technical role family
+   * — "AI startups currently hiring software engineers". A backend-engineer
+   * opening then IS the evidence the mission wants, and calling the company
+   * `technical_only / ineligible` states the opposite of the truth.
+   *
+   * Absent means the previous behaviour: only a commercial tier counts.
+   */
+  technical_roles_satisfy_signal?: boolean;
 }
 
 /**
@@ -184,6 +209,8 @@ export function prequalifyYcCompanies(
   const vocab = missionPolicy.vocabulary ?? null;
   // Default TRUE preserves the pre-Mission behaviour exactly.
   const sizeEnforceable = missionPolicy.size_enforceable !== false;
+  /** See `technical_roles_satisfy_signal`. Defaults to the previous behaviour. */
+  const technicalSatisfies = missionPolicy.technical_roles_satisfy_signal === true;
   const excluded: ExcludedArtifact[] = [];
   const byKey = new Map<string, PrequalifiedCompany>();
 
@@ -251,17 +278,29 @@ export function prequalifyYcCompanies(
       one_liner: r.oneLiner ?? null,
       locations: r.allLocations ?? null,
       jobs, tier_a, tier_b, tier_c, technical, best_tier, score,
+      has_open_roles: jobs.length > 0,
       strongest_signal: strongest?.title ?? null,
       size_fit, size_status,
       // A KNOWN out-of-range size is disqualifying on its own. Apollo (200) and
       // Magic (350) each have a real commercial opening and are still wrong for
       // a 10-150 mission; paying to resolve them buys a lead that can never
       // pass the Brain gate.
-      eligible: best_tier !== null &&
+      // ── THE MISSION DECIDES WHAT THE FACTS MEAN ───────────────────────
+      //
+      // This read `best_tier !== null` — the highest COMMERCIAL role tier — so
+      // a company hiring only engineers was `technical_only` and ineligible
+      // even when the user had asked for exactly that. The counts above are
+      // facts; this line is the interpretation, and interpretation belongs to
+      // the mission.
+      //
+      // `technicalSatisfies` is derived from the mission's own required signal,
+      // never from the request's wording — there is no "if AI startup" here and
+      // there must not be.
+      eligible: (best_tier !== null || (technicalSatisfies && technical > 0)) &&
         (!sizeEnforceable || (size_status !== "above_max" && size_status !== "below_min")),
       exclusion: (sizeEnforceable && (size_status === "above_max" || size_status === "below_min"))
         ? "employee_size"
-        : best_tier === null
+        : (best_tier === null && !(technicalSatisfies && technical > 0))
         ? (technical > 0 ? "technical_only" : "insufficient_commercial")
         : null,
       reasons,
@@ -284,6 +323,12 @@ export function prequalifyYcCompanies(
     tier_b_companies: companies.filter((c) => c.best_tier === "B").length,
     tier_c_only_companies: companies.filter((c) => c.best_tier === "C").length,
     technical_only_companies: companies.filter((c) => c.exclusion === "technical_only").length,
+    // FACTS, reported next to the verdict so an audit can see what the pool
+    // actually contained rather than only what the policy concluded about it.
+    companies_with_open_roles: companies.filter((c) => c.has_open_roles).length,
+    companies_with_commercial_roles: companies.filter((c) => c.best_tier !== null).length,
+    companies_with_technical_roles: companies.filter((c) => c.technical > 0).length,
+    technical_roles_satisfy_signal: technicalSatisfies,
     employee_size_excluded: companies.filter((c) => c.exclusion === "employee_size").length,
     eligible_companies: companies.filter((c) => c.eligible).length,
   };

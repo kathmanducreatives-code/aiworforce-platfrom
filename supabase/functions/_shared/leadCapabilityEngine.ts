@@ -458,6 +458,18 @@ export interface CapabilityExecutionState {
     eligible_companies: number;
     employee_size_excluded: number;
     technical_only_companies: number;
+    /**
+     * FACTS about the pool, carried beside the verdict.
+     *
+     * Without them an audit sees "0 eligible" and cannot tell an empty pool
+     * from one full of companies hiring the wrong role — the ambiguity that
+     * made a healthy pool read as an ICP failure on run 1af9b9ea.
+     */
+    companies_with_open_roles: number;
+    companies_with_commercial_roles: number;
+    companies_with_technical_roles: number;
+    /** Which way the mission read those facts. */
+    technical_roles_satisfy_signal: boolean;
     /** EVERY job seen across every company, commercial or not. */
     open_jobs_evaluated: number;
     // `shortlist_keys` DELETED. Prequalification no longer decides the
@@ -2794,7 +2806,7 @@ export async function runCapabilityPlan(
         applyPrequalification(state, companies, rawYcRows, {
           min: opts.brain?.employee_min ?? null,
           max: opts.brain?.employee_max ?? null,
-        }, qualificationCtx);
+        }, qualificationCtx, opts.mission?.required_signals ?? null);
         // The working set may have shrunk — artifacts are gone.
         // `state.company_keys` is DERIVED once, at the return. See the note there.
         log("prequalification_complete", {
@@ -5052,6 +5064,14 @@ export function applyPrequalification(
    * the workspace Brain keeps its previous authority and behaviour is unchanged.
    */
   qualification?: QualificationContext | null,
+  /**
+   * The mission's own required signals.
+   *
+   * Passed so the free pre-pass can tell whether a TECHNICAL opening is the
+   * evidence this mission asked for. Omitted keeps the previous behaviour, in
+   * which only a commercial role tier counted.
+   */
+  requiredSignals?: ReadonlyArray<{ type?: string; role_families?: string[] }> | null,
 ): PrequalificationResult {
   // THE MISSION DECIDES WHAT COUNTS AS A QUALIFYING ROLE, AND WHETHER SIZE MAY
   // REJECT. Both used to be answered by the workspace Brain and a hard-coded
@@ -5066,6 +5086,20 @@ export function applyPrequalification(
     {
       vocabulary: qualification?.role_vocabulary ?? null,
       size_enforceable: bounds.enforceable,
+      // ── DOES THE MISSION ACCEPT A TECHNICAL ROLE AS ITS EVIDENCE? ────────
+      //
+      // Derived from the mission's compiled `required_signals`, never from the
+      // sentence. A hiring signal naming an engineering/technical role family
+      // means an engineering opening IS what the user asked to see, so calling
+      // that company `technical_only` and ineligible states the opposite of
+      // the truth. A mission asking for SALES hiring is unaffected: its role
+      // families do not match, and an engineering opening still proves nothing
+      // about GTM expansion.
+      technical_roles_satisfy_signal: (requiredSignals ?? []).some((sig) =>
+        String(sig?.type ?? "").toLowerCase() === "hiring" &&
+        (sig?.role_families ?? []).some((f) =>
+          /engineer|technical|developer|software|data|infra|platform|ml|ai/i.test(String(f)))
+      ),
     },
   );
   const byKey = new Map(result.companies.map((c) => [c.company_key, c]));
@@ -5113,6 +5147,16 @@ export function applyPrequalification(
     eligible_companies: result.eligible_companies,
     employee_size_excluded: result.employee_size_excluded,
     technical_only_companies: result.technical_only_companies,
+    // ── THE FACTS TRAVEL WITH THE VERDICT ────────────────────────────────
+    //
+    // Without these, an audit can see "0 eligible" but not whether the pool was
+    // empty of hiring companies or merely empty of the ROLE this mission
+    // wanted. That ambiguity is what made a healthy pool read as an ICP
+    // failure on run 1af9b9ea.
+    companies_with_open_roles: result.companies_with_open_roles,
+    companies_with_commercial_roles: result.companies_with_commercial_roles,
+    companies_with_technical_roles: result.companies_with_technical_roles,
+    technical_roles_satisfy_signal: result.technical_roles_satisfy_signal,
     open_jobs_evaluated: result.companies.reduce((n, c) => n + c.jobs.length, 0),
     companies: result.companies.map((c) => ({
       company_key: c.company_key,

@@ -375,8 +375,19 @@ const runEngine = async (o: {
   budgetEnv?: string;
   /** Extra env, so the untriaged spend policy is exercised through the engine. */
   env?: Record<string, string>;
+  /**
+   * Override the mission's required signals.
+   *
+   * The free pre-pass now reads them to decide whether a technical opening is
+   * the evidence the mission wants, so a test that wants a SALES mission has to
+   * be able to say so.
+   */
+  signals?: ReadonlyArray<{ type: string; role_families: string[] }>;
 }) => {
-  const m = mission();
+  const base = mission();
+  const m = (o.signals
+    ? { ...base, required_signals: o.signals }
+    : base) as typeof base;
   const plan = buildCapabilityGraph(m);
   const run = await runCapabilityPlan({
       planDiscovery: stubDiscoverySelector(),
@@ -420,24 +431,56 @@ Deno.test("5. THE DEFECT IS FIXED: a role absent from the dictionary is no longe
       "every breadth role now reaches investigation, with no GPT verdict at all");
     for (const c of run.companies) {
       assertEquals(c.shortlist_exclusion, null, c.key);
-      // The deterministic opinion is still RECORDED — it simply has no veto.
-      assertFalse(c.prequalified?.eligible ?? true,
-        `${c.key}: the vocabulary still rates it ineligible, and is still wrong`);
     }
+
+    // ── AND THE DETERMINISTIC OPINION IS NO LONGER WRONG ─────────────────
+    //
+    // This asserted the vocabulary "still rates it ineligible, and is still
+    // wrong" — documenting a defect the run shipped with. The pre-pass now
+    // reads the MISSION's own required signal (hiring / engineering), so an
+    // engineering opening is recognised as the evidence the user asked for.
+    // The veto was removed first; this removes the wrong verdict behind it.
+    //
+    // FOUR OF FIVE, and the fifth is worth naming rather than rounding away:
+    // `classifyJobTitle("Data Scientist")` returns `other`, not `technical`, so
+    // that company still carries no evidence the pre-pass recognises. That is a
+    // gap in the ROLE VOCABULARY, not in the mission-awareness fixed here, and
+    // widening the classifier is a change with its own blast radius. Recorded
+    // so it is a known gap rather than a silent one.
+    const eligible = run.companies.filter((c) => c.prequalified?.eligible);
+    assertEquals(eligible.length, BREADTH_ROLES.length - 1,
+      "every engineering role the classifier recognises is now eligible");
+    const stillIneligible = run.companies.filter((c) => !c.prequalified?.eligible);
+    assertEquals(stillIneligible.length, 1);
+    assertEquals(
+      stillIneligible[0].prequalified?.jobs[0].title, "Data Scientist",
+      "the one exception is the vocabulary gap, not the mission logic",
+    );
   });
 
-Deno.test("5-legacy. …and an operator can still restore the old exclusion", async () => {
-  // The same pool under `eligible_only`. Kept as a real, exercised path so the
-  // rollback is a configuration change rather than a code revert.
-  const run = await runEngine({
-    titles: BREADTH_ROLES,
-    env: { [UNTRIAGED_POLICY_ENV]: "eligible_only" },
+// ── REWORKED: THE OPERATOR PROFILE STILL EXISTS, THIS POOL NO LONGER TRIPS IT
+//
+// This ran the same engineering pool under `eligible_only` and asserted all
+// five were excluded. They are eligible now — the mission asked for engineers
+// and they are engineers — so the pool cannot demonstrate the profile any more.
+//
+// What it demonstrates instead is the distinction Phase 2 exists to draw: the
+// exclusion still bites when the MISSION does not accept those roles. A sales
+// mission looking at engineering-only openings has no evidence of sales hiring,
+// and saying so is correct rather than mission-blind.
+Deno.test("5-legacy. eligible_only still excludes when the mission rejects the roles",
+  async () => {
+    const run = await runEngine({
+      titles: BREADTH_ROLES,
+      env: { [UNTRIAGED_POLICY_ENV]: "eligible_only" },
+      // Hiring, but for SALES. The same engineering openings prove nothing.
+      signals: [{ type: "hiring", role_families: ["sales"] }],
+    });
+    assertEquals(run.companies.filter((c) => c.shortlisted).length, 0);
+    for (const c of run.companies) {
+      assertEquals(c.shortlist_exclusion, "prequalification_ineligible");
+    }
   });
-  assertEquals(run.companies.filter((c) => c.shortlisted).length, 0);
-  for (const c of run.companies) {
-    assertEquals(c.shortlist_exclusion, "prequalification_ineligible");
-  }
-});
 
 Deno.test("5a. …while roles that happen to BE in the dictionary sail through", async () => {
   // The contrast is the argument: nothing here understood the Mission. One set
@@ -647,4 +690,57 @@ Deno.test("6d. the batch ALLOWANCE still caps model calls", async () => {
   assertEquals(resolveTriageConcurrency((k) =>
     k === TRIAGE_CONCURRENCY_ENV ? "0" : undefined), DEFAULT_TRIAGE_CONCURRENCY,
     "a nonsense value falls back rather than serialising or exploding");
+});
+
+// ═══════ 5c-5e. the pre-pass reports FACTS; the mission says what they mean ══
+//
+// `eligible: false / technical_only` was a conclusion drawn without reading the
+// mission. On run 1af9b9ea it did not exclude anybody — GPT triage covered the
+// pool, so `no_triage` was 0 and the verdict never bit — but it still made an
+// audit read as an ICP failure when there was none. These pin the three cases
+// the handoff named.
+
+Deno.test("5c. currently hiring + an engineering opening ⇒ evidence exists", async () => {
+  const run = await runEngine({
+    // `Platform Engineer` classifies as `technical`. `Backend Engineer` is in
+    // the commercial dictionary and would pass by the OLD route, proving
+    // nothing about the mission-aware one.
+    titles: ["Platform Engineer"],
+    signals: [{ type: "hiring", role_families: ["engineering"] }],
+  });
+  const c = run.companies[0].prequalified!;
+  assert(c.has_open_roles, "the FACT: there is an open role");
+  assert(c.technical > 0, "and it is a technical one");
+  assert(c.eligible, "which is exactly the evidence this mission asked for");
+  assertEquals(c.exclusion, null, "so nothing is excluded");
+});
+
+Deno.test("5d. hiring SALESPEOPLE + engineering-only ⇒ unsupported, and says so", async () => {
+  // The distinction that makes 5c safe. An engineering opening is a fact; it is
+  // not evidence of sales hiring, and the pre-pass must keep saying so.
+  const run = await runEngine({
+    titles: ["Platform Engineer"],
+    signals: [{ type: "hiring", role_families: ["sales"] }],
+  });
+  const c = run.companies[0].prequalified!;
+  assert(c.has_open_roles, "the fact is unchanged — the company IS hiring");
+  assertFalse(c.eligible, "but not for what this mission requires");
+  assertEquals(c.exclusion, "technical_only");
+});
+
+Deno.test("5e. the pre-pass reports what the pool contained, not only its verdict", async () => {
+  // An audit has to be able to separate "no company was hiring" from "no
+  // company was hiring the role we wanted". The counters used to answer only
+  // the second, which is how a healthy pool read as an ICP failure.
+  const run = await runEngine({
+    titles: ["Platform Engineer"],
+    signals: [{ type: "hiring", role_families: ["sales"] }],
+  });
+  const p = run.state.prequalification!;
+  assertEquals(p.companies_with_open_roles, run.companies.length,
+    "every company had an open role, whatever the verdict concluded");
+  assert(p.companies_with_technical_roles > 0);
+  assertEquals(p.companies_with_commercial_roles, 0);
+  assertEquals(p.technical_roles_satisfy_signal, false,
+    "and the record states which way the mission read those facts");
 });
