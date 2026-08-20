@@ -2036,7 +2036,36 @@ Deno.serve(async (req) => {
         // to be reconstructed from Actor payloads after the money was gone.
         try {
           await supabase.from("tasks").update({
+            // ── MERGED, NOT REPLACED. THIS IS A CONTINUATION'S OWN ROW. ──────
+            //
+            // This was a wholesale `result: { … }` replace, and on a
+            // continuation `task.id` is the PARENT's id — so a successor's very
+            // first write destroyed everything the parent had persisted,
+            // including `lead_resume_checkpoint`, roughly four seconds before
+            // `loadLeadResumeRecords` below tried to read it back.
+            //
+            // Production run 85192217 (2026-08-19) is the case. The parent
+            // qualified 1 of 10, left 51 candidates on the frontier, wrote a
+            // checkpoint of 100 companies and dispatched correctly. The
+            // successor then wiped the row, restored 0 records, and the
+            // empty-restore guard did exactly its job:
+            //
+            //   continuation-restore-empty  expected_companies: 100,
+            //                               restored_records: 0
+            //   terminal_guard_disarmed     reason: continuation_restore_empty
+            //
+            // The guard was right and the ordering was right — the dispatch
+            // already happens after the parent's final write, as the comment at
+            // the dispatch site says. What was wrong is that the successor
+            // deleted the thing it was about to depend on.
+            //
+            // `resumedTaskResult` is the parent's result as read UNDER THE
+            // CLAIM (see the resume branch above), so merging against it needs
+            // no second read and cannot race: the parent has already finished
+            // and released the lease by the time a successor exists. For a
+            // fresh task it is `{}`, so this is identical to the old behaviour.
             result: {
+              ...resumedTaskResult,
               paid_execution_preflight: paidPreflight,
               // ONE ROW ANSWERS "WHICH CODE DID THIS?". Persisted alongside the
               // preflight — the same record that authorises spending — so a

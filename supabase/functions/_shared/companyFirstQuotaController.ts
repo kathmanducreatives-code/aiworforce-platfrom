@@ -1025,9 +1025,28 @@ export async function runCompanyFirstQuotaController(
 
   if (!terminal) {
     terminal = rounds.length >= bounds.maxRounds ? "round_limit_reached" : "quota_not_met";
-    terminalReason = terminal === "round_limit_reached"
-      ? `maximum of ${bounds.maxRounds} sourcing rounds reached before the quota was met`
-      : "sourcing ended without meeting the requested quota";
+    // ── A DISABLED LOOP MUST NOT REPORT A ROUND LIMIT ────────────────────────
+    //
+    // `maxRounds` is 0 when `sourcingBlocked` is set — that is, whenever the
+    // capability engine owns sourcing and this legacy loop is deliberately
+    // neutered. The old wording then read:
+    //
+    //   "maximum of 0 sourcing rounds reached before the quota was met"
+    //
+    // which describes a budget that was exhausted. Nothing was exhausted; this
+    // loop was never permitted to run. On production task 85192217 (2026-08-19)
+    // that sentence was the headline terminal reason on a run whose real defect
+    // was a continuation losing its checkpoint, and it cost a diagnosis: the
+    // obvious reading is "raise the round budget", which would have changed
+    // nothing at all.
+    //
+    // A zero budget and a spent budget are different facts and now say so.
+    terminalReason = terminal !== "round_limit_reached"
+      ? "sourcing ended without meeting the requested quota"
+      : bounds.maxRounds === 0
+      ? "the legacy sourcing loop is disabled for this run; the capability " +
+        "engine owns sourcing and this loop reports no rounds of its own"
+      : `maximum of ${bounds.maxRounds} sourcing rounds reached before the quota was met`;
   }
 
   // FINALIZATION runs ONLY on a true terminal condition. A continuation must not
