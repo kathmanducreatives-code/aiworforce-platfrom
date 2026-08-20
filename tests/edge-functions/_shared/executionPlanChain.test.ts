@@ -511,3 +511,132 @@ Deno.test("20. dropping a CHAIN-OPTIONAL stage is honoured, not refused", async 
     "an optional stage the chain deselects is a legitimate decision, not a refusal",
   );
 });
+
+// ═════════════ 21-25. A CONTINUATION DOES NOT RE-BUY THE PLAN ══════════════
+//
+// TEST plan 9105aa67's continuation slice asked the model to plan the whole
+// chain again — a second ~16k-token call into a 30,000 TPM budget it had
+// already half-spent — was rejected with HTTP 429, and the run died 1.6s in
+// holding two real leads and 87 unexamined candidates.
+//
+// The plan was already made, already validated, and already written to the
+// checkpoint. It was re-bought because the persisted copy dropped each step's
+// `input`, which made it a description of a decision rather than the decision.
+
+const REUSABLE_CHAIN = [
+  step("startup_company_discovery", MEMO23, "cohort + embedded hiring evidence"),
+  step("company_identity_resolution", NAME_MATCHER, "identity", [1]),
+  step("company_enrichment", ENRICH, "details", [2]),
+];
+
+/**
+ * Runs the engine with a planner that COUNTS how often it is asked to plan.
+ *
+ * `planned` counts the INITIAL plan only — the ~16k-token call this fix exists
+ * to stop repeating. The post-discovery amendment reaches the same dependency
+ * carrying `results`, and it is a different decision made against facts the
+ * first call could not have; conflating the two would make this test pass or
+ * fail for the wrong reason.
+ */
+async function runCounting(
+  over: Record<string, unknown> = {}, chain: unknown[] = REUSABLE_CHAIN,
+) {
+  const rec: Rec = { calls: [] };
+  let planned = 0;
+  let amended = 0;
+  const m = mission();
+  const run = await runCapabilityPlan({
+    planDiscovery: stubDiscoverySelector(),
+    planExecution: (i: { results?: unknown }) => {
+      if (i?.results) amended++;
+      else planned++;
+      return Promise.resolve({ steps: chain, reasoning: "test" });
+    },
+    ...deps(ROWS, rec),
+  } as never, {
+    mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20, ...over,
+  } as never);
+  return { run, planned, amended, calls: rec.calls };
+}
+
+Deno.test("21. the persisted plan carries each step's INPUT", async () => {
+  const { run } = await runCounting();
+  const persisted = run.state.execution_plan as
+    { steps: Array<{ capability: string; input?: unknown }> } | null;
+  assert(persisted, "the chain is persisted");
+  for (const s of persisted!.steps) {
+    assert(s.input !== undefined,
+      `step ${s.capability} lost its input; a continuation cannot resume from half a decision`);
+  }
+});
+
+Deno.test("22. a second slice REUSES the checkpointed plan — the model is not asked again", async () => {
+  const first = await runCounting();
+  assertEquals(first.planned, 1, "the first slice plans");
+
+  const second = await runCounting({ state: first.run.state });
+  assertEquals(second.planned, 0,
+    "the plan was already bought, validated and stored; re-buying it is what hit the TPM limit");
+
+  const reused = second.run.state.execution_plan as
+    { steps: Array<{ capability: string }> } | null;
+  assertEquals(
+    reused!.steps.map((s) => s.capability),
+    (first.run.state.execution_plan as { steps: Array<{ capability: string }> })
+      .steps.map((s) => s.capability),
+    "and it is the SAME chain, not a lookalike",
+  );
+});
+
+Deno.test("23. a stored plan is RE-VALIDATED, never merely trusted", async () => {
+  const first = await runCounting();
+  // The stored plan now names an actor for a capability that does not declare
+  // it — the shape a graph or registry change would leave behind.
+  const tampered = structuredClone(first.run.state) as unknown as {
+    execution_plan: { steps: Array<{ actor_key: string | null; capability: string }> };
+  };
+  tampered.execution_plan.steps[2].actor_key = JOB_SEARCH;
+
+  const second = await runCounting({ state: tampered });
+  assertEquals(second.planned, 1,
+    "containment is not a property of where a plan came from; a refused chain is re-planned");
+});
+
+Deno.test("23b. a stored plan that merely SHRINKS on revalidation is not reused either", async () => {
+  const first = await runCounting();
+  // A step for a capability this mission never authorised. Validation drops it
+  // and keeps the rest — leaving a plan that is shorter than the one the
+  // checkpoint recorded, and therefore not the plan it claims to be.
+  const drifted = structuredClone(first.run.state) as unknown as {
+    execution_plan: { steps: Array<Record<string, unknown>> };
+  };
+  drifted.execution_plan.steps.push({
+    step: 4, capability: "job_discovery", actor_key: "apify_jobs",
+    purpose: "drift", depends_on: [1], input: {},
+  });
+
+  const second = await runCounting({ state: drifted });
+  assertEquals(second.planned, 1,
+    "reusing a silently shortened chain is how a run stops doing what it recorded");
+});
+
+Deno.test("24. a checkpoint written BEFORE inputs were persisted is not reused", async () => {
+  const first = await runCounting();
+  const legacy = structuredClone(first.run.state) as unknown as {
+    execution_plan: { steps: Array<Record<string, unknown>> };
+  };
+  for (const s of legacy.execution_plan.steps) delete s.input;
+
+  const second = await runCounting({ state: legacy });
+  assertEquals(second.planned, 1,
+    "reusing it would run every actor with no filters at all — silently");
+});
+
+Deno.test("25. a state for a DIFFERENT mission is never reused", async () => {
+  const first = await runCounting();
+  const foreign = structuredClone(first.run.state) as unknown as { mission_hash: string };
+  foreign.mission_hash = "a-different-question-entirely";
+
+  const second = await runCounting({ state: foreign });
+  assertEquals(second.planned, 1);
+});

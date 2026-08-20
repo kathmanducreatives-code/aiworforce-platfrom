@@ -607,6 +607,40 @@ export function stateMatchesMission(
     state.mission_hash === missionHashValue;
 }
 
+/**
+ * The execution plan a previous slice already paid for, if it is safe to reuse.
+ *
+ * Returns the RAW steps, not a plan: the caller re-runs `validateExecutionPlan`
+ * over them, so a restored chain crosses exactly the same containment boundary
+ * a fresh one does. Reuse is about not re-buying the model's DECISION; it is
+ * never about trusting a stored one.
+ *
+ * Null — meaning "plan again" — whenever anything is less than certain:
+ *
+ *   * the mission hash disagrees, so this state answers a different question;
+ *   * the stored plan was blocked, or has no steps;
+ *   * any step is missing its `input`, which is how a checkpoint written before
+ *     inputs were persisted looks. Half a decision is not one to resume from,
+ *     and silently reusing it would run every Actor with no filters at all.
+ */
+export function reusableStoredPlan(
+  state: CapabilityExecutionState, missionHashValue: string,
+): unknown[] | null {
+  if (state.mission_hash !== missionHashValue) return null;
+  const stored = state.execution_plan as
+    { source?: unknown; steps?: unknown } | null | undefined;
+  if (!stored || stored.source === "blocked") return null;
+  const steps = Array.isArray(stored.steps) ? stored.steps : null;
+  if (!steps || steps.length === 0) return null;
+  const everyStepComplete = steps.every((raw) => {
+    const step = raw as Record<string, unknown> | null;
+    return !!step && typeof step === "object" &&
+      typeof step.capability === "string" &&
+      !!step.input && typeof step.input === "object" && !Array.isArray(step.input);
+  });
+  return everyStepComplete ? steps : null;
+}
+
 // -------------------------------------------------------------- working set ----
 
 /**
@@ -2142,7 +2176,48 @@ export async function runCapabilityPlan(
           ? proposed
           : (proposed as { steps?: unknown } | null)?.steps;
 
-      const first = validateExecutionPlan(
+      // ── A CONTINUATION DOES NOT RE-BUY THE PLAN ────────────────────────
+      //
+      // Every slice used to ask the model to plan the whole chain again, from
+      // scratch, at ~16k tokens a call. Run 9105aa67's continuation did that
+      // and was rejected for exceeding 30,000 tokens per minute — so the run
+      // died not because anything was wrong with it, but because it paid twice
+      // for a decision it had already made and written down.
+      //
+      // The stored plan is re-VALIDATED, never merely trusted. Containment is
+      // not a property of where a plan came from; a restored plan is checked
+      // against this mission's authorised capabilities and each capability's
+      // own actors exactly as a fresh one is. That check is pure and free.
+      //
+      // Reuse requires the mission hash to match — a state from a different
+      // question is a different plan — and every step to carry its `input`,
+      // because a checkpoint written before inputs were persisted holds only
+      // half the decision, and half a decision is not one to resume from.
+      const stored = reusableStoredPlan(state, hash);
+      if (stored) {
+        const restored = validateExecutionPlan(stored, opts.mission, opts.plan);
+        // CLEANLY, OR NOT AT ALL. Not `source !== "blocked"`: a violation that
+        // DROPS one step leaves the plan validated and shorter, and reusing
+        // that would silently run a different chain from the one the
+        // checkpoint recorded. Any violation at all means the stored plan no
+        // longer means what it said, and the model should plan against what is
+        // true now.
+        if (restored.violations.length === 0) {
+          executionPlan = restored;
+          log("execution_plan_reused_from_checkpoint", {
+            steps: restored.steps.map((s) => `${s.capability}:${s.actor_key ?? "-"}`),
+            source: restored.source,
+          });
+        } else {
+          // The mission or the graph moved under the stored plan. Say so, then
+          // plan again — this is not a case for running a refused chain.
+          log("execution_plan_checkpoint_rejected", {
+            violations: restored.violations.map((v) => v.code),
+          });
+        }
+      }
+
+      const first = executionPlan ?? validateExecutionPlan(
         stepsOf(await deps.planExecution({ payload, mission_hash: hash })),
         opts.mission, opts.plan);
 
@@ -2212,6 +2287,16 @@ export async function runCapabilityPlan(
       steps: executionPlan.steps.map((s) => ({
         step: s.step, capability: s.capability, actor_key: s.actor_key,
         purpose: s.purpose, depends_on: s.depends_on,
+        // ── THE INPUT TRAVELS WITH THE STEP ──────────────────────────────
+        //
+        // Dropped until now, which made the persisted plan a description of a
+        // decision rather than the decision itself: a continuation could read
+        // back which Actor to run but not what to ask it. That is why every
+        // slice re-bought the plan from the model, and re-buying it is what
+        // put run 9105aa67 over its token-per-minute limit. Already validated
+        // against the Actor's own `supported_filters`, so nothing unchecked is
+        // being stored.
+        input: s.input,
       })),
       violations: executionPlan.violations.map((v) => v.code),
     }
@@ -2959,9 +3044,12 @@ export async function runCapabilityPlan(
               ...(changed ? { amended_reasoning: amended.reasoning } : {
                 amendment_considered_no_change: true,
               }),
+              // The input travels here too — see the note on the first
+              // projection. An amended plan that dropped it would be reused as
+              // a chain of Actors nobody had told what to ask for.
               steps: amended.steps.map((s) => ({
                 step: s.step, capability: s.capability, actor_key: s.actor_key,
-                purpose: s.purpose, depends_on: s.depends_on,
+                purpose: s.purpose, depends_on: s.depends_on, input: s.input,
               })),
             };
             log(

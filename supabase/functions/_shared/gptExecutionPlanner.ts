@@ -24,7 +24,9 @@
 //
 // PURE apart from the injected model call.
 
-import { gptStructured, type GptDeps, type GptResult } from "./gptProvider.ts";
+import {
+  gptStructured, isProviderFailure, type GptDeps, type GptFailureCode, type GptResult,
+} from "./gptProvider.ts";
 import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import {
   buildExecutionPlannerPayload, MAX_PLAN_STEPS,
@@ -146,6 +148,32 @@ RULES, in order of importance:
 If the authorised capabilities and their actors cannot establish what this
 request needs, return an empty steps list and say what is missing. That is a
 correct answer. A chain you expect to return the wrong population is not.`;
+
+/**
+ * The planner could not be REACHED. Distinct from a planner that answered badly.
+ *
+ * TEST run 9105aa67's continuation asked for a plan, got HTTP 429, and the
+ * engine reported `plan_not_a_list` — "the planner returned no list of steps",
+ * a statement about the shape of an answer that never arrived. It then spent
+ * its one repair round re-sending the same 16k-token payload 291ms into a
+ * 4.4-second rate limit, and blocked the run on the second 429.
+ *
+ * A repair round is a conversation with the model: here is what was wrong with
+ * your plan, plan again. There is no conversation to have with a rate limit.
+ * Throwing routes this straight to the engine's `execution_planner_failed`
+ * branch, which stops the run WITHOUT a second call and reports the provider's
+ * own words instead of a shape complaint.
+ */
+export class GptPlannerUnavailableError extends Error {
+  readonly code: GptFailureCode;
+  readonly retryable: boolean;
+  constructor(code: GptFailureCode, detail: string, retryable: boolean) {
+    super(`the execution planner could not be reached (${code}): ${detail}`);
+    this.name = "GptPlannerUnavailableError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
 
 export interface GptPlanExecutionInput {
   mission: LeadMissionV1;
@@ -281,10 +309,20 @@ export function makeGptExecutionPlanner(
     if (!r.ok) {
       (deps.log ?? (() => {}))("gpt_execution_planner_failed", {
         code: r.code, detail: r.detail, latency_ms: r.latency_ms,
+        retryable: r.retryable, attempts: r.attempts,
       });
-      // Null, not a throw. The engine treats an unusable answer as "no chain was
-      // planned" and falls back to the GRAPH's own order — which is code, is
-      // inspectable, and is the sequence this system used before chains existed.
+      // ── WHICH KIND OF FAILURE IS THIS? ────────────────────────────────
+      //
+      // THE PROVIDER DID NOT ANSWER (no key, HTTP error, transport fault).
+      // There is nothing to say back to the model, so a repair round would be
+      // a second identical call — which is exactly how a 4-second rate limit
+      // killed run 9105aa67. Throw, and let the engine stop honestly.
+      if (isProviderFailure(r.code)) {
+        throw new GptPlannerUnavailableError(r.code, r.detail, r.retryable);
+      }
+      // THE MODEL ANSWERED BADLY (empty, unparseable, refused). That IS worth
+      // a repair round, so it stays a null and the engine asks again with the
+      // refusal attached.
       return null;
     }
     // The serialised input becomes a real object here, so `validateExecutionPlan`

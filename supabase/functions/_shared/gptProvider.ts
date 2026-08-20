@@ -132,34 +132,125 @@ export interface GptRequest {
   routing_reason?: string;
 }
 
+/**
+ * Failure codes that mean THE PROVIDER did not answer, as opposed to the model
+ * answering badly.
+ *
+ * The distinction is not cosmetic. A caller that gets a malformed plan has
+ * something to say back to the model — "that step was refused, plan again" —
+ * and a repair round is worth the tokens. A caller that got HTTP 429 has
+ * nothing to say to anybody; sending the same payload again immediately is how
+ * TEST run 9105aa67 turned a 4-second rate limit into a dead run.
+ */
+export const PROVIDER_FAILURE_CODES = [
+  "no_api_key", "http_error", "transport_error",
+] as const;
+
+export type GptFailureCode =
+  | typeof PROVIDER_FAILURE_CODES[number]
+  | "empty_response"
+  | "unparseable_json"
+  | "schema_refused";
+
+export function isProviderFailure(code: GptFailureCode): boolean {
+  return (PROVIDER_FAILURE_CODES as readonly string[]).includes(code);
+}
+
 export type GptResult<T> =
   | { ok: true; value: T; model: string; latency_ms: number }
   | {
     ok: false;
     /** Why it failed, in a form a caller can branch on. */
-    code:
-      | "no_api_key"
-      | "http_error"
-      | "transport_error"
-      | "empty_response"
-      | "unparseable_json"
-      | "schema_refused";
+    code: GptFailureCode;
     /** Safe to log and to persist. Never contains the key. */
     detail: string;
     latency_ms: number;
+    /**
+     * Would trying again plausibly succeed?
+     *
+     * True for the transient server-side statuses only — 429 and 5xx. A caller
+     * that cannot wait can still refuse; what it must not do is report a rate
+     * limit as though the model had decided something.
+     */
+    retryable: boolean;
+    /** How many attempts were actually made. 1 unless a retry happened. */
+    attempts: number;
   };
 
 export interface GptDeps {
   /** Injected so tests exercise every branch without a network or a key. */
   fetch?: (url: string, init: RequestInit) => Promise<{
-    ok: boolean; status: number; text: () => Promise<string>;
+    ok: boolean;
+    status: number;
+    text: () => Promise<string>;
+    /** Present on a real `Response`. Read for `Retry-After` only. */
+    headers?: { get: (name: string) => string | null };
   }>;
   readEnv?: (key: string) => string | undefined;
   now?: () => number;
   log?: (msg: string, meta?: unknown) => void;
+  /** Injected so a retry test does not spend real seconds. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
+
+// ── THE TRANSIENT-FAILURE POLICY ───────────────────────────────────────────
+//
+// TEST run 9105aa67 qualified 2 of 10 and elected to continue. The
+// continuation slice asked the execution planner for a plan, got
+//
+//     HTTP 429 … TPM: Limit 30000, Used 15706, Requested 16508.
+//                Please try again in 4.428s.
+//
+// re-sent the same ~16k-token payload 291ms later, got 429 again, and the run
+// died 1.6 seconds in with `plan_not_a_list` — a message about the shape of an
+// answer that was never received. OpenAI had said exactly how long to wait.
+//
+// ONE retry, and the count is a CONSTANT rather than a condition, so the worst
+// case is two calls whatever happens inside. A rate limit that survives the
+// provider's own advised wait is not going to yield to a third attempt in the
+// same minute; it needs a smaller payload or a bigger quota, and both of those
+// are somebody's decision, not a loop's.
+
+/** Attempts beyond the first. A constant — see above. */
+export const MAX_TRANSIENT_RETRIES = 1;
+/** Longer than this and the caller's own deadline is the better authority. */
+export const MAX_RETRY_WAIT_MS = 8000;
+/** Used when the provider says "retry" without saying when. */
+export const DEFAULT_RETRY_WAIT_MS = 1000;
+
+/** 429 and the 5xx family. Everything else is a decision, not a hiccup. */
+function statusIsTransient(status: number): boolean {
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+/**
+ * How long the provider asked us to wait, in ms, or null if it did not say.
+ *
+ * `Retry-After` first, because it is the standard header and it is
+ * authoritative. OpenAI does not always send it on a TPM rejection — the wait
+ * appears only in the message body — so the body is read as a fallback. Both
+ * are provider-supplied numbers; neither is a guess of ours.
+ */
+export function retryDelayMs(
+  headers: { get: (name: string) => string | null } | undefined,
+  body: string,
+): number | null {
+  const header = headers?.get("retry-after");
+  if (header) {
+    const seconds = Number(header.trim());
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+  }
+  const stated = /try again in ([0-9]+(?:\.[0-9]+)?)\s*(ms|s)\b/i.exec(body);
+  if (stated) {
+    const value = Number(stated[1]);
+    if (Number.isFinite(value) && value >= 0) {
+      return Math.round(stated[2].toLowerCase() === "ms" ? value : value * 1000);
+    }
+  }
+  return null;
+}
 
 /**
  * Strip anything credential-shaped out of text that will be persisted.
@@ -207,17 +298,26 @@ export async function gptStructured<T>(
   if (!key) {
     // NOT A DEGRADATION. The caller decides what to do without a model; this
     // module will not quietly answer with a different one.
-    return { ok: false, code: "no_api_key", detail: "OPENAI_API_KEY is not set", latency_ms: elapsed() };
+    return {
+      ok: false, code: "no_api_key", detail: "OPENAI_API_KEY is not set",
+      latency_ms: elapsed(), retryable: false, attempts: 0,
+    };
   }
 
   const doFetch = deps.fetch ?? ((url: string, init: RequestInit) =>
     fetch(url, init) as unknown as Promise<{
-      ok: boolean; status: number; text: () => Promise<string>;
+      ok: boolean;
+      status: number;
+      text: () => Promise<string>;
+      headers?: { get: (name: string) => string | null };
     }>);
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
   let raw: string;
-  try {
-    const res = await doFetch(ENDPOINT, {
+  let attempts = 0;
+  // ONE REQUEST BODY, BUILT ONCE. A retry must send exactly what was rejected;
+  // rebuilding it would make the second attempt a different call.
+  const requestInit = {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
@@ -255,25 +355,59 @@ export async function gptStructured<T>(
           }
           : { type: "json_object" },
       }),
-    });
+  } satisfies RequestInit;
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      // The status and a bounded excerpt only. A provider error body can echo
-      // request content, and this string is persisted into task results.
-      return {
-        ok: false, code: "http_error",
-        detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
-        latency_ms: elapsed(),
+  // BOUNDED RETRY, NOT A LOOP. The bound is a constant, so the worst case is
+  // two calls whatever the provider does — see MAX_TRANSIENT_RETRIES.
+  let failure: Extract<GptResult<T>, { ok: false }> | null = null;
+  for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
+    attempts = attempt + 1;
+    let transientWaitMs: number | null = null;
+    try {
+      const res = await doFetch(ENDPOINT, requestInit);
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        const transient = statusIsTransient(res.status);
+        // The status and a bounded excerpt only. A provider error body can echo
+        // request content, and this string is persisted into task results.
+        failure = {
+          ok: false, code: "http_error",
+          detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
+          latency_ms: elapsed(), retryable: transient, attempts,
+        };
+        // WAIT AS LONG AS THE PROVIDER ASKED, AND NO LONGER. Beyond the cap the
+        // caller's own deadline is the better authority, and a run that sits
+        // out a 60-second rate limit has spent its slice on nothing.
+        const advised = transient ? retryDelayMs(res.headers, body) : null;
+        const wait = advised ?? (transient ? DEFAULT_RETRY_WAIT_MS : null);
+        transientWaitMs = wait != null && wait <= MAX_RETRY_WAIT_MS ? wait : null;
+      } else {
+        raw = await res.text();
+        failure = null;
+        break;
+      }
+    } catch (e) {
+      // A THROWN fetch is a transport fault: a reset connection, a DNS blip, an
+      // aborted socket. Transient by nature, and retried on the same terms.
+      failure = {
+        ok: false, code: "transport_error",
+        detail: redact(String(e).slice(0, 300), key),
+        latency_ms: elapsed(), retryable: true, attempts,
       };
+      transientWaitMs = DEFAULT_RETRY_WAIT_MS;
     }
-    raw = await res.text();
-  } catch (e) {
-    return {
-      ok: false, code: "transport_error",
-      detail: redact(String(e).slice(0, 300), key), latency_ms: elapsed(),
-    };
+
+    if (transientWaitMs == null || attempt === MAX_TRANSIENT_RETRIES) break;
+    log("gpt_transient_retry", {
+      purpose: req.purpose, model, attempt: attempts,
+      code: failure.code, wait_ms: transientWaitMs,
+      detail: failure.detail.slice(0, 160),
+    });
+    await sleep(transientWaitMs);
   }
+  if (failure) return failure;
+  raw = raw!;
 
   let content: string | undefined;
   try {
@@ -289,16 +423,22 @@ export async function gptStructured<T>(
       return {
         ok: false, code: "schema_refused",
         detail: redact(`the model refused: ${String(choice.refusal).slice(0, 200)}`, key),
-        latency_ms: elapsed(),
+        latency_ms: elapsed(), retryable: false, attempts,
       };
     }
     content = choice?.content ?? undefined;
   } catch {
-    return { ok: false, code: "unparseable_json", detail: "the API envelope was not JSON", latency_ms: elapsed() };
+    return {
+      ok: false, code: "unparseable_json", detail: "the API envelope was not JSON",
+      latency_ms: elapsed(), retryable: false, attempts,
+    };
   }
 
   if (!content || !content.trim()) {
-    return { ok: false, code: "empty_response", detail: "the model returned no content", latency_ms: elapsed() };
+    return {
+      ok: false, code: "empty_response", detail: "the model returned no content",
+      latency_ms: elapsed(), retryable: false, attempts,
+    };
   }
 
   try {
@@ -314,7 +454,7 @@ export async function gptStructured<T>(
     return {
       ok: false, code: "unparseable_json",
       detail: "the content field was not valid JSON despite a strict schema",
-      latency_ms: elapsed(),
+      latency_ms: elapsed(), retryable: false, attempts,
     };
   }
 }
