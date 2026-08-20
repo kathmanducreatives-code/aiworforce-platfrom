@@ -1279,12 +1279,44 @@ Deno.serve(async (req) => {
   const conversation_id: string = conversationId;
 
   // 5. Persist user message (carries card-action metadata when applicable)
-  await admin.from("messages").insert({
+  //
+  // ── `{}`, NOT `null` ────────────────────────────────────────────────────
+  //
+  // `messages.metadata` is NOT NULL DEFAULT '{}'. A default only applies when
+  // the column is OMITTED, so sending an explicit null is not "take the
+  // default" — it is a constraint violation, and every plainly typed message
+  // took this branch.
+  //
+  // AND IT FAILED IN SILENCE, which is why it survived. The insert's error was
+  // never read, so pilot-chat carried on, answered "Got it — I'll turn this
+  // into a sourcing workflow", and produced no plan and no task. The user saw a
+  // reply and nothing else happened. Observed 2026-08-20 09:46:04Z:
+  // `null value in column "metadata" of relation "messages" violates not-null
+  // constraint`, on a 400 that nothing in the request path reported.
+  //
+  // So the fix is both halves: send a value the column accepts, and refuse to
+  // continue quietly when the turn was not recorded. A conversation missing its
+  // user turn cannot be classified, cannot be resumed, and cannot be audited.
+  const { error: userMessageError } = await admin.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
     content: message,
-    metadata: actionSource ? { action_source: actionSource, ...(actionMetadata ?? {}) } : null,
+    metadata: actionSource
+      ? { action_source: actionSource, ...(actionMetadata ?? {}) }
+      : {},
   });
+  if (userMessageError) {
+    console.error("[pilot-chat] user message insert failed", {
+      conversation_id: conversationId,
+      code: userMessageError.code,
+      message: userMessageError.message,
+      details: userMessageError.details,
+    });
+    return json({
+      error: "failed to record your message",
+      detail: userMessageError.message,
+    }, 500);
+  }
 
   // 5a. Resolve pending clarification (people-vs-companies) BEFORE classifying intent.
   // Look at the most recent assistant message in this conversation.
