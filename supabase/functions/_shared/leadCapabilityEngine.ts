@@ -65,7 +65,10 @@ import {
 import {
   buildMissionFunnel, type FunnelCompany, type MissionFunnel,
 } from "./leadMissionFunnel.ts";
-import type { ExecutionDeadline } from "./leadExecutionFinalizer.ts";
+import {
+  BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
+  withDeadlineBudget, type ExecutionDeadline,
+} from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
   reachesCompanyBrain, type HiringAssessment, type SupportingSignal,
@@ -96,7 +99,8 @@ import {
 import { poolFingerprintOf } from "./poolCheckpoint.ts";
 import {
   CHECKPOINT_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS, providerOperationKey,
-  shouldCheckpoint, shouldSkipProviderCall, type CompanyResumeRecord,
+  shouldCheckpoint, shouldSkipProviderCall, shouldStartWork,
+  type CompanyResumeRecord,
 } from "./leadResumeState.ts";
 import {
   buildMissionTriageInput, parseMissionTriageStrict, summariseTriage, TRIAGE_BATCH_SIZE,
@@ -3535,24 +3539,60 @@ export async function runCapabilityPlan(
           opts.mission.required_signals.some((s) => s.type === "hiring");
         const limits = deps.batchLimits ?? resolveBatchLimits({});
         const { batches, beyond_cap } = planBatches(toEvaluate, limits);
+        const batchReserveMs = deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS;
+        let batchClockExpired = false;
         for (const batch of batches) {
-          // THE DEADLINE IS CHECKED BETWEEN BATCHES, never mid-batch. A batch
-          // that started is allowed to finish; the companies in the batches
-          // after it are recorded UNEVALUATED, which is a different and honest
-          // thing from being reviewed.
-          if (deps.deadline && shouldCheckpoint({
+          // THE DEADLINE IS CHECKED BETWEEN BATCHES, never mid-batch — and a
+          // batch is admitted only when there is room for what a batch COSTS,
+          // not merely room to checkpoint. The weaker test admitted a batch
+          // with a second to spare and then had no say over the call itself;
+          // see the qualification loop below, where that pattern cost a whole
+          // run. The companies in the batches after a stop are recorded
+          // UNEVALUATED, which is a different and honest thing from reviewed.
+          const batchStartedAt = deps.deadline?.elapsedMs() ?? 0;
+          if (deps.deadline && !shouldStartWork({
             elapsedMs: () => deps.deadline!.elapsedMs(),
             remainingMs: () => deps.deadline!.remainingMs(),
-          }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)) {
+          }, deps.deadline.estimateFor(BATCH_EVALUATION_OP), batchReserveMs)) {
             state.terminal_reason = "execution_deadline_checkpoint";
-            log("stage2_batch_deadline_stop", { evaluated: groundedByKey.size });
+            log("stage2_batch_deadline_stop", {
+              evaluated: groundedByKey.size,
+              remaining_ms: deps.deadline.remainingMs(),
+              per_batch_estimate_ms: deps.deadline.estimateFor(BATCH_EVALUATION_OP),
+            });
             break;
           }
           const members = batch.map((p) => ({
             company_key: p.company_key, company_name: p.company_name,
             registry: p.registry, requiresCommercialSignal: requiresSignal,
           }));
-          const result = await deps.evaluateBatch(members);
+          // A BATCH IS ONE MODEL CALL, and one model call must not be able to
+          // outlive the reserve. On overrun the batch contributes nothing and
+          // the loop stops: its companies fall through to the per-company path
+          // or to a continuation, and none of them is decided on silence.
+          const result = deps.deadline
+            ? await withDeadlineBudget(
+              () => deps.evaluateBatch!(members),
+              deps.deadline.remainingMs() - batchReserveMs,
+              "stage2_batch_evaluation",
+            ).catch((e) => {
+              if (e instanceof DeadlineBudgetExceeded) {
+                batchClockExpired = true;
+                return null;
+              }
+              throw e;
+            })
+            : await deps.evaluateBatch(members);
+          deps.deadline?.observeCall(
+            deps.deadline.elapsedMs() - batchStartedAt, BATCH_EVALUATION_OP);
+          if (batchClockExpired) {
+            state.terminal_reason = "execution_deadline_checkpoint";
+            log("stage2_batch_call_deadline_stop", {
+              evaluated: groundedByKey.size,
+              remaining_ms: deps.deadline?.remainingMs() ?? 0,
+            });
+            break;
+          }
           if (!result) continue;
           for (const o of result.outcomes) {
             if (o.verification) groundedByKey.set(o.company_key, o.verification);
@@ -3605,22 +3645,91 @@ export async function runCapabilityPlan(
       // A company this loop does not reach is NOT REACHED: no verdict, no
       // rejection, still on the frontier and still resumable. That is the same
       // rule the batch stage follows, and the reason stopping here is safe.
+      // ── AND CHECKING THE CLOCK WAS NOT ENOUGH EITHER ───────────────────────
+      //
+      // The guard above was already here when task 1e67725f died, and it did
+      // not save it. It asked `shouldCheckpoint` — "is there still room to
+      // write a checkpoint?" — which passed at 91s of a 125s budget, admitted a
+      // company, and then had no further say. The two model calls below took 55
+      // seconds and the isolate was killed at 146s: no checkpoint, no
+      // continuation, `tasks.result` null, the row `running` forever and the
+      // execution card spinning until someone gave up on it.
+      //
+      // ADMITTING WORK AND BOUNDING WORK ARE DIFFERENT THINGS, and this loop
+      // now does both:
+      //
+      //   1. ADMISSION asks `shouldStartWork` — room for the reserve AND for
+      //      what a company is estimated to cost. The estimate lives on the
+      //      deadline under `QUALIFICATION_OP` and is fed real durations below,
+      //      so after one company the loop is reasoning about this workspace's
+      //      actual latency instead of a constant.
+      //
+      //   2. THE CEILING caps the calls themselves at whatever is left after
+      //      the reserve, so a call that runs three times its estimate cannot
+      //      spend the margin that admission set aside. The estimate bounds the
+      //      typical company; the ceiling bounds the pathological one; neither
+      //      alone is sufficient and 1e67725f is the proof.
+      //
+      // A company stopped by either is NOT REACHED — no verdict, no rejection,
+      // still resumable — which is the same rule the guard already followed and
+      // the reason stopping here was always safe.
+      const qualificationReserveMs = deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS;
+      /** Wall clock a single company's model calls may consume, right now. */
+      const qualificationCallBudgetMs = (): number =>
+        deps.deadline ? deps.deadline.remainingMs() - qualificationReserveMs : 0;
       let qualificationStopped = false;
+      /** Set to the call's label the moment one overruns the ceiling. */
+      let qualificationClockExpired: string | null = null;
+      /**
+       * One qualification model call, under the ceiling.
+       *
+       * Returns null on overrun, which every caller below already handles as
+       * "the model did not answer" — an absent grounder degrades to REVIEW and
+       * an absent evaluator holds as insufficient evidence. Neither rejects
+       * anybody, so the failure mode of running out of clock is a company that
+       * stays resumable rather than one that is quietly marked unqualified.
+       *
+       * Offline callers (no deadline) are unbounded, exactly as before.
+       */
+      const clockBound = async <T>(
+        label: string, work: () => Promise<T>,
+      ): Promise<T | null> => {
+        if (!deps.deadline) return await work();
+        try {
+          return await withDeadlineBudget(work, qualificationCallBudgetMs(), label);
+        } catch (e) {
+          if (e instanceof DeadlineBudgetExceeded) {
+            qualificationClockExpired = label;
+            return null;
+          }
+          throw e;
+        }
+      };
       for (let qIndex = 0; qIndex < eligible.length; qIndex++) {
         const c = eligible[qIndex];
-        if (deps.deadline && shouldCheckpoint({
+        if (deps.deadline && !shouldStartWork({
           elapsedMs: () => deps.deadline!.elapsedMs(),
           remainingMs: () => deps.deadline!.remainingMs(),
-        }, deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS)) {
+        }, deps.deadline.estimateFor(QUALIFICATION_OP), qualificationReserveMs)) {
           qualificationStopped = true;
           state.terminal_reason = "execution_deadline_checkpoint";
           log("qualification_deadline_stop", {
             evaluated: qIndex,
             not_reached: eligible.length - qIndex,
             remaining_ms: deps.deadline.remainingMs(),
+            per_company_estimate_ms: deps.deadline.estimateFor(QUALIFICATION_OP),
           });
           break;
         }
+        // Measured across the whole company, not per call, because the estimate
+        // it feeds is what admission spends — and admission admits a COMPANY.
+        //
+        // ON THE DEADLINE'S OWN CLOCK, not `Date.now()`. The deadline is
+        // constructed with an injectable `now`, and a duration measured against
+        // a different clock than the one admission consults is not a
+        // measurement of anything — it silently reads zero wherever time is
+        // simulated, which is every offline test and every fake-clock proof.
+        const qualificationStartedAt = deps.deadline?.elapsedMs() ?? 0;
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
           company_key: c.key,
@@ -3719,10 +3828,28 @@ export async function runCapabilityPlan(
         // non-Stage-2 case and is not called twice for the same company.
         const grounded = groundedByKey.get(c.key)
           ?? (deps.groundCompany
-            ? await deps.groundCompany({
+            ? await clockBound("company_grounding", () => deps.groundCompany!({
               registry, requiresCommercialSignal, company_key: c.key,
-            })
+            }))
             : null);
+        // WHAT A COMPANY ACTUALLY COSTS, fed back so the next admission decision
+        // is made against this workspace's latency rather than a constant.
+        // `observeCall` keeps a maximum, so measuring cumulative elapsed twice
+        // per company is monotonic — the later reading simply subsumes the
+        // earlier one.
+        deps.deadline?.observeCall(
+          deps.deadline.elapsedMs() - qualificationStartedAt, QUALIFICATION_OP);
+        if (qualificationClockExpired) {
+          qualificationStopped = true;
+          state.terminal_reason = "execution_deadline_checkpoint";
+          log("qualification_call_deadline_stop", {
+            call: qualificationClockExpired,
+            evaluated: qIndex,
+            not_reached: eligible.length - qIndex,
+            remaining_ms: deps.deadline?.remainingMs() ?? 0,
+          });
+          break;
+        }
         c.grounded = grounded ?? null;
 
         // ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE ─────────────────────────
@@ -3848,7 +3975,7 @@ export async function runCapabilityPlan(
         // SUMMARISER. Its `missing_evidence` tells the evaluator what nobody
         // could establish; its verdict no longer decides.
         const evaluation = deps.evaluateMission
-          ? await deps.evaluateMission({
+          ? await clockBound("mission_evaluation", () => deps.evaluateMission!({
             input: buildMissionEvaluationInput({
               ctx: qualificationCtx,
               authority: resolveBrainAuthority(qualificationCtx, opts.brain),
@@ -3857,8 +3984,26 @@ export async function runCapabilityPlan(
             }),
             registry,
             company_key: c.key,
-          })
+          }))
           : null;
+        deps.deadline?.observeCall(
+          deps.deadline.elapsedMs() - qualificationStartedAt, QUALIFICATION_OP);
+        // STOPPING BEATS HOLDING. Falling through would record this company as
+        // insufficient_evidence — accurate, but it spends the reserve deciding
+        // how to describe a company nobody evaluated. Breaking leaves it NOT
+        // REACHED and gets the checkpoint written, which is what a continuation
+        // needs in order to pick it up.
+        if (qualificationClockExpired) {
+          qualificationStopped = true;
+          state.terminal_reason = "execution_deadline_checkpoint";
+          log("qualification_call_deadline_stop", {
+            call: qualificationClockExpired,
+            evaluated: qIndex,
+            not_reached: eligible.length - qIndex,
+            remaining_ms: deps.deadline?.remainingMs() ?? 0,
+          });
+          break;
+        }
 
         if (evaluation) {
           c.evaluation_path = "model_evaluated";

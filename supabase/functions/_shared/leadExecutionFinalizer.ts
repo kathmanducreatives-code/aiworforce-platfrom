@@ -153,6 +153,92 @@ export function createExecutionDeadline(
   } as ExecutionDeadline;
 }
 
+// ------------------------------------------------------- bounded model work ----
+
+/**
+ * The deadline operation key for one company's qualification.
+ *
+ * Qualification is not a provider call, so it never appeared in the per-op
+ * latency table and always fell back to the global `assumedCallMs`. Naming it
+ * lets the deadline learn what a company actually costs on THIS workspace's
+ * data, the same way it learned that memo23 starts take 24s.
+ */
+export const QUALIFICATION_OP = "company_qualification";
+
+/**
+ * The deadline operation key for one Stage-2 batch evaluation.
+ *
+ * Kept separate from `QUALIFICATION_OP` because a batch judges many companies
+ * in one call and a per-company estimate would badly under-price it — and this
+ * table's whole purpose is that one stage's latency never speaks for another's.
+ */
+export const BATCH_EVALUATION_OP = "stage2_batch_evaluation";
+
+/**
+ * Raised when a unit of work was still running at the moment the caller had to
+ * stop in order to checkpoint. NOT an error about the work — the work may well
+ * have been about to succeed. It is a statement about the clock.
+ *
+ * Callers MUST treat the subject of a budget-exceeded call as NOT REACHED:
+ * no verdict, no rejection, still on the frontier. Recording anything else
+ * turns "we ran out of time" into evidence about a company, which is the one
+ * inference this architecture forbids.
+ */
+export class DeadlineBudgetExceeded extends Error {
+  readonly label: string;
+  readonly budgetMs: number;
+  constructor(label: string, budgetMs: number) {
+    super(`${label} did not return within its ${budgetMs}ms clock budget`);
+    this.name = "DeadlineBudgetExceeded";
+    this.label = label;
+    this.budgetMs = budgetMs;
+  }
+}
+
+/**
+ * RUN `work`, BUT NEVER PAST THE POINT WHERE STOPPING IS STILL POSSIBLE.
+ *
+ * Admission control (`shouldStartWork`) bounds the typical iteration; this
+ * bounds the pathological one. On run 1e67725f a qualification call that
+ * normally takes ~7s was still running 55 seconds later, and because nothing
+ * capped it the isolate was killed mid-call: no checkpoint, no continuation,
+ * a task row stuck at `running` and a spinning card in the UI.
+ *
+ * ── WHAT THIS DOES AND DOES NOT DO ──────────────────────────────────────────
+ *
+ * It returns CONTROL to the caller on time. It does not cancel the underlying
+ * request — `groundCompany` and `evaluateMission` are plain promises with no
+ * abort plumbing, so the fetch keeps running in the background until the
+ * isolate ends. That is deliberate and it is fine: the whole point is that the
+ * caller gets its few seconds to write a checkpoint and return a continuation,
+ * and the isolate is being torn down immediately afterwards either way. What
+ * we buy is a clean stop, not a saved token.
+ *
+ * The timer is cleared on the happy path, so a completed call leaves no pending
+ * handle to keep the isolate alive.
+ */
+export async function withDeadlineBudget<T>(
+  work: () => Promise<T>, budgetMs: number, label: string,
+): Promise<T> {
+  // A non-positive budget means the caller should not have started at all.
+  // Failing before doing the work is strictly better than doing work nobody
+  // will be alive to read.
+  if (budgetMs <= 0) throw new DeadlineBudgetExceeded(label, budgetMs);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new DeadlineBudgetExceeded(label, budgetMs)), budgetMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 // ------------------------------------------------------------- finalizer ----
 
 export interface FinalizerState {

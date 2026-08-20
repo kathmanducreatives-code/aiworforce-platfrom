@@ -50,6 +50,40 @@ export function shouldCheckpoint(
   return clock.remainingMs() <= reserveMs;
 }
 
+/**
+ * IS THERE ROOM FOR THIS UNIT OF WORK, plus the reserve, plus a stop?
+ *
+ * `shouldCheckpoint` answers a WEAKER question: "is there still room to write a
+ * checkpoint?" A loop that only asks that will admit an iteration with 100ms to
+ * spare and then run it for a minute, because admitting work and bounding work
+ * are different things. Task 1e67725f died exactly there — the qualification
+ * loop's guard passed at 91s of a 125s budget, entered a company, and the
+ * isolate was killed at 146s with no checkpoint written and the row left
+ * `running` forever.
+ *
+ * So the question a loop must actually ask is "is there room for what I am
+ * about to start, AND to stop cleanly afterwards?" — which needs an estimate of
+ * the work, not just the reserve.
+ *
+ * `estimatedWorkMs` should come from `ExecutionDeadline.estimateFor(op)`, whose
+ * floor is the conservative assumed duration and which only ever moves UP from
+ * observed reality. A stage with no history is therefore admitted pessimistically,
+ * which is the safe direction: the cost of guessing high is one company deferred
+ * to a continuation, and the cost of guessing low is the whole run lost.
+ *
+ * THIS IS NECESSARY BUT NOT SUFFICIENT. An estimate bounds the TYPICAL
+ * iteration; it cannot bound a pathological one. The work itself must also be
+ * capped — see `withDeadlineBudget` — or a single call three times slower than
+ * its estimate defeats the admission that let it in.
+ */
+export function shouldStartWork(
+  clock: ReserveClock,
+  estimatedWorkMs: number,
+  reserveMs: number = CHECKPOINT_RESERVE_MS,
+): boolean {
+  return clock.remainingMs() > reserveMs + Math.max(0, estimatedWorkMs);
+}
+
 // ------------------------------------------------------ per-company stages ----
 
 /**
