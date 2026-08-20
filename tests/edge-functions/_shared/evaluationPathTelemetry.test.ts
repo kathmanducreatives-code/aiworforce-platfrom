@@ -368,3 +368,52 @@ Deno.test("8. instrumentation is inert — it never changes a verdict", async ()
   assertEquals(verdicts(a.run.companies), verdicts(b.run.companies),
     "the run must be deterministic and unaffected by the added field");
 });
+
+// ═════════════ 6. under a deadline, the strongest are qualified first ══
+//
+// Qualification is the wall-clock bottleneck: run 1af9b9ea missed its
+// checkpoint reserve by 2.4s and issued no verdicts at all. When the clock can
+// stop the loop at any point, the ORDER companies are attempted in decides who
+// gets a verdict — so it must not be arrival order.
+Deno.test("6. a strong candidate is attempted before a weak one", () => {
+  // The ordering rule in isolation: tier A, then B, then C, then enriched,
+  // then the rest — stable inside each band so nothing is reordered
+  // arbitrarily. Pre-grounded companies still come first; their expensive half
+  // is already bought and would otherwise be discarded.
+  const strength = (c: { tier: string | null; enriched: boolean }): number => {
+    if (c.tier === "A") return 0;
+    if (c.tier === "B") return 1;
+    if (c.tier === "C") return 2;
+    return c.enriched ? 3 : 4;
+  };
+  const pool = [
+    { key: "weak-1", tier: null, enriched: false },
+    { key: "enriched-1", tier: null, enriched: true },
+    { key: "tierB", tier: "B", enriched: false },
+    { key: "weak-2", tier: null, enriched: false },
+    { key: "tierA", tier: "A", enriched: false },
+  ];
+  const ordered = pool
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => strength(a.c) - strength(b.c) || a.i - b.i)
+    .map((x) => x.c.key);
+
+  assertEquals(ordered, ["tierA", "tierB", "enriched-1", "weak-1", "weak-2"]);
+  // Stability matters: two equally weak companies keep their arrival order, so
+  // the rule never reshuffles candidates it has no opinion about.
+  assertEquals(ordered.indexOf("weak-1") < ordered.indexOf("weak-2"), true);
+});
+
+Deno.test("7. the engine applies that order only when a deadline exists", async () => {
+  // Without a clock there is nothing to ration, and reordering would change
+  // results for no reason.
+  const SRC = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  const block = SRC.slice(SRC.indexOf("const eligibleOrdered"), SRC.indexOf("let qualificationStopped"));
+  assertEquals(/deps\.deadline\s*\n?\s*\?/.test(block), true,
+    "the ordering must be conditional on a deadline");
+  assertEquals(block.includes(": eligible;"), true, "and fall back to arrival order without one");
+  assertEquals(block.includes("isPreGrounded"), true,
+    "pre-grounded companies must still be finished first");
+});

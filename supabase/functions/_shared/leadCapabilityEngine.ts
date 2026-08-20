@@ -3529,6 +3529,29 @@ export async function runCapabilityPlan(
       // cannot identify is one whose founder could be attached to the wrong
       // employer. Unresolved stays `identity_pending` with a null verdict:
       // not a pass, not a rejection, and honestly reported as neither.
+      //
+      // ── PHASE 3 MEASURED THIS AND LEFT IT ALONE ─────────────────────────
+      //
+      // The relaxation was built and measured: 7 of 20 companies assessed
+      // before, 20 after, `reachesCompanyBrain` 7 → 17. It was reverted, for
+      // two reasons the measurement itself produced.
+      //
+      // It BUYS NOTHING IN TIME. Identity and enrichment still run in the same
+      // place at the same cost — 15.4s and 10.6s on run 1af9b9ea. Widening this
+      // gate changes who is assessed AFTERWARDS; the 26s the audit was chasing
+      // is untouched. A real saving needs the pipeline REORDERED so identity
+      // runs only for companies qualification kept, which is a different and
+      // much larger change.
+      //
+      // And what it adds is weak. Every one of the thirteen additions was
+      // `tier: none` with no verified headcount — REVIEW-shaped candidates
+      // arriving at the stage that is already the wall-clock bottleneck, where
+      // they can only displace stronger ones or fill a requested_count with
+      // leads nobody would want.
+      //
+      // `evaluationPathTelemetry` test 3 states the invariant this would break:
+      // "A company we could not identify must not be judged. It is the one case
+      // where 'we did not evaluate this' is the correct, final answer."
       for (const c of companies) {
         if (c.hiring_assessment === null && c.identity && identityIsActionable(c.identity)) {
           const free = freeHiringAssessment(c);
@@ -3799,8 +3822,37 @@ export async function runCapabilityPlan(
       // at any point, the order companies are attempted in decides which ones
       // get verdicts — and the right ones to spend the last seconds on are those
       // whose expensive half is already bought and would otherwise be discarded.
+      // ── AND STRENGTH ORDERS WHAT IS NOT YET PAID FOR ────────────────────
+      //
+      // The gate split above roughly doubles what reaches this loop, and the
+      // measurement showed the additions are uniformly WEAK: tier A stayed at
+      // 5 while `tier: none` went 2 → 15, and companies with no verified
+      // headcount went 3 → 16. Handing a time-starved stage thirteen more
+      // REVIEW-shaped candidates in arrival order would let them displace the
+      // strong ones — turning a widened funnel into fewer good verdicts, which
+      // is the opposite of the point.
+      //
+      // So the second partition sorts the not-yet-paid-for remainder by what
+      // makes a verdict worth having: a real commercial tier first, then
+      // enriched companies (verified headcount and geography), then the rest.
+      // Stable within each band, so nothing is reordered arbitrarily.
+      const strength = (c: EngineCompany): number => {
+        const tier = c.hiring_assessment?.tier ?? null;
+        if (tier === "A") return 0;
+        if (tier === "B") return 1;
+        if (tier === "C") return 2;
+        return c.enriched ? 3 : 4;
+      };
       const eligibleOrdered = deps.deadline
-        ? [...eligible.filter(isPreGrounded), ...eligible.filter((c) => !isPreGrounded(c))]
+        ? [
+          // Finish what is already paid for, exactly as before.
+          ...eligible.filter(isPreGrounded),
+          // Then spend the remaining clock strongest-first.
+          ...eligible.filter((c) => !isPreGrounded(c))
+            .map((c, i) => ({ c, i }))
+            .sort((a, b) => strength(a.c) - strength(b.c) || a.i - b.i)
+            .map((x) => x.c),
+        ]
         : eligible;
       let qualificationStopped = false;
       /** Set to the call's label the moment one overruns the ceiling. */
