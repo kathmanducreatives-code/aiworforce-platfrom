@@ -726,14 +726,42 @@ export function describeDbError(error: unknown): string {
   return parts.join(" ");
 }
 
+/**
+ * The row, minus the field that is not a column.
+ *
+ * `version` is a module constant carried on the IN-MEMORY row for forward
+ * compatibility — `executionLedgerWiring.test.ts` has said so since the table
+ * was written, and exempts it from the "every column the writer sets exists"
+ * check on exactly that grounds. The exemption was right about the intent and
+ * wrong about the mechanism: nothing stripped it. `buildStartedRow`'s output
+ * went to `db.insert()` verbatim, PostgREST rejected the whole row, and it has
+ * done so every single time:
+ *
+ *     [execution-ledger] insert error [PGRST204] Could not find the 'version'
+ *     column of 'lead_execution_calls' in the schema cache
+ *
+ * `lead_execution_calls` has held zero rows since it was created. Every paid
+ * Actor call this system has made is unaudited, because a field everyone agreed
+ * was not a column was sent to the database anyway.
+ *
+ * STRIPPED HERE, at the one place that talks to the table, rather than removed
+ * from the row — in-process readers and the row's own type still carry it, which
+ * is what the constant was for.
+ */
+function toDbRow<T extends { version?: unknown }>(row: T): Omit<T, "version"> {
+  const { version: _version, ...rest } = row;
+  return rest;
+}
+
 export function createLedgerWriter(db: LedgerDb): LedgerWriter {
   return {
     async insert(row) {
-      const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).insert(row);
+      const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).insert(toDbRow(row));
       if (error) console.error("[execution-ledger] insert error", describeDbError(error));
     },
     async finalize(id, patch) {
-      const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).update(patch).eq("id", id);
+      const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE)
+        .update(toDbRow(patch)).eq("id", id);
       if (error) console.error("[execution-ledger] finalize error", describeDbError(error));
     },
   };

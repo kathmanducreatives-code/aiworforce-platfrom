@@ -10,7 +10,9 @@
 //
 // Offline: the migration is read as text and the wiring as source.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assert, assertEquals, assertFalse,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildStartedRow, createLedgerWriter, describeDbError, inferStage,
   LEAD_EXECUTION_CALLS_TABLE, type ExecutionCallSpec,
@@ -41,10 +43,54 @@ Deno.test("migration: every column the writer sets exists in the table", async (
 
   // `version` is a module constant carried on the in-memory row for forward
   // compatibility, not a column — everything else must be declared.
+  //
+  // THIS EXEMPTION WAS RIGHT AND NOT ENOUGH. It was right that `version` is not
+  // a column; it assumed something removed it before the insert, and nothing
+  // did. See the test below, which asserts the strip rather than trusting it.
   for (const column of Object.keys(row).filter((k) => k !== "version")) {
     assert(new RegExp(`\\b${column}\\b`).test(sql),
       `the writer sets "${column}" but the migration does not declare it`);
   }
+});
+
+Deno.test("migration: a field that is NOT a column never reaches the table", async () => {
+  const sql = await schemaSql();
+  const row = buildStartedRow({
+    workspace_id: "w", stage: "company_discovery", reason: "initial_discovery",
+    provider_id: "apify", logical_call_key: "k",
+  });
+  assertEquals(row.version, "lead-execution-ledger-v1",
+    "the constant still travels on the in-memory row — that is what it is for");
+  assertFalse(/\bversion\b/.test(sql), "and the table still has no such column");
+
+  // So the writer must not send it. PostgREST rejects the WHOLE row over one
+  // unknown key, which is why this table held nothing at all rather than rows
+  // with a missing field.
+  const sent: Record<string, unknown>[] = [];
+  const writer = createLedgerWriter({
+    from: () => ({
+      insert: (r: Record<string, unknown>) => { sent.push(r); return Promise.resolve({ error: null }); },
+      update: (r: Record<string, unknown>) => {
+        sent.push(r);
+        return { eq: () => Promise.resolve({ error: null }) };
+      },
+    }),
+  } as never);
+
+  await writer.insert(row);
+  await writer.finalize("id-1", { status: "succeeded", version: row.version } as never);
+
+  assertEquals(sent.length, 2);
+  for (const payload of sent) {
+    assertFalse("version" in payload,
+      `the writer sent a key the table does not have: ${JSON.stringify(Object.keys(payload))}`);
+  }
+  // And nothing else was lost on the way.
+  for (const key of Object.keys(row)) {
+    if (key === "version") continue;
+    assert(key in sent[0], `stripping version must not drop "${key}"`);
+  }
+  assertEquals(sent[1].status, "succeeded", "a patch still patches");
 });
 
 Deno.test("migration: attempts cannot overwrite each other", async () => {
