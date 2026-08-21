@@ -12,8 +12,8 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  buildStartedRow, inferStage, LEAD_EXECUTION_CALLS_TABLE,
-  type ExecutionCallSpec,
+  buildStartedRow, createLedgerWriter, describeDbError, inferStage,
+  LEAD_EXECUTION_CALLS_TABLE, type ExecutionCallSpec,
 } from "../../../supabase/functions/_shared/executionLedger.ts";
 
 const MIGRATION = new URL(
@@ -187,4 +187,66 @@ Deno.test("both paths produce the same row shape", () => {
   assertEquals(a.status, b.status);
   assertEquals(a.version, b.version);
   assertEquals(LEAD_EXECUTION_CALLS_TABLE, "lead_execution_calls");
+});
+
+
+// ══════════════════════ A SWALLOWED ERROR MUST STILL SAY WHAT IT WAS ══
+//
+// `lead_execution_calls` holds ZERO rows on TEST and always has. Every insert
+// has failed, and every failure printed the same thing:
+//
+//     [execution-ledger] insert error [object Object]
+//
+// because `String(error)` on a PostgREST error object is exactly that. TEST run
+// b7a9e112 logged four of them in eighty seconds. Swallowing the failure is
+// correct — the ledger watches execution and must never be able to fail it —
+// but a swallow that also destroys the reason is a silence, and it left every
+// paid Actor call this system has ever made unaudited and undiagnosable.
+
+Deno.test("describeDbError: a PostgREST error reads as its message, not [object Object]", () => {
+  const described = describeDbError({
+    code: "23502", message: 'null value in column "reason" violates not-null constraint',
+    details: "Failing row contains (…)", hint: null,
+  });
+  assert(!described.includes("[object Object]"));
+  assert(described.includes("23502"), described);
+  assert(described.includes("not-null constraint"), described);
+  assert(described.includes("Failing row"), described);
+});
+
+Deno.test("describeDbError: an object with none of the four fields still says something", () => {
+  const described = describeDbError({ weird: true });
+  assert(!described.includes("[object Object]"),
+    "a JSON dump beats the string that sent this one undiagnosed");
+  assert(described.includes("weird"), described);
+});
+
+Deno.test("describeDbError: a plain Error and a string are unchanged", () => {
+  assert(describeDbError(new Error("boom")).includes("boom"));
+  assertEquals(describeDbError("boom"), "boom");
+  assertEquals(describeDbError(null), "null");
+});
+
+Deno.test("the writer logs the described error, and still never throws", async () => {
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { logged.push(args.map(String).join(" ")); };
+  try {
+    const writer = createLedgerWriter({
+      from: () => ({
+        insert: () => Promise.resolve({
+          error: { code: "42703", message: 'column "record_kind" does not exist' },
+        }),
+        update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+      }),
+    } as never);
+    // The contract that matters most: a failed audit write is not a failed run.
+    await writer.insert({ workspace_id: "w" } as never);
+  } finally {
+    console.error = original;
+  }
+  assertEquals(logged.length, 1);
+  assert(logged[0].includes("42703"), logged[0]);
+  assert(logged[0].includes("does not exist"), logged[0]);
+  assert(!logged[0].includes("[object Object]"), logged[0]);
 });

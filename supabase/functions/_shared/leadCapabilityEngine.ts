@@ -1532,8 +1532,39 @@ export async function runCapabilityPlan(
   const applyMissionIntelligence = async (companies: EngineCompany[]): Promise<void> => {
     const verdicts = new Map<string, TriageVerdict>();
 
-    if (deps.triageCompanies && companies.length > 0) {
-      const batches = triageBatches(companies, deps.triageBatchSize ?? TRIAGE_BATCH_SIZE);
+    // ── A VERDICT ALREADY REACHED IS NOT RE-BOUGHT ──────────────────────────
+    //
+    // `ensureMissionIntelligence` guards on `missionIntelligenceApplied`, which
+    // is a local of THIS invocation — so on a continuation it is false and this
+    // stage ran again over the whole restored pool. It was idempotent within an
+    // invocation and not at all across the checkpoint.
+    //
+    // TEST run b7a9e112 triaged its 100 companies SEVEN times: once legitimately
+    // and six times over verdicts the checkpoint had just handed back intact
+    // (`working_set_restored_from_checkpoint restored: 100, snapshots_missing:
+    // 0`). 24 redundant model calls, costing 19 to 63 seconds of ~107-second
+    // slices. Identity resolution inherited what was left — 11 to 17 seconds —
+    // and attempted 6 of its 23 targets, which is why 74 companies were never
+    // touched and the run spent 123 cost units to reach 9 of 10.
+    //
+    // AND THE VERDICTS WERE NOT EVEN STABLE. Successive passes returned
+    // relevant 74, 74, 76, 76, 74, 76 — so `investigation_rank`, the cursor the
+    // frontier slice reads, shifted underneath itself between invocations.
+    //
+    // Restored verdicts are seeded here and their companies are not batched.
+    // Everything downstream — the summary, the ranking, the slice — still sees
+    // the whole pool, because the map is the whole pool.
+    const untriaged = companies.filter((c) => !c.triage);
+    for (const c of companies) if (c.triage) verdicts.set(c.key, c.triage);
+    if (untriaged.length < companies.length) {
+      log("triage_reused_from_checkpoint", {
+        reused: companies.length - untriaged.length,
+        to_triage: untriaged.length,
+      });
+    }
+
+    if (deps.triageCompanies && untriaged.length > 0) {
+      const batches = triageBatches(untriaged, deps.triageBatchSize ?? TRIAGE_BATCH_SIZE);
       const allowed = deps.triageBatchesAllowed ?? batches.length;
       let made = 0;
 
@@ -1613,7 +1644,11 @@ export async function runCapabilityPlan(
       };
     }
 
-    for (const c of companies) c.triage = verdicts.get(c.key) ?? null;
+    // `?? c.triage` and not `?? null`: a company the fresh pass did not cover
+    // keeps the verdict it arrived with. Overwriting it with null is how a
+    // restored pool would have been silently un-triaged had the batch budget
+    // run out mid-continuation.
+    for (const c of companies) c.triage = verdicts.get(c.key) ?? c.triage ?? null;
 
     // ── STAGE 3: THE BUDGET DECIDES THE SHORTLIST ──────────────────────────
     //

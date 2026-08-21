@@ -694,15 +694,47 @@ export const LEAD_EXECUTION_CALLS_TABLE = "lead_execution_calls" as const;
  * be able to fail it. A missing audit row is a gap in evidence; a thrown audit
  * write is a lost lead run.
  */
+/**
+ * Say what actually went wrong with a database write.
+ *
+ * `String(error)` on a PostgREST error object yields the literal text
+ * "[object Object]", and that is exactly what every ledger failure has printed.
+ * TEST run b7a9e112 logged four of them in eighty seconds; the table itself has
+ * never held a single row on TEST. The swallow below is correct — the ledger
+ * watches execution and must never be able to fail it — but a swallow that also
+ * destroys the reason is not a swallow, it is a silence. Every paid Actor call
+ * this system has made is unaudited, and nothing said why.
+ *
+ * PostgREST reports `message`, `details`, `hint` and `code`. All four are ours,
+ * describe our own schema, and contain no row data — safe to log.
+ */
+export function describeDbError(error: unknown): string {
+  const e = error as
+    { message?: unknown; details?: unknown; hint?: unknown; code?: unknown } | null;
+  if (!e || typeof e !== "object") return String(error);
+  const parts = [
+    typeof e.code === "string" && e.code ? `[${e.code}]` : null,
+    typeof e.message === "string" && e.message ? e.message : null,
+    typeof e.details === "string" && e.details ? `details: ${e.details}` : null,
+    typeof e.hint === "string" && e.hint ? `hint: ${e.hint}` : null,
+  ].filter((p): p is string => p !== null);
+  // An object with none of those is still worth SOMETHING — better a JSON dump
+  // than the string "[object Object]" that sent this one undiagnosed for weeks.
+  if (parts.length === 0) {
+    try { return JSON.stringify(e).slice(0, 400); } catch { return String(error); }
+  }
+  return parts.join(" ");
+}
+
 export function createLedgerWriter(db: LedgerDb): LedgerWriter {
   return {
     async insert(row) {
       const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).insert(row);
-      if (error) console.error("[execution-ledger] insert error", String(error));
+      if (error) console.error("[execution-ledger] insert error", describeDbError(error));
     },
     async finalize(id, patch) {
       const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).update(patch).eq("id", id);
-      if (error) console.error("[execution-ledger] finalize error", String(error));
+      if (error) console.error("[execution-ledger] finalize error", describeDbError(error));
     },
   };
 }
