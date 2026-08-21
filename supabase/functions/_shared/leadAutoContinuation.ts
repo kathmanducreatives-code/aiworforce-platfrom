@@ -222,14 +222,73 @@ export function resolveMaxLineageCostUnits(read?: EnvReader): number {
  * Persisted on the task row so a continuation inherits them. Without this the
  * ceilings reset every slice and none of them bounds anything.
  */
+/**
+ * ── EVERY COUNT HERE IS ALREADY LINEAGE-CUMULATIVE ──────────────────────────
+ *
+ * THE DEFECT THIS SHAPE EXISTS TO END. `CapabilityExecutionState` is spread
+ * from the checkpoint on every continuation (`leadCapabilityEngine.ts`, "state
+ * = stateMatchesMission ? { ...opts.state } : newExecutionState"), so
+ * `accumulated_cost_units` and `investigation_selected` do not reset — they are
+ * running totals for the WHOLE lineage. `foldSlice` then ADDED them to running
+ * totals of its own, once per slice, producing a sum of successive cumulative
+ * snapshots. That is not a quantity of anything.
+ *
+ * Measured against the execution ledger, where one paid provider call is one
+ * cost unit:
+ *
+ *     plan        provider calls    cost_units_used    continuations
+ *     747ff464                 6                158                6
+ *     a5332734                27                127                6
+ *     958c86bc                29                124                5
+ *     66554ea2                28                 58                3
+ *     44c9c5c0                18                 27                2
+ *
+ * The inflation tracks the continuation count exactly. This was not a reporting
+ * blemish: `a5332734` and `958c86bc` were both TERMINATED by the 120-unit
+ * ceiling — "127 of 120 provider cost units spent; 78 candidates remain
+ * unexamined" — after 27 and 29 real calls. The budget guard was killing runs
+ * on money nobody had spent.
+ *
+ * So the rule for this record is now uniform and stated once: a cumulative
+ * input is folded with MAX, never with addition. `max` is also self-healing —
+ * if a slice ever arrives with a reset state (a mission-hash mismatch rebuilds
+ * it from zero) the lineage keeps the higher figure, because the money was
+ * still spent.
+ *
+ * `continuations_used` is the one true per-call increment and stays `+ 1`.
+ */
 export interface LineageProgress {
   version: typeof AUTO_CONTINUATION_VERSION;
   continuations_used: number;
+  /** Cumulative paid provider work across the lineage. Governs the ceiling. */
   cost_units_used: number;
   barren_slices: number;
   /** Highest qualified count observed. Never allowed to fall — see below. */
   qualified_high_water: number;
-  investigated_total: number;
+  /**
+   * DISTINCT companies carried to a terminal investigation state.
+   *
+   * A COMPANY count. Derived from the working set, which is deduplicated by
+   * construction and survives continuation, so a company investigated in slice
+   * one is not counted again in slice four.
+   *
+   * Replaces `investigated_total`, which was none of those things: it summed
+   * `investigation_selected`, a SPEND counter that deliberately re-counts
+   * carried in-flight work ("this invocation buys those searches too"), across
+   * every slice. It reported 40, 148, 360 and 406 against a pool of 100.
+   */
+  unique_companies_investigated: number;
+  /**
+   * AUTHORISATIONS, not companies — the other half of what the old field
+   * conflated.
+   *
+   * `investigation_selected` counts every time this lineage authorised paying
+   * to investigate a company, INCLUDING re-authorising work carried in flight
+   * from an earlier pass. That is the right definition for a spend question and
+   * the wrong one for "how many companies did we look at", so it now has its
+   * own name and both questions can be answered.
+   */
+  investigation_authorisations: number;
   stopped_reason: StopReason | null;
   stopped_detail: string | null;
 }
@@ -238,7 +297,8 @@ export function newLineageProgress(): LineageProgress {
   return {
     version: AUTO_CONTINUATION_VERSION,
     continuations_used: 0, cost_units_used: 0, barren_slices: 0,
-    qualified_high_water: 0, investigated_total: 0,
+    qualified_high_water: 0,
+    unique_companies_investigated: 0, investigation_authorisations: 0,
     stopped_reason: null, stopped_detail: null,
   };
 }
@@ -253,24 +313,46 @@ export function newLineageProgress(): LineageProgress {
  */
 export function foldSlice(
   prior: LineageProgress,
+  /**
+   * EVERY FIELD IS THE LINEAGE-CUMULATIVE VALUE AS THIS SLICE LEFT IT, and each
+   * name says so. The old parameter was `{ qualified, investigated, costUnits }`
+   * — three names that read as per-slice deltas while every caller passed a
+   * cumulative total, which is precisely how the addition below became a sum of
+   * snapshots. A name that lies is how the next person reintroduces this.
+   */
   slice: {
-    qualified: number;
-    investigated: number;
-    costUnits: number;
+    /** Distinct qualified companies in the pool. */
+    qualifiedInPool: number;
+    /** Distinct companies at a terminal investigation state, from the working set. */
+    uniqueCompaniesInvestigatedInPool: number;
+    /** Every authorisation this lineage has made, carried work included. */
+    authorisationsInPool: number;
+    /** Paid provider cost units accumulated across the lineage. */
+    costUnitsInLineage: number;
   },
 ): LineageProgress {
-  const qualifiedDelta = slice.qualified - prior.qualified_high_water;
-  const barren = sliceWasBarren({
-    qualifiedDelta,
-    investigatedDelta: slice.investigated,
-  });
+  // DELTAS ARE DERIVED HERE, from cumulative in and cumulative held. They are
+  // not asked for, because a caller that has to compute one will eventually
+  // compute it wrong — `sliceWasBarren` was documented as taking a delta and
+  // handed a cumulative count, so no slice after the first could ever be
+  // barren. Every run this year reported `barren_slices: 0`, including
+  // lineages whose last four slices selected nobody at all.
+  const qualifiedDelta = slice.qualifiedInPool - prior.qualified_high_water;
+  const investigatedDelta =
+    slice.uniqueCompaniesInvestigatedInPool - prior.unique_companies_investigated;
+  const barren = sliceWasBarren({ qualifiedDelta, investigatedDelta });
+  const keepHigher = (was: number, now: number) => Math.max(was, Math.max(0, now));
   return {
     ...prior,
+    // The one true per-call increment.
     continuations_used: prior.continuations_used + 1,
-    cost_units_used: prior.cost_units_used + Math.max(0, slice.costUnits),
+    cost_units_used: keepHigher(prior.cost_units_used, slice.costUnitsInLineage),
     barren_slices: barren ? prior.barren_slices + 1 : 0,
-    qualified_high_water: Math.max(prior.qualified_high_water, slice.qualified),
-    investigated_total: prior.investigated_total + Math.max(0, slice.investigated),
+    qualified_high_water: keepHigher(prior.qualified_high_water, slice.qualifiedInPool),
+    unique_companies_investigated: keepHigher(
+      prior.unique_companies_investigated, slice.uniqueCompaniesInvestigatedInPool),
+    investigation_authorisations: keepHigher(
+      prior.investigation_authorisations, slice.authorisationsInPool),
   };
 }
 
@@ -286,7 +368,18 @@ export function readLineageProgress(raw: unknown): LineageProgress {
     cost_units_used: n(o.cost_units_used),
     barren_slices: n(o.barren_slices),
     qualified_high_water: n(o.qualified_high_water),
-    investigated_total: n(o.investigated_total),
+    // THE OLD FIELD IS DELIBERATELY NOT READ. A pre-split checkpoint holds
+    // `investigated_total`, and its value is a sum of cumulative snapshots —
+    // seeding a COMPANY count with it would pin the lineage to a meaningless
+    // number for good, because `foldSlice` only ever moves these up. Starting a
+    // resumed legacy lineage at zero and re-deriving from the working set is
+    // strictly more correct: the working set is the thing that actually knows.
+    //
+    // `cost_units_used` IS still read, and a legacy value there is inflated by
+    // the same defect. That errs toward stopping a resumed run early rather
+    // than overspending on it, which is the right direction to be wrong in.
+    unique_companies_investigated: n(o.unique_companies_investigated),
+    investigation_authorisations: n(o.investigation_authorisations),
     stopped_reason: (o.stopped_reason as StopReason | null) ?? null,
     stopped_detail: typeof o.stopped_detail === "string" ? o.stopped_detail : null,
   };

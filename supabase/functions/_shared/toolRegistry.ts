@@ -309,6 +309,14 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
 
 // ---------- Tool: source_with_apify (Apify) ----------
 
+import {
+  priceProviderCall, type ProviderRunUsage,
+} from "./providerCostModel.ts";
+import {
+  authorizeProviderCall, settleProviderCall, resolveCreditEnforcement,
+  CREDIT_REFUSED_ERROR, type CreditDb,
+} from "./creditAuthorization.ts";
+
 const APIFY_BASE = "https://api.apify.com/v2";
 
 // Actor catalog. Fill `actor_id` once the user provides the Apify actor for that source_type.
@@ -1243,6 +1251,19 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         normalized_source_type: kindLabel,
         run_id,
         dataset_id: resolvedDatasetId,
+      // ── THE PROVIDER'S OWN USAGE, CARRIED OUT OF THE POLLER ─────────────
+      //
+      // `finalRun` is the full `/actor-runs/{id}` document and it dies here
+      // otherwise. `priceProviderCall` reads `usageTotalUsd` if Apify sends it
+      // and falls back to the verified card price table if not — so passing it
+      // through is what turns "does the run object carry a charge?" from a
+      // comment into a recorded fact. Three fields, never the whole document:
+      // this travels into a jsonb column.
+      provider_usage: {
+        usageTotalUsd: finalRun?.usageTotalUsd ?? null,
+        usage: finalRun?.usage ? { totalUsd: finalRun.usage.totalUsd ?? null } : null,
+        stats: finalRun?.stats ? { computeUnits: finalRun.stats.computeUnits ?? null } : null,
+      },
         // ONE CONTRACT, TWO NAMES. `company_items` is what the structured branch
         // has always been authoritative on; `items` is what every consumer
         // actually reads — including `invokeJobs`, which is why company
@@ -1317,6 +1338,19 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       discovery,
       run_id,
       dataset_id: resolvedDatasetId,
+      // ── THE PROVIDER'S OWN USAGE, CARRIED OUT OF THE POLLER ─────────────
+      //
+      // `finalRun` is the full `/actor-runs/{id}` document and it dies here
+      // otherwise. `priceProviderCall` reads `usageTotalUsd` if Apify sends it
+      // and falls back to the verified card price table if not — so passing it
+      // through is what turns "does the run object carry a charge?" from a
+      // comment into a recorded fact. Three fields, never the whole document:
+      // this travels into a jsonb column.
+      provider_usage: {
+        usageTotalUsd: finalRun?.usageTotalUsd ?? null,
+        usage: finalRun?.usage ? { totalUsd: finalRun.usage.totalUsd ?? null } : null,
+        stats: finalRun?.stats ? { computeUnits: finalRun.stats.computeUnits ?? null } : null,
+      },
       items,
       total: items.length,
       // Success with zero items is `no_results`, not a failure (rule 10).
@@ -1578,7 +1612,62 @@ export async function runTool(
 
   if (auditSpec) {
     const writer = createLedgerWriter(ctx.admin as unknown as LedgerDb);
+
+    // ── AUTHORISE, EXECUTE, SETTLE ──────────────────────────────────────
+    //
+    // Here, and not at the planning layer, because a future path that reaches
+    // a provider without knowing about credits is the failure being designed
+    // out — and the only defence against it is that the money boundary and the
+    // call boundary are the same line. `logical_call_key` is the idempotency
+    // key, so a retried or replayed call reserves nothing further.
+    const creditMode = resolveCreditEnforcement();
+    const auth = await authorizeProviderCall({
+      db: ctx.admin as unknown as CreditDb,
+      workspace_id: auditSpec.workspace_id,
+      logical_call_key: auditSpec.logical_call_key,
+      task_id: auditSpec.task_id,
+      capability: auditSpec.capability,
+      mode: creditMode,
+    });
+    console.log("[credits][authorization]", {
+      mode: auth.mode, allowed: auth.allowed, reserved: auth.reserved,
+      reason: auth.reason, balance_after: auth.balance_after,
+      capability: auditSpec.capability, detail: auth.detail,
+    });
+
+    if (!auth.allowed) {
+      // REFUSED, AND NOTHING WAS STARTED. Reported with its own error code so
+      // the engine can tell this from a provider fault and checkpoint instead
+      // of recording a verdict about the company.
+      return {
+        ok: false,
+        error: CREDIT_REFUSED_ERROR,
+        data: {
+          credit_refusal: {
+            reason: auth.reason, balance_after: auth.balance_after,
+            detail: auth.detail, mode: auth.mode,
+          },
+        },
+      };
+    }
+
     result = await withExecutionAudit(writer, auditSpec, executeOnce);
+
+    // SETTLED ON WHAT ACTUALLY HAPPENED. A call that never reached the
+    // provider refunds in full; `credits_release_stale` is the backstop if this
+    // never runs at all.
+    const started = result.ok || typeof (result.data as { run_id?: unknown } | null)
+      ?.run_id === "string";
+    const settled = await settleProviderCall({
+      db: ctx.admin as unknown as CreditDb,
+      transaction_id: auth.transaction_id,
+      started,
+      reason: result.ok ? "provider_call_succeeded" : String(result.error ?? "failed"),
+    });
+    console.log("[credits][settlement]", {
+      transaction_id: auth.transaction_id, started,
+      charged: settled.charged, settled: settled.settled, detail: settled.detail,
+    });
   } else {
     try {
       result = await tool.execute(input, ctx);
@@ -1681,10 +1770,22 @@ export async function runTool(
  * Inventing "completed" or "quota_satisfied" here would put a workflow-level
  * claim on a row that cannot support it.
  *
- * COST IS ALWAYS AN ESTIMATE AT THIS LAYER. Apify does not return a charge on the
- * run object we poll, so nothing here may claim `provider_reported`. A per-actor
- * price table can promote this later; until then the row says "estimated" and
- * `actual_cost_usd` stays null.
+ * COST IS PRICED HERE, WITH ITS PROVENANCE. This said "Apify does not return a
+ * charge on the run object we poll, so nothing here may claim
+ * `provider_reported`. A per-actor price table can promote this later; until
+ * then the row says estimated and `actual_cost_usd` stays null."
+ *
+ * Two claims, and neither survived being checked. The per-actor price table it
+ * defers to already existed and was already verified — `hiringActorCatalog`'s
+ * `cost_model`, with named per-event prices — and nothing consulted it. And the
+ * row did NOT say "estimated": it said `unknown` on every one of the 118 rows
+ * this table holds, because `cost: { source: "unknown" }` is hardcoded below.
+ *
+ * Whether Apify reports a charge is now a question the code asks rather than
+ * one a comment answers: `provider_usage` carries the run document's own
+ * figures out of the poller, `priceProviderCall` prefers them, and falls back
+ * to the card table with `event_priced` when they are absent. The first live
+ * run tells us which, and the ledger records it either way.
  */
 function outcomeFromToolResult(
   r: ToolResult,
@@ -1712,7 +1813,17 @@ function outcomeFromToolResult(
       provider_run_id: runId,
       dataset_id: datasetId,
       counts: { raw: items ? items.length : null },
-      cost: { source: "unknown" },
+      // PRICED FROM WHAT THIS RUN ACTUALLY DID: its own row count, its own
+      // input (short and full company rows are a 2x difference), and the
+      // provider's usage figures when it sends any. `started: !resumed` keeps a
+      // reused run from being charged a second start fee it never paid.
+      cost: priceProviderCall({
+        actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
+        itemCount: items ? items.length : null,
+        input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
+        run: (d.provider_usage ?? null) as ProviderRunUsage | null,
+        started: !resumed,
+      }),
       metadata: {
         actor_id: d.actor_id ?? null,
         build_id: d.build_id ?? null,
@@ -1733,7 +1844,18 @@ function outcomeFromToolResult(
     dataset_id: datasetId,
     failure_code: code.split(":")[0],
     failure_message: code,
-    cost: { source: "unknown" },
+    // A FAILED CALL IS NOT A FREE CALL. An Actor that started and then timed out
+    // has already been charged its start fee, and a run left RUNNING is
+    // explicitly "billable" per the branch that returns it. Pricing it at zero
+    // would let the expensive failures disappear from the run's economics.
+    cost: priceProviderCall({
+      actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
+      // No rows arrived, so only the start charge applies.
+      itemCount: 0,
+      input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
+      run: (d.provider_usage ?? null) as ProviderRunUsage | null,
+      started: runId !== null,
+    }),
     metadata: { resumable: d.resumable ?? null, status: d.status ?? null },
   };
 }

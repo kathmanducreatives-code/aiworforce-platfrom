@@ -321,7 +321,7 @@ import {
 import {
   dispatchContinuation, type DispatchOutcome,
 } from "../_shared/leadContinuationDispatch.ts";
-import { isFrontier } from "../_shared/leadInvestigationBudget.ts";
+import { isFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
 import { projectStatus, RESUMABLE_ROW_STATUS } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
@@ -3949,10 +3949,26 @@ Deno.serve(async (req) => {
         const priorProgress = readLineageProgress(
           (((priorTaskRow.data as { result?: Record<string, unknown> } | null)
             ?.result ?? {}) as Record<string, unknown>)[LINEAGE_PROGRESS_KEY]);
+        // ── COMPANIES AND AUTHORISATIONS ARE DIFFERENT QUANTITIES ──────────
+        //
+        // `investigation_selected` is a SPEND counter — it re-counts work
+        // carried in flight, on purpose, because this invocation buys those
+        // searches too. It was being reported as a company count, and summed
+        // across slices on top of that.
+        //
+        // The company count is derived from the working set, which is
+        // deduplicated by construction and restored whole on every
+        // continuation, so a company investigated in slice one cannot be
+        // counted again in slice four.
+        const uniqueInvestigated = capabilityRun
+          ? capabilityRun.companies.filter(
+            (c) => wasInvestigated(c.investigation_state)).length
+          : 0;
         const progress = foldSlice(priorProgress, {
-          qualified: sliceQualified,
-          investigated: capabilityRun?.state.investigation_selected ?? 0,
-          costUnits: capabilityRun?.state.accumulated_cost_units ?? 0,
+          qualifiedInPool: sliceQualified,
+          uniqueCompaniesInvestigatedInPool: uniqueInvestigated,
+          authorisationsInPool: capabilityRun?.state.investigation_selected ?? 0,
+          costUnitsInLineage: capabilityRun?.state.accumulated_cost_units ?? 0,
         });
         const autoDecision = decideAutoContinuation({
           // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated

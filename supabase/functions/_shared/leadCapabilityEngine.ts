@@ -144,6 +144,7 @@ import {
 } from "./leadCapabilityGraph.ts";
 import { normalizeLocationName } from "./harvestApiPeople.ts";
 import { guardedInvoker } from "./leadMissionRuntime.ts";
+import { CREDIT_REFUSED_ERROR } from "./creditAuthorization.ts";
 import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
@@ -235,6 +236,12 @@ export interface ProviderAttempt {
     | "skipped_not_configured"
     /** The execution deadline closed before this call could safely start. */
     | "skipped_deadline"
+    /**
+     * Credit authorisation refused the call. Nothing was started, so this is
+     * not a failure and costs nothing — it is the spend equivalent of
+     * `skipped_deadline`, and the run checkpoints for the same reason.
+     */
+    | "skipped_credit_refused"
     /**
      * A previous invocation already bought this exact answer, or already gave up
      * on this company. Costs nothing and is not a failure.
@@ -466,7 +473,46 @@ export interface CapabilityExecutionState {
       candidate_name: string | null;
       candidate_slug: string;
       candidate_domain: string | null;
+      /** Where the provider ranked this candidate, 0-based. */
+      rank: number;
     }>;
+    /**
+     * WHERE THE ACCEPTED COMPANY WAS FOUND, one bucket per rank.
+     *
+     * The only measurement that can settle `maxItems`. Winners clustering at
+     * ranks 0-2 mean twelve of fifteen rows are bought and never read; winners
+     * appearing at 11 and 13 mean five was the miss and fifteen is earning it.
+     * A match verdict cannot answer either question.
+     */
+    accepted_rank_histogram: Record<string, number>;
+    /**
+     * WHAT HAPPENED BEFORE THE MATCHER EVER SAW ANYTHING.
+     *
+     * `unresolved` was one word for four different facts, and the run reported
+     * only the word. These separate them:
+     *
+     *   candidates_returned  the provider answered with rows; any miss after
+     *                        this is the MATCHER's decision, and
+     *                        `by_code` says which rule made it.
+     *   no_candidates        the provider answered with nothing. Either this
+     *                        company has no LinkedIn page, or the name index
+     *                        cannot surface it at any depth — retrieval, never
+     *                        matching.
+     *   provider_error       the call itself faulted. Says nothing about the
+     *                        company at all.
+     *   not_attempted        the clock or the credit gate stopped it. Not a
+     *                        finding; the company is still on the frontier.
+     */
+    retrieval_outcomes: Record<string, number>;
+    /**
+     * Which retrieval depth produced these outcomes.
+     *
+     * Short and full are a 2x price difference and the provider returns
+     * different results for identical queries, so no single run can compare
+     * them. Stamping the mode on the outcomes is what makes the comparison
+     * possible ACROSS runs, from data rather than from argument.
+     */
+    retrieval_modes: Record<string, number>;
   };
   /**
    * WHICH REQUIRED SIGNALS THIS RUN COULD ANSWER, and why any could not.
@@ -696,6 +742,42 @@ export function stateMatchesMission(
 export const IDENTITY_SEARCH_MAX_ITEMS = 15;
 
 /**
+ * Which retrieval depth the identity search buys.
+ *
+ * ── THE STAGED FLOW WAS ALREADY HALF-BUILT ──────────────────────────────────
+ *
+ * `full` costs $0.004 a row against `short`'s $0.002, and the only two fields
+ * it adds are `employeeCount` and `industries`. Those are precisely the two
+ * fields this actor's own card says must NOT be trusted from a search:
+ *
+ *   company_search_size_filters_wrong_field
+ *     "companySize filters employeeCountRange, which contradicts employeeCount
+ *      by up to 23x." — mitigation: "Only enriched employeeCount may satisfy a
+ *      size gate."
+ *   company_search_industry_unreliable
+ *     "industryIds:['4'] returned TechCrunch, Entrepreneur Media and Swooped."
+ *      — mitigation: "Provider industry is never proof. Enrichment supplies the
+ *      authoritative industry id."
+ *
+ * And `apify_linkedin_company_details` — which already runs, on the resolved
+ * winner, batched — lists `best_for: ["authoritative exact employeeCount",
+ * "authoritative industry id + hierarchy", ... "correcting company-search's
+ * unreliable filters"]`.
+ *
+ * So `full` on the SEARCH bought, for fifteen candidates, the two fields it is
+ * documented as getting wrong, which are then bought properly for the one
+ * winner by the stage whose job that is. The short → winner → full-details flow
+ * is not a new architecture: it is what these two stages already were, once the
+ * search stops doing the enrichment stage's work fourteen times over.
+ *
+ * A CONSTANT AND NOT A KNOB. Recorded on every match decision instead, so the
+ * comparison between modes is made from run data rather than from this comment
+ * — the provider returns different results for identical queries, so no single
+ * run can settle it and only accumulated evidence can.
+ */
+export const SEARCH_SCRAPER_MODE: "short" | "full" = "short";
+
+/**
  * The `locations` filter for an identity search, or nothing.
  *
  * ONLY WHEN THE MISSION MADE GEOGRAPHY HARD. A soft or absent geography is a
@@ -723,6 +805,40 @@ export function identitySearchLocations(mission: LeadMissionV1): string[] {
   return [...seen].slice(0, 20);
 }
 
+/** What the provider did, before any matching rule was consulted. */
+export type RetrievalOutcome =
+  | "candidates_returned" | "no_candidates" | "provider_error" | "not_attempted";
+
+/**
+ * Record what retrieval did for one company.
+ *
+ * SEPARATE FROM `recordMatchDecisions` on purpose. That function answers "which
+ * rule refused this candidate", and it can only run when there are candidates —
+ * so the two cases where there are none were absent from every diagnostic this
+ * system has produced. A company LinkedIn has no page for and a company the
+ * matcher rejected both left the stage as `unresolved`, and the difference is
+ * exactly the one that decides whether to change the QUERY or the RULES.
+ *
+ * Counts only. The per-company detail lives in `rejected_samples`, which is
+ * bounded; this is the denominator that makes those samples readable.
+ */
+export function recordRetrievalOutcome(
+  state: CapabilityExecutionState,
+  company: { key: string },
+  outcome: RetrievalOutcome,
+): void {
+  void company;
+  const d = state.identity_match_diagnostics ?? {
+    version: "identity-match-diagnostics-v1" as const,
+    companies_judged: 0, companies_accepted: 0, companies_rejected: 0,
+    by_code: {}, rejected_samples: [],
+    accepted_rank_histogram: {}, retrieval_modes: {}, retrieval_outcomes: {},
+  };
+  d.retrieval_outcomes ??= {};
+  d.retrieval_outcomes[outcome] = (d.retrieval_outcomes[outcome] ?? 0) + 1;
+  state.identity_match_diagnostics = d;
+}
+
 /** How many refusals to keep verbatim. Enough to see a pattern, bounded. */
 export const MAX_MATCH_REJECTION_SAMPLES = 25;
 
@@ -746,6 +862,10 @@ export function recordMatchDecisions(
     candidate_name: string | null;
     candidate_slug: string;
     candidate_domain: string | null;
+    /** The provider's own ordering, 0-based. */
+    rank?: number;
+    /** `short` or `full` — the depth this search was bought at. */
+    retrieval_mode?: string;
   }>,
 ): void {
   if (decisions.length === 0) return;
@@ -753,9 +873,28 @@ export function recordMatchDecisions(
     version: "identity-match-diagnostics-v1" as const,
     companies_judged: 0, companies_accepted: 0, companies_rejected: 0,
     by_code: {}, rejected_samples: [],
+    accepted_rank_histogram: {}, retrieval_modes: {}, retrieval_outcomes: {},
   };
+  // Older checkpoints predate these three; absent is empty, never a crash.
+  d.accepted_rank_histogram ??= {};
+  d.retrieval_modes ??= {};
+  d.retrieval_outcomes ??= {};
 
-  for (const dec of decisions) d.by_code[dec.code] = (d.by_code[dec.code] ?? 0) + 1;
+  for (const dec of decisions) {
+    d.by_code[dec.code] = (d.by_code[dec.code] ?? 0) + 1;
+    if (dec.retrieval_mode) {
+      d.retrieval_modes[dec.retrieval_mode] = (d.retrieval_modes[dec.retrieval_mode] ?? 0) + 1;
+    }
+  }
+
+  // THE FIRST ACCEPTED CANDIDATE'S RANK, not every accepted one: the question
+  // is how deep the search had to go to find the company, and a second
+  // acceptance further down does not change that answer.
+  const winner = decisions.find((x) => x.accepted);
+  if (winner && typeof winner.rank === "number") {
+    const bucket = String(winner.rank);
+    d.accepted_rank_histogram[bucket] = (d.accepted_rank_histogram[bucket] ?? 0) + 1;
+  }
 
   const accepted = decisions.some((x) => x.accepted);
   d.companies_judged++;
@@ -776,6 +915,7 @@ export function recordMatchDecisions(
       candidate_name: closest.candidate_name,
       candidate_slug: closest.candidate_slug,
       candidate_domain: closest.candidate_domain,
+      rank: typeof closest.rank === "number" ? closest.rank : -1,
     });
   }
 
@@ -2264,6 +2404,25 @@ export async function runCapabilityPlan(
         log("provider_pending", { capability, provider, run_id: pending.run_id });
         return [];
       }
+      // ── REFUSED FOR CREDIT IS NOT A PROVIDER FAULT ────────────────────
+      //
+      // Nothing was started and nothing was learned about this company, so
+      // recording `provider_error` would attach a verdict to a company the run
+      // never looked at. It takes the DEADLINE path's shape instead — block the
+      // company as deferred, set a checkpoint reason, return empty — because
+      // "we may not spend right now" and "we are out of time" are the same
+      // situation from the frontier's point of view: resumable, no verdict, no
+      // money spent. Reusing that shape is also why there is no second way to
+      // pause a run.
+      if (String(e).includes(CREDIT_REFUSED_ERROR)) {
+        record("skipped_credit_refused", 0,
+          "credit authorisation refused; the call was not started");
+        if (company) company.stage_block = { capability, reason: "deferred" };
+        lastCallBlock = "deferred";
+        state.terminal_reason = "credit_exhausted_checkpoint";
+        log("provider_refused_no_credit", { capability, provider });
+        return [];
+      }
       record("error", 0, String(e));
       // A FAILED CALL IS NOT A NEGATIVE ANSWER. Same reasoning as the deadline
       // skip above: the caller must not read the empty array as evidence.
@@ -3384,7 +3543,7 @@ export async function runCapabilityPlan(
             // 15 that is 15 results on every one of ~23 identity calls per run
             // — the single largest paid line in the pipeline, doubled for a
             // number nothing here looks at.
-            scraperMode: "short",
+            scraperMode: SEARCH_SCRAPER_MODE,
             maxItems: IDENTITY_SEARCH_MAX_ITEMS,
             // ── THE GEOGRAPHY THE MISSION ALREADY DECLARED HARD ──────────
             //
@@ -3411,7 +3570,23 @@ export async function runCapabilityPlan(
           // a TERMINAL state that stops the company being retried, ever. The
           // company keeps `identity === null` and is counted as unfinished
           // work below.
-          if (c.stage_block?.capability === cap) return;
+          if (c.stage_block?.capability === cap) {
+            // NEVER ATTEMPTED, OR ATTEMPTED AND FAULTED. Both were invisible:
+            // the company simply left the stage `unresolved`, which is the same
+            // word used for "the provider answered and nothing matched". Three
+            // very different facts under one label is why five audits could not
+            // say whether a miss was retrieval, matching or the clock.
+            recordRetrievalOutcome(state, c,
+              c.stage_block.reason === "provider_error" ? "provider_error" : "not_attempted");
+            return;
+          }
+          // A SEARCH THAT RETURNED NOTHING IS NOT A MATCH FAILURE. This is the
+          // "genuinely missing identity" case, and `recordMatchDecisions` never
+          // saw it — it is only called when candidates came back, so a company
+          // LinkedIn has no page for looked exactly like one the matcher
+          // refused.
+          recordRetrievalOutcome(state, c,
+            found.length === 0 ? "no_candidates" : "candidates_returned");
           lookups = found.map((f) => ({
             name: (f.name as string) ?? null,
             linkedinUrl: (f.linkedinUrl as string) ?? null,
@@ -3443,12 +3618,23 @@ export async function runCapabilityPlan(
             }));
             lookups = decisions.filter((d) => d.candidate.accepted).map((d) => d.lookup);
             if (before > 0) {
-              recordMatchDecisions(state, c, decisions.map((d) => ({
+              recordMatchDecisions(state, c, decisions.map((d, rank) => ({
                 code: d.candidate.code,
                 accepted: d.candidate.accepted,
                 candidate_name: d.lookup.name,
                 candidate_slug: linkedInSlugToken(d.lookup.linkedinUrl),
                 candidate_domain: d.lookup.website,
+                // WHERE THE PROVIDER PUT IT. The question `maxItems` turns on:
+                // a winner at rank 11 says 15 was the right ask and 5 was not;
+                // winners never past rank 3 say we are paying for twelve rows
+                // nobody reads. Neither is answerable from a match verdict.
+                rank,
+                // AND UNDER WHICH RETRIEVAL. Short and full are a 2x price
+                // difference, and comparing their match rates across runs is
+                // the only honest way to decide between them — the provider
+                // returns different results for identical queries, so a single
+                // run cannot settle it either way.
+                retrieval_mode: SEARCH_SCRAPER_MODE,
               })));
             }
             if (before > 0 && lookups.length === 0) {
@@ -3599,6 +3785,12 @@ export async function runCapabilityPlan(
           accepted: state.identity_match_diagnostics.companies_accepted,
           rejected: state.identity_match_diagnostics.companies_rejected,
           by_code: state.identity_match_diagnostics.by_code,
+          // The two that decide `maxItems` and the retrieval depth.
+          accepted_ranks: state.identity_match_diagnostics.accepted_rank_histogram,
+          retrieval_modes: state.identity_match_diagnostics.retrieval_modes,
+          // Retrieval vs matching vs fault vs clock — four facts that were one
+          // word.
+          retrieval: state.identity_match_diagnostics.retrieval_outcomes,
         });
       }
       await publish("identity_resolved");

@@ -360,3 +360,186 @@ Deno.test("16. the stage still reads only mode-independent fields", () => {
     assert(branch.includes(needed), `"${needed}" is what this stage actually consumes`);
   }
 });
+
+// ═══ 6. THE STAGED FLOW, AND THE MEASUREMENTS THAT CAN REVISIT IT ══════════
+//
+// `full` costs $0.004 a row against `short`'s $0.002, and the only two fields
+// it adds are `employeeCount` and `industries` — precisely the two this actor's
+// own card says must not be trusted from a search, and precisely the two
+// `apify_linkedin_company_details` exists to supply authoritatively for the
+// winner. So `full` on the search bought, for fifteen candidates, the fields it
+// is documented as getting wrong, which are then bought properly for the one
+// company that matters.
+
+import {
+  SEARCH_SCRAPER_MODE,
+} from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import {
+  hiringActorCard,
+} from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
+
+Deno.test("17. the two fields `full` adds are the two the card says not to trust", () => {
+  const search = hiringActorCard("apify_linkedin_company_search")!;
+  const enrich = hiringActorCard("apify_linkedin_company_details")!;
+
+  // The search's own defects name them.
+  const defects = search.known_defects.map((d) => d.id);
+  assert(defects.includes("company_search_size_filters_wrong_field"));
+  assert(defects.includes("company_search_industry_unreliable"));
+  assert(search.known_defects.some((d) => /Only enriched employeeCount/.test(d.mitigation)));
+  assert(search.known_defects.some((d) => /Enrichment supplies the authoritative/.test(d.mitigation)));
+
+  // And the enrichment stage claims exactly them.
+  assert(enrich.best_for.some((b) => /employeeCount/.test(b)));
+  assert(enrich.best_for.some((b) => /industry id/.test(b)));
+  assert(enrich.best_for.some((b) => /correcting company-search/.test(b)),
+    "the enrichment card says outright that it exists to correct the search");
+});
+
+Deno.test("18. the search is bought SHORT, and the price gap is real", () => {
+  assertEquals(SEARCH_SCRAPER_MODE, "short");
+  const c = hiringActorCard("apify_linkedin_company_search")!.cost_model;
+  assertEquals(c.events_usd!["short-company"], 0.002);
+  assertEquals(c.events_usd!["full-company"], 0.004);
+  assertEquals(
+    c.events_usd!["full-company"] / c.events_usd!["short-company"], 2,
+    "at maxItems 15 across ~23 calls a run, that gap is the largest line in the pipeline",
+  );
+});
+
+Deno.test("19. the winner's RANK is recorded — the only thing that can settle maxItems", () => {
+  const state = {} as never as Parameters<typeof recordMatchDecisions>[0];
+  const dec = (rank: number, accepted: boolean) => ({
+    code: (accepted ? "domain_exact" : "no_name_or_domain_match") as
+      Parameters<typeof recordMatchDecisions>[2][number]["code"],
+    accepted, candidate_name: `c${rank}`, candidate_slug: `c${rank}`,
+    candidate_domain: null, rank, retrieval_mode: "short",
+  });
+
+  // A company found at rank 11 — beyond where `maxItems: 5` could ever reach.
+  recordMatchDecisions(state, engineCompany("a.com", "A", "a.com"), [
+    dec(0, false), dec(1, false), dec(11, true), dec(12, false),
+  ]);
+  // And one found immediately.
+  recordMatchDecisions(state, engineCompany("b.com", "B", "b.com"), [dec(0, true)]);
+
+  const d = state.identity_match_diagnostics!;
+  assertEquals(d.accepted_rank_histogram, { "11": 1, "0": 1 });
+  assertEquals(d.retrieval_modes, { short: 5 },
+    "every candidate carries the depth it was bought at, so modes compare ACROSS runs");
+});
+
+Deno.test("20. only the FIRST acceptance sets the rank", () => {
+  const state = {} as never as Parameters<typeof recordMatchDecisions>[0];
+  recordMatchDecisions(state, engineCompany("c.com", "C", "c.com"), [
+    { code: "domain_exact", accepted: true, candidate_name: "C", candidate_slug: "c",
+      candidate_domain: "c.com", rank: 3, retrieval_mode: "short" },
+    { code: "name_and_slug", accepted: true, candidate_name: "C", candidate_slug: "c",
+      candidate_domain: null, rank: 9, retrieval_mode: "short" },
+  ]);
+  assertEquals(state.identity_match_diagnostics!.accepted_rank_histogram, { "3": 1 },
+    "how deep the search had to go — a second hit further down does not change it");
+});
+
+Deno.test("21. a refusal carries its rank too, and a missing one is not zero", () => {
+  const state = {} as never as Parameters<typeof recordMatchDecisions>[0];
+  recordMatchDecisions(state, engineCompany("d.com", "D", "d.com"), [
+    { code: "no_name_or_domain_match", accepted: false, candidate_name: "Other",
+      candidate_slug: "other", candidate_domain: null, rank: 2, retrieval_mode: "short" },
+  ]);
+  assertEquals(state.identity_match_diagnostics!.rejected_samples[0].rank, 2);
+
+  // An older caller that does not supply one must not be read as "rank 0".
+  const legacy = {} as never as Parameters<typeof recordMatchDecisions>[0];
+  recordMatchDecisions(legacy, engineCompany("e.com", "E", "e.com"), [
+    { code: "no_name_or_domain_match", accepted: false, candidate_name: "x",
+      candidate_slug: "x", candidate_domain: null },
+  ]);
+  assertEquals(legacy.identity_match_diagnostics!.rejected_samples[0].rank, -1,
+    "unknown, not first");
+  assertEquals(legacy.identity_match_diagnostics!.accepted_rank_histogram, {});
+});
+
+// ═══ 7. FOUR FACTS THAT WERE ONE WORD ══════════════════════════════════════
+//
+// A company left identity resolution `unresolved` whether the provider had
+// returned nothing, returned the wrong companies, faulted, or was never asked
+// because the clock ran out. Five audits could not say which, because
+// `recordMatchDecisions` only runs when candidates come back — so the two cases
+// with no candidates were absent from every diagnostic this system produced.
+//
+// The distinction is the one that decides what to change: retrieval outcomes
+// point at the QUERY, match codes point at the RULES.
+
+import {
+  recordRetrievalOutcome,
+} from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+
+Deno.test("22. a search that returned NOTHING is not a match failure", () => {
+  const state = {} as never as Parameters<typeof recordRetrievalOutcome>[0];
+  recordRetrievalOutcome(state, { key: "ghost.ai" }, "no_candidates");
+
+  const d = state.identity_match_diagnostics!;
+  assertEquals(d.retrieval_outcomes, { no_candidates: 1 });
+  assertEquals(d.by_code, {},
+    "no rule was consulted, so no rule may be blamed");
+  assertEquals(d.companies_rejected, 0,
+    "the matcher rejected nobody — it was never given anything");
+});
+
+Deno.test("23. the four outcomes are counted apart", () => {
+  const state = {} as never as Parameters<typeof recordRetrievalOutcome>[0];
+  for (const o of ["candidates_returned", "candidates_returned", "no_candidates",
+    "provider_error", "not_attempted", "not_attempted"] as const) {
+    recordRetrievalOutcome(state, { key: `c-${Math.random()}` }, o);
+  }
+  assertEquals(state.identity_match_diagnostics!.retrieval_outcomes, {
+    candidates_returned: 2, no_candidates: 1, provider_error: 1, not_attempted: 2,
+  });
+});
+
+Deno.test("24. retrieval and matching share one record without colliding", () => {
+  // A run where the provider answered for one company and not for another. Both
+  // facts have to survive in the same diagnostic, because the ratio between
+  // them is the finding.
+  const state = {} as never as Parameters<typeof recordRetrievalOutcome>[0];
+  recordRetrievalOutcome(state, { key: "found.ai" }, "candidates_returned");
+  recordMatchDecisions(state, engineCompany("found.ai", "Found", "found.ai"), [
+    { code: "domain_exact", accepted: true, candidate_name: "Found",
+      candidate_slug: "found", candidate_domain: "found.ai", rank: 0,
+      retrieval_mode: "short" },
+  ]);
+  recordRetrievalOutcome(state, { key: "ghost.ai" }, "no_candidates");
+
+  const d = state.identity_match_diagnostics!;
+  assertEquals(d.retrieval_outcomes, { candidates_returned: 1, no_candidates: 1 });
+  assertEquals(d.companies_judged, 1, "only the one with candidates was judged");
+  assertEquals(d.companies_accepted, 1);
+  assertEquals(d.accepted_rank_histogram, { "0": 1 });
+});
+
+Deno.test("25. a deferred company is not evidence about the company", () => {
+  // The clock and the credit gate both land here. Neither is a finding, and
+  // counting them as retrieval failures would make a budget decision look like
+  // a fact about LinkedIn.
+  const state = {} as never as Parameters<typeof recordRetrievalOutcome>[0];
+  recordRetrievalOutcome(state, { key: "later.ai" }, "not_attempted");
+  const d = state.identity_match_diagnostics!;
+  assertEquals(d.retrieval_outcomes.not_attempted, 1);
+  assertEquals(d.retrieval_outcomes.no_candidates, undefined);
+  assertEquals(d.companies_judged, 0);
+});
+
+Deno.test("26. the engine records all three paths, not just the one with rows", () => {
+  // The defect was structural: only the branch with candidates recorded
+  // anything. This pins that every exit from the search is now accounted for.
+  const src = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  const branch = src.slice(
+    src.indexOf("const found = await callProvider(cap, provider, compiled, c);"),
+    src.indexOf("c.identity = resolveIdentityAgainstLookups("));
+  assert(branch.includes('"provider_error"'), "a faulted call is recorded");
+  assert(branch.includes('"not_attempted"'), "a company the clock or credits stopped is recorded");
+  assert(branch.includes('"no_candidates"'), "a search that returned nothing is recorded");
+  assert(branch.includes('"candidates_returned"'), "and so is the ordinary case");
+});

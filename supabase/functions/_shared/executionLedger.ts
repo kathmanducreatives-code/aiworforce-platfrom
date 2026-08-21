@@ -72,8 +72,25 @@ export type ExecutionStatus =
   /** An already-paid provider run was adopted instead of starting a new one. */
   | "reused";
 
-/** How much a cost figure can be trusted. An estimate is never stored as actual. */
-export type CostSource = "provider_reported" | "estimated" | "unknown";
+/**
+ * How much a cost figure can be trusted. An estimate is never stored as actual.
+ *
+ * `event_priced` is the grade that was missing. Every row this table has ever
+ * held said `unknown`, because the only alternatives were "the provider told
+ * us" — which nothing read — and "estimated", which is where a figure computed
+ * from a VERIFIED per-event price table would have been buried alongside
+ * genuine guesses. Those are not the same claim: one is accurate to the cent
+ * and one is not gradeable at all, and "what did this run cost?" cannot be
+ * answered honestly without saying which you have.
+ *
+ * Only `provider_reported` may populate `actual_cost_usd`, and the database
+ * enforces it: `lead_execution_calls_actual_cost_requires_provider`.
+ */
+export type CostSource =
+  | "provider_reported"
+  | "event_priced"
+  | "estimated"
+  | "unknown";
 
 /**
  * Funnel counts.
@@ -483,6 +500,12 @@ export interface StageSummary {
   normalized: number | null;
   accepted: number | null;
   rejected: number | null;
+  /** Provider-reported spend attributed to this stage. */
+  actual_cost_usd: number;
+  /** Everything not provider-reported. Never added to the line above. */
+  estimated_cost_usd: number;
+  /** How the figures above were obtained. */
+  cost_confidence: ReturnType<typeof costConfidence>;
 }
 
 export interface TaskLedgerSummary {
@@ -510,12 +533,44 @@ export interface TaskLedgerSummary {
   estimated_cost_usd: number;
   /** True when any cost in this task is an estimate rather than a reported figure. */
   cost_is_partly_estimated: boolean;
+  /** How many calls carry each grade of cost provenance. */
+  cost_confidence: ReturnType<typeof costConfidence>;
   total_duration_ms: number;
   by_stage: StageSummary[];
   /** Task-level funnel outcomes no single provider call could know. */
   stage_results: StageSummary[];
   /** The last recorded `next_decision`, which is why the workflow stopped. */
   stop_reason: string | null;
+}
+
+/**
+ * How much of a set of costs is the provider's own figure rather than ours.
+ *
+ * Lives here, not in `providerCostModel`, because it reads LEDGER ROWS and this
+ * module owns both `CostSource` and the row shape. The pricing module depends
+ * on this file for its types; a helper here that reached back for it would make
+ * that a cycle.
+ *
+ * Reported beside the totals so a run's economics always carry their own grade.
+ * "$0.41, none of it provider-confirmed" is a different statement from "$0.41",
+ * and only one of them can be put in front of a customer.
+ */
+export function costConfidence(sources: readonly CostSource[]): {
+  provider_reported: number;
+  event_priced: number;
+  estimated: number;
+  unknown: number;
+  /** True when every figure came from the provider itself. */
+  fully_reported: boolean;
+} {
+  const count = (s: CostSource) => sources.filter((x) => x === s).length;
+  return {
+    provider_reported: count("provider_reported"),
+    event_priced: count("event_priced"),
+    estimated: count("estimated"),
+    unknown: count("unknown"),
+    fully_reported: sources.length > 0 && sources.every((s) => s === "provider_reported"),
+  };
 }
 
 /** Sum, treating null as unknown rather than zero. Null when nothing was known. */
@@ -549,6 +604,15 @@ export function summarizeTaskLedger(rows: ExecutionLedgerRow[]): TaskLedgerSumma
       normalized: sumKnown(list.map((r) => r.normalized_count)),
       accepted: sumKnown(list.map((r) => r.accepted_count)),
       rejected: sumKnown(list.map((r) => r.rejected_count)),
+      // PER STAGE, BECAUSE THAT IS THE QUESTION PEOPLE ACTUALLY ASK. "What did
+      // this run cost" is answerable from the total; "why is it expensive" is
+      // only answerable if identity, discovery and enrichment are separable.
+      // Kept apart by grade for the same reason the totals are.
+      actual_cost_usd: Number(
+        list.reduce((a, r) => a + (r.actual_cost_usd ?? 0), 0).toFixed(4)),
+      estimated_cost_usd: Number(
+        list.reduce((a, r) => a + (r.estimated_cost_usd ?? 0), 0).toFixed(4)),
+      cost_confidence: costConfidence(list.map((r) => r.cost_source)),
     }));
   };
 
@@ -574,7 +638,11 @@ export function summarizeTaskLedger(rows: ExecutionLedgerRow[]): TaskLedgerSumma
     reused: calls.filter((r) => r.status === "reused").length,
     actual_cost_usd: Number(calls.reduce((a, r) => a + (r.actual_cost_usd ?? 0), 0).toFixed(4)),
     estimated_cost_usd: Number(calls.reduce((a, r) => a + (r.estimated_cost_usd ?? 0), 0).toFixed(4)),
-    cost_is_partly_estimated: calls.some((r) => r.cost_source === "estimated"),
+    // ANY figure that is not the provider's own. `event_priced` is accurate and
+    // still ours, so a run priced entirely from the card table is "partly
+    // estimated" in the only sense that matters: nobody at Apify agreed to it.
+    cost_is_partly_estimated: calls.some((r) => r.cost_source !== "provider_reported"),
+    cost_confidence: costConfidence(calls.map((r) => r.cost_source)),
     total_duration_ms: calls.reduce((a, r) => a + (r.duration_ms ?? 0), 0),
     by_stage: group(calls),
     stage_results: group(stageRows),

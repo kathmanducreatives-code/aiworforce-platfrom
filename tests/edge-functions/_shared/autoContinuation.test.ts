@@ -110,25 +110,53 @@ Deno.test("7b. the target is checked before every ceiling", () => {
   assertEquals(d.reason, "quota_met");
 });
 
+/**
+ * Build `foldSlice`'s input from a lineage's CUMULATIVE position.
+ *
+ * Every real caller passes cumulative values — `state` is spread from the
+ * checkpoint, so `accumulated_cost_units` and `investigation_selected` are
+ * running totals for the whole lineage. This helper makes the tests say that
+ * out loud, so a future edit cannot quietly reintroduce delta-shaped inputs.
+ */
+const cumulative = (i: { qualified: number; investigated: number; cost: number }) => ({
+  qualifiedInPool: i.qualified,
+  uniqueCompaniesInvestigatedInPool: i.investigated,
+  // Authorisations track investigations here; their own semantics are pinned
+  // separately, in the test that shows the two diverging.
+  authorisationsInPool: i.investigated,
+  costUnitsInLineage: i.cost,
+});
+
 // ═══════════════════════════ 8-10. what carries between slices ══
 
 Deno.test("8. the qualified count is a HIGH-WATER MARK and never regresses", () => {
   // THE DEFECT THIS PREVENTS is the one the multi-round controller had: a slice
   // that evaluates nobody reports zero qualified, and assigning that erases the
   // companies an earlier slice proved and already persisted.
+  //
+  // EVERY INPUT IS CUMULATIVE, because every caller's is. `state` is spread from
+  // the checkpoint on a continuation, so `accumulated_cost_units` and
+  // `investigation_selected` are lineage totals, not slice deltas.
   let p = newLineageProgress();
-  p = foldSlice(p, { qualified: 4, investigated: 10, costUnits: 12 });
+  p = foldSlice(p, cumulative({ qualified: 4, investigated: 10, cost: 12 }));
   assertEquals(p.qualified_high_water, 4);
 
-  p = foldSlice(p, { qualified: 0, investigated: 10, costUnits: 12 });
+  p = foldSlice(p, cumulative({ qualified: 0, investigated: 10, cost: 12 }));
   assertEquals(p.qualified_high_water, 4,
     "a barren slice may not un-qualify four persisted companies");
 
-  p = foldSlice(p, { qualified: 7, investigated: 10, costUnits: 12 });
+  p = foldSlice(p, cumulative({ qualified: 7, investigated: 22, cost: 30 }));
   assertEquals(p.qualified_high_water, 7);
   assertEquals(p.continuations_used, 3);
-  assertEquals(p.cost_units_used, 36);
-  assertEquals(p.investigated_total, 30);
+
+  // ── THE COUNTERS THAT WERE SUMS OF SNAPSHOTS ────────────────────────────
+  //
+  // Three slices reporting lineage totals of 12, 12 and 30 cost units mean the
+  // lineage spent 30. The old fold added them and answered 54 — and the same
+  // arithmetic on real runs reported 158 units against 6 provider calls, then
+  // terminated the run for exceeding a ceiling of 120.
+  assertEquals(p.cost_units_used, 30, "the lineage total, not a sum of totals");
+  assertEquals(p.unique_companies_investigated, 22);
 });
 
 Deno.test("9. barren slices count consecutively and any progress resets them", () => {
@@ -137,19 +165,32 @@ Deno.test("9. barren slices count consecutively and any progress resets them", (
     "moving the frontier is progress even when nobody qualified");
   assertFalse(sliceWasBarren({ qualifiedDelta: 2, investigatedDelta: 0 }));
 
+  // AND THE DELTA IS DERIVED, NOT PASSED. `sliceWasBarren` documents its input
+  // as a delta and `foldSlice` used to hand it a cumulative count, so no slice
+  // after the first could ever be barren — every run this year reported
+  // `barren_slices: 0`, including lineages whose last four slices selected
+  // nobody at all. The counts below are cumulative and the deltas are computed.
   let p = newLineageProgress();
-  p = foldSlice(p, { qualified: 0, investigated: 0, costUnits: 1 });
+  p = foldSlice(p, cumulative({ qualified: 0, investigated: 0, cost: 1 }));
   assertEquals(p.barren_slices, 1);
-  p = foldSlice(p, { qualified: 0, investigated: 0, costUnits: 1 });
+  p = foldSlice(p, cumulative({ qualified: 0, investigated: 0, cost: 2 }));
   assertEquals(p.barren_slices, 2);
-  p = foldSlice(p, { qualified: 0, investigated: 6, costUnits: 1 });
+  p = foldSlice(p, cumulative({ qualified: 0, investigated: 6, cost: 3 }));
   assertEquals(p.barren_slices, 0, "a slice that investigated somebody resets the count");
+
+  // THE CASE THE OLD FOLD COULD NOT SEE: a lineage that has investigated 20
+  // companies and adds none. Cumulative 20 in, cumulative 20 held, delta zero.
+  let q = newLineageProgress();
+  q = foldSlice(q, cumulative({ qualified: 3, investigated: 20, cost: 20 }));
+  assertEquals(q.barren_slices, 0);
+  q = foldSlice(q, cumulative({ qualified: 3, investigated: 20, cost: 20 }));
+  assertEquals(q.barren_slices, 1,
+    "a slice that added nobody is barren however many the lineage has investigated");
 });
 
 Deno.test("10. progress survives the task row, and a missing one is safe", () => {
-  const p = foldSlice(newLineageProgress(), {
-    qualified: 3, investigated: 10, costUnits: 9,
-  });
+  const p = foldSlice(newLineageProgress(),
+    cumulative({ qualified: 3, investigated: 10, cost: 9 }));
   const round = readLineageProgress(JSON.parse(JSON.stringify(p)));
   assertEquals(round.qualified_high_water, 3);
   assertEquals(round.continuations_used, 1);
@@ -295,6 +336,8 @@ Deno.test("16. a request for 10 reaches 10 across slices with no human input", (
   let pool = 100;
   let progress = newLineageProgress();
   let slices = 0;
+  let investigatedCumulative = 0;
+  let costCumulative = 0;
   const qualifiedPerSlice = [4, 3, 2, 4];
 
   for (;;) {
@@ -317,11 +360,16 @@ Deno.test("16. a request for 10 reaches 10 across slices with no human input", (
     const investigated = Math.min(10, pool);
     pool -= investigated;
     const gained = qualifiedPerSlice[Math.min(slices, qualifiedPerSlice.length - 1)];
-    progress = foldSlice(progress, {
+    // CUMULATIVE, as the engine reports them: the working set and the cost
+    // counter both survive the checkpoint, so each slice hands over the
+    // lineage's position, never its own contribution.
+    investigatedCumulative += investigated;
+    costCumulative += 11;
+    progress = foldSlice(progress, cumulative({
       qualified: progress.qualified_high_water + gained,
-      investigated,
-      costUnits: 11,
-    });
+      investigated: investigatedCumulative,
+      cost: costCumulative,
+    }));
     slices++;
     assert(slices <= 20, "the loop must terminate");
   }
@@ -340,6 +388,8 @@ Deno.test("16b. a thin pool ends honestly short rather than looping", () => {
   let pool = 25;
   let progress = newLineageProgress();
   let slices = 0;
+  let investigatedCumulative = 0;
+  let costCumulative = 0;
   let stop = "";
 
   for (;;) {
@@ -353,9 +403,12 @@ Deno.test("16b. a thin pool ends honestly short rather than looping", () => {
     if (!d.continue) { stop = d.reason; break; }
     const investigated = Math.min(10, pool);
     pool -= investigated;
-    progress = foldSlice(progress, {
-      qualified: progress.qualified_high_water + 1, investigated, costUnits: 11,
-    });
+    investigatedCumulative += investigated;
+    costCumulative += 11;
+    progress = foldSlice(progress, cumulative({
+      qualified: progress.qualified_high_water + 1,
+      investigated: investigatedCumulative, cost: costCumulative,
+    }));
     slices++;
     assert(slices <= 20, "the loop must terminate");
   }
@@ -552,11 +605,15 @@ Deno.test("25. a slice that resumed nothing is BARREN and eventually stops the j
   // mark does not move — and `no_progress` ends the job rather than paying for
   // the same pass indefinitely.
   let p = newLineageProgress();
-  p = foldSlice(p, { qualified: 3, investigated: 10, costUnits: 12 });
-  // A replayed slice: same companies, same verdicts, nothing new qualified.
-  p = foldSlice(p, { qualified: 3, investigated: 0, costUnits: 12 });
+  p = foldSlice(p, cumulative({ qualified: 3, investigated: 10, cost: 12 }));
+  // A REPLAYED SLICE, as one really reports itself: the same ten companies are
+  // still investigated and the same three still qualified, so the lineage's
+  // cumulative position is UNCHANGED. It does not report zero — reporting zero
+  // is what the old delta-shaped contract asked for, and no real slice ever
+  // did it, which is why this guard never fired outside a test.
+  p = foldSlice(p, cumulative({ qualified: 3, investigated: 10, cost: 12 }));
   assertEquals(p.barren_slices, 1);
-  p = foldSlice(p, { qualified: 3, investigated: 0, costUnits: 12 });
+  p = foldSlice(p, cumulative({ qualified: 3, investigated: 10, cost: 12 }));
   assertEquals(p.barren_slices, 2);
   const d = decideAutoContinuation({
     qualified: p.qualified_high_water, requestedCount: 10, frontierRemaining: 89,
@@ -616,4 +673,114 @@ Deno.test("28. a transport failure inside the window is still a failure", async 
   }));
   assertFalse(out.dispatched);
   assertEquals(out.dispatched === false ? out.reason : null, "transport_error");
+});
+
+// ═══════ 29-33. THE ACCOUNTING MODEL: CUMULATIVE IN, MONOTONIC OUT ══
+//
+// `CapabilityExecutionState` is spread from the checkpoint on every
+// continuation, so `accumulated_cost_units` and `investigation_selected` are
+// LINEAGE totals, not slice deltas. `foldSlice` added them to totals of its own
+// once per slice, producing a sum of successive cumulative snapshots.
+//
+// Measured against the execution ledger, where one paid provider call is one
+// cost unit:
+//
+//     plan        provider calls    cost_units_used    continuations
+//     747ff464                 6                158                6
+//     a5332734                27                127                6
+//     958c86bc                29                124                5
+//     66554ea2                28                 58                3
+//     44c9c5c0                18                 27                2
+//
+// The inflation tracks the continuation count exactly, and it was not cosmetic:
+// a5332734 and 958c86bc were both TERMINATED by the 120-unit ceiling — "127 of
+// 120 provider cost units spent; 78 candidates remain unexamined" — after 27
+// and 29 real calls.
+
+Deno.test("29. THE 158-FOR-6 RUN: repeated lineage totals are not repeated spend", () => {
+  // Six slices of a lineage that made six provider calls in total. Each one
+  // hands over the lineage's position, and the position barely moves.
+  let p = newLineageProgress();
+  for (const spent of [1, 2, 3, 4, 5, 6]) {
+    p = foldSlice(p, cumulative({ qualified: 1, investigated: 6, cost: spent }));
+  }
+  assertEquals(p.cost_units_used, 6, "six calls cost six units, however many slices saw them");
+  assertEquals(p.continuations_used, 6, "and the slice count is still a real count");
+
+  // The ceiling now measures spend rather than slice count.
+  const d = decideAutoContinuation({
+    qualified: p.qualified_high_water, requestedCount: 10, frontierRemaining: 80,
+    continuationsUsed: 0, maxContinuations: 10,
+    costUnitsUsed: p.cost_units_used, maxCostUnits: 120,
+    barrenSlices: 0,
+  });
+  assert(d.continue, "a run that has spent 6 of 120 units must not be stopped for cost");
+});
+
+Deno.test("30. a company investigated in slice one is not counted again in slice four", () => {
+  // The working set is deduplicated and restored whole, so it reports the same
+  // company at the same cumulative position every slice.
+  let p = newLineageProgress();
+  p = foldSlice(p, cumulative({ qualified: 2, investigated: 10, cost: 10 }));
+  p = foldSlice(p, cumulative({ qualified: 5, investigated: 23, cost: 23 }));
+  p = foldSlice(p, cumulative({ qualified: 9, investigated: 31, cost: 31 }));
+  p = foldSlice(p, cumulative({ qualified: 10, investigated: 40, cost: 40 }));
+
+  assertEquals(p.unique_companies_investigated, 40,
+    "the pool's own count — the old fold answered 104 for this lineage");
+  assert(p.unique_companies_investigated <= 100,
+    "a company count can never exceed the pool it is drawn from");
+});
+
+Deno.test("31. companies and AUTHORISATIONS are separate quantities", () => {
+  // `investigation_selected` re-counts work carried in flight, deliberately:
+  // this invocation buys those searches too. So authorisations legitimately
+  // exceed companies, and collapsing them into one number is what made
+  // "investigated" unanswerable.
+  let p = newLineageProgress();
+  p = foldSlice(p, {
+    qualifiedInPool: 4,
+    uniqueCompaniesInvestigatedInPool: 10,
+    authorisationsInPool: 10,
+    costUnitsInLineage: 10,
+  });
+  p = foldSlice(p, {
+    qualifiedInPool: 6,
+    // Three new companies, but the ten carried in flight were re-authorised.
+    uniqueCompaniesInvestigatedInPool: 13,
+    authorisationsInPool: 23,
+    costUnitsInLineage: 23,
+  });
+  assertEquals(p.unique_companies_investigated, 13, "thirteen distinct companies");
+  assertEquals(p.investigation_authorisations, 23, "twenty-three authorisations");
+  assert(p.investigation_authorisations > p.unique_companies_investigated,
+    "and the difference is exactly the carried work — a real fact, not an error");
+});
+
+Deno.test("32. a reset state cannot lose money the lineage already spent", () => {
+  // A mission-hash mismatch rebuilds `CapabilityExecutionState` from zero. The
+  // spend still happened, so the lineage keeps the higher figure.
+  let p = newLineageProgress();
+  p = foldSlice(p, cumulative({ qualified: 7, investigated: 30, cost: 44 }));
+  p = foldSlice(p, cumulative({ qualified: 0, investigated: 0, cost: 0 }));
+  assertEquals(p.cost_units_used, 44, "money spent is not unspent by a fresh state");
+  assertEquals(p.qualified_high_water, 7);
+  assertEquals(p.unique_companies_investigated, 30);
+});
+
+Deno.test("33. a legacy checkpoint's meaningless company count is not inherited", () => {
+  // `investigated_total` held a sum of snapshots. Seeding a COMPANY count with
+  // it would pin the lineage to that number for good, because these fields only
+  // ever move up. Re-deriving from the working set is strictly more correct.
+  const legacy = readLineageProgress({
+    version: "lead-auto-continuation-v1",
+    continuations_used: 6, cost_units_used: 158, barren_slices: 0,
+    qualified_high_water: 9, investigated_total: 406,
+  });
+  assertEquals(legacy.unique_companies_investigated, 0,
+    "406 companies out of a pool of 100 is not a starting point");
+  assertEquals(legacy.investigation_authorisations, 0);
+  assertEquals(legacy.qualified_high_water, 9, "but a real high-water mark still carries");
+  assertEquals(legacy.cost_units_used, 158,
+    "and an inflated spend figure errs toward stopping early, which is the safe direction");
 });
