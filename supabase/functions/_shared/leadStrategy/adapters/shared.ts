@@ -7,6 +7,7 @@
 
 import { extractJson } from "../../aiProvider.ts";
 import { buildModelTelemetry, readModelUsage } from "../../modelCostModel.ts";
+import { buildChatCompletionsBody } from "../../modelRequestBody.ts";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_TIMEOUT_MS,
 } from "../config.ts";
@@ -27,16 +28,25 @@ export function buildStrategistRequestBody(
   call: StrategistCall,
   wireModel = call.model,
 ): Record<string, unknown> {
-  return {
+  // ── ONE BUILDER, SHARED WITH THE OTHER TRANSPORT ────────────────────────
+  //
+  // This shape and `gptProvider`'s were two hand-written bodies encoding two
+  // model families, and the disagreement between them is what kept half the
+  // pipeline unable to reach gpt-5.6 at all. `buildChatCompletionsBody` now
+  // owns the difference.
+  //
+  // BYTE-IDENTICAL for every input this function has ever received — the
+  // strategist always sends a gpt-5.6 model with effort `none`, no schema and a
+  // completion cap — and `modelRequestBody.test.ts` asserts exactly that, so
+  // unifying the builders is provably not a behaviour change here.
+  return buildChatCompletionsBody({
     model: wireModel,
-    messages: [
-      { role: "system", content: call.systemPrompt },
-      { role: "user", content: call.userMessage },
-    ],
-    reasoning_effort: "none",
-    max_completion_tokens: call.maxCompletionTokens ?? DEFAULT_MAX_COMPLETION_TOKENS,
-    response_format: { type: "json_object" },
-  };
+    systemPrompt: call.systemPrompt,
+    userMessage: call.userMessage,
+    reasoningEffort: "none",
+    maxOutputTokens: call.maxCompletionTokens ?? DEFAULT_MAX_COMPLETION_TOKENS,
+    schema: null,
+  });
 }
 
 export function normalizeHttpError(status: number): string {

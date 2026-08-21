@@ -209,6 +209,9 @@ export interface GptDeps {
 import {
   readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
 } from "./modelCostModel.ts";
+import {
+  buildChatCompletionsBody, type ReasoningEffort,
+} from "./modelRequestBody.ts";
 
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
@@ -357,44 +360,30 @@ export async function gptStructured<T>(
   let attempts = 0;
   // ONE REQUEST BODY, BUILT ONCE. A retry must send exactly what was rejected;
   // rebuilding it would make the second attempt a different call.
+  // ── THE BODY IS A FUNCTION OF THE MODEL, NOT OF THIS FILE ─────────────
+  //
+  // This built the gpt-4.1 shape by hand — `temperature`, `max_tokens` — which
+  // the GPT-5 models reject outright. That is why mission compilation,
+  // discovery selection and execution planning could never be pointed at
+  // `gpt-5.6-*`: the wall was in the request body, and nothing said so.
+  //
+  // `buildChatCompletionsBody` decides the shape from the model id, so this
+  // transport can now reach either family. No model and no effort changes
+  // here — see `reasoningEffort` on the request.
   const requestInit = {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        temperature: req.temperature ?? 0,
-        ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-        messages: [
-          { role: "system", content: req.system },
-          { role: "user", content: req.user },
-        ],
-        // STRUCTURED OUTPUT, ENFORCED BY THE API. `strict` makes the model
-        // unable to return a shape the schema forbids, which removes the whole
-        // class of "the model answered in prose today" failures that a
-        // parse-and-hope approach lives with.
-        //
-        // ── WHY A SCHEMA IS OPTIONAL ──────────────────────────────────────
-        //
-        // A schema here is a SECOND statement of what a valid answer is. Where
-        // the caller has no other validator that is exactly what you want. But
-        // several lead-intelligence stages answer through
-        // `intelligence/plannerWrapper`, which already parses the envelope,
-        // scans it for injection, and makes one constrained repair — it IS the
-        // authority on their shape. Declaring a strict schema in front of it
-        // would create two definitions of one contract, and two definitions
-        // drift; that drift is precisely how a field the parser reads becomes
-        // unemittable and a constraint silently disappears.
-        //
-        // So a caller WITH its own validator asks for `json_object` — the
-        // answer is still guaranteed to be JSON, and the existing parser stays
-        // the single authority on what the JSON must contain.
-        response_format: req.schema
-          ? {
-            type: "json_schema",
-            json_schema: { name: req.schema.name, strict: true, schema: req.schema.schema },
-          }
-          : { type: "json_object" },
-      }),
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify(buildChatCompletionsBody({
+      model,
+      systemPrompt: req.system,
+      userMessage: req.user,
+      maxOutputTokens: req.maxTokens ?? null,
+      temperature: req.temperature ?? null,
+      // Carried through at last. On a gpt-4.1 model the builder omits it, so
+      // this is inert until routing actually moves a stage to GPT-5.
+      reasoningEffort: (req.reasoningEffort as ReasoningEffort | null | undefined) ?? null,
+      schema: req.schema ?? null,
+    })),
   } satisfies RequestInit;
 
   // BOUNDED RETRY, NOT A LOOP. The bound is a constant, so the worst case is
