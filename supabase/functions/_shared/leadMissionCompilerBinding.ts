@@ -238,12 +238,33 @@ export function buildMissionCompilerBinding(input: {
             systemPrompt: MISSION_COMPILER_SYSTEM_PROMPT,
             messages: [{ role: "user", content: payload }],
           } as never);
-          const r = result as { ok?: boolean; json?: unknown } | null | undefined;
+          const r = result as
+            { ok?: boolean; json?: unknown; code?: unknown; detail?: unknown }
+            | null | undefined;
           if (r?.ok && r.json != null) return r.json;
-        } catch {
+          // ── WHY IT FAILED, NOT JUST THAT IT DID ─────────────────────────
+          //
+          // This branch dropped `code` and `detail` on the floor, so a
+          // compilation failure reached the user as `proposal_received: false`
+          // and nothing else. On 2026-08-21 the OpenAI balance ran out and the
+          // chat simply stopped answering; the reason —
+          // `insufficient_quota` — existed in the response and was discarded
+          // twice per message. Diagnosing it took a manual call to the
+          // provider, which is the exact cost of a silent catch.
+          console.log("[mission-compiler][attempt-failed]", {
+            attempt, of: MAX_COMPILATION_ATTEMPTS,
+            code: typeof r?.code === "string" ? r.code : "no_result",
+            detail: typeof r?.detail === "string" ? r.detail.slice(0, 300) : null,
+          });
+        } catch (e) {
           // Swallowed per attempt so a throw on the first try still gets the
           // second. The final outcome — not this attempt — is what the caller
-          // sees, and it is reported honestly as null below.
+          // sees, and it is reported honestly as null below. Logged, though:
+          // an unrecorded throw here is indistinguishable from a model that
+          // answered badly, and the two need different responses.
+          console.log("[mission-compiler][attempt-threw]", {
+            attempt, of: MAX_COMPILATION_ATTEMPTS, error: String(e).slice(0, 300),
+          });
         }
       }
 

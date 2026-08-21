@@ -220,6 +220,29 @@ export const MAX_RETRY_WAIT_MS = 8000;
 /** Used when the provider says "retry" without saying when. */
 export const DEFAULT_RETRY_WAIT_MS = 1000;
 
+/**
+ * An exhausted balance wearing a rate limit's status code.
+ *
+ * OpenAI returns HTTP 429 for two situations that could not be less alike:
+ *
+ *   "Rate limit reached … Please try again in 4.428s"     — transient
+ *   "You have no credits remaining. Add credits to        — permanent
+ *    continue using the API." (insufficient_quota)
+ *
+ * TEST 2026-08-21 16:34: the account ran out of credits and every chat message
+ * stopped being answered. The retry added this morning treated it as a hiccup
+ * and waited a second before asking again, twice per compiler attempt, four
+ * calls per message — for a condition that cannot resolve without somebody
+ * topping up an account.
+ *
+ * Waiting is not merely useless here, it is misleading: it makes a billing
+ * problem look like a slow provider.
+ */
+function bodyIsQuotaExhausted(body: string): boolean {
+  return /insufficient_quota|credit_balance_exhausted|no credits remaining|billing_hard_limit/i
+    .test(body);
+}
+
 /** 429 and the 5xx family. Everything else is a decision, not a hiccup. */
 function statusIsTransient(status: number): boolean {
   return status === 429 || (status >= 500 && status < 600);
@@ -368,7 +391,9 @@ export async function gptStructured<T>(
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const transient = statusIsTransient(res.status);
+        // A 429 that says the balance is gone is not a rate limit. Retrying it
+        // burns the caller's clock on a condition only a human can clear.
+        const transient = statusIsTransient(res.status) && !bodyIsQuotaExhausted(body);
         // The status and a bounded excerpt only. A provider error body can echo
         // request content, and this string is persisted into task results.
         failure = {
@@ -376,6 +401,15 @@ export async function gptStructured<T>(
           detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
           latency_ms: elapsed(), retryable: transient, attempts,
         };
+        if (!transient && res.status === 429) {
+          // SAID OUT LOUD, because it is the one provider failure a person has
+          // to act on. The alternative is what actually happened: four silent
+          // retries and a chat that answers nothing.
+          log("gpt_quota_exhausted", {
+            purpose: req.purpose, model,
+            detail: redact(body.slice(0, 200), key),
+          });
+        }
         // WAIT AS LONG AS THE PROVIDER ASKED, AND NO LONGER. Beyond the cap the
         // caller's own deadline is the better authority, and a run that sits
         // out a 60-second rate limit has spent its slice on nothing.

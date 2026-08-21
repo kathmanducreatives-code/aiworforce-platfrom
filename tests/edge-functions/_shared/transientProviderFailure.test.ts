@@ -239,3 +239,80 @@ Deno.test("planner: a missing key throws rather than reading as an empty plan", 
   });
   await assertRejects(() => plan(plannerInput), GptPlannerUnavailableError);
 });
+
+// ═══ 5. AN EXHAUSTED BALANCE IS NOT A RATE LIMIT ═══════════════════════════
+//
+// TEST 2026-08-21 16:34. Every chat message stopped being answered. The
+// account had run out of OpenAI credits, and OpenAI reports that with the SAME
+// status code as a rate limit:
+//
+//   429  "Rate limit reached … Please try again in 4.428s"          transient
+//   429  "You have no credits remaining. Add credits to continue"   permanent
+//
+// The retry added earlier that day treated both as hiccups. It waited and
+// asked again — twice per compiler attempt, four calls per message — for a
+// condition only a human topping up an account can clear. Worse than useless:
+// it makes a billing problem look like a slow provider.
+
+const QUOTA_BODY = JSON.stringify({
+  error: {
+    message: "You have no credits remaining. Add credits to continue using the API at " +
+      "https://platform.openai.com/settings/organization/billing/.",
+    type: "insufficient_quota", param: null, code: "credit_balance_exhausted",
+  },
+});
+
+Deno.test("15. a quota 429 is NOT retried, and says so", async () => {
+  const f = scriptedFetch([{ status: 429, body: QUOTA_BODY }]);
+  const r = await gptStructured(REQUEST, f.deps);
+
+  assert(!r.ok);
+  assertEquals(r.code, "http_error");
+  assertEquals(r.retryable, false,
+    "no wait clears an empty balance; calling it retryable hides a billing problem");
+  assertEquals(f.calls.length, 1, "one call, not two");
+  assertEquals(f.slept, [], "and no time spent waiting for something that cannot change");
+  assert(r.detail.includes("no credits remaining"), r.detail);
+});
+
+Deno.test("16. a real rate-limit 429 is STILL retried", async () => {
+  // The distinction has to survive: the fix must not disarm the retry that
+  // exists for genuine throttling.
+  const f = scriptedFetch([
+    { status: 429, body: TPM_BODY },
+    { status: 200, body: OK_BODY },
+  ]);
+  const r = await gptStructured(REQUEST, f.deps);
+  assert(r.ok);
+  assertEquals(f.calls.length, 2);
+  assertEquals(f.slept, [4428]);
+});
+
+Deno.test("17. every wording OpenAI uses for an empty balance is recognised", async () => {
+  for (const body of [
+    JSON.stringify({ error: { code: "credit_balance_exhausted" } }),
+    JSON.stringify({ error: { type: "insufficient_quota" } }),
+    "You have no credits remaining.",
+    JSON.stringify({ error: { code: "billing_hard_limit_reached" } }),
+  ]) {
+    const f = scriptedFetch([{ status: 429, body }]);
+    const r = await gptStructured(REQUEST, f.deps);
+    assert(!r.ok);
+    assertEquals(r.retryable, false, `not retryable: ${body.slice(0, 60)}`);
+    assertEquals(f.calls.length, 1);
+  }
+});
+
+Deno.test("18. the mission compiler records WHY an attempt failed", () => {
+  // `proposeMission` dropped `code` and `detail`, so a compilation failure
+  // reached the user as `proposal_received: false` and nothing else — which is
+  // why diagnosing an empty balance needed a manual call to the provider.
+  const src = Deno.readTextFileSync(new URL(
+    "../../../supabase/functions/_shared/leadMissionCompilerBinding.ts", import.meta.url));
+  assert(src.includes("[mission-compiler][attempt-failed]"),
+    "a refused attempt must name its code");
+  assert(src.includes("[mission-compiler][attempt-threw]"),
+    "and a thrown one must be distinguishable from a refused one");
+  assert(!/catch \{\s*\n\s*\/\/ Swallowed per attempt/.test(src),
+    "the bare catch is what made this invisible");
+});
