@@ -142,6 +142,7 @@ import {
   CAPABILITY_REGISTRY, CapabilityContainmentError, onCapabilityExhausted,
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
+import { normalizeLocationName } from "./harvestApiPeople.ts";
 import { guardedInvoker } from "./leadMissionRuntime.ts";
 import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
@@ -664,6 +665,64 @@ export function stateMatchesMission(
  *     inputs were persisted looks. Half a decision is not one to resume from,
  *     and silently reusing it would run every Actor with no filters at all.
  */
+/**
+ * How many candidates one identity search asks for.
+ *
+ * WAS FIVE, AND FIVE WAS THE MISS. Run a5332734 is the first with per-candidate
+ * match telemetry, and it says the same thing five times: the rejected
+ * companies were rejected CORRECTLY, because the right LinkedIn page was not in
+ * the results at all.
+ *
+ *   Autonomous Technologies Group  →  Autonomous Solutions, Inc. (asirobots.com)
+ *   HUD (hud.ai)                   →  HUD (willhudsondesign.com) — a portfolio
+ *   Trata (trytrata.com)           →  Trata Soluções Acústicas (Brazil)
+ *   Dex (joindex.com)              →  DEX, no website at all
+ *   Elayne (elayne.com)            →  Ethereal Elayne Freight Broker LLC
+ *
+ * Every impostor is larger and older than a five-person YC startup, and
+ * `searchQuery` is a NAME index ranked by prominence. A short common name —
+ * "HUD", "Dex", "Trata", "Elayne" — puts the startup below the establishment,
+ * and five results never reach it.
+ *
+ * THIS IS AN EXPERIMENT WITH A READ-OUT, NOT A FIX. It is not known that these
+ * pages rank 6th-15th; some may not exist on LinkedIn at all. What is known is
+ * that a miss already costs the whole ~8.4s call, while an extra result costs
+ * $0.002-0.004 — so the asymmetry is worth the try, and
+ * `identity_match_diagnostics` measures the answer directly. If misses convert
+ * to `domain_exact` accepts it worked; if rejected companies still show no
+ * name-matching candidate at all, these pages are not reachable by name and the
+ * answer is a different resolution strategy.
+ */
+export const IDENTITY_SEARCH_MAX_ITEMS = 15;
+
+/**
+ * The `locations` filter for an identity search, or nothing.
+ *
+ * ONLY WHEN THE MISSION MADE GEOGRAPHY HARD. A soft or absent geography is a
+ * ranking preference, and turning it into a provider filter would silently
+ * narrow a search the user never narrowed — the same authority inversion the
+ * prequalification size bound was fixed for.
+ *
+ * Normalised through `normalizeLocationName`, which maps the abbreviations a
+ * model emits — "US", "USA", "America" — to "United States", the exact value in
+ * this actor's own verified example. Anything outside that small table passes
+ * through VERBATIM, which is deliberate: the table covers abbreviations, not
+ * places, and dropping every location it does not list would discard "Germany"
+ * and "San Francisco" along with the typos. A location the actor does not
+ * recognise costs this one search its results; a location silently dropped
+ * costs the mission its geography on every search.
+ */
+export function identitySearchLocations(mission: LeadMissionV1): string[] {
+  if (!mission?.geography_is_hard) return [];
+  const seen = new Set<string>();
+  for (const raw of mission.company_profile?.locations ?? []) {
+    const norm = normalizeLocationName(raw);
+    if (norm) seen.add(norm);
+  }
+  // The compiler validates a maximum of 20; keep this side of it by construction.
+  return [...seen].slice(0, 20);
+}
+
 /** How many refusals to keep verbatim. Enough to see a pattern, bounded. */
 export const MAX_MATCH_REJECTION_SAMPLES = 25;
 
@@ -3295,6 +3354,7 @@ export async function runCapabilityPlan(
         // ALREADY IDENTIFIED IS NOT WORTH PAYING FOR. memo23 has no LinkedIn
         // field, but a resumed run or another provider may have supplied one.
         if (!c.company.linkedin_company_url && c.company.company_name) {
+          const locations = identitySearchLocations(opts.mission);
           const compiled = compileHarvestCompanySearchInput({
             // Name plus domain. `linkedInSearchQueryFor` owns this so the dry run
             // and the live call cannot describe different searches.
@@ -3304,7 +3364,16 @@ export async function runCapabilityPlan(
             // `full` is required: `short` returns employeeCount === null, and an
             // unverifiable size cannot settle a 10-150 gate.
             scraperMode: "full",
-            maxItems: 5,
+            maxItems: IDENTITY_SEARCH_MAX_ITEMS,
+            // ── THE GEOGRAPHY THE MISSION ALREADY DECLARED HARD ──────────
+            //
+            // A supported filter, validated by `compileHarvestCompanySearchInput`
+            // and shown in the actor's own verified example, that this call has
+            // never sent. Run a5332734 refused `Trata Soluções Acústicas`
+            // (trataacustica.com.br) as a match for the YC company Trata — a
+            // Brazilian acoustics firm that a US filter would not have returned
+            // in the first place.
+            ...(locations.length ? { locations } : {}),
           });
           // SCOPED TO THE COMPANY, so the resume guard can refuse it. Lossless:
           // a company this run already resolved carries its URL back in through

@@ -38,6 +38,7 @@ import {
 } from "../../../supabase/functions/_shared/leadCommercialPrequalification.ts";
 import {
   recordMatchDecisions, MAX_MATCH_REJECTION_SAMPLES,
+  identitySearchLocations, IDENTITY_SEARCH_MAX_ITEMS,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 
 const company = (over: Partial<PrequalifiedCompany> = {}): PrequalifiedCompany => ({
@@ -191,4 +192,68 @@ Deno.test("8. no candidates means nothing is recorded at all", () => {
   recordMatchDecisions(state, engineCompany("d.com", "D", "d.com"), []);
   assertEquals(state.identity_match_diagnostics, undefined,
     "a company the search returned nothing for was not judged here");
+});
+
+// ═══ 4. THE SEARCH THE DIAGNOSTIC SENT US BACK TO ══════════════════════════
+//
+// Five samples, five correct refusals: the right LinkedIn page was not in the
+// results at all. So the fix is not in matching, it is in RETRIEVAL — and the
+// call had been sending the same two fields for every company since it was
+// written.
+
+Deno.test("9. a HARD geography reaches the search; a soft one does not", () => {
+  const hard = {
+    geography_is_hard: true,
+    company_profile: { locations: ["United States"] },
+  } as never as Parameters<typeof identitySearchLocations>[0];
+  assertEquals(identitySearchLocations(hard), ["United States"],
+    "the exact value in this actor's own verified example");
+
+  const soft = {
+    geography_is_hard: false,
+    company_profile: { locations: ["United States"] },
+  } as never as Parameters<typeof identitySearchLocations>[0];
+  assertEquals(identitySearchLocations(soft), [],
+    "a soft geography is a ranking preference; turning it into a provider filter narrows a search the user did not");
+});
+
+Deno.test("10. the abbreviations a model emits are normalised, others pass through", () => {
+  const mk = (locations: string[]) => identitySearchLocations(
+    { geography_is_hard: true, company_profile: { locations } } as never,
+  );
+  assertEquals(mk(["US"]), ["United States"]);
+  assertEquals(mk(["usa"]), ["United States"]);
+  assertEquals(mk(["America"]), ["United States"]);
+  assertEquals(mk(["US", "U.S.", "united states"]), ["United States"], "and deduped");
+  // The table covers abbreviations, not places. Dropping what it does not list
+  // would discard real locations along with the typos.
+  assertEquals(mk(["Germany"]), ["Germany"]);
+});
+
+Deno.test("11. a missing or empty geography sends no filter at all", () => {
+  for (const m of [
+    { geography_is_hard: true, company_profile: { locations: [] } },
+    { geography_is_hard: true, company_profile: {} },
+    { geography_is_hard: true },
+    {},
+  ]) {
+    assertEquals(identitySearchLocations(m as never), [],
+      `no geography must mean no filter: ${JSON.stringify(m)}`);
+  }
+});
+
+Deno.test("12. the filter stays inside the compiler's own limit", () => {
+  const many = Array.from({ length: 40 }, (_, i) => `Country ${i}`);
+  const out = identitySearchLocations(
+    { geography_is_hard: true, company_profile: { locations: many } } as never,
+  );
+  assertEquals(out.length, 20, "compileHarvestCompanySearchInput rejects more than 20");
+});
+
+Deno.test("13. the search asks for more than five candidates now", () => {
+  // Five was the miss: every refusal above was an impostor ranked above a
+  // five-person YC startup in a name index sorted by prominence.
+  assertEquals(IDENTITY_SEARCH_MAX_ITEMS, 15);
+  assert(IDENTITY_SEARCH_MAX_ITEMS > 5);
+  assert(IDENTITY_SEARCH_MAX_ITEMS <= 1000, "the compiler's ceiling");
 });
