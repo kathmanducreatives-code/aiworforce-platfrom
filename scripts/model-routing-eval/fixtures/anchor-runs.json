@@ -1,0 +1,441 @@
+{
+ "_provenance": {
+  "kind": "HARVESTED",
+  "source": "supabase TEST project ohsdatpvfdjdemstoiuj, table `tasks`, column `result`",
+  "harvested_at": "2026-08-21",
+  "note": "Verbatim. Neither the mission nor the discovery strategy was edited. These are the only two runs in the entire persisted history that delivered the full requested count (10/10)."
+ },
+ "runs": [
+  {
+   "run_id": "3a231901",
+   "created_at": "2026-08-21 10:35:37.842547+00",
+   "user_request": "Find 10 qualified AI startups in the US currently hiring",
+   "mission": {
+    "version": "lead-mission-v1",
+    "confidence": 1,
+    "directives": {
+     "source_strategy": [
+      "startup_cohort_first",
+      "job_signal_first"
+     ],
+     "adjacent_signals": [],
+     "excluded_signals": [],
+     "preferred_signals": [
+      "hiring"
+     ],
+     "required_evidence": [
+      "hiring"
+     ],
+     "allowed_broadening": {
+      "geographies": [],
+      "company_types": [],
+      "role_families": [],
+      "employee_range": {
+       "max": null,
+       "min": null
+      }
+     },
+     "execution_preference": "balanced",
+     "disallowed_broadening": [
+      "company_types",
+      "geographies",
+      "hiring"
+     ],
+     "evaluation_instructions": "Qualify only companies that are AI startups based in the United States and are currently hiring. Require clear evidence of hiring activity. Rank by strength of AI focus and hiring signal. Do not include companies outside the US or that are not startups or not hiring.",
+     "founder_unlock_recommended": true,
+     "requested_contact_ready_count": null
+    },
+    "strategies": [
+     "hiring"
+    ],
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "company_profile": {
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "verticals": [
+      "AI",
+      "startup"
+     ],
+     "business_models": []
+    },
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "planner_runtime": {
+     "role": "planner",
+     "dirty": false,
+     "git_sha": "1cc2f92588484b686f0d87025b497d6240f91099",
+     "function": "pilot-chat",
+     "git_short": "1cc2f925",
+     "build_timestamp": "2026-08-21T09:47:39.853Z",
+     "lead_intelligence_contract_version": "v1"
+    },
+    "requested_count": 10,
+    "field_provenance": {
+     "target_entity": "explicit_user_request",
+     "requested_count": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "decision_makers.roles": "gpt_inference",
+     "company_profile.stages": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "company_profile.verticals": "gpt_inference",
+     "company_profile.business_models": "gpt_inference"
+    },
+    "hard_constraints": {
+     "hiring": {
+      "value": true,
+      "reason": "User requires companies currently hiring.",
+      "operator": "equals"
+     },
+     "geographies": {
+      "value": "United States",
+      "reason": "User explicitly requests US companies.",
+      "operator": "includes"
+     },
+     "company_types": {
+      "value": [
+       "AI",
+       "startup"
+      ],
+      "reason": "User explicitly requests AI startups.",
+      "operator": "includes"
+     },
+     "company_profile.locations": {
+      "value": [
+       "United States"
+      ],
+      "reason": "stated explicitly in the user's query",
+      "operator": "in"
+     }
+    },
+    "requested_output": "qualified_companies",
+    "required_signals": [
+     {
+      "type": "hiring"
+     }
+    ],
+    "soft_preferences": {},
+    "geography_is_hard": true,
+    "original_user_query": "Find 10 qualified AI startups in the US currently hiring",
+    "mission_parser_source": "gpt_validated",
+    "required_capabilities": [
+     "startup_company_discovery",
+     "company_identity_resolution",
+     "company_enrichment",
+     "company_brain_qualification",
+     "persistence"
+    ],
+    "required_signal_terms": [
+     "AI startups",
+     "currently hiring"
+    ],
+    "proposed_output_intent": "qualified_companies",
+    "prohibited_capabilities": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "lead_intelligence_contract_version": "v1"
+   },
+   "discovery": {
+    "actors": [
+     {
+      "role": "primary",
+      "input": {
+       "mode": "companies",
+       "queries": [
+        "artificial intelligence",
+        "AI startup",
+        "AI"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "isHiring": true,
+       "maxItems": 100,
+       "scrapeOpenJobs": true,
+       "maxEmployeeSize": "250",
+       "minEmployeeSize": "5+"
+      },
+      "actor_key": "apify_yc_companies_memo23",
+      "rationale": "Discover US-based AI startups in the YC directory that are currently hiring, and return open jobs as evidence.",
+      "input_fields": [
+       "isHiring",
+       "maxEmployeeSize",
+       "maxItems",
+       "minEmployeeSize",
+       "mode",
+       "queries",
+       "regions",
+       "scrapeOpenJobs"
+      ],
+      "dropped_filters": [
+       {
+        "field": "maxItems",
+        "reason": "apify_yc_companies_memo23 has no such input; its schema accepts mode, regions, industries, batch, isHiring, minEmployeeSize, maxEmployeeSize, queries, scrapeOpenJobs, scrapeFounderDetails"
+       }
+      ],
+      "requires_enrichment": true
+     }
+    ],
+    "source": "model_repaired",
+    "blocked": 0,
+    "version": "lead-discovery-strategy-v1",
+    "repaired": 1,
+    "violations": [
+     {
+      "code": "filter_dropped",
+      "message": "maxItems: apify_yc_companies_memo23 has no such input; its schema accepts mode, regions, industries, batch, isHiring, minEmployeeSize, maxEmployeeSize, queries, scrapeOpenJobs, scrapeFounderDetails",
+      "severity": "repair",
+      "actor_key": "apify_yc_companies_memo23"
+     }
+    ],
+    "model_chosen": true,
+    "all_require_enrichment": true
+   },
+   "outcome": {
+    "deferred": 0,
+    "evaluated": 100,
+    "qualified": 10,
+    "shortlisted": 15,
+    "contact_ready": 0,
+    "not_qualified": 0,
+    "accounts_found": 100,
+    "not_investigated": 3,
+    "held_for_evidence": 0,
+    "identity_unresolved": 5,
+    "awaiting_investigation": 82
+   }
+  },
+  {
+   "run_id": "4fe98f5c",
+   "created_at": "2026-08-21 10:52:32.70458+00",
+   "user_request": "Find 10 qualified AI startups in the US currently hiring",
+   "mission": {
+    "version": "lead-mission-v1",
+    "confidence": 1,
+    "directives": {
+     "source_strategy": [
+      "startup_cohort_first",
+      "job_signal_first"
+     ],
+     "adjacent_signals": [],
+     "excluded_signals": [],
+     "preferred_signals": [
+      "hiring"
+     ],
+     "required_evidence": [
+      "hiring"
+     ],
+     "allowed_broadening": {
+      "geographies": [],
+      "company_types": [],
+      "role_families": [],
+      "employee_range": {
+       "max": null,
+       "min": null
+      }
+     },
+     "execution_preference": "balanced",
+     "disallowed_broadening": [
+      "company_types",
+      "geographies",
+      "hiring"
+     ],
+     "evaluation_instructions": "Qualify only AI startups located in the US that are currently hiring. Require clear evidence of both AI focus and active hiring. Rank by strength of AI positioning and hiring signal.",
+     "founder_unlock_recommended": true,
+     "requested_contact_ready_count": null
+    },
+    "strategies": [
+     "hiring"
+    ],
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "company_profile": {
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "verticals": [
+      "AI",
+      "startup"
+     ],
+     "business_models": []
+    },
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "planner_runtime": {
+     "role": "planner",
+     "dirty": false,
+     "git_sha": "1cc2f92588484b686f0d87025b497d6240f91099",
+     "function": "pilot-chat",
+     "git_short": "1cc2f925",
+     "build_timestamp": "2026-08-21T09:47:39.853Z",
+     "lead_intelligence_contract_version": "v1"
+    },
+    "requested_count": 10,
+    "field_provenance": {
+     "target_entity": "explicit_user_request",
+     "requested_count": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "decision_makers.roles": "gpt_inference",
+     "company_profile.stages": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "company_profile.verticals": "gpt_inference",
+     "company_profile.business_models": "gpt_inference"
+    },
+    "hard_constraints": {
+     "hiring": {
+      "value": true,
+      "reason": "User requires companies currently hiring.",
+      "operator": "equals"
+     },
+     "geographies": {
+      "value": "US",
+      "reason": "User explicitly requests companies in the US.",
+      "operator": "includes"
+     },
+     "company_types": {
+      "value": [
+       "AI",
+       "startup"
+      ],
+      "reason": "User explicitly requests AI startups.",
+      "operator": "includes"
+     },
+     "company_profile.locations": {
+      "value": [
+       "United States"
+      ],
+      "reason": "stated explicitly in the user's query",
+      "operator": "in"
+     }
+    },
+    "requested_output": "qualified_companies",
+    "required_signals": [
+     {
+      "type": "hiring"
+     }
+    ],
+    "soft_preferences": {},
+    "geography_is_hard": true,
+    "original_user_query": "Find 10 qualified AI startups in the US currently hiring",
+    "mission_parser_source": "gpt_validated",
+    "required_capabilities": [
+     "startup_company_discovery",
+     "company_identity_resolution",
+     "company_enrichment",
+     "company_brain_qualification",
+     "persistence"
+    ],
+    "required_signal_terms": [
+     "AI startups",
+     "currently hiring"
+    ],
+    "proposed_output_intent": "qualified_companies",
+    "prohibited_capabilities": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "lead_intelligence_contract_version": "v1"
+   },
+   "discovery": {
+    "actors": [
+     {
+      "role": "primary",
+      "input": {
+       "mode": "companies",
+       "queries": [
+        "artificial intelligence",
+        "AI startup"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "isHiring": true,
+       "maxItems": 100,
+       "scrapeOpenJobs": true,
+       "maxEmployeeSize": "250",
+       "minEmployeeSize": "5+"
+      },
+      "actor_key": "apify_yc_companies_memo23",
+      "rationale": "Discover US-based AI startups in the YC directory that are currently hiring, with open jobs as evidence.",
+      "input_fields": [
+       "isHiring",
+       "maxEmployeeSize",
+       "maxItems",
+       "minEmployeeSize",
+       "mode",
+       "queries",
+       "regions",
+       "scrapeOpenJobs"
+      ],
+      "dropped_filters": [
+       {
+        "field": "maxItems",
+        "reason": "apify_yc_companies_memo23 has no such input; its schema accepts mode, regions, industries, batch, isHiring, minEmployeeSize, maxEmployeeSize, queries, scrapeOpenJobs, scrapeFounderDetails"
+       }
+      ],
+      "requires_enrichment": true
+     }
+    ],
+    "source": "model_repaired",
+    "blocked": 0,
+    "version": "lead-discovery-strategy-v1",
+    "repaired": 1,
+    "violations": [
+     {
+      "code": "filter_dropped",
+      "message": "maxItems: apify_yc_companies_memo23 has no such input; its schema accepts mode, regions, industries, batch, isHiring, minEmployeeSize, maxEmployeeSize, queries, scrapeOpenJobs, scrapeFounderDetails",
+      "severity": "repair",
+      "actor_key": "apify_yc_companies_memo23"
+     }
+    ],
+    "model_chosen": true,
+    "all_require_enrichment": true
+   },
+   "outcome": {
+    "deferred": 0,
+    "evaluated": 100,
+    "qualified": 10,
+    "shortlisted": 23,
+    "contact_ready": 0,
+    "not_qualified": 0,
+    "accounts_found": 100,
+    "not_investigated": 3,
+    "held_for_evidence": 1,
+    "identity_unresolved": 12,
+    "awaiting_investigation": 74
+   }
+  }
+ ]
+}
