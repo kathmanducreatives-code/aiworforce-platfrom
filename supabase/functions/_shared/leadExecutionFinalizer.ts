@@ -133,6 +133,59 @@ const ASSUMED_MS_BY_OP: Readonly<Record<string, number>> = Object.freeze({
   [QUALIFICATION_PREGROUNDED_OP]: 7_000,
 });
 
+/**
+ * Ceilings on what ONE observation may do to an operation's estimate.
+ *
+ * ── AN ESTIMATE BOUNDS THE TYPICAL COMPANY; A CEILING BOUNDS THE PATHOLOGICAL ONE
+ *
+ * That is `qualificationClockReserve.test.ts`'s own summary of why the
+ * admission gate and `withDeadlineBudget` both exist. `observeCall` was quietly
+ * breaking it: it keeps a MONOTONIC MAXIMUM per operation, so the slowest
+ * company in an invocation becomes the price of every company after it for the
+ * rest of that invocation. That is the ceiling's job being done by the
+ * estimate, and done permanently.
+ *
+ * TEST run 958c86bc, 2026-08-21. The `company_qualification_pregrounded`
+ * estimate — floor 7,000ms — climbed across the run:
+ *
+ *     7,000  →  8,626  →  14,860  →  62,347
+ *
+ * At 62,347ms admission needs 14,000 + 62,347 = 76 seconds, more than a slice
+ * ever has, so the stage was unreachable for the remainder of the invocation on
+ * the evidence of one company.
+ *
+ * ── AND WHY ONLY THESE OPERATIONS ───────────────────────────────────────────
+ *
+ * The safety argument is NOT "an under-estimate is probably fine". It holds for
+ * these two operations and for no others.
+ *
+ * A qualification call is a MODEL call, and it is bounded twice: the admission
+ * gate here, and `withDeadlineBudget`, which cuts the company off at
+ * `remaining - reserve`. A company cut off is NOT REACHED — no verdict, no
+ * rejection, still on the frontier. So the failure modes are asymmetric.
+ * Over-estimating means nothing runs at all and paid work already done is
+ * discarded; under-estimating means one company is interrupted and resumes.
+ *
+ * A PROVIDER call has no such second gate. Starting an Actor the run cannot
+ * wait for spends real money on a result nobody reads — task 1e67725f exactly.
+ * So `apify_linkedin_company_search` and every other provider operation keeps
+ * the uncapped monotonic maximum, and a genuinely slow provider still prices
+ * itself out. Declared here one operation at a time, never inferred, for the
+ * same reason the floors above are.
+ *
+ * WHY THESE NUMBERS. Three times the floor. Every non-pathological estimate
+ * observed on run 958c86bc sits under 3x — 7,000 (1.0x), 8,626 (1.2x), 14,860
+ * (2.1x), and 18,293 against the 12,000 default (1.5x). The 62,347 outlier is
+ * 8.9x. Three separates them with room, and still leaves the estimate
+ * conservative: 21s for a stage whose evaluator is observed at ~5s.
+ */
+export const MAX_LEARNED_ESTIMATE_MULTIPLE = 3;
+
+/** The operations a learned estimate may not run away with. Model calls only. */
+export const CAPPED_ESTIMATE_OPS: readonly string[] = [
+  QUALIFICATION_OP, QUALIFICATION_PREGROUNDED_OP,
+];
+
 
 export interface ExecutionDeadline {
   startedAt: number;
@@ -183,8 +236,16 @@ export function createExecutionDeadline(
   const estimateFor = (op?: DeadlineOperation): number => {
     if (!op) return slowest;
     // The floor is `assumed` unless this operation declares a cheaper one it is
-    // KNOWN to beat. Observation still only ever moves the estimate UP.
-    return Math.max(ASSUMED_MS_BY_OP[op] ?? assumed, byOp.get(op) ?? 0);
+    // KNOWN to beat. Observation still only ever moves the estimate UP —
+    // and now only so far. See `MAX_LEARNED_ESTIMATE_MULTIPLE`: one
+    // pathological company was pricing every company after it out of the run.
+    const floor = ASSUMED_MS_BY_OP[op] ?? assumed;
+    const learned = Math.max(floor, byOp.get(op) ?? 0);
+    // A PROVIDER operation keeps the uncapped maximum: there is no second gate
+    // behind it, so a slow Actor must be allowed to price itself out.
+    return CAPPED_ESTIMATE_OPS.includes(op)
+      ? Math.min(learned, floor * MAX_LEARNED_ESTIMATE_MULTIPLE)
+      : learned;
   };
 
   return {

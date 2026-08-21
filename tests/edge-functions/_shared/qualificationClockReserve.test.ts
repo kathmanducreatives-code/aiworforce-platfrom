@@ -48,7 +48,8 @@ import {
   CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, shouldCheckpoint, shouldStartWork,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import {
-  BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
+  BATCH_EVALUATION_OP, CAPPED_ESTIMATE_OPS, DeadlineBudgetExceeded,
+  MAX_LEARNED_ESTIMATE_MULTIPLE, QUALIFICATION_OP, QUALIFICATION_PREGROUNDED_OP,
   createExecutionDeadline, withDeadlineBudget,
 } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
@@ -491,4 +492,69 @@ Deno.test("17. the number is boxed in from both sides, and 14s is the roomiest f
     assertFalse(shouldStartWork(clockAt(afterOne), estimate, smaller),
       `${smaller}ms admits no SECOND company either — only less margin`);
   }
+});
+
+
+// ══════════ 18-21. ONE SLOW COMPANY MUST NOT PRICE OUT EVERY OTHER ══
+//
+// `observeCall` keeps a monotonic maximum per operation, so on TEST run
+// 958c86bc the `company_qualification_pregrounded` estimate — floor 7,000ms —
+// went 7,000 → 8,626 → 14,860 → 62,347 across the invocation. At 62,347ms
+// admission needs 14,000 + 62,347 = 76 seconds, more than a slice ever has, so
+// the stage was unreachable for the rest of the run on the evidence of one
+// company. That is the CEILING's job (`withDeadlineBudget`) being done by the
+// ESTIMATE, and done permanently.
+
+/** Every per-company estimate that run actually recorded. */
+const OBSERVED_ESTIMATES = [7_000, 8_626, 14_860, 62_347];
+
+Deno.test("18. the pathological observation no longer prices the stage out", () => {
+  const d = createExecutionDeadline({ budgetMs: 125_000, assumedCallMs: 12_000 });
+  for (const ms of OBSERVED_ESTIMATES) d.observeCall(ms, QUALIFICATION_PREGROUNDED_OP);
+
+  assertEquals(d.estimateFor(QUALIFICATION_PREGROUNDED_OP), 21_000,
+    "three times the 7s floor, not the 62s outlier");
+  assert(
+    shouldStartWork(
+      { elapsedMs: () => 0, remainingMs: () => 40_000 },
+      d.estimateFor(QUALIFICATION_PREGROUNDED_OP), QUALIFICATION_RESERVE_MS),
+    "40s is room for a company again; at 62s it never would have been",
+  );
+});
+
+Deno.test("19. the normal observations are UNCHANGED — the cap only clips outliers", () => {
+  for (const ms of OBSERVED_ESTIMATES.filter((m) => m < 21_000)) {
+    const d = createExecutionDeadline({ budgetMs: 125_000, assumedCallMs: 12_000 });
+    d.observeCall(ms, QUALIFICATION_PREGROUNDED_OP);
+    assertEquals(d.estimateFor(QUALIFICATION_PREGROUNDED_OP), Math.max(7_000, ms),
+      `${ms}ms is a real measurement and must still be believed`);
+  }
+  // The 12s-floor operation, with the 18,293ms this run recorded for it.
+  const d = createExecutionDeadline({ budgetMs: 125_000, assumedCallMs: 12_000 });
+  d.observeCall(18_293, QUALIFICATION_OP);
+  assertEquals(d.estimateFor(QUALIFICATION_OP), 18_293, "1.5x its floor — believed");
+});
+
+Deno.test("20. a PROVIDER operation is NOT capped — there is no second gate behind it", () => {
+  // A model call is bounded twice (tests 5-7) and a stopped company is not
+  // reached (tests 8-10). An Actor start is bounded once: begin one the run
+  // cannot wait for and the money is spent on a result nobody reads.
+  const d = createExecutionDeadline({ budgetMs: 125_000, assumedCallMs: 12_000 });
+  d.observeCall(40_000, "apify_linkedin_company_search");
+  assertEquals(d.estimateFor("apify_linkedin_company_search"), 40_000,
+    "a genuinely slow provider must still be able to price itself out");
+
+  assertEquals([...CAPPED_ESTIMATE_OPS].sort(),
+    [QUALIFICATION_OP, QUALIFICATION_PREGROUNDED_OP].sort(),
+    "the cap is declared one operation at a time, never inferred");
+});
+
+Deno.test("21. the cap never lowers an estimate below its floor", () => {
+  assertEquals(MAX_LEARNED_ESTIMATE_MULTIPLE, 3);
+  const d = createExecutionDeadline({ budgetMs: 125_000, assumedCallMs: 12_000 });
+  d.observeCall(1, QUALIFICATION_PREGROUNDED_OP);
+  assertEquals(d.estimateFor(QUALIFICATION_PREGROUNDED_OP), 7_000,
+    "one fast call still cannot talk the deadline downwards");
+  assert(MAX_LEARNED_ESTIMATE_MULTIPLE >= 1,
+    "a multiple below one would make the cap fight the floor");
 });
