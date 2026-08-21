@@ -38,6 +38,43 @@ export const RESUME_STATE_VERSION = "lead-resume-state-v1" as const;
  */
 export const CHECKPOINT_RESERVE_MS = 18_000;
 
+/**
+ * The reserve the QUALIFICATION loop admits work against.
+ *
+ * WHY IT IS ITS OWN NUMBER. The 18s above is sized for the slowest downstream
+ * PROVIDER call — "a reserve below the slowest downstream call would let the
+ * engine authorise a call it cannot complete". That argument does not apply to
+ * qualification: its model calls are already hard-bounded by the engine's
+ * `clockBound`, which caps each one at `remaining − reserve`, so a
+ * qualification call physically cannot run into the reserve. And a company the
+ * clock stops mid-flight is NOT REACHED — no verdict, no rejection, still
+ * resumable. Borrowing the provider reserve here bought safety that was
+ * already guaranteed, and paid for it in leads.
+ *
+ * WHAT IT COST. TEST run b7a9e112 stopped qualification three times:
+ *
+ *     evaluated: 1, not_reached: 2, remaining_ms: 22206
+ *     evaluated: 1, not_reached: 6, remaining_ms: 22984
+ *     evaluated: 2, not_reached: 2, remaining_ms: 23658
+ *
+ * Admission needs `reserve + estimate` — 18,000 + 7,000 = 25,000 — so every one
+ * fell one to three seconds short and left between two and six ALREADY ENRICHED
+ * companies without a verdict. Run 9b5ad99b lost all four of its at 19,137ms.
+ *
+ * WHY 14 SECONDS. Measured, not chosen. The work that actually happens after
+ * qualification stops — persistence, the quota pass, auto-continuation dispatch
+ * and the terminal guard — across five slices on three builds:
+ *
+ *     5.96s   6.27s   7.80s   7.86s   9.38s
+ *
+ * 14s clears all three admissions above (needing 21,000 against 22.2–23.7s
+ * available) and keeps 4.6s of margin over the worst tail ever observed. A
+ * smaller reserve would admit no more companies than this one does — after one
+ * ~7s evaluation the remaining clock is ~15s, below every candidate threshold —
+ * so 14s is the LARGEST value that unblocks, which is the one to pick.
+ */
+export const QUALIFICATION_RESERVE_MS = 14_000;
+
 export interface ReserveClock {
   elapsedMs(): number;
   remainingMs(): number;

@@ -45,7 +45,7 @@ import {
   parseLeadMissionDeterministic,
 } from "../../../supabase/functions/_shared/leadMission.ts";
 import {
-  CHECKPOINT_RESERVE_MS, shouldCheckpoint, shouldStartWork,
+  CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, shouldCheckpoint, shouldStartWork,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import {
   BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
@@ -398,16 +398,97 @@ Deno.test("13. offline callers have no deadline and are still unbounded", async 
 
 // ══════════════════════════════════════════ 14. the constant is not silent ══
 
-Deno.test("14. the reserve is a real number and the loop uses it by default", () => {
-  assertEquals(CHECKPOINT_RESERVE_MS, 18_000);
-  // The engine must reach for the shared constant rather than inventing a
-  // local one — a second reserve that drifts is the defect this file exists for.
+Deno.test("14. both reserves are real numbers and the loop uses them by default", () => {
+  assertEquals(CHECKPOINT_RESERVE_MS, 18_000, "the PROVIDER reserve is unchanged");
+  assertEquals(QUALIFICATION_RESERVE_MS, 14_000);
+  // The engine must reach for a shared constant rather than inventing a local
+  // one — a second reserve that drifts is the defect this file exists for.
   const src = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
   assert(
+    src.includes("deps.checkpointReserveMs ?? QUALIFICATION_RESERVE_MS"),
+    "the qualification loop reaches for ITS OWN shared constant",
+  );
+  assert(
     src.includes("deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS"),
-    "the qualification reserve is the shared one",
+    "and the provider loops keep theirs",
   );
   assert(src.includes("shouldStartWork("), "admission asks the predictive question");
   assert(src.includes("withDeadlineBudget("), "the model calls are under a ceiling");
+});
+
+// ════════════════════ 15-17. WHY QUALIFICATION GETS ITS OWN RESERVE ══
+//
+// The 18s above is sized for the slowest downstream PROVIDER call, so that the
+// engine never authorises an Actor it cannot finish. Qualification is not an
+// Actor: its calls are already bounded by `withDeadlineBudget` (tests 5-7) and
+// a company the clock stops is not reached (tests 8-10). Borrowing the provider
+// reserve there bought safety that was already guaranteed, and paid for it in
+// leads.
+
+/** Every `remaining_ms` a real run was refused admission at. */
+const REFUSED_AT = [
+  { run: "9b5ad99b", remaining: 19_137, stranded: 4 },
+  { run: "b7a9e112", remaining: 22_206, stranded: 2 },
+  { run: "b7a9e112", remaining: 22_984, stranded: 6 },
+  { run: "b7a9e112", remaining: 23_658, stranded: 2 },
+];
+
+/** The observed cost of everything that happens AFTER qualification stops. */
+const MEASURED_TAILS_MS = [5_960, 6_270, 7_800, 7_860, 9_380];
+
+const clockAt = (remaining: number) => ({
+  elapsedMs: () => 120_000 - remaining,
+  remainingMs: () => remaining,
+});
+
+Deno.test("15. the runs that were refused with 22 seconds on the clock now start", () => {
+  const estimate = 7_000;   // `company_qualification_pregrounded`, as priced
+  for (const c of REFUSED_AT) {
+    assertFalse(
+      shouldStartWork(clockAt(c.remaining), estimate, CHECKPOINT_RESERVE_MS),
+      `run ${c.run} was refused at ${c.remaining}ms and stranded ${c.stranded} enriched companies`,
+    );
+  }
+  // Every one except the tightest now admits a company.
+  for (const c of REFUSED_AT.filter((x) => x.remaining > 21_000)) {
+    assert(
+      shouldStartWork(clockAt(c.remaining), estimate, QUALIFICATION_RESERVE_MS),
+      `${c.remaining}ms is room for a 7s evaluation and a 14s reserve`,
+    );
+  }
+});
+
+Deno.test("16. the reserve still covers the worst tail ever measured, with margin", () => {
+  const worst = Math.max(...MEASURED_TAILS_MS);
+  assertEquals(worst, 9_380);
+  assert(QUALIFICATION_RESERVE_MS > worst,
+    "a reserve below the finalisation tail would cut off the checkpoint itself");
+  assert(QUALIFICATION_RESERVE_MS - worst >= 4_000,
+    `margin over the worst observed tail is ${QUALIFICATION_RESERVE_MS - worst}ms`);
+});
+
+Deno.test("17. the number is boxed in from both sides, and 14s is the roomiest fit", () => {
+  const estimate = 7_000;
+  const tightest = Math.min(...REFUSED_AT.filter((c) => c.remaining > 21_000)
+    .map((c) => c.remaining));
+  assertEquals(tightest, 22_206);
+
+  // FLOOR — it has to outlast the finalisation tail. 9.38s was the worst seen.
+  assert(QUALIFICATION_RESERVE_MS > Math.max(...MEASURED_TAILS_MS));
+
+  // CEILING — it has to admit the tightest real case. 16s does not.
+  assertFalse(shouldStartWork(clockAt(tightest), estimate, 16_000),
+    "16s refuses the 22.2s slice this change exists to admit");
+  assert(shouldStartWork(clockAt(tightest), estimate, QUALIFICATION_RESERVE_MS));
+
+  // So the admissible window is [~9.4s, ~15.2s), and inside it a SMALLER number
+  // buys nothing: after one ~7s evaluation the clock reads ~15s, below every
+  // candidate threshold, so the slice stops there either way. Choosing the
+  // smallest would trade margin for no extra company.
+  const afterOne = tightest - estimate;
+  for (const smaller of [10_000, 12_000]) {
+    assertFalse(shouldStartWork(clockAt(afterOne), estimate, smaller),
+      `${smaller}ms admits no SECOND company either — only less margin`);
+  }
 });

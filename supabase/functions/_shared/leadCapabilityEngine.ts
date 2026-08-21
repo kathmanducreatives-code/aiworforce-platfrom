@@ -98,7 +98,8 @@ import {
 } from "./poolRanking.ts";
 import { poolFingerprintOf } from "./poolCheckpoint.ts";
 import {
-  CHECKPOINT_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS, providerOperationKey,
+  CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS,
+  providerOperationKey,
   shouldCheckpoint, shouldSkipProviderCall, shouldStartWork,
   type CompanyResumeRecord,
 } from "./leadResumeState.ts";
@@ -3891,7 +3892,13 @@ export async function runCapabilityPlan(
       // A company stopped by either is NOT REACHED — no verdict, no rejection,
       // still resumable — which is the same rule the guard already followed and
       // the reason stopping here was always safe.
-      const qualificationReserveMs = deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS;
+      // ITS OWN RESERVE, NOT THE PROVIDER ONE. See `QUALIFICATION_RESERVE_MS`:
+      // the calls below are already clock-bounded and a stopped company is
+      // resumable, so the 18s sized for the slowest Actor was refusing
+      // admission with 22 seconds on the clock and leaving enriched companies
+      // without a verdict. An injected reserve still wins, so every test that
+      // pins the clock is unaffected.
+      const qualificationReserveMs = deps.checkpointReserveMs ?? QUALIFICATION_RESERVE_MS;
       /** Wall clock a single company's model calls may consume, right now. */
       const qualificationCallBudgetMs = (): number =>
         deps.deadline ? deps.deadline.remainingMs() - qualificationReserveMs : 0;
