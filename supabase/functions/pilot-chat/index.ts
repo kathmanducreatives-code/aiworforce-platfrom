@@ -1152,7 +1152,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
   });
 }
 
-Deno.serve(async (req) => {
+async function handlePilotChat(req: Request, fail: FailureContext): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -1221,6 +1221,10 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  // HANDED OVER THE MOMENT IT EXISTS. The catch at the bottom of this file can
+  // only answer in the conversation if it has these two, and it is reached from
+  // anywhere below — so they are given away early rather than at the end.
+  fail.admin = admin;
 
   // 3. Membership check via workspace_members
   const { data: member } = await admin
@@ -1277,6 +1281,7 @@ Deno.serve(async (req) => {
     return json({ error: "failed to resolve conversation" }, 500);
   }
   const conversation_id: string = conversationId;
+  fail.conversationId = conversation_id;
 
   // 5. Persist user message (carries card-action metadata when applicable)
   //
@@ -2967,4 +2972,97 @@ Deno.serve(async (req) => {
     modelUsed,
     providerUsed,
   });
+}
+
+
+// ── A THROWN REQUEST MUST STILL ANSWER THE USER ────────────────────────────
+//
+// TEST 2026-08-21. The OpenAI balance ran out, so the GPT mission compiler was
+// refused twice and raised `MissionCompilationFailedError` — correctly: it
+// declines to substitute a regex reading of the user's request for a mission it
+// could not compile.
+//
+// `Deno.serve` had no catch around it. So the correct refusal became an
+// unhandled throw, Deno answered 500 with no body the UI could render, and the
+// chat showed NOTHING AT ALL. Four messages were sent that afternoon and every
+// one of them vanished. The user's report was "the software is not working",
+// which is exactly right and says nothing about which of a hundred things it
+// might be.
+//
+// A refusal the user cannot see is indistinguishable from a crash. This turns
+// every escape from the handler into a message in the conversation — the same
+// shape a normal reply has, so the UI renders it with no change — and leaves
+// the throw itself in the logs where it belongs.
+
+interface FailureContext {
+  admin?: { from: (t: string) => any };
+  conversationId?: string | null;
+}
+
+/** What the user is told. Honest about the class, silent about internals. */
+function failureMessageFor(e: unknown): string {
+  if (e instanceof MissionCompilationFailedError) {
+    // NAMES THE STAGE, NOT A CAUSE IT DOES NOT KNOW. The compiler cannot tell a
+    // quota problem from an outage from a timeout — `gpt_quota_exhausted` and
+    // `[mission-compiler][attempt-failed]` carry that, in the logs, for whoever
+    // can act on it.
+    return "I could not read your request into a plan just now — the AI service " +
+      "that interprets it did not respond. Nothing was started and nothing was " +
+      "charged. Please try again in a moment; if it keeps happening, the AI " +
+      "provider configuration needs checking.";
+  }
+  return "Something went wrong handling that message. Nothing was started and " +
+    "nothing was charged. Please try again.";
+}
+
+Deno.serve(async (req) => {
+  const fail: FailureContext = {};
+  try {
+    return await handlePilotChat(req, fail);
+  } catch (e) {
+    // LOUD IN THE LOGS, CALM IN THE CHAT. The stack is what a maintainer needs
+    // and the last thing a user does.
+    console.error("[pilot-chat][unhandled]", {
+      error: String(e),
+      kind: e instanceof MissionCompilationFailedError
+        ? "mission_compilation_failed" : "unexpected",
+      conversation_id: fail.conversationId ?? null,
+    });
+
+    const content = failureMessageFor(e);
+    // NO CONVERSATION MEANS THE FAILURE HAPPENED BEFORE ONE EXISTED — auth, a
+    // malformed body. There is nowhere to put a message, so the status code is
+    // the whole answer, and it is at least a truthful one.
+    if (!fail.admin || !fail.conversationId) {
+      return json({ error: "pilot_chat_failed", message: content }, 500);
+    }
+
+    try {
+      const { data: saved } = await fail.admin
+        .from("messages")
+        .insert({
+          conversation_id: fail.conversationId,
+          role: "assistant",
+          content,
+          agent_slug: "pilot",
+          metadata: {
+            type: "error",
+            kind: e instanceof MissionCompilationFailedError
+              ? "mission_compilation_failed" : "unexpected",
+          },
+        })
+        .select("*")
+        .single();
+      // THE SHAPE OF A NORMAL REPLY, deliberately. A distinct error envelope
+      // would need the UI to learn a second one, and the UI is not the thing
+      // that was broken.
+      return json({
+        type: "reply", conversation_id: fail.conversationId, message: saved,
+      });
+    } catch (saveError) {
+      // The database is the last thing standing between the user and silence.
+      console.error("[pilot-chat][unhandled][save-failed]", String(saveError));
+      return json({ error: "pilot_chat_failed", message: content }, 500);
+    }
+  }
 });
