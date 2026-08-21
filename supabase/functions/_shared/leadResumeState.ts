@@ -443,6 +443,66 @@ function asStage<T extends string>(v: unknown, allowed: readonly T[], fallback: 
     ? v as T : fallback;
 }
 
+const asObjectOrNull = (v: unknown): Record<string, unknown> | null => asRecord(v);
+const asStringOrNull = (v: unknown): string | null =>
+  typeof v === "string" && v.length > 0 ? v : null;
+
+/**
+ * THE HALF OF RESUME THAT WAS WRITTEN AND NEVER READ.
+ *
+ * `toResumeRecord` has written a `snapshot` for every company since the durable
+ * working set was introduced. This reader rebuilt each record field by field —
+ * identity, enrichment, hiring, brain, founder, url, operations, timestamp —
+ * and simply did not mention `snapshot`, so every one was dropped on load.
+ *
+ * The writer and the reader disagreed, and the reader wins. Measured on TEST
+ * run 9105aa67's own persisted checkpoint:
+ *
+ *     companies in the persisted checkpoint : 100
+ *     of those carrying a snapshot          : 100
+ *     records returned by this function     : 100
+ *     of those carrying a snapshot          :   0
+ *
+ * `restoreWorkingSet` therefore restored nothing on every continuation. The
+ * frontier read empty, the yield gate answered `frontier_exhausted`, and runs
+ * reported "every discovered candidate has been investigated" with 88 of 98
+ * never touched — while the auto-continuation message promised the user it was
+ * "looking for 8 more across 87 remaining companies". Three consecutive TEST
+ * runs ended that way. The continuation machinery was complete except for this.
+ *
+ * VALIDATED, NOT CAST, like everything else here — a checkpoint is JSON another
+ * deploy wrote. Only the SHAPE is checked; `restoreWorkingSet` owns the value
+ * narrowing (investigation state, enrichment outcome, rank) and already treats
+ * every field as untrusted. A snapshot with no `company` object cannot rebuild
+ * anything, so it reads as absent rather than as an empty company — which keeps
+ * the `snapshots_missing` count honest.
+ */
+function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null {
+  const s = asRecord(raw);
+  const company = asRecord(s?.company);
+  if (!s || !company) return null;
+  return {
+    company,
+    // BOUNDED ON READ AS WELL AS ON WRITE. The cap is this module's promise
+    // about how large a restored working set can get, and a checkpoint written
+    // by a build with a different cap must not be able to break it.
+    yc_open_jobs: (Array.isArray(s.yc_open_jobs) ? s.yc_open_jobs : [])
+      .map(asRecord).filter((j): j is Record<string, unknown> => j !== null)
+      .slice(0, MAX_SNAPSHOT_JOBS),
+    prequalified: asObjectOrNull(s.prequalified),
+    prequal_key: asStringOrNull(s.prequal_key),
+    shortlisted: s.shortlisted === true,
+    investigation_state: asStringOrNull(s.investigation_state),
+    investigation_rank: typeof s.investigation_rank === "number" &&
+        Number.isFinite(s.investigation_rank)
+      ? s.investigation_rank
+      : null,
+    triage: asObjectOrNull(s.triage),
+    enriched: asObjectOrNull(s.enriched),
+    enrichment_outcome: asStringOrNull(s.enrichment_outcome),
+  };
+}
+
 /**
  * Per-company records from a persisted task result.
  *
@@ -486,6 +546,10 @@ export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecor
         ? c.completed_operations.filter((o): o is string => typeof o === "string" && !!o)
         : [],
       updated_at: typeof c.updated_at === "string" ? c.updated_at : base.updated_at,
+      // WITHOUT THIS LINE THE LEDGER IS UNREACHABLE. See
+      // `readWorkingSetSnapshot` — it was written on every checkpoint and read
+      // on none, which is what made every continuation restore zero companies.
+      snapshot: readWorkingSetSnapshot(c.snapshot),
     });
   }
   return out;
