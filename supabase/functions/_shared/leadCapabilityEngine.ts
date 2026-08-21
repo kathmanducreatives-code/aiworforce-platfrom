@@ -44,9 +44,11 @@ import {
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
 import {
-  acceptLinkedInMatch, linkedInSearchQueryFor, LINKEDIN_RESOLUTION_CONCURRENCY,
+  acceptLinkedInMatch, linkedInSearchQueryFor, linkedInSlugToken,
+  LINKEDIN_RESOLUTION_CONCURRENCY,
   prequalificationKey, prequalifyYcCompanies,
-  type PrequalificationResult, type PrequalifiedCompany, type YcCompanyInput,
+  type MatchOutcomeCode, type PrequalificationResult, type PrequalifiedCompany,
+  type YcCompanyInput,
 } from "./leadCommercialPrequalification.ts";
 import {
   buildQualificationContext, resolveEmployeeBounds, qualificationContextSummary,
@@ -428,6 +430,44 @@ export interface CapabilityExecutionState {
    */
   execution_plan?: Record<string, unknown> | null;
   /**
+   * WHY IDENTITY RESOLUTION ACCEPTED OR REFUSED WHAT THE ACTOR RETURNED.
+   *
+   * The identity stage's miss rate was unmeasurable. `acceptLinkedInMatch`
+   * computes exactly which of its four paths decided, and the engine read
+   * `.accepted` and discarded the rest — so a run could report "9 unresolved"
+   * and nothing at all about why. Run 958c86bc's 28 Actor calls ALL succeeded
+   * and ALL returned rows, so every one of those misses happened here.
+   *
+   * Diagnostics only. Nothing reads this to make a decision.
+   */
+  identity_match_diagnostics?: {
+    version: "identity-match-diagnostics-v1";
+    /** Companies whose candidates were judged at all. */
+    companies_judged: number;
+    companies_accepted: number;
+    companies_rejected: number;
+    /** Per-candidate outcome counts, keyed by `MatchOutcomeCode`. */
+    by_code: Record<string, number>;
+    /**
+     * A BOUNDED SAMPLE of refusals, with what the refusal turned on.
+     *
+     * The two rejection codes need opposite fixes — `no_name_or_domain_match`
+     * means the exact-equality NAME gate refused before corroboration was
+     * consulted, `name_matched_nothing_corroborated` means corroboration itself
+     * is too strict. Telling them apart needs the names and slugs side by side,
+     * which is what this carries.
+     */
+    rejected_samples: Array<{
+      company_key: string;
+      company_name: string;
+      company_domain: string | null;
+      code: MatchOutcomeCode;
+      candidate_name: string | null;
+      candidate_slug: string;
+      candidate_domain: string | null;
+    }>;
+  };
+  /**
    * WHICH REQUIRED SIGNALS THIS RUN COULD ANSWER, and why any could not.
    *
    * The record that separates "no more candidates" from "no source could ever
@@ -624,6 +664,65 @@ export function stateMatchesMission(
  *     inputs were persisted looks. Half a decision is not one to resume from,
  *     and silently reusing it would run every Actor with no filters at all.
  */
+/** How many refusals to keep verbatim. Enough to see a pattern, bounded. */
+export const MAX_MATCH_REJECTION_SAMPLES = 25;
+
+/**
+ * Record what identity matching decided, and what it decided it on.
+ *
+ * PURELY OBSERVATIONAL. Called after the filter has already run; it cannot
+ * change which candidates survive, and it is safe on a run with no diagnostics
+ * consumer at all.
+ *
+ * A company counts ONCE — as accepted if any candidate was accepted — because
+ * the question being measured is "did this company get an identity", not "how
+ * many of five search hits were wrong", which is always most of them.
+ */
+export function recordMatchDecisions(
+  state: CapabilityExecutionState,
+  company: { key: string; company: { company_name?: string | null; canonical_domain?: string | null } },
+  decisions: ReadonlyArray<{
+    code: MatchOutcomeCode;
+    accepted: boolean;
+    candidate_name: string | null;
+    candidate_slug: string;
+    candidate_domain: string | null;
+  }>,
+): void {
+  if (decisions.length === 0) return;
+  const d = state.identity_match_diagnostics ?? {
+    version: "identity-match-diagnostics-v1" as const,
+    companies_judged: 0, companies_accepted: 0, companies_rejected: 0,
+    by_code: {}, rejected_samples: [],
+  };
+
+  for (const dec of decisions) d.by_code[dec.code] = (d.by_code[dec.code] ?? 0) + 1;
+
+  const accepted = decisions.some((x) => x.accepted);
+  d.companies_judged++;
+  if (accepted) d.companies_accepted++;
+  else d.companies_rejected++;
+
+  // THE CLOSEST REFUSAL, not the first. A name that matched and failed only on
+  // corroboration says something different from a name that never matched, and
+  // when both are present the former is the informative one.
+  if (!accepted && d.rejected_samples.length < MAX_MATCH_REJECTION_SAMPLES) {
+    const closest = decisions.find((x) => x.code === "name_matched_nothing_corroborated")
+      ?? decisions[0];
+    d.rejected_samples.push({
+      company_key: company.key,
+      company_name: company.company.company_name ?? company.key,
+      company_domain: company.company.canonical_domain ?? null,
+      code: closest.code,
+      candidate_name: closest.candidate_name,
+      candidate_slug: closest.candidate_slug,
+      candidate_domain: closest.candidate_domain,
+    });
+  }
+
+  state.identity_match_diagnostics = d;
+}
+
 export function reusableStoredPlan(
   state: CapabilityExecutionState, missionHashValue: string,
 ): unknown[] | null {
@@ -3234,11 +3333,34 @@ export async function runCapabilityPlan(
           // worse than returning nothing.
           if (c.prequalified) {
             const before = lookups.length;
-            lookups = lookups.filter((l, i) => acceptLinkedInMatch(c.prequalified!, {
-              name: l.name, website: l.website, linkedinUrl: l.linkedinUrl,
-              description: (found[i]?.description as string) ?? null,
-              location: (found[i]?.location as string) ?? null,
-            }).accepted);
+            // ── THE VERDICT AND THE REASON FOR IT ────────────────────────
+            //
+            // This read `.accepted` and dropped `strength`, `reason` and now
+            // `code` on the floor. TEST run 958c86bc rejected 9 of the 20
+            // companies that reached a verdict — 45% — and no persisted record
+            // said which of the four acceptance paths nearly fired or what
+            // stopped it. The actor was never the problem: all 28 calls
+            // succeeded and every one returned rows.
+            //
+            // Recorded, not acted on. Nothing about the decision changes here.
+            const decisions = lookups.map((l, i) => ({
+              candidate: acceptLinkedInMatch(c.prequalified!, {
+                name: l.name, website: l.website, linkedinUrl: l.linkedinUrl,
+                description: (found[i]?.description as string) ?? null,
+                location: (found[i]?.location as string) ?? null,
+              }),
+              lookup: l,
+            }));
+            lookups = decisions.filter((d) => d.candidate.accepted).map((d) => d.lookup);
+            if (before > 0) {
+              recordMatchDecisions(state, c, decisions.map((d) => ({
+                code: d.candidate.code,
+                accepted: d.candidate.accepted,
+                candidate_name: d.lookup.name,
+                candidate_slug: linkedInSlugToken(d.lookup.linkedinUrl),
+                candidate_domain: d.lookup.website,
+              })));
+            }
             if (before > 0 && lookups.length === 0) {
               c.record.missing_evidence.push("linkedin_match_rejected_weak");
             }
@@ -3379,6 +3501,16 @@ export async function runCapabilityPlan(
         deferred_company_keys: deferredTargets.map((c) => c.key),
         concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
       });
+      // WHY, not just how many. Every Actor call on run 958c86bc succeeded and
+      // returned rows, so an `unresolved` count on its own describes nothing.
+      if (state.identity_match_diagnostics) {
+        log("identity_match_outcomes", {
+          judged: state.identity_match_diagnostics.companies_judged,
+          accepted: state.identity_match_diagnostics.companies_accepted,
+          rejected: state.identity_match_diagnostics.companies_rejected,
+          by_code: state.identity_match_diagnostics.by_code,
+        });
+      }
       await publish("identity_resolved");
       continue;
     }

@@ -499,6 +499,37 @@ export interface CandidateMatch {
 export type MatchStrength = "domain_exact" | "name_plus_evidence" | "rejected_weak";
 
 /**
+ * WHICH PATH DECIDED, as a stable key.
+ *
+ * `reason` is prose built for a human reading one decision. It embeds the
+ * company's own domain and slug, so it can never be counted — and counting is
+ * the whole question here. TEST run 958c86bc rejected 9 of the 20 companies
+ * that reached a verdict, and nothing in any persisted record said which of the
+ * four acceptance paths nearly fired or what stopped it, because the engine
+ * read `.accepted` and discarded the rest.
+ *
+ * These are the axis a run can be measured along:
+ *
+ *   domain_exact                       LinkedIn's own website matched ours
+ *   name_and_slug                      names equal, slug agrees with our domain
+ *   name_and_prose                     names equal, description/location carries the domain
+ *   name_and_one_liner                 names equal, the YC one-liner is echoed
+ *   name_matched_nothing_corroborated  names equal and NOTHING else agreed
+ *   no_name_or_domain_match            the name gate refused before any of that
+ *
+ * The last two are the ones worth telling apart. A run full of the first means
+ * corroboration is too strict; a run full of the second means the NAME GATE is,
+ * and those need opposite fixes.
+ */
+export type MatchOutcomeCode =
+  | "domain_exact"
+  | "name_and_slug"
+  | "name_and_prose"
+  | "name_and_one_liner"
+  | "name_matched_nothing_corroborated"
+  | "no_name_or_domain_match";
+
+/**
  * Accept a LinkedIn search result for a company — or refuse it.
  *
  * A name-only match is REFUSED. "Apollo", "Hub", "Magic" and "Streak" are real
@@ -541,10 +572,13 @@ function tokensAgree(a: string, b: string): boolean {
 
 export function acceptLinkedInMatch(
   company: PrequalifiedCompany, candidate: CandidateMatch,
-): { accepted: boolean; strength: MatchStrength; reason: string } {
+): { accepted: boolean; strength: MatchStrength; reason: string; code: MatchOutcomeCode } {
   const candDomain = normalizeDomain(candidate.website);
   if (company.canonical_domain && candDomain && candDomain === company.canonical_domain) {
-    return { accepted: true, strength: "domain_exact", reason: `domain ${candDomain} matches exactly` };
+    return {
+      accepted: true, strength: "domain_exact", code: "domain_exact",
+      reason: `domain ${candDomain} matches exactly`,
+    };
   }
   const sameName = normalizeCompanyName(candidate.name) === normalizeCompanyName(company.name);
   if (sameName) {
@@ -591,14 +625,14 @@ export function acceptLinkedInMatch(
     const slug = linkedInSlugToken(candidate.linkedinUrl);
     if (tokensAgree(slug, domainToken)) {
       return {
-        accepted: true, strength: "name_plus_evidence",
+        accepted: true, strength: "name_plus_evidence", code: "name_and_slug",
         reason: `name matches and the LinkedIn slug "${slug}" agrees with domain "${domainToken}"`,
       };
     }
     // Prose, compared as tokens so "Retell AI" contains "retellai".
     if (domainToken.length > 3 && hayToken.includes(domainToken)) {
       return {
-        accepted: true, strength: "name_plus_evidence",
+        accepted: true, strength: "name_plus_evidence", code: "name_and_prose",
         reason: "name matches and description/location corroborates",
       };
     }
@@ -606,15 +640,19 @@ export function acceptLinkedInMatch(
       const onelinerToken = identityToken(company.one_liner).slice(0, 24);
       if (onelinerToken.length >= 16 && hayToken.includes(onelinerToken)) {
         return {
-          accepted: true, strength: "name_plus_evidence",
+          accepted: true, strength: "name_plus_evidence", code: "name_and_one_liner",
           reason: "name matches and the company description corroborates",
         };
       }
     }
     return {
       accepted: false, strength: "rejected_weak",
+      code: "name_matched_nothing_corroborated",
       reason: "name matches but nothing corroborates it — a bare name match is not an identity",
     };
   }
-  return { accepted: false, strength: "rejected_weak", reason: "neither domain nor name matches" };
+  return {
+    accepted: false, strength: "rejected_weak", code: "no_name_or_domain_match",
+    reason: "neither domain nor name matches",
+  };
 }
