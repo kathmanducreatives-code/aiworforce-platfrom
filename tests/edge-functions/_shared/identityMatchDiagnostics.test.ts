@@ -257,3 +257,106 @@ Deno.test("13. the search asks for more than five candidates now", () => {
   assert(IDENTITY_SEARCH_MAX_ITEMS > 5);
   assert(IDENTITY_SEARCH_MAX_ITEMS <= 1000, "the compiler's ceiling");
 });
+
+// ═══ 5. THE SEARCH BUYS ONLY WHAT IT READS ═════════════════════════════════
+//
+// `scraperMode` was `full`, justified in-line by "`short` returns employeeCount
+// === null, and an unverifiable size cannot settle a 10-150 gate". True of the
+// size gate, and not true of THIS call: the stage reads five fields out of each
+// result — name, linkedinUrl, website, description, location — and
+// `employeeCount` is not one of them. Three fields leave the branch.
+//
+// Since maxItems went to 15, `full` was doubling the price of 15 results on
+// every identity call for a number nothing here looks at.
+
+import {
+  runCapabilityPlan, type CapabilityEngineDeps,
+} from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import {
+  parseLeadMissionDeterministic,
+} from "../../../supabase/functions/_shared/leadMission.ts";
+import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
+import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+
+const SEARCH = "apify_linkedin_company_search";
+const MEMO23 = "apify_yc_companies_memo23";
+
+/** One YC company, and the LinkedIn row SHORT mode returns for it. */
+const YC_ROW = {
+  name: "Godela", website: "https://godela.ai", teamSize: 6, batch: "X25",
+  industries: ["B2B"], id: "godela", regions: ["United States of America"],
+  isHiring: true, openJobs: [{ title: "Founding Engineer" }],
+} as unknown as Record<string, unknown>;
+
+/**
+ * SHORT MODE, faithfully: `employeeCount` and `industries` absent, everything
+ * this stage actually reads present. Per the actor's own verified card, those
+ * two fields are the only ones `full` adds.
+ */
+const SHORT_MODE_HIT = {
+  id: "1", name: "Godela", linkedinUrl: "https://www.linkedin.com/company/godela-ai",
+  website: "https://godela.ai", description: "AI physics engine", location: "San Francisco",
+  employeeCount: null, industry: "Software Development",
+};
+
+async function runIdentity() {
+  const calls: Array<Record<string, unknown>> = [];
+  const m = parseLeadMissionDeterministic(
+    "Find 10 qualified AI startups in the US currently hiring",
+  );
+  const run = await runCapabilityPlan({
+    planDiscovery: stubDiscoverySelector(),
+    invoke: (call: CompiledActorCall<unknown>) => {
+      if (call.actorKey === MEMO23) return Promise.resolve([YC_ROW]);
+      if (call.actorKey === SEARCH) {
+        calls.push(call.input as Record<string, unknown>);
+        return Promise.resolve([SHORT_MODE_HIT]);
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+  } as unknown as CapabilityEngineDeps as never, {
+    mission: m, plan: buildCapabilityGraph(m), maxCandidates: 20,
+    readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined,
+  } as never);
+  return { run, calls };
+}
+
+Deno.test("14. the identity search asks for SHORT mode", async () => {
+  const { calls } = await runIdentity();
+  assert(calls.length > 0, "the identity search must have run");
+  for (const input of calls) {
+    assertEquals(input.scraperMode, "short",
+      "full doubles the per-result price for `employeeCount`, which this stage never reads");
+    assertEquals(input.maxItems, IDENTITY_SEARCH_MAX_ITEMS);
+  }
+});
+
+Deno.test("15. and resolves an identity from a short-mode row", async () => {
+  // The proof that dropping `full` costs nothing: a row with employeeCount null
+  // and no `industries` still carries everything the match needs.
+  const { run } = await runIdentity();
+  const c = run.companies.find((x) => x.key === "godela.ai");
+  assert(c, "the company survived to identity resolution");
+  assertEquals(c!.identity?.linkedin_company_url,
+    "https://www.linkedin.com/company/godela-ai",
+    "domain_exact does not need a headcount");
+});
+
+Deno.test("16. the stage still reads only mode-independent fields", () => {
+  // If someone later lifts `employeeCount` out of the search result, `short`
+  // silently becomes the wrong mode. This is the tripwire for that.
+  const src = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  const branch = src.slice(
+    src.indexOf("lookups = found.map("),
+    src.indexOf("c.identity = resolveIdentityAgainstLookups("));
+  for (const full_mode_only of ["employeeCount", "industries"]) {
+    assert(!branch.includes(full_mode_only),
+      `the identity branch reads "${full_mode_only}", which SHORT mode does not return`);
+  }
+  for (const needed of ["name", "linkedinUrl", "website", "description", "location"]) {
+    assert(branch.includes(needed), `"${needed}" is what this stage actually consumes`);
+  }
+});

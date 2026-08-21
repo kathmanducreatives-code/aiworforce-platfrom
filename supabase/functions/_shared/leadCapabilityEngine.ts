@@ -3361,9 +3361,30 @@ export async function runCapabilityPlan(
             searchQuery: c.prequalified
               ? linkedInSearchQueryFor(c.prequalified)
               : c.company.company_name,
-            // `full` is required: `short` returns employeeCount === null, and an
-            // unverifiable size cannot settle a 10-150 gate.
-            scraperMode: "full",
+            // ── `short`, BECAUSE THIS STAGE NEVER READS THE EXPENSIVE FIELD ──
+            //
+            // This said `full` is required: "`short` returns employeeCount ===
+            // null, and an unverifiable size cannot settle a 10-150 gate." The
+            // reasoning is sound and it belongs to a different stage. THIS one
+            // reads exactly five fields out of the result — `name`,
+            // `linkedinUrl` and `website` into `lookups`, plus `description`
+            // and `location` for `acceptLinkedInMatch`. `employeeCount` is
+            // never read, never carried, and cannot reach the size gate: three
+            // fields leave this branch.
+            //
+            // Per the actor's own verified card, only `employeeCount` and
+            // `industries` are full-mode-only. Every field this stage consumes
+            // is returned in both modes. And the size gate is settled where it
+            // always was — by `company_enrichment`, whose card note says so
+            // outright: "Use enrichment, not full mode, when headcount must be
+            // trusted."
+            //
+            // The cost is no longer marginal. `full-company` is $0.004 a result
+            // against `short-company`'s $0.002, and since raising maxItems to
+            // 15 that is 15 results on every one of ~23 identity calls per run
+            // — the single largest paid line in the pipeline, doubled for a
+            // number nothing here looks at.
+            scraperMode: "short",
             maxItems: IDENTITY_SEARCH_MAX_ITEMS,
             // ── THE GEOGRAPHY THE MISSION ALREADY DECLARED HARD ──────────
             //
