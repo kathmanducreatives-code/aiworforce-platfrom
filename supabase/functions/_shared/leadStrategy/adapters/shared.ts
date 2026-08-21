@@ -6,6 +6,7 @@
 // exactly what keeps the canonical result byte-identical across providers.
 
 import { extractJson } from "../../aiProvider.ts";
+import { buildModelTelemetry, readModelUsage } from "../../modelCostModel.ts";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_TIMEOUT_MS,
 } from "../config.ts";
@@ -67,12 +68,20 @@ export async function completeOpenAiCompatible(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), call.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
+  // BUILT ONCE. Telemetry reports the effort that was actually SENT rather
+  // than one it assumes, and rebuilding the body to read it back would make
+  // those two things capable of disagreeing.
+  const requestBody = buildStrategistRequestBody(call, opts.wireModel ?? call.model);
+  const sentEffort = typeof requestBody.reasoning_effort === "string"
+    ? requestBody.reasoning_effort
+    : null;
+
   try {
     const res = await doFetch(opts.endpoint, {
       method: "POST",
       signal: ctrl.signal,
       headers: { "Content-Type": "application/json", ...opts.headers },
-      body: JSON.stringify(buildStrategistRequestBody(call, opts.wireModel ?? call.model)),
+      body: JSON.stringify(requestBody),
     });
     clearTimeout(timer);
     const text = await res.text();
@@ -99,6 +108,23 @@ export async function completeOpenAiCompatible(
         latencyMs, error: `json_parse_failed: ${String(e)}`, errorCode: "json_parse_failed",
       };
     }
+
+    // ── WHAT THIS CALL COST ─────────────────────────────────────────────
+    //
+    // `usage` was already being carried on the result and never priced, so the
+    // high-volume half of the pipeline — triage, evaluation, grounded brain —
+    // reported no model spend at all. Emitted HERE, on the one shared
+    // transport, so both adapters report identically and neither can drift.
+    //
+    // `reasoning_effort` is read back off the body actually sent rather than
+    // assumed, because that is the field a routing change will move first.
+    console.log("[model-telemetry]", buildModelTelemetry({
+      role: call.role ?? "unattributed",
+      model: call.model,
+      reasoning_effort: sentEffort,
+      usage: readModelUsage(data),
+      latency_ms: latencyMs,
+    }));
 
     const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
     const content = choices?.[0]?.message?.content ?? "";

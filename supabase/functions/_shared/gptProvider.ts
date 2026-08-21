@@ -130,6 +130,15 @@ export interface GptRequest {
    * regression and a quality regression look identical in the telemetry.
    */
   routing_reason?: string;
+  /**
+   * The effort this call was routed at, for telemetry.
+   *
+   * NOT SENT TO THE API YET. `gptStructured` still speaks the gpt-4.1 body —
+   * `temperature` and `max_tokens`, both of which the GPT-5 models reject — so
+   * sending an effort here would be a routing change wearing a telemetry
+   * change's clothes. Phase 1 measures; Phase 2 unifies the transports.
+   */
+  reasoningEffort?: string | null;
 }
 
 /**
@@ -157,7 +166,11 @@ export function isProviderFailure(code: GptFailureCode): boolean {
 }
 
 export type GptResult<T> =
-  | { ok: true; value: T; model: string; latency_ms: number }
+  | {
+    ok: true; value: T; model: string; latency_ms: number;
+    /** Token counts as OpenAI reported them, and what they cost. */
+    telemetry?: ModelCallTelemetry;
+  }
   | {
     ok: false;
     /** Why it failed, in a form a caller can branch on. */
@@ -192,6 +205,10 @@ export interface GptDeps {
   /** Injected so a retry test does not spend real seconds. */
   sleep?: (ms: number) => Promise<void>;
 }
+
+import {
+  readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
+} from "./modelCostModel.ts";
 
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
@@ -443,6 +460,26 @@ export async function gptStructured<T>(
   if (failure) return failure;
   raw = raw!;
 
+  // ── WHAT IT COST, READ OFF THE SAME BODY ────────────────────────────────
+  //
+  // `usage` was never parsed on either transport, so no model spend of any kind
+  // was recorded and the routing question could not be settled by measurement.
+  // Read before the content, because a response that fails to parse below still
+  // consumed tokens and was still billed.
+  let envelope: unknown = null;
+  try { envelope = JSON.parse(raw); } catch { /* handled below */ }
+  const usage = readModelUsage(envelope);
+  const telemetry = buildModelTelemetry({
+    role: req.purpose,
+    model,
+    // gpt-4.1 takes no effort parameter; the GPT-5 models require one. Null
+    // means "not applicable", never "default".
+    reasoning_effort: req.reasoningEffort ?? null,
+    usage,
+    latency_ms: elapsed(),
+  });
+  log("gpt_call_telemetry", telemetry);
+
   let content: string | undefined;
   try {
     const parsed = JSON.parse(raw) as {
@@ -481,7 +518,7 @@ export async function gptStructured<T>(
       purpose: req.purpose, model, tier: req.tier ?? "reasoning",
       routing_reason: req.routing_reason ?? null, latency_ms: elapsed(),
     });
-    return { ok: true, value, model, latency_ms: elapsed() };
+    return { ok: true, value, model, latency_ms: elapsed(), telemetry };
   } catch {
     // `strict` should make this unreachable. It is handled anyway, because
     // "unreachable" is a claim about a provider we do not control.

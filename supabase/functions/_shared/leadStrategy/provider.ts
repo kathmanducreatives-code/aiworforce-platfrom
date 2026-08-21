@@ -21,6 +21,17 @@ export interface StrategistCall {
   userMessage: string;
   timeoutMs?: number;
   maxCompletionTokens?: number;
+  /**
+   * The STAGE this call serves, for telemetry — `mission_triage`,
+   * `mission_evaluation`, and so on.
+   *
+   * Separate from `model` on purpose. "What did qualification cost this month"
+   * and "what did Luna cost this month" are different questions, and a routing
+   * change makes the second one useless for answering the first. Optional so no
+   * existing caller breaks; an unnamed call reports `unattributed`, which is
+   * visible in the audit rather than silently merged into another stage.
+   */
+  role?: string;
 }
 
 /** Canonical, provider-agnostic result. Byte-identical across adapters. */
