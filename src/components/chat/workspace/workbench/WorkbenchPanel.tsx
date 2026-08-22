@@ -163,6 +163,14 @@ export default function WorkbenchPanel() {
         </div>
       )}
 
+      {/* ── ONE TAB ROW, OWNED BY WHOEVER HAS THE DATA ────────────────────
+          The leads path used to render THIS bar (Table / Insights / Activity)
+          and then a second set of result states inside a single table below
+          it. Its own tabs now live in `LeadResultsView`, which is the only
+          place that holds the rows and can therefore count them — a tab
+          labelled "Qualified 10" cannot be rendered by a component that does
+          not know what qualified. */}
+      {!leadsPanel && (
       <div className="flex items-center gap-0.5 px-3 border-b border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur sticky top-0 z-[5] shrink-0">
         {tabs.map((t) => {
           const Icon = t.icon;
@@ -186,8 +194,9 @@ export default function WorkbenchPanel() {
           );
         })}
       </div>
+      )}
 
-      {tab === 'table' ? (
+      {tab === 'table' || leadsPanel ? (
         <div className="flex-1 min-h-0 min-w-0 relative z-[1] overflow-hidden flex flex-col">
           {leadsPanel && showContinue && (
             <ContinueVerificationBar
@@ -228,6 +237,12 @@ export default function WorkbenchPanel() {
                   portfolio={portfolio}
                   progress={progress}
                   evaluationRows={evaluationRows}
+                  // BUILT HERE, PLACED THERE. Both need `data`, which this
+                  // component owns; passing the built elements avoids fetching
+                  // the leads twice — `useLeadResults` holds plain state with
+                  // no shared cache, so a second call is a second query.
+                  insightsSlot={<InsightsView data={data} panel={leadsPanel} />}
+                  activitySlot={<ActivityTimeline items={data.activity} />}
                 />
               ) : (
                 <div className="h-full overflow-auto p-4 space-y-3">{renderTable()}</div>

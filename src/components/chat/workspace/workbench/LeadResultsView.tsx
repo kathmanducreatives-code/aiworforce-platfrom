@@ -33,6 +33,9 @@ import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
 import { resolveQualification as qualificationFromRecord } from '@/lib/qualifiedLead/qualification';
 import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
 import { buildRunSummary } from '@/lib/workbench/runSummary';
+import {
+  LEAD_TAB_EMPTY, type LeadTabId, notReachedCompanies, partitionLeads, tabsFor,
+} from '@/lib/workbench/leadTabs';
 import type { PortfolioView } from '@/lib/workbench/portfolioView';
 import type { WorkbenchProgress } from '@/lib/workbench/workbenchProgress';
 import type { EvaluationRow } from '@/lib/workbench/evaluationRows';
@@ -53,11 +56,21 @@ interface Props {
   portfolio?: PortfolioView | null;
   progress?: WorkbenchProgress | null;
   evaluationRows?: EvaluationRow[];
+  /**
+   * The two secondary views, built by the panel.
+   *
+   * Both need the panel's `data`; passing the built elements keeps the leads
+   * fetched once. `useLeadResults` holds plain state with no shared cache, so
+   * calling it a second time to satisfy a tab would double every query.
+   */
+  insightsSlot?: React.ReactNode;
+  activitySlot?: React.ReactNode;
 }
 
 export default function LeadResultsView({
   meta, conversationId, taskId = null,
   portfolio = null, progress = null, evaluationRows = [],
+  insightsSlot = null, activitySlot = null,
 }: Props) {
   const { closeWorkbench } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
@@ -134,11 +147,48 @@ export default function LeadResultsView({
     return out;
   }, [items, accountViews, savedIcp, brain]);
 
-  const filtered = useMemo(() => items.filter((r) => {
+  // ── THE TAB THE USER IS ON, AND WHAT IT CONTAINS ───────────────────────
+  //
+  // One table used to hold everything: a company that qualified, one still
+  // waiting on a contact, and one the run never reached, as adjacent rows of
+  // equal weight. Separated here, from the states the model already carried.
+  const [tab, setTab] = useState<LeadTabId>('qualified');
+  const partition = useMemo(
+    () => partitionLeads(items.map((r) => ({ ...r, ...qualificationFromRow(r) }))),
+    [items],
+  );
+  const notReached = useMemo(() => notReachedCompanies(evaluationRows), [evaluationRows]);
+  const tabs = useMemo(() => tabsFor({
+    qualified: partition.qualified.length,
+    inReview: partition.inReview.length,
+    notReached: notReached.length,
+    hasInsights: !!insightsSlot,
+  }), [partition, notReached, insightsSlot]);
+
+  // A tab can vanish between renders — `Not reached` disappears once a resumed
+  // run finishes it. Falling back to Qualified beats rendering nothing.
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab('qualified');
+  }, [tabs, tab]);
+
+  // SELECTION DOES NOT SURVIVE A TAB CHANGE.
+  //
+  // `selectedRows` is derived from the visible rows, so a selection made on
+  // Qualified is already inert on In review — but it is still HELD, and comes
+  // back on return. A toolbar reading "3 selected" for rows the user cannot see,
+  // or a count that reappears after a detour, is a worse surprise than losing a
+  // selection they can remake in one click.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab]);
+
+  const tabRows = tab === 'in_review' ? partition.inReview : partition.qualified;
+
+  const filtered = useMemo(() => tabRows.filter((r) => {
     if (onlyWithWebsite && !r.website) return false;
     if (minFit > 0 && (r.fit_score ?? 0) < minFit) return false;
     return true;
-  }), [items, onlyWithWebsite, minFit]);
+  }), [tabRows, onlyWithWebsite, minFit]);
 
   const selectedRows = useMemo(
     () => filtered.filter((r) => selected.has(r.id)),
@@ -402,8 +452,41 @@ export default function LeadResultsView({
         } : null}
       />
 
-      {/* Filters, demoted out of the header. */}
-      <div className="px-6 py-2.5 flex items-center gap-1.5 text-[11.5px] border-b border-white/[0.06]">
+      {/* ── THE TABS ───────────────────────────────────────────────────────
+          Qualified is the default and the hero. The counts are on the tabs
+          themselves, which is the only place a count belongs now: it labels
+          the thing you are about to look at instead of floating above three
+          other numbers claiming the same subject. */}
+      <div className="px-6 flex items-center gap-1 border-b border-white/[0.06] shrink-0">
+        {tabs.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`relative px-3 py-3 text-[13px] transition-colors ${
+                active ? 'text-[#F0F6FC] font-medium' : 'text-[#8b949e] hover:text-[#C9D1D9]'
+              }`}
+            >
+              {t.label}
+              {t.count !== null && (
+                <span className={`ml-1.5 tabular-nums ${active ? 'text-emerald-300' : 'text-[#6e7681]'}`}>
+                  {t.count}
+                </span>
+              )}
+              {active && (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-emerald-400" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filters apply to the two lead tabs only — there is nothing to filter
+          on a list of companies the run never reached, and offering a control
+          that changes nothing is worse than not offering it. */}
+      {(tab === 'qualified' || tab === 'in_review') && (
+      <div className="px-6 py-2.5 flex items-center gap-1.5 text-[11.5px] border-b border-white/[0.06] shrink-0">
         <Filter className="h-3 w-3 text-[#6e7681]" />
         <button
           onClick={() => setOnlyWithWebsite((v) => !v)}
@@ -421,24 +504,60 @@ export default function LeadResultsView({
           </button>
         ))}
       </div>
+      )}
 
       {/* RecommendationBanner removed: the recommendation IS the hero CTA
           above, and rendering both stated one next step twice, in two visual
           languages, 60px apart. QualificationInsightsPanel moves to the
           Insights tab in phase 2 — it is diagnostic, not the answer. */}
-      <BulkActionToolbar
-        selectedCount={selectedRows.length}
-        onClear={() => setSelected(new Set())}
-        onAction={onBulkAction}
-        credits={bulkCredits}
-      />
+      {/* Selection only exists on the lead tabs. */}
+      {(tab === 'qualified' || tab === 'in_review') && (
+        <BulkActionToolbar
+          selectedCount={selectedRows.length}
+          onClear={() => setSelected(new Set())}
+          onAction={onBulkAction}
+          credits={bulkCredits}
+        />
+      )}
 
       {actionOutcome && (
         <LeadActionOutcomeCard outcome={actionOutcome} onClose={() => setActionOutcome(null)} />
       )}
 
-      {/* Body */}
-      {loading && items.length === 0 ? (
+      {/* ── SECONDARY TABS ─────────────────────────────────────────────────
+          Scrolled, bounded, and outside the lead-table branch entirely, so
+          nothing about them can affect the space the leads get. */}
+      {tab === 'not_reached' ? (
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
+          <p className="text-[13px] text-[#8b949e] leading-relaxed mb-4 max-w-xl">
+            The run stopped before checking these {notReached.length} companies.
+            Resuming picks up exactly here — nothing already paid for is bought
+            again.
+          </p>
+          <ul className="space-y-px">
+            {notReached.map((c) => (
+              <li
+                key={c.company_key}
+                className="flex items-baseline justify-between gap-4 py-2.5 border-b border-white/[0.04]"
+              >
+                <span className="text-[13.5px] text-[#C9D1D9] truncate">{c.company_name}</span>
+                <span className="text-[12px] text-[#6e7681] shrink-0 truncate max-w-[45%]">
+                  {c.strongest_signal ?? 'Not checked yet'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : tab === 'insights' ? (
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-5">{insightsSlot}</div>
+      ) : tab === 'activity' ? (
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
+          {activitySlot ?? (
+            <p className="text-[13px] text-[#8b949e]">{LEAD_TAB_EMPTY.activity}</p>
+          )}
+        </div>
+      ) : /* Body — the two lead tabs */
+      loading && items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">
           <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading leads…
         </div>
@@ -453,8 +572,21 @@ export default function LeadResultsView({
         <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">
           {EMPTY_WORKBENCH_MESSAGE}
         </div>
+      ) : tabRows.length === 0 ? (
+        // WHAT THE BUCKET MEANS, not that it is empty. "No leads" leaves a
+        // reader unable to tell a run that found nothing from a tab that does
+        // not apply to their request.
+        <div className="flex-1 flex items-center justify-center px-8">
+          <p className="text-[13px] text-[#8b949e] text-center max-w-sm leading-relaxed">
+            {LEAD_TAB_EMPTY[tab]}
+          </p>
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">No leads match these filters.</div>
+        <div className="flex-1 flex items-center justify-center px-8">
+          <p className="text-[13px] text-[#8b949e] text-center">
+            No {tab === 'qualified' ? 'qualified leads' : 'companies'} match these filters.
+          </p>
+        </div>
       ) : (
         <LeadTable
           rows={filtered}

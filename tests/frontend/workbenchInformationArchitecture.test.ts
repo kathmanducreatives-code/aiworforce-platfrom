@@ -186,3 +186,62 @@ Deno.test("13. the summary is built from the run's own projections", () => {
     "computed once — a second call is a second answer",
   );
 });
+
+// ═══ 7. PHASE 2 — ONE TAB ROW, OWNED BY WHOEVER HAS THE DATA ══════════════
+
+Deno.test("14. the panel no longer renders tabs for the leads path", () => {
+  // Two tab systems used to describe one screen: the panel's Table / Insights /
+  // Activity, and — inside "Table" — every result state mixed into one list.
+  assert(/\{!leadsPanel && \(/.test(PANEL),
+    "the panel's tab bar is for the non-leads path only");
+  assert(PANEL.includes("insightsSlot={"), "Insights is handed down…");
+  assert(PANEL.includes("activitySlot={"), "…and so is Activity");
+});
+
+Deno.test("15. the leads are fetched ONCE, whatever the tab", () => {
+  // `useLeadResults` holds plain state with no shared cache, so a tab that
+  // called it again would double every query for the same rows.
+  assertEquals((VIEW.match(/useLeadResults\(/g) ?? []).length, 1);
+  assert(!PANEL.includes("useLeadResults"),
+    "the panel builds the secondary views instead of re-fetching the leads");
+});
+
+Deno.test("16. Qualified is the default tab", () => {
+  assert(/useState<LeadTabId>\('qualified'\)/.test(VIEW),
+    "the hero view is what opens");
+});
+
+Deno.test("17. the body switches on the tab, and only leads get the table", () => {
+  assert(VIEW.includes("tab === 'not_reached'"));
+  assert(VIEW.includes("tab === 'insights'"));
+  assert(VIEW.includes("tab === 'activity'"));
+  // Filters and bulk selection are meaningless on a list of companies the run
+  // never reached; a control that changes nothing is worse than no control.
+  assertEquals(
+    (VIEW.match(/tab === 'qualified' \|\| tab === 'in_review'/g) ?? []).length, 2,
+    "filters and the bulk toolbar are both gated to the lead tabs",
+  );
+});
+
+Deno.test("18. an empty tab explains the bucket", () => {
+  assert(VIEW.includes("LEAD_TAB_EMPTY[tab]"),
+    "'No leads' cannot distinguish a run that found nothing from a tab that " +
+    "does not apply to this request");
+});
+
+Deno.test("19. selection does not survive a tab change", () => {
+  // A toolbar reading "3 selected" for rows the user cannot see, or a count
+  // that reappears after a detour, is worse than losing a one-click selection.
+  const at = VIEW.indexOf("setSelected(new Set());\n  }, [tab]);");
+  assert(at !== -1, "the selection is cleared when the tab changes");
+});
+
+Deno.test("20. and the secondary tabs cannot take the leads' space", () => {
+  // Every secondary branch is a sibling of the lead table, never a stacked
+  // block above it — the phase 1 defect, which a tab system makes easy to
+  // reintroduce.
+  const bodies = [...VIEW.matchAll(/tab === '(not_reached|insights|activity)' \?/g)];
+  assertEquals(bodies.length, 3);
+  assert(VIEW.includes('flex-1 min-h-0 overflow-auto px-6 py-5'),
+    "each scrolls inside the space the table would have used");
+});
