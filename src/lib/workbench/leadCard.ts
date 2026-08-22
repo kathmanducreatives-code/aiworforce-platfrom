@@ -67,6 +67,14 @@ export interface LeadCardModel {
   stateLabel: string;
   /** The single next step, or null when there is nothing to do. */
   nextStep: string | null;
+  /**
+   * The fallback for the "why" line when the row carries no reason.
+   *
+   * Never blank: an empty line under every card reads as a rendering fault. It
+   * states the STATE in words a reader can act on, which is the honest thing
+   * to say when nothing more specific was recorded.
+   */
+  whyLine: string;
 }
 
 export interface LeadCardInput extends QualificationRecord {
@@ -159,6 +167,7 @@ export function buildLeadCard(row: LeadCardInput): LeadCardModel {
     state,
     stateLabel: STATE_LABEL[state],
     nextStep: NEXT_STEP[state],
+    whyLine: WHY_LINE[state],
   };
 }
 
@@ -181,6 +190,13 @@ const STATE_LABEL: Readonly<Record<LeadCardState, string>> = Object.freeze({
  * finished lead, and a card that suggests something for every state trains the
  * reader to ignore the suggestion.
  */
+/** What the state means, when the row recorded no reason of its own. */
+const WHY_LINE: Readonly<Record<LeadCardState, string>> = Object.freeze({
+  ready: 'Matched your criteria',
+  needs_contact: 'Matched your criteria — no contact found yet',
+  in_review: 'Still checking qualification',
+});
+
 const NEXT_STEP: Readonly<Record<LeadCardState, string | null>> = Object.freeze({
   ready: null,
   needs_contact: 'Find decision-makers',

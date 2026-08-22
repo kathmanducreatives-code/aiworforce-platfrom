@@ -3,11 +3,10 @@ import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import LeadCardList from './leadTable/LeadCardList';
-import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
-import { Loader2, Filter, Sparkles, X, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Loader2, Filter, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -152,7 +151,9 @@ export default function LeadResultsView({
   // One table used to hold everything: a company that qualified, one still
   // waiting on a contact, and one the run never reached, as adjacent rows of
   // equal weight. Separated here, from the states the model already carried.
+  // The default is decided once the rows arrive — see the effect below.
   const [tab, setTab] = useState<LeadTabId>('qualified');
+  const [tabChosen, setTabChosen] = useState(false);
   const partition = useMemo(
     () => partitionLeads(items.map((r) => ({ ...r, ...qualificationFromRow(r) }))),
     [items],
@@ -164,6 +165,20 @@ export default function LeadResultsView({
     notReached: notReached.length,
     hasInsights: !!insightsSlot,
   }), [partition, notReached, insightsSlot]);
+
+  // OPEN ON WHERE THE RESULTS ACTUALLY ARE.
+  //
+  // Qualified is the hero and stays first, but opening it EMPTY while eleven
+  // usable leads sit one tab over shows a blank page for a run that worked.
+  // Decided once, when the rows first land, so it never yanks the tab out from
+  // under someone mid-read.
+  useEffect(() => {
+    if (tabChosen || items.length === 0) return;
+    setTabChosen(true);
+    if (partition.qualified.length === 0 && partition.inReview.length > 0) {
+      setTab('in_review');
+    }
+  }, [tabChosen, items.length, partition]);
 
   // A tab can vanish between renders — `Not reached` disappears once a resumed
   // run finishes it. Falling back to Qualified beats rendering nothing.
@@ -196,16 +211,6 @@ export default function LeadResultsView({
   );
   const targetRows = selectedRows.length > 0 ? selectedRows : filtered;
 
-  const bulkCredits = useMemo<Record<LeadResultPanelAction, number>>(() => ({
-    enrich: estimateCredits('enrich', selectedRows),
-    enrich_and_draft: estimateCredits('enrich_and_draft', selectedRows),
-    find_contacts: estimateCredits('find_contacts', selectedRows),
-    research_company: estimateCredits('research_company', selectedRows),
-    draft_outreach: estimateCredits('draft_outreach', selectedRows),
-    rank: estimateCredits('rank', selectedRows),
-    export_csv: 0,
-    save_to_signal_feed: 0,
-  }), [selectedRows]);
 
   const counts = useMemo(() => ({
     found: items.length,
@@ -242,22 +247,23 @@ export default function LeadResultsView({
     }, items.map(qualificationFromRow));
   }, [meta.qualified_lead_run, items]);
 
-  const summary = useMemo(() => {
-    const resolved = items.map(qualificationFromRow).map(qualificationFromRecord);
-    return buildRunSummary({
-      quota: runQuota,
-      portfolio,
-      progress,
-      rows: {
-        total: items.length,
-        // EXPLICIT POSITIVE VERDICTS ONLY. `level !== 'not_qualified'` once
-        // reported 20 qualified for a run that qualified none, because absence
-        // of a rejection is not a pass.
-        qualified: resolved.filter((q) => q.qualified).length,
-        pending: resolved.filter((q) => !q.qualified && q.evaluated).length,
-      },
-    });
-  }, [items, runQuota, portfolio, progress]);
+  // ONE SOURCE FOR THE HERO AND THE TABS.
+  //
+  // They used to be derived separately: the tabs from `partitionLeads`, the
+  // hero from a precedence chain that preferred `quota.qualifiedCompanies`. So
+  // the hero read "11 qualified leads" beside a "Qualified 0" tab — a COMPANY
+  // count under a LEAD label, on the same screen as the truth.
+  //
+  // `partition` is now the only answer to "how many qualified", and it feeds
+  // both.
+  const summary = useMemo(() => buildRunSummary({
+    qualifiedLeads: partition.qualified.length,
+    leadsInReview: partition.inReview.length,
+    quota: runQuota,
+    portfolio,
+    progress,
+    rows: { total: items.length, qualified: 0, pending: 0 },
+  }), [partition, items.length, runQuota, portfolio, progress]);
 
   // The qualification diagnostics were computed here and rendered inline above
   // the table. They are DIAGNOSTIC — read when a number looks wrong — so phase 2
@@ -393,7 +399,6 @@ export default function LeadResultsView({
 
   // Bulk + recommended actions operate on the SELECTION (empty → clear message,
   // never all rows / a new search). Unlock cells operate on their own row.
-  const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, selectedRows), [runAction, selectedRows]);
   const onUnlock = useCallback((a: LeadResultPanelAction, id: string) => {
     const row = items.find((r) => r.id === id);
     if (!row) return;
@@ -438,17 +443,19 @@ export default function LeadResultsView({
 
           One number, one line of context, one action. The counters live in Run
           details, under the table. */}
+      {/* NO CTA BESIDE THE HERO.
+          It was a large DISABLED panel carrying a paragraph explaining why it
+          was disabled — the single biggest block on the screen, permanently
+          unusable on every run in the history, and beside the one number the
+          page exists to show. The action still exists in the action bar, where
+          it appears when it can actually run. A disabled control with an
+          explanation is a cost with no benefit: it takes prime space to say
+          "not yet". */}
       <RunSummaryHero
         summary={summary}
-        cta={recommendation ? {
+        cta={isRecommendationDispatchable(recommendation) ? {
           label: recommendation.label,
           onClick: onRunRecommendation,
-          // A recommendation whose prerequisite does not exist must not be
-          // dispatchable — the reason is shown rather than the button silently
-          // doing nothing.
-          disabled: !isRecommendationDispatchable(recommendation),
-          hint: isRecommendationDispatchable(recommendation)
-            ? undefined : recommendation.reason,
         } : null}
       />
 
@@ -486,8 +493,8 @@ export default function LeadResultsView({
           on a list of companies the run never reached, and offering a control
           that changes nothing is worse than not offering it. */}
       {(tab === 'qualified' || tab === 'in_review') && (
-      <div className="px-6 py-2.5 flex items-center gap-1.5 text-[11.5px] border-b border-white/[0.06] shrink-0">
-        <Filter className="h-3 w-3 text-[#6e7681]" />
+      <div className="px-7 py-2 flex items-center gap-1.5 text-[12.5px] shrink-0">
+        <Filter className="h-3.5 w-3.5 text-[#6e7681]" />
         <button
           onClick={() => setOnlyWithWebsite((v) => !v)}
           className={`px-2.5 py-1 rounded-md border transition-colors ${onlyWithWebsite ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.08] bg-white/[0.02] text-[#8b949e] hover:text-[#C9D1D9]'}`}
@@ -503,6 +510,11 @@ export default function LeadResultsView({
             Fit {v}+
           </button>
         ))}
+        {(onlyWithWebsite || minFit > 0) && (
+          <span className="ml-auto text-[12.5px] text-[#6e7681] tabular-nums">
+            {filtered.length} of {tabRows.length}
+          </span>
+        )}
       </div>
       )}
 
@@ -510,15 +522,8 @@ export default function LeadResultsView({
           above, and rendering both stated one next step twice, in two visual
           languages, 60px apart. QualificationInsightsPanel moves to the
           Insights tab in phase 2 — it is diagnostic, not the answer. */}
-      {/* Selection only exists on the lead tabs. */}
-      {(tab === 'qualified' || tab === 'in_review') && (
-        <BulkActionToolbar
-          selectedCount={selectedRows.length}
-          onClear={() => setSelected(new Set())}
-          onAction={onBulkAction}
-          credits={bulkCredits}
-        />
-      )}
+      {/* `BulkActionToolbar` rendered here and is removed: with the action bar
+          now appearing on selection, the two were the same bar twice. */}
 
       {actionOutcome && (
         <LeadActionOutcomeCard outcome={actionOutcome} onClose={() => setActionOutcome(null)} />
@@ -605,71 +610,56 @@ export default function LeadResultsView({
         />
       )}
 
-      {/* Obvious Action Buttons Group */}
-      <div className="px-4 py-3 bg-[#0a0d12]/60 border-t border-white/[0.05] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
+      {/* ── ACTIONS, ONLY WHEN THERE IS SOMETHING TO ACT ON ────────────────
+          This was a permanently-visible bar of four buttons, three of them
+          disabled whenever nothing was selected — which is the state the page
+          opens in. Fixed height, always present, mostly greyed out.
+
+          It now appears on selection. `Done` moves to the header, where
+          closing a panel belongs. */}
+      {selectedRows.length > 0 && (tab === 'qualified' || tab === 'in_review') && (
+        <div className="shrink-0 px-7 py-3 border-t border-white/[0.06] bg-[#0d1117] flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-[#8b949e] mr-1">
+            {selectedRows.length} selected
+          </span>
+          <ActionButton
+            primary
+            busy={directRunning === 'find_decision_makers'}
+            disabled={directRunning !== null}
             onClick={() => runDirectLeadAction('find_decision_makers')}
-            disabled={directRunning !== null || selectedRows.length === 0}
-            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
-              directRunning !== null || selectedRows.length === 0
-                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-            }`}
-            title={selectedRows.length === 0 ? 'Select at least one lead' : isApifyPeopleReady ? 'Find decision-makers for the selected lead(s)' : 'Uses job-poster hints; enable Apify for deeper people search'}
-          >
-            {directRunning === 'find_decision_makers'
-              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.find_decision_makers}</>
-              : 'Find decision-makers'}
-          </button>
-
-          <button
+            label="Find decision-makers"
+            busyLabel={LEAD_ACTION_LOADING.find_decision_makers}
+          />
+          <ActionButton
+            busy={directRunning === 'research_company'}
+            // A missing PROVIDER is a setup problem, not a selection problem,
+            // and it is the only reason a shown button may be disabled here.
+            disabled={directRunning !== null || !isFirecrawlReady}
             onClick={() => runDirectLeadAction('research_company')}
-            disabled={directRunning !== null || selectedRows.length === 0 || !isFirecrawlReady}
-            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
-              !isFirecrawlReady
-                ? 'border border-dashed border-amber-500/30 bg-amber-500/5 text-amber-400 cursor-not-allowed'
-                : directRunning !== null || selectedRows.length === 0
-                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
-                : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
-            }`}
-            title={!isFirecrawlReady ? 'Setup needed: Firecrawl' : selectedRows.length === 0 ? 'Select at least one lead' : 'Research the selected compan(y/ies)'}
-          >
-            {directRunning === 'research_company'
-              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.research_company}</>
-              : <>Research company {!isFirecrawlReady && '(Setup needed)'}</>}
-          </button>
-
-          <button
+            label={isFirecrawlReady ? 'Research company' : 'Research company · setup needed'}
+            busyLabel={LEAD_ACTION_LOADING.research_company}
+          />
+          <ActionButton
+            busy={directRunning === 'generate_outreach'}
+            disabled={directRunning !== null}
             onClick={() => runDirectLeadAction('generate_outreach')}
-            disabled={directRunning !== null || selectedRows.length === 0}
-            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
-              directRunning !== null || selectedRows.length === 0
-                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
-                : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
-            }`}
-            title={selectedRows.length === 0 ? 'Select at least one lead' : 'Prepare an approval-only outreach draft'}
-          >
-            {directRunning === 'generate_outreach'
-              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.generate_outreach}</>
-              : 'Generate outreach'}
-          </button>
-
-          <button
+            label="Draft outreach"
+            // Stated where it applies, not in a footer under every screen.
+            title="Drafts always need your approval — nothing is sent automatically"
+            busyLabel={LEAD_ACTION_LOADING.generate_outreach}
+          />
+          <ActionButton
             onClick={() => runAction('export_csv', rowsForExport(selectedRows, filtered))}
-            className="h-8 px-3 rounded border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04] text-[11.5px] font-semibold text-neutral-300 transition-colors"
+            label={`Export CSV (${selectedRows.length})`}
+          />
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-auto text-[13px] text-[#8b949e] hover:text-[#C9D1D9] transition-colors"
           >
-            Export CSV{selectedRows.length ? ` (${selectedRows.length})` : ''}
+            Clear
           </button>
         </div>
-
-        <button
-          onClick={() => closeWorkbench()}
-          className="h-8 px-4 rounded border border-white/10 hover:bg-white/[0.05] text-[11.5px] font-semibold text-neutral-300 transition-colors"
-        >
-          Done
-        </button>
-      </div>
+      )}
 
       {/* ── EVERYTHING TRUE BUT NOT THE POINT ──────────────────────────────
           The stage counts, the grading breakdown and the reviewed-but-not-
@@ -683,12 +673,11 @@ export default function LeadResultsView({
         evaluationRows={evaluationRows}
       />
 
-      {/* Footer note. "Agentory credits estimated locally" was dropped — an
-          implementation detail no reader can act on. The approval promise
-          stays, because it is a commitment about their data. */}
-      <div className="border-t border-white/[0.06] px-6 py-2 text-[11.5px] text-[#6e7681]">
-        {filtered.length} of {items.length} shown · drafts always need your approval
-      </div>
+      {/* The standing footer note is gone. "N of M shown" moved into the filter
+          row, where it is a caption for the control that changes it; the
+          approval promise moved onto the Draft outreach action, where it is
+          read at the moment it applies rather than sitting under every screen
+          forever. */}
 
       <LeadDetailDrawer row={drawerRow ? (items.find((r) => r.id === drawerRow.id) ?? drawerRow) : null} onClose={() => setDrawerRow(null)} />
 
@@ -702,6 +691,30 @@ export default function LeadResultsView({
         />
       )}
     </div>
+  );
+}
+
+/** One shape for every action button, so the bar cannot drift row to row. */
+function ActionButton({ label, busyLabel, onClick, disabled, busy, primary }: {
+  label: string; busyLabel?: string; onClick: () => void;
+  disabled?: boolean; busy?: boolean; primary?: boolean;
+}) {
+  const off = disabled || busy;
+  return (
+    <button
+      onClick={onClick}
+      disabled={off}
+      className={`h-9 px-3.5 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+        off
+          ? 'border border-white/[0.07] bg-white/[0.02] text-[#6e7681] cursor-not-allowed'
+          : primary
+          ? 'bg-emerald-500 hover:bg-emerald-400 text-black'
+          : 'border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9]'
+      }`}
+    >
+      {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {busy ? (busyLabel ?? 'Working…') : label}
+    </button>
   );
 }
 

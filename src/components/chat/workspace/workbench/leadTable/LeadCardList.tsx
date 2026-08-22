@@ -52,19 +52,24 @@ export default function LeadCardList({
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
-      {/* Select-all lives with the list, not in a column header — there is no
-          header row any more, and it is the only table chrome worth keeping. */}
-      <div className="sticky top-0 z-[2] bg-[#0a0d12]/95 backdrop-blur px-6 py-2.5 border-b border-white/[0.06] flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={allChecked}
-          onChange={onToggleAll}
-          aria-label="Select all"
-          className="h-3.5 w-3.5 rounded accent-emerald-500 cursor-pointer"
-        />
-        <span className="text-[12px] text-[#6e7681]">
-          {allChecked ? 'All selected' : 'Select all'}
-        </span>
+      {/* SELECT-ALL APPEARS ON HOVER OR SELECTION.
+          It was a permanently-visible bar with its own border, above every
+          list, to offer a control most readers never use. */}
+      <div className={`sticky top-0 z-[2] bg-[#0a0d12]/95 backdrop-blur px-7 transition-all ${
+        selected.size > 0 ? 'py-2 opacity-100' : 'py-0 h-0 overflow-hidden opacity-0 focus-within:h-auto focus-within:py-2 focus-within:opacity-100'
+      }`}>
+        <label className="inline-flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={onToggleAll}
+            aria-label="Select all"
+            className="h-3.5 w-3.5 rounded accent-emerald-500 cursor-pointer"
+          />
+          <span className="text-[12.5px] text-[#8b949e]">
+            {allChecked ? 'All selected' : 'Select all'}
+          </span>
+        </label>
       </div>
 
       {models.map(({ row, model }) => {

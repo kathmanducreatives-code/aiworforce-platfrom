@@ -87,8 +87,25 @@ export function buildQuotaProgress(
 
   // A company can be qualified and still deliver zero CONTACT-ready leads. Both
   // numbers are reported; neither is allowed to stand in for the other.
+  // ── ABSENCE OF A REJECTION IS NOT A PASS ──────────────────────────────
+  //
+  // This fell back to `level !== 'not_qualified'`, counting every company that
+  // had not been ACTIVELY rejected — including ones nothing had looked at. The
+  // identical defect was found and fixed in `workbenchCounts.ts`, where the
+  // comment records TEST plan edb4cbf6 reporting 20 qualified companies for a
+  // run whose qualified set was empty. It survived here, unfixed, in a file
+  // whose answer the Workbench hero then preferred over every other source.
+  //
+  // It fires on EVERY run, not rarely: `backend.counts.verifiedCompanies` is
+  // null on all four runs in the persisted history, and `not_qualified` is 0 on
+  // all four — nothing is ever actively rejected — so the fallback counted
+  // essentially everything evaluated and called it qualified.
   const qualifiedCompanies = numOrNull(backend?.counts?.verifiedCompanies)
-    ?? new Set(resolved.filter((r) => r.q.level !== 'not_qualified').map((r) => r.candidate.company ?? '')).size;
+    ?? new Set(
+      resolved
+        .filter((r) => r.q.evaluated && r.q.qualified)
+        .map((r) => r.candidate.company ?? ''),
+    ).size;
   const verifiedDecisionMakers = resolved.filter((r) => r.q.level !== 'needs_decision_maker' && !!r.candidate.person).length;
   const hiringSignalsReviewed = numOrNull(backend?.counts?.rawJobs) ?? 0;
 

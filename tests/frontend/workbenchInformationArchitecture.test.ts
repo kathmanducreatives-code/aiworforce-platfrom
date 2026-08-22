@@ -94,12 +94,14 @@ Deno.test("4. Run details is bounded and cannot squeeze the table unbidden", () 
 Deno.test("5. the headline is the largest text on the page", () => {
   // Every size in the old header was 10–13.5px. The largest text was the panel
   // TITLE; the number the user came for rendered at 11px inside a chip row.
-  assert(/text-\[32px\]/.test(HERO), "the answer is set at 32px");
+  assert(/text-\[28px\]/.test(HERO), "the answer is set at 28px");
 
   const sizes = [...VIEW_BODY.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)]
     .map((m) => Number(m[1]));
   const biggestInFlow = Math.max(...sizes);
-  assert(biggestInFlow <= 14,
+  // 15.5px is the company name on a card — the largest thing in the LIST, and
+  // deliberately so. It is still well under the 28px headline.
+  assert(biggestInFlow <= 16,
     `the page flow's largest type is ${biggestInFlow}px; nothing in it may ` +
     "compete with the headline");
 });
@@ -172,8 +174,10 @@ Deno.test("12. the headline says QUALIFIED, and the promise about drafts stays",
   const lib = read("../../src/lib/workbench/runSummary.ts");
   assert(lib.includes("qualified ${n === 1 ? 'lead' : 'leads'}"),
     "a row being on the page has never meant it qualified");
-  assert(VIEW.includes("drafts always need your approval"),
-    "the approval promise is a commitment about their data, not jargon — it stays");
+  // MOVED, NOT DROPPED. It was a standing footer under every screen; it now
+  // sits on the Draft outreach action, read at the moment it applies.
+  assert(VIEW.includes("Drafts always need your approval"),
+    "the approval promise is a commitment about their data — it stays, where it bites");
 });
 
 // ═══ 6. THE DATA MODEL IS THE REAL ONE ═════════════════════════════════════

@@ -48,61 +48,64 @@ export default function LeadCard({
 }: Props) {
   return (
     <div
-      className={`group relative border-b border-white/[0.05] transition-colors ${
+      // ONE HAIRLINE PER ROW, and only between rows. The table drew a border on
+      // every cell of every column.
+      className={`group relative border-b border-white/[0.04] transition-colors ${
         selected ? 'bg-emerald-500/[0.04]' : 'hover:bg-white/[0.015]'
       }`}
     >
-      <div className="flex gap-4 px-6 py-4">
+      <div className="flex gap-3.5 px-7 py-3.5">
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggle}
           aria-label={`Select ${model.company}`}
-          className="mt-1 h-3.5 w-3.5 rounded accent-emerald-500 cursor-pointer shrink-0"
+          className="mt-1 h-3.5 w-3.5 rounded accent-emerald-500 cursor-pointer shrink-0 opacity-40 group-hover:opacity-100 checked:opacity-100 transition-opacity"
         />
 
         <div className="min-w-0 flex-1">
-          {/* WHICH IS THIS, AND IS IT ANY GOOD — one question, one line. */}
+          {/* LINE 1 — name, and the two facts that rank it. */}
           <div className="flex items-baseline justify-between gap-4">
             <button
               onClick={onOpen}
-              className="text-[15px] font-medium text-[#F0F6FC] truncate hover:text-emerald-300 transition-colors text-left"
+              className="text-[15.5px] font-medium text-[#F0F6FC] truncate hover:text-emerald-300 transition-colors text-left leading-snug"
             >
               {model.company}
             </button>
-            {model.fit !== null && (
-              <span className="shrink-0 text-[12.5px] tabular-nums">
-                <span className={FIT_TONE[model.fitLabel ?? ''] ?? 'text-[#8b949e]'}>
-                  {model.fitLabel}
-                </span>
-                <span className="text-[#6e7681]"> · {model.fit}</span>
+            <span className="shrink-0 flex items-baseline gap-2.5 text-[13px]">
+              <span className="inline-flex items-center gap-1.5 text-[#8b949e]">
+                <span className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[model.state]}`} />
+                {busyLabel ?? model.stateLabel}
               </span>
-            )}
+              {model.fit !== null && (
+                <span className={`tabular-nums ${FIT_TONE[model.fitLabel ?? ''] ?? 'text-[#8b949e]'}`}>
+                  Fit {model.fit}
+                </span>
+              )}
+            </span>
           </div>
 
+          {/* LINE 2 — website, quiet. */}
           {model.websiteLabel && (
-            <div className="mt-0.5">
-              {model.websiteHref ? (
-                <a
-                  href={model.websiteHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-[12.5px] text-[#8b949e] hover:text-[#C9D1D9] transition-colors"
-                >
-                  {model.websiteLabel}
-                  <ArrowUpRight className="h-3 w-3" />
-                </a>
-              ) : (
-                // Shown, unlinked. A broken link is worse than no link — it
-                // looks checked.
-                <span className="text-[12.5px] text-[#6e7681]">{model.websiteLabel}</span>
-              )}
-            </div>
+            model.websiteHref ? (
+              <a
+                href={model.websiteHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-[13px] text-[#6e7681] hover:text-[#C9D1D9] transition-colors"
+              >
+                {model.websiteLabel}
+                <ArrowUpRight className="h-3 w-3" />
+              </a>
+            ) : (
+              <span className="text-[13px] text-[#6e7681]">{model.websiteLabel}</span>
+            )
           )}
 
+          {/* LINE 3 — the signal. The specific fact that put it here. */}
           {model.signal && (
-            <div className="mt-2.5 text-[13.5px] text-[#C9D1D9] leading-snug">
+            <div className="mt-1.5 text-[14px] text-[#C9D1D9] leading-snug truncate">
               {model.signalHref ? (
                 <a
                   href={model.signalHref}
@@ -117,22 +120,15 @@ export default function LeadCard({
             </div>
           )}
 
-          {model.reason && (
-            <p className="mt-1 text-[12.5px] text-[#8b949e] leading-relaxed line-clamp-2">
-              {model.reason}
+          {/* LINE 4 — why it is here, and the next step if there is one. */}
+          <div className="mt-1 flex items-baseline justify-between gap-4">
+            <p className="text-[13px] text-[#6e7681] leading-relaxed truncate">
+              {model.reason ?? model.whyLine}
             </p>
-          )}
-
-          {/* WHAT IT IS, AND WHAT TO DO ABOUT IT. */}
-          <div className="mt-3 flex items-center justify-between gap-4">
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8b949e]">
-              <span className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[model.state]}`} />
-              {busyLabel ?? model.stateLabel}
-            </span>
             {model.nextStep && onNextStep && !busyLabel && (
               <button
                 onClick={onNextStep}
-                className="text-[12.5px] text-emerald-300/90 hover:text-emerald-200 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="shrink-0 text-[13px] text-emerald-300/90 hover:text-emerald-200 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
               >
                 {model.nextStep} →
               </button>
