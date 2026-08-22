@@ -35,6 +35,7 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
+import { routeModel } from "./gptModelRouter.ts";
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
@@ -158,7 +159,16 @@ export function buildGroundedBrainBinding(
   // The legacy model id is retained only as a diagnostic of what the old env
   // asked for; it no longer selects anything. No JSON schema is sent — see
   // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
-  const generate = input.generate ?? createGptStrategistGenerateJson();
+  const generate = input.generate ?? createGptStrategistGenerateJson({}, (() => {
+    // ROUTED, LIKE EVERY OTHER STAGE. This passed nothing, so it inherited the
+    // `reasoning` tier and silently resolved to gpt-4.1 — a model choice made
+    // by omission, invisible in the cost trace, for grounded evidence reading.
+    const route = routeModel("grounded_evidence_evaluation");
+    return {
+      model: route.model, reasoningEffort: route.reasoning_effort,
+      tier: route.tier, purpose: route.stage, reason: route.reason,
+    };
+  })());
 
   // THE SAME BUDGET, NOT AN EXTRA ONE. When the shared allowance is spent the
   // binding stops calling and the company is held for review — a grounded run

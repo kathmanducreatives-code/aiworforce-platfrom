@@ -174,6 +174,13 @@ export function buildMissionEvaluationBinding(
     pool_size: input.shortlistSize ?? undefined,
   });
   const generate = input.generate ?? createGptStrategistGenerateJson({}, {
+    // THE ROUTER'S MODEL AND EFFORT. Both these stages run on Luna at effort
+    // `none`: they read evidence already paid for, and an undecidable verdict
+    // degrades to a defined outcome rather than escalating — so a second model
+    // call would buy cost, not information, at the volume where that multiplies
+    // hardest.
+    model: route.model,
+    reasoningEffort: route.reasoning_effort,
     tier: route.tier,
     purpose: route.stage,
     reason: route.reason,

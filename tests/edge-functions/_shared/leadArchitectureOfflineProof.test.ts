@@ -22,6 +22,7 @@
 // ZERO network, ZERO provider calls, ZERO model spend.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { LUNA, routeModel } from "../../../supabase/functions/_shared/gptModelRouter.ts";
 import { GPT_MODEL } from "../../../supabase/functions/_shared/gptProvider.ts";
 import {
   buildMissionCompilerBinding,
@@ -161,7 +162,14 @@ Deno.test("1. the LeadMission model call reaches transport and the mission is mo
   // would assert the architecture that produced the 2026-08-17 failure. What
   // the test proves is unchanged: transport was reached, with the id this
   // stage is supposed to send.
-  assertEquals(calls[0].model, GPT_MODEL, "mission compilation must run on GPT");
+  // THE ROUTED MODEL, NOT A FROZEN LITERAL. This read `GPT_MODEL` (gpt-4.1)
+  // and the routing change moved mission compilation to Luna. The property is
+  // the same one it always was — an OpenAI model reached transport, not the
+  // Claude/Lovable strategist — and it is now expressed against the router so a
+  // future routing change does not read as a regression.
+  assertEquals(calls[0].model, routeModel("mission_compilation").model,
+    "mission compilation must run on the model the router chose");
+  assertEquals(calls[0].model, LUNA, "which today is Luna");
   assert(proposal !== null, "a successful model call must yield a proposal");
 
   const compiled = compileLeadMission({
@@ -377,7 +385,11 @@ Deno.test("6. all five enabled model stages reach the transport", async () => {
     // was half done — mission compiler on GPT, the rest on the strategist. With
     // the last four moved there is one expectation, and a stage that quietly
     // reverted to Claude would fail here.
-    assertEquals(calls[0].model, GPT_MODEL, `${name} must run on GPT`);
+    // Asserted against the router for the same reason as the mission stage
+    // above: all five are OpenAI, and which OpenAI model is the router's call.
+    assertEquals(calls[0].model, LUNA,
+      `${name} must run on Luna — a stage that quietly reverted to Claude, or ` +
+      "to the gpt-4.1 pair, would fail here");
     reached.push(name);
   }
 

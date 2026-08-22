@@ -23,6 +23,7 @@
 //
 // Pure apart from the injected facade. No provider import, no network.
 
+import { routeModel } from "./gptModelRouter.ts";
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
@@ -172,7 +173,16 @@ export function buildSemanticClassificationBinding(
   // The legacy model id is retained only as a diagnostic of what the old env
   // asked for; it no longer selects anything. No JSON schema is sent — see
   // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
-  const generate = input.generate ?? createGptStrategistGenerateJson();
+  const generate = input.generate ?? createGptStrategistGenerateJson({}, (() => {
+    // ROUTED, LIKE EVERY OTHER STAGE. This passed nothing, so it inherited the
+    // `reasoning` tier and silently resolved to gpt-4.1 — a model choice made
+    // by omission, invisible in the cost trace, for one company's description.
+    const route = routeModel("semantic_classification");
+    return {
+      model: route.model, reasoningEffort: route.reasoning_effort,
+      tier: route.tier, purpose: route.stage, reason: route.reason,
+    };
+  })());
 
   return {
     classifyCompanyEvidence: async (payload: Record<string, unknown>) => {

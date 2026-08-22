@@ -226,18 +226,20 @@ Deno.test("17. but the maintainer's log now names it", () => {
 
 // ═══ 7. NO ROUTING MOVED ═══════════════════════════════════════════════════
 
-Deno.test("18. NEITHER FIX CHANGED A MODEL OR AN EFFORT", () => {
-  const provider = Deno.readTextFileSync(new URL(
-    "../../../supabase/functions/_shared/gptProvider.ts", import.meta.url));
-  assert(provider.includes('export const GPT_MODEL = "gpt-4.1"'));
-  assert(provider.includes('export const GPT_FAST_MODEL = "gpt-4.1-mini"'));
-
-  const config = Deno.readTextFileSync(new URL(
-    "../../../supabase/functions/_shared/leadStrategy/config.ts", import.meta.url));
-  assert(config.includes('DEFAULT_PRIMARY_MODEL = "openai/gpt-5.6-luna"'));
-
-  const router = Deno.readTextFileSync(new URL(
-    "../../../supabase/functions/_shared/gptModelRouter.ts", import.meta.url));
-  assert(router.includes('mission_compilation: {\n    tier: "reasoning"'),
-    "the stage this work touched most is still routed exactly as it was");
+Deno.test("18. the failure ladder and the MODEL ladder stay separate", () => {
+  // This asserted "no model moved", which was true when the two propagation
+  // fixes landed and is deliberately false now: the routing change that
+  // followed moved the planning stages from gpt-4.1 to Luna. What must remain
+  // true is the property these fixes were about — that a PROVIDER failure and
+  // a MODEL-OUTPUT failure are different things, and only the second may reach
+  // a second model.
+  //
+  // Terra shares the OpenAI account with Luna. Escalating a quota exhaustion
+  // would call a second model that fails for the identical reason.
+  const escalation = Deno.readTextFileSync(new URL(
+    "../../../supabase/functions/_shared/modelEscalation.ts", import.meta.url));
+  assert(escalation.includes("isProviderSideFailure("),
+    "the ladder must ask whether the PROVIDER failed before escalating");
+  assert(escalation.includes("provider_failure_no_escalation"),
+    "and record that it deliberately did not");
 });

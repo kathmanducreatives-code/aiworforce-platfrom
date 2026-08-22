@@ -24,6 +24,7 @@
 // ZERO network and ZERO model spend: `fetch` is replaced and restored.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { LUNA } from "../../../supabase/functions/_shared/gptModelRouter.ts";
 import { GPT_MODEL } from "../../../supabase/functions/_shared/gptProvider.ts";
 import {
   DEFAULT_LEAD_INTELLIGENCE_MODEL,
@@ -278,13 +279,18 @@ for (const seam of SEAMS) {
       calls.length, 1,
       `${seam.feature} made ${calls.length} wire calls; it must reach the transport exactly once`,
     );
-    // The canonical id was the STRATEGIST's. These stages are GPT now, so the
-    // id that must reach the wire is OpenAI's — asserting the old one would
-    // assert the architecture this refactor removed.
+    // ASSERTED AGAINST THE ROUTER, NOT A LITERAL.
+    //
+    // This read `GPT_MODEL` (gpt-4.1), which each of these bindings reached by
+    // OMISSION: none passed a route, so all four inherited the default tier and
+    // silently resolved to gpt-4.1 — a model choice nobody made, invisible in
+    // the cost trace. They are routed now, and all four land on Luna.
     assertEquals(
-      calls[0].model, GPT_MODEL,
-      `${seam.feature} must run on GPT, not the strategist`,
+      calls[0].model, LUNA,
+      `${seam.feature} must run on the routed model, not the strategist`,
     );
+    assert(calls[0].model !== GPT_MODEL,
+      `${seam.feature} must not fall back to the gpt-4.1 pair`);
     assert(calls[0].url.includes("openai.com"), `${seam.feature} must target OpenAI`);
   });
 
@@ -302,9 +308,11 @@ for (const seam of SEAMS) {
       seam.drive(env({ ...seam.flags, [seam.modelEnvKey]: LEGACY_WIRE_ID }))
     );
     assertEquals(calls.length, 1, `${seam.feature} must still reach the transport`);
+    // STRONGER UNDER ROUTING, not weaker: the model is now a pure function of
+    // the stage, so no environment value can reach the decision at all.
     assertEquals(
-      calls[0].model, GPT_MODEL,
-      `${seam.feature} must ignore the env override and run GPT`,
+      calls[0].model, LUNA,
+      `${seam.feature} must ignore the env override and run the routed model`,
     );
   });
 }

@@ -42,6 +42,20 @@ export const GPT_PROVIDER_VERSION = "gpt-provider-v1" as const;
  * THE REASONING TIER. Every stage where a wrong answer costs money or
  * misdirects the whole run.
  */
+/**
+ * LEGACY FALLBACK ONLY — no longer reachable from the lead flow.
+ *
+ * Every lead stage now resolves its model through `gptModelRouter`, which
+ * answers Luna or Terra. `modelForTier` survives for a call site that passes no
+ * route at all, and there are none left in the lead pipeline —
+ * `lunaFirstRouting.test.ts` test 16 asserts that every routed stage lands on
+ * the Luna/Terra ladder.
+ *
+ * Kept rather than deleted because a call site that forgets to route should get
+ * a WORKING model and show up as gpt-4.1 in the telemetry, which is loud and
+ * harmless. Deleting it would turn that mistake into a crash in production for
+ * the sake of tidiness.
+ */
 export const GPT_MODEL = "gpt-4.1" as const;
 
 /**
@@ -123,6 +137,16 @@ export interface GptRequest {
    */
   tier?: GptTier;
   /**
+   * The model the ROUTER chose. Overrides the tier lookup when present.
+   *
+   * A caller never writes a model id here; it passes `route.model` from
+   * `gptModelRouter`. The tier fallback survives only for call sites that have
+   * not yet been moved, and every one of them is a stage still resolving to the
+   * gpt-4.1 pair — so a stage whose model is absent from a trace is a stage
+   * nobody has routed.
+   */
+  model?: string;
+  /**
    * WHY that tier, in the caller's own words.
    *
    * Persisted with the call. "Which model decided this, and who decided that it
@@ -131,14 +155,15 @@ export interface GptRequest {
    */
   routing_reason?: string;
   /**
-   * The effort this call was routed at, for telemetry.
+   * The effort this call was routed at.
    *
-   * NOT SENT TO THE API YET. `gptStructured` still speaks the gpt-4.1 body —
-   * `temperature` and `max_tokens`, both of which the GPT-5 models reject — so
-   * sending an effort here would be a routing change wearing a telemetry
-   * change's clothes. Phase 1 measures; Phase 2 unifies the transports.
+   * SENT NOW, where the model accepts it. Phase 2 made the body a function of
+   * the model — `buildChatCompletionsBody` emits `reasoning_effort` and
+   * `max_completion_tokens` for a GPT-5 model and `temperature`/`max_tokens`
+   * for gpt-4.1 — so this is a live parameter on the Luna path and telemetry
+   * only on the legacy one. The builder decides which; no caller does.
    */
-  reasoningEffort?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }
 
 /**
@@ -362,7 +387,12 @@ export async function gptStructured<T>(
   // model" in this call refers to it — the request body, the success log, the
   // returned result and the diagnostics. A second place that re-derives it is a
   // second place that can disagree about what actually ran.
-  const model = modelForTier(req.tier);
+  // THE ROUTER'S CHOICE, or the tier fallback for a stage not yet moved.
+  // Resolved ONCE, here, and every subsequent mention of "the model" in this
+  // call refers to it — the request body, the success log, the returned result
+  // and the diagnostics. A second place that re-derives it is a second place
+  // that can disagree about what actually ran.
+  const model = req.model ?? modelForTier(req.tier);
 
   const key = readEnv("OPENAI_API_KEY");
   if (!key) {

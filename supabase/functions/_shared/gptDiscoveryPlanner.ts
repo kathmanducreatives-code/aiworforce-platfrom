@@ -306,6 +306,11 @@ export function makeGptDiscoveryPlanner(
       user,
       schema: RESPONSE_SCHEMA as unknown as { name: string; schema: Record<string, unknown> },
       maxTokens: 2000,
+      // THE ROUTER'S MODEL, NOT A TIER LOOKUP. Luna on the first attempt;
+      // the repair stage routes to Terra, and `feedback` is the real
+      // validator's violations — `validateDiscoveryStrategy` produced them.
+      model: route.model,
+      reasoningEffort: route.reasoning_effort,
       tier: route.tier,
       routing_reason: route.reason,
     }, deps);

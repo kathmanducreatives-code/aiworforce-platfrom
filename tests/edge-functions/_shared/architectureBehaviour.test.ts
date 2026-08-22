@@ -37,7 +37,9 @@ import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCa
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 import { DiscoveryStrategyBlockedError }
   from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
-import { routeModel } from "../../../supabase/functions/_shared/gptModelRouter.ts";
+import {
+  escalationRoute, LUNA, routeModel, TERRA,
+} from "../../../supabase/functions/_shared/gptModelRouter.ts";
 import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 
@@ -451,30 +453,48 @@ Deno.test("11. junk discovery results → GPT replans rather than blindly contin
 
 // ══════════════════════════════════════════════════════ 12 ══
 
-Deno.test("12. the model router chooses different tiers for simple vs complex work", () => {
-  // COMPLEX: a wrong answer misdirects the run or spends money badly.
+Deno.test("12. the model router runs Luna first and reserves Terra for repair", () => {
+  // REWRITTEN WITH THE ARCHITECTURE IT PROTECTS.
+  //
+  // This used to assert a two-TIER split over gpt-4.1 and gpt-4.1-mini, with an
+  // escalation driven by pool size. Tiers named a cost shape, not a ladder, so a
+  // stage whose output was structurally invalid had nowhere to go and one bad
+  // response was a dead run. The property worth protecting is the same — the
+  // router decides, and every decision states what being wrong costs — but the
+  // decision it now makes is Luna → validate → Terra.
   for (const stage of [
     "mission_compilation", "discovery_actor_selection", "execution_plan",
-    "execution_plan_amendment", "mission_evaluation",
+    "execution_plan_amendment",
   ] as const) {
     const r = routeModel(stage);
-    assertEquals(r.tier, "reasoning", `${stage} must not be downgraded`);
+    assertEquals(r.model, LUNA, `${stage} starts on Luna`);
+    assertEquals(r.reasoning_effort, "low", "planning thinks a little, never a lot");
+    assertEquals(r.slot, "primary");
     assert(r.reason.length > 20, `${stage} states what being wrong costs`);
+
+    // And each has somewhere to go when the REAL validator says no.
+    const esc = escalationRoute(stage, "validator rejected the proposal");
+    assertEquals(esc?.model, TERRA, `${stage} escalates to Terra`);
+    assertEquals(esc?.slot, "escalation");
   }
 
-  // SIMPLE: a wrong answer costs one row its ORDER.
-  const triage = routeModel("mission_triage", { batch_size: 25, pool_size: 100, requested_count: 10 });
-  assertEquals(triage.tier, "fast", "high-volume classification takes the cheap tier");
-  assertEquals(triage.model, "gpt-4.1-mini");
+  // HIGH VOLUME: Luna, no effort, and NO escalation — an undecidable verdict
+  // degrades to a defined outcome, so a second call buys cost, not information.
+  for (const stage of [
+    "mission_triage", "mission_evaluation", "company_qualification",
+    "semantic_classification",
+  ] as const) {
+    const r = routeModel(stage);
+    assertEquals(r.model, LUNA, `${stage} runs on Luna`);
+    assertEquals(r.reasoning_effort, "none");
+    assertEquals(escalationRoute(stage, "any reason"), null,
+      `${stage} must not escalate; its failure mode is already handled`);
+  }
 
-  // AND THE ESCALATION IS ABOUT STAKES, NOT WORK. Same prompt, same batch size —
-  // but now every verdict decides a lead rather than a position.
-  const decisive = routeModel("mission_triage", { batch_size: 25, pool_size: 4, requested_count: 10 });
-  assertEquals(decisive.tier, "reasoning");
-  assertEquals(decisive.escalated_from, "fast");
-  assert(/decides a lead/.test(decisive.reason), decisive.reason);
-
-  // A repair is never cheaper than the attempt that failed.
-  assertEquals(routeModel("discovery_actor_selection_repair").tier, "reasoning");
-  assertEquals(routeModel("execution_plan_repair").tier, "reasoning");
+  // A REPAIR IS THE ESCALATION. Starting it on Luna would re-run the model
+  // whose output was just rejected, against the same input, and hope.
+  for (const stage of ["discovery_actor_selection_repair", "execution_plan_repair"] as const) {
+    assertEquals(routeModel(stage).model, TERRA);
+    assertEquals(escalationRoute(stage, "any reason"), null, "there is no third rung");
+  }
 });

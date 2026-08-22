@@ -22,6 +22,7 @@ import {
   createGptMissionGenerateJson,
   GPT_MISSION_MODEL_ID,
 } from "../../../supabase/functions/_shared/gptMissionModel.ts";
+import { LUNA } from "../../../supabase/functions/_shared/gptModelRouter.ts";
 import { parseMissionProposal } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
 
 const COMPILER = await Deno.readTextFile(
@@ -168,7 +169,7 @@ Deno.test("5. an explicit null count is preserved, never invented", () => {
 
 const gen = createGptMissionGenerateJson;
 
-Deno.test("6. it calls OpenAI, with the mission schema and temperature 0", async () => {
+Deno.test("6. it calls OpenAI on LUNA, with the mission schema and the GPT-5 body", async () => {
   let url = "";
   let body: Record<string, unknown> = {};
   const f = gen({
@@ -188,13 +189,34 @@ Deno.test("6. it calls OpenAI, with the mission schema and temperature 0", async
   const r = await f({ taskType: "planning", messages: [{ role: "user", content: "find 10 AI startups" }] } as never);
 
   assert(url.includes("openai.com"), `must call OpenAI, called ${url}`);
-  assertEquals(body.temperature, 0, "compilation must be reproducible");
+
+  // ── THE ROUTING CHANGE, VISIBLE ON THE WIRE ───────────────────────────
+  //
+  // This used to assert `temperature: 0` and the gpt-4.1 provenance id. Both
+  // moved, and both had to: mission compilation now runs on Luna, and
+  // `buildChatCompletionsBody` makes the body a function of the MODEL. A GPT-5
+  // model rejects a non-default `temperature` outright, so sending one would
+  // 400 every compilation — the exact wall Phase 2 removed.
+  //
+  // Reproducibility is not lost. The GPT-5 chat models are effectively greedy
+  // at low effort, which is what `reasoning_effort` now carries instead.
+  assertEquals(body.model, LUNA, "compilation starts on Luna");
+  assertEquals(body.reasoning_effort, "low", "planning thinks a little, never a lot");
+  assert(!("temperature" in body), "rejected outright by GPT-5");
+  assert(!("max_tokens" in body), "likewise — only max_completion_tokens may cap it");
+
   const rf = body.response_format as Record<string, unknown>;
   const js = rf.json_schema as Record<string, unknown>;
   assertEquals(js.name, "lead_mission_proposal");
   assertEquals(js.strict, true);
   assertEquals(r.ok, true);
-  assertEquals(r.model, GPT_MISSION_MODEL_ID);
+  // The provenance records what ACTUALLY read the sentence, not a constant.
+  // "Which model read this request?" is the question that cost a day in the
+  // 2026-08-17 audit, and a frozen id answers it wrongly the moment routing
+  // moves — which is precisely what just happened.
+  assertEquals(r.model, `openai:${LUNA}`);
+  assert(r.model !== GPT_MISSION_MODEL_ID,
+    "the gpt-4.1 fallback id must no longer describe a routed call");
 });
 
 Deno.test("7. a GPT failure is reported as a failure, never as a proposal", async () => {

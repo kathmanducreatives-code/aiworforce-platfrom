@@ -16,9 +16,14 @@
 //
 // ZERO network, ZERO model calls — the provider's `fetch` is injected.
 
-import { routeModel, GPT_STAGES }
+import {
+  DeterministicStageError, isDeterministicStage, LUNA, TERRA,
+  routeModel, GPT_STAGES,
+}
   from "../../../supabase/functions/_shared/gptModelRouter.ts";
-import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assert, assertEquals, assertFalse, assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   GPT_FAST_MODEL, GPT_MODEL, gptDiagnostics, gptStructured, modelForTier,
 } from "../../../supabase/functions/_shared/gptProvider.ts";
@@ -155,7 +160,7 @@ Deno.test("6b. EVALUATION runs on the reasoning tier — it decides qualificatio
 
 // ═══════════════════════════ 7. the source says what it routes, and why ══
 
-Deno.test("7. every tier decision states a reason, in ONE place", async () => {
+Deno.test("7. every routing decision states a reason, in ONE place", async () => {
   // ── THIS ASSERTION MOVED WITH THE DECISION IT PROTECTS ────────────────────
   //
   // It used to read `tier: "fast"` out of `missionTriageBinding.ts` and
@@ -169,10 +174,20 @@ Deno.test("7. every tier decision states a reason, in ONE place", async () => {
 
   for (const stage of GPT_STAGES) {
     assert(src.includes(`${stage}: {`), `${stage} has a policy entry`);
+    // A DETERMINISTIC STAGE HAS A POLICY AND NO MODEL. `pool_ranking` routes
+    // nowhere by design — see the audit in the router — and asking it for a
+    // model is an error rather than a default.
+    if (isDeterministicStage(stage)) {
+      assertThrows(() => routeModel(stage), DeterministicStageError);
+      continue;
+    }
     const route = routeModel(stage);
     assert(route.reason.trim().length > 20,
-      `${stage} must say what being wrong there costs, not just pick a tier`);
-    assertEquals(route.model, modelForTier(route.tier));
+      `${stage} must say what being wrong there costs, not just name a model`);
+    // The model comes from the policy, never from a tier lookup: `modelForTier`
+    // resolved to the gpt-4.1 pair, which is exactly what this change replaces.
+    assert([LUNA, TERRA].includes(route.model as typeof LUNA),
+      `${stage} resolved to ${route.model}, which is outside the production ladder`);
   }
 
   // AND THE CALL SITES NO LONGER DECIDE. A tier literal reappearing in a

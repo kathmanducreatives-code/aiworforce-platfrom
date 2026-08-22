@@ -46,6 +46,7 @@ import {
   gptStructured, GPT_MODEL, modelForTier, type GptDeps, type GptTier,
 } from "./gptProvider.ts";
 import type { GenerateOpts, GenerateResult } from "./aiProvider.ts";
+import type { ReasoningEffort } from "./modelRequestBody.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 
 export const GPT_STRATEGIST_VERSION = "gpt-strategist-v1" as const;
@@ -63,6 +64,17 @@ export const GPT_STRATEGIST_MODEL_ID = `openai:${GPT_MODEL}` as const;
 export interface StrategistRouting {
   /** Which model tier this stage needs. Defaults to `reasoning`. */
   tier?: GptTier;
+  /**
+   * The model the ROUTER chose. Overrides the tier lookup when present.
+   *
+   * A caller passes `route.model`; it never writes a model id. The tier
+   * fallback survives only for stages not yet routed, and each of those still
+   * resolves to the gpt-4.1 pair — so an unrouted stage is visible in a trace
+   * rather than silent.
+   */
+  model?: string;
+  /** The effort the router chose. Sent where the model accepts one. */
+  reasoningEffort?: ReasoningEffort | null;
   /** Why, in the caller's words. Persisted with the call. */
   reason?: string;
   /** Names the stage in diagnostics, so calls are separable per stage. */
@@ -79,7 +91,10 @@ export function createGptStrategistGenerateJson(
   deps: GptDeps = {}, routing: StrategistRouting = {},
 ): GenerateJsonFn {
   const tier: GptTier = routing.tier ?? "reasoning";
-  const modelId = `openai:${modelForTier(tier)}`;
+  // PROVENANCE FOLLOWS THE ROUTE. A frozen id answers "which model decided
+  // this?" wrongly the moment routing moves — which is exactly what happened.
+  const resolvedModel = routing.model ?? modelForTier(tier);
+  const modelId = `openai:${resolvedModel}`;
   return async (gen: GenerateOpts): Promise<GenerateResult> => {
     const started = Date.now();
 
@@ -94,8 +109,12 @@ export function createGptStrategistGenerateJson(
       system,
       user,
       // No `schema`: see the header. `plannerWrapper` owns the contract.
+      // The builder DROPS temperature for a GPT-5 model, which rejects any
+      // non-default value, and keeps it for gpt-4.1. No caller decides which.
       temperature: gen.temperature ?? 0,
       maxTokens: gen.maxTokens ?? 4000,
+      model: resolvedModel,
+      reasoningEffort: routing.reasoningEffort ?? null,
       tier,
       routing_reason: routing.reason,
     }, deps);
