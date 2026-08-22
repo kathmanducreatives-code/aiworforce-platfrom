@@ -75,20 +75,44 @@ Deno.test("a malformed or absent portfolio reads as null, never as zeroes", () =
   assertEquals(readPortfolio({ workbench_portfolio: {} }), null, "no counts is not a portfolio");
 });
 
-Deno.test("the panel renders the summary and the engine writes it", async () => {
+Deno.test("the portfolio reaches the UI, and the engine writes it", async () => {
+  // ── THIS ASSERTION MOVED WITH THE SECTION IT PROTECTS ────────────────────
+  //
+  // It used to require `<PortfolioSummary portfolio={portfolio} />` in the
+  // panel, and that the summary contain the words "passed the Company Brain".
+  //
+  // Both encoded the OLD information architecture. PortfolioSummary rendered as
+  // one of three counter systems stacked ABOVE the leads — 24 numbers between
+  // them, "Qualified" appearing three times — which is what left the qualified
+  // leads roughly 180px of an 800px panel. It now lives inside `RunDetails`,
+  // under the table, reached by the view rather than the panel.
+  //
+  // What the test protects is unchanged: the portfolio must not be silently
+  // dropped, and delivered must never be mistaken for qualified.
   const panel = await Deno.readTextFile(new URL(
     "../../src/components/chat/workspace/workbench/WorkbenchPanel.tsx", import.meta.url));
-  assert(panel.includes("readPortfolio(taskResult)"));
-  assert(panel.includes("<PortfolioSummary portfolio={portfolio} />"));
+  assert(panel.includes("readPortfolio(taskResult)"), "the panel still reads it");
+  assert(/portfolio=\{portfolio\}/.test(panel),
+    "…and hands it to the view rather than rendering a competing counter block");
 
-  const summary = await Deno.readTextFile(new URL(
-    "../../src/components/chat/workspace/workbench/PortfolioSummary.tsx", import.meta.url));
-  for (const label of ["Requested", "Delivered", "Tier A", "Tier B", "Tier C",
-    "Qualified", "Review", "Watch", "Contact-ready"]) {
-    assert(summary.includes(label), `the summary must name "${label}"`);
+  const details = await Deno.readTextFile(new URL(
+    "../../src/components/chat/workspace/workbench/RunDetails.tsx", import.meta.url));
+  for (const field of ["counts.qualified", "counts.review", "counts.watch",
+    "counts.tier_a", "counts.tier_b", "counts.tier_c"]) {
+    assert(details.includes(field), `Run details must still show ${field}`);
   }
-  assert(summary.includes("passed the Company Brain"),
-    "the header must say how many of the delivered opportunities actually qualified");
+  // The internal subsystem name is gone from the user-facing copy — the point of
+  // the wording pass — but the DISTINCTION it existed to make is now structural
+  // and stronger: `buildRunSummary` keeps `qualified` and `reviewed` as separate
+  // numbers from separate authorities, and `workbenchRunSummary.test.ts` pins
+  // that they never collapse into each other.
+  assert(!/Company Brain/.test(details),
+    "internal subsystem names do not belong in the user-facing surface");
+
+  const summaryLib = await Deno.readTextFile(new URL(
+    "../../src/lib/workbench/runSummary.ts", import.meta.url));
+  assert(summaryLib.includes("qualified:") && summaryLib.includes("reviewed:"),
+    "delivered and qualified must remain separately sourced numbers");
 
   const runAgent = await Deno.readTextFile(
     new URL("../../supabase/functions/run-agent/index.ts", import.meta.url));

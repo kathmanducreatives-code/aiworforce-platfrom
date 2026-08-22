@@ -3,9 +3,6 @@ import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import LeadTable from './leadTable/LeadTable';
-import RecommendationBanner from './leadTable/RecommendationBanner';
-import QualificationInsightsPanel from './leadTable/QualificationInsightsPanel';
-import { insightsFromResult, processingState } from '@/lib/qualifiedLead/insights';
 import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
@@ -32,17 +29,36 @@ import {
 } from '@/lib/outreachOpener';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { buildQuotaProgress } from '@/lib/qualifiedLead/quotaProgress';
-import { buildWorkbenchCounts } from '@/lib/qualifiedLead/workbenchCounts';
 import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
+import { resolveQualification as qualificationFromRecord } from '@/lib/qualifiedLead/qualification';
 import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
+import { buildRunSummary } from '@/lib/workbench/runSummary';
+import type { PortfolioView } from '@/lib/workbench/portfolioView';
+import type { WorkbenchProgress } from '@/lib/workbench/workbenchProgress';
+import type { EvaluationRow } from '@/lib/workbench/evaluationRows';
+import RunSummaryHero from './RunSummaryHero';
+import RunDetails from './RunDetails';
 
 interface Props {
   meta: LeadResultsPanelMeta;
   conversationId: string | null;
   taskId?: string | null;
+  /**
+   * The run's own projections, passed down rather than rendered as siblings.
+   *
+   * They used to be three fixed-height strips ABOVE this view, which is what
+   * left the leads roughly 180px of an 800px panel. They now feed the one
+   * headline and the collapsed Run details, both rendered here.
+   */
+  portfolio?: PortfolioView | null;
+  progress?: WorkbenchProgress | null;
+  evaluationRows?: EvaluationRow[];
 }
 
-export default function LeadResultsView({ meta, conversationId, taskId = null }: Props) {
+export default function LeadResultsView({
+  meta, conversationId, taskId = null,
+  portfolio = null, progress = null, evaluationRows = [],
+}: Props) {
   const { closeWorkbench } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
   // THE FULL OWNERSHIP CHAIN, not just the plan id. `meta.plan_id` alone is what
@@ -63,7 +79,6 @@ export default function LeadResultsView({ meta, conversationId, taskId = null }:
   // completed stages still exist.
   const [accountViews, setAccountViews] = useState<Record<string, WorkbenchAccountView>>({});
   const [actionOutcome, setActionOutcome] = useState<{ kind: LeadActionKind; success: boolean; error?: string; summary?: string } | null>(null);
-  const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minFit, setMinFit] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -150,36 +165,56 @@ export default function LeadResultsView({ meta, conversationId, taskId = null }:
     draftReady: items.filter((r) => r.draft_status === 'drafted' || r.draft_status === 'approved').length,
   }), [items]);
 
-  // QUALIFIED-LEAD COUNTS. Present only when the run reported a CONTACT quota;
-  // otherwise the account-shaped chips below stay exactly as they were.
-  const qualifiedLeadCounts = useMemo(() => {
+  // `qualifiedLeadCounts` (buildWorkbenchCounts) lived here and fed the six-chip
+  // header. `buildRunSummary` supersedes it: same precedence discipline, but it
+  // reconciles the portfolio and stage projections too, which the chips never
+  // saw — and it reports the disagreements rather than rendering a fourth
+  // opinion beside them.
+
+  // ── THE ONE SET OF HEADLINE NUMBERS ────────────────────────────────────
+  //
+  // Replaces three counter systems that rendered simultaneously: this view's
+  // six chips, PortfolioSummary's eleven cells and WorkflowProgressStrip's
+  // seven stage lines. "Qualified" appeared three times across them, from three
+  // different persisted projections that nothing ever compared.
+  //
+  // `buildRunSummary` picks one authority per number and RECORDS every dissent,
+  // which `RunDetails` shows. A conflict nobody can see is a conflict that
+  // survives.
+  const runQuota = useMemo(() => {
     const run = meta.qualified_lead_run;
     if (!run || run.count_entity !== 'contact_ready_lead') return null;
-    const progress = buildQuotaProgress({
+    return buildQuotaProgress({
       requested_leads: run.requested_lead_count ?? null,
       quota_policy: run.quota_policy ?? null,
       terminal_status: run.terminal_status ?? null,
       rounds_completed: run.rounds_completed ?? null,
     }, items.map(qualificationFromRow));
-    return buildWorkbenchCounts({ rows: items.map(qualificationFromRow), progress });
   }, [meta.qualified_lead_run, items]);
 
-  // WORKBENCH INSIGHTS. The qualification diagnostics the backend already
-  // persists — one per company the Company Brain evaluated, including the ones
-  // its filter drops. Nothing rendered them before this.
-  const insights = useMemo(
-    () => insightsFromResult(meta.qualified_lead_run ?? null),
-    [meta.qualified_lead_run],
-  );
-  const insightsProcessing = useMemo(() => {
-    const run = meta.qualified_lead_run;
-    if (!run) return null;
-    const requested = Number(run.requested_lead_count ?? 0);
-    const contactReady = items.filter((r) => qualificationFromRow(r).contact_status === 'ok').length;
-    // A terminal run has no work left; anything else may still progress.
-    const workRemains = run.terminal_status !== 'completed' && run.terminal_status !== 'search_exhausted';
-    return processingState({ insights, contactReady, requested, workRemains });
-  }, [meta.qualified_lead_run, items, insights]);
+  const summary = useMemo(() => {
+    const resolved = items.map(qualificationFromRow).map(qualificationFromRecord);
+    return buildRunSummary({
+      quota: runQuota,
+      portfolio,
+      progress,
+      rows: {
+        total: items.length,
+        // EXPLICIT POSITIVE VERDICTS ONLY. `level !== 'not_qualified'` once
+        // reported 20 qualified for a run that qualified none, because absence
+        // of a rejection is not a pass.
+        qualified: resolved.filter((q) => q.qualified).length,
+        pending: resolved.filter((q) => !q.qualified && q.evaluated).length,
+      },
+    });
+  }, [items, runQuota, portfolio, progress]);
+
+  // The qualification diagnostics were computed here and rendered inline above
+  // the table. They are DIAGNOSTIC — read when a number looks wrong — so phase 2
+  // moves them to an Insights tab. Both derivations are pure functions of
+  // `meta.qualified_lead_run` (`insightsFromResult` / `processingState`) and are
+  // recomputed there; keeping a dead copy here would be a second answer waiting
+  // to drift from the live one.
 
   const recommendation = useMemo(() => meta.recommended_next_action
     ? {
@@ -342,82 +377,55 @@ export default function LeadResultsView({ meta, conversationId, taskId = null }:
   return (
     <div className="h-full w-full min-w-0 flex flex-col bg-[#0a0d12] relative overflow-hidden">
 
-      {/* Header */}
-      <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[13.5px] font-semibold text-[#F0F6FC] flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {meta.title}
-            </div>
-            <div className="text-[11px] text-[#7D8590] mt-0.5">{meta.subtitle}</div>
-          </div>
-          <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md border border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300 shrink-0">
-            {meta.source_type.replace(/_/g, ' ')}
-          </span>
-        </div>
+      {/* ── THE ANSWER ────────────────────────────────────────────────────
+          What stood here: a 13.5px title, a 6-chip counter row (ACCOUNTS
+          FOUND / EVALUATED / QUALIFIED COMPANIES / DECISION-MAKERS VERIFIED /
+          CONTACT-READY / REMAINING), a filter row, and a dismissible banner
+          explaining what Workbench is. The largest text on the page was the
+          title; the number the user came for rendered at 11px inside the chip
+          row, beside two other components showing their own answer to the same
+          question.
 
-        {/* Summary chips.
+          One number, one line of context, one action. The counters live in Run
+          details, under the table. */}
+      <RunSummaryHero
+        summary={summary}
+        cta={recommendation ? {
+          label: recommendation.label,
+          onClick: onRunRecommendation,
+          // A recommendation whose prerequisite does not exist must not be
+          // dispatchable — the reason is shown rather than the button silently
+          // doing nothing.
+          disabled: !isRecommendationDispatchable(recommendation),
+          hint: isRecommendationDispatchable(recommendation)
+            ? undefined : recommendation.reason,
+        } : null}
+      />
 
-            For a qualified-lead run the account-shaped and lead-shaped counts are
-            rendered as separate, separately labelled groups from the quota
-            adapter — `Found` (rows) and `Contact-ready` (a contact field) are not
-            answers to "how many of the five leads do I have?". */}
-        <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[10.5px]">
-          {qualifiedLeadCounts ? (
-            qualifiedLeadCounts.map((c) => (
-              <Chip
-                key={c.key}
-                label={c.label}
-                v={c.value}
-                tone={c.tone === 'positive' ? 'good' : c.tone === 'warning' ? 'warn' : 'default'}
-              />
-            ))
-          ) : (
-            <>
-              <Chip label="Found" v={counts.found} tone="default" />
-              <Chip label="Contact-ready" v={counts.contactReady} tone={counts.contactReady > 0 ? 'good' : 'muted'} />
-              <Chip label="Needs contact" v={counts.needContact} tone={counts.needContact > 0 ? 'warn' : 'muted'} />
-              <Chip label="Enrichable" v={counts.enrichable} tone={counts.enrichable > 0 ? 'good' : 'muted'} />
-              <Chip label="Drafts" v={counts.draftReady} tone={counts.draftReady > 0 ? 'good' : 'muted'} />
-            </>
-          )}
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <Filter className="h-3 w-3 text-[#7D8590]" />
-            <button
-              onClick={() => setOnlyWithWebsite((v) => !v)}
-              className={`px-2 py-0.5 rounded border transition-colors ${onlyWithWebsite ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'}`}
-            >
-              Has website
-            </button>
-            {[60, 75, 90].map((v) => (
-              <button
-                key={v}
-                onClick={() => setMinFit(minFit === v ? 0 : v)}
-                className={`px-2 py-0.5 rounded border transition-colors ${minFit === v ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'}`}
-              >
-                Fit ≥ {v}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Filters, demoted out of the header. */}
+      <div className="px-6 py-2.5 flex items-center gap-1.5 text-[11.5px] border-b border-white/[0.06]">
+        <Filter className="h-3 w-3 text-[#6e7681]" />
+        <button
+          onClick={() => setOnlyWithWebsite((v) => !v)}
+          className={`px-2.5 py-1 rounded-md border transition-colors ${onlyWithWebsite ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.08] bg-white/[0.02] text-[#8b949e] hover:text-[#C9D1D9]'}`}
+        >
+          Has website
+        </button>
+        {[60, 75, 90].map((v) => (
+          <button
+            key={v}
+            onClick={() => setMinFit(minFit === v ? 0 : v)}
+            className={`px-2.5 py-1 rounded-md border transition-colors ${minFit === v ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.08] bg-white/[0.02] text-[#8b949e] hover:text-[#C9D1D9]'}`}
+          >
+            Fit {v}+
+          </button>
+        ))}
       </div>
 
-      {showHelper && (
-        <div className="mx-4 mt-3 mb-1.5 flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3 text-[12.5px] text-[#C9D1D9] relative">
-          <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-          <div className="flex-1 pr-6">
-            This is Workbench. Your workflow output appears here. Review the accounts, check why they were accepted, then choose the next step.
-          </div>
-          <button onClick={() => setShowHelper(false)} className="absolute top-3 right-3 text-[#7D8590] hover:text-[#C9D1D9] transition-colors">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      <RecommendationBanner rec={recommendation} onRun={onRunRecommendation} />
-      <QualificationInsightsPanel insights={insights} processing={insightsProcessing} />
+      {/* RecommendationBanner removed: the recommendation IS the hero CTA
+          above, and rendering both stated one next step twice, in two visual
+          languages, 60px apart. QualificationInsightsPanel moves to the
+          Insights tab in phase 2 — it is diagnostic, not the answer. */}
       <BulkActionToolbar
         selectedCount={selectedRows.length}
         onClear={() => setSelected(new Set())}
@@ -527,10 +535,23 @@ export default function LeadResultsView({ meta, conversationId, taskId = null }:
         </button>
       </div>
 
-      {/* Footer note */}
-      <div className="border-t border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur px-3 py-1.5 text-[10px] text-[#7D8590] flex items-center justify-between">
-        <span>{filtered.length} of {items.length} shown · drafts require approval — nothing is sent automatically</span>
-        <span className="font-mono">Agentory credits estimated locally</span>
+      {/* ── EVERYTHING TRUE BUT NOT THE POINT ──────────────────────────────
+          The stage counts, the grading breakdown and the reviewed-but-not-
+          selected companies. All three used to render above the table (and the
+          last of them at `max-h-[45%]` below it), which is what left the leads
+          roughly 180px of an 800px panel. */}
+      <RunDetails
+        summary={summary}
+        portfolio={portfolio}
+        progress={progress}
+        evaluationRows={evaluationRows}
+      />
+
+      {/* Footer note. "Agentory credits estimated locally" was dropped — an
+          implementation detail no reader can act on. The approval promise
+          stays, because it is a commitment about their data. */}
+      <div className="border-t border-white/[0.06] px-6 py-2 text-[11.5px] text-[#6e7681]">
+        {filtered.length} of {items.length} shown · drafts always need your approval
       </div>
 
       <LeadDetailDrawer row={drawerRow ? (items.find((r) => r.id === drawerRow.id) ?? drawerRow) : null} onClose={() => setDrawerRow(null)} />
@@ -566,19 +587,6 @@ function LeadActionOutcomeCard({ outcome, onClose }: { outcome: { kind: LeadActi
   );
 }
 
-function Chip({ label, v, tone }: { label: string; v: number; tone: 'default' | 'good' | 'warn' | 'muted' }) {
-  const cls =
-    tone === 'good' ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200'
-    : tone === 'warn' ? 'border-amber-500/30 bg-amber-500/[0.08] text-amber-200'
-    : tone === 'muted' ? 'border-white/[0.06] bg-white/[0.02] text-[#7D8590]'
-    : 'border-white/10 bg-white/[0.04] text-[#C9D1D9]';
-  return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${cls}`}>
-      <span className="text-[10px] text-[#7D8590] uppercase tracking-wider">{label}</span>
-      <span className="font-mono text-[11px]">{v}</span>
-    </span>
-  );
-}
 
 function getActionDescription(action: LeadResultPanelAction, rows: number): string {
   switch (action) {

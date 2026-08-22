@@ -5,9 +5,6 @@ import { workbenchQueryKey } from '@/lib/workbench/workbenchSession';
 import { readWorkbenchProgress } from '@/lib/workbench/workbenchProgress';
 import { readEvaluationRows } from '@/lib/workbench/evaluationRows';
 import { readPortfolio, workbenchIsEmpty } from '@/lib/workbench/portfolioView';
-import PortfolioSummary from './PortfolioSummary';
-import WorkflowProgressStrip from './WorkflowProgressStrip';
-import EvaluatedCompaniesTable from './EvaluatedCompaniesTable';
 import ContinueVerificationBar from './ContinueVerificationBar';
 import { canContinueWorkflow, hasStoredCompanyRun } from '@/lib/workbench/continueWorkflow';
 
@@ -207,23 +204,31 @@ export default function WorkbenchPanel() {
               }}
             />
           )}
-          {leadsPanel && portfolio && <PortfolioSummary portfolio={portfolio} />}
-          {leadsPanel && progress && <WorkflowProgressStrip progress={progress} />}
-          {/* The strip is a fixed-height sibling; the table takes what is left
-              and scrolls inside it rather than pushing the panel taller. */}
+          {/* ── THE LEADS ARE THE ONLY FLEX CHILD ────────────────────────
+              PortfolioSummary (11 cells), WorkflowProgressStrip (7 stage
+              lines) and EvaluatedCompaniesTable used to render HERE, above and
+              below the leads, the last of them taking `max-h-[45%]` of what
+              remained. Stacked with the panel header, the tab bar and the
+              view's own header and action bar, the qualified leads — the thing
+              the user opened the panel for — were left roughly 180px of an
+              800px panel, and could not be given more because every sibling
+              was fixed-height.
+
+              All three now live inside `RunDetails`, rendered by the view
+              itself under the table. Nothing was deleted; it stopped
+              outranking the answer. */}
           <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
             <ChatErrorBoundary>
               {leadsPanel ? (
-                <div className="h-full flex flex-col min-h-0">
-                  <div className="flex-1 min-h-0 overflow-hidden">
-                    <LeadResultsView key={workbenchKey} meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} taskId={selectedOutput?.taskId ?? null} />
-                  </div>
-                  {evaluationRows.length > 0 && (
-                    <div className="max-h-[45%] overflow-auto border-t border-white/[0.06] shrink-0">
-                      <EvaluatedCompaniesTable rows={evaluationRows} />
-                    </div>
-                  )}
-                </div>
+                <LeadResultsView
+                  key={workbenchKey}
+                  meta={leadsPanel}
+                  conversationId={selectedOutput?.conversationId ?? null}
+                  taskId={selectedOutput?.taskId ?? null}
+                  portfolio={portfolio}
+                  progress={progress}
+                  evaluationRows={evaluationRows}
+                />
               ) : (
                 <div className="h-full overflow-auto p-4 space-y-3">{renderTable()}</div>
               )}
