@@ -73,9 +73,12 @@ Deno.test("2. and nothing takes a PERCENTAGE of the leads' space", () => {
 });
 
 Deno.test("3. the leads are the only flex-1 child of the view", () => {
-  const table = read("../../src/components/chat/workspace/workbench/leadTable/LeadTable.tsx");
-  assert(/flex-1 min-h-0 overflow-auto/.test(table),
-    "LeadTable takes the remaining height and scrolls inside it");
+  // `LeadTable` held this and is deleted — phase 3 replaced a fourteen-column
+  // horizontal scroll with a card list. The property is unchanged: whatever
+  // renders the leads takes the remaining height and scrolls inside it.
+  const list = read("../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx");
+  assert(/flex-1 min-h-0 overflow-auto/.test(list),
+    "the lead list takes the remaining height and scrolls inside it");
 });
 
 Deno.test("4. Run details is bounded and cannot squeeze the table unbidden", () => {

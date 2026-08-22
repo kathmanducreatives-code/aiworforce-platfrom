@@ -1,4 +1,16 @@
-// THE UNLOCK BUTTON MUST NOT ADVERTISE A COST IT DOES NOT CHARGE.
+// THE NEXT-STEP BUTTON MUST NOT ADVERTISE A COST IT DOES NOT CHARGE.
+//
+// ── THE AFFORDANCE MOVED; THE GUARANTEE DID NOT ─────────────────────────────
+//
+// This protected `LockedCell`, the padlocked table cell whose whole content was
+// an upsell. Four of the fourteen columns were those. The card replaced them:
+// the same dispatch now hangs off one next-step button per lead, shown only
+// when there is genuinely something missing.
+//
+// `LockedCell` and `LeadTable` are deleted — nothing imported them once the
+// card list landed, and 484 lines of unreachable UI would only rot. What must
+// not be deleted with them is this: the affordance claims no price, AND the
+// path it triggers is provably the free one.
 //
 // LockedCell used to render a `~Nc` badge and an "Unlock — ~N credits" tooltip.
 // Nothing charged it. Every action the unlock cells dispatch is mapped by
@@ -18,8 +30,8 @@ import { workbenchActionToLeadKind } from "../../src/lib/leadActionRequest.ts";
 
 const read = (p: string) => Deno.readTextFileSync(new URL(p, import.meta.url));
 
-const LOCKED_CELL_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LockedCell.tsx");
-const LEAD_TABLE_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadTable.tsx");
+const CARD_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadCard.tsx");
+const CARD_LIST_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx");
 const RESULTS_VIEW_SRC = read("../../src/components/chat/workspace/workbench/LeadResultsView.tsx");
 
 /** Source with comments removed — comments may discuss credits; code may not. */
@@ -27,23 +39,24 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
-Deno.test("LockedCell renders no credit cost at all", () => {
-  const code = stripComments(LOCKED_CELL_SRC);
-  assert(!/\bcredits?\b/i.test(code), "LockedCell's code must not mention credits — it charges none");
-  // The specific things that used to lie: the `~Nc` badge and the tooltip.
-  assert(!/~\$\{credits\}/.test(code) && !/\{credits\}c/.test(code), "no credit badge may be rendered");
+Deno.test("the lead card renders no credit cost at all", () => {
+  const code = stripComments(CARD_SRC);
+  assert(!/\bcredits?\b/i.test(code),
+    "the card's code must not mention credits — the next step charges none");
+  assert(!/~\$\{credits\}/.test(code) && !/\{credits\}c/.test(code),
+    "no credit badge may be rendered");
 });
 
-Deno.test("no caller passes a credit cost to LockedCell", () => {
-  const usages = [...stripComments(LEAD_TABLE_SRC).matchAll(/<LockedCell\b[\s\S]*?\/>/g)].map((m) => m[0]);
-  assert(usages.length > 0, "LeadTable must still render LockedCell — the test is otherwise vacuous");
+Deno.test("no caller passes a credit cost to the card", () => {
+  const usages = [...stripComments(CARD_LIST_SRC).matchAll(/<LeadCard\b[\s\S]*?\/>/g)].map((m) => m[0]);
+  assert(usages.length > 0, "the list must still render LeadCard — the test is otherwise vacuous");
   for (const u of usages) {
-    assert(!/\bcredits\s*=/.test(u), `LockedCell usage still passes a credit cost:\n${u}`);
+    assert(!/\bcredits\s*=/.test(u), `LeadCard usage passes a credit cost:\n${u}`);
   }
 });
 
 Deno.test("every unlock button dispatches an action that takes the FREE direct path", () => {
-  const actions = [...stripComments(LEAD_TABLE_SRC).matchAll(/onUnlock\(\s*'([a-z_]+)'/g)].map((m) => m[1]);
+  const actions = [...stripComments(CARD_LIST_SRC).matchAll(/onUnlock\(\s*'([a-z_]+)'/g)].map((m) => m[1]);
   assert(actions.length > 0, "no onUnlock dispatches found — the test would be vacuous");
 
   // Every distinct action must map to a lead_action kind. That mapping is what
@@ -56,8 +69,19 @@ Deno.test("every unlock button dispatches an action that takes the FREE direct p
       `credits-confirm path — the cost-free label on its button would then be wrong`,
     );
   }
-  // Pin the set so a newly-added unlock action has to come back through here.
-  assertEquals(distinct, ["draft_outreach", "find_contacts", "research_company"]);
+  // ── THE SET SHRANK, DELIBERATELY ──────────────────────────────────────
+  //
+  // It was ["draft_outreach", "find_contacts", "research_company"] — three
+  // padlocked cells per row, each an upsell for a different action. The card
+  // offers ONE next step, and only when something is genuinely missing.
+  //
+  // The other two capabilities did not go away: "Research company" and
+  // "Generate outreach" are in the action bar, applied to the selection. That
+  // is the same work reached by choosing rows first instead of by a padlock in
+  // every row of every column.
+  //
+  // Pinned so a newly-added unlock action has to come back through here.
+  assertEquals(distinct, ["find_contacts"]);
 });
 
 Deno.test("runAction returns on the direct lead path BEFORE estimating credits", () => {
@@ -76,7 +100,10 @@ Deno.test("runAction returns on the direct lead path BEFORE estimating credits",
 
 Deno.test("the credit-ledgered unlock-founders flow still has no src/ caller", () => {
   // If this ever becomes false, the free-label decision above must be revisited.
-  for (const [file, src] of [["LeadTable", LEAD_TABLE_SRC], ["LeadResultsView", RESULTS_VIEW_SRC]] as const) {
+  for (const [file, src] of [
+    ["LeadCard", CARD_SRC], ["LeadCardList", CARD_LIST_SRC],
+    ["LeadResultsView", RESULTS_VIEW_SRC],
+  ] as const) {
     assert(!/unlock-founders/.test(src), `${file} now calls unlock-founders — the free label is no longer accurate`);
   }
 });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import LeadTable from './leadTable/LeadTable';
+import LeadCardList from './leadTable/LeadCardList';
 import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
@@ -588,12 +588,16 @@ export default function LeadResultsView({
           </p>
         </div>
       ) : (
-        <LeadTable
+        // ── CARDS, NOT A FOURTEEN-COLUMN SCROLL ──────────────────────────
+        //
+        // `LeadTable` put Fit at column 12 and Status at column 14, past four
+        // padlocked columns and off the right edge at any normal panel width —
+        // the two facts a reader most needs, hardest to reach. The detail those
+        // padlocks gated lives in `LeadDetailDrawer`, which every card opens.
+        <LeadCardList
           rows={filtered}
           selected={selected}
           rowActions={rowActions}
-          accountViews={accountViews}
-          outreachHints={outreachHints}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}
