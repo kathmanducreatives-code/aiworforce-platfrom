@@ -56,6 +56,41 @@ const COL = {
   status: 'w-[150px] min-w-[150px]',
 } as const;
 
+/**
+ * ROW BACKGROUNDS ARE OPAQUE, ALWAYS.
+ *
+ * ── THE BLEED ───────────────────────────────────────────────────────────────
+ *
+ * This was `bg-[#0a0d12] group-hover:bg-white/[0.02]`, and selection was
+ * `bg-emerald-500/[0.05]`. Both set the SAME CSS property, so on hover the
+ * literal `#0a0d12` was replaced by `rgba(255,255,255,0.02)` — a 98%
+ * transparent cell. For an ordinary column that is invisible; for a STICKY one
+ * it is fatal, because the horizontally-scrolled columns pass underneath it and
+ * show straight through. That is the "…eeded" from "Setup needed" appearing
+ * inside the company column.
+ *
+ * Selection was worse: `emerald/[0.05]` is translucent unconditionally, so a
+ * selected row bled whether or not it was hovered.
+ *
+ * ── WHY SOLID HEX AND NOT A LAYER ───────────────────────────────────────────
+ *
+ * The tints are pre-blended against the panel background rather than stacked as
+ * an overlay element. An overlay inside a sticky `<td>` needs its own stacking
+ * context and paints over the cell's own text as readily as under it, which is
+ * the same class of bug one layer down. These are the exact colours the
+ * translucent versions produced — the surface looks identical and is opaque.
+ */
+const ROW_BG = {
+  /** #0a0d12 — the panel. */
+  base: 'bg-[#0a0d12]',
+  /** #0a0d12 + 2% white. */
+  hover: 'group-hover:bg-[#0f1217]',
+  /** #0a0d12 + 5% emerald-500. */
+  selected: 'bg-[#0a1618]',
+  /** …and the same again with the hover lift, so selection is not inert. */
+  selectedHover: 'group-hover:bg-[#0f1b1d]',
+} as const;
+
 const STATE_DOT: Record<string, string> = {
   ready: 'bg-emerald-400',
   needs_contact: 'bg-amber-400',
@@ -124,8 +159,12 @@ export default function LeadSpreadsheet({
             <TH w={COL.outreach}>Outreach</TH>
             <TH w={COL.status}>Status</TH>
           </tr>
-          {/* A single hairline under the whole header, drawn once. */}
-          <tr><td colSpan={8} className="p-0 h-px bg-white/[0.07]" /></tr>
+          {/* A single hairline under the whole header, drawn once.
+              Opaque above it, because this row is sticky too and a translucent
+              rule would let the scrolled rows show through the header seam. */}
+          <tr className="bg-[#0a0d12]">
+            <td colSpan={8} className="p-0 h-px bg-white/[0.07]" />
+          </tr>
         </thead>
 
         <tbody>
@@ -134,7 +173,12 @@ export default function LeadSpreadsheet({
             const view = accountViews[r.id];
             const running = rowActions[r.id]?.status === 'running'
               ? rowActions[r.id].kind : null;
-            const rowBg = isSel ? 'bg-emerald-500/[0.05]' : 'bg-[#0a0d12] group-hover:bg-white/[0.02]';
+            // EVERY VARIANT IS AN OPAQUE HEX. A sticky cell whose background
+            // is even slightly translucent shows the scrolled columns through
+            // itself, which is the entire defect this replaced.
+            const rowBg = isSel
+              ? `${ROW_BG.selected} ${ROW_BG.selectedHover}`
+              : `${ROW_BG.base} ${ROW_BG.hover}`;
 
             const dmState = running === 'find_decision_makers' ? 'processing'
               : unlockStateFor({ stage: view?.decision_makers, providerReady: providers.people });
@@ -148,8 +192,12 @@ export default function LeadSpreadsheet({
             const outreach = view?.outreach.last_success;
 
             return (
-              <tr key={r.id} className="group align-top">
-                <td className={`${COL.select} sticky left-0 z-[1] ${rowBg} px-3 py-2.5 border-b border-white/[0.04]`}>
+              // `align-middle` with a fixed height: every cell now holds at
+              // most two lines, so a row's height no longer depends on which
+              // columns happen to be unlocked. `align-top` plus variable line
+              // counts is what made one row taller than its neighbours.
+              <tr key={r.id} className={`group h-[62px] align-middle ${rowBg}`}>
+                <td className={`${COL.select} sticky left-0 z-[2] ${rowBg} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   <input
                     type="checkbox"
                     checked={isSel}
@@ -160,7 +208,7 @@ export default function LeadSpreadsheet({
                 </td>
 
                 {/* STICKY. A horizontal scroll must never lose the name. */}
-                <td className={`${COL.company} sticky left-9 z-[1] ${rowBg} px-3 py-2.5 border-b border-r border-white/[0.04]`}>
+                <td className={`${COL.company} sticky left-9 z-[2] ${rowBg} px-3 border-b border-r border-white/[0.04] overflow-hidden`}>
                   <button
                     onClick={() => onOpen(r)}
                     className="text-left w-full text-[14px] font-medium text-[#F0F6FC] hover:text-emerald-300 transition-colors truncate block leading-snug"
@@ -184,7 +232,7 @@ export default function LeadSpreadsheet({
                   )}
                 </td>
 
-                <td className={`${COL.fit} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.fit} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   {card.fit !== null ? (
                     <>
                       <div className={`text-[13px] tabular-nums ${FIT_TONE[card.fitLabel ?? ''] ?? 'text-[#8b949e]'}`}>
@@ -197,43 +245,55 @@ export default function LeadSpreadsheet({
                   )}
                 </td>
 
-                <td className={`${COL.signal} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.signal} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   <div className="text-[13px] text-[#C9D1D9] truncate leading-snug">
                     {card.signal ?? <span className="text-[#6e7681]">No signal recorded</span>}
                   </div>
-                  {/* WHY, in one line. The full reasoning is in the drawer —
+                  {/* WHY, in one line, with the evidence link on the same row.
+                      It was a third stacked line, which made this column the
+                      tallest in the table. The full reasoning is in the drawer:
                       paragraphs of evidence in every row is what made the
                       original table unreadable. */}
-                  <div className="text-[12px] text-[#6e7681] truncate">
-                    {card.reason ?? card.whyLine}
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-[12px] text-[#6e7681] truncate">
+                      {card.reason ?? card.whyLine}
+                    </span>
+                    {card.signalHref && (
+                      <a
+                        href={card.signalHref}
+                        target="_blank" rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 inline-flex items-center gap-1 text-[12px] text-emerald-300/70 hover:text-emerald-200 transition-colors"
+                      >
+                        Evidence <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
                   </div>
-                  {card.signalHref && (
-                    <a
-                      href={card.signalHref}
-                      target="_blank" rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-[12px] text-emerald-300/70 hover:text-emerald-200 transition-colors"
-                    >
-                      Evidence <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  )}
                 </td>
 
-                <td className={`${COL.decisionMaker} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.decisionMaker} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   {dmState === 'unlocked' && dm ? (
+                    // TWO LINES, LIKE EVERY OTHER CELL. This was three — name,
+                    // title, then a LinkedIn link on its own row — so any row
+                    // with a decision-maker stood taller than its neighbours.
+                    // The link moves onto the name line, where it also sits
+                    // closer to the thing it identifies.
                     <>
-                      <div className="text-[13px] text-[#F0F6FC] truncate">{dm.full_name}</div>
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="text-[13px] text-[#F0F6FC] truncate">{dm.full_name}</span>
+                        {dm.linkedin_url && (
+                          <a
+                            href={dm.linkedin_url}
+                            target="_blank" rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 text-sky-300/80 hover:text-sky-200"
+                            aria-label={`${dm.full_name} on LinkedIn`}
+                          >
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                      </div>
                       <div className="text-[12px] text-[#6e7681] truncate">{dm.title}</div>
-                      {dm.linkedin_url && (
-                        <a
-                          href={dm.linkedin_url}
-                          target="_blank" rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[12px] text-sky-300/80 hover:text-sky-200"
-                        >
-                          LinkedIn <ExternalLink className="h-2.5 w-2.5" />
-                        </a>
-                      )}
                     </>
                   ) : (
                     <UnlockCell
@@ -248,9 +308,9 @@ export default function LeadSpreadsheet({
                   )}
                 </td>
 
-                <td className={`${COL.research} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.research} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   {researchState === 'unlocked' && research ? (
-                    <div className="text-[12.5px] text-[#C9D1D9] line-clamp-2 leading-relaxed">
+                    <div className="text-[12.5px] text-[#C9D1D9] line-clamp-2 leading-snug">
                       {research.summary ?? 'Researched'}
                     </div>
                   ) : (
@@ -266,11 +326,11 @@ export default function LeadSpreadsheet({
                   )}
                 </td>
 
-                <td className={`${COL.outreach} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.outreach} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   {outreachState === 'unlocked' && outreach ? (
                     <button
                       onClick={() => onOpen(r)}
-                      className="text-left text-[12.5px] text-[#C9D1D9] line-clamp-2 hover:text-emerald-300 transition-colors leading-relaxed"
+                      className="text-left text-[12.5px] text-[#C9D1D9] line-clamp-2 hover:text-emerald-300 transition-colors leading-snug"
                     >
                       {outreach.preview ?? outreachHints[r.id]?.opener ?? 'Draft ready'}
                     </button>
@@ -286,7 +346,7 @@ export default function LeadSpreadsheet({
                   )}
                 </td>
 
-                <td className={`${COL.status} px-3 py-2.5 border-b border-white/[0.04]`}>
+                <td className={`${COL.status} px-3 border-b border-white/[0.04] overflow-hidden`}>
                   <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[#8b949e]">
                     <span className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[card.state] ?? 'bg-[#6e7681]'}`} />
                     {card.stateLabel}

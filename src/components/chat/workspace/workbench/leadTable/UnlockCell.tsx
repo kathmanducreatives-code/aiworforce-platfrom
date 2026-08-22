@@ -123,13 +123,17 @@ export default function UnlockCell({
   return (
     <button
       onClick={onUnlock}
-      className="group/cell text-left w-full"
-      title={label}
+      className="group/cell text-left w-full min-w-0"
+      // NO `title`. It duplicated the label already rendered one line below,
+      // and a native tooltip is painted by the browser OUTSIDE the table — the
+      // "Research company" box floating over the header in the report is this
+      // attribute, not a layout fault. The three states that DO keep a title
+      // carry something not otherwise on screen.
     >
-      <span className="block text-[12px] text-[#6e7681] group-hover/cell:text-[#8b949e] transition-colors">
+      <span className="block truncate text-[12px] text-[#6e7681] group-hover/cell:text-[#8b949e] transition-colors">
         Not researched
       </span>
-      <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] text-emerald-300/70 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+      <span className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-emerald-300/70 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <Lock className="h-2.5 w-2.5" />
         {label}
         {cost != null && cost > 0 && (
