@@ -6,7 +6,9 @@
 // exactly what keeps the canonical result byte-identical across providers.
 
 import { extractJson } from "../../aiProvider.ts";
-import { buildModelTelemetry, readModelUsage } from "../../modelCostModel.ts";
+import {
+  buildModelTelemetry, readModelUsage, type ModelCallTelemetry,
+} from "../../modelCostModel.ts";
 import { buildChatCompletionsBody } from "../../modelRequestBody.ts";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_TIMEOUT_MS,
@@ -62,6 +64,14 @@ export interface OpenAiCompatibleOptions {
   /** Model id as the wire expects it (may differ from the canonical id). */
   wireModel?: string;
   fetchImpl?: FetchLike;
+  /**
+   * Where this call's telemetry goes, beyond the log.
+   *
+   * The same explicit seam as `GptDeps.onModelCall`, for the same reason: a
+   * module-level sink would misattribute across concurrent runs sharing an
+   * isolate. Optional, and its absence changes nothing.
+   */
+  onModelCall?: (t: ModelCallTelemetry, ok: boolean) => void;
 }
 
 /**
@@ -128,13 +138,15 @@ export async function completeOpenAiCompatible(
     //
     // `reasoning_effort` is read back off the body actually sent rather than
     // assumed, because that is the field a routing change will move first.
-    console.log("[model-telemetry]", buildModelTelemetry({
+    const telemetry = buildModelTelemetry({
       role: call.role ?? "unattributed",
       model: call.model,
       reasoning_effort: sentEffort,
       usage: readModelUsage(data),
       latency_ms: latencyMs,
-    }));
+    });
+    console.log("[model-telemetry]", telemetry);
+    opts.onModelCall?.(telemetry, true);
 
     const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
     const content = choices?.[0]?.message?.content ?? "";

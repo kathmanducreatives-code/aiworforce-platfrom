@@ -67,6 +67,10 @@ import {
 } from "./leadMissionCompiler.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
 import { createGptMissionGenerateJson, GPT_MISSION_MODEL_ID } from "./gptMissionModel.ts";
+import type { GptDeps } from "./gptProvider.ts";
+import {
+  isUnrecoverableModelFailure, type ModelFailure, readModelFailure,
+} from "./modelFailureContract.ts";
 
 export type EnvReader = (key: string) => string | undefined;
 
@@ -112,16 +116,34 @@ export const MAX_COMPILATION_ATTEMPTS = 2;
 export class MissionCompilationFailedError extends Error {
   readonly workspaceId: string;
   readonly enablementReason: CompilerEnablementReason;
-  constructor(workspaceId: string, enablementReason: CompilerEnablementReason) {
+  /**
+   * The provider's own failure code, when one reached this layer.
+   *
+   * `quota_exhausted` is the one that matters: it is the only compilation
+   * failure a person can actually fix, and it used to arrive here as nothing at
+   * all. Null when no producer named a reason — which is now a distinct and
+   * visible state rather than the default.
+   */
+  readonly providerCode: string | null;
+  readonly providerDetail: string | null;
+
+  constructor(
+    workspaceId: string,
+    enablementReason: CompilerEnablementReason,
+    failure?: ModelFailure | null,
+  ) {
     super(
       `mission compilation failed after ${MAX_COMPILATION_ATTEMPTS} attempt(s) for a ` +
       `workspace running the compiled-mission architecture (compiler enablement: ` +
       `${enablementReason}). No deterministic mission was substituted and no provider ` +
-      `work was scheduled.`,
+      `work was scheduled.` +
+      (failure?.reported ? ` Provider reported: ${failure.code}.` : ""),
     );
     this.name = "MissionCompilationFailedError";
     this.workspaceId = workspaceId;
     this.enablementReason = enablementReason;
+    this.providerCode = failure?.reported ? failure.code : null;
+    this.providerDetail = failure?.detail ?? null;
   }
 }
 
@@ -178,6 +200,19 @@ export interface MissionCompilerBinding {
   enablement: CompilerEnablement;
   /** Safe task diagnostics. Never a prompt, credential or model output. */
   diagnostics: Record<string, unknown>;
+  /**
+   * Why the last compilation failed, in the PROVIDER's words.
+   *
+   * `proposeMission` answers `null` for every failure, which is the right
+   * contract — the caller wants a mission or nothing. But it means the reason
+   * dies at the return, and the reason is the whole difference between "the
+   * model misread the request" and "the account has no credits".
+   *
+   * Read by the call site when it raises `MissionCompilationFailedError`, so a
+   * quota outage surfaces as `quota_exhausted` rather than as a generic
+   * compilation failure. Null before any attempt.
+   */
+  lastModelFailure: () => ModelFailure | null;
 }
 
 export function buildMissionCompilerBinding(input: {
@@ -185,6 +220,15 @@ export function buildMissionCompilerBinding(input: {
   read?: EnvReader;
   /** Injected in tests. Production uses the configured strategist adapter. */
   generate?: GenerateJsonFn;
+  /**
+   * Where this stage's model spend is recorded.
+   *
+   * Optional, and its absence changes nothing but the ledger — the call still
+   * runs and still logs. Passed down to `gptStructured` through `GptDeps`
+   * rather than read from anywhere ambient, so the workspace and task a row is
+   * attributed to are the ones this binding was built for.
+   */
+  onModelCall?: GptDeps["onModelCall"];
 }): MissionCompilerBinding {
   // ── THE COMPILER IS NO LONGER OPTIONAL ──────────────────────────────────
   //
@@ -218,11 +262,17 @@ export function buildMissionCompilerBinding(input: {
   // Even with the old flag ON, this stage was never GPT — so "enable the flag"
   // would not have produced the GPT-first architecture, only a different
   // non-GPT one.
-  const generate = input.generate ?? createGptMissionGenerateJson();
+  const generate = input.generate ??
+    createGptMissionGenerateJson({ onModelCall: input.onModelCall });
+
+  // Binding-scoped so it survives `proposeMission` returning null. Reset at the
+  // start of every call, so it can never describe an older attempt.
+  let lastFailure: ModelFailure | null = null;
 
   return {
     enablement,
     diagnostics: base,
+    lastModelFailure: () => lastFailure,
     proposeMission: async (ctx: CompilerPromptContext) => {
       const payload = JSON.stringify(buildMissionCompilerPayload(ctx));
 
@@ -232,30 +282,55 @@ export function buildMissionCompilerBinding(input: {
       // truncated or unparseable body. A model that misread the sentence
       // successfully returns a proposal and is never retried; `compileLeadMission`
       // judges that proposal, not this function.
+      lastFailure = null;
       for (let attempt = 1; attempt <= MAX_COMPILATION_ATTEMPTS; attempt++) {
         try {
           const result = await generate({
             systemPrompt: MISSION_COMPILER_SYSTEM_PROMPT,
             messages: [{ role: "user", content: payload }],
           } as never);
-          const r = result as
-            { ok?: boolean; json?: unknown; code?: unknown; detail?: unknown }
-            | null | undefined;
+          const r = result as { ok?: boolean; json?: unknown } | null | undefined;
           if (r?.ok && r.json != null) return r.json;
+
           // ── WHY IT FAILED, NOT JUST THAT IT DID ─────────────────────────
           //
-          // This branch dropped `code` and `detail` on the floor, so a
-          // compilation failure reached the user as `proposal_received: false`
-          // and nothing else. On 2026-08-21 the OpenAI balance ran out and the
-          // chat simply stopped answering; the reason —
-          // `insufficient_quota` — existed in the response and was discarded
-          // twice per message. Diagnosing it took a manual call to the
-          // provider, which is the exact cost of a silent catch.
+          // This branch used to read `r.code` and `r.detail`. NO PRODUCER ON
+          // THIS BOUNDARY HAS EVER EMITTED THOSE NAMES — `gptMissionModel` and
+          // the strategist both send `errorCode` and `error` — so `code` was
+          // always undefined, always fell through to the literal `"no_result"`,
+          // and `detail` was always null.
+          //
+          // The comment that stood here said the branch existed to stop
+          // dropping the reason. It dropped it anyway, and its log line looked
+          // exactly like the bug it was meant to have fixed.
+          //
+          // On 2026-08-21 the OpenAI balance ran out: `insufficient_quota` was
+          // in the body, was detected, survived two adapter layers as a code,
+          // and died here — twice per message. `readModelFailure` is now the
+          // only reader of this boundary and a test pins it against the real
+          // producer sources.
+          const failure = readModelFailure(result);
+          lastFailure = failure;
           console.log("[mission-compiler][attempt-failed]", {
             attempt, of: MAX_COMPILATION_ATTEMPTS,
-            code: typeof r?.code === "string" ? r.code : "no_result",
-            detail: typeof r?.detail === "string" ? r.detail.slice(0, 300) : null,
+            code: failure.code,
+            detail: failure.detail,
+            // Distinguishes "the model failed and said why" from "nobody said
+            // why" — the ambiguity that hid the original bug for its whole life.
+            reported: failure.reported,
           });
+
+          // NO SECOND ATTEMPT AGAINST AN EMPTY BALANCE. A retry cannot clear a
+          // quota, and spending the caller's clock on one is how four silent
+          // retries became a chat that answered nothing.
+          if (isUnrecoverableModelFailure(failure.code)) {
+            console.log("[mission-compiler][unrecoverable]", {
+              code: failure.code,
+              detail: failure.detail,
+              note: "a human must act; further attempts cannot succeed",
+            });
+            break;
+          }
         } catch (e) {
           // Swallowed per attempt so a throw on the first try still gets the
           // second. The final outcome — not this attempt — is what the caller

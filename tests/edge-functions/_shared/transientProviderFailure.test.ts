@@ -267,7 +267,16 @@ Deno.test("15. a quota 429 is NOT retried, and says so", async () => {
   const r = await gptStructured(REQUEST, f.deps);
 
   assert(!r.ok);
-  assertEquals(r.code, "http_error");
+  // NAMED, NOT `http_error`.
+  //
+  // This assertion used to read `http_error`, pinning the very narrowing that
+  // made the 2026-08-21 outage undiagnosable: the quota case WAS detected here
+  // — `bodyIsQuotaExhausted` has always been right — but the finding only
+  // reached the log line and the `retryable` flag, while `code`, the one field
+  // callers branch on, stayed generic. Every layer above therefore saw an
+  // ordinary HTTP fault and had nothing to say about it.
+  assertEquals(r.code, "quota_exhausted",
+    "the only provider failure a person can actually fix must be nameable");
   assertEquals(r.retryable, false,
     "no wait clears an empty balance; calling it retryable hides a billing problem");
   assertEquals(f.calls.length, 1, "one call, not two");

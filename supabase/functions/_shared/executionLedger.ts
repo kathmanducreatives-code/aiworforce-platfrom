@@ -34,6 +34,11 @@
 // provider access. `LedgerWriter` is the only seam, which is what makes the whole
 // lifecycle testable offline.
 
+// TYPE-ONLY, and deliberately so. `modelCostModel` imports `ExecutionCost` from
+// this module, so a value import here would be a cycle. Types are erased, so
+// this one is not.
+import type { ModelCallTelemetry } from "./modelCostModel.ts";
+
 export const EXECUTION_LEDGER_VERSION = "lead-execution-ledger-v1" as const;
 
 // ── VOCABULARY ──────────────────────────────────────────────────────────────
@@ -121,15 +126,26 @@ export interface ExecutionCost {
 
 /** What is known before the call is made. */
 /**
- * A provider call, or a task-level stage outcome.
+ * A provider call, a task-level stage outcome, or one LLM invocation.
  *
- * Kept in one table because they answer one question together, and kept
- * DISTINGUISHABLE because they are not the same event. An Actor returning 100
- * rows does not entitle anyone to record "13 evidence-satisfied" against that
- * Actor: several calls may have contributed to those 13, and attributing them to
- * one row makes the ledger untrustworthy exactly where it must be trusted.
+ * Kept in one table because they answer one question together — "what did this
+ * run cost?" — and kept DISTINGUISHABLE because they are not the same event. An
+ * Actor returning 100 rows does not entitle anyone to record "13
+ * evidence-satisfied" against that Actor: several calls may have contributed to
+ * those 13, and attributing them to one row makes the ledger untrustworthy
+ * exactly where it must be trusted.
+ *
+ * `model_call` shares `estimated_cost_usd`, `duration_ms`, `status` and the
+ * failure columns with the other kinds, which is what lets one query price a
+ * whole run. It never shares the FUNNEL columns: token counts live in
+ * `metadata`, because `accepted_count` is summed across the table by existing
+ * queries and making it mean "output tokens" for one kind would corrupt every
+ * one of them.
+ *
+ * Anything summing provider spend must filter on `record_kind`, which the
+ * existing summary already does.
  */
-export type RecordKind = "provider_call" | "stage_result";
+export type RecordKind = "provider_call" | "stage_result" | "model_call";
 
 export interface ExecutionCallSpec {
   record_kind?: RecordKind;
@@ -739,6 +755,176 @@ export async function recordStageResult(
     }));
   } catch (e) {
     console.error("[execution-ledger] stage result failed", String(e));
+  }
+}
+
+/**
+ * Record one LLM invocation.
+ *
+ * ── WHAT THIS CLOSES ──────────────────────────────────────────────────────
+ *
+ * Phase 1 built the telemetry — role, model, effort, tokens, latency, cost,
+ * provenance — and both transports emitted it to `console.log` and nothing
+ * else. A run could be audited for Apify dollars to the cent and could not
+ * answer "what did the models cost?", because the answer existed only in a log
+ * line that nothing aggregated.
+ *
+ * ── WHERE EACH FIELD LANDS, AND WHY ───────────────────────────────────────
+ *
+ * Cost, latency, status and failure take their REAL columns. They are cross-kind
+ * concepts, and sharing them is the entire point: `sum(estimated_cost_usd)` over
+ * a task now prices the models and the Actors together, and
+ * `group by record_kind` splits them again.
+ *
+ * Everything model-specific goes in `metadata` — token counts most of all. The
+ * funnel columns (`raw_count`, `accepted_count`, …) are summed across the whole
+ * table by existing queries, and overloading one of them to mean "output tokens"
+ * for a single record kind would silently corrupt every one of those aggregates.
+ * The `lead_model_calls` view projects the jsonb back into columns so this costs
+ * nothing at query time.
+ *
+ * ── ACTUAL COST IS NEVER WRITTEN HERE ─────────────────────────────────────
+ *
+ * OpenAI returns token counts and no monetary charge, so the figure is ours and
+ * belongs in `estimated_cost_usd` under `event_priced`. The database enforces
+ * this independently — `actual_cost_usd IS NULL OR cost_source =
+ * 'provider_reported'` — and a row attempting otherwise is REJECTED rather than
+ * quietly stored. That constraint is general on purpose: if a provider ever does
+ * report a charge, the honest path stays open.
+ *
+ * ── FAILURES ARE RECORDED TOO ─────────────────────────────────────────────
+ *
+ * A call that 429s is a call that happened. Recording only the successes would
+ * make an outage look like a quiet period, which is the exact reading that cost
+ * a day on 2026-08-21.
+ */
+export async function recordModelCall(
+  writer: LedgerWriter | null | undefined,
+  spec: Omit<ExecutionCallSpec, "record_kind" | "provider_id" | "stage" | "reason"> & {
+    telemetry: ModelCallTelemetry;
+    /** False for a call the provider refused or that never returned. */
+    ok: boolean;
+    failure_code?: string | null;
+    failure_message?: string | null;
+    stage?: ExecutionStage;
+    reason?: ExecutionReason;
+  },
+): Promise<void> {
+  if (!writer) return;
+  const t = spec.telemetry;
+  const row = buildStartedRow({
+    ...spec,
+    record_kind: "model_call",
+    // The vendor that ran it. Honest, and distinct from `agentory_internal`,
+    // which is what a stage result — an observation we made ourselves — uses.
+    provider_id: "openai",
+    // `ExecutionStage` names the paid LEAD stages; none of them describes a
+    // model call. The logical stage is `telemetry.role`, recorded below, and
+    // claiming e.g. `company_discovery` here would put model rows into a funnel
+    // they are not part of.
+    stage: spec.stage ?? "other",
+    reason: spec.reason ?? "unspecified",
+  });
+  try {
+    await writer.insert(row);
+    await writer.finalize(row.id, {
+      ...buildFinalPatch(row, {
+      status: spec.ok ? "succeeded" : "failed",
+      failure_code: spec.failure_code ?? null,
+      failure_message: spec.failure_message ?? null,
+      cost: {
+        // NEVER `actual_usd`. See above — the counts are the provider's, the
+        // prices are ours, and the database refuses the alternative.
+        actual_usd: null,
+        estimated_usd: t.estimated_cost_usd,
+        source: t.cost_source,
+      },
+      metadata: {
+        role: t.role,
+        model: t.model,
+        reasoning_effort: t.reasoning_effort,
+        input_tokens: t.input_tokens,
+        cached_input_tokens: t.cached_input_tokens,
+        output_tokens: t.output_tokens,
+        fallback_reason: t.fallback_reason,
+        telemetry_version: t.version,
+      },
+      }),
+      // THE MODEL'S LATENCY, NOT THE LEDGER'S.
+      //
+      // `buildFinalPatch` derives `duration_ms` from the wall clock between row
+      // creation and finalize, which is right for a provider call the ledger
+      // wraps in real time. A model call is recorded AFTER it returned, so that
+      // figure would be the few milliseconds this function took — a latency
+      // column full of near-zeroes, and a p95 that means nothing.
+      duration_ms: t.latency_ms,
+    });
+  } catch (e) {
+    // Swallowed like every other ledger failure: accounting must never be able
+    // to take a run down. Logged loudly, because an empty model ledger and a
+    // run that made no model calls look identical from the outside.
+    console.error("[execution-ledger] model call failed", String(e));
+  }
+}
+
+/**
+ * Collects model telemetry during a stage, then writes it once the stage ends.
+ *
+ * ── WHY NOT WRITE FROM THE CALLBACK ───────────────────────────────────────
+ *
+ * `onModelCall` is synchronous, and the write is not. Calling `recordModelCall`
+ * from inside it would leave a floating promise, which in an edge function can
+ * be cut off the moment the response returns — so the rows most worth having,
+ * the ones from a call that failed and ended the request, are exactly the ones
+ * most likely to vanish.
+ *
+ * Collecting is synchronous and cannot fail. Draining is explicit, awaited, and
+ * happens where the caller already knows the workspace and task.
+ */
+export class ModelCallCollector {
+  private readonly calls: Array<{ telemetry: ModelCallTelemetry; ok: boolean }> = [];
+
+  /** The `onModelCall` seam, ready to pass to `GptDeps`. */
+  readonly sink = (telemetry: ModelCallTelemetry, ok: boolean): void => {
+    this.calls.push({ telemetry, ok });
+  };
+
+  get length(): number {
+    return this.calls.length;
+  }
+
+  /**
+   * Write every collected call, then forget them.
+   *
+   * Cleared BEFORE the writes so a drain that partially fails cannot re-write
+   * the rows it already wrote if it is called again — the ledger has no
+   * uniqueness constraint that would catch a duplicate, and a double-counted
+   * model call is a wrong bill rather than a loud error.
+   */
+  async drain(
+    writer: LedgerWriter | null | undefined,
+    spec: {
+      workspace_id: string;
+      task_id?: string | null;
+      plan_id?: string | null;
+      /** Prefix for the idempotency key; the role and index complete it. */
+      logical_call_key: string;
+    },
+  ): Promise<number> {
+    const pending = this.calls.splice(0, this.calls.length);
+    if (!writer) return 0;
+    let written = 0;
+    for (const [i, c] of pending.entries()) {
+      await recordModelCall(writer, {
+        ...spec,
+        logical_call_key: `${spec.logical_call_key}:${c.telemetry.role}:${i + 1}`,
+        telemetry: c.telemetry,
+        ok: c.ok,
+        failure_code: c.ok ? null : c.telemetry.fallback_reason,
+      });
+      written++;
+    }
+    return written;
   }
 }
 

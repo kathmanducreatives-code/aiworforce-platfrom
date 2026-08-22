@@ -149,6 +149,19 @@ export function priceModelCall(i: {
   if (!price) {
     return { actual_usd: null, estimated_usd: null, source: "unknown", model_id };
   }
+  // NO USAGE REPORTED IS NOT A FREE CALL.
+  //
+  // A failed call — a 429, a timeout, a transport fault — parses no body and so
+  // reports no counts. Pricing that as `event_priced: $0` would state that we
+  // know it cost nothing, on the same provenance grade as a figure computed
+  // from real counts. During an outage every row would read as a priced, free
+  // call and the model bill would look untouched while nothing worked.
+  //
+  // `readModelUsage` already draws this distinction — "a response with no usage
+  // reports nothing, not zero cost" — and this is the same rule one layer down.
+  if (i.usage.input_tokens == null && i.usage.output_tokens == null) {
+    return { actual_usd: null, estimated_usd: null, source: "unknown", model_id };
+  }
   const input = i.usage.input_tokens ?? 0;
   const cached = Math.min(i.usage.cached_input_tokens ?? 0, input);
   const uncached = Math.max(0, input - cached);

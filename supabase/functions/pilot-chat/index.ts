@@ -54,6 +54,9 @@ import {
 import {
   buildMissionCompilerBinding, MissionCompilationFailedError,
 } from "../_shared/leadMissionCompilerBinding.ts";
+import {
+  createLedgerWriter, type LedgerDb, type LedgerWriter, ModelCallCollector,
+} from "../_shared/executionLedger.ts";
 import { getLeadIntelligenceCapabilities } from "../_shared/leadIntelligencePolicy.ts";
 import { compileFirstProviderCall } from "../_shared/leadCapabilityEngine.ts";
 import {
@@ -577,6 +580,20 @@ function leadIntentForToolInput(mission: LeadMissionV1 | null, brain: any): any 
  * Returns null when the request carries no hiring signal, which is the same
  * condition under which the card path declines to build one.
  */
+/**
+ * What a caller must supply for model spend to be recorded.
+ *
+ * `correlationId` seeds the idempotency key so a replayed request does not
+ * double-count. Deliberately explicit rather than read from ambient state: two
+ * runs can share an isolate, and a misattributed cost row is worse than a
+ * missing one.
+ */
+interface MissionLedgerContext {
+  writer: LedgerWriter;
+  taskId?: string | null;
+  correlationId: string;
+}
+
 async function compileCanonicalLeadMission(i: {
   prompt: string;
   workspaceId: string;
@@ -590,6 +607,16 @@ async function compileCanonicalLeadMission(i: {
    * it, or states null, and execution applies `effectiveRequestedCount()`.
    */
   requestedCount: number | null;
+  /**
+   * Where this compilation's model spend is recorded.
+   *
+   * Optional. Absent, the call runs and logs exactly as before and only the
+   * ledger row is missing — so a caller with no admin client is not a broken
+   * caller. Present, every model call this stage makes lands in
+   * `lead_execution_calls` under `record_kind = 'model_call'`, including the
+   * ones that FAILED, which are the rows an outage is diagnosed from.
+   */
+  ledger?: MissionLedgerContext | null;
 }): Promise<ReturnType<typeof buildMissionForPrompt> | null> {
   // ── NO REGEX MAY DECIDE WHETHER THE MODEL GETS TO READ THE SENTENCE ──────
   //
@@ -616,7 +643,14 @@ async function compileCanonicalLeadMission(i: {
   // `compileLeadMission` answers deterministically — correct for a workspace
   // that has deliberately not adopted the compiler, and refused below for one
   // that has.
-  const compilerBinding = buildMissionCompilerBinding({ workspaceId: i.workspaceId });
+  // COLLECT NOW, WRITE LATER. The sink is synchronous and cannot fail; the
+  // drain below is awaited, so a row is never left to a floating promise that
+  // the response can outrun.
+  const modelCalls = new ModelCallCollector();
+  const compilerBinding = buildMissionCompilerBinding({
+    workspaceId: i.workspaceId,
+    onModelCall: modelCalls.sink,
+  });
   const gptProposal = compilerBinding.proposeMission
     ? await compilerBinding.proposeMission({
       originalUserQuery: i.prompt,
@@ -637,7 +671,19 @@ async function compileCanonicalLeadMission(i: {
     workspace_id: i.workspaceId,
     ...compilerBinding.diagnostics,
     proposal_received: gptProposal != null,
+    model_calls: modelCalls.length,
   });
+
+  // DRAINED BEFORE ANY THROW BELOW. A compilation that fails is exactly the one
+  // whose model rows matter — an outage with no ledger rows is indistinguishable
+  // from a quiet period.
+  if (i.ledger) {
+    await modelCalls.drain(i.ledger.writer, {
+      workspace_id: i.workspaceId,
+      task_id: i.ledger.taskId ?? null,
+      logical_call_key: `mission_compilation:${i.ledger.correlationId}`,
+    });
+  }
 
   // ── THE REFUSAL MOVED UPSTREAM, AND IS TRANSLATED HERE ──────────────────
   //
@@ -695,7 +741,13 @@ async function compileCanonicalLeadMission(i: {
     // The legacy enablement reason is passed through unchanged — it is a closed
     // union, and the error class already states the part that matters: that no
     // deterministic mission was substituted and nothing was scheduled.
-    throw new MissionCompilationFailedError(i.workspaceId, compilerBinding.enablement.reason);
+    // THE PROVIDER'S REASON, CARRIED. Without it a quota outage and a model
+    // that misread the sentence raise the identical error, which is what made
+    // 2026-08-21 take a manual API call to diagnose.
+    throw new MissionCompilationFailedError(
+      i.workspaceId, compilerBinding.enablement.reason,
+      compilerBinding.lastModelFailure(),
+    );
   }
 
   return mission;
@@ -815,7 +867,10 @@ async function generateWorkflowConfirmation(
     // money is spent, which makes an unverified reading here worse than one
     // deeper in the pipeline, not better.
     if (cardMission.mission_parser_source === "deterministic_fallback") {
-      throw new MissionCompilationFailedError(workspaceId, compilerBinding.enablement.reason);
+      throw new MissionCompilationFailedError(
+        workspaceId, compilerBinding.enablement.reason,
+        compilerBinding.lastModelFailure(),
+      );
     }
     return buildHiringConfirmation(prompt, cardMission, company, cardBrainLite);
   }
@@ -1225,6 +1280,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // only answer in the conversation if it has these two, and it is reached from
   // anywhere below — so they are given away early rather than at the end.
   fail.admin = admin;
+
+  // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
+  //
+  // Built once, here, because this is the first point at which the admin client
+  // exists — the same reason `fail.admin` is handed over on this line. Every
+  // mission compilation below shares it, so a request's model rows carry one
+  // correlation id and a replay cannot double-count them.
+  const missionLedger: MissionLedgerContext = {
+    writer: createLedgerWriter(admin as unknown as LedgerDb),
+    correlationId: crypto.randomUUID(),
+  };
 
   // 3. Membership check via workspace_members
   const { data: member } = await admin
@@ -2072,6 +2138,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // NO REGEX COUNT. The Mission states the count the user asked for, or
         // states null; nothing here re-reads the sentence to second-guess it.
         requestedCount: null,
+        ledger: missionLedger,
       }));
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
@@ -2144,6 +2211,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           prompt: req.original_user_request || intakeInstruction,
           workspaceId, brain: brainProfile,
           requestedCount: null,
+          ledger: missionLedger,
         }));
       return await delegateToOrchestrate({
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
@@ -2569,6 +2637,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         workspaceId,
         brain: brainProfile,
         requestedCount: null,
+        ledger: missionLedger,
       }));
 
     // Lead Intelligence Engine: prefer the lead_intent the confirmation card
@@ -2678,6 +2747,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     const peopleMission = canonicalMissionForTransport(
       await compileCanonicalLeadMission({
         prompt: message, workspaceId, brain: brainProfile, requestedCount: null,
+        ledger: missionLedger,
       }));
     const peopleBrain = brainProfile as any;
     const peopleIntent = peopleMission
@@ -3002,10 +3072,15 @@ interface FailureContext {
 /** What the user is told. Honest about the class, silent about internals. */
 function failureMessageFor(e: unknown): string {
   if (e instanceof MissionCompilationFailedError) {
-    // NAMES THE STAGE, NOT A CAUSE IT DOES NOT KNOW. The compiler cannot tell a
-    // quota problem from an outage from a timeout — `gpt_quota_exhausted` and
-    // `[mission-compiler][attempt-failed]` carry that, in the logs, for whoever
-    // can act on it.
+    // NAMES THE STAGE, NOT THE CAUSE — DELIBERATELY, AND NO LONGER FOR LACK OF
+    // KNOWING IT.
+    //
+    // The compiler CAN now tell a quota outage from a timeout: the error
+    // carries `providerCode`, and `[pilot-chat][unhandled]` logs it. That is
+    // where a cause belongs. Telling an end user "the account is out of
+    // credits" exposes an operational detail they cannot act on and would not
+    // be true for the other codes that reach this branch, so the message stays
+    // exactly as it was: what failed, what it means for them, what to do.
     return "I could not read your request into a plan just now — the AI service " +
       "that interprets it did not respond. Nothing was started and nothing was " +
       "charged. Please try again in a moment; if it keeps happening, the AI " +
@@ -3024,6 +3099,12 @@ Deno.serve(async (req) => {
     // and the last thing a user does.
     console.error("[pilot-chat][unhandled]", {
       error: String(e),
+      // THE PROVIDER'S OWN CODE, where the failure had one. `quota_exhausted`
+      // here is the difference between "the chat is broken" and "top up the
+      // account" — and it used to be absent, which is why the second reading
+      // took a manual API call to reach.
+      provider_code: e instanceof MissionCompilationFailedError ? e.providerCode : null,
+      provider_detail: e instanceof MissionCompilationFailedError ? e.providerDetail : null,
       kind: e instanceof MissionCompilationFailedError
         ? "mission_compilation_failed" : "unexpected",
       conversation_id: fail.conversationId ?? null,

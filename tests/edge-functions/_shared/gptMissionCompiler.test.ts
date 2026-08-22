@@ -227,8 +227,13 @@ Deno.test("9. the compiler is no longer flag-gated", () => {
     /if \(!enablement\.enabled\)[\s\S]{0,120}proposeMission: null/.test(code), false,
     "an unset flag must no longer switch interpretation off",
   );
+  // Matched on the CALL, not on empty parens. The adapter now receives a
+  // telemetry sink so model spend reaches the ledger, and the original
+  // `createGptMissionGenerateJson\(\)` pattern failed on the argument — for a
+  // change that does not touch what this test is about, which is that the GPT
+  // adapter and not the strategist reads the user's sentence.
   assert(
-    /createGptMissionGenerateJson\(\)/.test(code),
+    /createGptMissionGenerateJson\(/.test(code),
     "production must use the GPT adapter, not the Claude/Lovable strategist",
   );
   assertEquals(

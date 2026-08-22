@@ -153,6 +153,21 @@ export interface GptRequest {
  */
 export const PROVIDER_FAILURE_CODES = [
   "no_api_key", "http_error", "transport_error",
+  /**
+   * The balance is gone. A PROVIDER failure like the others, and the only one
+   * that no amount of waiting, retrying or re-prompting can clear.
+   *
+   * It used to be reported as `http_error`. The quota case was detected
+   * correctly — `bodyIsQuotaExhausted` has always been right — but the finding
+   * only ever reached a log line and the `retryable` flag, while the CODE, the
+   * one field callers branch on, still said `http_error`. So every layer above
+   * saw a generic HTTP fault and had nothing to say about it.
+   *
+   * On 2026-08-21 that cost a day: the chat stopped answering, and diagnosing
+   * why took a manual call to the OpenAI API to discover a fact the code had
+   * already established and thrown away.
+   */
+  "quota_exhausted",
 ] as const;
 
 export type GptFailureCode =
@@ -204,6 +219,18 @@ export interface GptDeps {
   log?: (msg: string, meta?: unknown) => void;
   /** Injected so a retry test does not spend real seconds. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Where this call's telemetry goes, beyond the log.
+   *
+   * AN EXPLICIT SEAM, NOT A GLOBAL SINK. A module-level "current writer" would
+   * be simpler to wire and would misattribute one request's model calls to
+   * another's task whenever two runs share an isolate. Passed through `GptDeps`,
+   * the attribution comes from the caller that already knows it.
+   *
+   * Optional, and its absence changes nothing: the log line is emitted either
+   * way, so a call site that has no ledger behaves exactly as before.
+   */
+  onModelCall?: (t: ModelCallTelemetry, ok: boolean) => void;
 }
 
 import {
@@ -399,15 +426,20 @@ export async function gptStructured<T>(
         const body = await res.text().catch(() => "");
         // A 429 that says the balance is gone is not a rate limit. Retrying it
         // burns the caller's clock on a condition only a human can clear.
-        const transient = statusIsTransient(res.status) && !bodyIsQuotaExhausted(body);
+        const quotaExhausted = bodyIsQuotaExhausted(body);
+        const transient = statusIsTransient(res.status) && !quotaExhausted;
         // The status and a bounded excerpt only. A provider error body can echo
         // request content, and this string is persisted into task results.
         failure = {
-          ok: false, code: "http_error",
+          ok: false,
+          // NAMED, NOT BURIED. The distinction already existed one line above
+          // and only reached `retryable`; a caller cannot branch on a boolean
+          // that says "do not retry" without knowing WHY not.
+          code: quotaExhausted ? "quota_exhausted" : "http_error",
           detail: redact(`OpenAI returned HTTP ${res.status}: ${body.slice(0, 300)}`, key),
           latency_ms: elapsed(), retryable: transient, attempts,
         };
-        if (!transient && res.status === 429) {
+        if (quotaExhausted) {
           // SAID OUT LOUD, because it is the one provider failure a person has
           // to act on. The alternative is what actually happened: four silent
           // retries and a chat that answers nothing.
@@ -446,7 +478,25 @@ export async function gptStructured<T>(
     });
     await sleep(transientWaitMs);
   }
-  if (failure) return failure;
+  if (failure) {
+    // A FAILED CALL IS STILL A CALL THAT HAPPENED.
+    //
+    // Recording only successes makes an outage look like a quiet period — which
+    // is exactly how 2026-08-21 read from the outside. There is no usage to
+    // report (nothing parsed a body), so `priceModelCall` grades the cost
+    // `unknown` rather than claiming a priced zero.
+    const failTelemetry = buildModelTelemetry({
+      role: req.purpose,
+      model,
+      reasoning_effort: req.reasoningEffort ?? null,
+      usage: { input_tokens: null, cached_input_tokens: null, output_tokens: null },
+      latency_ms: elapsed(),
+      fallback_reason: failure.code,
+    });
+    log("gpt_call_telemetry", failTelemetry);
+    deps.onModelCall?.(failTelemetry, false);
+    return failure;
+  }
   raw = raw!;
 
   // ── WHAT IT COST, READ OFF THE SAME BODY ────────────────────────────────
@@ -468,6 +518,7 @@ export async function gptStructured<T>(
     latency_ms: elapsed(),
   });
   log("gpt_call_telemetry", telemetry);
+  deps.onModelCall?.(telemetry, true);
 
   let content: string | undefined;
   try {
