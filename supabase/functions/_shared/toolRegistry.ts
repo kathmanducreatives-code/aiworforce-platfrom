@@ -316,6 +316,7 @@ import {
   authorizeProviderCall, settleProviderCall, resolveCreditEnforcement,
   CREDIT_REFUSED_ERROR, type CreditDb,
 } from "./creditAuthorization.ts";
+import { priceFor } from "./creditPricing.ts";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 
@@ -1556,7 +1557,20 @@ export async function runTool(
   // The ledger never alters `result`. It observes and finalizes in a `finally`,
   // so a throw still leaves a terminal row.
   let result: ToolResult;
-  const audited = tool.name === "source_with_apify" && ctx.workspace_id;
+  // ── WHICH TOOLS PASS THE MONEY BOUNDARY ────────────────────────────────
+  //
+  // This read `tool.name === "source_with_apify"` alone, which covered the
+  // lead-sourcing Actor and the people search that `find_decision_makers`
+  // dispatches — but NOT `scrape_url`, the Firecrawl call behind
+  // `research_company`. So one unlockable column reserved credits and its
+  // neighbour did not, for no reason anyone had decided: the gate was written
+  // when sourcing was the only paid path and never revisited when the Workbench
+  // grew per-row unlocks.
+  //
+  // Both are paid provider calls against a workspace. Both go through the
+  // ledger and the reserve.
+  const PAID_TOOLS = new Set(["source_with_apify", "scrape_url"]);
+  const audited = PAID_TOOLS.has(tool.name) && ctx.workspace_id;
   const auditInput = (input ?? {}) as Record<string, unknown>;
   const auditSpec = audited
     ? {
@@ -1621,6 +1635,14 @@ export async function runTool(
     // call boundary are the same line. `logical_call_key` is the idempotency
     // key, so a retried or replayed call reserves nothing further.
     const creditMode = resolveCreditEnforcement();
+    // THE PRICE THE UI QUOTED, or the flat default for anything the pricing
+    // table does not name. `unlock_capability` is set by the lead-action
+    // executor, which is the only caller that has a user-facing price on a
+    // button — and the number reserved here is the number that button showed,
+    // by construction rather than by coincidence.
+    const quoted = typeof auditInput.unlock_capability === "string"
+      ? priceFor(auditInput.unlock_capability)
+      : null;
     const auth = await authorizeProviderCall({
       db: ctx.admin as unknown as CreditDb,
       workspace_id: auditSpec.workspace_id,
@@ -1628,6 +1650,7 @@ export async function runTool(
       task_id: auditSpec.task_id,
       capability: auditSpec.capability,
       mode: creditMode,
+      ...(quoted != null ? { amount: quoted } : {}),
     });
     console.log("[credits][authorization]", {
       mode: auth.mode, allowed: auth.allowed, reserved: auth.reserved,

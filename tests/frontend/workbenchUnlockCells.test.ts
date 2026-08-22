@@ -74,19 +74,31 @@ Deno.test("6. a finished failure is retryable, and says why", () => {
 // ═══ 2. PRICE — THE THING THAT MUST NOT BE INVENTED ════════════════════════
 
 Deno.test("7. NO CREDIT AMOUNT IS FABRICATED", () => {
+  // ── THIS ASSERTION MOVED WITH THE TRUTH IT PROTECTS ────────────────────
+  //
+  // It used to require that NO cost be passed at all, because at the time none
+  // was charged: `unlock-founders` and `credits_reserve` had zero callers in
+  // src/, and both credit tables were empty. That was the honest state and the
+  // test held it.
+  //
+  // Credits are now wired end to end — `creditPricing` is passed to
+  // `authorizeProviderCall`, and the cell quotes the same table. So a cost on
+  // the button is no longer a fabrication; a LITERAL one still would be.
+  // `creditUnlockFlow.test.ts` pins that the quote and the charge share a table.
   // Verified against the repo and the live database, not from a comment:
   // `unlock-founders` and `credits_reserve` have zero callers in src/;
   // `runAction` dispatches lead kinds and returns BEFORE `estimateCredits`;
   // workspace_credit_balances and credit_transactions are both empty. These
   // actions charge nothing, so a "· 2 credits" label would be a price invented
   // for the look of the thing.
-  assert(/cost\s*=\s*null/.test(CELL), "cost defaults to null — free");
-  assert(!/\d+\s+credits?/.test(CELL.replace(/cost === 1/g, "")),
-    "no literal amount may be hardcoded in the cell");
+  assert(/cost\s*=\s*null/.test(CELL),
+    "the cell still DEFAULTS to free — an unpriced action must not invent one");
   const usages = [...SHEET.matchAll(/<UnlockCell\b[\s\S]*?\/>/g)];
   assertEquals(usages.length, 3, "one per unlockable column");
   for (const u of usages) {
-    assert(!/cost=/.test(u[0]), `a cost is being passed in:\n${u[0]}`);
+    assert(/cost=\{priceFor\('/.test(u[0]),
+      `the quote must come from the price table, not a literal:\n${u[0]}`);
+    assert(!/cost=\{\d/.test(u[0]), `a literal amount is hardcoded:\n${u[0]}`);
   }
 });
 

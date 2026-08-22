@@ -29,7 +29,15 @@ import type { AccountStage } from '../workbenchAccountView.ts';
 export const UNLOCK_STATE_VERSION = 'workbench-unlock-state-v1' as const;
 
 export type UnlockState =
-  | 'not_researched' | 'processing' | 'unlocked' | 'unavailable' | 'failed';
+  | 'not_researched' | 'processing' | 'unlocked' | 'unavailable' | 'failed'
+  /**
+   * The reserve declined. Nothing ran and nothing was charged.
+   *
+   * DISTINCT FROM `failed`, which means a provider was paid for and did not
+   * deliver. "Try again" is wrong here — the balance has to change first — and
+   * a user needs to know the attempt cost them nothing.
+   */
+  | 'insufficient_credits';
 
 export interface UnlockInput<T> {
   stage: AccountStage<T> | undefined;
@@ -54,6 +62,11 @@ export function unlockStateFor<T>(i: UnlockInput<T>): UnlockState {
   const attempt = stage?.attempt ?? null;
 
   if (attempt?.status === 'running') return 'processing';
+  // REFUSED BEFORE EXECUTION. Checked before `last_success` so a refusal on a
+  // re-unlock is visible, and before `failed` so it is never mistaken for a
+  // provider that ran and lost.
+  if (attempt?.reason_code === 'credit_authorization_refused'
+    && stage?.last_success == null) return 'insufficient_credits';
   // HELD DATA WINS. A failed retry does not un-hold what we already have.
   if (stage?.last_success != null) return 'unlocked';
   if (!providerReady) return 'unavailable';

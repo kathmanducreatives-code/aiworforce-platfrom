@@ -100,6 +100,8 @@ export function planToToolInput(plan: PeopleSearchPlan): Record<string, unknown>
 
   return {
     tool_name: "source_with_apify",
+    // The capability whose price the Workbench quoted for this unlock.
+    unlock_capability: "find_decision_makers",
     selected_actor_key: plan.actor_key,
     source_type: "people_profiles",
     company_linkedin_url: companyUrl,

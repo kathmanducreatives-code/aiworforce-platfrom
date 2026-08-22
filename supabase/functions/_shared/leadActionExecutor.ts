@@ -195,7 +195,13 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
     const lead = leadRecordFromRow(row);
 
     if (action === "research_company") {
-      const firecrawl: FirecrawlFn = async (url) => mapFirecrawlResult(await ctx.runTool("scrape_url", { url, extraction_goal: `Company research for ${lead.company_name ?? url}`, max_pages: 1 }, ctx.toolCtx));
+      const firecrawl: FirecrawlFn = async (url) => mapFirecrawlResult(await ctx.runTool("scrape_url", {
+        url, extraction_goal: `Company research for ${lead.company_name ?? url}`, max_pages: 1,
+        // NAMES THE PRICE THE BUTTON SHOWED. `runTool` looks this up in
+        // `creditPricing` and reserves exactly that, so the quote and the
+        // charge cannot drift apart.
+        unlock_capability: "research_company",
+      }, ctx.toolCtx));
       const res = await runCompanyEnrichment(lead, firecrawl);
       if (res.status !== "blocked") {
         // Record the stage in the account state as well, so a later action can

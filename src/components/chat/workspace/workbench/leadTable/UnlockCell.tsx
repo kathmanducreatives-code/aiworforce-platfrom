@@ -30,7 +30,8 @@
 // things: one is configuration, the other is an attempt that ran and did not
 // work.
 
-import { Loader2, Lock, AlertTriangle, RotateCw } from 'lucide-react';
+import { Loader2, Lock, AlertTriangle, RotateCw, Coins } from 'lucide-react';
+import type { UnlockState } from '@/lib/workbench/unlockState';
 
 /**
  * What this cell can say about itself.
@@ -38,17 +39,7 @@ import { Loader2, Lock, AlertTriangle, RotateCw } from 'lucide-react';
  * Mirrors `RowDisplayStatus` on `StageAttempt` plus the two states an attempt
  * cannot describe — never asked for, and blocked by configuration.
  */
-export type UnlockState =
-  /** Nobody has asked for this yet. The ordinary resting state. */
-  | 'not_researched'
-  /** Running now. */
-  | 'processing'
-  /** We have it. The cell renders its value, not this component. */
-  | 'unlocked'
-  /** A prerequisite the user must fix — a provider that is not configured. */
-  | 'unavailable'
-  /** It ran and did not work. Retryable. */
-  | 'failed';
+export type { UnlockState } from '@/lib/workbench/unlockState';
 
 interface Props {
   state: UnlockState;
@@ -56,8 +47,12 @@ interface Props {
   label: string;
   onUnlock: () => void;
   /**
-   * Real cost, when there is one. Null means FREE, and renders nothing —
-   * never "0 credits", which reads as a price of zero rather than no charge.
+   * The price from `creditPricing`, which is the table the reserve uses.
+   *
+   * 0 renders nothing — "0 credits" reads as a price of zero rather than as no
+   * charge, and free actions should look free rather than cheap. A number here
+   * is a promise: it is what `authorizeProviderCall` will reserve, because the
+   * executor tags the call with the same capability this price came from.
    */
   cost?: number | null;
   /** Why it cannot run. Required for `unavailable`. */
@@ -87,6 +82,21 @@ export default function UnlockCell({
       >
         <AlertTriangle className="h-3 w-3 text-amber-400/70" />
         Setup needed
+      </span>
+    );
+  }
+
+  if (state === 'insufficient_credits') {
+    // NOT `failed`. Nothing ran and nothing was charged, and the fix is a
+    // balance rather than a retry — offering "Try again" would be wrong about
+    // what happened and useless about what to do.
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[12px] text-amber-200/90"
+        title="The reserve was declined, so nothing was run and nothing was charged."
+      >
+        <Coins className="h-3 w-3" />
+        Not enough credits
       </span>
     );
   }
@@ -123,7 +133,9 @@ export default function UnlockCell({
         <Lock className="h-2.5 w-2.5" />
         {label}
         {cost != null && cost > 0 && (
-          <span className="text-[#6e7681]">· {cost} {cost === 1 ? 'credit' : 'credits'}</span>
+          <span className="text-[#6e7681]">
+            · {cost} {cost === 1 ? 'credit' : 'credits'}
+          </span>
         )}
       </span>
     </button>

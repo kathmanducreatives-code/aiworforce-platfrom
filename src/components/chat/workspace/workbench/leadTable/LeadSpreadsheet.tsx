@@ -37,6 +37,7 @@ import { buildLeadCard } from '@/lib/workbench/leadCard';
 import { qualificationFromRow } from '@/lib/qualifiedLead/rowQualification';
 import { unlockFailureReason, unlockStateFor } from '@/lib/workbench/unlockState';
 import UnlockCell from './UnlockCell';
+import { priceFor } from '@/lib/credits/pricing';
 
 /**
  * Column widths.
@@ -238,6 +239,8 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={dmState}
                       label="Find contact"
+                      // The price the reserve will take. Same table, both sides.
+                      cost={priceFor('find_decision_makers')}
                       onUnlock={() => onUnlock('find_contacts', r.id)}
                       blockedReason="A people-search provider is not configured"
                       failureReason={unlockFailureReason(view?.decision_makers)}
@@ -254,6 +257,8 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={researchState}
                       label="Research company"
+                      // The price the reserve will take. Same table, both sides.
+                      cost={priceFor('research_company')}
                       onUnlock={() => onUnlock('research_company', r.id)}
                       blockedReason="Firecrawl is not configured"
                       failureReason={unlockFailureReason(view?.company_research)}
@@ -273,6 +278,8 @@ export default function LeadSpreadsheet({
                     <UnlockCell
                       state={outreachState}
                       label="Draft outreach"
+                      // The price the reserve will take. Same table, both sides.
+                      cost={priceFor('generate_outreach')}
                       onUnlock={() => onUnlock('draft_outreach', r.id)}
                       failureReason={unlockFailureReason(view?.outreach)}
                     />

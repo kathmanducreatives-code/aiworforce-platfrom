@@ -115,7 +115,28 @@ export const ERROR_COPY: Record<string, string> = {
   lead_ownership_check_failed: 'Could not verify the selected rows.',
   lead_action_failed: 'The action failed partway through — retry the affected rows.',
   run_agent_failed: 'The action could not be started.',
+  // ── REFUSED BEFORE ANYTHING RAN ──────────────────────────────────────────
+  //
+  // The reserve declined, so no provider was called and nothing was charged.
+  // Said in those words on purpose: a user who sees a failed action needs to
+  // know whether it cost them anything, and this one did not.
+  credit_authorization_refused:
+    'Not enough credits for that. Nothing was run and nothing was charged.',
 };
+
+/** The refusal that leaves a cell locked. Mirrors CREDIT_REFUSED_ERROR. */
+export const CREDIT_REFUSED_ERROR = 'credit_authorization_refused' as const;
+
+/**
+ * True when the action was refused before any provider ran.
+ *
+ * The cell must go back to its offer state, NOT to "failed" — nothing was
+ * attempted, so "Try again" would be wrong about what happened and would hide
+ * the one fact the user can act on: the balance.
+ */
+export function isCreditRefusal(code: string | null | undefined): boolean {
+  return code === CREDIT_REFUSED_ERROR;
+}
 
 /** Codes that mean nothing was executed, so the batch reports a request error. */
 export const PRE_EXECUTION_CODES: ReadonlySet<string> = new Set([
