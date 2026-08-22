@@ -30,8 +30,11 @@ import { workbenchActionToLeadKind } from "../../src/lib/leadActionRequest.ts";
 
 const read = (p: string) => Deno.readTextFileSync(new URL(p, import.meta.url));
 
-const CARD_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadCard.tsx");
-const CARD_LIST_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx");
+// The affordance came back to a CELL. `LockedCell` → `UnlockCell`, rendered by
+// the restored spreadsheet — which is where it was before the card refactor
+// removed it. The guarantee has now outlived three homes and must outlive more.
+const CARD_SRC = read("../../src/components/chat/workspace/workbench/leadTable/UnlockCell.tsx");
+const CARD_LIST_SRC = read("../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx");
 const RESULTS_VIEW_SRC = read("../../src/components/chat/workspace/workbench/LeadResultsView.tsx");
 
 /** Source with comments removed — comments may discuss credits; code may not. */
@@ -39,19 +42,28 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
-Deno.test("the lead card renders no credit cost at all", () => {
+Deno.test("the unlock cell renders no INVENTED credit cost", () => {
   const code = stripComments(CARD_SRC);
-  assert(!/\bcredits?\b/i.test(code),
-    "the card's code must not mention credits — the next step charges none");
+  // `cost` is OPTIONAL and null on every action wired today — verified against
+  // the repo and the live database: zero callers of `unlock-founders` or
+  // `credits_reserve` in src/, and zero rows in workspace_credit_balances.
+  // The cell may RENDER a cost it is given; it may not invent one.
+  assert(/cost\s*=\s*null/.test(code),
+    "cost must default to null — free is the current truth, and '0 credits' " +
+    "would read as a price rather than as no charge");
+  assert(!/'\d+ credits?'/.test(code) && !/`\d+ credits?`/.test(code),
+    "no literal credit amount may be hardcoded");
   assert(!/~\$\{credits\}/.test(code) && !/\{credits\}c/.test(code),
     "no credit badge may be rendered");
 });
 
 Deno.test("no caller passes a credit cost to the card", () => {
-  const usages = [...stripComments(CARD_LIST_SRC).matchAll(/<LeadCard\b[\s\S]*?\/>/g)].map((m) => m[0]);
-  assert(usages.length > 0, "the list must still render LeadCard — the test is otherwise vacuous");
+  const usages = [...stripComments(CARD_LIST_SRC).matchAll(/<UnlockCell\b[\s\S]*?\/>/g)].map((m) => m[0]);
+  assert(usages.length >= 3,
+    "the spreadsheet must render an unlock cell per unlockable column — the " +
+    "test is otherwise vacuous");
   for (const u of usages) {
-    assert(!/\bcredits\s*=/.test(u), `LeadCard usage passes a credit cost:\n${u}`);
+    assert(!/\bcost=\{?\d/.test(u), `an unlock cell is given a hardcoded cost:\n${u}`);
   }
 });
 
@@ -81,7 +93,11 @@ Deno.test("every unlock button dispatches an action that takes the FREE direct p
   // every row of every column.
   //
   // Pinned so a newly-added unlock action has to come back through here.
-  assertEquals(distinct, ["find_contacts"]);
+  // BACK TO THREE. The card offered one next step because it had one cell; the
+  // spreadsheet has an unlockable COLUMN each for decision-maker, research and
+  // outreach, which is the interaction model that existed before the refactor
+  // removed it. Every one still takes the free direct path.
+  assertEquals(distinct, ["draft_outreach", "find_contacts", "research_company"]);
 });
 
 Deno.test("runAction returns on the direct lead path BEFORE estimating credits", () => {
@@ -100,10 +116,14 @@ Deno.test("runAction returns on the direct lead path BEFORE estimating credits",
 
 Deno.test("the credit-ledgered unlock-founders flow still has no src/ caller", () => {
   // If this ever becomes false, the free-label decision above must be revisited.
+  // COMMENTS STRIPPED — `UnlockCell`'s header explains WHY it shows no price,
+  // and names `unlock-founders` while doing so. Matching raw source failed on
+  // that explanation. Read code, never the commentary about the code.
   for (const [file, src] of [
-    ["LeadCard", CARD_SRC], ["LeadCardList", CARD_LIST_SRC],
+    ["UnlockCell", CARD_SRC], ["LeadSpreadsheet", CARD_LIST_SRC],
     ["LeadResultsView", RESULTS_VIEW_SRC],
   ] as const) {
-    assert(!/unlock-founders/.test(src), `${file} now calls unlock-founders — the free label is no longer accurate`);
+    assert(!/unlock-founders/.test(stripComments(src)),
+      `${file} now calls unlock-founders — the free label is no longer accurate`);
   }
 });

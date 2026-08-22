@@ -207,44 +207,47 @@ Deno.test("21. an unknown company is named, not blank", () => {
 
 Deno.test("22. every required field is rendered by the card", () => {
   const card = Deno.readTextFileSync(new URL(
-    "../../src/components/chat/workspace/workbench/leadTable/LeadCard.tsx", import.meta.url));
+    "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx", import.meta.url));
   for (const [field, token] of [
-    ["company", "model.company"],
-    ["website", "model.websiteLabel"],
-    ["strongest signal", "model.signal"],
-    ["fit", "model.fit"],
-    ["why it was accepted", "model.reason"],
-    ["current status", "model.stateLabel"],
-    ["next step", "model.nextStep"],
+    ["company", "card.company"],
+    ["website", "card.websiteLabel"],
+    ["strongest signal", "card.signal"],
+    ["fit", "card.fit"],
+    ["why it was accepted", "card.reason"],
+    ["current status", "card.stateLabel"],
   ] as const) {
     assert(card.includes(token), `the card must render ${field} (${token})`);
   }
 });
 
-Deno.test("23. and NOTHING scrolls horizontally", () => {
+Deno.test("23. the sticky company column survives the horizontal scroll", () => {
   // `w-max min-w-full` on the old table is what put Fit and Status off the
   // right edge. A card that reintroduces it reintroduces the whole defect.
   const list = Deno.readTextFileSync(new URL(
-    "../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx", import.meta.url));
+    "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx", import.meta.url));
   const card = Deno.readTextFileSync(new URL(
-    "../../src/components/chat/workspace/workbench/leadTable/LeadCard.tsx", import.meta.url));
+    "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx", import.meta.url));
   // COMMENTS STRIPPED. These tests describe what was removed, so the prose
   // explaining the fix names the very class the fix deletes — the fourth time
   // in this redesign that a source-reading assertion failed on its own
   // commentary. Read code, never the explanation of the code.
   const code = (x: string) =>
     x.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  for (const [name, src] of [["list", code(list)], ["card", code(card)]] as const) {
-    assert(!/w-max/.test(src), `${name} must not size to its content`);
-    assert(!/overflow-x/.test(src), `${name} must not scroll sideways`);
-  }
+  // A GRID MAY SCROLL SIDEWAYS — that was never the defect. The defect was
+  // scrolling sideways with the two most important columns at the far end and
+  // the company name scrolling away with them. Eight columns, Fit and Status
+  // beside the name, and the name pinned.
+  const src = code(list);
+  assert(/sticky left-0/.test(src), "the select column is pinned");
+  assert(/sticky left-9/.test(src), "and the company column beside it");
+  assert(/sticky top-0/.test(src), "with a pinned header");
 });
 
-Deno.test("24. the fourteen-column table is GONE, not merely unused", () => {
+Deno.test("24. exactly ONE grid implementation exists", () => {
   // 484 lines of unreachable UI would only rot. Its one real guarantee — that
   // the unlock affordance advertises no price it does not charge — moved to
   // `lockedCellCost.test.ts`, which now reads the card.
-  for (const p of ["LeadTable.tsx", "LockedCell.tsx"]) {
+  for (const p of ["LeadTable.tsx", "LockedCell.tsx", "LeadCard.tsx", "LeadCardList.tsx"]) {
     let exists = true;
     try {
       Deno.readTextFileSync(new URL(
@@ -266,6 +269,6 @@ Deno.test("25. the detail those padlocks gated is still reachable", () => {
     assert(drawer.includes(section), `the drawer must still show "${section}"`);
   }
   const list = Deno.readTextFileSync(new URL(
-    "../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx", import.meta.url));
-  assert(list.includes("onOpen(row)"), "and every card opens it");
+    "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx", import.meta.url));
+  assert(list.includes("onOpen(r)"), "and every row opens it");
 });

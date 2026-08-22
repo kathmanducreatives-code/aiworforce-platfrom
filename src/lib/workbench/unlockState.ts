@@ -1,0 +1,69 @@
+// WHAT A CELL CAN SAY ABOUT ITSELF, DERIVED FROM THE STAGE THAT OWNS IT.
+//
+// ── ONE STATE SYSTEM, NOT A SECOND ──────────────────────────────────────────
+//
+// `WorkbenchAccountView` already models per-stage progress — `company_research`,
+// `decision_makers`, `contact_enrichment`, `outreach` — each an `AccountStage`
+// with a latest `attempt` and a `last_success`. `LeadResultsView` has been
+// hydrating it on every load the whole time; when the spreadsheet was replaced
+// with cards the renderer went and the state machine kept running, feeding
+// nothing.
+//
+// This is a projection of that model onto what a CELL can display. It invents
+// no stages and stores nothing: give it the stage and the provider readiness,
+// and it says which of the six cell states applies.
+//
+// ── THE DISTINCTION THAT MATTERS ────────────────────────────────────────────
+//
+// "Nobody asked for this yet" and "this cannot run" look identical in a naive
+// rendering and mean opposite things. The first is the ordinary resting state
+// of every row when a run finishes — an offer. The second is a provider the
+// user has to go and configure. A cell that shows one as the other either
+// nags about work that cannot happen, or hides a setup problem behind a
+// button that will never succeed.
+//
+// Pure — no React, no network.
+
+import type { AccountStage } from '../workbenchAccountView.ts';
+
+export const UNLOCK_STATE_VERSION = 'workbench-unlock-state-v1' as const;
+
+export type UnlockState =
+  | 'not_researched' | 'processing' | 'unlocked' | 'unavailable' | 'failed';
+
+export interface UnlockInput<T> {
+  stage: AccountStage<T> | undefined;
+  /**
+   * False when the provider this stage needs is not configured.
+   *
+   * Checked BEFORE the attempt, because a stage that cannot run should say so
+   * even if an older attempt once succeeded — the button would fail now.
+   */
+  providerReady?: boolean;
+}
+
+/**
+ * Which of the six states this cell is in.
+ *
+ * `last_success` outranks a later failed attempt: data we already hold does not
+ * stop being held because a retry failed, and showing "Try again" over a value
+ * the user can see would be a lie about what is on screen.
+ */
+export function unlockStateFor<T>(i: UnlockInput<T>): UnlockState {
+  const { stage, providerReady = true } = i;
+  const attempt = stage?.attempt ?? null;
+
+  if (attempt?.status === 'running') return 'processing';
+  // HELD DATA WINS. A failed retry does not un-hold what we already have.
+  if (stage?.last_success != null) return 'unlocked';
+  if (!providerReady) return 'unavailable';
+  if (attempt && attempt.status !== 'succeeded') return 'failed';
+  return 'not_researched';
+}
+
+/** The failure message a `failed` cell shows, if the attempt recorded one. */
+export function unlockFailureReason<T>(stage: AccountStage<T> | undefined): string | null {
+  const a = stage?.attempt;
+  if (!a || a.status === 'succeeded' || a.status === 'running') return null;
+  return a.failure_reason ?? a.message ?? a.reason_code ?? null;
+}

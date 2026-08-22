@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import LeadCardList from './leadTable/LeadCardList';
+import LeadSpreadsheet from './leadTable/LeadSpreadsheet';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
@@ -593,16 +593,24 @@ export default function LeadResultsView({
           </p>
         </div>
       ) : (
-        // ── CARDS, NOT A FOURTEEN-COLUMN SCROLL ──────────────────────────
+        // ── THE RESEARCH SPREADSHEET ─────────────────────────────────────
         //
-        // `LeadTable` put Fit at column 12 and Status at column 14, past four
-        // padlocked columns and off the right edge at any normal panel width —
-        // the two facts a reader most needs, hardest to reach. The detail those
-        // padlocks gated lives in `LeadDetailDrawer`, which every card opens.
-        <LeadCardList
+        // Restored. The card list that stood here fixed the fourteen-column
+        // scroll and removed the workspace with it: `accountViews` and
+        // `outreachHints` — the per-stage unlock state this view has been
+        // hydrating on every load — were being computed and passed to nothing.
+        <LeadSpreadsheet
           rows={filtered}
           selected={selected}
           rowActions={rowActions}
+          accountViews={accountViews}
+          outreachHints={outreachHints}
+          providers={{
+            // Named readiness, so a cell says "setup needed" instead of
+            // offering a button that cannot succeed.
+            people: !!isApifyPeopleReady,
+            research: !!isFirecrawlReady,
+          }}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}

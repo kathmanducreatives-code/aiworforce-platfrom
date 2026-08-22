@@ -194,7 +194,7 @@ Deno.test("12. the action bar appears on selection, not permanently", () => {
 Deno.test("13. nothing above or below the list has a fixed or percentage height", () => {
   const src = code(VIEW);
   const list = code(read(
-    "../../src/components/chat/workspace/workbench/leadTable/LeadCardList.tsx"));
+    "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx"));
   assert(!/max-h-\[\d+%\]/.test(src), "no percentage sibling may squeeze the list");
   assert(!/\bh-\[\d+px\]/.test(src), "and no fixed pixel height either");
   assert(/flex-1 min-h-0 overflow-auto/.test(list),
