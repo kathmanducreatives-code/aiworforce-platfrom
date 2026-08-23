@@ -14,7 +14,7 @@
 // sent, a value outside a verified enum is not sent, counts are clamped to
 // published limits, and a proposal that survives none of it falls back to
 // exactly today's behaviour.
-import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   DEFAULT_MAX_ACTORS,
   DISCOVERY_STRATEGY_VERSION,
@@ -298,11 +298,38 @@ Deno.test("16. the briefing shows capability and failure modes, never an actor i
   }
 });
 
-Deno.test("17. every briefed actor is genuinely registered for discovery", () => {
-  for (const entry of discoveryCatalogBriefing()) {
+Deno.test("17. every briefed actor can genuinely introduce a candidate", () => {
+  // ── WIDENED, AND STILL CLOSED ─────────────────────────────────────────────
+  //
+  // This asserted `company_discovery` on every briefed actor, which was right
+  // while that was the only way into the pool. A funding round names a company,
+  // a topic post names its author and a news article names its subject, so
+  // three more purposes can introduce a candidate.
+  //
+  // The set stays CLOSED, and verification-only purposes stay out: an actor
+  // that must be GIVEN its subject can never introduce one, so briefing it for
+  // discovery would invite a choice the validator would then refuse.
+  const CAN_INTRODUCE = [
+    "company_discovery", "funding_discovery", "social_discovery", "news_signal",
+  ];
+  const briefed = discoveryCatalogBriefing();
+  assert(briefed.length > 0);
+
+  for (const entry of briefed) {
     const card = hiringActorCard(String(entry.actor_key))!;
     assert(card, `${entry.actor_key} must resolve in the catalog`);
-    assert(card.purposes.includes("company_discovery"));
+    assert(card.purposes.some((p) => CAN_INTRODUCE.includes(p)),
+      `${entry.actor_key} is briefed for discovery but registered for ${card.purposes.join(", ")}`);
+  }
+
+  // And the verification-only actors must NOT be briefed here.
+  const keys = briefed.map((e) => String(e.actor_key));
+  for (const k of [
+    "apify_linkedin_company_posts", "apify_linkedin_profile_posts",
+    "apify_builtwith_technology", "apify_linkedin_company_details",
+  ]) {
+    assertFalse(keys.includes(k),
+      `${k} consumes an identity it cannot find and must not be briefed as discovery`);
   }
 });
 

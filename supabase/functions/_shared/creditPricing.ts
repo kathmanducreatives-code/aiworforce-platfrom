@@ -37,6 +37,7 @@ export const CREDIT_PRICING_VERSION = "credit-pricing-v1" as const;
 /** The unlockable capabilities a Workbench row offers. */
 export type UnlockCapability =
   | "find_decision_makers"
+  | "find_contact_details"
   | "research_company"
   | "generate_outreach";
 
@@ -48,8 +49,33 @@ export type UnlockCapability =
  * a credit is what a workspace is allowed to spend, not what a call cost.
  */
 export const UNLOCK_PRICES: Readonly<Record<UnlockCapability, number>> = Object.freeze({
-  /** One Apify people-search actor run against one company. */
+  /**
+   * One Apify people-search run against one company.
+   *
+   * PROVIDER COST, read from the live Store schema on 2026-08-23:
+   * `harvestapi/linkedin-company-employees` bills a $0.02 actor start plus
+   * $0.003 per short profile, so a bounded five-person search is ~$0.035. It is
+   * the most expensive of the three per press, because a SEARCH pays a start
+   * fee and returns several rows to be verified and ranked.
+   */
   find_decision_makers: 2,
+  /**
+   * One profile enrichment, with an email lookup, against ONE known person.
+   *
+   * ── WHY THIS IS CHEAPER THAN FINDING THE PERSON ─────────────────────────
+   *
+   * `harvestapi/linkedin-profile-scraper` charges $0.010 for the
+   * details+email event and has NO actor-start fee — roughly a third of a
+   * decision-maker search. By the time it runs the person is already resolved
+   * and verified, so it buys one lookup rather than a search, and the price
+   * says so.
+   *
+   * It is not free, and not 1, because the email event genuinely costs 2.5x
+   * the plain profile event and bills whether or not an address is found. A
+   * user who unlocks this is buying an ATTEMPT with a real hit rate, and the
+   * price has to survive the misses.
+   */
+  find_contact_details: 1,
   /** One Firecrawl crawl plus extraction. */
   research_company: 1,
   /**

@@ -46,6 +46,7 @@ export const CREDIT_PRICING_VERSION = "credit-pricing-v1" as const;
 /** The unlockable capabilities a Workbench row offers. */
 export type UnlockCapability =
   | "find_decision_makers"
+  | "find_contact_details"
   | "research_company"
   | "generate_outreach";
 
@@ -59,6 +60,14 @@ export type UnlockCapability =
 export const UNLOCK_PRICES: Readonly<Record<UnlockCapability, number>> = Object.freeze({
   /** One Apify people-search actor run against one company. */
   find_decision_makers: 2,
+  /**
+   * Enrich ONE already-resolved person, with an email lookup.
+   *
+   * Cheaper than finding them: the enrichment Actor has no start fee and bills
+   * $0.010 for the details+email event, against ~$0.035 for a bounded
+   * five-person search. MIRRORS the backend table — the test pins them equal.
+   */
+  find_contact_details: 1,
   /** One Firecrawl crawl plus extraction. */
   research_company: 1,
   /**

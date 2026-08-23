@@ -71,11 +71,16 @@ function missionWith(over: Partial<LeadMissionV1> = {}): LeadMissionV1 {
 Deno.test("1. LIVE REGRESSION: a prohibited capability cannot disarm a scheduled one", () => {
   // The exact live shape: the provider is shared between two scheduled
   // capabilities and one prohibited one.
+  // `expansion_signal_discovery` no longer shares this provider — Phase 5
+  // repointed it at the news source, because a company-NAME matcher cannot state
+  // an expansion. `company_post_verification` is the sharing case now: it is
+  // prohibited for a plain hiring mission and its provider set overlaps nothing,
+  // so the shared-provider shape is taken from an actually-shared one.
   const shared = "apify_linkedin_company_search";
   assert(CAPABILITY_REGISTRY.general_company_discovery.providers.includes(shared));
   assert(CAPABILITY_REGISTRY.company_identity_resolution.providers.includes(shared));
-  assert(CAPABILITY_REGISTRY.expansion_signal_discovery.providers.includes(shared),
-    "the prohibited capability really does share this provider");
+  assert(CAPABILITY_REGISTRY.startup_company_discovery.providers.includes(shared),
+    "a second scheduled capability really does share this provider");
 
   const graph = buildCapabilityGraph(missionWith());
   assert(graph.steps.some((s) => String(s.capability) === "general_company_discovery"));

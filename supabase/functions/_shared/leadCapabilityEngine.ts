@@ -40,7 +40,7 @@ import {
   compileHarvestCompanyDetailsInput, compileHarvestCompanyEmployeesInput,
   compileHarvestCompanySearchInput,
   compileHarvestJobSearchInput, compileHarvestProfileSearchInput,
-  compileMemo23YcInput, fanOutSolidcodeTeamSizes,
+  compileDatahyenaFundingInput, compileMemo23YcInput, fanOutSolidcodeTeamSizes,
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
 import {
@@ -50,6 +50,21 @@ import {
   type MatchOutcomeCode, type PrequalificationResult, type PrequalifiedCompany,
   type YcCompanyInput,
 } from "./leadCommercialPrequalification.ts";
+import {
+  prequalifyDiscoveredCompanies, mergePrequalification,
+  genericPrequalificationKey,
+} from "./leadGenericPrequalification.ts";
+import {
+  assessSignals, verdictsClaimingUninvestigatedSignals,
+  type RequiredSignal as QualRequiredSignal, type SignalAssessment,
+} from "./signalQualification.ts";
+import {
+  buildLeadVerdict, qualificationDecision, type LeadVerdict,
+} from "./leadQualificationVerdict.ts";
+import {
+  resolveMissionOutput, outputContractViolations, type MissionOutput,
+} from "./missionOutputContract.ts";
+import { priceFor } from "./creditPricing.ts";
 import {
   buildQualificationContext, resolveEmployeeBounds, qualificationContextSummary,
   resolveBrainAuthority,
@@ -126,6 +141,8 @@ import {
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
   normalizeSolidcodeCompany,
   type NormalizedHiringCompany, type NormalizedHiringJob, type NormalizedHiringPerson,
+  normalizeDatahyenaFundingRound, fundingRoundToCompany,
+  type NormalizedFundingRound,
 } from "./hiringActorNormalizers.ts";
 import {
   advance, evaluateCompanyFit, newCompanyRecord, projectFunnel,
@@ -134,6 +151,9 @@ import {
 import {
   identityIsActionable, resolveIdentityAgainstLookups, type IdentityResolution,
 } from "./companyIdentityResolution.ts";
+import {
+  buildSnapshotRow, isSameDayDuplicate, type HeadcountSnapshotRow,
+} from "./headcountSnapshotStore.ts";
 import { DEFAULT_ROLE_PACKS, filterJobsForPack, type RolePack } from "./hiringRolePackFilter.ts";
 import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, PROFILE_SEARCH_SCRAPER_MODES,
@@ -402,6 +422,15 @@ export interface CapabilityExecutionState {
   /** Passed every gate except one that lacked evidence. NOT rejections. */
   unknown_company_keys: string[];
   contact_identities: string[];
+  /**
+   * WHAT THIS RUN RETURNS, versus what was asked for.
+   *
+   * Null until qualification runs. Non-null it always states the requested
+   * entity, the returned entity, and — when they differ — the unlock that would
+   * close the gap. A person mission returning accounts is a legitimate outcome;
+   * returning them silently is not.
+   */
+  mission_output: MissionOutput | null;
   terminal_reason: string | null;
   fallback_reason: string | null;
   /**
@@ -549,6 +578,24 @@ export interface CapabilityExecutionState {
     employee_size_excluded: number;
     technical_only_companies: number;
     /**
+     * HOW MANY COMPANIES THE GENERIC PASS COULD READ.
+     *
+     * The free pre-pass used to run only on a YC pool. It now also scores every
+     * company from every other discovery actor, off the normalized row and that
+     * normalizer's own `field_trust` map. This counts the second half.
+     *
+     * Zero on a pure-YC run is correct and expected. Zero on a run whose
+     * discovery was a LinkedIn or funding search means a new actor is reaching
+     * the paid stages ungated — which is the condition this field exists to
+     * make visible rather than leave to be inferred from a cost line.
+     */
+    generic_scored: number;
+    generic_version: string;
+    /** Of those, how many carried an EXACT, trusted headcount — the one gate. */
+    generic_with_trusted_size: number;
+    /** …and how many carried a description, the ICP gate's primary input. */
+    generic_with_description: number;
+    /**
      * FACTS about the pool, carried beside the verdict.
      *
      * Without them an audit sees "0 eligible" and cannot tell an empty pool
@@ -662,6 +709,7 @@ export function newExecutionState(
     current_capability: null,
     pending_capabilities: plan.steps.map((s) => s.capability),
     provider_attempts: [],
+    mission_output: null,
     accumulated_cost_units: 0,
     company_keys: [],
     qualified_company_keys: [],
@@ -982,6 +1030,16 @@ export interface EngineCompany {
    */
   prequal_key: string | null;
   prequalified: PrequalifiedCompany | null;
+  /**
+   * ICP fit and signal/intent fit, judged separately and banded — never averaged.
+   *
+   * Null until qualification runs. The band is ordinal and deliberately not a
+   * score: a perfect ICP match with no signal and a loud signal from outside
+   * the ICP are different ACTIONS, and one number cannot say which.
+   */
+  lead_verdict: LeadVerdict | null;
+  /** One verdict per required signal, including the ones nobody investigated. */
+  signal_assessments: SignalAssessment[];
   shortlisted: boolean;
   /**
    * The GPT triage verdict — Stage 2, free, discovery-data only.
@@ -1422,6 +1480,24 @@ export interface CapabilityEngineOpts {
     lineage_root_task_id: string;
     records: readonly CompanyResumeRecord[];
   };
+  /**
+   * Who this run belongs to, for observations worth keeping beyond it.
+   *
+   * ── WHY THIS IS SEPARATE FROM `resume` ──────────────────────────────────
+   *
+   * The workspace id already reaches the engine on `resume`, and reusing it
+   * would tie headcount collection to resumed runs — so a company's FIRST
+   * enrichment, the one that starts its series, would be the one reading never
+   * kept. An arbitrary rule producing exactly the wrong result.
+   *
+   * Optional, and its absence is not an error: a caller that does not supply it
+   * simply contributes nothing to the series, and `buildSnapshotRow` refuses
+   * the rows rather than inventing a workspace for them.
+   */
+  identity?: {
+    workspace_id: string;
+    task_id?: string | null;
+  };
 }
 
 export interface CapabilityRunResult {
@@ -1430,6 +1506,15 @@ export interface CapabilityRunResult {
   funnel: FunnelCounts;
   /** Per-company stage state, so a resume continues where each one stopped. */
   resume_records: CompanyResumeRecord[];
+  /**
+   * Dated headcount readings this run observed, ready to insert.
+   *
+   * Empty on any run that enriched nothing. Growth becomes answerable only once
+   * two of these exist for one company on different days, which is why the
+   * capability stays unsupported until the series has depth — a fact about the
+   * data rather than about the providers.
+   */
+  headcount_snapshots: HeadcountSnapshotRow[];
   /** STAGE 2 output. Null when full-pool evaluation was not enabled. */
   pool: {
     eligible: EligiblePool["metrics"];
@@ -1474,6 +1559,18 @@ export async function runCapabilityPlan(
 ): Promise<CapabilityRunResult> {
   const log = deps.log ?? (() => {});
   const hash = await missionHash(opts.mission);
+  /**
+   * Dated headcount readings observed during this run.
+   *
+   * BUILT, NOT WRITTEN. The engine has no database dependency, so the rows are
+   * returned and the caller persists them — the same separation that keeps
+   * every other engine output testable without Postgres.
+   *
+   * Only exact counts from a source verified to produce them reach this list;
+   * `buildSnapshotRow` refuses the rest.
+   */
+  const headcountSnapshots: HeadcountSnapshotRow[] = [];
+
   const state: CapabilityExecutionState = stateMatchesMission(opts.state, hash)
     ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
     : newExecutionState(opts.plan, hash);
@@ -2756,6 +2853,14 @@ export async function runCapabilityPlan(
       const tried: string[] = [];
       /** Raw provider rows, kept for the FREE prequalification pass below. */
       const rawYcRows: YcCompanyInput[] = [];
+      /**
+       * Funding evidence collected during discovery, one entry per proven round.
+       *
+       * Only rows that passed `is_evidence` reach this list, so its length is a
+       * count of PROVEN funding events and never of candidates that merely came
+       * from a funding search.
+       */
+      const fundingRounds: NormalizedFundingRound[] = [];
       /** Set the moment any provider's input fails validation. */
       let schemaFailure = false;
       /** Set when a provider started a real run that has not finished. */
@@ -3063,6 +3168,38 @@ export async function runCapabilityPlan(
               // actors", and it needed no new machinery.
               addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
             }
+          } else if (provider === "apify_funding_rounds_datahyena") {
+            // ── DISCOVERY BY FUNDING EVENT ──────────────────────────────────
+            //
+            // The row this Actor returns is a ROUND, not a company: it names the
+            // company and carries the evidence — stage, amount, announced date,
+            // investors, source articles — in one record. So the company enters
+            // the pool exactly like any other discovered candidate, and the
+            // round travels with it as the funding evidence.
+            //
+            // EVERY SEARCH TERM COMES FROM THE STRATEGY. `maxItems` is the only
+            // pre-set, and only because it is a COST ceiling — at $0.045 per
+            // record this Actor is five times the price of any other row here,
+            // so the ceiling is clamped harder than elsewhere.
+            const compiled = compileDatahyenaFundingInput({
+              maxItems: Math.min(maxCandidates, 200),
+              ...sel.input,
+            });
+            for (const r of await callProvider(cap, provider, compiled)) {
+              const round = normalizeDatahyenaFundingRound(r);
+              // A ROW THAT IS NOT EVIDENCE IS NOT A CANDIDATE.
+              //
+              // `is_evidence` is false when the row has no company name or no
+              // announced date. Admitting such a row would put a company into a
+              // FUNDING mission's pool carrying no provable funding event, and
+              // the qualification stage would then have to decide between
+              // inventing the signal and dropping a candidate discovery had
+              // already paid for. Refusing it here keeps that choice from
+              // arising.
+              if (!round.is_evidence) continue;
+              addCompany(companies, fundingRoundToCompany(round), []);
+              fundingRounds.push(round);
+            }
           }
           // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
           //
@@ -3228,41 +3365,41 @@ export async function runCapabilityPlan(
       // is paid for. Task c8a6e53d skipped this step and bought 16 identity
       // lookups for companies that were only hiring engineers, or had 350 staff
       // against a 10-150 mission.
-      // ── ONLY WHEN THERE ARE YC ROWS TO PREQUALIFY ────────────────────────
+      // ── IT RUNS FOR EVERY POOL NOW, NOT ONLY A YC ONE ────────────────────
       //
-      // `applyPrequalification` reads the memo23 row shape — full `openJobs`,
-      // `teamSize`, `website`. It ran unconditionally because this branch was
-      // the YC branch; now that every discovery capability shares the stage, a
-      // pool assembled entirely by the LinkedIn company search has no such rows
-      // and calling it would score a hundred companies off fields that are not
-      // there.
+      // This was `if (rawYcRows.length > 0)`, and the comment beneath it
+      // conceded the cost: a pool assembled by the LinkedIn company search, the
+      // funding source or the news source "loses the FREE pre-pass, which is
+      // exactly what a source that returns no embedded jobs cannot support."
       //
-      // Skipping it is NOT skipping the shortlist. `applyMissionIntelligence`
-      // below owns triage, budget and ranking for every route — that is the
-      // invariant `ensureMissionIntelligence` states for the paid stages — so a
-      // non-YC pool is still triaged and still sliced. What it loses is the
-      // FREE pre-pass, which is exactly what a source that returns no embedded
-      // jobs cannot support.
-      if (rawYcRows.length > 0) {
-        applyPrequalification(state, companies, rawYcRows, {
-          min: opts.brain?.employee_min ?? null,
-          max: opts.brain?.employee_max ?? null,
-        }, qualificationCtx, opts.mission?.required_signals ?? null);
-        // The working set may have shrunk — artifacts are gone.
-        // `state.company_keys` is DERIVED once, at the return. See the note there.
-        log("prequalification_complete", {
-          unique: state.prequalification?.unique_companies,
-          eligible: state.prequalification?.eligible_companies,
-          size_excluded: state.prequalification?.employee_size_excluded,
-          technical_only: state.prequalification?.technical_only_companies,
-        });
-      } else {
-        log("prequalification_skipped", {
-          capability: cap,
-          reason: "no embedded-jobs rows in this pool; the free pre-pass has nothing to read",
-          companies: companies.length,
-        });
-      }
+      // The premise was too strong. A source with no embedded jobs still
+      // returns an exact headcount, a description, a domain and a LinkedIn URL.
+      // A company whose KNOWN exact headcount is 500 on a 10-150 mission was
+      // being carried through identity resolution and enrichment — two paid
+      // calls, ~26s — to reach a conclusion its discovery row already stated.
+      //
+      // TWO PASSES, ONE VERDICT SHAPE. The YC pass keeps the row shape it reads
+      // and the role-tier scoring only it can do. The generic pass reads the
+      // NORMALIZED company plus that normalizer's own `field_trust` map, so it
+      // gates only on fields the source is declared trustworthy for and needs no
+      // knowledge of which actor produced the row. `mergePrequalification` folds
+      // them into the single result the run reports, because the funnel reads
+      // its counts and a mixed pool described by half of itself is the same
+      // class of error as the old shortlist telemetry.
+      applyPrequalification(state, companies, rawYcRows, {
+        min: opts.brain?.employee_min ?? null,
+        max: opts.brain?.employee_max ?? null,
+      }, qualificationCtx, opts.mission?.required_signals ?? null);
+      // The working set may have shrunk — artifacts are gone.
+      // `state.company_keys` is DERIVED once, at the return. See the note there.
+      log("prequalification_complete", {
+        unique: state.prequalification?.unique_companies,
+        eligible: state.prequalification?.eligible_companies,
+        size_excluded: state.prequalification?.employee_size_excluded,
+        technical_only: state.prequalification?.technical_only_companies,
+        yc_rows: rawYcRows.length,
+        generic_scored: state.prequalification?.generic_scored ?? 0,
+      });
 
       // ── STAGE 2: GPT MISSION INTELLIGENCE, THEN THE SMART SHORTLIST ────────
       //
@@ -3448,8 +3585,11 @@ export async function runCapabilityPlan(
     // for a provider to be chosen or an input to be written. That is the point:
     // this was not a bug in the query compiler, it was a bug in there BEING a
     // second query compiler.
+    // `funding_signal_discovery` LEFT THIS LIST when it gained a provider that
+    // can keep its claim. It is driven through the shared discovery stage like
+    // any other discovery capability — see `ENGINE_DRIVEN_DISCOVERY`.
     if (cap === "known_company_resolution" ||
-        cap === "job_discovery" || cap === "funding_signal_discovery" ||
+        cap === "job_discovery" ||
         cap === "expansion_signal_discovery" || cap === "job_deduplication" ||
         cap === "expansion_signal_verification") {
       // Declared in the graph and reachable, but not yet driven by this engine.
@@ -3860,6 +4000,32 @@ export async function runCapabilityPlan(
             const normalized = normalizeLinkedInCompanyEnriched(row);
             const url = normalized.linkedin_company_url;
             const matches = url ? byUrl.get(url) ?? [] : [];
+            // ── THE HEADCOUNT READING, KEPT ─────────────────────────────
+            //
+            // This actor returns an authoritative EXACT `employeeCount`, and
+            // until now the run used it once for a size gate and discarded it.
+            // Growth is a delta between two dated readings, so discarding the
+            // first is precisely why `headcount_change` has never been
+            // answerable for any company.
+            //
+            // The row is BUILT here and written by the caller: the engine takes
+            // no database dependency, and `buildSnapshotRow` refuses anything
+            // that is not an exact count from a source verified to produce one.
+            {
+              const snap = buildSnapshotRow({
+                workspace_id: opts.identity?.workspace_id ??
+                  opts.resume?.workspace_id ?? "",
+                linkedin_company_url: normalized.linkedin_company_url,
+                canonical_domain: normalized.canonical_domain,
+                company_name: normalized.company_name,
+                employee_count: normalized.employee_count,
+                source: "apify_linkedin_company_details",
+                task_id: opts.identity?.task_id ?? null,
+              });
+              if (snap.row && !isSameDayDuplicate(snap.row, headcountSnapshots)) {
+                headcountSnapshots.push(snap.row);
+              }
+            }
             for (const c of matches) {
               c.enriched = normalized;
               c.enrichment_outcome = "success";
@@ -4862,8 +5028,104 @@ export async function runCapabilityPlan(
         c.record.missing_evidence.push(...c.fit.missing_evidence, "mission_evaluation");
         unknown++;
       }
+      // ── THE GENERAL SIGNAL AXIS, AND THE VETO ────────────────────────────
+      //
+      // `hiring_fit` was the only signal verdict the evaluator produced, and its
+      // prompt line is hiring-shaped. Funding, posts, expansion, product launch
+      // and technology were folded into the generic requirement list, so a
+      // two-signal mission produced one signal answer and the model chose which
+      // one it was about.
+      //
+      // `assessSignals` gives every required signal its own verdict, and it is
+      // computed from `completed_capabilities` — what actually RAN — so a signal
+      // nobody investigated can never be reported satisfied. That guarantee is
+      // structural rather than a line in a prompt, and CODE VETOES THE MODEL: a
+      // claimed `verified` on an uninvestigated signal is downgraded here.
+      const requiredForQual: QualRequiredSignal[] = (opts.mission?.required_signals ?? [])
+        .map((sig) => ({
+          event: String(sig.type ?? ""),
+          subject: String((sig as { subject?: string }).subject ?? "company"),
+          timeframe_days: (sig as { timeframe_days?: number }).timeframe_days ?? null,
+        }));
+
+      for (const c of companies) {
+        const modelVerdicts: Record<string, { verdict: string; evidence_ids: string[] }> = {};
+        // The evaluator's hiring axis maps onto the hiring signal and nothing
+        // else. Deliberately narrow: attributing it to funding or posts would be
+        // the same collapse this replaces, in the other direction.
+        const hf = c.mission_evaluation?.hiring_fit;
+        if (hf) {
+          modelVerdicts["hiring/company"] = {
+            verdict: hf === "verified" ? "verified" : hf === "plausible" ? "plausible" : "absent",
+            evidence_ids: (c.mission_evaluation?.matched_requirements ?? [])
+              .map((m) => m.evidence_id).filter(Boolean),
+          };
+        }
+        const signals = assessSignals({
+          required: requiredForQual,
+          completed: state.completed_capabilities.map(String),
+          // A PROVIDER THAT ERRORED IS NOT A PROVIDER THAT FOUND NOTHING.
+          // `empty` is deliberately absent: an actor that ran and returned no
+          // rows ANSWERED the question, and treating that as a failure would
+          // turn "we checked and there is nothing" back into "we do not know".
+          failed: state.provider_attempts
+            .filter((a) => a.outcome === "error" || a.outcome === "compile_failed")
+            .map((a) => String(a.capability)),
+          modelVerdicts,
+        });
+
+        // A POSITIVE VERDICT ON SOMETHING NOBODY RAN IS A BUG, NOT A FINDING.
+        // Recorded rather than thrown: the run continues, the claim does not.
+        const bogus = verdictsClaimingUninvestigatedSignals(signals);
+        if (bogus.length > 0) {
+          log("signal_claim_rejected", { company: c.key, violations: bogus });
+        }
+
+        c.lead_verdict = buildLeadVerdict({
+          icp_fit: c.mission_evaluation?.icp_fit ?? null,
+          // JUDGEABLE, NOT MERELY PRESENT. `icp_fit` has no "could not tell"
+          // value — `weak` covers both a poor match and no evidence — so the
+          // evaluator having run at all is what makes it judgeable.
+          icp_judgeable: c.evaluation_path !== "model_unavailable" &&
+            c.decision_source !== "not_evaluated",
+          icp_dimensions_met: (c.mission_evaluation?.matched_requirements ?? [])
+            .map((m) => m.requirement),
+          icp_dimensions_unknown: c.mission_evaluation?.unknown_fields ?? [],
+          icp_evidence_ids: (c.mission_evaluation?.matched_requirements ?? [])
+            .map((m) => m.evidence_id).filter(Boolean),
+          signals,
+        });
+        c.signal_assessments = signals;
+      }
+
       state.qualified_company_keys = companies.filter((c) => c.verdict === "pass").map((c) => c.key);
       state.unknown_company_keys = companies.filter((c) => c.verdict === "unknown").map((c) => c.key);
+
+      // ── WHAT THIS RUN ACTUALLY RETURNS ───────────────────────────────────
+      //
+      // A person-entity mission that returns companies must SAY so. Person work
+      // is unlock-gated and never scheduled, which is correct; handing back
+      // accounts with no statement that a substitution happened is not.
+      state.mission_output = resolveMissionOutput({
+        requested_entity:
+          opts.mission?.target_entity === "person" ? "person"
+          : opts.mission?.target_entity === "job" ? "job" : "company",
+        companies: companies.map((c) => ({
+          company_key: c.key,
+          company_name: c.company.company_name,
+          qualified: c.verdict === "pass",
+        })),
+        // People exist only once an unlock has run. Nothing here buys them.
+        people: [],
+        people_unlock: {
+          capability: "find_decision_makers",
+          credits: priceFor("find_decision_makers"),
+        },
+      });
+      const outputViolations = outputContractViolations(state.mission_output);
+      if (outputViolations.length > 0) {
+        log("mission_output_contract_violation", { violations: outputViolations });
+      }
 
       // "NOBODY PASSED" AND "NOBODY WAS OFFERED" ARE DIFFERENT FACTS.
       //
@@ -5296,6 +5558,7 @@ export async function runCapabilityPlan(
     companies,
     pool,
     resume_records: companies.map(toResumeRecord),
+    headcount_snapshots: headcountSnapshots,
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
   };
@@ -5472,6 +5735,10 @@ const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
 export const ENGINE_DRIVEN_DISCOVERY: ReadonlySet<CapabilityId> = new Set<CapabilityId>([
   "startup_company_discovery",
   "general_company_discovery",
+  // Joined when `apify_funding_rounds_datahyena` was carded: it has a verified
+  // input schema, a bounded compiler, a normalizer and a cost model, which are
+  // the four things membership here has always required.
+  "funding_signal_discovery",
 ]);
 
 /**
@@ -5747,6 +6014,77 @@ export function applyPrequalification(
     c.prequalified = c.prequal_key ? byKey.get(c.prequal_key) ?? null : null;
   }
 
+  // ── THE GENERIC PASS: EVERY COMPANY THE YC PASS COULD NOT READ ───────────
+  //
+  // A company reaches here unscored for exactly one reason — the YC pass reads
+  // memo23's raw row shape and this company came from somewhere else. That is a
+  // statement about the READER, not about the company, and it used to mean the
+  // whole pool from every other actor went to identity resolution and
+  // enrichment unranked and ungated.
+  //
+  // The generic pass reads the normalized company and its normalizer's own
+  // `field_trust` map. There is no actor key in it and there must not be: a new
+  // discovery actor is triaged the day its normalizer declares field trust,
+  // with no change to this function.
+  //
+  // ── `prequal_key === null` IS LOAD-BEARING, NOT A TIDINESS CHECK ─────────
+  //
+  // `prequalified === null` alone is the wrong test, because it is ALSO true of
+  // a company the YC pass REFUSED — a scraper artifact, a row with no name and
+  // no website. Those keep their `prequal_key` and are deleted by the splice
+  // loop below precisely because they carry no verdict.
+  //
+  // Such a row is not resurrected by being rescored: the generic pass carries
+  // the same `ARTIFACT_DOMAINS` list and the same no-name rule, so it refuses
+  // the row a second time and the splice still removes it. What it does instead
+  // is COUNT IT TWICE. Measured on a three-row pool containing the YC directory
+  // page and one empty row: `total_rows` 3 → 5, `artifacts_excluded` 2 → 4.
+  // Those two numbers feed the funnel and are what an audit reads to decide
+  // whether a pool was bad or a policy was, so inflating them turns a clean run
+  // into an apparently dirty one.
+  //
+  // The engine already states the distinction this relies on: "a company
+  // prequalification never saw is a company it has not rejected." A null key is
+  // "never saw". A null verdict with a key is "rejected", and a rejection does
+  // not need a second opinion.
+  const unscored = companies.filter((c) =>
+    c.prequalified === null && c.prequal_key === null);
+  const generic = prequalifyDiscoveredCompanies(
+    unscored.map((c) => c.company),
+    { min: bounds.min, max: bounds.max },
+    {
+      // THE SAME AUTHORITY QUESTION THE YC PASS ASKS. A workspace Brain's
+      // advisory range orders the pool; only a range the MISSION expressed may
+      // remove anyone from it.
+      size_enforceable: bounds.enforceable,
+      mission_requires_hiring: missionRequiresHiring,
+    },
+  );
+
+  // ARTIFACTS LEAVE THE WORKING SET, exactly as they do on the YC side.
+  // A directory or platform page is not a prospect no matter which actor found
+  // it, and one reached persistence as a qualified lead on an earlier run.
+  const artifactKeys = new Set(generic.excluded.map((e) =>
+    e.domain ?? `name:${e.name.trim().toLowerCase()}`));
+
+  const genericByKey = new Map(generic.companies.map((c) => [c.company_key, c]));
+  let genericScored = 0;
+  for (let i = companies.length - 1; i >= 0; i--) {
+    const c = companies[i];
+    if (c.prequalified !== null) continue;
+    const domain = c.company.canonical_domain;
+    if (domain && artifactKeys.has(domain)) { companies.splice(i, 1); continue; }
+    // THE MODULE THAT SCORED IT OWNS THE KEY. Deriving it here would be a
+    // second implementation of the same rule, and the two would disagree the
+    // first time either changed.
+    const scored = genericByKey.get(genericPrequalificationKey(c.company));
+    if (scored) { c.prequalified = scored; genericScored++; }
+    // NOT FOUND IS NOT REMOVED. The YC side splices an unscored row because
+    // there it means the row was refused. Here it can only mean the two key
+    // derivations disagreed, and deleting a company over a key mismatch is how
+    // a run silently loses everything one actor paid to find.
+  }
+
   // SCRAPER ARTIFACTS LEAVE THE WORKING SET ENTIRELY.
   //
   // The five empty rows memo23 returns all normalize to the same fallback key
@@ -5775,27 +6113,48 @@ export function applyPrequalification(
     if (c.prequalified === null) companies.splice(i, 1);
   }
 
+  // ── ONE RESULT DESCRIBES THE WHOLE POOL ─────────────────────────────────
+  //
+  // The funnel reads `eligible_companies` and `employee_size_excluded` off
+  // `state.prequalification`. Reporting the YC half of a mixed pool while the
+  // run acted on both halves is the same class of error as the old shortlist
+  // telemetry, which named a set of companies that had not been investigated.
+  //
+  // Tier counts are NOT folded in: a generic company has no role tiers, and
+  // adding it to `companies_with_commercial_roles` would assert a fact nobody
+  // established.
+  const merged = mergePrequalification(result, generic);
+
   state.prequalification = {
-    version: result.version,
-    total_rows: result.total_rows,
-    unique_companies: result.unique_companies,
-    artifacts_excluded: result.excluded.length,
-    eligible_companies: result.eligible_companies,
-    employee_size_excluded: result.employee_size_excluded,
-    technical_only_companies: result.technical_only_companies,
+    version: merged.version,
+    total_rows: merged.total_rows,
+    unique_companies: merged.unique_companies,
+    artifacts_excluded: merged.excluded.length,
+    eligible_companies: merged.eligible_companies,
+    employee_size_excluded: merged.employee_size_excluded,
+    technical_only_companies: merged.technical_only_companies,
+    // ── WHAT THE FREE PASS ACTUALLY REACHED ───────────────────────────────
+    //
+    // Split out because "the pre-pass ran" and "the pre-pass could read this
+    // company" are different facts, and the second is the one that says whether
+    // a new discovery actor is being triaged or silently waved through.
+    generic_scored: genericScored,
+    generic_version: generic.version,
+    generic_with_trusted_size: generic.companies_with_trusted_size,
+    generic_with_description: generic.companies_with_description,
     // ── THE FACTS TRAVEL WITH THE VERDICT ────────────────────────────────
     //
     // Without these, an audit can see "0 eligible" but not whether the pool was
     // empty of hiring companies or merely empty of the ROLE this mission
     // wanted. That ambiguity is what made a healthy pool read as an ICP
     // failure on run 1af9b9ea.
-    companies_with_open_roles: result.companies_with_open_roles,
-    companies_with_commercial_roles: result.companies_with_commercial_roles,
-    companies_with_technical_roles: result.companies_with_technical_roles,
-    technical_roles_satisfy_signal: result.technical_roles_satisfy_signal,
-    any_open_role_satisfies_signal: result.any_open_role_satisfies_signal,
-    open_jobs_evaluated: result.companies.reduce((n, c) => n + c.jobs.length, 0),
-    companies: result.companies.map((c) => ({
+    companies_with_open_roles: merged.companies_with_open_roles,
+    companies_with_commercial_roles: merged.companies_with_commercial_roles,
+    companies_with_technical_roles: merged.companies_with_technical_roles,
+    technical_roles_satisfy_signal: merged.technical_roles_satisfy_signal,
+    any_open_role_satisfies_signal: merged.any_open_role_satisfies_signal,
+    open_jobs_evaluated: merged.companies.reduce((n, c) => n + c.jobs.length, 0),
+    companies: merged.companies.map((c) => ({
       company_key: c.company_key,
       name: c.name,
       canonical_domain: c.canonical_domain,
@@ -5813,7 +6172,9 @@ export function applyPrequalification(
       reasons: c.reasons,
     })),
   };
-  return result;
+  // THE MERGED RESULT, not the YC one. A caller that read the return value and
+  // the state would otherwise see two different pools.
+  return merged;
 }
 
 /** Union of jobs kept by ANY approved pack. `filterJobsForPack` takes one pack. */
@@ -5943,6 +6304,7 @@ function addCompany(
   if (set.some((x) => x.key === key)) return;
   set.push({
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
+    lead_verdict: null, signal_assessments: [],
     triage: null, shortlist_exclusion: null,
     // PENDING, NOT EXCLUDED. A company enters the frontier and leaves it only
     // by being investigated or by a decision that closes it.

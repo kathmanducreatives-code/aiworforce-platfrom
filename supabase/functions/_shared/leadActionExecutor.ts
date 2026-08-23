@@ -13,6 +13,13 @@ import {
   type LeadRecord, type FirecrawlFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
+import {
+  runContactEnrichment, type ResolvedPerson,
+} from "./contactEnrichmentRunner.ts";
+import { decideReuse } from "./unlockReuseContract.ts";
+import {
+  readProviderResultItems, resolveResponseKind,
+} from "./providerResponseContract.ts";
 import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
 import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/integration.ts";
 import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
@@ -26,10 +33,12 @@ import { makeOpenerModel } from "./workbench/openerModel.ts";
 import {
   readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
   nextBestAction, WORKBENCH_STATE_KEY,
-  type CompanyResearchState, type DecisionMakerState,
+  type CompanyResearchState, type DecisionMakerState, type ContactEnrichmentState,
 } from "./workbench/accountState.ts";
 
-export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
+export type LeadAction =
+  | "research_company" | "find_decision_makers" | "find_contact_details"
+  | "generate_outreach";
 
 /**
  * A lead action operates on EXISTING selected Workbench rows. Validate the
@@ -372,6 +381,120 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         existing_contact_count: res.existing_contact_count,
         needs_manual_review: res.status === "needs_manual_review",
         observability: res.observability,
+      });
+
+    } else if (action === "find_contact_details") {
+      // ── BUY A WAY TO REACH SOMEBODY WE ALREADY FOUND ─────────────────────
+      //
+      // Reads the person `find_decision_makers` resolved and looks up their
+      // business email. It does NOT search: with nobody resolved it declines and
+      // says which action to run first. That refusal is the architecture — if it
+      // fell back to a search it would be decision-maker discovery again at a
+      // second price, which is precisely the `contact_unlock` defect this
+      // capability replaced.
+      const state = readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id);
+      const dm = state.decision_makers.last_success;
+      const priorContact = state.contact_enrichment.last_success;
+
+      // ── NEVER PURCHASE WHAT WE ALREADY HAVE ──────────────────────────────
+      //
+      // Checked HERE as well as inside the runner, because this is the layer
+      // that would otherwise reach `runTool` and reserve credits. A held answer
+      // includes a paid MISS: re-running buys the same nothing at the same price.
+      const reuse = decideReuse("find_contact_details", {
+        contact: { status: priorContact?.email_status ?? null },
+      });
+      if (reuse.verdict === "reuse") {
+        per_lead.push({
+          lead_candidate_id: lead.lead_candidate_id, company: lead.company_name,
+          status: priorContact!.email_status, reused: true,
+          business_email: priorContact!.business_email,
+          reason: reuse.reason,
+        });
+        continue;
+      }
+
+      const person: ResolvedPerson | null = dm && (dm.primary_linkedin_url || dm.primary_full_name)
+        ? {
+          linkedin_url: dm.primary_linkedin_url,
+          full_name: dm.primary_full_name,
+          title: dm.primary_role_family,
+        }
+        : null;
+
+      const outcome = await runContactEnrichment(
+        { person, emailLookupAuthorized: true, existing: null },
+        {
+          invoke: async (call) => {
+            const rr = await ctx.runTool("source_with_apify", {
+              selected_actor_key: call.actorKey,
+              actor_id: call.actorId,
+              compiled_actor_input: true,
+              capability_key: call.actorKey,
+              input: call.input as Record<string, unknown>,
+              compiled_input_hash: call.inputHash,
+              // NAMES THE PRICE THE BUTTON SHOWED. `runTool` looks this up in
+              // `creditPricing` and reserves exactly that, so the quote and the
+              // charge cannot drift apart.
+              unlock_capability: "find_contact_details",
+            }, ctx.toolCtx);
+            if (!rr.ok || !rr.data) throw new Error(rr.error ?? "contact_actor_failed");
+            const kind = resolveResponseKind({
+              actorKey: call.actorKey, actorId: call.actorId,
+              sourceType: (rr.data as { normalized_source_type?: string })
+                .normalized_source_type ?? null,
+            });
+            return readProviderResultItems(
+              rr.data as Record<string, unknown>, kind) as Record<string, unknown>[];
+          },
+        },
+      );
+
+      const rec = outcome.record;
+      // ── A REFUSAL IS NOT A STAGE FAILURE ─────────────────────────────────
+      //
+      // "No decision maker resolved yet" is a prerequisite, not a provider that
+      // lost. Writing it as `failed` would render a "Try again" button over an
+      // action that cannot succeed until a DIFFERENT action runs first.
+      if (rec.status !== "refused") {
+        const contactPayload: ContactEnrichmentState = {
+          email_status: rec.status as ContactEnrichmentState["email_status"],
+          business_email: rec.business_email,
+          email_source: rec.email_source,
+          person_full_name: rec.full_name,
+          person_linkedin_url: rec.linkedin_url,
+          linkedin_available: !!rec.linkedin_url,
+          reason: rec.reason,
+        };
+        const merged = applyStageUpdate(
+          state,
+          "contact_enrichment",
+          {
+            // `not_found` IS A SUCCESS. The lookup ran and answered. Recording
+            // it as a failure would show "Try again" over a question that has
+            // already been paid for and settled.
+            status: rec.status === "provider_error" ? "failed" : "succeeded",
+            reason_code: rec.status,
+            payload: contactPayload,
+          },
+          nowIso(),
+        );
+        await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
+          [WORKBENCH_STATE_KEY]: merged,
+        });
+      }
+
+      per_lead.push({
+        lead_candidate_id: lead.lead_candidate_id,
+        company: lead.company_name,
+        status: rec.status,
+        refusal: outcome.refusal,
+        business_email: rec.business_email,
+        // NEVER A PHONE. No registered Actor returns one, and the field is
+        // reported as null so a consumer cannot infer coverage that does not
+        // exist.
+        phone: null,
+        reason: rec.reason,
       });
 
     } else if (action === "generate_outreach" && ctx.output_mode === "personalized_opener") {

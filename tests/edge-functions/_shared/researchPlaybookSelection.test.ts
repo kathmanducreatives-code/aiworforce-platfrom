@@ -96,25 +96,32 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
       `${c}: ENGINE_DRIVEN_CAPABILITIES says ${isEngineDriven(c)}, the engine says ${driven}`,
     );
   }
-  // And the skip guard really does name the six the engine declines to drive.
+  // And the skip guard really does name the five the engine declines to drive.
+  // `funding_signal_discovery` LEFT this list in Phase 4: it gained a provider
+  // with a verified schema, a bounded compiler, a normalizer and a cost model,
+  // which is what membership of the driven set has always required.
   for (const c of [
-    "known_company_resolution", "job_discovery", "funding_signal_discovery",
+    "known_company_resolution", "job_discovery",
     "expansion_signal_discovery", "job_deduplication", "expansion_signal_verification",
   ]) {
     assert(skipped.has(c), `the engine must still skip ${c}`);
     assertFalse(isEngineDriven(c as never), `${c} must not be marked engine-driven`);
   }
   assertEquals(
-    ENGINE_DRIVEN_CAPABILITIES.length, 10,
-    "ten capabilities are engine-driven; a change here is a real architecture change",
+    ENGINE_DRIVEN_CAPABILITIES.length, 11,
+    "eleven capabilities are engine-driven; a change here is a real architecture change",
   );
 });
 
 Deno.test("a capability with providers is NOT enough to call a playbook supported", () => {
-  // This is the Phase 2 error, pinned so it cannot come back: `funding` and
-  // `supplied_company` both name a capability that names providers, and the
-  // engine skips both — so nothing was ever going to run.
-  for (const id of ["funding", "supplied_company"] as const) {
+  // The error this pins: naming a capability that names providers proves
+  // nothing, because the engine may not drive that capability at all.
+  //
+  // `funding` used to be the second example here and no longer is — it gained a
+  // provider that keeps its claim and a stage that runs it, which is exactly
+  // the transition this assertion is meant to make visible rather than silent.
+  // `supplied_company` still names a capability the engine skips.
+  for (const id of ["supplied_company"] as const) {
     const spec = RESEARCH_PLAYBOOKS[id];
     const entry = spec.discovery_capabilities[0];
     assert(entry in CAPABILITY_REGISTRY, `${id} names a real capability`);
@@ -126,7 +133,17 @@ Deno.test("a capability with providers is NOT enough to call a playbook supporte
 
 // ═══════════════════════ 2. the support matrix, proven ═════════════════════
 
-Deno.test("hiring is the only supported playbook today, and its whole path is real", () => {
+Deno.test("hiring and funding are the supported playbooks, and their whole path is real", () => {
+  for (const id of ["hiring", "funding"] as const) {
+    const sp = playbookSupport(id);
+    assertEquals(sp.status, "supported", `${id} must be supported`);
+    assertEquals(sp.gaps, [], `${id} gaps`);
+    for (const r of playbookRequirements(id)) {
+      assert(r.engine_driven, `${id}/${r.capability} must be engine-driven`);
+      assert(r.providers.length > 0, `${id}/${r.capability} needs an approved provider`);
+    }
+  }
+
   const s = playbookSupport("hiring");
   assertEquals(s.status, "supported");
   assertEquals(s.gaps, []);
@@ -149,8 +166,8 @@ Deno.test("hiring is the only supported playbook today, and its whole path is re
 });
 
 Deno.test("every other playbook is unsupported, each for a stated reason", () => {
+  // `funding` left this table in Phase 4. The rest are unchanged.
   const expected: Record<string, string[]> = {
-    funding: ["capability_not_engine_driven"],
     supplied_company: ["capability_not_engine_driven"],
     social: ["no_capability_defined"],
     news: ["no_capability_defined"],
@@ -168,8 +185,8 @@ Deno.test("an unsupported playbook still carries the facts the next phase needs"
     "registered-but-unbound actors must be named",
   );
   assert(
-    RESEARCH_PLAYBOOKS.funding.notes.some((n) => /no funding field/.test(n)),
-    "the funding provider's inability to express funding must be recorded",
+    RESEARCH_PLAYBOOKS.funding.notes.some((n) => /DISCOVERY ONLY/.test(n)),
+    "the funding source's inability to VERIFY must be recorded, now that it can discover",
   );
   assert(
     RESEARCH_PLAYBOOKS.supplied_company.notes.some((n) => /engine-driven/.test(n)),
@@ -291,12 +308,16 @@ Deno.test("a hiring Mission selects the hiring playbook and it is runnable", () 
   assert(s.ok);
 });
 
-Deno.test("a funding Mission selects the funding playbook and reports it blocked", () => {
+Deno.test("a funding Mission selects the funding playbook and RUNS it", () => {
+  // Phase 4. This asserted `blocked` for as long as the funding capability's
+  // only provider was a YC directory scraper with no funding field. With
+  // `apify_funding_rounds_datahyena` carded, compiled and driven, the shape the
+  // user asked for is the shape that runs.
   const s = selectResearchPlaybooks(mission({ strategies: ["funding"] }));
   assertEquals(selected(s), ["funding"], "the shape asked for is still recorded");
-  assertEquals(s.runnable, []);
-  assertEquals(s.blocked[0].gaps, ["capability_not_engine_driven"]);
-  assertFalse(s.ok);
+  assertEquals(s.runnable, ["funding"]);
+  assertEquals(s.blocked, []);
+  assert(s.ok);
 });
 
 Deno.test("a supplied-company Mission selects that shape and reports it blocked", () => {
@@ -317,7 +338,9 @@ Deno.test("social and news report no capability at all", () => {
 });
 
 Deno.test("an unsupported shape never becomes hiring, discovery, or anything else", () => {
-  for (const strategy of ["social", "news", "funding"] as const) {
+  // `funding` left this list in Phase 4 — it is supported now, so it is no
+  // longer an example of a shape that must refuse substitution.
+  for (const strategy of ["social", "news"] as const) {
     const s = selectResearchPlaybooks(mission({ strategies: [strategy] }));
     assertEquals(selected(s), [strategy], `${strategy} must stay itself`);
     assertEquals(s.runnable, [], "nothing runnable may be substituted in");
@@ -329,12 +352,15 @@ Deno.test("an unsupported shape never becomes hiring, discovery, or anything els
 });
 
 Deno.test("funding + hiring selects BOTH, not an arbitrary winner", () => {
+  // Both shapes are runnable now, which is a stronger form of the same
+  // property: the request named two, and neither is dropped in favour of the
+  // other.
   const s = selectResearchPlaybooks(mission({ strategies: ["funding", "hiring"] }));
   assertEquals(selected(s), ["funding", "hiring"]);
-  assertEquals(s.runnable, ["hiring"]);
-  assertEquals(s.blocked.map((b) => b.playbook), ["funding"]);
+  assertEquals(s.runnable, ["funding", "hiring"]);
+  assertEquals(s.blocked, []);
   assertEquals(s.combination, "any_may_satisfy");
-  assert(s.ok, "one runnable route answers a disjunctive request");
+  assert(s.ok);
 });
 
 Deno.test("multi_signal means the named shapes must hold TOGETHER", () => {
@@ -347,10 +373,24 @@ Deno.test("multi_signal means the named shapes must hold TOGETHER", () => {
     selected(s).some((p) => (p as string) === "multi_signal"),
     "multi_signal is a combination rule, not a sixth playbook",
   );
-  assertFalse(
-    s.ok,
-    "a conjunction is unsatisfiable while one of its shapes cannot run",
-  );
+  // Both shapes run now, so the conjunction is satisfiable. The RULE under test
+  // — that a conjunction needs every named shape, not any one of them — is
+  // exercised by the unsatisfiable case below, which pairs a runnable shape
+  // with one that genuinely cannot run.
+  assert(s.ok, "a conjunction of two runnable shapes is satisfiable");
+});
+
+Deno.test("a conjunction is unsatisfiable while ONE of its shapes cannot run", () => {
+  // The rule, kept exercised now that funding is runnable: social has no
+  // capability at all, so funding AND social cannot both hold however well
+  // funding runs.
+  const s = selectResearchPlaybooks(mission({
+    strategies: ["multi_signal", "funding", "social"],
+  }));
+  assertEquals(s.combination, "all_must_hold");
+  assertEquals(s.runnable, ["funding"]);
+  assertEquals(s.blocked.map((b) => b.playbook), ["social"]);
+  assertFalse(s.ok, "one unrunnable shape defeats the conjunction");
 });
 
 Deno.test("a conjunction of two runnable shapes would be ok", () => {
@@ -550,10 +590,8 @@ Deno.test("the log summary carries the gaps, not just the wins", () => {
   const s = playbookSelectionSummary(selectResearchPlaybooks(mission({
     strategies: ["multi_signal", "funding", "social"],
   })));
-  assertEquals(s.runnable, []);
-  assertEquals(s.blocked, [
-    "funding:capability_not_engine_driven", "social:no_capability_defined",
-  ]);
+  assertEquals(s.runnable, ["funding"]);
+  assertEquals(s.blocked, ["social:no_capability_defined"]);
   assertEquals(s.ok, false);
   assertEquals(s.combination, "all_must_hold");
 });

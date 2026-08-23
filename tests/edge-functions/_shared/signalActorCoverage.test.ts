@@ -40,43 +40,99 @@ Deno.test("1. a hiring signal resolves to actors that can serve it", () => {
 });
 
 Deno.test("2. THE DEFECT: a funding requirement is no longer silently dropped", () => {
-  // The failure this module exists to end. Both signals are recorded, both are
-  // resolved, and the funding half names its own sources rather than being left
-  // to whichever later stage happened to look.
+  // The failure this module exists to end. Both signals are recorded and both
+  // are resolved, so the funding half can no longer be left to whichever later
+  // stage happened to look.
+  //
+  // WHY `capability_gap` AND NOT `covered`.
+  //
+  // This assertion used to read `covered`, and that was the same dishonesty one
+  // layer down. Crunchbase is described — its schema has been read — but NO
+  // capability declares it, so `toRepoKey` returns null and nothing may call
+  // it. Reporting that as covered told the run it had served a signal it had no
+  // means of asking about; `runnable_actors` was empty at the same moment.
+  //
+  // `capability_gap` states the true position: the source is known, it is
+  // unreachable, and no evidence for this signal was collected.
+  // ── PHASE 4: THE GAP CLOSED ───────────────────────────────────────────────
+  //
+  // This asserted `capability_gap` for as long as every funding source was
+  // described-but-uncallable. `apify_funding_rounds_datahyena` is carded,
+  // compiled and engine-driven, so the funding half is now genuinely served —
+  // which is the outcome the gap status existed to make visible and fixable.
+  //
+  // These fixture signals carry no structured descriptor, so this also exercises
+  // the LEGACY path: a bare `{ type }` still resolves through the scenario
+  // matrix, and it must reach the same verdict as a structured one.
   const r = coverMissionSignals(missionWith([{ type: "hiring" }, { type: "funding" }]));
   assertEquals(r.signals.length, 2);
   assertEquals(r.signals[1].signal, "funding");
   assertEquals(r.signals[1].status, "covered");
-  assert(r.signals[1].actors.includes("memo23/crunchbase-scraper"));
-  // And the union is what discovery must run to serve the whole request.
-  assert(r.required_actors.length > r.signals[0].actors.length);
+  assertEquals(r.fully_covered, true);
+
+  assert(r.runnable_actors.includes("apify_funding_rounds_datahyena"),
+    "the funding source must be runnable, not merely described");
+  // Crunchbase stays KNOWLEDGE: still named as a source, still uncallable.
+  assert(r.described_only.includes("memo23/crunchbase-scraper"));
+  assert(!r.runnable_actors.includes("memo23/crunchbase-scraper"));
 });
 
-Deno.test("3. a strategy that ignores a required signal is reported", () => {
-  // The check that would have caught it: pure company discovery against a
-  // mission that also required funding.
-  const r = coverMissionSignals(missionWith([{ type: "hiring" }, { type: "funding" }]));
-  const unserved = signalsUnservedByStrategy(r, ["apify_yc_companies_memo23"]);
+Deno.test("3. a strategy that ignores a runnable required signal is reported", () => {
+  // `signalsUnservedByStrategy` answers one question: of the signals this run
+  // COULD have served, which did the chosen strategy leave out? Only a covered
+  // signal can be unserved in that sense — an unreachable one is not a strategy
+  // mistake, and reporting it here would tell the caller to add an Actor it is
+  // forbidden to call.
+  const r = coverMissionSignals(missionWith([{ type: "hiring" }]));
+  assertEquals(r.signals[0].status, "covered");
 
+  // A strategy carrying none of hiring's actors leaves it unserved.
+  const unserved = signalsUnservedByStrategy(r, ["apify_linkedin_company_details"]);
   assertEquals(unserved.length, 1);
-  assertEquals(unserved[0].signal, "funding");
+  assertEquals(unserved[0].signal, "hiring");
 
-  // And a strategy that DOES include a funding source reports nothing.
-  const served = signalsUnservedByStrategy(
-    r, ["apify_yc_companies_memo23", "memo23/crunchbase-scraper"]);
+  // A strategy that DOES include one reports nothing.
+  const served = signalsUnservedByStrategy(r, ["apify_linkedin_job_search"]);
   assertEquals(served.length, 0);
 });
 
-Deno.test("4. funding AMOUNT is partial, not covered, and says why", () => {
-  // Verified from the Crunchbase schema: the amount unlocks only in LOGGED-IN
-  // MODE with a session cookie. News may still mention a figure, so a weaker
-  // answer exists — and offering it honestly beats refusing the request.
-  const r = coverMissionSignals(missionWith([{ type: "funding_amount" }]));
-  assertEquals(r.signals[0].status, "partial");
+Deno.test("3b. a capability gap is never reported as a strategy failure", () => {
+  // The companion rule, stated separately because it is the one that keeps the
+  // engine safe. `leadCapabilityEngine` adds an Actor to the run for every
+  // signal `signalsUnservedByStrategy` returns. A gap signal appearing there
+  // would push an undeclared Actor at that loop every single round.
+  //
+  // Funding was the original example and is served now; a leadership post became
+  // `requires_unlock` in Phase 5. So the rule is exercised on headcount growth,
+  // which no provider can produce at all — growth is a delta over stored
+  // readings, and nothing stores them.
+  const r = coverMissionSignals(missionWith([
+    { type: "headcount_change", event: "headcount_change", subject: "company", qualifier: {} },
+  ] as never));
+  assertEquals(r.signals[0].status, "capability_gap");
+
+  // No strategy can serve it, so no strategy is blamed for not serving it.
+  assertEquals(signalsUnservedByStrategy(r, []).length, 0);
+  assertEquals(signalsUnservedByStrategy(r, ["apify_yc_companies_memo23"]).length, 0);
+
+  // It is reported through coverage instead, which is where a gap belongs.
   assertEquals(r.fully_covered, false);
-  assert(r.signals[0].actors.length > 0, "the lesser answer still names a source");
-  assert(/cookie/i.test(r.signals[0].limitation!));
-  assert(/cookie/i.test(r.shortfall_statement));
+  // Headcount growth reports the DERIVED reason: it is a delta over stored
+  // readings, so "no Actor produces this" would send a user hunting a source
+  // that cannot exist.
+  assert(/COMPUTED, not retrieved/i.test(r.shortfall_statement));
+});
+
+Deno.test("4. funding AMOUNT is covered now, and its limitation is stated in the evidence bar", () => {
+  // The cookie gate was a fact about Crunchbase, not about funding amounts. The
+  // carded source returns `amount_usd` with no session, so this stopped being a
+  // partial answer — while the honest caveat survives where it belongs: an
+  // announced figure is a report, and it travels with its source article.
+  const r = coverMissionSignals(missionWith([{ type: "funding_amount" }]));
+  assertEquals(r.signals[0].status, "covered");
+  assertEquals(r.fully_covered, true);
+  assert(r.runnable_actors.includes("apify_funding_rounds_datahyena"));
+  assert(/report, never an audit/i.test(r.signals[0].minimum_evidence));
 });
 
 Deno.test("5. a technology-adoption signal is unservable, with the verified reason", () => {
@@ -131,13 +187,15 @@ Deno.test("9. a mission with no signals is covered by definition", () => {
 Deno.test("10. the shortfall statement names the signal and the reason", () => {
   // Written for a person. "We found 7 of 10" invites the user to ask for more
   // candidates; the reason tells them what would actually change the answer.
+  // `funding_amount` is served since Phase 4, so the unmet examples here are a
+  // technology signal (no reverse lookup exists) and an unrecognised one.
   const r = coverMissionSignals(missionWith([
-    { type: "hiring" }, { type: "funding_amount" }, { type: "technology_adoption" },
+    { type: "hiring" }, { type: "technology_adoption" }, { type: "vibes" },
   ]));
   assertEquals(r.fully_covered, false);
   const s = r.shortfall_statement;
-  assert(/funding_amount/.test(s));
   assert(/technology_adoption/.test(s));
+  assert(/vibes/.test(s));
   assertEquals(/"hiring"/.test(s), false, "a covered signal must not appear in the shortfall");
 });
 
@@ -146,14 +204,16 @@ Deno.test("11. an empty unmet list produces an empty statement", () => {
 });
 
 Deno.test("12. diagnostics carry the reasons and no payload", () => {
-  const r = coverMissionSignals(missionWith([{ type: "hiring" }, { type: "funding_amount" }]));
+  const r = coverMissionSignals(missionWith([
+    { type: "hiring" }, { type: "technology_adoption" },
+  ]));
   const d = coverageDiagnostics(r);
 
   assertEquals(d.fully_covered, false);
   assertEquals((d.signals as unknown[]).length, 2);
   assert(d.shortfall_statement, "the honest ending must survive into the record");
   const withLimit = (d.signals as Array<Record<string, unknown>>)
-    .find((x) => x.signal === "funding_amount")!;
+    .find((x) => x.signal === "technology_adoption")!;
   assert(withLimit.limitation, "the reason must be recorded, not just the status");
   const covered = (d.signals as Array<Record<string, unknown>>)
     .find((x) => x.signal === "hiring")!;

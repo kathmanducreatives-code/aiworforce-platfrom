@@ -82,6 +82,26 @@ const MISSION_FAMILY_TO_CANONICAL: Readonly<Record<string, RoleFamily>> = {
   customer_success: "customer_success",
   sdr: "gtm_sales",
   engineering: "engineering",
+  // ── A CANONICAL FAMILY IS ALSO A LEGAL MISSION KEY ────────────────────────
+  //
+  // The mission's own short keys above came from a marker table that predates
+  // the structured signal reader. That reader resolves a role against
+  // `ROLE_FAMILY_ALIASES` and therefore emits the CANONICAL family name —
+  // `sales_operations`, not `sales_ops`.
+  //
+  // Without these identity entries, such a family resolves to nothing here and
+  // the run falls back to the default commercial ladder. That fallback is safe
+  // by design, but it is also a silent loss of exactly the precision the
+  // structured reader exists to add: a mission that correctly identified
+  // "Revenue Operations" would qualify against a generic sales vocabulary.
+  //
+  // Listed rather than derived so the table stays one readable statement of
+  // every key a mission may legally carry.
+  sales_operations: "sales_operations",
+  gtm_sales: "gtm_sales",
+  marketing_growth: "marketing_growth",
+  ops: "ops",
+  finance: "finance",
 };
 
 /**

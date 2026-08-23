@@ -24,6 +24,9 @@ import {
 import {
   runFounderUnlock, UNLOCK_PROVIDERS,
 } from "../../../supabase/functions/_shared/founderUnlockRunner.ts";
+import {
+  UNLOCK_PRICES,
+} from "../../../supabase/functions/_shared/creditPricing.ts";
 
 const POOL_ROW = (over: Record<string, unknown> = {}) => ({
   company_key: "co1", company_name: "Co One",
@@ -144,7 +147,17 @@ Deno.test("16. the price comes from the server catalogue alone", () => {
   assert(r.ok);
   assertEquals(r.authorization.price, 3);
   assertEquals(unlockPrice("founder_unlock"), 3);
-  assertEquals(unlockPrice("contact_unlock"), 2);
+  // 2 → 1. The old price was right for the wrong thing: `contact_unlock` used
+  // to re-run founder discovery, because the endpoint never branched on
+  // `unlock_type`. It now performs the same single profile lookup as the
+  // Workbench's `find_contact_details`, so it must carry the same price — two
+  // numbers for one provider call is how a user discovers that where they
+  // clicked changed what they paid.
+  assertEquals(unlockPrice("contact_unlock"), 1);
+  assertEquals(unlockPrice("contact_unlock"), UNLOCK_PRICES.find_contact_details,
+    "the same provider call must cost the same on both surfaces");
+  // And a lookup stays cheaper than the search that found the person.
+  assert(unlockPrice("contact_unlock") < unlockPrice("founder_unlock"));
   // Insufficient funds is a payment problem, and says so.
   assertEquals(UNLOCK_REFUSAL_STATUS.insufficient_credits, 402);
   assertEquals(UNLOCK_REFUSAL_STATUS.forbidden_workspace, 403);
@@ -285,13 +298,34 @@ Deno.test("33-36. the endpoint reserves before spending and cannot be bypassed",
     new URL("../../../supabase/functions/unlock-founders/index.ts", import.meta.url));
 
   // ORDER IS THE SAFETY PROPERTY: authorize, then reserve, then run, then finalize.
+  //
+  // ── CHECKED PER PATH, NOT BY FIRST OCCURRENCE ────────────────────────────
+  //
+  // This used a single `indexOf` for each step, which worked while the endpoint
+  // had exactly one paid path. It now has two — `contact_unlock` runs contact
+  // enrichment and `founder_unlock` runs people discovery — and a global first
+  // index silently measures whichever appears earlier in the file. The property
+  // worth guarding is that EVERY path reserves before it spends and finalizes
+  // after, so every path is checked.
   const iAuth = src.indexOf("authorizeUnlock(");
   const iReserve = src.indexOf('rpc("credits_reserve"');
-  const iRun = src.indexOf("runFounderUnlock(");
-  const iFinal = src.indexOf('rpc("credits_finalize"');
   assert(iAuth > 0 && iReserve > iAuth, "authorization precedes the reservation");
-  assert(iRun > iReserve, "no provider runs before a reservation succeeds");
-  assert(iFinal > iRun, "the charge is finalized after the work");
+
+  for (const runner of ["runContactEnrichment(", "runFounderUnlock("]) {
+    const iRun = src.indexOf(runner);
+    assert(iRun > 0, `${runner} must exist — the endpoint has two paid paths`);
+    assert(iRun > iReserve,
+      `${runner}: no provider runs before a reservation succeeds`);
+    const iFinal = src.indexOf('rpc("credits_finalize"', iRun);
+    assert(iFinal > iRun,
+      `${runner}: the charge must be finalized after the work`);
+  }
+
+  // AND THE TWO PATHS ARE ACTUALLY DISTINCT. The defect this fixed was an
+  // endpoint that read `unlock_type` four times and never branched on it, so
+  // a contact unlock charged 2 credits to re-run founder discovery.
+  assert(/unlock_type === "contact_unlock"/.test(src),
+    "the endpoint must branch on unlock_type, not merely record it");
 
   // The replay check happens before any money moves.
   assert(src.indexOf("findCompletedUnlock(") < iReserve,

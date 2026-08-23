@@ -62,7 +62,30 @@ export type PlanResult =
 export function planPeopleSearch(
   identity: DecisionMakerCompanyIdentity,
   stage: Exclude<SearchStage, "direct_known_person" | "stop">,
-  opts: { maxResults?: number; geography?: string[] } = {},
+  opts: {
+    maxResults?: number;
+    geography?: string[];
+    /**
+     * THE PERSONA THE USER ASKED FOR.
+     *
+     * ── WHY THIS IS A PARAMETER AND NOT A WIDER DEFAULT LIST ───────────────
+     *
+     * `TITLE_FILTERS` is a fixed founder/CEO/revenue-leader list, so "find the
+     * VP Sales" and "find the Head of Marketing" both searched for the same
+     * dozen titles. Widening the constant to cover every persona anyone might
+     * ask for makes EVERY search broader and more expensive, and the actor's
+     * `jobTitles` filter is fuzzy — its own `company_employees_fuzzy_titles`
+     * defect returned a Finance Intern for a Founder query — so a longer list
+     * returns more wrong people, not more right ones.
+     *
+     * Supplying the asked-for persona INSTEAD keeps each search small and on
+     * target. Absent, the default list stands and behaviour is unchanged.
+     *
+     * The titles are a RETRIEVAL HINT and never a verdict: `classifyDecisionMakerRole`
+     * and the employer check still decide who is accepted, exactly as before.
+     */
+    personaTitles?: string[];
+  } = {},
 ): PlanResult {
   if (!identity.search_ready) {
     return {
@@ -73,6 +96,13 @@ export function planPeopleSearch(
   }
 
   const maximum_results = Math.max(1, Math.min(opts.maxResults ?? MAX_RESULTS_PER_LEAD, MAX_RESULTS_PER_LEAD));
+  // THE ASKED-FOR PERSONA, OR THE DEFAULT LADDER. Trimmed and de-duplicated,
+  // and capped at the Actor's documented `jobTitles` limit of 50.
+  const persona = (opts.personaTitles ?? [])
+    .map((t) => String(t).trim()).filter((t) => t.length > 0);
+  const title_filters: readonly string[] = persona.length > 0
+    ? [...new Set(persona)].slice(0, 50)
+    : TITLE_FILTERS;
   // Geography is only ever passed through when the caller supplies it. Guessing a
   // location silently excludes valid people.
   const geography_filters = Array.isArray(opts.geography) ? opts.geography.filter((g) => typeof g === "string" && g) : [];
@@ -92,7 +122,7 @@ export function planPeopleSearch(
         actor_key: "apify_linkedin_company_employees",
         stage,
         company_filters: { company_linkedin_url: identity.company_linkedin_url },
-        title_filters: [...TITLE_FILTERS],
+        title_filters: [...title_filters],
         seniority_filters: [...SENIORITY_FILTERS],
         geography_filters,
         maximum_results,
@@ -121,7 +151,7 @@ export function planPeopleSearch(
         // Name is a refinement here, never the sole key.
         ...(identity.company_name ? { company_name: identity.company_name } : {}),
       },
-      title_filters: [...TITLE_FILTERS],
+      title_filters: [...title_filters],
       seniority_filters: [...SENIORITY_FILTERS],
       geography_filters,
       maximum_results,

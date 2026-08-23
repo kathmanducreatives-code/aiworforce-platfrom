@@ -64,7 +64,16 @@ export interface ActorInputField {
 
 export interface ActorQuality {
   /** Runs the actor has served across the whole Apify store. */
-  total_runs: number;
+  /**
+   * Lifetime runs, when the Store publishes one.
+   *
+   * NULLABLE, because it is not always published: the contact-enrichment Actor
+   * reports total USERS and monthly users but no run count. Writing 0 there
+   * would say "never run", which is the opposite of what a 64,000-user Actor
+   * means, and is exactly the kind of invented zero this codebase keeps
+   * refusing elsewhere.
+   */
+  total_runs: number | null;
   /** Distinct users in the last 30 days. Maturity, not popularity. */
   monthly_users: number;
   /** Store-reported success rate, where published. */
@@ -190,6 +199,212 @@ export const ACTOR_INPUT_CONTRACTS: Readonly<Record<string, ActorInputContract>>
       example: { company: ["https://www.linkedin.com/company/retell-ai"], jobTitles: ["Software Engineer"], maxItems: 10 },
       quality: { total_runs: 1381328, monthly_users: 707, success_rate_pct: null, rating: null,
         note: "Heavily used (1,381,328 runs, 707 monthly users). Mature and predictable; its edges are well explored." },
+    },
+    apify_funding_rounds_datahyena: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "since", type: "string" },
+        { name: "round", type: "array", enum: [
+          "pre-seed", "seed", "angel", "series-a", "series-b", "series-c",
+          "series-d", "series-e", "series-f", "series-g", "series-h", "growth",
+          "extension", "bridge", "convertible", "debt", "grant", "other",
+          "unknown", "series-i", "safe", "pre-ipo", "secondary", "pipe"] },
+        { name: "verticals", type: "array", enum: [
+          "ai", "fintech", "saas", "devtools", "healthcare", "climate",
+          "robotics", "cybersecurity", "logistics", "commerce", "data",
+          "crypto", "media", "education", "marketing", "telecom", "realestate",
+          "hardware", "gaming", "space", "unknown"] },
+        { name: "countries", type: "array" },
+        { name: "country", type: "string" },
+        { name: "industryGroup", type: "string" },
+        { name: "industryGroups", type: "array" },
+        { name: "naicsCode", type: "string" },
+        { name: "employeeBuckets", type: "array", enum: [
+          "1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000",
+          "5001-10000", "10001+"] },
+        { name: "minAmountUsd", type: "integer" },
+        { name: "maxAmountUsd", type: "integer" },
+        { name: "maxItems", type: "integer", default: 100 },
+        { name: "cursor", type: "string" },
+      ],
+      example: {
+        since: "2026-06-01", round: ["seed", "series-a"],
+        verticals: ["cybersecurity"], countries: ["DE", "FR", "GB"], maxItems: 50,
+      },
+      quality: {
+        // 0 rather than null: the Store reports no run count for this Actor, and
+        // the contract type requires a number. The note carries the truth.
+        total_runs: 0, monthly_users: 36, success_rate_pct: null, rating: 4.78,
+        note:
+          "Small but retained user base (48 total, 36 monthly, 4 ratings at 4.78). " +
+          "Input schema read live from the Store API on 2026-08-22; OUTPUT HAS " +
+          "NOT BEEN OBSERVED. Treat field names and fill rates as unconfirmed " +
+          "until a live verification run is done. Billed per record at $0.045 — " +
+          "the most expensive row in this catalog, so bound maxItems tightly.",
+      },
+    },
+    apify_linkedin_company_posts: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "targetUrls", type: "array" },
+        { name: "maxPosts", type: "integer", default: 10 },
+        { name: "postedLimit", type: "string", enum: ["any","1h","24h","week","month","3months","6months","year"] },
+        { name: "postedLimitDate", type: "string" },
+        { name: "includeQuotePosts", type: "boolean", default: true },
+        { name: "includeReposts", type: "boolean", default: true },
+        { name: "scrapeComments", type: "boolean", default: false },
+        { name: "maxComments", type: "integer", default: 5 },
+        { name: "commentsPostedLimit", type: "string", enum: ["any","1h","24h","week","month"] },
+        { name: "scrapeReactions", type: "boolean", default: false },
+        { name: "maxReactions", type: "integer", default: 5 },
+        { name: "contextCountry", type: "string", enum: ["any","US","GB","DE","FR"] },
+      ],
+      example: {
+        targetUrls: ["https://www.linkedin.com/company/stripe"],
+        maxPosts: 10, postedLimit: "month",
+      },
+      quality: {
+        total_runs: 0, monthly_users: 3064, success_rate_pct: null, rating: 5,
+        note:
+          "Well adopted (9,884 total, 3,064 monthly). Schema read live 2026-08-22; " +
+          "OUTPUT NOT OBSERVED. NOTE: this schema is IDENTICAL to " +
+          "apify_linkedin_profile_posts and accepts /in/ profile URLs too — scope " +
+          "is enforced by the compiler, not by choosing this Actor.",
+      },
+    },
+    apify_linkedin_profile_posts: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "targetUrls", type: "array" },
+        { name: "maxPosts", type: "integer", default: 10 },
+        { name: "postedLimit", type: "string", enum: ["any","1h","24h","week","month","3months","6months","year"] },
+        { name: "postedLimitDate", type: "string" },
+        { name: "includeQuotePosts", type: "boolean", default: true },
+        { name: "includeReposts", type: "boolean", default: true },
+        { name: "scrapeComments", type: "boolean", default: false },
+        { name: "maxComments", type: "integer", default: 5 },
+        { name: "commentsPostedLimit", type: "string", enum: ["any","1h","24h","week","month"] },
+        { name: "scrapeReactions", type: "boolean", default: false },
+        { name: "maxReactions", type: "integer", default: 5 },
+        { name: "contextCountry", type: "string", enum: ["any","US","GB","DE","FR"] },
+      ],
+      example: {
+        targetUrls: ["https://www.linkedin.com/in/satyanadella"],
+        maxPosts: 10, postedLimit: "month",
+      },
+      quality: {
+        total_runs: 0, monthly_users: 8054, success_rate_pct: null, rating: 4.9,
+        note:
+          "The most adopted Actor in this set (31,340 total, 8,054 monthly). " +
+          "Schema read live 2026-08-22; OUTPUT NOT OBSERVED. UNLOCK-GATED: it " +
+          "reads an identified person's profile and cannot find one.",
+      },
+    },
+    apify_linkedin_post_search: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "searchQueries", type: "array" },
+        { name: "maxPosts", type: "integer", default: 20 },
+        { name: "postedLimit", type: "string", enum: ["any","1h","24h","week","month","3months","6months","year"] },
+        { name: "postedLimitDate", type: "string" },
+        { name: "sortBy", type: "string", enum: ["relevance","date"] },
+        { name: "authorUrls", type: "array" },
+        { name: "authorsCompanies", type: "array" },
+        { name: "authorKeywords", type: "string" },
+        { name: "authorsIndustryId", type: "array" },
+        { name: "mentioningMember", type: "array" },
+        { name: "mentioningCompany", type: "array" },
+        { name: "contentType", type: "string", enum: ["all","videos","images","jobs","live_videos","documents","collaborative_articles"] },
+        { name: "profileScraperMode", type: "string", enum: ["short","main"], default: "short" },
+        { name: "scrapeComments", type: "boolean", default: false },
+        { name: "maxComments", type: "integer", default: 10 },
+        { name: "commentsPostedLimit", type: "string", enum: ["any","1h","24h","week","month","3months","6months","year"] },
+        { name: "commentsProfileScraperMode", type: "string", enum: ["short","main"], default: "short" },
+        { name: "scrapeReactions", type: "boolean", default: false },
+        { name: "startPage", type: "integer", default: 1 },
+        { name: "scrapePages", type: "integer" },
+      ],
+      example: {
+        searchQueries: ["\"US expansion\" OR \"entering the US\""],
+        maxPosts: 25, postedLimit: "month", sortBy: "date",
+        scrapeComments: true, maxComments: 5,
+      },
+      quality: {
+        total_runs: 0, monthly_users: 5428, success_rate_pct: null, rating: 4.94,
+        note:
+          "Strong adoption (24,170 total, 5,428 monthly, 4.94/14). Schema read " +
+          "live 2026-08-22; OUTPUT NOT OBSERVED. COMMENTS ARE BILLED AS RESULTS " +
+          "at the price of a post: maxPosts 50 with maxComments 10 is up to 550 " +
+          "billable items. UNLOCK-GATED: results carry identified people.",
+      },
+    },
+    apify_google_news: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "keywords", type: "array" },
+        { name: "topics", type: "array", enum: ["WORLD","NATION","BUSINESS","TECHNOLOGY","ENTERTAINMENT","SPORTS","SCIENCE","HEALTH"] },
+        { name: "topicUrls", type: "array" },
+        { name: "maxArticles", type: "integer", default: 100 },
+        { name: "timeframe", type: "string", enum: ["1h","1d","7d","30d","1y","all"], default: "1h" },
+        { name: "region_language", type: "string", default: "US:en" },
+        { name: "decodeUrls", type: "boolean", default: false },
+        { name: "extractDescriptions", type: "boolean", default: false },
+        { name: "extractImages", type: "boolean", default: true },
+      ],
+      example: {
+        keywords: ["\"Acme Corp\" (expansion OR \"new office\" OR \"enters the\")"],
+        maxArticles: 20, timeframe: "30d", region_language: "US:en", decodeUrls: true,
+      },
+      quality: {
+        total_runs: 0, monthly_users: 447, success_rate_pct: null, rating: 4.9,
+        note:
+          "1,724 total users, 447 monthly, 4.9/5. Schema read live 2026-08-22; " +
+          "OUTPUT NOT OBSERVED. `timeframe` applies to KEYWORD searches only — " +
+          "topic pages return their own curated results at any age. Supports " +
+          "Google News operators: quotes, OR, -exclusion, site:.",
+      },
+    },
+    apify_builtwith_technology: {
+      verified_at: "2026-08-22",
+      fields: [
+        { name: "startDomains", type: "array" },
+        { name: "maxRequestsPerCrawl", type: "integer", default: 10000000 },
+      ],
+      example: { startDomains: ["stripe.com"], maxRequestsPerCrawl: 10 },
+      quality: {
+        total_runs: 0, monthly_users: 107, success_rate_pct: null, rating: 5,
+        note:
+          "573 total users, 107 monthly. Schema read live 2026-08-22; OUTPUT NOT " +
+          "OBSERVED. THE ENTIRE INPUT IS TWO FIELDS: domain in, technologies out. " +
+          "No query field and no reverse lookup, so it can never find companies " +
+          "BY technology. Its default maxRequestsPerCrawl is 10,000,000 — always " +
+          "set it explicitly.",
+      },
+    },
+    // ── CONTACT ENRICHMENT ────────────────────────────────────────────────
+    //
+    // Read from the live Apify Store schema on 2026-08-23. Deliberately small:
+    // this Actor takes targets and a mode and nothing else, which is what makes
+    // it safe to run against a person a user has already chosen.
+    apify_linkedin_profile_enrichment: {
+      verified_at: "2026-08-23",
+      fields: [
+        { name: "profileScraperMode", type: "string",
+          enum: ["Profile details no email ($4 per 1k)", "Profile details + email search ($10 per 1k)"],
+          default: "Profile details no email ($4 per 1k)",
+          note: "A THIRD vocabulary — neither sibling people Actor's value is valid here, and an unrecognised value falls back to the Actor default rather than erroring. The email variant is a PURCHASE the user authorises, not a mode a planner picks." },
+        { name: "queries", type: "array",
+          note: "Profile URLs or public identifiers. The Actor's own umbrella field." },
+        { name: "urls", type: "array",
+          note: "Full profile URLs. Vanity slugs only — the opaque ACwAAA member-id form belongs in profileIds." },
+        { name: "publicIdentifiers", type: "array",
+          note: "The last path segment of a profile URL." },
+        { name: "profileIds", type: "array",
+          note: "THE HANDOFF FROM DISCOVERY. linkedin-company-employees returns the opaque ACwAAA member id and never a vanity slug, so a decision maker found there arrives as a profile ID." },
+      ],
+      example: { profileIds: ["ACwAAABc1234"], profileScraperMode: "Profile details no email ($4 per 1k)" },
+      quality: { total_runs: null, monthly_users: 10686, success_rate_pct: null, rating: null,
+        note: "64,487 total users, 10,686 monthly, 436 bookmarks (Store, 2026-08-23). Not deprecated. Registered only after a live schema read — it previously sat in the REJECTED list for lack of one." },
     },
     apify_people_search: {
       verified_at: "2026-08-19",

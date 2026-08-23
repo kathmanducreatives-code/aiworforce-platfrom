@@ -199,11 +199,22 @@ async function runHiringWithPersistence(
   over: Partial<CapabilityEngineDeps> = {},
   planId = "plan-1",
   workspaceId = "ws-1",
+  /**
+   * Force the capability plan instead of deriving it from the mission.
+   *
+   * Exists so the "a refused preflight persists nothing" invariant can be
+   * exercised on a plan the router can no longer produce. It used to be
+   * reachable through a hiring+funding mission, which entered at
+   * `funding_signal_discovery`; that capability is now `supported: false` and
+   * the entry falls through to real discovery. The routing defect is fixed —
+   * the invariant it happened to exercise still needs a test.
+   */
+  planOverride: ReturnType<typeof buildCapabilityGraph> | null = null,
 ) {
   const calls: string[] = [];
 
   const selection = selectResearchPlaybooks(m);
-  const plan = buildCapabilityGraph(m);
+  const plan = planOverride ?? buildCapabilityGraph(m);
   const authorization = authorizePlaybookExecution(selection, plan, m);
   const first = compileFirstProviderCall(plan);
   const preflight = buildPaidExecutionPreflight({
@@ -626,17 +637,57 @@ Deno.test("an unsupported playbook writes nothing to the Lead Library", async ()
 });
 
 Deno.test("a playbook/capability mismatch persists nothing and calls no actor", async () => {
-  const db = memoryDb();
-  const r = await runHiringWithPersistence(hiringMission({
+  // The invariant: when the paid gate refuses, the run stops BEFORE the first
+  // actor and writes nothing. Nothing partial, nothing to clean up.
+  //
+  // The mismatch is now constructed rather than routed. This mission (hiring +
+  // funding) used to enter at `funding_signal_discovery` and fail the boundary;
+  // that capability is `supported: false` today, so the mission routes to real
+  // discovery and legitimately proceeds. The plan below is what the router is
+  // no longer allowed to build.
+  const m = hiringMission({
     required_signals: [{ type: "hiring" }, { type: "funding" }],
     company_profile: {
       business_models: [], verticals: ["b2b saas"], stages: [], locations: [],
     },
-  }), HAPPY, db);
+  });
+  const divergent = {
+    ...buildCapabilityGraph(m),
+    entry_capability: "expansion_signal_discovery" as const,
+  };
+
+  const db = memoryDb();
+  const r = await runHiringWithPersistence(
+    m, HAPPY, db, {}, "plan-1", "ws-1", divergent);
+
   assertFalse(r.preflight.ok);
   assertEquals(r.run, null);
   assertEquals(r.calls, []);
   assertEquals(db.rows("lead_candidates").length, 0);
+});
+
+Deno.test("a funding signal alongside hiring now runs, and buys nothing for funding", async () => {
+  // The other half of the fix, end to end. The mission asks for hiring AND
+  // funding evidence. Hiring is served; funding has no callable source, so it
+  // is reported as a capability gap — and crucially, no actor is called for it.
+  // The mission's own profile is kept — only the funding signal is added — so
+  // this exercises the routing change and nothing else. (Stripping the profile
+  // trips the cohort guard, which correctly refuses a YC source for a mission
+  // that does not target the YC cohort; that is a different test.)
+  const m = hiringMission({
+    required_signals: [{ type: "hiring" }, { type: "funding" }],
+  });
+  const db = memoryDb();
+  const r = await runHiringWithPersistence(m, HAPPY, db);
+
+  assert(r.preflight.ok, JSON.stringify(r.preflight.blocked));
+  assert(r.run, "the run proceeds instead of entering a capability that cannot discover");
+
+  // Every actor called belongs to the hiring/discovery path. Nothing was bought
+  // in the name of a funding signal this system cannot collect.
+  for (const c of r.calls) {
+    assertFalse(/crunchbase|news/i.test(c), `no funding source may be called: ${c}`);
+  }
 });
 
 Deno.test("run-agent wires the projection to the canonical writer, once", () => {

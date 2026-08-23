@@ -15,11 +15,18 @@
 // Mode B is detected BEFORE the plan-step required-field gate so a direct action
 // can never be rejected for missing orchestration metadata.
 
-export type LeadActionKind = "research_company" | "find_decision_makers" | "generate_outreach";
+export type LeadActionKind =
+  | "research_company" | "find_decision_makers" | "find_contact_details"
+  | "generate_outreach";
 
 export const LEAD_ACTION_KINDS: readonly LeadActionKind[] = [
   "research_company",
   "find_decision_makers",
+  // Buying a way to REACH somebody is its own action, its own Actor and its own
+  // price. It is deliberately not folded into `find_decision_makers`: that one
+  // finds the person, and running an email lookup as a side effect of a search
+  // would spend on everyone returned rather than on the one person a user chose.
+  "find_contact_details",
   "generate_outreach",
 ] as const;
 

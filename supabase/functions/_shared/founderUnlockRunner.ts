@@ -49,8 +49,21 @@ export interface UnlockedPerson {
   full_name: string | null;
   title: string | null;
   linkedin_url: string | null;
+  /**
+   * The provider's STABLE profile id, carried so a later contact enrichment
+   * does not have to parse it back out of a URL.
+   *
+   * `company-employees` returns the opaque `ACwAAA…` member form and never a
+   * vanity slug, and the enrichment Actor accepts that form in `profileIds`.
+   * Storing it here makes the handoff explicit rather than a regex over
+   * `linkedin_url` that quietly stops matching when a URL shape changes.
+   */
+  source_profile_id: string | null;
   current_employer: string | null;
   employer_verification: string;
+  // NO EMAIL, NO PHONE, DELIBERATELY. Discovery finds the person; buying a way
+  // to reach them is a separate, separately-priced, separately-consented action
+  // (`contact_unlock`). A field here would make that boundary optional.
 }
 
 export interface UnlockRunOutcome {
@@ -144,6 +157,7 @@ export async function runFounderUnlock(
       full_name: p.full_name ?? null,
       title: p.title ?? null,
       linkedin_url: p.linkedin_url ?? null,
+      source_profile_id: p.source_profile_id ?? null,
       current_employer: p.current_employer ?? null,
       employer_verification: v.outcome,
     });

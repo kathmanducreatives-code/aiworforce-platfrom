@@ -14,6 +14,14 @@ export function estimateCredits(action: LeadResultPanelAction, rows: LeadTableRo
   switch (action) {
     case 'find_contacts':
       return rows.filter((r) => r.contact_status === 'needs_contact').length;
+    // ── ONLY ROWS WITH SOMEBODY TO ENRICH ──────────────────────────────────
+    //
+    // Contact enrichment takes a person, so a row where nobody has been
+    // resolved yet cannot be charged for: the action would decline before
+    // reaching a provider. Counting it would quote a price for work that
+    // cannot happen.
+    case 'find_contact_details':
+      return rows.filter((r) => r.contact_status === 'profile_only').length;
     case 'research_company':
       return rows.filter((r) => !!r.website && r.enrichment_status !== 'enriched').length;
     case 'draft_outreach':
@@ -150,6 +158,7 @@ export function recommendNextAction(rows: LeadTableRow[], partial = false): Reco
 
 export const ACTION_LABEL: Record<LeadResultPanelAction, string> = {
   find_contacts: 'Find decision-makers',
+  find_contact_details: 'Find contact details',
   research_company: 'Research company',
   draft_outreach: 'Generate outreach',
   enrich_and_draft: 'Enrich + draft',

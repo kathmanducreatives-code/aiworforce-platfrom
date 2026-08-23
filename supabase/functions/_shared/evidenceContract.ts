@@ -30,7 +30,23 @@ export type EvidenceCategory =
   | "launch_signal"
   | "expansion_signal"
   | "founder_activity_signal"
-  | "gtm_signal";
+  | "gtm_signal"
+  // ── THE CATEGORIES THE VOCABULARY WAS MISSING ─────────────────────────────
+  //
+  // `signalToEvidenceCategory` returned NULL for two members of the mission's
+  // own signal vocabulary — `leadership_change` and `technology` — so a mission
+  // could require them while the compiled evidence contract contained no
+  // requirement for them at all. A total mapping needs a category per event.
+  //
+  // `company_activity_signal` is separate from `founder_activity_signal`
+  // because a company page posting and its CEO posting are different claims
+  // with different proof chains: the second needs the person identified first.
+  // Collapsing them is what made "leadership posted" satisfiable by a company
+  // post.
+  | "company_activity_signal"
+  | "engagement_signal"
+  | "technology_signal"
+  | "headcount_signal";
 
 export type EvidenceConfidence = "low" | "medium" | "high";
 
@@ -96,13 +112,38 @@ function req(
   return { category, required, minimumConfidence, acceptableSourceTypes, ...(freshnessWindowHours ? { freshnessWindowHours } : {}) };
 }
 
-/** Map an intent signal type → the evidence category that proves it. */
-export function signalToEvidenceCategory(signal: string): EvidenceCategory | null {
+/**
+ * Map a signal → the evidence category that proves it.
+ *
+ * TOTAL over the signal vocabulary. It used to return null for
+ * `leadership_change` and `technology`, which meant a mission could require
+ * either one while `compileEvidenceContract` produced no requirement for it —
+ * the requirement was in the mission, invisible to the contract, and therefore
+ * never checked against anything.
+ *
+ * SUBJECT-AWARE for social events, because that is where the distinction lives.
+ * A post by the company and a post by its CEO are not interchangeable evidence,
+ * so they resolve to different categories and a company-post source can never
+ * satisfy a leadership-post requirement.
+ *
+ * The legacy `new_executive` / `recent_post` spellings from `LeadSignalType`
+ * are kept so the intent layer keeps resolving while both vocabularies exist.
+ */
+export function signalToEvidenceCategory(
+  signal: string, subject: string = "company",
+): EvidenceCategory | null {
+  const person = subject === "leadership" || subject === "employee";
   switch (signal) {
     case "hiring": return "job_signal";
     case "funding": return "funding_signal";
     case "product_launch": return "launch_signal";
     case "expansion": return "expansion_signal";
+    case "technology": return "technology_signal";
+    case "headcount_change": return "headcount_signal";
+    case "leadership_change": return "gtm_signal";
+    case "post": return person ? "founder_activity_signal" : "company_activity_signal";
+    case "comment": return "engagement_signal";
+    // Legacy spellings from the intent layer's own enum.
     case "new_executive": return "gtm_signal";
     case "recent_post": return "founder_activity_signal";
     default: return null;
@@ -160,7 +201,8 @@ export function compileEvidenceContract(
   // ---------- timing ----------
   const timingRequirements: EvidenceRequirement[] = [];
   const explicitSignalCats = (intent.signals ?? [])
-    .map((s) => signalToEvidenceCategory(s.type))
+    .map((s) => signalToEvidenceCategory(
+      s.type, (s as unknown as { subject?: string }).subject ?? "company"))
     .filter((c): c is EvidenceCategory => !!c);
   // The window the user stated explicitly ("funded this week"), carried on the typed
   // intent. resolveWindowHours applies the STRICTER of (explicit, general policy).

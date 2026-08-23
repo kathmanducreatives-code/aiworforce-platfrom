@@ -13,7 +13,8 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   SCENARIO_MATRIX, blockedScenarios, scenario, scenarioActors, scenarioBriefing,
-  scenarioIsServable, unmetCapabilities, unresolvedIntelligenceIds,
+  scenarioIsServable, scenarioIsExecutable, executableScenarioActors,
+  unmetCapabilities, unresolvedIntelligenceIds,
 } from "../../../supabase/functions/_shared/discoveryScenarioMatrix.ts";
 import { actorIntelligence } from "../../../supabase/functions/_shared/apifyIntelligenceRegistry.ts";
 import { hiringActorCard } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
@@ -77,48 +78,70 @@ Deno.test("4. no domain- or URL-fed Actor appears in a discovery scenario", () =
   }
 });
 
-Deno.test("5. funding AMOUNT is blocked by the cookie gate", () => {
-  // Verified from the Store schema, not assumed: the amount, announced date and
-  // investors unlock only in "LOGGED-IN MODE" with a session cookie pasted from
-  // a browser, and anonymous mode is vendor-described as "signal-only".
+Deno.test("5. funding AMOUNT is no longer blocked, because the provider set changed", () => {
+  // ── A BLOCK IS A STATEMENT ABOUT PROVIDERS, NOT A PERMANENT VERDICT ───────
+  //
+  // This asserted a cookie gate for as long as the only funding source hid the
+  // amount behind a Crunchbase session. `datahyena/company-funding-rounds`
+  // returns `amount_usd` normalized from the announcement with no session at
+  // all, so the block came off — which is exactly what should happen when the
+  // evidence behind it stops being true.
   const s = scenario("funding_amount")!;
-  assertEquals(s.preferred_actors, []);
-  assertEquals(scenarioIsServable(s), false);
-  assert(/cookie/i.test(s.blocked_reason!));
+  assertEquals(scenarioIsServable(s), true);
+  assertEquals(s.blocked_reason, undefined);
+  assert(s.preferred_actors.includes("datahyena/company-funding-rounds"));
+  assertEquals(scenarioIsExecutable(s), true, "and a capability may actually call it");
 
-  // A LESSER ANSWER IS STILL AN ANSWER. News can mention a figure, so the
-  // fallback is not empty — and the planner must be able to tell "there is a
-  // lesser answer" from "there is none".
-  assert(s.fallback_actors.length > 0);
-  assert(/raised recently/i.test(s.blocked_reason!),
-    "the block must name what CAN be answered instead");
+  // THE REAL LIMITATION SURVIVES, in the evidence line rather than as a block:
+  // an announced figure is a report, and it travels with its source article.
+  assert(/report, never an audit/i.test(s.minimum_evidence));
+  assert(/source article/i.test(s.minimum_evidence));
 });
 
-Deno.test("6. recent funding as a SIGNAL is servable", () => {
-  // The distinction that makes the block above useful rather than merely
-  // discouraging: "raised recently" is answerable, "raised $X" is not.
+Deno.test("6. recent funding is servable AND executable", () => {
+  // Servable was always true — Crunchbase existed. Executable is the Phase 4
+  // change: a capability may now actually call a funding source, so the signal
+  // stops being a capability gap.
   const s = scenario("recent_funding")!;
   assertEquals(scenarioIsServable(s), true);
-  assert(s.preferred_actors.includes("memo23/crunchbase-scraper"));
-  assert(/signal-only/i.test(s.minimum_evidence));
+  assertEquals(scenarioIsExecutable(s), true);
+  assertEquals(s.preferred_actors[0], "datahyena/company-funding-rounds",
+    "the callable source must be preferred over the described ones");
+
+  const { runnable, described_only } = executableScenarioActors(s);
+  // The news source joined as a fallback in Phase 5 — a funding announcement is
+  // a dated article naming the round, which is the same evidence shape.
+  assertEquals(runnable, ["apify_funding_rounds_datahyena", "apify_google_news"]);
+  assert(described_only.includes("memo23/crunchbase-scraper"),
+    "Crunchbase stays as knowledge, and stays uncallable");
+  assert(/announced date/i.test(s.minimum_evidence));
 });
 
-Deno.test("7. product launches are blocked on adoption and a credential", () => {
+Deno.test("7. product launches are servable now, on dated articles rather than Product Hunt", () => {
+  // The block named a specific Actor's adoption and credential requirement.
+  // Carding a news source made the block false: a dated article naming the
+  // product IS the evidence a launch needs, and the block came off with the
+  // reason that produced it.
   const s = scenario("product_launches")!;
-  assertEquals(scenarioIsServable(s), false);
-  assert(/API token/i.test(s.blocked_reason!));
-  assert(/20 lifetime users/i.test(s.blocked_reason!),
-    "the block must carry the evidence, not just the verdict");
+  assertEquals(scenarioIsServable(s), true);
+  assertEquals(s.blocked_reason, undefined);
+  assertEquals(scenarioIsExecutable(s), true);
+  assert(s.preferred_actors.includes("data_xplorer/google-news-scraper-fast"));
+  // The company's own post corroborates and does not replace the source.
+  assert(/corroborates; it does not replace/i.test(s.minimum_evidence));
 });
 
 Deno.test("8. exactly the verified-impossible scenarios are blocked", () => {
   // Pinning the SET, so a future scenario cannot be quietly blocked to make a
   // failing planner test pass — nor a real block quietly removed.
+  // `funding_amount` left this set in Phase 4 — its block named a cookie gate
+  // that the carded funding source does not have.
+  // What remains blocked is exactly what BuiltWith's schema makes impossible:
+  // both entries are the reverse lookup — "which companies run X" — that a
+  // two-field domain-in/technologies-out Actor cannot perform.
   const ids = blockedScenarios().map((s) => s.id).sort();
   assertEquals(ids, [
     "competitor_technology_adoption",
-    "funding_amount",
-    "product_launches",
     "technology_stack_discovery",
   ]);
 });
@@ -203,7 +226,7 @@ Deno.test("15. the briefing shows the impossible as well as the possible", () =>
   assertEquals(briefing.length, Object.keys(SCENARIO_MATRIX).length);
 
   const blocked = briefing.filter((b) => b.servable === false);
-  assertEquals(blocked.length, 4);
+  assertEquals(blocked.length, 2);
   for (const b of blocked) {
     assert(b.blocked_reason, `${b.scenario} must carry its reason into the briefing`);
   }

@@ -15,10 +15,17 @@
 // specified as discovery; BuiltWith — the only technology Actor that exists —
 // has an input schema with exactly two fields, `startDomains` and
 // `maxRequestsPerCrawl`. It answers "what does this domain run", never "who
-// runs this technology". `funding_amount` was specified as a filter; the
-// Crunchbase Actor's own schema states the amount unlocks only with a session
-// cookie pasted from a logged-in browser. `product_launches` had one candidate
-// Actor with 20 lifetime users that requires a Product Hunt API token.
+// runs this technology". `product_launches` was blocked too, because the only
+// Product Hunt Actor examined had 20 lifetime users and required an API token;
+// it came off when a carded news source arrived, since a dated article naming
+// the product is the evidence a launch actually needs.
+//
+// `funding_amount` used to be on that list, blocked because the only funding
+// source gated the amount behind a Crunchbase session cookie. It is not blocked
+// any more: `datahyena/company-funding-rounds` returns the amount normalized to
+// USD with no session at all. A block is a statement about the current provider
+// set, and it comes off when the provider set changes — which is the whole
+// reason each one carries its evidence rather than a verdict.
 //
 // A scenario with no Actor is recorded here, loudly, rather than quietly
 // dropped or — far worse — pointed at an Actor that cannot answer it. A planner
@@ -93,6 +100,16 @@ const POST_SEARCH = ["harvestapi/linkedin-post-search"];
 const COMPANY_POSTS = ["harvestapi/linkedin-company-posts"];
 const PROFILE_POSTS = ["harvestapi/linkedin-profile-posts"];
 const CRUNCHBASE = ["memo23/crunchbase-scraper"];
+/**
+ * The carded funding source — one row per funding EVENT.
+ *
+ * FIRST in every funding scenario it appears in, because it is the only one of
+ * these the engine may actually call: `actorIdentity` resolves it to a repo key
+ * and the others resolve to nothing. Crunchbase and the news scraper stay
+ * listed behind it as knowledge — they describe what a fuller funding capability
+ * would reach — and `executableScenarioActors` keeps them in `described_only`.
+ */
+const FUNDING_ROUNDS = ["datahyena/company-funding-rounds"];
 
 /**
  * Hiring scenarios share a shape: discovery finds the company, the job source
@@ -136,18 +153,20 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
   recent_funding: {
     id: "recent_funding",
     required_capabilities: ["funding_signal"],
-    preferred_actors: [...CRUNCHBASE],
+    preferred_actors: [...FUNDING_ROUNDS, ...CRUNCHBASE],
     fallback_actors: [...NEWS],
     corroborating_actors: [...NEWS, ...POST_SEARCH],
     minimum_evidence:
-      "a dated funding event naming the company, from Crunchbase or two " +
-      "independent news sources. Anonymous Crunchbase output is signal-only",
+      "a dated funding event naming the company. The carded source returns the " +
+      "round itself — stage, amount in USD, announced date, investors and the " +
+      "source articles — and a row without an announced date is refused as " +
+      "evidence during normalization",
     freshness_requirement: "within_month",
   },
   funding_round_type: {
     id: "funding_round_type",
     required_capabilities: ["funding_signal"],
-    preferred_actors: [...CRUNCHBASE],
+    preferred_actors: [...FUNDING_ROUNDS, ...CRUNCHBASE],
     fallback_actors: [...NEWS],
     corroborating_actors: [...NEWS],
     minimum_evidence:
@@ -158,22 +177,23 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
   funding_amount: {
     id: "funding_amount",
     required_capabilities: ["funding_signal"],
-    preferred_actors: [],
+    // ── THE COOKIE GATE IS GONE, AND SO IS THE BLOCK ────────────────────────
+    //
+    // This scenario was blocked because the only funding source gated the
+    // amount behind a Crunchbase session cookie. The carded source returns
+    // `amount_usd` normalized from the announcement with no session at all, so
+    // the block no longer describes reality and has been removed.
+    //
+    // The LIMITATION that remains is different and is stated in the evidence
+    // line: an announced figure is what an outlet reported, not an audited
+    // number, and it travels with its source article for exactly that reason.
+    preferred_actors: [...FUNDING_ROUNDS],
     fallback_actors: [...NEWS],
     corroborating_actors: [...NEWS],
-    minimum_evidence: "a stated figure with a currency and a date",
+    minimum_evidence:
+      "a stated figure with a currency and a date, carrying the source article " +
+      "it was announced in. An announced amount is a report, never an audit",
     freshness_requirement: "within_month",
-    // VERIFIED, NOT ASSUMED. The Store schema for memo23/crunchbase-scraper
-    // states that the funding amount, announced date and investors unlock only
-    // in "LOGGED-IN MODE" with a Crunchbase session cookie pasted from a
-    // browser, and describes anonymous mode as "signal-only", capped at 15
-    // results per search.
-    blocked_reason:
-      "no registered Actor returns a funding AMOUNT unattended — Crunchbase " +
-      "gates it behind a user-supplied session cookie. A news source may " +
-      "mention a figure, but a headline is not a structured amount. Ask the " +
-      "user for a Crunchbase cookie, or answer 'raised recently' instead of " +
-      "'raised $X'",
   },
   investor_discovery: {
     id: "investor_discovery",
@@ -256,16 +276,17 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
   product_launches: {
     id: "product_launches",
     required_capabilities: ["news_signal"],
-    preferred_actors: [],
-    fallback_actors: [...NEWS],
+    // News is PREFERRED now that it is carded. Company posts corroborate: a
+    // company announcing its own launch is real evidence, but it is the company
+    // talking about itself, so the article stays the primary source.
+    preferred_actors: [...NEWS],
+    fallback_actors: [...COMPANY_POSTS],
     corroborating_actors: [...POST_SEARCH],
-    minimum_evidence: "a dated launch naming the product and the company",
+    minimum_evidence:
+      "a dated launch naming the product and the company, with the article that " +
+      "announced it. A company's own post corroborates; it does not replace the " +
+      "source",
     freshness_requirement: "within_month",
-    blocked_reason:
-      "the only Product Hunt Actor examined has 20 lifetime users, 4 monthly, " +
-      "no rating, and requires a Product Hunt API token for every mode except " +
-      "a limited leaderboard. News and post search can approximate a launch, " +
-      "but no structured launch source is registered",
   },
 
   // ── DISCOVERY ──────────────────────────────────────────────────────────────
@@ -374,6 +395,10 @@ export const SCENARIO_MATRIX: Readonly<Record<ScenarioId, ScenarioSpec>> = Objec
   technology_stack_verification: {
     id: "technology_stack_verification",
     required_capabilities: ["technology_signal"],
+    // CARDED in Phase 5, so this scenario became executable. Its sibling
+    // `technology_stack_discovery` did NOT, and cannot: the same Actor has no
+    // query field. One Actor, two scenarios, opposite verdicts — which is the
+    // clearest illustration in this file of why power is recorded per scenario.
     preferred_actors: ["builtwith/builtwith-official-technology-scraper"],
     fallback_actors: [],
     corroborating_actors: [],
@@ -455,6 +480,33 @@ export function scenarioIsServable(s: ScenarioSpec): boolean {
 }
 
 /**
+ * Can this scenario be RUN today?
+ *
+ * ── WHY THIS IS A SECOND QUESTION AND NOT A STRICTER FIRST ONE ──────────────
+ *
+ * `scenarioIsServable` answers "does a source that could serve this exist?" —
+ * a question about KNOWLEDGE, and the honest answer for `recent_funding` is
+ * yes: Crunchbase exists and its schema has been read. This function answers
+ * "may a capability call one of those sources?", which is a question about
+ * PERMISSION, and there the answer is no — no capability declares Crunchbase,
+ * so `toRepoKey` returns null and `guardedInvoker` would refuse the call.
+ *
+ * Collapsing the two loses information the planner needs. "No source exists"
+ * and "the source exists but nothing may call it" lead to different actions:
+ * the first is a dead end, the second is a carding task with a known target.
+ *
+ * The defect this exists to end is the opposite conflation. `coverMissionSignals`
+ * used servability alone, so a funding signal was reported COVERED while
+ * `runnable_actors` was empty and the run never asked a funding source
+ * anything — the exact silent dishonesty `signalActorCoverage`'s own header
+ * describes, reproduced one layer down.
+ */
+export function scenarioIsExecutable(s: ScenarioSpec): boolean {
+  return s.blocked_reason == null &&
+    executableScenarioActors(s).runnable.length > 0;
+}
+
+/**
  * Every Actor a scenario may legitimately involve, in execution order.
  *
  * Corroborating Actors come LAST and are marked as such by their position:
@@ -471,19 +523,31 @@ export function scenarioActors(s: ScenarioSpec): string[] {
  * Blocked scenarios are INCLUDED, with their reason. A planner that cannot see
  * what is impossible will keep proposing it, and the user will keep receiving
  * confident empty results instead of "we cannot answer that, here is why".
+ *
+ * `servable` and `executable` are both reported, because they are different
+ * facts and the planner acts differently on each — see `scenarioIsExecutable`.
+ * A scenario that is servable but not executable is a CAPABILITY GAP: the
+ * source is known and unreachable, and proposing it would plan a step that
+ * silently never runs.
  */
 export function scenarioBriefing(): Array<Record<string, unknown>> {
-  return Object.values(SCENARIO_MATRIX).map((s) => ({
-    scenario: s.id,
-    required_capabilities: s.required_capabilities,
-    preferred_actors: s.preferred_actors,
-    fallback_actors: s.fallback_actors,
-    corroborating_actors: s.corroborating_actors,
-    minimum_evidence: s.minimum_evidence,
-    freshness_requirement: s.freshness_requirement,
-    servable: scenarioIsServable(s),
-    ...(s.blocked_reason ? { blocked_reason: s.blocked_reason } : {}),
-  }));
+  return Object.values(SCENARIO_MATRIX).map((s) => {
+    const { runnable, described_only } = executableScenarioActors(s);
+    return {
+      scenario: s.id,
+      required_capabilities: s.required_capabilities,
+      preferred_actors: s.preferred_actors,
+      fallback_actors: s.fallback_actors,
+      corroborating_actors: s.corroborating_actors,
+      minimum_evidence: s.minimum_evidence,
+      freshness_requirement: s.freshness_requirement,
+      servable: scenarioIsServable(s),
+      executable: scenarioIsExecutable(s),
+      runnable_actors: runnable,
+      ...(described_only.length ? { described_only } : {}),
+      ...(s.blocked_reason ? { blocked_reason: s.blocked_reason } : {}),
+    };
+  });
 }
 
 /**

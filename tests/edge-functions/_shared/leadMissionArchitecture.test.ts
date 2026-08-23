@@ -62,7 +62,20 @@ Deno.test("1. the canonical query produces a startup-first company mission", () 
   assert(m.decision_makers.current_employment_required);
   const hiring = m.required_signals.find((s) => s.type === "hiring");
   assert(hiring, "the hiring signal must be required");
-  assertEquals(hiring!.role_families, ["sales_ops"]);
+  // THE CANONICAL FAMILY NAME, not the old marker-table shorthand.
+  //
+  // The structured reader resolves a role against `ROLE_FAMILY_ALIASES` — the
+  // one table the title filter and the actor input planner already match
+  // against — so it emits `sales_operations` rather than `sales_ops`. Both are
+  // legal mission keys (`MISSION_FAMILY_TO_CANONICAL` carries identity entries
+  // for the canonical names), and the canonical one is the better answer: it is
+  // the same string the rest of the funnel compares titles with.
+  assertEquals(hiring!.role_families, ["sales_operations"]);
+
+  // The requirement is now structured, not just named.
+  assertEquals(hiring!.event, "hiring");
+  assertEquals(hiring!.subject, "company");
+  assertEquals(hiring!.qualifier?.role_families, ["sales_operations"]);
 });
 
 Deno.test("1b. its capability graph is startup-first, enriches before qualifying", () => {
@@ -95,8 +108,13 @@ Deno.test("1b. its capability graph is startup-first, enriches before qualifying
     "founder discovery must not appear in an automatic graph");
   assertEquals(order.indexOf("employer_verification"), -1);
   assertEquals(order.indexOf("contact_enrichment"), -1);
-  assertEquals(plan.offered_capabilities, ["offer_founder_unlock", "offer_contact_unlock"],
-    "the people work is surfaced as offers instead");
+  // `offer_deep_company_research` is also an offer and also never a step: deep
+  // website research is a DEPTH upgrade on a company that already qualified,
+  // not part of qualifying it. The three assertions above still hold — no
+  // people or contact capability appears in `order`.
+  assertEquals(plan.offered_capabilities,
+    ["offer_founder_unlock", "offer_contact_unlock", "offer_deep_company_research"],
+    "the people work and the deep research are surfaced as offers instead");
 
   // And the full expected chain is present, in order.
   for (const [a, b] of [
@@ -418,14 +436,46 @@ Deno.test("9. a job-output query IS allowed to use job discovery", () => {
   assert(legacyLoopReachable(m, plan).reachable);
 });
 
-Deno.test("10. funding and expansion queries build their own graphs", () => {
+Deno.test("10. a funding or expansion signal never routes discovery into a stage that cannot discover", () => {
+  // ── WHAT THIS TEST USED TO ASSERT, AND WHY IT WAS BACKWARDS ───────────────
+  //
+  // It required `entry_capability` to be `funding_signal_discovery` and
+  // `expansion_signal_discovery`, on the reasonable-sounding principle that a
+  // signal should shape the graph. The consequence was the worst outcome the
+  // graph can produce.
+  //
+  // `ENGINE_DRIVEN_DISCOVERY` contains only `startup_company_discovery` and
+  // `general_company_discovery`. Every other discovery capability is reported
+  // `skipped_no_input`. So entering at a signal stage meant the ENTRY step was
+  // skipped, discovery never ran, and the mission returned zero companies —
+  // while the signal was reported as covered.
+  //
+  // It also inverted precedence: `hasSignal(expansion)` was tested before the
+  // profile branches, so asking for MORE evidence about industrial companies
+  // made the run worse at finding industrial companies.
+  //
+  // Both capabilities are now `supported: false` in the registry, with the
+  // verified reason their providers cannot keep the claim.
   const funding = parseLeadMissionDeterministic(
     "Find recently funded cybersecurity companies and their CEOs");
   assert(funding.required_signals.some((s) => s.type === "funding"));
   const fPlan = buildCapabilityGraph(funding);
+
+  // ── PHASE 4: THE FUNDING ENTRY IS REAL NOW ────────────────────────────────
+  //
+  // This asserted `general_company_discovery` while funding discovery was a
+  // stage the engine skipped. With a provider that returns dated funding events
+  // and an engine branch that drives it, entering through funding is the RIGHT
+  // plan for a funding-shaped mission: it discovers by the round and carries the
+  // event forward as evidence.
   assertEquals(fPlan.entry_capability, "funding_signal_discovery");
-  // "…and their CEOs" is a request for PEOPLE, and it is answered with an offer
-  // rather than a purchase. The step is gone; the offer names it.
+  assert(fPlan.steps.map((s) => s.capability).includes("funding_signal_discovery"));
+  // Enrichment still precedes qualification: a company that raised is not
+  // thereby shown to fit the ICP.
+  const fOrder = fPlan.steps.map((s) => s.capability);
+  assert(fOrder.indexOf("company_enrichment") < fOrder.indexOf("company_brain_qualification"));
+
+  // UNCHANGED: people are offered, never purchased.
   assertFalse(fPlan.steps.map((s) => s.capability).includes("founder_discovery"));
   assert(fPlan.offered_capabilities.includes("offer_founder_unlock"));
   assertFalse(isProviderAllowed(fPlan, "apify_jobs"));
@@ -433,10 +483,26 @@ Deno.test("10. funding and expansion queries build their own graphs", () => {
   const expansion = parseLeadMissionDeterministic(
     "Find industrial companies expanding into Europe and their owners");
   assert(expansion.required_signals.some((s) => s.type === "expansion"));
+  // ── PHASE 5: EXPANSION BECAME REAL ────────────────────────────────────────
+  //
+  // This asserted a fallthrough to profile discovery while expansion's declared
+  // providers were a company-NAME matcher and a JOB search — neither of which
+  // can state that a company entered a market. Both stages now run the carded
+  // news source, so entering through expansion is the right plan.
   const ePlan = buildCapabilityGraph(expansion);
   assertEquals(ePlan.entry_capability, "expansion_signal_discovery");
+
   const eOrder = ePlan.steps.map((s) => s.capability);
   assert(eOrder.includes("expansion_signal_verification"));
+  // THE OLD PROVIDER IS GONE. A job's location must never stand as proof that a
+  // company entered a market.
+  assertFalse(
+    CAPABILITY_REGISTRY.expansion_signal_verification.providers
+      .includes("apify_linkedin_job_search"),
+    "a job search may never be an expansion verifier",
+  );
+
+  // UNCHANGED: enrichment still precedes qualification.
   assert(eOrder.indexOf("company_enrichment") < eOrder.indexOf("company_brain_qualification"));
 });
 

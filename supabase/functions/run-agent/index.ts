@@ -2589,6 +2589,13 @@ Deno.serve(async (req) => {
                 lineage_root_task_id: leadResumeLineageRoot,
                 records: roundResume,
               },
+              // WHO THIS RUN BELONGS TO, for observations kept beyond it.
+              //
+              // Supplied separately from `resume` on purpose: reusing the
+              // resume workspace would tie headcount collection to RESUMED
+              // runs, so a company's first enrichment — the reading that starts
+              // its series — would be the one never kept.
+              identity: { workspace_id, task_id: task.id },
               // ── THE BRAIN THE EVALUATOR READS ───────────────────────────
               //
               // TWO KINDS OF FIELD, and which side of the line each one falls
@@ -2998,6 +3005,38 @@ Deno.serve(async (req) => {
             const missionPersistPlan = createPersistPlan({
               db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,
             });
+            // ── THE HEADCOUNT SERIES GROWS BY ONE ROW PER ENRICHED COMPANY ──
+            //
+            // Written BEFORE the lead rows and independently of them: a reading
+            // is worth keeping whether or not the company went on to qualify,
+            // and a company rejected today may be the one whose growth matters
+            // in three months.
+            //
+            // The insert IGNORES DUPLICATES rather than failing. The table's
+            // unique index is (workspace, company, source, day), so a second
+            // enrichment of the same company on the same day is a repeat, not
+            // an error — and a growth series must never be able to take a run
+            // down.
+            let headcountSnapshotsWritten = 0;
+            let headcountSnapshotError: string | null = null;
+            if (capabilityRun?.headcount_snapshots.length) {
+              try {
+                const { error: hsErr } = await supabase
+                  .from("company_headcount_snapshots")
+                  .upsert(capabilityRun.headcount_snapshots, {
+                    onConflict: "workspace_id,company_key,source,observed_on",
+                    ignoreDuplicates: true,
+                  });
+                if (hsErr) {
+                  headcountSnapshotError = hsErr.message ?? String(hsErr);
+                } else {
+                  headcountSnapshotsWritten = capabilityRun.headcount_snapshots.length;
+                }
+              } catch (he) {
+                headcountSnapshotError = he instanceof Error ? he.message : String(he);
+              }
+            }
+
             const missionPersistResults: Array<{
               key: string; ok: boolean; lead_candidate_id: string | null; reason?: string;
             }> = [];
@@ -3047,6 +3086,17 @@ Deno.serve(async (req) => {
                     lead_library_persistence: {
                       ...missionPersistenceSummary(missionPersistence, missionPersisted),
                       results: missionPersistResults,
+                    },
+                    // WHAT THIS RUN CONTRIBUTED TO THE GROWTH SERIES.
+                    //
+                    // Recorded even when zero, because zero is the answer for
+                    // every run that enriched nothing — and a growth capability
+                    // that stays unanswerable needs to show why rather than
+                    // simply staying quiet.
+                    headcount_snapshots: {
+                      observed: capabilityRun?.headcount_snapshots.length ?? 0,
+                      written: headcountSnapshotsWritten,
+                      ...(headcountSnapshotError ? { error: headcountSnapshotError } : {}),
                     },
                     workbench_evaluation_counts: evaluation.counts,
                     // THE STAGE-LEVEL TOTALS BEHIND THOSE COUNTS. "0 qualified"

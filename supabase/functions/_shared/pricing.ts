@@ -13,9 +13,20 @@ export const UNLOCK_CREDIT_COSTS = {
   // Anchored to the existing catalogue's `decision_makers_5_accounts: 12`
   // (≈2.4 credits per company), rounded up.
   founder_unlock: 3,
-  // Cheaper than the founder unlock: by the time this runs the person is
-  // already resolved and verified, so it buys one further lookup, not a search.
-  contact_unlock: 2,
+  // ── PRICED AT THE WORK IT NOW ACTUALLY DOES ─────────────────────────────
+  //
+  // 2 → 1. This was the right price for the wrong thing: it was set when
+  // `contact_unlock` re-ran founder discovery, because the endpoint never
+  // branched on `unlock_type`. It now performs the SAME provider call as the
+  // Workbench's `find_contact_details` — one `harvestapi/linkedin-profile-scraper`
+  // lookup against one already-resolved person, $0.010 with no actor-start fee —
+  // so it must carry the same price. Two numbers for one call is how a user
+  // discovers that where they clicked changed what they paid.
+  //
+  // Still cheaper than the founder unlock, and for the reason that was always
+  // stated: by the time this runs the person is resolved and verified, so it
+  // buys one lookup rather than a search.
+  contact_unlock: 1,
 } as const;
 
 export type UnlockKind = keyof typeof UNLOCK_CREDIT_COSTS;

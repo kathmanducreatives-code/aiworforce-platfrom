@@ -2,7 +2,9 @@
 // imports, so it is unit-testable under Deno like the other src/lib model tests.
 // leadActions.ts wraps this with the actual run-agent invoke.
 
-export type LeadActionKind = 'research_company' | 'find_decision_makers' | 'generate_outreach';
+export type LeadActionKind =
+  | 'research_company' | 'find_decision_makers' | 'find_contact_details'
+  | 'generate_outreach';
 
 // Maps a Workbench panel action → the structured lead_action kind. The three
 // lead actions (+ the `enrich` synonym) ALWAYS run on existing selected rows via
@@ -16,6 +18,8 @@ export function workbenchActionToLeadKind(action: string): LeadActionKind | null
       return 'research_company';
     case 'find_contacts':
       return 'find_decision_makers';
+    case 'find_contact_details':
+      return 'find_contact_details';
     case 'draft_outreach':
       return 'generate_outreach';
     default:
@@ -29,12 +33,16 @@ export function workbenchActionToLeadKind(action: string): LeadActionKind | null
 export const AGENT_FOR: Record<LeadActionKind, string> = {
   research_company: 'hawk',
   find_decision_makers: 'hawk',
+  // Same agent as discovery: it is the same kind of work on the same account,
+  // one step further in.
+  find_contact_details: 'hawk',
   generate_outreach: 'penn',
 };
 
 export const INSTRUCTION_FOR: Record<LeadActionKind, string> = {
   research_company: 'Research company context for the selected lead(s).',
   find_decision_makers: 'Find decision-makers for the selected lead(s).',
+  find_contact_details: 'Look up business contact details for the resolved decision-maker.',
   generate_outreach: 'Prepare an approval-ready outreach draft for the selected lead(s).',
 };
 
@@ -42,6 +50,7 @@ export const INSTRUCTION_FOR: Record<LeadActionKind, string> = {
 export const LEAD_ACTION_LOADING: Record<LeadActionKind, string> = {
   research_company: 'Researching company…',
   find_decision_makers: 'Finding decision-makers…',
+  find_contact_details: 'Looking up contact details…',
   generate_outreach: 'Preparing draft…',
 };
 

@@ -191,7 +191,8 @@ Deno.test("compiled hiring payloads are valid, not just present", () => {
 // ═══════════ 3. unsupported playbooks stay blocked ═════════════════════════
 
 Deno.test("an unsupported shape is never authorised as hiring", () => {
-  for (const strategy of ["funding", "social", "news"] as const) {
+  // `funding` left this list in Phase 4 — it is a supported shape now.
+  for (const strategy of ["social", "news"] as const) {
     const m = mission({ strategies: [strategy], required_signals: [] });
     const { selection, authorization } = chain(m);
     assertEquals(selection.runnable, [], `${strategy} must not be runnable`);
@@ -211,7 +212,8 @@ Deno.test("an unsupported shape does not change execution in this phase", () => 
   // The promise made for funding/social/news/multi_signal: behaviour unchanged.
   // The boundary is inert for them, so the preflight verdict is whatever it was
   // before the boundary existed.
-  for (const strategy of ["funding", "social", "news"] as const) {
+  // `funding` left this list in Phase 4 — it is a supported shape now.
+  for (const strategy of ["social", "news"] as const) {
     const m = mission({ strategies: [strategy], required_signals: [] });
     const { authorization, preflight } = chain(m);
     const without = buildPaidExecutionPreflight({
@@ -230,7 +232,10 @@ Deno.test("multi_signal is not governed either, and adds no block", () => {
   const m = mission({ strategies: ["multi_signal", "hiring", "funding"] });
   const { selection, authorization, preflight } = chain(m);
   assertEquals(selection.combination, "all_must_hold");
-  assertFalse(selection.ok, "a conjunction with a blocked half is not answerable");
+  // Both halves run since Phase 4, so the conjunction is answerable. The
+  // property under test here is the GOVERNANCE one below: a mixed selection is
+  // left to the existing route regardless of whether its halves are runnable.
+  assert(selection.ok, "both shapes are runnable, so the conjunction holds");
   assertFalse(
     authorization.applies,
     "a mixed selection is left to the existing route in this phase",
@@ -252,11 +257,20 @@ Deno.test("hiring alongside another shape is NOT governed — mixed selections w
 
 // ═══════════ 4. the boundary catches a real divergence ═════════════════════
 
-Deno.test("a hiring Mission routed to a capability the engine skips is REFUSED", () => {
-  // The divergence the boundary exists for: strategy says hiring, and the graph
-  // — choosing from a mix of fields that predates the playbook vocabulary —
-  // enters at `funding_signal_discovery`, which the engine skips. Before the
-  // boundary this run reported success having discovered nothing.
+Deno.test("a funding signal no longer diverts a hiring Mission into a skipped capability", () => {
+  // ── THE DIVERGENCE THIS USED TO REPRODUCE, NOW FIXED AT ITS SOURCE ────────
+  //
+  // This mission (hiring + funding signals) used to enter at
+  // `funding_signal_discovery` — a capability the engine skips — so the
+  // boundary refused it and the run stopped. The refusal was correct, but it
+  // was treating a symptom: the graph should never have offered a discovery
+  // entry that cannot discover.
+  //
+  // `funding_signal_discovery` is now `supported: false`, because its only
+  // provider is a YC directory scraper with no funding field in its verified
+  // schema. Entry falls through to real discovery, the hiring shape and the
+  // graph agree, and the run proceeds — with the funding signal reported as an
+  // uncollected capability gap rather than silently assumed.
   const m = mission({
     strategies: ["hiring"],
     required_signals: [{ type: "hiring" }, { type: "funding" }],
@@ -267,12 +281,47 @@ Deno.test("a hiring Mission routed to a capability the engine skips is REFUSED",
   const { selection, plan, authorization, preflight } = chain(m);
 
   assertEquals(selection.runnable, ["hiring"], "the selected shape is hiring");
-  assertEquals(
-    plan.entry_capability, "funding_signal_discovery",
-    "the graph nonetheless enters at a funding capability",
-  );
-  assertFalse(isEngineDriven("funding_signal_discovery"));
+  assertEquals(plan.entry_capability, "general_company_discovery");
+  assert(isEngineDriven(plan.entry_capability),
+    "the entry capability must be one the engine actually drives");
 
+  // Shape and graph now agree, so there is nothing for the boundary to refuse.
+  assert(authorization.applies);
+  assert(authorization.authorized, JSON.stringify(authorization.violations));
+  assert(preflight.ok, JSON.stringify(preflight.blocked));
+
+  // The funding requirement is NOT silently absorbed. It is supported since
+  // Phase 4, but this plan's shape discovers companies another way and the
+  // funding source cannot verify over a pool it did not produce — so the
+  // planner is told the requirement will go uncollected under this shape.
+  assert(plan.routing_advisories.some((a) =>
+    /funding/i.test(a) && /DISCOVERY-ONLY/.test(a)));
+});
+
+Deno.test("the boundary still REFUSES an entry the playbook does not authorise", () => {
+  // ── WHY THIS IS CONSTRUCTED RATHER THAN ROUTED ────────────────────────────
+  //
+  // With the unsupported signal entries removed, `buildCapabilityGraph` can no
+  // longer produce a divergent entry for a hiring mission: every reachable
+  // entry is either the playbook's own discovery (startup/general) or forced by
+  // a decided mission field (`known_company_resolution` when companies are
+  // supplied, `job_discovery` when job listings are the requested output), and
+  // `missionForcedEntry` authorises those two deliberately.
+  //
+  // That is the fix working — the divergence class is gone at its source. The
+  // BOUNDARY is not gone, and must not rot: the next capability added to the
+  // graph could reintroduce exactly this. So the check is exercised directly,
+  // on a plan whose entry the playbook does not authorise and the mission did
+  // not force.
+  const m = mission({ strategies: ["hiring"] });
+  const selection = selectResearchPlaybooks(m);
+  const realPlan = buildCapabilityGraph(m);
+
+  const divergent = { ...realPlan, entry_capability: "expansion_signal_discovery" as const };
+  const authorization = authorizePlaybookExecution(selection, divergent, m);
+
+  assertEquals(selection.runnable, ["hiring"]);
+  assertFalse(isEngineDriven("expansion_signal_discovery"));
   assert(authorization.applies);
   assertFalse(authorization.authorized);
   assertEquals(authorization.entry_source, "unauthorized");
@@ -280,6 +329,15 @@ Deno.test("a hiring Mission routed to a capability the engine skips is REFUSED",
 
   // And the paid gate refuses rather than spending on a plan that answers a
   // different question than the one selected.
+  const first = compileFirstProviderCall(divergent);
+  const preflight = buildPaidExecutionPreflight({
+    mission: m, plan: divergent,
+    firstProvider: first.provider,
+    firstProviderInput: first.compiled?.ok ? first.compiled.input : null,
+    firstProviderCompileOk: first.compiled ? first.compiled.ok : undefined,
+    firstProviderErrors: first.compiled && !first.compiled.ok ? first.compiled.errors : [],
+    playbook: authorization,
+  });
   assertFalse(preflight.ok);
   assert(preflight.blocked.some((b) => b.code === "playbook_not_authorized"));
   let threw = false;

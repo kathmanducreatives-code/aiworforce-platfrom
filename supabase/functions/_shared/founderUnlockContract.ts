@@ -161,6 +161,41 @@ export function findCompletedUnlock(
     ? entry as Record<string, unknown> : null;
 }
 
+/**
+ * The people a completed `founder_unlock` recorded for this company.
+ *
+ * ── WHY CONTACT ENRICHMENT READS THIS AND NOT A PROVIDER ───────────────────
+ *
+ * Enrichment takes a person who is already known. `founder_unlock_required_first`
+ * guarantees one exists by the time a contact unlock is authorised, and this is
+ * where that unlock put them. Going back to a provider to re-derive the same
+ * person would be the exact duplicate purchase this whole change removes.
+ *
+ * Returns [] rather than throwing on any malformed shape: a contact unlock with
+ * no readable person must refuse politely and charge nothing, not 500.
+ */
+export function readUnlockedPeople(
+  taskResult: unknown, companyKey: string,
+): Array<{
+  full_name: string | null; title: string | null;
+  linkedin_url: string | null; source_profile_id: string | null;
+}> {
+  const entry = findCompletedUnlock(taskResult, companyKey, "founder_unlock");
+  const people = entry?.people;
+  if (!Array.isArray(people)) return [];
+  return people
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === "object")
+    .map((p) => ({
+      full_name: typeof p.full_name === "string" ? p.full_name : null,
+      title: typeof p.title === "string" ? p.title : null,
+      linkedin_url: typeof p.linkedin_url === "string" ? p.linkedin_url : null,
+      // The unlock runner stores the opaque member id when it had one; the
+      // enrichment Actor wants it in `profileIds`, never in `urls`.
+      source_profile_id: typeof p.source_profile_id === "string"
+        ? p.source_profile_id : null,
+    }));
+}
+
 export interface UnlockAuthorization {
   request: UnlockRequest;
   row: PoolRowView;

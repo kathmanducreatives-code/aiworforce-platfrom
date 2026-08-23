@@ -343,7 +343,26 @@ export function compileLeadEntityIntent(
   const isJobSeeker = JOB_SEEKER_RE.test(text);
   const personOfCompany = PERSON_OF_COMPANY_RE.test(text);
   const hasHiringSignal = signals.some((s) => s.type === "hiring");
-  const hasCompanySignal = signals.length > 0; // hiring/funding/expansion/… are company-level
+  // ── NOT EVERY SIGNAL IS A COMPANY SIGNAL ──────────────────────────────────
+  //
+  // This read `signals.length > 0`, with the comment "hiring/funding/expansion/…
+  // are company-level". That was true of the events it listed and false of the
+  // two it did not: `recent_post` sits in the same enum, and a request about
+  // what a CEO posted is a claim about a person, not about their employer.
+  //
+  // Treating it as company-level forced a company gate onto a person-level
+  // requirement, so "founders who posted about X" was answered by qualifying
+  // the company and never establishing that any person posted anything.
+  //
+  // A company signal is now one whose SUBJECT is the company. Signals with no
+  // recorded subject keep the old reading — an older persisted mission must not
+  // change meaning because this code learned a new field.
+  const isCompanySubject = (sig: { type?: string; subject?: string }) => {
+    const subject = sig.subject;
+    if (subject) return subject === "company";
+    return sig.type !== "recent_post";
+  };
+  const hasCompanySignal = signals.some(isCompanySubject);
   const hasCompanyQualifier = company_categories.length > 0 || companyEv != null || personOfCompany;
 
   let execution_mode: ExecutionMode;

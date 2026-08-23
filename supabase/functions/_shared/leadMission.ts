@@ -33,6 +33,10 @@
 
 import { canonicalJson, sha256Hex } from "./planHash.ts";
 import type { CapabilityId } from "./leadCapabilityGraph.ts";
+import {
+  readSignalsFromQuery,
+  type SignalEvent, type SignalQualifier, type SignalSubject,
+} from "./missionSignalDescriptor.ts";
 
 export const LEAD_MISSION_VERSION = "lead-mission-v1" as const;
 
@@ -160,6 +164,27 @@ export interface MissionSignal {
   type: string;
   role_families?: string[];
   timeframe_days?: number;
+
+  // ── THE STRUCTURED READING ────────────────────────────────────────────────
+  //
+  // `type` alone cannot hold what a B2B requirement actually says. These three
+  // fields carry the rest, and `type` is kept as their alias so every existing
+  // `s.type === "hiring"` comparison in the lead path keeps working unchanged.
+  //
+  // Optional because a mission may arrive from an older persisted record or a
+  // hand-built fixture. Absent, the mission behaves exactly as it did before;
+  // present, `subject` and `qualifier` are what stop a leadership post being
+  // mistaken for a company post and an enterprise-seller role being mistaken
+  // for any open role at all. See `missionSignalDescriptor`.
+
+  /** WHAT HAPPENED. Always equal to `type` when present. */
+  event?: SignalEvent;
+  /** TO WHOM — company, or a person at it. Person subjects need identity first. */
+  subject?: SignalSubject;
+  /** ABOUT WHAT — role, topic, region, round. Narrows the event, never widens it. */
+  qualifier?: SignalQualifier;
+  /** The user's own words for this requirement. */
+  phrase?: string;
 }
 
 /**
@@ -228,6 +253,77 @@ export function canonicalSignalType(raw: string): string {
 /** Does this signal ask for hiring evidence, whatever wording produced it? */
 export function isHiringSignal(signal: Pick<MissionSignal, "type">): boolean {
   return canonicalSignalType(signal?.type ?? "") === "hiring";
+}
+
+/**
+ * EVIDENCE THIS SYSTEM HAS NO WORD FOR.
+ *
+ * ── WHY A TABLE OF THINGS WE CANNOT DO ──────────────────────────────────────
+ *
+ * `MISSION_SIGNAL_TYPES` is the whole vocabulary, and a request that falls
+ * outside it does not fail — it DISAPPEARS. "Find logistics companies showing
+ * GTM headcount growth" parsed to `required_signals: []`, and a mission with no
+ * signals is fully covered by definition, so the run reported complete success
+ * at answering a question it had discarded. Ten structural missions were tried
+ * and every one of them reported `fully_covered: true`, including three whose
+ * entire requirement had vanished.
+ *
+ * The fix is not to invent types for these. A type with no evidence semantics
+ * and no Actor is the fake support this architecture exists to refuse. The fix
+ * is to RECORD THE MISS: the mission keeps a plain-language note of what it was
+ * asked for and could not represent, and coverage refuses to call itself
+ * complete while any note is present.
+ *
+ * Each entry names the EVIDENCE, not the phrasing, because that sentence is
+ * shown to a user who then knows what they would need for the request to be
+ * answerable.
+ *
+ * DETECTION ONLY. Nothing here routes, selects an Actor, or implies a
+ * capability — matching a pattern produces a sentence and nothing else.
+ */
+const UNREPRESENTABLE_EVIDENCE: ReadonlyArray<readonly [RegExp, string]> = Object.freeze([
+  // ── WHAT GRADUATED, AND WHY THIS LIST SHRANK ──────────────────────────────
+  //
+  // This table used to carry comments, leadership posts, company posts and
+  // headcount growth. All four are now REPRESENTABLE: `SIGNAL_EVENTS` has
+  // `post`, `comment` and `headcount_change`, and `SignalSubject` separates a
+  // company posting from its CEO posting.
+  //
+  // Keeping them here would have been actively misleading. The flagship's
+  // leadership requirement is read, structured and reported as a capability
+  // gap with its own reason — and the stale note said, in the same shortfall,
+  // that the requirement "was not represented in this mission at all". Two
+  // sentences about one requirement, one of them false.
+  //
+  // Representation and support are different questions. A represented
+  // requirement with no source is a capability gap, which
+  // `actorEvidenceCapability` reports precisely. This table is only for
+  // evidence the vocabulary cannot express AT ALL, so that a genuinely novel
+  // request still cannot vanish into a mission with no signals.
+  [/\breviews?\b|\bratings?\b|\bglassdoor\b|\btrustpilot\b|\bg2\b/,
+   "public reviews or ratings — no registered source returns review data, and there is no signal type for it"],
+  [/\bemployee (?:sentiment|satisfaction|morale)\b|\bculture score\b/,
+   "employee sentiment — nothing registered measures it and no signal type expresses it"],
+  [/\bweb ?traffic\b|\bvisitors?\b|\bpage ?views?\b|\bsimilarweb\b/,
+   "web traffic or audience size — no registered source returns it"],
+  [/\bchurn\b|\brevenue\b(?!\s+operations)|\barr\b|\bmrr\b|\bprofitab\w*\b/,
+   "financial performance such as revenue, ARR or churn — no registered source returns company financials"],
+]);
+
+/**
+ * Requirements the vocabulary cannot express, as user-legible sentences.
+ *
+ * Reads the user's own sentence and nothing else. Returns an empty array when
+ * everything asked for is representable — which is the common case and must
+ * stay cheap.
+ */
+export function unrepresentableEvidence(query: string): string[] {
+  const t = String(query ?? "").toLowerCase();
+  const out: string[] = [];
+  for (const [re, description] of UNREPRESENTABLE_EVIDENCE) {
+    if (re.test(t) && !out.includes(description)) out.push(description);
+  }
+  return out;
 }
 
 export interface MissionCompanyProfile {
@@ -310,6 +406,20 @@ export interface LeadMissionV1 {
 
   company_profile: MissionCompanyProfile;
   required_signals: MissionSignal[];
+  /**
+   * What the request asked for that this system has no vocabulary for.
+   *
+   * Plain sentences, from {@link unrepresentableEvidence}. Non-empty means the
+   * mission is KNOWN to be incomplete: `coverMissionSignals` will not report
+   * full coverage while any entry is present, so a discarded requirement can no
+   * longer be mistaken for a satisfied one.
+   *
+   * Deliberately NOT part of `missionHash`. It is derived from
+   * `original_user_query`, which the hash already covers, so including it would
+   * add no identity and would invalidate every stored checkpoint the first time
+   * a sentence here is reworded.
+   */
+  unrepresented_requirements?: string[];
   decision_makers: MissionDecisionMakers;
   /**
    * How this opportunity is to be discovered and proven. Empty means the model
@@ -474,13 +584,34 @@ const ROLE_FAMILY_MARKERS: ReadonlyArray<[RegExp, string]> = [
   [/\bengineer\w*\b/, "engineering"],
 ];
 
+// ── GEOGRAPHY, INCLUDING THE ADJECTIVE FORMS ────────────────────────────────
+//
+// "European companies" and "German companies" are how people actually write a
+// location, and neither matched: `\beurope\b` fails on "european", and Germany
+// was absent from the table entirely. Both requests therefore reached the
+// geography gate with NO location — the constraint the user stated most plainly
+// was the one silently dropped.
+//
+// Adjective and country forms are listed beside the noun they resolve to, so
+// one entry owns one place and the canonical value cannot drift between them.
 const GEO_MARKERS: ReadonlyArray<[RegExp, string]> = [
-  [/\bunited states\b|\busa\b|\bu\.s\.\b|\bus\b/, "United States"],
-  [/\beurope\b|\beu\b/, "Europe"],
-  [/\bunited kingdom\b|\buk\b/, "United Kingdom"],
-  [/\bcanada\b/, "Canada"],
-  [/\bindia\b/, "India"],
+  [/\bunited states\b|\busa\b|\bu\.s\.\b|\bus\b|\bamerican?\b/, "United States"],
+  [/\beurope(?:an)?\b|\beu\b|\bemea\b/, "Europe"],
+  [/\bunited kingdom\b|\buk\b|\bbritish\b|\bbritain\b/, "United Kingdom"],
+  [/\bgermany\b|\bgerman\b/, "Germany"],
+  [/\bfrance\b|\bfrench\b/, "France"],
+  [/\bnetherlands\b|\bdutch\b/, "Netherlands"],
+  [/\bspain\b|\bspanish\b/, "Spain"],
+  [/\bcanada\b|\bcanadian\b/, "Canada"],
+  [/\bindia\b|\bindian\b/, "India"],
+  [/\baustralia\b|\baustralian\b/, "Australia"],
+  [/\bsingapore\b/, "Singapore"],
 ];
+
+/** Escape a value for safe inclusion in a constructed RegExp. */
+function escapeRe(v: string): string {
+  return String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function firstMatch(t: string, table: ReadonlyArray<[RegExp, string]>): string | null {
   for (const [re, v] of table) if (re.test(t)) return v;
@@ -549,32 +680,141 @@ export function parseLeadMissionDeterministic(
   const stages = isStartup ? ["startup"] : [];
   if (isStartup) prov["company_profile.stages"] = "explicit_user_request";
 
-  const locations = allMatches(t, GEO_MARKERS);
-  if (locations.length) prov["company_profile.locations"] = "explicit_user_request";
-
   const known = extractKnownCompanies(q);
   if (known.length) prov["company_profile.known_companies"] = "explicit_user_request";
 
   const roleFamilies = allMatches(t, ROLE_FAMILY_MARKERS);
 
-  // SIGNALS. "hiring X" is a hiring signal; funding and expansion are their own.
-  const signals: MissionSignal[] = [];
-  if (/\bhiring\b|\brecruit\w*\s+for\b|\bopen roles?\b/.test(t)) {
-    signals.push({ type: "hiring", ...(roleFamilies.length ? { role_families: roleFamilies } : {}) });
+  // WHAT THIS READING CANNOT CARRY. Read from the user's own sentence, before
+  // any signal is derived, so the note survives even when nothing else matches.
+  const unrepresented = unrepresentableEvidence(q);
+
+  // ── SIGNALS: ONE READER, THE WHOLE SENTENCE ───────────────────────────────
+  //
+  // This used to be six independent regex tests, each pushing a bare
+  // `{ type }`. That shape could record THAT a requirement existed and nothing
+  // about what it required: "hiring enterprise sellers" and "hiring anyone"
+  // produced identical signals, and "whose leadership posted about US
+  // expansion" produced either nothing or — once expansion markers were added —
+  // an EXPANSION requirement, claiming the company had expanded when all that
+  // was asked was that a person talked about expanding.
+  //
+  // `readSignalsFromQuery` reads the sentence clause by clause and returns a
+  // descriptor per requirement, carrying the subject and the qualifiers. The
+  // role-family channel below is preserved: a descriptor sets `role_families`
+  // from its own qualifier, and the sentence-wide marker scan still fills it
+  // for a hiring signal whose clause did not name a family.
+  const signals: MissionSignal[] = readSignalsFromQuery(q);
+  for (const sig of signals) {
+    if (sig.event !== "hiring") continue;
+    if ((sig.role_families ?? []).length === 0 && roleFamilies.length > 0) {
+      sig.role_families = [...roleFamilies];
+      sig.qualifier = { ...(sig.qualifier ?? {}), role_families: [...roleFamilies] };
+    }
+    // A hiring requirement with no stated window still wants recent evidence;
+    // the timeframe is applied here rather than inside the reader so the
+    // reader stays a pure statement of what the sentence said.
   }
-  if (/\bfund(?:ed|ing)\b|\braised\b|\bseries [a-d]\b|\bpre-?seed\b/.test(t)) {
-    signals.push({ type: "funding", timeframe_days: 180 });
+  for (const sig of signals) {
+    if (sig.timeframe_days == null && sig.event !== "hiring" && sig.event !== "technology") {
+      sig.timeframe_days = 180;
+    }
   }
-  if (/\bexpand\w*\b|\bopening (?:an? )?(?:office|location)\b|\bentering\b/.test(t)) {
-    signals.push({ type: "expansion", timeframe_days: 180 });
+
+  // ── WHERE THE COMPANY IS, NOT WHERE THE SIGNAL POINTS ─────────────────────
+  //
+  // Geography used to be scanned from the whole sentence, which read the
+  // flagship's "posted about US expansion" as a company location and produced
+  // `locations: ["United States", "Europe"]` for a request that asked for
+  // EUROPEAN companies talking about moving to the US. The geography gate then
+  // had a constraint the user never stated, pointing at the wrong continent.
+  //
+  // A region inside a signal qualifier belongs to the SIGNAL. So the company
+  // reading is taken from the sentence with those qualifier fragments removed:
+  // whatever geography survives was stated about the company itself.
+  //
+  // Subtractive rather than positional on purpose — "companies in Europe
+  // expanding into the US" and "US-expanding companies in Europe" say the same
+  // thing in different orders, and both must read as Europe.
+  let companyText = t;
+  for (const sig of signals) {
+    const q2 = sig.qualifier ?? {};
+    if (q2.topic) companyText = companyText.split(q2.topic).join(" ");
+    if (q2.region) {
+      companyText = companyText.replace(
+        new RegExp(`\\b(?:in ?to|into|to|in)\\s+(?:the\\s+)?${escapeRe(q2.region)}\\b`, "g"), " ");
+      // A bare region left over from a social topic ("US expansion") is still
+      // the signal's, never the company's.
+      if (sig.event === "post" || sig.event === "comment") {
+        companyText = companyText.replace(new RegExp(`\\b${escapeRe(q2.region)}\\b`, "g"), " ");
+      }
+    }
   }
+  const locations = allMatches(companyText, GEO_MARKERS);
+  if (locations.length) prov["company_profile.locations"] = "explicit_user_request";
+
   if (signals.length) prov["required_signals"] = "explicit_user_request";
 
   // TARGET ENTITY + OUTPUT. What the user asked to RECEIVE.
-  const wantsJobs = /\bjobs?\b|\bjob listings?\b|\bpostings?\b|\bvacanc\w*\b/.test(t) &&
+  // ── "POSTING" IS NOT "JOB POSTINGS" ──────────────────────────────────────
+  //
+  // This tested a bare `\bpostings?\b`, which matches the present participle in
+  // "companies POSTING about AI". So a social-signal mission compiled to
+  // `requested_output: job_listings`, and because the OUTPUT picks the plan, the
+  // whole run became `job_discovery → job_deduplication → persistence`. The
+  // signal was read correctly as `post/company` and then never used.
+  //
+  //   "companies posting on LinkedIn about AI"   → job_listings   ✗
+  //   "companies that posted about AI"           → qualified      ✓
+  //
+  // The flagship benchmark was safe only by tense. Two fixes, both narrow:
+  //
+  //   1. `postings?` must be a NOUN — preceded by "job(s)" or standing where a
+  //      noun stands ("browse the postings"). A participle after a subject is a
+  //      verb and never a job board.
+  //   2. Social language anywhere in the sentence settles it: nobody asks for
+  //      job listings "about" a topic or "on LinkedIn".
+  const socialPosting =
+    /\bpost(?:ing|ed|s)?\s+(?:about|on|regarding)\b/.test(t) ||
+    /\bon\s+linkedin\b/.test(t) ||
+    /\bcomment(?:ing|ed|s)?\b/.test(t);
+  const jobNoun =
+    /\bjobs?\b|\bjob listings?\b|\bjob postings?\b|\bvacanc\w*\b|\bopen roles?\b/.test(t) ||
+    // A bare "postings" as a noun: an article or a possessive in front of it.
+    /\b(?:the|their|these|those|any|all)\s+postings?\b/.test(t);
+  const wantsJobs = jobNoun && !socialPosting &&
     !FOUNDER_MARKERS.some((m) => t.includes(m));
+  // ── PERSON NOUNS, WITHOUT CATCHING HEADCOUNT ─────────────────────────────
+  //
+  // "Find 5 PEOPLE matching my ICP" asked for people and compiled to
+  // `target_entity: company`, because the list below covered decision-makers,
+  // contacts and leads but not the plainest word for the thing.
+  //
+  // The hazard is that "people" is also the unit headcount is measured in — "a
+  // team of 20 people", "companies with 500+ people" — and reading those as a
+  // person request would turn every size-bounded company search into a
+  // contact-ready mission. So a person noun counts only where a person noun
+  // stands: after a verb of retrieval, or in front of a relative clause that
+  // describes them.
+  const PERSON_NOUN = "people|persons?|prospects?|buyers?|executives?|" +
+    "decision[- ]makers?|contacts?|leads?";
+  const personObject = new RegExp(
+    // "find / get / show / give me [N] people ..."
+    `\\b(?:find|get|show|give|list|source|surface)\\b[^.]{0,24}?\\b(?:${PERSON_NOUN})\\b`,
+  ).test(t) ||
+    // "... people who / whose / that / at / matching / working ..."
+    new RegExp(`\\b(?:${PERSON_NOUN})\\s+(?:who|whose|that|at|in|matching|working|showing)\\b`)
+      .test(t);
+  // A HEADCOUNT PHRASE VETOES IT. "with 500 people", "a team of 20 people",
+  // "under 100 people" are all sizes, never a request for individuals.
+  const headcountPhrase =
+    /\b(?:with|of|under|over|above|below|about|around|least|most|than|to)\s+[\d,+-]+\s*(?:people|persons|employees|staff|headcount)\b/
+      .test(t) ||
+    /\bteam\s+of\b/.test(t) ||
+    /\b[\d,]+\s*[-–]\s*[\d,]+\s*(?:people|employees)\b/.test(t);
+
   const wantsPeople = FOUNDER_MARKERS.some((m) => t.includes(m)) ||
-    /\bdecision[- ]makers?\b|\bcontacts?\b|\bleads?\b/.test(t);
+    (personObject && !headcountPhrase);
   const wantsEnrichOnly = known.length > 0 &&
     /\benrich\b|\bresearch\b|\blook ?up\b/.test(t) && !wantsPeople;
 
@@ -627,6 +867,9 @@ export function parseLeadMissionDeterministic(
       ...(known.length ? { known_companies: known } : {}),
     },
     required_signals: signals,
+    // What the sentence asked for that no signal type can express. Recorded so
+    // a discarded requirement cannot be reported as a satisfied one.
+    ...(unrepresented.length ? { unrepresented_requirements: unrepresented } : {}),
     decision_makers: { roles, current_employment_required: roles.length > 0 },
     hard_constraints: {},
     soft_preferences: {},
@@ -795,6 +1038,11 @@ export function validateLeadMission(
         : (strArray(cp.known_companies).length ? { known_companies: strArray(cp.known_companies) } : {})),
     },
     required_signals: signals,
+    // Carried from whichever reading produced it — the model-compiled path
+    // inherits the deterministic parser's note via `base`.
+    ...((base.unrepresented_requirements ?? []).length
+      ? { unrepresented_requirements: base.unrepresented_requirements }
+      : {}),
     decision_makers: {
       roles: dmRoles.length ? dmRoles : base.decision_makers.roles,
       current_employment_required: dm.current_employment_required !== false &&

@@ -27,6 +27,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { LeadMissionV1 } from "./leadMission.ts";
+import { evidenceProducedBy } from "./actorEvidenceCapability.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
 
@@ -40,11 +41,15 @@ export const CAPABILITY_IDS = [
   "job_discovery",
   "funding_signal_discovery",
   "expansion_signal_discovery",
+  "product_launch_discovery",
   // company pipeline
   "company_identity_resolution",
   "company_enrichment",
   "hiring_verification",
   "expansion_signal_verification",
+  "company_post_verification",
+  "product_launch_verification",
+  "technology_verification",
   "company_brain_qualification",
   // people pipeline
   "founder_discovery",
@@ -93,6 +98,132 @@ export interface CapabilitySpec {
   fallback_policy: FallbackPolicy;
   /** Evidence this capability must produce for the next one to be legitimate. */
   evidence_required: string[];
+  /**
+   * Can this capability actually do what it claims? Defaults to true.
+   *
+   * ── WHY A DECLARED CAPABILITY MAY BE UNSUPPORTED ──────────────────────────
+   *
+   * A registry entry is a CLAIM: "this stage produces `funding_event` using
+   * these providers". Three entries below make a claim their providers cannot
+   * keep — `funding_signal_discovery` names a Y Combinator directory scraper
+   * whose verified input schema has no funding field at all, and both expansion
+   * entries name a company-NAME matcher and a JOB search respectively.
+   *
+   * Nothing checked the claim, and the cost was not a wasted call — it was
+   * WORSE. `ENGINE_DRIVEN_DISCOVERY` contains only the two real discovery
+   * capabilities, so an entry of `expansion_signal_discovery` is reported
+   * `skipped_no_input` and DISCOVERY NEVER RUNS. "Find European SaaS companies
+   * expanding into the US" entered at a stage the engine skips, found nothing,
+   * and — before coverage learned to check executability — reported the
+   * expansion signal as covered.
+   *
+   * Marking the claim false here is what stops it being made. An unsupported
+   * capability is never chosen as an entry and never scheduled as a step; it
+   * falls into `prohibited` by absence, and the reason reaches the planner
+   * through `routing_advisories` instead of vanishing into a skipped step.
+   *
+   * This is a statement about the CURRENT provider set, not a permanent one.
+   * Give one of these a provider that genuinely produces its evidence and the
+   * flag comes off with it.
+   */
+  supported?: boolean;
+  /** Required when `supported` is false. Verified, specific, and user-legible. */
+  unsupported_reason?: string;
+}
+
+/** Does this capability's provider set actually keep its evidence claim? */
+export function isCapabilitySupported(id: CapabilityId): boolean {
+  return CAPABILITY_REGISTRY[id].supported !== false;
+}
+
+/** Capabilities declared in the graph whose claim no provider can keep. */
+export function unsupportedCapabilities(): CapabilitySpec[] {
+  return CAPABILITY_IDS
+    .map((c) => CAPABILITY_REGISTRY[c])
+    .filter((s) => s.supported === false);
+}
+
+/**
+ * Capabilities whose SIGNAL claim their own providers cannot keep.
+ *
+ * ── WHY THIS IS COMPUTED AND NOT MAINTAINED ─────────────────────────────────
+ *
+ * Phase 1 set `supported: false` on three entries by hand, after reading each
+ * provider's card. That fixed the three and prevented none: the claim and the
+ * provider still live apart, and the only thing joining them was someone
+ * remembering to look.
+ *
+ * `actorEvidenceCapability` records what each executable Actor genuinely
+ * produces, so the join can be COMPUTED. A capability that names a signal in
+ * its `produces` list, while no declared provider produces that signal's
+ * evidence, is refuted here — and `capabilityEvidenceTruth.test.ts` fails the
+ * build rather than letting the claim reach a plan.
+ *
+ * Returns the offending capabilities with the evidence their providers actually
+ * yield, so the message says what is missing rather than merely that something
+ * is.
+ */
+
+/**
+ * Which SIGNAL each `produces` string claims.
+ *
+ * ── WHY THIS IS A TABLE AND NOT A STRING TRANSFORM ─────────────────────────
+ *
+ * The check used to strip `_signal|_event|_evidence` and compare the remainder
+ * to an event name. That silently mis-parsed real claims: `launch_signal`
+ * became "launch" against the event `product_launch`, so a capability could
+ * claim a launch and be neither kept nor refuted — it simply fell out of the
+ * guard.
+ *
+ * The names cannot just be aligned: `launch_signal` is a value in a CHECK
+ * constraint on `signal_events.evidence_category`, so renaming it is a
+ * migration rather than a refactor. The mapping is therefore stated once, here.
+ *
+ * A `produces` value ABSENT from this table is not a signal claim — it is a
+ * pipeline artifact like `company_candidate` or `company_identity`, which the
+ * evidence table deliberately says nothing about.
+ */
+const CLAIM_TO_EVENT: Readonly<Record<string, string>> = Object.freeze({
+  hiring_evidence: "hiring",
+  funding_signal: "funding",
+  funding_event: "funding",
+  expansion_signal: "expansion",
+  expansion_evidence: "expansion",
+  launch_signal: "product_launch",
+  launch_evidence: "product_launch",
+  company_activity_evidence: "post",
+  technology_evidence: "technology",
+});
+
+export function capabilitiesClaimingUnproducibleEvidence(): Array<{
+  id: CapabilityId; claims: string[]; providers: string[]; actually_produces: string[];
+}> {
+  const out: Array<{
+    id: CapabilityId; claims: string[]; providers: string[]; actually_produces: string[];
+  }> = [];
+  for (const id of CAPABILITY_IDS) {
+    const spec = CAPABILITY_REGISTRY[id];
+    // Only SIGNAL claims are checkable this way. A capability producing
+    // `company_candidate` or `company_evidence` is making a discovery or
+    // enrichment claim, which the evidence table deliberately says nothing
+    // about — it records what proves a SIGNAL.
+    const claims = spec.produces.filter((p) => p in CLAIM_TO_EVENT);
+    if (claims.length === 0) continue;
+    const produced = evidenceProducedBy(spec.providers);
+    const producedNames = produced.map((p) => `${p.event}/${p.subject}`);
+
+    // A claim is kept only when some declared provider produces evidence for
+    // the same event. `hiring_evidence` is kept by an Actor producing `hiring`.
+    const unmet = claims.filter((claim) =>
+      !produced.some((p) => p.event === CLAIM_TO_EVENT[claim]));
+    if (unmet.length > 0) {
+      out.push({
+        id, claims: unmet, providers: [...spec.providers],
+        actually_produces: producedNames.length ? producedNames : ["nothing"],
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -218,11 +349,31 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["required_signals includes funding"],
     produces: ["company_candidate", "funding_signal"],
     allowed_next: ["company_identity_resolution"],
-    providers: ["apify_yc_companies_memo23"],
-    cost_units: 1,
+    // ── THE PROVIDER THAT CAN ACTUALLY KEEP THIS CLAIM ────────────────────
+    //
+    // This declared `apify_yc_companies_memo23` — a Y Combinator directory
+    // scraper with no funding field anywhere in its verified schema — while
+    // claiming to produce `funding_event`. The claim was refuted by
+    // `capabilitiesClaimingUnproducibleEvidence` and the capability was marked
+    // unsupported.
+    //
+    // `apify_funding_rounds_datahyena` returns one row per funding EVENT:
+    // company, stage, amount in USD, announced date, investors and the source
+    // articles, with the amount ungated by any session cookie. That is the
+    // evidence this capability always claimed, so the claim is now keepable and
+    // the `supported: false` flag is gone — removed because the derivation
+    // stopped refuting it, not because anyone decided it should be.
+    //
+    // DISCOVERY ONLY. There is no company or URL input, so this cannot verify
+    // funding for a company set already in hand; `funding_verification` is
+    // deliberately absent from the graph rather than faked with this provider.
+    providers: ["apify_funding_rounds_datahyena"],
+    // The most expensive row in the catalog at $0.045, so the forecast must not
+    // treat it like a $0.001 job row.
+    cost_units: 3,
     max_attempts: 2,
     fallback_policy: "terminal_on_exhaustion",
-    evidence_required: ["company_name", "funding_event"],
+    evidence_required: ["company_name", "funding_event", "announced_date"],
   },
   expansion_signal_discovery: {
     id: "expansion_signal_discovery",
@@ -230,13 +381,36 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["required_signals includes expansion"],
     produces: ["company_candidate", "expansion_signal"],
     allowed_next: ["company_identity_resolution"],
-    providers: ["apify_linkedin_company_search"],
-    cost_units: 1,
+    // ── A SOURCE THAT CAN ACTUALLY STATE AN EXPANSION ─────────────────────
+    //
+    // This declared `apify_linkedin_company_search` — a company-NAME matcher
+    // whose own card says `not_for: ["semantic/concept search"]` — so the
+    // "discovery" was a general company search wearing an expansion label, and
+    // the derivation refuted it in Phase 3.
+    //
+    // News is the right substrate: a dated article naming a company and a new
+    // market IS the evidence, and Google News operators can scope a keyword
+    // search to expansion language. The claim inside the article is prose that
+    // qualification must read — which is why the capability produces an article,
+    // not a verdict.
+    providers: ["apify_google_news"],
+    cost_units: 2,
     max_attempts: 2,
     fallback_policy: "terminal_on_exhaustion",
-    evidence_required: ["company_name"],
+    evidence_required: ["company_name", "expansion_statement", "published_at", "source_url"],
   },
-
+  product_launch_discovery: {
+    id: "product_launch_discovery",
+    label: "Discover companies by a product launch",
+    requires: ["required_signals includes product_launch"],
+    produces: ["company_candidate", "launch_signal"],
+    allowed_next: ["company_identity_resolution"],
+    providers: ["apify_google_news"],
+    cost_units: 2,
+    max_attempts: 2,
+    fallback_policy: "terminal_on_exhaustion",
+    evidence_required: ["company_name", "launch_statement", "published_at", "source_url"],
+  },
   company_identity_resolution: {
     id: "company_identity_resolution",
     label: "Resolve company identity",
@@ -295,11 +469,59 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     requires: ["company_identity", "required_signals includes expansion"],
     produces: ["expansion_evidence"],
     allowed_next: ["company_brain_qualification"],
-    providers: ["apify_linkedin_job_search"],
-    cost_units: 1,
+    // WAS `apify_linkedin_job_search`, which let a role's LOCATION stand as
+    // proof that a company entered a market — a US-located opening at a company
+    // with a decade-old US office would have satisfied the gate.
+    //
+    // Expansion evidence is an explicit dated statement of a new market. News
+    // carries it; a company's own post can corroborate it.
+    providers: ["apify_google_news", "apify_linkedin_company_posts"],
+    cost_units: 2,
     max_attempts: 2,
     fallback_policy: "provider_fallback_only",
-    evidence_required: ["location_evidence"],
+    evidence_required: ["expansion_statement", "published_at", "source_url"],
+  },
+  company_post_verification: {
+    id: "company_post_verification",
+    label: "Read the company's own posts",
+    requires: ["company_identity"],
+    produces: ["company_activity_evidence"],
+    allowed_next: ["company_brain_qualification"],
+    // Consumes a resolved LinkedIn company URL and cannot find one, so identity
+    // strictly precedes it. The compiler refuses a person URL here, which is
+    // where the company/leadership boundary is actually enforced.
+    providers: ["apify_linkedin_company_posts"],
+    cost_units: 1,
+    max_attempts: 2,
+    fallback_policy: "terminal_on_exhaustion",
+    evidence_required: ["post_url", "posted_at"],
+  },
+  product_launch_verification: {
+    id: "product_launch_verification",
+    label: "Verify a product launch",
+    requires: ["company_identity", "required_signals includes product_launch"],
+    produces: ["launch_evidence"],
+    allowed_next: ["company_brain_qualification"],
+    providers: ["apify_google_news", "apify_linkedin_company_posts"],
+    cost_units: 2,
+    max_attempts: 2,
+    fallback_policy: "provider_fallback_only",
+    evidence_required: ["launch_statement", "published_at", "source_url"],
+  },
+  technology_verification: {
+    id: "technology_verification",
+    label: "Verify the company's technology",
+    requires: ["company_domain", "required_signals includes technology"],
+    produces: ["technology_evidence"],
+    allowed_next: ["company_brain_qualification"],
+    // VERIFICATION ONLY, permanently as far as this provider is concerned:
+    // BuiltWith takes a domain list and returns what those domains run. There is
+    // no discovery counterpart because there is no query field to build one on.
+    providers: ["apify_builtwith_technology"],
+    cost_units: 1,
+    max_attempts: 1,
+    fallback_policy: "terminal_on_exhaustion",
+    evidence_required: ["domain", "technologies"],
   },
   company_brain_qualification: {
     id: "company_brain_qualification",
@@ -461,6 +683,31 @@ function hasSignal(m: LeadMissionV1, type: string): boolean {
 }
 
 /**
+ * Does the mission require this event ABOUT THIS SUBJECT?
+ *
+ * ── WHY THE SUBJECT CANNOT BE IGNORED HERE ─────────────────────────────────
+ *
+ * `post` means two different jobs depending on who posted. A company post is a
+ * page read against a resolved company URL, costs one unit and needs no
+ * authorisation. A leadership post is a claim about a PERSON — it needs an
+ * identified individual first and is unlock-gated all the way down.
+ *
+ * Scheduling a company-page read for a leadership signal would answer a
+ * question about a founder with a question about their employer's marketing,
+ * and then report the signal as satisfied.
+ *
+ * An UNDECLARED subject defaults to `company`, which is the conservative
+ * direction: the company read is the cheap, unauthorised one. Defaulting the
+ * other way would schedule person work — and person work is never scheduled,
+ * only offered.
+ */
+function hasSignalSubject(m: LeadMissionV1, type: string, subject: string): boolean {
+  return m.required_signals.some((sig) =>
+    sig.type === type &&
+    (((sig as { subject?: string }).subject ?? "company") === subject));
+}
+
+/**
  * Assemble the capability plan for a mission.
  *
  * The ENTRY capability is chosen from what the mission actually is, in a fixed
@@ -545,12 +792,61 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   } else if (missionSaysSo && asked("general_company_discovery")) {
     entry = "general_company_discovery";
     entryReason = "the mission requires general company discovery outside startup cohorts";
-  } else if (hasSignal(mission, "funding")) {
+  // ── A SIGNAL NO LONGER PICKS AN ENTRY THAT CANNOT DISCOVER ────────────────
+  //
+  // These two branches used to fire unconditionally, and the result was the
+  // worst outcome in the graph: not a wasted call, but NO CALL AT ALL.
+  // `ENGINE_DRIVEN_DISCOVERY` holds only the two real discovery capabilities,
+  // so entering at `funding_signal_discovery` or `expansion_signal_discovery`
+  // produced `skipped_no_input` for the ENTRY step — discovery never ran, the
+  // pool was empty, and the mission returned zero companies while reporting
+  // the signal as served.
+  //
+  // It also inverted the routing. `hasSignal(expansion)` was tested BEFORE the
+  // profile branches, so adding an expansion requirement to a cybersecurity
+  // mission REPLACED profile discovery with a company-name matcher. The mission
+  // got worse at finding the companies it asked for because it asked for more
+  // evidence about them.
+  //
+  // Guarded by `isCapabilitySupported`, both fall through to real discovery and
+  // the signal is carried as a qualifier — which is what `SIGNAL_RESEARCH_ROLES`
+  // has always said expansion is. The reason reaches the planner below.
+  // ── A SIGNAL ENTRY MUST AGREE WITH THE DECLARED RESEARCH SHAPE ────────────
+  //
+  // Funding discovery became real in Phase 4, and the first thing that exposed
+  // was an alignment problem the old `supported: false` had been hiding. A
+  // mission may carry a funding signal while its declared strategy is `hiring`
+  // — "B2B SaaS companies hiring RevOps that recently raised" is exactly that.
+  // Entering at funding discovery there makes the GRAPH disagree with the
+  // PLAYBOOK, and `authorizePlaybookExecution` then correctly refuses a mission
+  // that was never wrong.
+  //
+  // So the funding entry is taken only when funding is genuinely the research
+  // shape: the mission declared it, or it declared nothing and the signal is
+  // the only basis for discovery. A hiring-shaped mission keeps its profile
+  // entry and proves funding as a qualifier over the pool it finds.
+  } else if (
+    hasSignal(mission, "funding") &&
+    isCapabilitySupported("funding_signal_discovery") &&
+    ((mission.strategies ?? []).length === 0 ||
+      (mission.strategies ?? []).includes("funding"))
+  ) {
     entry = "funding_signal_discovery";
     entryReason = "the mission requires a funding signal";
-  } else if (hasSignal(mission, "expansion")) {
+  } else if (hasSignal(mission, "expansion") && isCapabilitySupported("expansion_signal_discovery")) {
     entry = "expansion_signal_discovery";
     entryReason = "the mission requires an expansion signal";
+  } else if (
+    hasSignal(mission, "product_launch") &&
+    isCapabilitySupported("product_launch_discovery") &&
+    (mission.strategies ?? []).length === 0
+  ) {
+    // Same rule as funding and expansion: a signal may choose the entry only
+    // when it is genuinely the research shape. A mission that declared a
+    // different strategy keeps its own entry and proves the launch as a
+    // qualifier over the pool that shape produces.
+    entry = "product_launch_discovery";
+    entryReason = "the mission requires a product-launch signal";
   } else if (mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
     entry = "startup_company_discovery";
     entryReason = "the mission targets startups";
@@ -619,9 +915,50 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
       // embedded evidence is expected to settle it without a paid call.
       entryReason += "; hiring evidence taken from embedded sources, not purchased";
     }
-    if (hasSignal(mission, "expansion")) {
+    // A verification step whose provider cannot produce the evidence is not a
+    // weak step, it is a false one — it would let a job posting's location
+    // stand as proof that a company entered a new market. Not scheduled; the
+    // gap is reported in `routing_advisories` instead.
+    if (hasSignal(mission, "expansion") && isCapabilitySupported("expansion_signal_verification")) {
       steps.push(step("expansion_signal_verification", order++, "the mission requires a verified expansion signal"));
     }
+
+    // ── THE THREE VERIFICATIONS THAT WERE DECLARED AND NEVER SCHEDULED ──────
+    //
+    // `company_post_verification`, `product_launch_verification` and
+    // `technology_verification` have existed in CAPABILITY_IDS, in the registry,
+    // with approved providers and declared `evidence_required`, since Phase 1 —
+    // and no branch ever pushed a step for any of them.
+    //
+    // The effect was the worst kind of silent gap. `resolveSignalSupport` says
+    // `technology/company` is SUPPORTED and BuiltWith is approved for it, so the
+    // system truthfully advertised a capability that a mission could never
+    // reach: "companies using Snowflake" planned discovery, identity, enrichment
+    // and qualification, and nothing that could look at a technology stack. The
+    // Brain was then asked to judge a technology signal from firmographics.
+    //
+    // Each is gated on `isCapabilitySupported` for the same reason the expansion
+    // branch above is: a verification step whose provider cannot produce the
+    // evidence is not a weak step, it is a false one.
+    if (hasSignal(mission, "technology") && isCapabilitySupported("technology_verification")) {
+      steps.push(step("technology_verification", order++,
+        "the mission requires evidence of the company's technology stack"));
+    }
+    // COMPANY posts only. A `post` signal whose subject is leadership is a
+    // PERSON claim and is unlock-gated — scheduling a company-page read for it
+    // would answer a question about a founder with a question about their
+    // employer's marketing.
+    if (hasSignalSubject(mission, "post", "company") &&
+        isCapabilitySupported("company_post_verification")) {
+      steps.push(step("company_post_verification", order++,
+        "the mission requires evidence from the company's own posts"));
+    }
+    if (hasSignal(mission, "product_launch") &&
+        isCapabilitySupported("product_launch_verification")) {
+      steps.push(step("product_launch_verification", order++,
+        "the mission requires a verified product-launch signal"));
+    }
+
     steps.push(step("company_brain_qualification", order++, "companies are qualified against the Company Brain"));
   }
 
@@ -642,8 +979,52 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   if (wantsPeople || mission.directives?.founder_unlock_recommended) {
     offered_capabilities.push("offer_founder_unlock");
   }
+  // ── A PERSON-LEVEL SIGNAL DECLARES ITS DEPENDENCY ─────────────────────────
+  //
+  // "Whose leadership has recently posted about US expansion" is a claim about
+  // a PERSON, and nothing can be proven about a person who has not been
+  // identified. Identity is reachable — `apify_linkedin_company_employees`
+  // produces it — and it is unlock-gated by deliberate design.
+  //
+  // Before the signal carried a subject, this mission asked for a leadership
+  // signal and the plan offered NOTHING: the requirement was invisible, so the
+  // dependency it implied was invisible too. Surfacing the offer is the honest
+  // middle between the two wrong answers — spending on people automatically,
+  // and dropping the requirement because no automatic route exists.
+  //
+  // An offer runs nothing. This adds no step and no cost; it puts a button in
+  // the Workbench and tells the user what it is for.
+  const needsPersonIdentity = (mission.required_signals ?? [])
+    .some((sig) => sig.subject === "leadership" || sig.subject === "employee");
+  if (needsPersonIdentity && !offered_capabilities.includes("offer_founder_unlock")) {
+    offered_capabilities.push("offer_founder_unlock");
+  }
   if (mission.requested_output === "contact_ready_leads") {
+    // ── BOTH HALVES, IN ORDER ────────────────────────────────────────────────
+    //
+    // "Contact ready" needs a PERSON and then a WAY TO REACH THEM, and those
+    // are two different purchases from two different Actors. Offering the
+    // contact unlock alone produced the defect this fixed: a button that could
+    // only ever run against somebody nobody had found yet.
+    if (!offered_capabilities.includes("offer_founder_unlock")) {
+      offered_capabilities.push("offer_founder_unlock");
+    }
     offered_capabilities.push("offer_contact_unlock");
+  }
+
+  // ── DEEP RESEARCH IS OFFERED, NEVER SCHEDULED ───────────────────────────
+  //
+  // Every qualified company can be researched more deeply, and none of them
+  // needs to be: qualification already establishes industry, size, geography
+  // and what the company does from evidence the run collects anyway. So this is
+  // an offer on every plan that produces companies — a button, costing nothing
+  // until pressed — and never a step.
+  //
+  // Deliberately NOT conditional on the mission's wording. A user who did not
+  // say "research deeply" may still want it once they see the shortlist, and a
+  // capability that appears only when a sentence matched is one nobody can find.
+  if (!offered_capabilities.includes("offer_deep_company_research")) {
+    offered_capabilities.push("offer_deep_company_research");
   }
 
   // Anything not in the plan is PROHIBITED. Stated positively so containment is
@@ -700,6 +1081,52 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
       "The mission targets startups. Startup-cohort sources carry stage, team " +
       "size and hiring state natively; a general company index does not and " +
       "cannot prove any of them.",
+    );
+  }
+
+  // ── THE CAPABILITY THIS MISSION WANTED AND CANNOT HAVE ────────────────────
+  //
+  // A signal whose capability is unsupported is not simply absent from the
+  // plan; the planner has to know WHY, or it will keep proposing the shape and
+  // reading the empty result as a bad query. The reason is the registry's own
+  // verified sentence, so there is no second wording to drift.
+  // ── A REQUIRED SIGNAL THAT THIS PLAN WILL NOT COLLECT ─────────────────────
+  //
+  // Funding became supported in Phase 4, and support is not the same as being
+  // SCHEDULED. A mission whose declared shape is hiring keeps its profile entry
+  // (see the entry rule above), so a funding signal it also carries has no step
+  // in this plan — the capability exists and this plan does not use it.
+  //
+  // That difference has to be visible or it becomes the Phase 0 defect wearing
+  // new clothes: a signal the system genuinely can serve, required by the
+  // mission, and quietly uncollected. The funding source is DISCOVERY-ONLY —
+  // it has no company input — so there is no way to prove funding over a pool
+  // this plan found some other way, and the planner needs to know that before
+  // it decides the shape is good enough.
+  if (hasSignal(mission, "funding") &&
+      !steps.some((st) => st.capability === "funding_signal_discovery")) {
+    routing_advisories.push(
+      "This mission requires funding evidence and this plan schedules no " +
+      "funding step, because its declared research shape discovers companies " +
+      "another way. The funding source is DISCOVERY-ONLY — it finds companies " +
+      "BY a round and has no company or domain input — so funding cannot be " +
+      "proven over the pool this plan produces. Either enter through funding " +
+      "discovery and verify the other signals over that pool, or expect the " +
+      "funding requirement to be reported as uncollected.",
+    );
+  }
+
+  for (const spec of unsupportedCapabilities()) {
+    const wanted =
+      (spec.id === "funding_signal_discovery" && hasSignal(mission, "funding")) ||
+      ((spec.id === "expansion_signal_discovery" ||
+        spec.id === "expansion_signal_verification") && hasSignal(mission, "expansion"));
+    if (!wanted) continue;
+    routing_advisories.push(
+      `This mission requires evidence that "${spec.label}" claims to produce, ` +
+      `and that capability is NOT SUPPORTED: ${spec.unsupported_reason} ` +
+      `No step was planned for it. Discovery proceeds on the company profile, ` +
+      `and this signal must be treated as unproven rather than assumed.`,
     );
   }
 

@@ -30,7 +30,7 @@
 // things: one is configuration, the other is an attempt that ran and did not
 // work.
 
-import { Loader2, Lock, AlertTriangle, RotateCw, Coins } from 'lucide-react';
+import { Loader2, Lock, AlertTriangle, RotateCw, Coins, MinusCircle } from 'lucide-react';
 import type { UnlockState } from '@/lib/workbench/unlockState';
 
 /**
@@ -97,6 +97,27 @@ export default function UnlockCell({
       >
         <Coins className="h-3 w-3" />
         Not enough credits
+      </span>
+    );
+  }
+
+  if (state === 'not_found') {
+    // ── PAID FOR, ANSWERED, EMPTY ────────────────────────────────────────────
+    //
+    // NOT a button. This state previously rendered as `not_researched` — an
+    // offer identical to a row nobody had touched — so a user who had already
+    // paid to search a company with no matching person was invited to buy the
+    // same nothing again.
+    //
+    // Not `failed` either: nothing went wrong, and "Try again" would be a lie
+    // about both what happened and what would happen next.
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[12px] text-[#6e7681]"
+        title="This ran and found nothing. Running it again would return the same result at the same price."
+      >
+        <MinusCircle className="h-3 w-3 text-[#6e7681]" />
+        None found
       </span>
     );
   }

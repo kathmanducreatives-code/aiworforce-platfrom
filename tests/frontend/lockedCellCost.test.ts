@@ -93,11 +93,18 @@ Deno.test("every unlock button dispatches an action that takes the FREE direct p
   // every row of every column.
   //
   // Pinned so a newly-added unlock action has to come back through here.
-  // BACK TO THREE. The card offered one next step because it had one cell; the
-  // spreadsheet has an unlockable COLUMN each for decision-maker, research and
-  // outreach, which is the interaction model that existed before the refactor
-  // removed it. Every one still takes the free direct path.
-  assertEquals(distinct, ["draft_outreach", "find_contacts", "research_company"]);
+  // BACK TO THREE, THEN FOUR. The card offered one next step because it had one
+  // cell; the spreadsheet has an unlockable COLUMN each for decision-maker,
+  // contact details, research and outreach.
+  //
+  // The property this test actually defends is the loop above: every dispatched
+  // action must map to a lead kind, because that mapping is what makes
+  // `runAction` return early through `runDirectLeadAction` instead of falling
+  // into the credits-confirm path — where a cost-free button label would be
+  // wrong. `find_contact_details` maps, so it takes the same free direct path.
+  assertEquals(distinct, [
+    "draft_outreach", "find_contact_details", "find_contacts", "research_company",
+  ]);
 });
 
 Deno.test("runAction returns on the direct lead path BEFORE estimating credits", () => {

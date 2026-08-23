@@ -5,6 +5,7 @@ import { evaluateEvidenceSufficiency } from "../../../supabase/functions/_shared
 import {
   planCandidateEnrichment, dedupeCompanyEnrichment, DEFAULT_EVIDENCE_BUDGET,
   emptyLedger, createInMemoryEvidenceCache,
+  enforcesUnlockGatedWebResearch, FORBIDDEN_AUTOMATIC_ACTIONS,
 } from "../../../supabase/functions/_shared/conditionalEnrichmentPlanner.ts";
 import { appendEvidence, companyKeyFor, satisfiedCategories, type CandidateEnvelope, type EvidenceItem } from "../../../supabase/functions/_shared/candidateEnvelope.ts";
 import { ACTOR_CAPABILITIES, isCallable, getActorCapability, unverifiedCapabilities } from "../../../supabase/functions/_shared/actorCapabilityRegistry.ts";
@@ -130,7 +131,11 @@ Deno.test("9/31: complete fit but missing timing → signal enrichment; staging 
   assertEquals(s.timingComplete, false);
   assertEquals(s.nextDecision, "signal_enrichment");
   const p = planCandidateEnrichment({ envelope: env, sufficiency: s, budget: DEFAULT_EVIDENCE_BUDGET, ledger: emptyLedger(), now: NOW });
-  assert(p.action === "specialized_signal_source" || p.action === "targeted_firecrawl", p.action);
+  // `|| p.action === "targeted_firecrawl"` used to be the other half of this
+  // assertion. A missing timing signal now takes a verified structured source
+  // or stages — it never falls back to crawling the company's website hoping a
+  // date is on the homepage.
+  assertEquals(p.action, "specialized_signal_source", p.action);
   assertEquals(p.reasonCode, "missing_timing_signal");
 });
 
@@ -261,22 +266,81 @@ Deno.test("companyKeyFor prefers LinkedIn URL → domain → name+geo", () => {
 });
 
 // ============ (21)(22) budget ============
-Deno.test("21: budget exhaustion stages honestly", () => {
+Deno.test("21: a gap only the web can close STAGES — it never orders a crawl", () => {
+  // ── WHAT THIS TEST USED TO SAY ───────────────────────────────────────────
+  //
+  // It exhausted `ledger.firecrawlCompaniesUsed` against
+  // `budget.firecrawlCompanies` and asserted `budget_exhausted` — which means
+  // the pass-case it was guarding was a plan that DID order a crawl, and the
+  // only thing standing between a candidate and a crawl was a counter reaching
+  // five. Both the counter and the budget line are gone, so the branch is
+  // asserted at its new floor instead: whatever the ledger says, the answer is
+  // the unlock gate.
   const contract = compileEvidenceContract(compileLeadEntityIntent("Using my ICP, find me 5 hot founders I should contact right now."), BRAIN);
   const env = personEnvelope([
     ev("person_identity", { confidence: "high" }), ev("person_company_association"),
     ev("company_website"), ev("company_industry"), ev("company_geography"), ev("company_size", { confidence: "low" }),
   ]);
   const s = evaluateEvidenceSufficiency({ contract, envelope: env, now: NOW });
-  const ledger = { ...emptyLedger(), firecrawlCompaniesUsed: DEFAULT_EVIDENCE_BUDGET.firecrawlCompanies };
-  // Remove structured signal routes by demanding an unsupported category set.
   const p = planCandidateEnrichment({
     envelope: env,
     sufficiency: { ...s, missingCriticalRequirements: ["company_business_model"], nextDecision: "targeted_web_verification" },
-    budget: DEFAULT_EVIDENCE_BUDGET, ledger, now: NOW,
+    budget: DEFAULT_EVIDENCE_BUDGET, ledger: emptyLedger(), now: NOW,
   });
   assertEquals(p.action, "stage");
-  assertEquals(p.reasonCode, "budget_exhausted");
+  assertEquals(p.reasonCode, "web_research_is_unlock_gated");
+  // AND IT NAMES NO ACTOR. A staged plan carrying `firecrawl_scrape_url` and
+  // its implementation id is a call plan in everything but the verb.
+  assertEquals(p.actorKey, undefined);
+  assertEquals(p.estimatedCostClass, "none");
+});
+
+Deno.test("21b: NO sufficiency verdict can produce an automatic crawl", () => {
+  // The branch above is one route. This walks EVERY `nextDecision` the
+  // sufficiency evaluator can return, because the way an automatic crawl comes
+  // back is not someone re-adding the branch that was deleted — it is a new
+  // decision value being wired to the cheapest thing that answers it.
+  const contract = compileEvidenceContract(compileLeadEntityIntent("Using my ICP, find me 5 hot founders I should contact right now."), BRAIN);
+  const env = personEnvelope([
+    ev("person_identity", { confidence: "high" }), ev("person_company_association"),
+    ev("company_website"), ev("company_industry"), ev("company_geography"), ev("company_size", { confidence: "low" }),
+  ]);
+  const s = evaluateEvidenceSufficiency({ contract, envelope: env, now: NOW });
+
+  const decisions = [
+    "structured_company_enrichment", "targeted_web_verification",
+    "signal_enrichment", "qualify_now", "reject", "stage",
+  ] as const;
+
+  const plans = decisions.map((d) => planCandidateEnrichment({
+    envelope: env,
+    sufficiency: {
+      ...s,
+      missingCriticalRequirements: ["company_business_model", "job_signal"],
+      nextDecision: d as typeof s.nextDecision,
+    },
+    budget: DEFAULT_EVIDENCE_BUDGET, ledger: emptyLedger(), now: NOW,
+  }));
+
+  assertEquals(enforcesUnlockGatedWebResearch(plans), []);
+});
+
+Deno.test("21c: the guard BITES — it catches a reintroduced crawl", () => {
+  // A guard nobody has seen fail is a guard nobody knows works. This feeds it
+  // exactly the plan the deleted branch used to return.
+  const reintroduced = [{
+    candidateId: "c1", companyKey: "dom:acme.com",
+    action: "targeted_firecrawl" as unknown as "stage",
+    actorKey: "firecrawl_scrape_url", actorId: "mendable/firecrawl",
+    requiredEvidence: ["company_business_model" as const],
+    reasonCode: "missing_official_proof" as const,
+    estimatedCostClass: "high" as const,
+  }];
+  const violations = enforcesUnlockGatedWebResearch(reintroduced);
+  assertEquals(violations.length, 3, violations.join(" | "));
+  assert(violations.some((v) => /research_company unlock/.test(v)));
+  assert(violations.some((v) => /firecrawl_scrape_url/.test(v)));
+  assert(violations.some((v) => /cost class "high"/.test(v)));
 });
 
 Deno.test("22: requested accepted count stops further enrichment", () => {
@@ -299,10 +363,29 @@ Deno.test("27: search-wide/enrich-narrow — non-competitive candidates are not 
 });
 
 // ============ (13) Firecrawl page cap ============
-Deno.test("13: Firecrawl capability is capped at 3 pages per company", () => {
+Deno.test("13: the workflow budget grants NO automatic Firecrawl allowance", () => {
+  // The actor's own page cap is unchanged and still matters — the
+  // `research_company` unlock runs through it.
   assertEquals(ACTOR_CAPABILITIES.firecrawl_scrape_url.defaultMaxItems, 3);
-  assertEquals(DEFAULT_EVIDENCE_BUDGET.firecrawlPagesPerCompany, 3);
-  assertEquals(DEFAULT_EVIDENCE_BUDGET.firecrawlCompanies, 5);
+
+  // ── WHAT CHANGED, AND WHY IT IS THE POINT ────────────────────────────────
+  //
+  // This asserted `firecrawlPagesPerCompany === 3` and `firecrawlCompanies
+  // === 5` — an allowance of fifteen pages that every caller taking
+  // DEFAULT_EVIDENCE_BUDGET already held without ever naming Firecrawl. A
+  // budget line IS permission. Zeroing it would have left the field there for
+  // someone to raise, so the fields are deleted and their absence is asserted.
+  const budget = DEFAULT_EVIDENCE_BUDGET as unknown as Record<string, unknown>;
+  for (const gone of ["firecrawlCompanies", "firecrawlPagesPerCompany"]) {
+    assertEquals(gone in budget, false,
+      `${gone} is back in the workflow budget — that is a standing authorisation to crawl`);
+  }
+  // The ledger that counted the spend is gone with it.
+  assertEquals("firecrawlCompaniesUsed" in (emptyLedger() as unknown as Record<string, unknown>), false);
+
+  // And the forbidden set is non-empty, so the guard above can never pass
+  // vacuously by having nothing to forbid.
+  assert(FORBIDDEN_AUTOMATIC_ACTIONS.includes("targeted_firecrawl"));
 });
 
 // ============ (24)(25)(26) evidence integrity ============

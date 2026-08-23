@@ -49,6 +49,7 @@
 // PURE. No network, provider, model or database access — the caller injects the
 // model call and passes its raw output in.
 
+import { readSignalPhrase } from "./missionSignalDescriptor.ts";
 import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
@@ -1149,10 +1150,35 @@ function proposalToMissionCandidate(
     //
     // This is the seam where the two part company, and it is the ONLY place
     // the conversion is done — see `canonicalSignalType`.
-    required_signals: p.preferred_signals.map((s) => ({
-      type: canonicalSignalType(s),
-      ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
-    })),
+    // ── THE MODEL'S PROSE, READ STRUCTURALLY ──────────────────────────────
+    //
+    // This mapped each phrase through `canonicalSignalType`, which reduces it
+    // to ONE word and returns it verbatim when nothing matches. That is where
+    // "enterprise sales hiring" lost its role and "leadership posts" became an
+    // unrecognised string: the model had written the requirement correctly and
+    // the compiler discarded everything except the head noun.
+    //
+    // `readSignalPhrase` is the SAME reader the deterministic parser uses, so
+    // both paths turn the same words into the same requirement. A phrase it
+    // cannot read yields null — recorded below as unrepresented, never rounded
+    // to the nearest event.
+    required_signals: p.preferred_signals.map((s) => {
+      const d = readSignalPhrase(s);
+      if (!d) {
+        // Preserve the old behaviour for a phrase with no readable event: the
+        // canonical head word, kept verbatim when it matches nothing, so
+        // coverage still reports it as unrecognised rather than dropping it.
+        return {
+          type: canonicalSignalType(s),
+          phrase: s,
+          ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
+        };
+      }
+      return {
+        ...d,
+        ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
+      };
+    }),
     decision_makers: {
       roles: p.decision_maker_roles,
       current_employment_required: true,

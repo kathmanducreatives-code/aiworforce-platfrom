@@ -174,11 +174,20 @@ async function runHiring(
   m: LeadMissionV1,
   rows: Record<string, Record<string, unknown>[]> = HAPPY,
   over: Partial<CapabilityEngineDeps> = {},
+  /**
+   * Force the capability plan instead of deriving it from the mission.
+   *
+   * The "a refused preflight runs nothing" invariant used to be reachable
+   * through a hiring+funding mission, which entered at
+   * `funding_signal_discovery`. That capability is now `supported: false`, so
+   * the router can no longer build such a plan — the invariant still needs one.
+   */
+  planOverride: ReturnType<typeof buildCapabilityGraph> | null = null,
 ) {
   const rec: Recorder = { calls: [], inputs: [] };
 
   const selection = selectResearchPlaybooks(m);
-  const plan = buildCapabilityGraph(m);
+  const plan = planOverride ?? buildCapabilityGraph(m);
   const authorization = authorizePlaybookExecution(selection, plan, m);
   const first = compileFirstProviderCall(plan);
   const preflight = buildPaidExecutionPreflight({
@@ -594,16 +603,23 @@ Deno.test("failure: enrichment failure HOLDS the company, it never rejects it", 
 });
 
 Deno.test("failure: a playbook/capability mismatch refuses before any actor runs", async () => {
-  // strategy hiring, but the graph enters at a funding capability the engine
-  // skips. The boundary refuses, so the engine never runs at all.
+  // The invariant: a refused preflight means the engine never runs and no actor
+  // is ever called.
+  //
+  // The mismatch is constructed rather than routed. This mission used to enter
+  // at `funding_signal_discovery` — a capability the engine skips — and be
+  // refused by the boundary. That capability is `supported: false` now, so the
+  // mission routes to real discovery and legitimately proceeds; the plan below
+  // is the one the router is no longer permitted to build.
   const m = hiringMission({
     strategies: ["hiring"],
     required_signals: [{ type: "hiring" }, { type: "funding" }],
-    company_profile: {
-      business_models: [], verticals: ["b2b saas"], stages: [], locations: [],
-    },
   });
-  const r = await runHiring(m);
+  const divergent = {
+    ...buildCapabilityGraph(m),
+    entry_capability: "expansion_signal_discovery" as const,
+  };
+  const r = await runHiring(m, HAPPY, {}, divergent);
   assertFalse(r.preflight.ok);
   assert(r.preflight.blocked.some((b) => b.code === "playbook_not_authorized"));
   assertEquals(r.run, null, "the engine must not have run");
@@ -612,7 +628,8 @@ Deno.test("failure: a playbook/capability mismatch refuses before any actor runs
 });
 
 Deno.test("failure: an unsupported playbook never reaches execution", async () => {
-  for (const strategy of ["social", "news", "funding"] as const) {
+  // `funding` left this list in Phase 4 — it is a supported shape now.
+  for (const strategy of ["social", "news"] as const) {
     const r = await runHiring(hiringMission({ strategies: [strategy] }));
     assertFalse(r.authorization.applies, `${strategy} is not governed by the hiring boundary`);
     assertEquals(r.selection.runnable, [], `${strategy} is not runnable`);

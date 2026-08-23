@@ -156,13 +156,91 @@ Deno.test("specific blockers name the actual missing requirement", () => {
     "blocked_missing_company_brain",
   );
   assertEquals(
-    assessOpenerEligibility(ctxFor({ research: false }), false).reason_code,
-    "blocked_missing_company_research",
-  );
-  assertEquals(
     assessOpenerEligibility(ctxFor({ fresh: true }), true).reason_code,
     "blocked_icp_disqualified",
   );
+});
+
+// ═══ DEEP RESEARCH IMPROVES A DRAFT; IT NO LONGER GATES ONE ════════════════
+
+Deno.test("missing deep research DOWNGRADES a draft — it no longer blocks it", () => {
+  // ── WHAT THIS USED TO ASSERT ─────────────────────────────────────────────
+  //
+  // `research: false` → `blocked_missing_company_research`. So a lead with a
+  // verified buyer, a coherent Company Brain and a fresh dated trigger could
+  // not be written to until a Firecrawl crawl had been PURCHASED — a premium
+  // unlock standing in front of the product's core action, discarding the
+  // qualification and signal evidence the user had already paid for.
+  const e = assessOpenerEligibility(ctxFor({ research: false, fresh: true }), false);
+
+  assertEquals(e.status, "downgraded", "a real trigger is writable without a crawl");
+  assertEquals(e.reason_code, "downgraded_no_research");
+  // A DATED TRIGGER STILL EARNS `specific`. Deep research raises confidence in
+  // what a company DOES; it does not supply a reason to write today.
+  assertEquals(e.personalization_depth, "specific");
+  // …and it names the unlock that would improve it, so the Workbench can offer
+  // the right button instead of a generic "add more evidence".
+  assertEquals(e.missing_requirements, ["company_research"]);
+});
+
+Deno.test("THE FLOOR: nothing grounded at all is still a block", () => {
+  // ── WHERE THE LINE MOVED TO, AND WHERE IT DID NOT ────────────────────────
+  //
+  // Relaxing the research gate must not become "always draft". This fixture has
+  // no crawl, no dated trigger and no company-site or sourcing evidence — so
+  // there is genuinely nothing to write from, and a draft here could only be
+  // invented. That is the one state that must still refuse.
+  //
+  // Note the reason code: `blocked_no_grounded_evidence`, not
+  // `blocked_missing_company_research`. The difference matters to a user, who
+  // would otherwise be sent to buy a crawl when what they actually lack is any
+  // evidence at all.
+  const e = assessOpenerEligibility(ctxFor({ research: false }), false);
+  assertEquals(e.status, "blocked");
+  assertEquals(e.reason_code, "blocked_no_grounded_evidence");
+  assertEquals(e.personalization_depth, "none");
+  assertEquals(e.missing_requirements, ["grounded_evidence"]);
+});
+
+Deno.test("the retired block is emitted by NOTHING", () => {
+  // `blocked_missing_company_research` is kept in the union so historical rows
+  // stay parseable, and must never be produced again. Asserted across the whole
+  // matrix of fixture states rather than a single case, because a reintroduced
+  // block would most likely appear in one branch and not the others.
+  for (const research of [true, false]) {
+    for (const person of [true, false]) {
+      for (const fresh of [undefined, true, false]) {
+        const ctx = ctxFor({
+          research, person, ...(fresh === undefined ? {} : { fresh }),
+        });
+        for (const icp of [true, false]) {
+          const e = assessOpenerEligibility(ctx, icp);
+          assert(e.reason_code !== "blocked_missing_company_research",
+            `research=${research} person=${person} fresh=${fresh} icp=${icp} ` +
+            `still blocks on missing research`);
+        }
+      }
+    }
+  }
+});
+
+Deno.test("research WITHOUT a trigger stays company_level, as before", () => {
+  // Unchanged behaviour, asserted so the new grading did not quietly promote
+  // a crawl into a why-now. "I read your website" is not a trigger.
+  const e = assessOpenerEligibility(ctxFor({}), false);
+  assertEquals(e.status, "downgraded");
+  assertEquals(e.reason_code, "downgraded_company_level");
+  assertEquals(e.personalization_depth, "company_level");
+  assertEquals(e.missing_requirements, ["fresh_timing_signal"]);
+});
+
+Deno.test("a verified person is STILL required — that gate did not move", () => {
+  // Relaxing the research gate must not relax the person gate. A draft with no
+  // verified recipient is a template, and the whole chain exists to avoid one.
+  const e = assessOpenerEligibility(ctxFor({ person: false, research: false }), false);
+  assertEquals(e.status, "blocked");
+  assertEquals(e.reason_code, "blocked_missing_verified_person");
+  assertEquals(e.personalization_depth, "none");
 });
 
 Deno.test("an ICP disqualifier overrides an otherwise ready account", () => {

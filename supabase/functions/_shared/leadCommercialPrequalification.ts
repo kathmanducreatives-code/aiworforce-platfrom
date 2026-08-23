@@ -39,9 +39,9 @@ export type { SignalTier };
  * Y Combinator's own page appeared as a "company" on an earlier run and was
  * counted as a qualified lead.
  */
-const ARTIFACT_DOMAINS: readonly string[] = [
+export const ARTIFACT_DOMAINS: readonly string[] = Object.freeze([
   "ycombinator.com", "workatastartup.com", "news.ycombinator.com",
-];
+]);
 
 const lc = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase() : "";
 

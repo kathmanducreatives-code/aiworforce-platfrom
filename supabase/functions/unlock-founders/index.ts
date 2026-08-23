@@ -24,10 +24,14 @@ import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import {
   authorizeUnlock, findCompletedUnlock, parseUnlockRequest,
   UNLOCK_REFUSAL_MESSAGE, UNLOCK_REFUSAL_STATUS, UNLOCK_RESULT_KEY,
+  readUnlockedPeople,
   type UnlockRefusal,
 } from "../_shared/founderUnlockContract.ts";
 import { computeUnlockCharge } from "../_shared/pricing.ts";
 import { runFounderUnlock } from "../_shared/founderUnlockRunner.ts";
+import {
+  runContactEnrichment, type ResolvedPerson,
+} from "../_shared/contactEnrichmentRunner.ts";
 import { readCheckpointCompanies } from "../_shared/leadResumeState.ts";
 import { readPersistedLeadMission } from "../_shared/leadMissionRuntime.ts";
 import { runTool } from "../_shared/toolRegistry.ts";
@@ -52,6 +56,52 @@ const refuse = (r: UnlockRefusal, extra: Record<string, unknown> = {}) =>
 
 /** Used only when the run's mission did not name any. */
 const DEFAULT_ROLES = ["Founder", "Co-Founder", "CEO", "Owner"];
+
+/**
+ * Record one completed unlock against its task, WITHOUT clobbering the rest.
+ *
+ * ── READ-MODIFY-WRITE, AND WHY IT CANNOT BE A BLIND UPDATE ─────────────────
+ *
+ * `update({ result })` replaces the whole jsonb column. A blind write here
+ * deletes the Workbench pool this unlock was authorised against — the pool the
+ * NEXT unlock's `company_not_in_pool` check reads. So the prior value is read,
+ * merged at three levels (task result → all unlocks → this company), and
+ * written back.
+ *
+ * Shared by the founder and contact paths deliberately: two copies of a
+ * read-modify-write over the same column is how one of them eventually forgets
+ * a level and erases the other's result.
+ */
+// deno-lint-ignore no-explicit-any
+type UnlockDb = { from: (table: string) => any };
+
+async function persistUnlock(
+  admin: UnlockDb,
+  request: { task_id: string; company_key: string; unlock_type: string },
+  row: { company_name?: string | null },
+  unlockRecord: Record<string, unknown>,
+): Promise<void> {
+  void row;
+  const db = admin;
+  const { data: cur } = await db.from("tasks")
+    .select("result").eq("id", request.task_id).maybeSingle();
+  const prior = (cur?.result && typeof cur.result === "object")
+    ? cur.result as Record<string, unknown> : {};
+  const allUnlocks = (prior[UNLOCK_RESULT_KEY] && typeof prior[UNLOCK_RESULT_KEY] === "object")
+    ? prior[UNLOCK_RESULT_KEY] as Record<string, unknown> : {};
+  const forCompany = (allUnlocks[request.company_key] &&
+    typeof allUnlocks[request.company_key] === "object")
+    ? allUnlocks[request.company_key] as Record<string, unknown> : {};
+  await db.from("tasks").update({
+    result: {
+      ...prior,
+      [UNLOCK_RESULT_KEY]: {
+        ...allUnlocks,
+        [request.company_key]: { ...forCompany, [request.unlock_type]: unlockRecord },
+      },
+    },
+  }).eq("id", request.task_id);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -203,6 +253,99 @@ Deno.serve(async (req) => {
     user_id: (task as { user_id?: string }).user_id ?? userId,
   };
 
+  // ── 7. RUN THE THING THAT WAS ACTUALLY BOUGHT ────────────────────────────
+  //
+  // THE DEFECT THIS BRANCH FIXES.
+  //
+  // `unlock_type` was read in four places — the replay lookup, the ledger kind,
+  // a log line and the stored record — and never once decided what ran. So
+  // `contact_unlock` charged 2 credits and called `runFounderUnlock`, the same
+  // people SEARCH `founder_unlock` had just run for 3. `UnlockedPerson` carries
+  // no email and no phone, so the second purchase could not have produced a
+  // contact method under any circumstances, and `founder_unlock_required_first`
+  // made it mandatory rather than optional.
+  //
+  // Contact enrichment is a different Actor doing a different job: it takes the
+  // person the founder unlock already resolved and looks up their business
+  // email. It cannot search, so it is only reachable in this order — which is
+  // what `founder_unlock_required_first` was always trying to express.
+  if (request.unlock_type === "contact_unlock") {
+    const priorPeople = readUnlockedPeople(taskResult, request.company_key);
+    const person: ResolvedPerson | null = priorPeople[0] ?? null;
+
+    const enrichment = await runContactEnrichment(
+      { person, emailLookupAuthorized: true, existing: null },
+      {
+        invoke: async (call) => {
+          const rr = await runTool("source_with_apify", {
+            selected_actor_key: call.actorKey,
+            actor_id: call.actorId,
+            compiled_actor_input: true,
+            capability_key: call.actorKey,
+            input: call.input as Record<string, unknown>,
+            compiled_input_hash: call.inputHash,
+            persistence_authority: "contact_unlock" as const,
+          }, ctx as never);
+          if (!rr.ok || !rr.data) throw new Error(rr.error ?? "contact_actor_failed");
+          const kind = resolveResponseKind({
+            actorKey: call.actorKey, actorId: call.actorId,
+            sourceType: (rr.data as { normalized_source_type?: string })
+              .normalized_source_type ?? null,
+          });
+          return readProviderResultItems(
+            rr.data as Record<string, unknown>, kind) as Record<string, unknown>[];
+        },
+      },
+    );
+
+    // ── BILLING FOLLOWS THE SAME RULE AS THE FOUNDER UNLOCK ────────────────
+    //
+    // `providerRan: false` covers every refusal — no resolved person, no usable
+    // profile id — and those are charged zero because nothing was spent on the
+    // user's behalf. A lookup that RAN and found nothing is a different case:
+    // the provider billed us for the search, so `verifiedCount` counts the
+    // answer rather than the address, and an honest `not_found` is charged.
+    // Selling an attempt and refunding every miss would make the miss free and
+    // the hit subsidise it.
+    const answered = enrichment.record.status === "email_found" ||
+      enrichment.record.status === "not_found";
+    const contactCharge = computeUnlockCharge({
+      reserved: price,
+      providerRan: enrichment.provider_ran,
+      verifiedCount: answered ? 1 : 0,
+    });
+    await admin.rpc("credits_finalize", {
+      p_transaction_id: transactionId,
+      p_actual: contactCharge.actual,
+      p_status: contactCharge.status,
+      p_reason: contactCharge.reason,
+    });
+    console.log("[unlock-founders][contact-finalized]", {
+      transaction_id: transactionId, charged: contactCharge.actual,
+      status: enrichment.record.status, refusal: enrichment.refusal,
+    });
+
+    await persistUnlock(admin, request, row, {
+      version: "contact-unlock-v1",
+      transaction_id: transactionId,
+      unlock_type: request.unlock_type,
+      company_key: request.company_key,
+      company_name: row.company_name,
+      contact: enrichment.record,
+      charged_credits: contactCharge.actual,
+      charge_status: contactCharge.status,
+      unlocked_at: new Date().toISOString(),
+    });
+
+    return json({
+      ok: enrichment.record.status !== "refused",
+      unlock_type: "contact_unlock",
+      contact: enrichment.record,
+      charged_credits: contactCharge.actual,
+      message: enrichment.record.reason,
+    }, enrichment.record.status === "refused" ? 409 : 200);
+  }
+
   let outcome;
   try {
     outcome = await runFounderUnlock({
@@ -287,22 +430,8 @@ Deno.serve(async (req) => {
   try {
     const { data: cur } = await admin.from("tasks")
       .select("result").eq("id", request.task_id).maybeSingle();
-    const prior = (cur?.result && typeof cur.result === "object")
-      ? cur.result as Record<string, unknown> : {};
-    const allUnlocks = (prior[UNLOCK_RESULT_KEY] && typeof prior[UNLOCK_RESULT_KEY] === "object")
-      ? prior[UNLOCK_RESULT_KEY] as Record<string, unknown> : {};
-    const forCompany = (allUnlocks[request.company_key] &&
-      typeof allUnlocks[request.company_key] === "object")
-      ? allUnlocks[request.company_key] as Record<string, unknown> : {};
-    await admin.from("tasks").update({
-      result: {
-        ...prior,
-        [UNLOCK_RESULT_KEY]: {
-          ...allUnlocks,
-          [request.company_key]: { ...forCompany, [request.unlock_type]: unlockRecord },
-        },
-      },
-    }).eq("id", request.task_id);
+    void cur;
+    await persistUnlock(admin, request, row, unlockRecord);
   } catch (e) {
     console.error("[unlock-founders][persist-error]", String(e));
   }

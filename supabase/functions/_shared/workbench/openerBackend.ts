@@ -355,11 +355,32 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
 export type OpenerReasonCode =
   | "ready"
   | "downgraded_company_level"
+  /**
+   * Writable, and deep research would make it richer.
+   *
+   * REPLACES `blocked_missing_company_research` AS A BLOCK. Firecrawl is a
+   * premium unlock; requiring it before any draft made the product's core
+   * action conditional on an upsell, and threw away the qualification and
+   * signal evidence the user had already paid for.
+   */
+  | "downgraded_no_research"
+  /**
+   * The floor. NO grounded evidence of any kind — not merely no crawl.
+   *
+   * This is the only state in which personalization would have to be invented,
+   * which is the thing that must never happen.
+   */
+  | "blocked_no_grounded_evidence"
   | "blocked_missing_verified_person"
   | "blocked_person_contract_invalid"
   | "blocked_missing_company_brain"
   | "blocked_seller_identity_conflict"
   | "blocked_company_brain_conflict"
+  /**
+   * RETAINED FOR READING OLD ROWS ONLY. Nothing emits it any more — see
+   * `downgraded_no_research`. Removing it would make historical drafts
+   * unparseable.
+   */
   | "blocked_missing_company_research"
   | "blocked_icp_disqualified";
 
@@ -480,27 +501,74 @@ export function assessOpenerEligibility(
     };
   }
 
+  // ── DEEP RESEARCH IMPROVES A DRAFT; IT NO LONGER GATES ONE ───────────────
+  //
+  // This was a BLOCK: `blocked_missing_company_research` whenever a company
+  // summary or its evidence was absent. So a lead with a verified buyer, a
+  // dated hiring signal and full firmographics could not be written to until a
+  // Firecrawl crawl had been purchased — a premium enrichment standing in front
+  // of the product's core action.
+  //
+  // The honest requirement is that a message has SOMETHING GROUNDED to say, and
+  // a crawl is one source of that rather than the only one. Qualification has
+  // already established industry, size, geography and a description, and the
+  // signal stages have already established what changed and when. Refusing to
+  // write from that was refusing to use evidence the user had already paid for.
+  //
+  // What must never happen is a draft written from nothing, so the floor moves
+  // rather than disappearing: no grounded evidence at all is still a block.
+  const groundedEvidence = ctx.evidence.filter((e) => e.allowed);
   const researchUsable = !!ctx.company.summary && ctx.evidence.length > 0;
-  if (!researchUsable) {
+  const freshTiming = groundedEvidence.some((e) =>
+    e.fresh && (e.source_type === "job_posting" || e.source_type === "signal"));
+  const companyGrounding = groundedEvidence.some((e) =>
+    e.source_type === "sourcing" || e.source_type === "linkedin" ||
+    e.source_type === "company_site");
+
+  if (!researchUsable && !freshTiming && !companyGrounding) {
+    // THE FLOOR. Not "no research" — no grounded evidence of ANY kind, which
+    // is the only state in which personalization would have to be invented.
     return {
       status: "blocked",
-      reason_code: "blocked_missing_company_research",
+      reason_code: "blocked_no_grounded_evidence",
       personalization_depth: "none" as PersonalizationDepth,
       allowed_evidence_ids: allowed,
-      missing_requirements: ["company_research"],
+      missing_requirements: ["grounded_evidence"],
     };
   }
 
-  // A fresh, allowed timing signal is what earns "specific" personalization.
-  const freshTiming = ctx.evidence.some((e) => e.allowed && e.fresh && (e.source_type === "job_posting" || e.source_type === "signal"));
+  // ── DEPTH, GRADED BY WHAT IS ACTUALLY HELD ───────────────────────────────
+  //
+  // `specific` is earned by a fresh dated trigger — a real why-now. Deep
+  // research raises confidence in what the company DOES; it does not by itself
+  // supply a reason to write today, so it does not promote a draft to
+  // `specific` on its own. That distinction is the difference between "I saw
+  // you're hiring three AEs" and "I read your website".
   if (!freshTiming) {
-    // No trigger is NOT a block — it downgrades depth and never invents a why-now.
     return {
       status: "downgraded",
-      reason_code: "downgraded_company_level",
+      reason_code: researchUsable
+        ? "downgraded_company_level"
+        // NAMES WHAT IS MISSING, so the Workbench can offer the right unlock
+        // instead of a generic "add more evidence".
+        : "downgraded_no_research",
       personalization_depth: "company_level",
       allowed_evidence_ids: allowed,
-      missing_requirements: ["fresh_timing_signal"],
+      missing_requirements: researchUsable
+        ? ["fresh_timing_signal"]
+        : ["fresh_timing_signal", "company_research"],
+    };
+  }
+
+  if (!researchUsable) {
+    // A REAL TRIGGER, WITHOUT THE CRAWL. Specific enough to write, and the
+    // status says plainly what would make it richer.
+    return {
+      status: "downgraded",
+      reason_code: "downgraded_no_research",
+      personalization_depth: "specific",
+      allowed_evidence_ids: allowed,
+      missing_requirements: ["company_research"],
     };
   }
 

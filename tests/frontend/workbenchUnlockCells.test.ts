@@ -94,7 +94,10 @@ Deno.test("7. NO CREDIT AMOUNT IS FABRICATED", () => {
   assert(/cost\s*=\s*null/.test(CELL),
     "the cell still DEFAULTS to free — an unpriced action must not invent one");
   const usages = [...SHEET.matchAll(/<UnlockCell\b[\s\S]*?\/>/g)];
-  assertEquals(usages.length, 3, "one per unlockable column");
+  // 3 → 4: the Contact details column. The count is not the point — the loop
+  // below is. Every cell must quote `priceFor` and none may carry a literal, so
+  // a new column cannot ship with a number somebody typed.
+  assertEquals(usages.length, 4, "one per unlockable column");
   for (const u of usages) {
     assert(/cost=\{priceFor\('/.test(u[0]),
       `the quote must come from the price table, not a literal:\n${u[0]}`);
@@ -114,13 +117,14 @@ Deno.test("8. but the cell CAN render a real cost when one exists", () => {
 
 Deno.test("9. every unlock names its own row id", () => {
   const calls = [...SHEET.matchAll(/onUnlock\('([a-z_]+)',\s*([A-Za-z.]+)\)/g)];
-  assertEquals(calls.length, 3, "decision-maker, research, outreach");
+  assertEquals(calls.length, 4,
+    "decision-maker, contact details, research, outreach");
   for (const [, action, arg] of calls) {
     assertEquals(arg, "r.id", `${action} must spend against the row it sits on`);
   }
   assertEquals(
     calls.map((c) => c[1]).sort(),
-    ["draft_outreach", "find_contacts", "research_company"],
+    ["draft_outreach", "find_contact_details", "find_contacts", "research_company"],
   );
 });
 

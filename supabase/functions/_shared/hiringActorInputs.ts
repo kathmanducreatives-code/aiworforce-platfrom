@@ -16,9 +16,15 @@ import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, COMPANY_SCRAPER_MODES, COMPANY_SIZE_BANDS,
   EMAIL_ENRICHMENT_MODES, HIRING_ACTOR_CATALOG, JOB_EMPLOYMENT_TYPES,
   JOB_POSTED_LIMITS, JOB_SORT_BY, JOB_WORKPLACE_TYPES, PROFILE_SEARCH_SCRAPER_MODES,
+  PROFILE_SCRAPER_MODES, PROFILE_SCRAPER_EMAIL_MODE,
   YC_MEMO23_INDUSTRIES, YC_MEMO23_MAX_SIZES, YC_MEMO23_MIN_SIZES, YC_MEMO23_MODES,
   YC_SOLIDCODE_INDUSTRIES, YC_SOLIDCODE_REGIONS, YC_SOLIDCODE_STATUSES,
   YC_SOLIDCODE_TEAM_SIZES,
+  FUNDING_ROUND_STAGES, FUNDING_COUNTRIES, FUNDING_VERTICALS,
+  FUNDING_EMPLOYEE_BUCKETS, FUNDING_STAGES_WITHOUT_COVERAGE,
+  POST_POSTED_LIMITS, COMMENT_POSTED_LIMITS, POST_SEARCH_SORT_BY,
+  POST_PROFILE_SCRAPER_MODES, POST_CONTEXT_COUNTRIES, POST_CONTENT_TYPES,
+  NEWS_TIMEFRAMES, NEWS_TOPICS, NEWS_REGION_LANGUAGES,
 } from "./hiringActorCatalog.ts";
 
 // ── CONTRACTS ────────────────────────────────────────────────────────────────
@@ -107,6 +113,58 @@ export interface HarvestProfileSearchInput {
   /** MUST come from PROFILE_SEARCH_SCRAPER_MODES — NOT the employees enum. */
   profileScraperMode: typeof PROFILE_SEARCH_SCRAPER_MODES[number];
   maxItems: number;
+}
+
+/**
+ * ONE KNOWN PERSON, ENRICHED. Never a search.
+ *
+ * ── THIS IS THE PAYLOAD, AND ONLY THE PAYLOAD ───────────────────────────────
+ *
+ * Every field here exists in the live Actor schema. `build()` sends the input
+ * object through verbatim, so a convenience field added to this type would be
+ * transmitted to an Actor that has no such input — and the contract guard in
+ * `actorInputContracts.test.ts` fails the build when one is. It caught exactly
+ * that during this change: a `maxItems` ceiling, invented here, that the Actor
+ * does not accept. The row count of this call IS the length of the target list.
+ *
+ * Compiler-only arguments — the email authorisation — live in
+ * `ProfileScraperCompileArgs` and never reach the wire.
+ */
+export interface HarvestProfileScraperInput {
+  /** Full profile URLs. Vanity slugs work; the opaque member-id form does not. */
+  urls?: string[];
+  /** The last path segment of a profile URL. */
+  publicIdentifiers?: string[];
+  /**
+   * The opaque `ACwAAA…` member id.
+   *
+   * THIS IS THE HANDOFF FROM DISCOVERY. `company-employees` returns that form
+   * and never a vanity slug — its own `company_employees_opaque_profile_url`
+   * defect says so — so a decision maker found there arrives here as a profile
+   * ID, not a URL. Putting it in `urls` is the mistake this field exists to
+   * prevent.
+   */
+  profileIds?: string[];
+  /** MUST come from PROFILE_SCRAPER_MODES — a third, incompatible vocabulary. */
+  profileScraperMode: typeof PROFILE_SCRAPER_MODES[number];
+}
+
+export interface ProfileScraperCompileArgs extends HarvestProfileScraperInput {
+  /**
+   * THE USER PRESSED FIND CONTACT DETAILS.
+   *
+   * ── WHY AUTHORISATION IS A FLAG AND NOT AN ENUM VALUE ────────────────────
+   *
+   * Every other compiler forbids email modes by REJECTING the enum value. That
+   * works while no layer may ever run one. Here one layer may, so absence of a
+   * ban is not the same as presence of consent — and a caller that simply set
+   * the expensive enum would have obtained an email purchase by typing a
+   * string.
+   *
+   * Compiler-only: it is stripped before the payload is built, because it is a
+   * statement about the USER, not an instruction to the Actor.
+   */
+  emailLookupAuthorized?: boolean;
 }
 
 // ── COMPILATION RESULT ───────────────────────────────────────────────────────
@@ -528,4 +586,564 @@ export function compileHarvestProfileSearchInput(
   if (e.length) return fail(K, e);
   w.push("fallback only — no per-company cap exists and the run minimum is $0.10");
   return build(K, i, "person", cost(K, i.maxItems), w, "profile-search");
+}
+
+
+/**
+ * Compile a contact-enrichment call against ONE known person.
+ *
+ * ── THE THREE THINGS THIS REFUSES ───────────────────────────────────────────
+ *
+ *   NO TARGET          the Actor accepts urls / publicIdentifiers / profileIds
+ *                      and needs at least one. With none it runs, returns
+ *                      nothing, and still bills.
+ *   A SIBLING'S ENUM   three people Actors, three vocabularies for one idea. An
+ *                      unrecognised value does not error on the platform, it
+ *                      falls back to the Actor default — the expensive one.
+ *   UNAUTHORISED EMAIL the email mode is a purchase the user makes, not a mode
+ *                      a caller selects. See `emailLookupAuthorized`.
+ */
+export function compileHarvestProfileScraperInput(
+  i: ProfileScraperCompileArgs,
+): CompileResult<HarvestProfileScraperInput> {
+  const K = "apify_linkedin_profile_enrichment";
+  const e: string[] = []; const w: string[] = [];
+
+  const targets = (i.urls?.length ?? 0) + (i.publicIdentifiers?.length ?? 0) +
+    (i.profileIds?.length ?? 0);
+  if (targets === 0) {
+    e.push(
+      "no target: one of urls[], publicIdentifiers[] or profileIds[] is required. " +
+      "This Actor enriches a KNOWN person and never searches for one.");
+  }
+  checkMax(e, "urls", i.urls, 1000);
+  checkMax(e, "publicIdentifiers", i.publicIdentifiers, 1000);
+  checkMax(e, "profileIds", i.profileIds, 1000);
+
+  // A LinkedIn COMPANY url in a person field is the wrong entity entirely.
+  for (const u of i.urls ?? []) {
+    if (LINKEDIN_COMPANY_URL.test(u)) {
+      e.push(`urls: "${u}" is a company page, not a person`);
+    }
+  }
+
+  if (!(PROFILE_SCRAPER_MODES as readonly string[]).includes(i.profileScraperMode)) {
+    const sibling =
+      (COMPANY_EMPLOYEES_SCRAPER_MODES as readonly string[]).includes(i.profileScraperMode as string)
+        ? " — that is the linkedin-company-employees enum."
+        : (PROFILE_SEARCH_SCRAPER_MODES as readonly string[]).includes(i.profileScraperMode as string)
+        ? " — that is the linkedin-profile-search enum."
+        : "";
+    e.push(
+      `profileScraperMode: "${i.profileScraperMode}" invalid for this Actor${sibling}` +
+      ` Allowed: ${PROFILE_SCRAPER_MODES.join(" | ")}`);
+  }
+
+  // ── CONSENT, BOTH WAYS ───────────────────────────────────────────────────
+  //
+  // An email mode without authorisation is a silent purchase. Authorisation
+  // without the email mode is a caller that thinks it bought something it did
+  // not ask for — and would report "no email found" for a lookup that never ran.
+  const wantsEmail = i.profileScraperMode === PROFILE_SCRAPER_EMAIL_MODE;
+  if (wantsEmail && i.emailLookupAuthorized !== true) {
+    e.push(
+      "email search requires emailLookupAuthorized: true. Finding a person and " +
+      "buying their contact details are separate, separately-priced actions.");
+  }
+  if (!wantsEmail && i.emailLookupAuthorized === true) {
+    e.push(
+      "emailLookupAuthorized is set but the mode performs no lookup — this would " +
+      "report 'no email found' for a search that never ran.");
+  }
+
+  if (e.length) return fail(K, e);
+
+  if (targets > 1) {
+    w.push(`${targets} profiles in one call — each is billed separately`);
+  }
+  if (wantsEmail) {
+    w.push(
+      "email search is BEST EFFORT and bills whether or not an address is found; " +
+      "a miss is an honest not_found, never an inferred address");
+  }
+
+  // THE PAYLOAD, WITH THE AUTHORISATION STRIPPED. `emailLookupAuthorized` is a
+  // fact about the user's consent and would be a field this Actor has never
+  // heard of. Destructured out rather than deleted, so a future field added to
+  // the args type has to be handled here deliberately.
+  const { emailLookupAuthorized: _consent, ...payload } = i;
+
+  // ROWS ARE TARGETS. There is no maxItems on this Actor — the number of
+  // profiles billed is the number asked for, which is the length of the list.
+  // Read from the live Store schema: $0.004 details, $0.010 details+email.
+  const per = wantsEmail ? 0.01 : 0.004;
+  return build(K, payload as HarvestProfileScraperInput, "person",
+    cost(K, targets, per), w, `${targets}p`);
+}
+
+// ── FUNDING ROUNDS (datahyena/company-funding-rounds) ────────────────────────
+
+export interface DatahyenaFundingInput {
+  /** ISO date. The recency filter, and the ONLY one this Actor offers. */
+  since?: string;
+  round?: string[];
+  verticals?: string[];
+  countries?: string[];
+  employeeBuckets?: string[];
+  minAmountUsd?: number;
+  maxAmountUsd?: number;
+  /** Billed PER RECORD RETURNED. The single cost multiplier. */
+  maxItems: number;
+  cursor?: string;
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/;
+
+/**
+ * Compile a bounded, verified funding-discovery call.
+ *
+ * ── WHAT THIS REFUSES, AND WHY ──────────────────────────────────────────────
+ *
+ * `maxItems` is the whole cost model here: one charge per record returned, at
+ * $0.045 — five times the per-row price of any other Actor in this catalog. An
+ * unbounded or accidentally large value is the most expensive mistake available
+ * in the system, so it is required and capped rather than defaulted.
+ *
+ * The stage warning matters as much as the errors. Five stages are accepted by
+ * the schema and documented by the vendor as having no coverage yet; a mission
+ * asking only for those would run, cost the start fee, return nothing, and look
+ * exactly like "no companies matched". The warning is what lets a zero-row
+ * result be reported as an unserved filter instead of an empty market.
+ */
+export function compileDatahyenaFundingInput(
+  i: DatahyenaFundingInput,
+): CompileResult<DatahyenaFundingInput> {
+  const K = "apify_funding_rounds_datahyena";
+  const e: string[] = []; const w: string[] = [];
+
+  checkEnum(e, "round", i.round, FUNDING_ROUND_STAGES);
+  checkEnum(e, "verticals", i.verticals, FUNDING_VERTICALS);
+  checkEnum(e, "countries", i.countries, FUNDING_COUNTRIES);
+  checkEnum(e, "employeeBuckets", i.employeeBuckets, FUNDING_EMPLOYEE_BUCKETS);
+
+  if (i.since !== undefined && !ISO_DATE_RE.test(String(i.since))) {
+    e.push(`since: "${i.since}" is not an ISO date (YYYY-MM-DD)`);
+  }
+  if (!Number.isInteger(i.maxItems) || i.maxItems < 1) {
+    e.push("maxItems must be a positive integer — this Actor bills per record");
+  } else if (i.maxItems > 500) {
+    // A ceiling, not a preference. 500 records is already ~$22.50.
+    e.push(`maxItems ${i.maxItems} exceeds the 500-record ceiling for this Actor ` +
+      `(billed per record at $0.045; ${i.maxItems} rows would cost ~$${(i.maxItems * 0.045).toFixed(2)})`);
+  }
+  if (i.minAmountUsd !== undefined && i.maxAmountUsd !== undefined &&
+      i.minAmountUsd > i.maxAmountUsd) {
+    e.push("minAmountUsd is greater than maxAmountUsd — no row can match");
+  }
+  if (e.length) return fail(K, e);
+
+  const dead = (i.round ?? []).filter((r) =>
+    (FUNDING_STAGES_WITHOUT_COVERAGE as readonly string[]).includes(r));
+  if (dead.length > 0 && dead.length === (i.round ?? []).length) {
+    w.push(
+      `every requested stage (${dead.join(", ")}) is documented by the provider ` +
+      `as having no coverage yet — this run will return zero rows, and that is ` +
+      `an unserved filter rather than an empty market`);
+  } else if (dead.length > 0) {
+    w.push(`stage(s) ${dead.join(", ")} have no coverage yet and will contribute nothing`);
+  }
+  if (i.countries?.length && !i.countries.includes("unknown")) {
+    w.push("about a quarter of companies have no HQ country on record and are " +
+      "excluded by any country filter — add \"unknown\" to keep those deals in");
+  }
+  if (i.since === undefined) {
+    w.push("no `since` filter — results start from the newest records but are " +
+      "not bounded by date, so recency cannot be claimed from the input alone");
+  }
+  w.push("amounts are announced figures normalized to USD, not audited numbers");
+
+  return build(K, {
+    ...i,
+    ...(i.round !== undefined ? { round: asList<string>(i.round) } : {}),
+    ...(i.verticals !== undefined ? { verticals: asList<string>(i.verticals) } : {}),
+    ...(i.countries !== undefined ? { countries: asList<string>(i.countries) } : {}),
+    ...(i.employeeBuckets !== undefined
+      ? { employeeBuckets: asList<string>(i.employeeBuckets) } : {}),
+  }, "company", cost(K, i.maxItems, undefined,
+    "one charge per record returned; maxItems is the cap"), w,
+  `funding:${i.since ?? "any"}`);
+}
+
+
+// ── SOCIAL POSTS ─────────────────────────────────────────────────────────────
+//
+// ── WHERE THE COMPANY/PERSON BOUNDARY ACTUALLY LIVES ────────────────────────
+//
+// `harvestapi/linkedin-company-posts` and `harvestapi/linkedin-profile-posts`
+// have IDENTICAL input schemas and both accept `/company/` and `/in/` URLs. The
+// company Actor's own prefill ships a personal profile. So calling "the company
+// Actor" guarantees nothing about scope: two Actors that do the same thing
+// cannot enforce a distinction between them.
+//
+// These two compilers are the boundary. One refuses a person URL, the other
+// refuses a company URL, and `socialEvidence.test.ts` asserts both refusals.
+// Everything downstream — the evidence table's subject scope, the unlock gate on
+// person-level signals, the separation of a company post from a leadership post
+// — rests on this being enforced HERE rather than assumed elsewhere.
+
+const COMPANY_URL_RE = /^https?:\/\/(www\.)?linkedin\.com\/company\/[^/?#]+/i;
+const PERSON_URL_RE = /^https?:\/\/(www\.)?linkedin\.com\/in\/[^/?#]+/i;
+
+export interface LinkedInPostsInput {
+  targetUrls: string[];
+  maxPosts: number;
+  postedLimit?: string;
+  postedLimitDate?: string;
+  includeQuotePosts?: boolean;
+  includeReposts?: boolean;
+  scrapeComments?: boolean;
+  maxComments?: number;
+  commentsPostedLimit?: string;
+  scrapeReactions?: boolean;
+  maxReactions?: number;
+  contextCountry?: string;
+}
+
+/** Shared validation for the two URL-fed post Actors. */
+function checkPostsInput(
+  K: string, i: LinkedInPostsInput, want: "company" | "person",
+): { e: string[]; w: string[] } {
+  const e: string[] = []; const w: string[] = [];
+  const urls = asList<string>(i.targetUrls ?? []);
+  if (urls.length === 0) e.push("targetUrls must name at least one LinkedIn URL");
+
+  const re = want === "company" ? COMPANY_URL_RE : PERSON_URL_RE;
+  const other = want === "company" ? PERSON_URL_RE : COMPANY_URL_RE;
+  for (const u of urls) {
+    if (re.test(u)) continue;
+    if (other.test(u)) {
+      // THE SCOPE VIOLATION, named precisely. This is the refusal that keeps a
+      // leadership post from being collected under a company capability and
+      // vice versa — including the unlock boundary, since a person URL reaching
+      // the ungated company Actor would buy person data with no unlock.
+      e.push(
+        `targetUrls: "${u}" is a ${want === "company" ? "PERSON" : "COMPANY"} URL ` +
+        `and this capability is ${want}-scoped. The two post Actors accept both ` +
+        `shapes, so scope is enforced here or nowhere.`);
+    } else {
+      e.push(`targetUrls: "${u}" is not a LinkedIn ${want} URL`);
+    }
+  }
+
+  if (!Number.isInteger(i.maxPosts) || i.maxPosts < 1) {
+    // 0 is the Actor's "ALL POSTS" sentinel — an unbounded spend, not an empty run.
+    e.push("maxPosts must be a positive integer (0 means ALL posts on this Actor)");
+  } else if (i.maxPosts > 50) {
+    e.push(`maxPosts ${i.maxPosts} exceeds the 50-per-target ceiling`);
+  }
+  if (i.postedLimit !== undefined &&
+      !(POST_POSTED_LIMITS as readonly string[]).includes(i.postedLimit)) {
+    e.push(`postedLimit: "${i.postedLimit}" is not a verified value`);
+  }
+  if (i.commentsPostedLimit !== undefined &&
+      !(COMMENT_POSTED_LIMITS as readonly string[]).includes(i.commentsPostedLimit)) {
+    e.push(`commentsPostedLimit: "${i.commentsPostedLimit}" is not verified on this Actor`);
+  }
+  if (i.contextCountry !== undefined &&
+      !(POST_CONTEXT_COUNTRIES as readonly string[]).includes(i.contextCountry)) {
+    e.push(`contextCountry: "${i.contextCountry}" is not a verified value`);
+  }
+  if (i.scrapeComments && (!Number.isInteger(i.maxComments) || (i.maxComments ?? 0) < 1)) {
+    e.push("maxComments must be a positive integer when scrapeComments is on");
+  }
+  if (i.scrapeComments && (i.maxComments ?? 0) > 25) {
+    e.push(`maxComments ${i.maxComments} exceeds the 25-per-post ceiling — ` +
+      `comments are billed at the same price as posts`);
+  }
+  if (i.scrapeReactions) {
+    // Reactions cost the same as a post and prove nothing this architecture uses.
+    e.push("scrapeReactions is forbidden — a reaction count is not evidence and " +
+      "each reaction is billed at the price of a post");
+  }
+  if (i.postedLimit === undefined && i.postedLimitDate === undefined) {
+    w.push("no date bound — recency cannot be claimed from the input alone and " +
+      "must be re-checked from each post's own date");
+  }
+  return { e, w };
+}
+
+function postsCostNote(i: LinkedInPostsInput): string {
+  const posts = i.maxPosts;
+  const comments = i.scrapeComments ? (i.maxComments ?? 0) * posts : 0;
+  return `up to ${posts} posts + ${comments} comments per target, each billed as a result`;
+}
+
+/** COMPANY-scoped post reading. Refuses a person URL. */
+export function compileCompanyPostsInput(
+  i: LinkedInPostsInput,
+): CompileResult<LinkedInPostsInput> {
+  const K = "apify_linkedin_company_posts";
+  const { e, w } = checkPostsInput(K, i, "company");
+  if (e.length) return fail(K, e);
+  w.push("comments on a company's post are engagement RECEIVED from other " +
+    "people — never a statement by the company");
+  const rows = i.maxPosts * i.targetUrls.length * (i.scrapeComments ? 1 + (i.maxComments ?? 0) : 1);
+  return build(K, { ...i, targetUrls: asList<string>(i.targetUrls), scrapeReactions: false },
+    "company", cost(K, rows, undefined, postsCostNote(i)), w,
+    `companyposts:${i.targetUrls.join(",")}`);
+}
+
+/** PERSON-scoped post reading. Refuses a company URL. Unlock-gated upstream. */
+export function compileProfilePostsInput(
+  i: LinkedInPostsInput,
+): CompileResult<LinkedInPostsInput> {
+  const K = "apify_linkedin_profile_posts";
+  const { e, w } = checkPostsInput(K, i, "person");
+  if (e.length) return fail(K, e);
+  w.push("this Actor reads an IDENTIFIED person's profile; producing that " +
+    "profile URL is the unlock-gated people stage and is never automatic");
+  const rows = i.maxPosts * i.targetUrls.length * (i.scrapeComments ? 1 + (i.maxComments ?? 0) : 1);
+  return build(K, { ...i, targetUrls: asList<string>(i.targetUrls), scrapeReactions: false },
+    "person", cost(K, rows, undefined, postsCostNote(i)), w,
+    `profileposts:${i.targetUrls.join(",")}`);
+}
+
+// ── SOCIAL: TOPIC SEARCH ─────────────────────────────────────────────────────
+
+export interface LinkedInPostSearchInput {
+  searchQueries: string[];
+  maxPosts: number;
+  postedLimit?: string;
+  postedLimitDate?: string;
+  sortBy?: string;
+  authorUrls?: string[];
+  authorsCompanies?: string[];
+  authorKeywords?: string;
+  contentType?: string;
+  profileScraperMode?: string;
+  scrapeComments?: boolean;
+  maxComments?: number;
+  commentsPostedLimit?: string;
+  commentsProfileScraperMode?: string;
+  scrapeReactions?: boolean;
+  scrapePages?: number;
+}
+
+/**
+ * Compile a topic post search.
+ *
+ * COMMENTS ARE THE EXPENSIVE PART AND THE VALUABLE PART. They are billed at the
+ * same price as a post, so `maxPosts: 50` with `maxComments: 10` is up to 550
+ * billable items rather than 50 — the estimate says so rather than discovering
+ * it on the invoice. They are also the only way "who commented on this topic"
+ * is answerable at all, because the commenter's profile arrives with them.
+ */
+export function compilePostSearchInput(
+  i: LinkedInPostSearchInput,
+): CompileResult<LinkedInPostSearchInput> {
+  const K = "apify_linkedin_post_search";
+  const e: string[] = []; const w: string[] = [];
+
+  const queries = asList<string>(i.searchQueries ?? []).filter((q) => q.trim().length > 0);
+  if (queries.length === 0) e.push("searchQueries must contain at least one non-empty query");
+
+  if (!Number.isInteger(i.maxPosts) || i.maxPosts < 1) {
+    e.push("maxPosts must be a positive integer (0 means ALL posts on this Actor)");
+  } else if (i.maxPosts > 100) {
+    e.push(`maxPosts ${i.maxPosts} exceeds the 100-per-query ceiling`);
+  }
+  if (i.postedLimit !== undefined &&
+      !(POST_POSTED_LIMITS as readonly string[]).includes(i.postedLimit)) {
+    e.push(`postedLimit: "${i.postedLimit}" is not a verified value`);
+  }
+  if (i.sortBy !== undefined && !(POST_SEARCH_SORT_BY as readonly string[]).includes(i.sortBy)) {
+    e.push(`sortBy: "${i.sortBy}" is not a verified value`);
+  }
+  if (i.contentType !== undefined &&
+      !(POST_CONTENT_TYPES as readonly string[]).includes(i.contentType)) {
+    e.push(`contentType: "${i.contentType}" is not a verified value`);
+  }
+  for (const [field, v] of [
+    ["profileScraperMode", i.profileScraperMode],
+    ["commentsProfileScraperMode", i.commentsProfileScraperMode],
+  ] as const) {
+    if (v !== undefined && !(POST_PROFILE_SCRAPER_MODES as readonly string[]).includes(v)) {
+      e.push(`${field}: "${v}" is not a verified value`);
+    }
+  }
+  if (i.scrapeComments && (!Number.isInteger(i.maxComments) || (i.maxComments ?? 0) < 1)) {
+    e.push("maxComments must be a positive integer when scrapeComments is on");
+  }
+  if (i.scrapeComments && (i.maxComments ?? 0) > 25) {
+    e.push(`maxComments ${i.maxComments} exceeds the 25-per-post ceiling`);
+  }
+  if (i.scrapeReactions) {
+    e.push("scrapeReactions is forbidden — a reaction is billed at the price of a " +
+      "post and proves nothing this architecture uses");
+  }
+  if (i.scrapePages !== undefined && i.scrapePages > 1) {
+    e.push(`scrapePages ${i.scrapePages} would fetch ${i.scrapePages * 100} posts; ` +
+      `bound the run with maxPosts instead`);
+  }
+  if (e.length) return fail(K, e);
+
+  if (i.postedLimit === undefined && i.postedLimitDate === undefined) {
+    w.push("no date bound — a topic search returns whatever ranks, at any age");
+  }
+  w.push("LinkedIn relevance decides what matches, not a topic model; the topic " +
+    "qualifier must be re-checked against each post's own text");
+  if (i.authorKeywords) {
+    w.push("authorKeywords matches a self-written headline — a headline claiming " +
+      "CEO is not verified employment");
+  }
+  const perQuery = i.maxPosts * (i.scrapeComments ? 1 + (i.maxComments ?? 0) : 1);
+  const rows = perQuery * queries.length;
+  if (i.scrapeComments) {
+    w.push(`comments are billed as results: up to ${rows} billable items, not ${i.maxPosts * queries.length}`);
+  }
+  return build(K, {
+    ...i, searchQueries: queries, scrapeReactions: false,
+    ...(i.authorUrls !== undefined ? { authorUrls: asList<string>(i.authorUrls) } : {}),
+    ...(i.authorsCompanies !== undefined
+      ? { authorsCompanies: asList<string>(i.authorsCompanies) } : {}),
+  }, "company", cost(K, rows, undefined,
+    `maxPosts x (1 + maxComments) x ${queries.length} queries`), w,
+  `postsearch:${queries.join("|")}`);
+}
+
+// ── NEWS ─────────────────────────────────────────────────────────────────────
+
+export interface GoogleNewsInput {
+  keywords?: string[];
+  topics?: string[];
+  maxArticles: number;
+  timeframe?: string;
+  region_language?: string;
+  decodeUrls?: boolean;
+  extractDescriptions?: boolean;
+  extractImages?: boolean;
+}
+
+/**
+ * Compile a news search.
+ *
+ * `decodeUrls` is FORCED ON. The vendor notes it slows the run, and that is the
+ * right trade: an undecoded link is a Google redirect, and a citation nobody can
+ * follow is not a source. Expansion and launch evidence both rest on being able
+ * to show the article that made the claim.
+ */
+export function compileGoogleNewsInput(
+  i: GoogleNewsInput,
+): CompileResult<GoogleNewsInput> {
+  const K = "apify_google_news";
+  const e: string[] = []; const w: string[] = [];
+
+  const keywords = asList<string>(i.keywords ?? []).filter((k) => k.trim().length > 0);
+  const topics = asList<string>(i.topics ?? []);
+  if (keywords.length === 0 && topics.length === 0) {
+    e.push("keywords or topics must be supplied — an unfiltered news run has no subject");
+  }
+  for (const t of topics) {
+    if (!(NEWS_TOPICS as readonly string[]).includes(t)) {
+      e.push(`topics: "${t}" is not a verified value`);
+    }
+  }
+  if (i.timeframe !== undefined && !(NEWS_TIMEFRAMES as readonly string[]).includes(i.timeframe)) {
+    e.push(`timeframe: "${i.timeframe}" is not a verified value`);
+  }
+  if (i.region_language !== undefined &&
+      !(NEWS_REGION_LANGUAGES as readonly string[]).includes(i.region_language)) {
+    e.push(`region_language: "${i.region_language}" is not in the verified subset`);
+  }
+  if (!Number.isInteger(i.maxArticles) || i.maxArticles < 1) {
+    // 0 is the Actor's "NO LIMIT" sentinel.
+    e.push("maxArticles must be a positive integer (0 means NO LIMIT on this Actor)");
+  } else if (i.maxArticles > 100) {
+    e.push(`maxArticles ${i.maxArticles} exceeds the 100-per-query ceiling`);
+  }
+  if (e.length) return fail(K, e);
+
+  if (topics.length > 0 && i.timeframe !== undefined) {
+    w.push("timeframe applies to KEYWORD searches only — topic pages return their " +
+      "own curated results at any age, so recency must be re-checked per article");
+  }
+  w.push("an article names a company in prose; a name is not an identity and must " +
+    "never attach an article to a company on its own");
+  // OBSERVED, run ak9nBcyYkolVrLQhM: a literal phrase search returned a court
+  // system "expanding into family courts" and a payments company "expanding
+  // deeper into AI" alongside two genuine office openings. Roughly half the
+  // rows were not the signal asked for.
+  w.push("Google News matches the phrase, not the meaning: a keyword search for " +
+    "expansion language returns metaphorical uses and non-company subjects, so " +
+    "each article's own claim must be read before it counts as evidence");
+  const rows = i.maxArticles * Math.max(1, keywords.length + topics.length);
+  return build(K, {
+    ...i,
+    ...(keywords.length ? { keywords } : {}),
+    ...(topics.length ? { topics } : {}),
+    decodeUrls: true,
+    // ── FORCED ON AFTER THE VALIDATION RUN ────────────────────────────────
+    //
+    // Run ak9nBcyYkolVrLQhM returned no `description` at all, because the
+    // vendor only extracts it when this is set. The description IS the claim —
+    // "the Berlin security firm said it is entering the US market" — and
+    // expansion and launch evidence are claims, not headlines. A title alone
+    // cannot distinguish a company entering a market from a court system
+    // expanding its e-filing, which that same run demonstrated.
+    //
+    // It costs time and not money: billing is per RESULT, not per field.
+    extractDescriptions: true,
+    // Images are billed as part of the same result but slow the run and are
+    // never evidence here.
+    extractImages: false,
+  }, "company", cost(K, rows, undefined,
+    "maxArticles per keyword AND per topic"), w,
+  `news:${[...keywords, ...topics].join("|")}`);
+}
+
+// ── TECHNOLOGY ───────────────────────────────────────────────────────────────
+
+export interface BuiltWithInput {
+  startDomains: string[];
+  maxRequestsPerCrawl: number;
+}
+
+const ROOT_DOMAIN_RE = /^(?:[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*\.){1,3}[A-Za-z]{2,}$/;
+
+/**
+ * Compile a technology verification call.
+ *
+ * There is nothing to search here. The Actor's entire input is a list of domains
+ * and a request cap, which is why technology is declared verification-only: a
+ * mission that wants companies BY technology has no route through this, and
+ * saying so is more useful than compiling a call that cannot answer it.
+ */
+export function compileBuiltWithInput(
+  i: BuiltWithInput,
+): CompileResult<BuiltWithInput> {
+  const K = "apify_builtwith_technology";
+  const e: string[] = []; const w: string[] = [];
+
+  const domains = asList<string>(i.startDomains ?? []);
+  if (domains.length === 0) {
+    e.push("startDomains must name at least one root domain — this Actor cannot search");
+  }
+  for (const d of domains) {
+    if (!ROOT_DOMAIN_RE.test(d)) {
+      e.push(`startDomains: "${d}" is not a root domain (the schema enforces this pattern)`);
+    }
+  }
+  if (!Number.isInteger(i.maxRequestsPerCrawl) || i.maxRequestsPerCrawl < 1) {
+    // The published DEFAULT is 10,000,000. Never inherit it.
+    e.push("maxRequestsPerCrawl must be set explicitly — the Actor's own default is 10,000,000");
+  } else if (i.maxRequestsPerCrawl > 500) {
+    e.push(`maxRequestsPerCrawl ${i.maxRequestsPerCrawl} exceeds the 500 ceiling`);
+  }
+  if (e.length) return fail(K, e);
+
+  w.push("a detection is present-tense: it carries no adoption date, so " +
+    "'recently adopted' cannot be answered from this Actor");
+  return build(K, { ...i, startDomains: domains }, "company",
+    cost(K, domains.length, undefined, "one result per domain"), w,
+    `builtwith:${domains.join(",")}`);
 }

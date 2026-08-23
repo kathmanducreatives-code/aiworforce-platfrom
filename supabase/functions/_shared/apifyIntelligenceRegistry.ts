@@ -183,13 +183,16 @@ export const REJECTED_ACTORS: ReadonlyArray<{
     evidence: "As above — named in the source catalog, absent from the Store " +
       "search. `apidojo/google-search-scraper` is registered instead.",
   },
-  {
-    actor_id: "harvestapi/linkedin-profile-scraper",
-    reason: "not verified in this pass",
-    evidence: "Named in the source catalog but not fetched from the Store API " +
-      "here. It must not be registered on the strength of a document — the " +
-      "same document also named the Actors rejected above.",
-  },
+  // ── `harvestapi/linkedin-profile-scraper` HAS LEFT THIS LIST ─────────────
+  //
+  // It sat here as "not verified in this pass — it must not be registered on
+  // the strength of a document". That bar was the right one and it has now been
+  // met: the Store schema was fetched on 2026-08-23 and the Actor is carded as
+  // `apify_linkedin_profile_enrichment` with its real enum, both real pricing
+  // events, and four defects taken from the schema rather than from prose.
+  //
+  // Leaving a stale refusal here beside a live card would make the repository
+  // contradict itself about the same Actor, which is worse than either answer.
   {
     actor_id: "datacach/yc-companies-detail-scraper",
     reason: "not verified in this pass",
@@ -633,6 +636,101 @@ export const APIFY_INTELLIGENCE: Readonly<Record<string, ActorIntelligenceRecord
     },
 
     // ── FUNDING ──────────────────────────────────────────────────────────────
+    "datahyena/company-funding-rounds": {
+      actor_id: "datahyena/company-funding-rounds",
+      actor_name: "Startup Funding Rounds Tracker: Recently Funded Companies",
+      provider: "datahyena",
+      source_url: "https://apify.com/datahyena/company-funding-rounds",
+      // NO company, domain or URL input. That absence is the capability fact
+      // that keeps this a discovery source and never a verification one.
+      input_entities: ["query"],
+      capabilities: ["funding_signal", "company_discovery"],
+      best_for: [
+        "discovering companies BY a recent funding round",
+        "one row per funding EVENT — stage, amount in USD, announced date, investors",
+        "date-bounded funding windows via `since`",
+        "funding amount WITHOUT a session cookie, which no other registered source offers",
+      ],
+      not_for: [
+        "checking whether a company you already have has raised — no company input exists",
+        "funding history; it returns announced rounds, not a full company record",
+        "audited financials — an announced amount is a report, not an audit",
+      ],
+      supported_filters: [
+        "since", "round", "verticals", "industryGroup", "industryGroups",
+        "naicsCode", "minAmountUsd", "maxAmountUsd", "country", "countries",
+        "employeeBuckets", "maxItems", "cursor",
+      ],
+      verified_enums: {
+        round: ["pre-seed", "seed", "angel", "series-a", "series-b", "series-c",
+          "series-d", "series-e", "series-f", "series-g", "series-h", "growth",
+          "extension", "bridge", "convertible", "debt", "grant", "other",
+          "unknown", "series-i", "safe", "pre-ipo", "secondary", "pipe"],
+        verticals: ["ai", "fintech", "saas", "devtools", "healthcare", "climate",
+          "robotics", "cybersecurity", "logistics", "commerce", "data", "crypto",
+          "media", "education", "marketing", "telecom", "realestate", "hardware",
+          "gaming", "space", "unknown"],
+        employeeBuckets: ["1-10", "11-50", "51-200", "201-500", "501-1000",
+          "1001-5000", "5001-10000", "10001+"],
+      },
+      input_limits: { maxItems: 500 },
+      output_fields: [],
+      cost: {
+        model: "PAY_PER_EVENT", start_usd: 0.00005, per_result_usd: 0.045,
+        notes: "The most expensive per-row Actor registered. 100 rows is $4.50.",
+      },
+      adoption: { total_users: 48, monthly_users: 36, rating: 4.78, rating_count: 4 },
+      // Nothing to fall back to: it is the only registered source that returns a
+      // funding amount without a session cookie.
+      fallback_actors: [],
+      // A round names the company and proves the ROUND. Industry and size are
+      // the provider's own tags, so the ICP claim still needs enrichment.
+      requires_enrichment: true,
+      // Raised after the live run: the evidence fields are fully populated, and
+      // held back from higher by the observed company-resolution collisions.
+      confidence: 0.7,
+      freshness: "recent_signal",
+      // FIELD-TESTED on run 0XchPqe0cJpx0Yc2T, 18 real rows.
+      evidence_level: "field_tested",
+      last_verified_at: "2026-08-22",
+      verified_via: "apify_store_api_and_live_runs",
+      actor_modified_at: "2026-08-20",
+      known_defects: [
+        {
+          id: "datahyena_company_identity_collision",
+          summary: "THE ROUND IS RELIABLE; THE COMPANY ATTACHED TO IT IS NOT. " +
+            "The live run attached an Australian fintech round to a Montreal " +
+            "performing-arts ensemble's domain, and tagged a biotech as Retail.",
+          mitigation: "Re-resolve identity before any ICP gate reads industry, " +
+            "domain or verticals from this source.",
+        },
+        {
+          id: "datahyena_field_fill_rates",
+          summary: "Observed over 18 rows: announcedAt/name/investors/sources " +
+            "100%, domain 94%, amountUsd 89%, linkedinUrl 83%, round 67%, " +
+            "verticals 61%, employeeCountBucket 28%.",
+          mitigation: "Filtering on stage silently drops a third of rows; " +
+            "employee bucket is far too sparse to gate size on.",
+        },
+        {
+          id: "datahyena_stage_coverage_gaps",
+          summary: "Five stages are accepted by the filter and documented by the " +
+            "vendor as having no coverage yet: series-i, safe, pre-ipo, " +
+            "secondary, pipe.",
+          mitigation: "Requesting only those is a silent zero-row run. The input " +
+            "compiler warns so the result is reported as an unserved filter " +
+            "rather than an empty market.",
+        },
+        {
+          id: "datahyena_missing_dimensions",
+          summary: "The vendor documents that about a fifth of companies have no " +
+            "industry on record and about a quarter no HQ country. Filtering on " +
+            "either dimension silently excludes those deals.",
+          mitigation: "Add the `unknown` member alongside a soft industry or " +
+            "country filter, or omit the filter when recall matters more.",
+        },
+      ],
+    },
     "memo23/crunchbase-scraper": {
       actor_id: "memo23/crunchbase-scraper",
       actor_name: "Crunchbase — 100K+ Instant Company DB, Funding Monitor",

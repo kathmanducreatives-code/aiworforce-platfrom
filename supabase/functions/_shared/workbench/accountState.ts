@@ -63,6 +63,39 @@ export interface DecisionMakerState {
   contact_id: string | null;
 }
 
+/**
+ * What a Find Contact Details unlock established about ONE person.
+ *
+ * ── `email_status` IS THE FIELD, NOT `email` ────────────────────────────────
+ *
+ * The paid provider event is "Profile details + email search" — a SEARCH that
+ * bills whether or not an address comes back. So the outcome has three shapes,
+ * not two, and collapsing them loses the one that matters most:
+ *
+ *   email_found   an address, quoted from the provider and never constructed
+ *   not_found     the lookup ran, was paid for, and there is no address. An
+ *                 ANSWER about this person — re-running buys the same nothing
+ *                 at the same price, which is why the Workbench must show it
+ *                 as "None found" rather than as an untouched offer.
+ *   provider_error nothing was established; a retry is exactly right
+ *
+ * NO PHONE FIELD. Not "not yet" — no registered Actor returns one, and a field
+ * here would be an invitation to populate it from somewhere that does not exist.
+ */
+export interface ContactEnrichmentState {
+  email_status: "email_found" | "not_found" | "provider_error";
+  /** The provider's own value. Null on every status but `email_found`. */
+  business_email: string | null;
+  /** Which Actor supplied it, so a claim can be traced. */
+  email_source: string | null;
+  /** The person this was bought for — a contact belongs to somebody. */
+  person_full_name: string | null;
+  person_linkedin_url: string | null;
+  /** True when a profile identity was available to enrich at all. */
+  linkedin_available: boolean;
+  reason: string;
+}
+
 export interface OutreachState {
   eligibility?: string | null;
   personalization_depth?: string | null;
@@ -89,6 +122,7 @@ export interface WorkbenchAccountState {
   lead_candidate_id: string;
   company_research: StageEnvelope<CompanyResearchState>;
   decision_makers: StageEnvelope<DecisionMakerState>;
+  contact_enrichment: StageEnvelope<ContactEnrichmentState>;
   outreach: StageEnvelope<OutreachState>;
   updated_at: string | null;
 }
@@ -109,6 +143,7 @@ export function emptyAccountState(leadCandidateId: string): WorkbenchAccountStat
     lead_candidate_id: leadCandidateId,
     company_research: emptyStage<CompanyResearchState>(),
     decision_makers: emptyStage<DecisionMakerState>(),
+    contact_enrichment: emptyStage<ContactEnrichmentState>(),
     outreach: emptyStage<OutreachState>(),
     updated_at: null,
   };
@@ -157,7 +192,8 @@ export function mergeStage<T>(
   };
 }
 
-export type StageName = "company_research" | "decision_makers" | "outreach";
+export type StageName =
+  | "company_research" | "decision_makers" | "contact_enrichment" | "outreach";
 
 /** Apply one stage update to the whole account state, preserving every other stage. */
 export function applyStageUpdate(
@@ -171,6 +207,8 @@ export function applyStageUpdate(
     next.company_research = mergeStage(state.company_research, update as never, now);
   } else if (stage === "decision_makers") {
     next.decision_makers = mergeStage(state.decision_makers, update as never, now);
+  } else if (stage === "contact_enrichment") {
+    next.contact_enrichment = mergeStage(state.contact_enrichment, update as never, now);
   } else {
     next.outreach = mergeStage(state.outreach, update as never, now);
   }

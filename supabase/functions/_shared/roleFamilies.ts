@@ -38,6 +38,15 @@ export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, s
     "Founding SDR", "Founding AE", "Head of Sales", "Growth", "GTM",
     "Go-to-Market", "Business Development", "Demand Generation", "Revenue",
     "Salesperson", "Sales Representative", "Territory Sales Manager",
+    // COLLOQUIAL FORMS THE LIST WAS MISSING. A request for "enterprise sellers"
+    // or "enterprise AEs" is a quota-carrying commercial hire and belongs to
+    // exactly this family — but neither word appeared here, so the flagship
+    // mission's role requirement resolved to no family at all and the run was
+    // free to qualify a Software Engineer posting against it.
+    //
+    // Added to the ONE alias table rather than to a second reader, so the role
+    // gate, the actor input planner and the title filter all learn them at once.
+    "AE", "Enterprise AE", "Seller", "Enterprise Seller", "Enterprise Sales",
   ],
   marketing_growth: [
     "Growth Marketer", "Product Marketing", "Content Marketing", "Demand Gen",

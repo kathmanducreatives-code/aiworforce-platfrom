@@ -352,7 +352,11 @@ Deno.test("42. stage transitions are idempotent and never move backwards", () =>
 // ═══ GPT CONTEXT (section 3) ═════════════════════════════════════════════
 Deno.test("GPT receives the Actor limitations as content, not only as a hash", () => {
   const brief = actorLimitationBriefing();
-  assertEquals(brief.length, 7, "all seven catalogued Actors must be briefed");
+  // 13 → 14: `apify_linkedin_profile_enrichment` joined the catalog. The
+  // briefing is DERIVED from the catalog, so a new Actor is briefed the moment
+  // it is carded — this count is the assertion that nobody added one whose
+  // limitations GPT never hears.
+  assertEquals(brief.length, 14, "all fourteen catalogued Actors must be briefed");
   const all = JSON.stringify(brief).toLowerCase();
   for (const required of [
     "linkedin company identity",        // memo23 has no LinkedIn URL
@@ -363,6 +367,14 @@ Deno.test("GPT receives the Actor limitations as content, not only as a hash", (
     "limit: company = 10",               // job-search batch limit
     "fuzzy",                             // job-search title matching
     "short ($4 per 1k)",                 // the enum difference
+    // ── CONTACT ENRICHMENT ────────────────────────────────────────────────
+    //
+    // The three facts that stop GPT proposing it for the wrong job. The first
+    // is the one that matters most: it is not a search, so it can never answer
+    // "find me the VP Sales".
+    "it does not search",
+    "guaranteeing an email",
+    "phone numbers",
   ]) {
     assert(all.includes(required.toLowerCase()), `GPT must be told: ${required}`);
   }

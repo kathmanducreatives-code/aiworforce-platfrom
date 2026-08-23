@@ -135,8 +135,12 @@ Deno.test("8. no `title` duplicates text already on screen", () => {
 Deno.test("9. selection and the unlock actions are untouched", () => {
   assert(SHEET.includes("onToggle(r.id)"), "row selection survives");
   assert(SHEET.includes("onToggleAll"), "and select-all");
-  assertEquals((SHEET.match(/onUnlock\('/g) ?? []).length, 3,
-    "all three unlock actions still dispatch");
+  // 3 → 4: the Contact details column. This file is about sticky-column bleed,
+  // and the count is here only to prove the layout change did not delete a
+  // dispatch — so it moves with the column count rather than being pinned to a
+  // number that was true once.
+  assertEquals((SHEET.match(/onUnlock\('/g) ?? []).length, 4,
+    "all four unlock actions still dispatch");
   assert(SHEET.includes("cost={priceFor("), "and still quote the real price");
 });
 

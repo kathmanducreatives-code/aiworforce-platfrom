@@ -46,7 +46,14 @@ const FIRMOGRAPHIC: ReadonlySet<EvidenceCategory> = new Set([
 const WEB_VERIFIABLE: ReadonlySet<EvidenceCategory> = new Set(["company_business_model"]);
 /** Timing/signal categories. */
 const SIGNAL_CATS: ReadonlySet<EvidenceCategory> = new Set([
-  "job_signal", "funding_signal", "launch_signal", "expansion_signal", "founder_activity_signal", "gtm_signal",
+  "job_signal", "funding_signal", "launch_signal", "expansion_signal",
+  "founder_activity_signal", "gtm_signal",
+  // The categories added when the signal vocabulary was made total. Omitting
+  // them here would classify a social or technology requirement as neither
+  // firmographic nor signal, and `nextDecision` would route it to structured
+  // company enrichment — asking a firmographics Actor to prove a post.
+  "company_activity_signal", "engagement_signal", "technology_signal",
+  "headcount_signal",
 ]);
 
 function requirementMet(env: CandidateEnvelope, r: EvidenceRequirement, now: string): { met: boolean; stale: boolean } {

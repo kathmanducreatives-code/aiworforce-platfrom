@@ -58,10 +58,30 @@ Deno.test("2. an unpriced capability is FREE, explicitly", () => {
 
 Deno.test("3. the prices are the shape of the work", () => {
   assertEquals(UNLOCK_PRICES.find_decision_makers, 2, "one Apify actor run");
+  assertEquals(UNLOCK_PRICES.find_contact_details, 1,
+    "one profile enrichment against a person already resolved — no start fee " +
+    "and a $0.010 email event, against ~$0.035 for a bounded people search");
   assertEquals(UNLOCK_PRICES.research_company, 1, "one Firecrawl crawl");
   assertEquals(UNLOCK_PRICES.generate_outreach, 0,
     "no paid provider — model spend is billed in DOLLARS in the execution " +
     "ledger, and charging credits too would bill one cost twice in two units");
+});
+
+Deno.test("3b. finding a person costs more than enriching a known one", () => {
+  // ── THE RELATIONSHIP, NOT THE NUMBERS ────────────────────────────────────
+  //
+  // A search pays an actor-start fee and returns several rows to verify and
+  // rank. An enrichment has no start fee and touches one profile. If contact
+  // details ever cost MORE than discovery, either a price was tuned without a
+  // provider reason or the two actions were confused for each other — which is
+  // precisely the defect that let `contact_unlock` charge for a second founder
+  // search.
+  assert(UNLOCK_PRICES.find_contact_details < UNLOCK_PRICES.find_decision_makers,
+    "enriching a known person must not cost more than finding them");
+  // And every priced action must buy something. A zero here would mean an
+  // action that reaches a paid provider for free.
+  assert(UNLOCK_PRICES.find_contact_details > 0);
+  assert(UNLOCK_PRICES.research_company > 0);
 });
 
 Deno.test("4. bulk price counts only rows that need the work", () => {
@@ -103,7 +123,14 @@ Deno.test("8. and the cell quotes from the same table", () => {
   const sheet = code(read(
     "../../src/components/chat/workspace/workbench/leadTable/LeadSpreadsheet.tsx"));
   const quotes = [...sheet.matchAll(/cost=\{priceFor\('([a-z_]+)'\)\}/g)].map((m) => m[1]);
-  assertEquals(quotes.sort(), ["find_decision_makers", "generate_outreach", "research_company"]);
+  // 3 → 4: the Contact details column. Every unlockable cell must quote from
+  // `priceFor`, because the executor tags its provider call with the same
+  // capability — so the number on the button IS the number reserved, by
+  // construction rather than by coincidence.
+  assertEquals(quotes.sort(), [
+    "find_contact_details", "find_decision_makers", "generate_outreach",
+    "research_company",
+  ]);
   assert(!/cost=\{\d/.test(sheet), "no literal amount may be typed into a cell");
 });
 

@@ -51,6 +51,7 @@ import {
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { coverMissionSignals } from "./signalActorCoverage.ts";
 import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
+import { inputStrategyFor } from "./actorInputStrategy.ts";
 import { scenarioBriefing } from "./discoveryScenarioMatrix.ts";
 
 export const DISCOVERY_STRATEGY_VERSION = "lead-discovery-strategy-v1" as const;
@@ -163,6 +164,38 @@ export const DEFAULT_MAX_ITEMS_PER_ACTOR = 100;
 /** The purpose an actor must be registered for to appear here at all. */
 const DISCOVERY_PURPOSE = "company_discovery" as const;
 
+/**
+ * Every purpose that can legitimately INTRODUCE candidates.
+ *
+ * ── THE BUG THIS FIXES ──────────────────────────────────────────────────────
+ *
+ * This check was a single hardcoded `company_discovery`, written when that was
+ * the only way a candidate could enter the pool. Phases 4 and 5 added three
+ * more: a funding round names a company, a topic post names its author, a news
+ * article names the company it reports on.
+ *
+ * The result was a contradiction the engine could not resolve. `funding_signal_
+ * discovery` is engine-driven and declares `apify_funding_rounds_datahyena` as
+ * its only provider, so the planner must select it — and this validator would
+ * have blocked that selection as `actor_not_for_discovery`, refusing the one
+ * actor the capability is allowed to call.
+ *
+ * The containment property is untouched. `assertProviderAllowed` still requires
+ * the actor to be declared by the capability actually running, so widening this
+ * set cannot reach an actor some other capability owns. What it does is stop
+ * the validator refusing a choice the graph already authorised.
+ *
+ * VERIFICATION-ONLY purposes stay OUT deliberately — `social_verification` and
+ * `technology_verification` consume identities they cannot find, and an actor
+ * that must be given its subject can never introduce one.
+ */
+const DISCOVERY_PURPOSES: readonly string[] = Object.freeze([
+  "company_discovery",
+  "funding_discovery",
+  "social_discovery",
+  "news_signal",
+]);
+
 const ROLES: readonly DiscoveryActorRole[] = ["primary", "breadth", "fallback"];
 
 function isRole(v: unknown): v is DiscoveryActorRole {
@@ -186,7 +219,13 @@ function asRecord(v: unknown): Record<string, unknown> | null {
  * the thing it is worst at.
  */
 export function discoveryCatalogBriefing(): Array<Record<string, unknown>> {
-  return actorsForPurpose(DISCOVERY_PURPOSE).map((c) => ({
+  // Every actor that can introduce a candidate, not only the company-discovery
+  // ones — otherwise the planner is asked to choose a funding or news source it
+  // was never shown.
+  const briefed = [...new Set(
+    DISCOVERY_PURPOSES.flatMap((p) => actorsForPurpose(p as never)),
+  )];
+  return briefed.map((c) => ({
     actor_key: c.actor_key,
     supported_filters: c.supported_filters,
     verified_enums: c.verified_enums,
@@ -211,6 +250,15 @@ export function discoveryCatalogBriefing(): Array<Record<string, unknown>> {
             ? { selection_notes: ACTOR_INPUT_CONTRACTS[c.actor_key].selection_notes }
             : {}),
         },
+        // ── HOW TO AIM IT AT THIS MISSION ─────────────────────────────────
+        //
+        // The contract above stops malformed input. This stops well-formed
+        // input that asks the wrong question — which filters mean what, which
+        // reinforce each other, which quietly destroy recall, how to phrase a
+        // query, and what multiplies the bill. See `actorInputStrategy`.
+        ...(inputStrategyFor(c.actor_key)
+          ? { input_strategy: inputStrategyFor(c.actor_key) }
+          : {}),
         quality: ACTOR_INPUT_CONTRACTS[c.actor_key].quality,
       }
       : {}),
@@ -346,8 +394,30 @@ export function conceptTermsOf(mission: LeadMissionV1): string[] {
  * name matcher is exactly the right tool for that.
  */
 export function missionNeedsSemanticDiscovery(mission: LeadMissionV1): boolean {
-  const named = (mission as { known_companies?: unknown[] }).known_companies ?? [];
-  if (Array.isArray(named) && named.length > 0) return false;
+  // ── THE NESTING IS `company_profile`, AND THIS READ THE TOP LEVEL ────────
+  //
+  // `known_companies` is declared inside `company_profile` (leadMission.ts) and
+  // every other reader uses that path — `leadIntentModel`, `leadPlaybookExecution`
+  // and `leadResearchPlaybooks` all say `mission.company_profile?.known_companies`.
+  // This one said `mission.known_companies`, which is always undefined, so the
+  // early return never fired and the escape hatch never opened.
+  //
+  // The consequence was not a cosmetic mismatch. A mission that NAMES its
+  // companies still read as a semantic search, so `actor_not_for_semantic_
+  // discovery` blocked `apify_linkedin_company_search` — a company-NAME matcher,
+  // which is exactly the right actor for a named-account cohort and the only
+  // discovery source carrying a trusted exact headcount.
+  //
+  // Read defensively at both levels: a caller constructing a partial mission in
+  // a test may put it either place, and the whole failure here was one reader
+  // disagreeing with the others about where the field lives.
+  const profileNamed = mission.company_profile?.known_companies ?? [];
+  const topLevelNamed = (mission as { known_companies?: unknown[] }).known_companies ?? [];
+  const named = [
+    ...(Array.isArray(profileNamed) ? profileNamed : []),
+    ...(Array.isArray(topLevelNamed) ? topLevelNamed : []),
+  ];
+  if (named.length > 0) return false;
   return conceptTermsOf(mission).length > 0;
 }
 
@@ -458,10 +528,11 @@ export function validateDiscoveryStrategy(
       });
       continue;
     }
-    if (!card.purposes.includes(DISCOVERY_PURPOSE)) {
+    if (!card.purposes.some((p) => DISCOVERY_PURPOSES.includes(p))) {
       violations.push({
         code: "actor_not_for_discovery", actor_key: key,
-        message: `${key} is registered for ${card.purposes.join(", ")}, not ${DISCOVERY_PURPOSE}`,
+        message: `${key} is registered for ${card.purposes.join(", ")}, none of ` +
+          `which can introduce a candidate (${DISCOVERY_PURPOSES.join(", ")})`,
         severity: "block",
       });
       continue;

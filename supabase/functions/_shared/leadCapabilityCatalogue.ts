@@ -30,14 +30,20 @@ export const CAPABILITY_CATALOGUE_VERSION = "lead-capability-catalogue-v1" as co
 export const PUBLIC_CAPABILITY_IDS = [
   "startup_company_discovery",
   "general_company_discovery",
+  "funding_event_discovery",
   "known_company_identity_resolution",
   "company_details_enrichment",
   "embedded_hiring_evidence",
   "external_hiring_verification",
+  "company_post_evidence",
+  "expansion_evidence",
+  "product_launch_evidence",
+  "technology_evidence",
   "company_semantic_evaluation",
   "portfolio_ranking",
   "offer_founder_unlock",
   "offer_contact_unlock",
+  "offer_deep_company_research",
 ] as const;
 
 export type PublicCapabilityId = typeof PUBLIC_CAPABILITY_IDS[number];
@@ -102,6 +108,20 @@ export const PUBLIC_CAPABILITY_CATALOGUE:
       internal: ["general_company_discovery"],
       paid: true,
     },
+    funding_event_discovery: {
+      id: "funding_event_discovery",
+      kind: "execution",
+      description:
+        "Discover companies through a recent FUNDING ROUND, and carry that round " +
+        "forward as the evidence. Returns one dated funding event per company — " +
+        "stage, amount in USD, announced date and investors. Choose when the " +
+        "query asks for recently funded companies, a named round stage, or a " +
+        "funding window. It can only FIND companies by a round; it cannot check " +
+        "whether a company you already have has raised, so do not choose it to " +
+        "confirm funding for a pool discovered another way.",
+      internal: ["funding_signal_discovery"],
+      paid: true,
+    },
     known_company_identity_resolution: {
       id: "known_company_identity_resolution",
       kind: "execution",
@@ -140,6 +160,55 @@ export const PUBLIC_CAPABILITY_CATALOGUE:
       internal: ["hiring_verification"],
       paid: true,
     },
+    company_post_evidence: {
+      id: "company_post_evidence",
+      kind: "execution",
+      description:
+        "Read what a COMPANY PAGE itself published on LinkedIn, once its company " +
+        "identity is resolved. Returns dated posts with their text, so a claim " +
+        "the company made about itself — a launch, a move, a hiring push — can " +
+        "be cited. Choose when the query asks what a company said or posted. " +
+        "This is the COMPANY's own voice: it cannot read what a founder or an " +
+        "employee posted, which is a different capability behind an unlock.",
+      internal: ["company_post_verification"],
+      paid: true,
+    },
+    expansion_evidence: {
+      id: "expansion_evidence",
+      kind: "execution",
+      description:
+        "Find or confirm an EXPANSION — a new market, country, office or region " +
+        "— from dated news articles, with the company's own posts as corroboration. " +
+        "Requires an explicit statement that the company is entering somewhere " +
+        "new. Choose when the query asks about expanding, entering a market, or " +
+        "opening an office. A job advertised in a country is NOT expansion " +
+        "evidence and will not satisfy this.",
+      internal: ["expansion_signal_discovery", "expansion_signal_verification"],
+      paid: true,
+    },
+    product_launch_evidence: {
+      id: "product_launch_evidence",
+      kind: "execution",
+      description:
+        "Find or confirm a PRODUCT LAUNCH from dated news articles, with the " +
+        "company's own posts as corroboration. Requires a dated announcement " +
+        "naming the product or the launch. Choose when the query asks about new " +
+        "products, launches or releases.",
+      internal: ["product_launch_discovery", "product_launch_verification"],
+      paid: true,
+    },
+    technology_evidence: {
+      id: "technology_evidence",
+      kind: "execution",
+      description:
+        "Confirm which technologies a company's DOMAIN actually runs. Choose " +
+        "when the query asks whether companies use a named technology AND you " +
+        "already have the companies. It CANNOT find companies by technology — " +
+        "there is no reverse lookup — and it reports no adoption date, so " +
+        "'recently adopted' cannot be answered.",
+      internal: ["technology_verification"],
+      paid: true,
+    },
     company_semantic_evaluation: {
       id: "company_semantic_evaluation",
       kind: "execution",
@@ -162,7 +231,16 @@ export const PUBLIC_CAPABILITY_CATALOGUE:
       description:
         "Offer the user a button to unlock founder / decision-maker details " +
         "later. This does NOT look anyone up and does NOT spend anything. It is " +
-        "the ONLY way to express interest in people.",
+        "the ONLY way to express interest in people — including anything a " +
+        "PERSON posted or commented. Leadership posts, founder posts and " +
+        "comments all require an identified person first, so choose this when " +
+        "the query asks what a founder, CEO or leader said, and expect the " +
+        "person-level evidence to be reported as awaiting authorisation rather " +
+        "than collected.\n\n" +
+        "THIS FINDS THE PERSON. It does not return an email or a phone number. " +
+        "Buying a way to REACH them is a separate, separately-priced action " +
+        "(offer_contact_unlock) that only becomes meaningful once this one has " +
+        "resolved somebody.",
       internal: [],
       paid: false,
     },
@@ -170,8 +248,40 @@ export const PUBLIC_CAPABILITY_CATALOGUE:
       id: "offer_contact_unlock",
       kind: "offer",
       description:
-        "Offer the user a button to unlock contact details later. This does NOT " +
-        "look anything up and does NOT spend anything.",
+        "Offer the user a button to buy a business EMAIL for a person who has " +
+        "ALREADY been identified. This does NOT look anything up and does NOT " +
+        "spend anything.\n\n" +
+        "CHOOSE THIS when the request is about reaching someone — 'find their " +
+        "business emails', 'get me contact details', 'how do I email them'. It " +
+        "is about a CONTACT METHOD for a known person.\n\n" +
+        "DO NOT choose this to FIND a person. It cannot search: it takes a " +
+        "profile that decision-maker discovery already resolved and looks that " +
+        "one person up. 'Find the VP Sales' is offer_founder_unlock, and this " +
+        "capability is only meaningful afterwards.\n\n" +
+        "It buys an ATTEMPT, not a guarantee: the lookup often returns no " +
+        "address, and that is reported as not_found rather than guessed. No " +
+        "phone number is available from any source here — never imply one.",
+      internal: [],
+      paid: false,
+    },
+    offer_deep_company_research: {
+      id: "offer_deep_company_research",
+      kind: "offer",
+      description:
+        "Offer the user a button to buy DEEP website research on a company — " +
+        "products, target customers, positioning, use cases, case studies and " +
+        "recent initiatives, read from the company's own site. This does NOT " +
+        "crawl anything and does NOT spend anything.\n\n" +
+        "CHOOSE THIS when the request is to understand a company properly " +
+        "before reaching out — 'research these companies deeply', 'what do they " +
+        "actually sell', 'give me context for a good message'.\n\n" +
+        "DO NOT choose this for ordinary qualification. Industry, size, " +
+        "geography and what a company does are already established from the " +
+        "evidence every run collects, and buying a crawl to re-establish them " +
+        "spends a credit on an answer already held. This is a DEPTH upgrade for " +
+        "companies that already qualified.\n\n" +
+        "It is also NOT contact enrichment. It reads a website; it does not " +
+        "find people and does not return emails.",
       internal: [],
       paid: false,
     },

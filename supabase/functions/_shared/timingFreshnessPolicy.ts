@@ -160,6 +160,17 @@ export const CANONICAL_TIMING_WINDOW_HOURS: Readonly<Record<string, number>> = {
   expansion_signal: 168,               // unchanged
   founder_activity_signal: 168,        // unchanged
   gtm_signal: 168,                     // unchanged
+  // Social activity is only meaningful while it is recent — a post from six
+  // months ago is not evidence that a company is moving now. One week, matching
+  // the scenario matrix's own `within_week` requirement for founder activity.
+  company_activity_signal: 168,
+  engagement_signal: 168,
+  // A technology stack is firmographic: it changes rarely and a month-old
+  // reading is still true.
+  technology_signal: DAYS(30),
+  // Headcount is a delta between observations, so the window is the span the
+  // comparison may cover rather than the age of one reading.
+  headcount_signal: DAYS(90),
 };
 
 /**

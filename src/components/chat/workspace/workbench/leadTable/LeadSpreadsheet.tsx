@@ -51,6 +51,10 @@ const COL = {
   fit: 'w-[132px] min-w-[132px]',
   signal: 'w-[300px] min-w-[300px]',
   decisionMaker: 'w-[210px] min-w-[210px]',
+  // Wider than its neighbours: an email is a single unbreakable token and
+  // truncating one mid-domain shows something that looks like a different
+  // address.
+  contact: 'w-[230px] min-w-[230px]',
   research: 'w-[210px] min-w-[210px]',
   outreach: 'w-[190px] min-w-[190px]',
   status: 'w-[150px] min-w-[150px]',
@@ -155,6 +159,7 @@ export default function LeadSpreadsheet({
             <TH w={COL.fit}>Fit</TH>
             <TH w={COL.signal}>Strongest signal</TH>
             <TH w={COL.decisionMaker}>Decision maker</TH>
+            <TH w={COL.contact}>Contact details</TH>
             <TH w={COL.research}>Company research</TH>
             <TH w={COL.outreach}>Outreach</TH>
             <TH w={COL.status}>Status</TH>
@@ -163,7 +168,10 @@ export default function LeadSpreadsheet({
               Opaque above it, because this row is sticky too and a translucent
               rule would let the scrolled rows show through the header seam. */}
           <tr className="bg-[#0a0d12]">
-            <td colSpan={8} className="p-0 h-px bg-white/[0.07]" />
+            {/* 8 → 9: the Contact details column. This hairline is drawn ONCE
+                    under the whole header, so its span is the column count and
+                    a stale number leaves the last column underlined by nothing. */}
+            <td colSpan={9} className="p-0 h-px bg-white/[0.07]" />
           </tr>
         </thead>
 
@@ -182,12 +190,21 @@ export default function LeadSpreadsheet({
 
             const dmState = running === 'find_decision_makers' ? 'processing'
               : unlockStateFor({ stage: view?.decision_makers, providerReady: providers.people });
+            // ── CONTACT DETAILS ────────────────────────────────────────
+            //
+            // `providers.people` is the readiness flag: the enrichment Actor is
+            // an Apify people provider, the same configuration the
+            // decision-maker column depends on. A separate flag would let this
+            // column claim to be runnable when the account it belongs to is not.
+            const contactState = running === 'find_contact_details' ? 'processing'
+              : unlockStateFor({ stage: view?.contact_enrichment, providerReady: providers.people });
             const researchState = running === 'research_company' ? 'processing'
               : unlockStateFor({ stage: view?.company_research, providerReady: providers.research });
             const outreachState = running === 'generate_outreach' ? 'processing'
               : unlockStateFor({ stage: view?.outreach });
 
             const dm = view?.decision_makers.last_success;
+            const contact = view?.contact_enrichment.last_success;
             const research = view?.company_research.last_success;
             const outreach = view?.outreach.last_success;
 
@@ -304,6 +321,47 @@ export default function LeadSpreadsheet({
                       onUnlock={() => onUnlock('find_contacts', r.id)}
                       blockedReason="A people-search provider is not configured"
                       failureReason={unlockFailureReason(view?.decision_makers)}
+                    />
+                  )}
+                </td>
+
+                <td className={`${COL.contact} px-3 border-b border-white/[0.04] overflow-hidden`}>
+                  {contactState === 'unlocked' && contact?.email_status === 'email_found'
+                    && contact.business_email ? (
+                    // AN ADDRESS WE HOLD. Selectable, because the first thing
+                    // anyone does with it is copy it, and `truncate` on a
+                    // single unbreakable token still yields a copyable string.
+                    <span
+                      className="block truncate text-[12.5px] text-[#C9D1D9] select-all"
+                      title={contact.business_email}
+                    >
+                      {contact.business_email}
+                    </span>
+                  ) : contactState === 'unlocked' ? (
+                    // ── HELD, AND THE ANSWER IS "NONE" ────────────────────
+                    //
+                    // `unlockStateFor` reports `unlocked` whenever a payload
+                    // was persisted, and a paid `not_found` IS a payload — the
+                    // lookup ran and settled the question. Rendering the same
+                    // priced button here would invite the user to buy the same
+                    // nothing again, which is the defect the `not_found` state
+                    // exists to prevent. Its `reason` says why a retry would
+                    // change nothing.
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[12px] text-[#6e7681]"
+                      title={contact?.reason ?? undefined}
+                    >
+                      No email found
+                    </span>
+                  ) : (
+                    <UnlockCell
+                      state={contactState}
+                      label="Find contact details"
+                      // The price the reserve will take. Same table, both sides.
+                      cost={priceFor('find_contact_details')}
+                      onUnlock={() => onUnlock('find_contact_details', r.id)}
+                      blockedReason="A people-search provider is not configured"
+                      failureReason={unlockFailureReason(view?.contact_enrichment)}
                     />
                   )}
                 </td>

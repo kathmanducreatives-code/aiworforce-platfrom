@@ -10,7 +10,7 @@
 // moved to Store ids, `signalsUnservedByStrategy` began comparing Store ids
 // against repo keys and reported every signal as unserved, including ones the
 // run was actually serving. These tests pin the resolver that ends it.
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   describedButNotExecutable, executableRepoKeys, executableWithoutIntelligence,
   identityDrift, identityTable, isStoreId, resolveActor, sameActor,
@@ -59,9 +59,14 @@ Deno.test("4. described and executable are different states", () => {
 Deno.test("5. the described-but-not-callable gap is visible", () => {
   // A scenario promising a funding source that no capability declares would
   // otherwise plan a step that silently never runs.
+  // The news source LEFT this list in Phase 5 when it was carded — which is the
+  // transition the list exists to make visible. Crunchbase is still on it: it is
+  // described, its schema has been read, and no capability declares it.
   const gap = describedButNotExecutable();
   assert(gap.includes("memo23/crunchbase-scraper"));
-  assert(gap.includes("data_xplorer/google-news-scraper-fast"));
+  assert(gap.includes("apidojo/google-search-scraper"));
+  assertFalse(gap.includes("data_xplorer/google-news-scraper-fast"),
+    "a carded Actor must leave the described-but-not-callable list");
   for (const id of gap) assertEquals(toRepoKey(id), null);
 });
 

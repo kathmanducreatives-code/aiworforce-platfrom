@@ -16,6 +16,7 @@ import {
 import {
   CapabilityContainmentError, buildCapabilityGraph,
 } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { PUBLIC_CAPABILITY_CATALOGUE } from "../../../supabase/functions/_shared/leadCapabilityCatalogue.ts";
 import { stubMissionEvaluator } from "./missionEvaluatorFixture.ts";
 import { guardedInvoker } from "../../../supabase/functions/_shared/leadMissionRuntime.ts";
 import {
@@ -202,9 +203,26 @@ Deno.test("4. founder discovery does not run automatically at all", async () => 
   assert(rec.calls.includes("apify_linkedin_company_details"),
     "the company pipeline still runs in full");
   assert(run.state.qualified_company_keys.length > 0, "a company must have qualified");
-  // And the qualified company carries the offer instead.
+  // And the qualified company carries the offers instead.
+  //
+  // `offer_deep_company_research` joined the list: every qualified company can
+  // be researched more deeply and none of them needs to be, so it is a button
+  // rather than a step. An offer schedules nothing and costs nothing until it
+  // is pressed — which is exactly what the two assertions above just proved
+  // about the people Actors.
   assertEquals(buildCapabilityGraph(m).offered_capabilities,
-    ["offer_founder_unlock", "offer_contact_unlock"]);
+    ["offer_founder_unlock", "offer_contact_unlock", "offer_deep_company_research"]);
+
+  // THE PROPERTY, NOT THE LIST. Every offered capability must be an `offer` and
+  // must be unpaid, so a future addition to that array cannot smuggle in
+  // something that spends without this test noticing.
+  for (const id of buildCapabilityGraph(m).offered_capabilities) {
+    const c = PUBLIC_CAPABILITY_CATALOGUE[
+      id as keyof typeof PUBLIC_CAPABILITY_CATALOGUE];
+    assert(c, `${id} must exist in the public catalogue`);
+    assertEquals(c.kind, "offer", `${id} must be an offer, never a step`);
+    assertEquals(c.paid, false, `${id} must cost nothing until pressed`);
+  }
 });
 
 // ═══════════════════════════════════════════════════════ 5. containment ══

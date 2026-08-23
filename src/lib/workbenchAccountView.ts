@@ -31,6 +31,7 @@ export type WorkbenchStage =
 export const STAGE_FOR_ACTION: Record<LeadActionKind, WorkbenchStage> = {
   research_company: 'company_research',
   find_decision_makers: 'decision_makers',
+  find_contact_details: 'contact_enrichment',
   generate_outreach: 'outreach',
 };
 
@@ -86,11 +87,38 @@ export interface OutreachStageView {
   draft_id?: string;
 }
 
+/**
+ * What a Find Contact Details unlock established, as the cell renders it.
+ *
+ * ── MIRRORS `ContactEnrichmentState` ON THE BACKEND ─────────────────────────
+ *
+ * This was `{ email_status: string; linkedin_available: boolean }` — a stage
+ * modelled but never written, because no action produced it. The backend now
+ * writes the full record, and a cell that only knew the status could show that
+ * an address exists without being able to show it.
+ *
+ * `email_status` has THREE values, and the middle one is the reason this type
+ * exists rather than a bare `email: string | null`:
+ *
+ *   email_found    an address, quoted from the provider, never constructed
+ *   not_found      the lookup ran, was PAID FOR, and there is none. An answer.
+ *   provider_error nothing was established; a retry is right
+ */
+export interface ContactEnrichmentView {
+  email_status: 'email_found' | 'not_found' | 'provider_error';
+  business_email: string | null;
+  email_source: string | null;
+  person_full_name: string | null;
+  person_linkedin_url: string | null;
+  linkedin_available: boolean;
+  reason: string;
+}
+
 export interface WorkbenchAccountView {
   lead_candidate_id: string;
   company_research: AccountStage<CompanyResearchView>;
   decision_makers: AccountStage<DecisionMakerRowView>;
-  contact_enrichment: AccountStage<{ email_status: string; linkedin_available: boolean }>;
+  contact_enrichment: AccountStage<ContactEnrichmentView>;
   outreach: AccountStage<OutreachStageView>;
   icp_snapshot: IcpSnapshot | null;
   updated_at: string | null;

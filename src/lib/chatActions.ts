@@ -35,6 +35,15 @@ export type LeadResultPanelAction =
   | 'export_csv'
   | 'save_to_signal_feed'
   | 'find_contacts'
+  /**
+   * Buy a business email for a person `find_contacts` already resolved.
+   *
+   * Deliberately a SEPARATE action, not a mode of `find_contacts`. Finding
+   * somebody and buying a way to reach them are different Actors at different
+   * prices, and running an email lookup as a side effect of a search would
+   * spend on everyone returned rather than on the one person a user chose.
+   */
+  | 'find_contact_details'
   | 'research_company';
 
 export interface ChatActionDetail {

@@ -31,6 +31,24 @@ export const UNLOCK_STATE_VERSION = 'workbench-unlock-state-v1' as const;
 export type UnlockState =
   | 'not_researched' | 'processing' | 'unlocked' | 'unavailable' | 'failed'
   /**
+   * The provider RAN, SUCCEEDED, and there was nothing to find.
+   *
+   * ── THE STATE THAT WAS MISSING, AND WHAT IT WAS BEING SHOWN AS ───────────
+   *
+   * A succeeded attempt with no `last_success` fell through every branch below
+   * and rendered as `not_researched` — an offer, identical to a row nobody had
+   * ever touched. So a user who had already paid to search for a decision maker
+   * at a company that has none was shown the same "Find contact · 2 credits"
+   * button, and pressing it bought the same nothing again.
+   *
+   * DISTINCT FROM `failed`: nothing went wrong. The company genuinely has no
+   * matching person, or the email lookup genuinely returned no address. That is
+   * an ANSWER, and it is worth what was paid for it.
+   *
+   * DISTINCT FROM `unlocked`: there is no value to display.
+   */
+  | 'not_found'
+  /**
    * The reserve declined. Nothing ran and nothing was charged.
    *
    * DISTINCT FROM `failed`, which means a provider was paid for and did not
@@ -71,6 +89,13 @@ export function unlockStateFor<T>(i: UnlockInput<T>): UnlockState {
   if (stage?.last_success != null) return 'unlocked';
   if (!providerReady) return 'unavailable';
   if (attempt && attempt.status !== 'succeeded') return 'failed';
+  // RAN, SUCCEEDED, FOUND NOTHING.
+  //
+  // Ordered AFTER `unlocked` and `failed` and BEFORE `not_researched`: it is
+  // only reachable when an attempt exists, completed, and produced no value.
+  // Without this branch that row rendered as an untouched offer and the user
+  // was invited to buy the same nothing again.
+  if (attempt?.status === 'succeeded') return 'not_found';
   return 'not_researched';
 }
 

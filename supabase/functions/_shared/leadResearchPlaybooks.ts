@@ -65,6 +65,9 @@ export const RESEARCH_PLAYBOOK_VERSION = "lead-research-playbook-v2" as const;
 export const ENGINE_DRIVEN_CAPABILITIES: readonly CapabilityId[] = Object.freeze([
   "startup_company_discovery",
   "general_company_discovery",
+  // Joined when the funding capability gained a provider that can keep its
+  // claim. It runs through the same shared discovery stage as the two above.
+  "funding_signal_discovery",
   "company_identity_resolution",
   "company_enrichment",
   "hiring_verification",
@@ -240,11 +243,18 @@ export const RESEARCH_PLAYBOOKS:
       proving_capabilities: [],
       unwired_actor_keys: [],
       notes: [
-        "funding_signal_discovery is declared with apify_yc_companies_memo23, " +
-        "whose verified input schema (compileMemo23YcInput) has no funding " +
-        "field at all — mode, industries, sizes, batch, regions, isHiring. YC " +
-        "batch membership is a funding proxy, not a funding search, so this " +
-        "shape needs a real funding source before it can be honest",
+        "funding_signal_discovery now runs apify_funding_rounds_datahyena, " +
+        "which returns one row per funding EVENT — company, stage, amount in " +
+        "USD, announced date, investors and source articles — with the amount " +
+        "ungated by any session cookie. It replaced apify_yc_companies_memo23, " +
+        "whose schema has no funding field at all and whose YC batch membership " +
+        "is a funding proxy rather than a funding search",
+        "DISCOVERY ONLY. The source has no company, domain or URL input, so it " +
+        "cannot confirm funding for a pool discovered another way, and the " +
+        "absence of a row proves nothing. A mission needing funding proven " +
+        "about companies it already holds is still unserved",
+        "a row without an announced date is refused as evidence during " +
+        "normalization, so a funding claim always carries a date",
       ],
     },
     supplied_company: {

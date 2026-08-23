@@ -100,11 +100,113 @@ function normalizeGeo(s: string): string {
 }
 
 /**
+ * What SATISFIES a required geography.
+ *
+ * ── WHY A REGION NEEDS MEMBERS AND AN ALIAS LIST WILL NOT DO ────────────────
+ *
+ * This table replaces a two-entry alias map that covered only "united states"
+ * and "united kingdom" and matched by substring. A continent is not a token any
+ * country string contains, so `("Berlin, Germany", ["Europe"])` answered
+ * CONTRADICTS — and the mission compiler emits "Europe" literally, from
+ * `GEO_MARKERS`, with no expansion anywhere between.
+ *
+ * The flagship benchmark is "cybersecurity companies IN EUROPE hiring
+ * enterprise sellers whose leadership posted about US expansion". Measured
+ * before this fix, it dropped Berlin, London, Paris and Amsterdam — every
+ * European company, on a European mission. The gate could not pass anyone.
+ *
+ * ── THE KEY IS A CLOSED VOCABULARY, WHICH IS WHY THIS IS TRACTABLE ─────────
+ *
+ * The REQUIRED side is not free text. It comes from `GEO_MARKERS` in
+ * `leadMission.ts` or from the workspace Brain, so the set of things that must
+ * be adjudicated is small and enumerable. The ESTABLISHED side is the provider's
+ * prose ("Berlin, Germany", "San Francisco, CA, USA") and is matched by token,
+ * never enumerated.
+ */
+const GEO_SCOPES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  // ── COUNTRIES: their own spellings and demonyms. ─────────────────────────
+  "united states": ["united states", "usa", "us", "u s", "america", "american"],
+  "united kingdom": ["united kingdom", "uk", "england", "scotland", "wales",
+    "northern ireland", "british", "britain", "london"],
+  germany: ["germany", "german", "deutschland"],
+  france: ["france", "french"],
+  netherlands: ["netherlands", "dutch", "holland"],
+  spain: ["spain", "spanish", "espana"],
+  italy: ["italy", "italian"],
+  ireland: ["ireland", "irish"],
+  sweden: ["sweden", "swedish"],
+  norway: ["norway", "norwegian"],
+  denmark: ["denmark", "danish"],
+  finland: ["finland", "finnish"],
+  poland: ["poland", "polish"],
+  portugal: ["portugal", "portuguese"],
+  switzerland: ["switzerland", "swiss"],
+  austria: ["austria", "austrian"],
+  belgium: ["belgium", "belgian"],
+  canada: ["canada", "canadian"],
+  mexico: ["mexico", "mexican"],
+  india: ["india", "indian"],
+  australia: ["australia", "australian"],
+  singapore: ["singapore"],
+  japan: ["japan", "japanese"],
+  israel: ["israel", "israeli"],
+  brazil: ["brazil", "brazilian"],
+
+  // ── REGIONS: satisfied by any member. ────────────────────────────────────
+  //
+  // Listed as a flat member set rather than composed at runtime: the whole
+  // point is that a reader can see what a region admits without executing
+  // anything, and a set that is assembled by code is a set nobody checks.
+  europe: ["europe", "european", "eu", "united kingdom", "uk", "england",
+    "scotland", "wales", "british", "britain", "london", "germany", "german",
+    "deutschland", "france", "french", "netherlands", "dutch", "holland",
+    "spain", "spanish", "italy", "italian", "ireland", "irish", "sweden",
+    "swedish", "norway", "norwegian", "denmark", "danish", "finland",
+    "finnish", "poland", "polish", "portugal", "portuguese", "switzerland",
+    "swiss", "austria", "austrian", "belgium", "belgian", "czech", "greece",
+    "greek", "romania", "hungary", "estonia", "lithuania", "latvia"],
+  emea: ["emea", "europe", "european", "eu", "middle east", "africa",
+    "united kingdom", "uk", "england", "britain", "british", "london",
+    "germany", "german", "france", "french", "netherlands", "dutch", "spain",
+    "spanish", "italy", "italian", "ireland", "irish", "sweden", "swedish",
+    "norway", "denmark", "finland", "poland", "portugal", "switzerland",
+    "swiss", "austria", "belgium", "israel", "israeli", "uae", "dubai"],
+  "north america": ["north america", "united states", "usa", "us", "u s",
+    "america", "american", "canada", "canadian", "mexico", "mexican"],
+  apac: ["apac", "asia", "asia pacific", "australia", "australian",
+    "singapore", "india", "indian", "japan", "japanese", "new zealand",
+    "hong kong", "korea", "korean", "indonesia", "malaysia", "philippines"],
+  nordics: ["nordics", "nordic", "sweden", "swedish", "norway", "norwegian",
+    "denmark", "danish", "finland", "finnish", "iceland"],
+  dach: ["dach", "germany", "german", "deutschland", "austria", "austrian",
+    "switzerland", "swiss"],
+  benelux: ["benelux", "belgium", "belgian", "netherlands", "dutch",
+    "holland", "luxembourg"],
+  latam: ["latam", "latin america", "brazil", "brazilian", "mexico",
+    "mexican", "argentina", "chile", "colombia", "peru"],
+});
+
+/** Whole-word containment. "us" must not match "Australia" or "Prussia". */
+function mentions(haystack: string, token: string): boolean {
+  return new RegExp(`(?:^| )${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: |$)`)
+    .test(haystack);
+}
+
+/**
  * Does the established geography CONTRADICT the mission's required one?
+ *
+ * ── THE THREE-VALUED RULE, MADE STRUCTURAL ──────────────────────────────────
  *
  * Returns false whenever either side is unknown. "We could not establish where
  * they are" is not "they are in the wrong place", and gating on the first would
  * remove every company whose enrichment happened to omit a location.
+ *
+ * That now extends to a required value this module does not RECOGNISE. A
+ * required geography absent from `GEO_SCOPES` — a city, a state, a region
+ * nobody has enumerated — cannot be adjudicated, so it does not contradict
+ * anything. This is the rule that stops the Europe bug from having a sequel:
+ * the failure was not a missing continent, it was a matcher that treated
+ * "I cannot evaluate this" as "this fails".
  */
 export function geographyContradicts(
   established: string | null, required: readonly string[],
@@ -112,17 +214,19 @@ export function geographyContradicts(
   if (!established || required.length === 0) return false;
   const e = normalizeGeo(established);
   if (!e) return false;
+
   return !required.some((r) => {
     const n = normalizeGeo(r);
-    if (!n) return true;
-    if (e.includes(n) || n.includes(e)) return true;
-    // "United States" vs "San Francisco, CA, USA" — match on the tail tokens
-    // rather than declaring a mismatch a normalizer difference would create.
-    const alias: Record<string, string[]> = {
-      "united states": ["usa", "us", "u s", "america"],
-      "united kingdom": ["uk", "england", "scotland", "wales"],
-    };
-    return (alias[n] ?? []).some((a) => e.includes(a));
+    if (!n) return true;                       // an empty requirement excludes nobody
+    // Direct match, either direction — "Germany" against "Munich, Germany",
+    // and "Munich, Germany" against a Brain value of "Germany".
+    if (mentions(e, n) || mentions(n, e)) return true;
+
+    const scope = GEO_SCOPES[n];
+    // UNRECOGNISED REQUIREMENT ⇒ NOT A CONTRADICTION. Satisfying it is the
+    // honest answer: nothing here can tell whether Berlin is in it.
+    if (!scope) return true;
+    return scope.some((token) => mentions(e, token));
   });
 }
 

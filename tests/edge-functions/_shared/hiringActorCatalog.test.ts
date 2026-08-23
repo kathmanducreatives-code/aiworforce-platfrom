@@ -422,15 +422,36 @@ Deno.test("21. invalid inputs are rejected at compile time, before any call", ()
 // ═══ 22. cards expose limitations and verified schema versions ═════════════
 Deno.test("22. every capability card carries limits, defects and a verified build", () => {
   const keys = Object.keys(HIRING_ACTOR_CATALOG);
-  assertEquals(keys.length, 7, "all seven benchmarked Actors must be catalogued");
+  // 13 → 14: `apify_linkedin_profile_enrichment`, the contact-enrichment Actor,
+  // verified against the live Store schema on 2026-08-23. It had previously
+  // been REFUSED registration for want of exactly that — see the REJECTED entry
+  // in `apifyIntelligenceRegistry`.
+  assertEquals(keys.length, 14, "all fourteen catalogued Actors must be present");
   for (const k of keys) {
     const c = HIRING_ACTOR_CATALOG[k];
     assert(c.actor_id.includes("/"), `${k}: actor_id must be the full slug`);
     assert(c.purposes.length > 0, `${k}: needs a purpose`);
     assert(c.not_for.length > 0, `${k}: a card without limits is the problem this catalog exists to fix`);
     assert(c.known_defects.length > 0, `${k}: every benchmarked Actor had at least one defect`);
-    assert(/^\d+\.\d+\.\d+$/.test(c.schema_build), `${k}: build must be a verified version`);
-    assertEquals(c.last_verified_at, "2026-08-01");
+    // ── TRACEABILITY, SPLIT BY PROVENANCE ─────────────────────────────────
+    //
+    // This asserted a `x.y.z` build and the literal date "2026-08-01" for every
+    // card, which encoded "every card came from the one benchmark". That was
+    // true when written and is no longer: `apify_funding_rounds_datahyena` was
+    // verified on 2026-08-22, and the Store publishes no build version for it
+    // at all — only a `modifiedAt`.
+    //
+    // The guarantee worth keeping is that a card is TRACEABLE to a verification
+    // event, not that every card shares one date. So the benchmark cohort keeps
+    // its exact original assertion, and any later card must still name a
+    // concrete schema build and an ISO verification date.
+    assert(c.schema_build.length > 0, `${k}: needs a schema build identifier`);
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(c.last_verified_at),
+      `${k}: last_verified_at must be an ISO date`);
+    if (c.last_verified_at === "2026-08-01") {
+      assert(/^\d+\.\d+\.\d+$/.test(c.schema_build),
+        `${k}: a benchmark card must carry its verified build version`);
+    }
     assert(c.normalizer_key.length > 0, `${k}: needs a normalizer key`);
     assertEquals(c.cost_model.tier, "BRONZE");
     for (const d of c.known_defects) {
@@ -438,10 +459,24 @@ Deno.test("22. every capability card carries limits, defects and a verified buil
         `${k}/${d.id}: a defect without a mitigation and evidence is a rumour`);
     }
   }
-  // The three Actors that cannot qualify alone must say so.
+  // The Actors that cannot qualify alone must say so.
+  //
+  // The funding source joins them, and for the same reason: a funding round
+  // names the company and proves the ROUND, but its industry and size tags are
+  // the provider's own labels. A company that raised a Series A is not thereby
+  // shown to be a B2B SaaS company of the right size, so enrichment still
+  // settles the ICP claim exactly as it does for the discovery sources.
+  // The post SEARCH and the news source join them: a topic match names a company
+  // in text, and neither a search hit nor an article settles what that company
+  // actually is. The URL-fed post Actors do NOT, because they are given an
+  // already-resolved identity rather than proposing one.
   const needEnrich = actorsRequiringEnrichment().sort();
   assertEquals(needEnrich, [
-    "apify_linkedin_company_search", "apify_yc_companies_memo23", "apify_yc_companies_solidcode",
+    "apify_funding_rounds_datahyena",
+    "apify_google_news",
+    "apify_linkedin_company_search",
+    "apify_linkedin_post_search",
+    "apify_yc_companies_memo23", "apify_yc_companies_solidcode",
   ].sort());
 });
 
