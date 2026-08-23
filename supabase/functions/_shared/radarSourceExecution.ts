@@ -18,7 +18,32 @@ import type { RadarSourcePlan, RadarSource } from "./radarScanPlanner.ts";
 import { firecrawlHitToCandidate, type FirecrawlHit, type ScoredCandidate, type RadarPlanSource } from "./radarCandidatePipeline.ts";
 
 /** Injected provider search. In production this calls Firecrawl; in tests, a stub. */
-export type FirecrawlSearchFn = (query: string, limit: number) => Promise<FirecrawlHit[]>;
+/**
+ * What one provider search returned — hits AND whether the provider refused.
+ *
+ * ── WHY THIS IS NOT `Promise<FirecrawlHit[]>` ──────────────────────────────
+ *
+ * It was. `firecrawlSearch` caught every non-200, logged it, and returned `[]`,
+ * so a provider REFUSAL and an honestly EMPTY search were the same value.
+ *
+ * On 2026-08-23 Firecrawl returned 429 to all ninety searches of a scan. Every
+ * one became `[]`. The scan reported `raw_count: 0` on every source, no error,
+ * and HTTP 200 — a completed scan that found nothing. `signals` had held zero
+ * rows since the feature was built, and the reason was invisible in the
+ * response, in the diagnostics, and in the UI.
+ *
+ * A caller cannot forget to check a required field. That is the whole reason
+ * this is a struct and not an array with an optional error beside it.
+ */
+export interface FirecrawlSearchResult {
+  hits: FirecrawlHit[];
+  /** Sanitized provider failure — status or message. Null when the call worked. */
+  error: string | null;
+}
+
+export type FirecrawlSearchFn = (
+  query: string, limit: number,
+) => Promise<FirecrawlSearchResult>;
 
 export interface SourceExecResult {
   source: RadarSource;
@@ -31,6 +56,17 @@ export interface SourceExecResult {
   stages_used: number;
   /** the exact query strings sent to the provider (with negatives applied) */
   queries_run: string[];
+  /**
+   * The provider's own refusal, when it refused.
+   *
+   * NULL AND "NO RESULTS" ARE DIFFERENT ANSWERS. A source that ran and found
+   * nothing carries null here; a source whose provider returned 429 carries the
+   * status. Collapsing them is what hid a dead integration for the entire life
+   * of the feature.
+   */
+  provider_error: string | null;
+  /** How many searches the provider refused. Zero on a healthy source. */
+  provider_failures: number;
 }
 
 /**
@@ -64,12 +100,16 @@ export async function runFirecrawlSource(args: {
   if (args.setupRequired) {
     return {
       source: plan.source, items: [], found: 0, status: "setup_needed",
+      provider_error: null, provider_failures: 0,
       reason: "Company Brain incomplete — complete setup before a high-quality scan.",
       stages_used: 0, queries_run: [],
     };
   }
   if (!plan.enabled || wanted <= 0) {
-    return { source: plan.source, items: [], found: 0, status: "skipped", stages_used: 0, queries_run: [] };
+    return {
+      source: plan.source, items: [], found: 0, status: "skipped",
+      stages_used: 0, queries_run: [], provider_error: null, provider_failures: 0,
+    };
   }
 
   const stages = [plan.staged_queries.exact, plan.staged_queries.synonym, plan.staged_queries.adjacent];
@@ -80,6 +120,8 @@ export async function runFirecrawlSource(args: {
   const collected: FirecrawlHit[] = [];
   const queries_run: string[] = [];
   let stages_used = 0;
+  let providerError: string | null = null;
+  let provider_failures = 0;
 
   for (const stage of stages) {
     if (collected.length >= enough) break;
@@ -88,8 +130,16 @@ export async function runFirecrawlSource(args: {
     for (const q of stage) {
       const full = buildFirecrawlQuery(q, plan.negative_terms);
       queries_run.push(full);
-      const hits = await args.search(full, perQuery);
-      if (Array.isArray(hits)) collected.push(...hits);
+      const res = await args.search(full, perQuery);
+      // FIRST FAILURE WINS and is kept verbatim. Ninety identical 429s are one
+      // fact, and overwriting it with the last would report the same thing
+      // while implying the others succeeded.
+      if (res.error) {
+        provider_failures++;
+        if (providerError == null) providerError = res.error;
+        continue;
+      }
+      if (Array.isArray(res.hits)) collected.push(...res.hits);
     }
   }
 
@@ -101,5 +151,16 @@ export async function runFirecrawlSource(args: {
     provider: "firecrawl_search",
   }));
 
-  return { source: plan.source, items, found: collected.length, status: "ready", stages_used, queries_run };
+  // A SOURCE WHOSE PROVIDER REFUSED EVERY CALL IS NOT "ready".
+  //
+  // Reporting `ready` with `found: 0` is exactly what made ninety 429s look
+  // like a market with nothing in it.
+  const allRefused = provider_failures > 0 && collected.length === 0;
+  return {
+    source: plan.source, items, found: collected.length,
+    status: allRefused ? "skipped" : "ready",
+    ...(allRefused ? { reason: `Provider refused every request (${providerError})` } : {}),
+    stages_used, queries_run,
+    provider_error: providerError, provider_failures,
+  };
 }

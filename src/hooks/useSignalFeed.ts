@@ -50,6 +50,23 @@ export interface RadarRunResult {
   dropped?: number;
   decision_counts?: Record<string, number>;
   adapters?: Record<string, { configured: boolean; actor: string | null; env_var: string; reason: string }>;
+  /**
+   * What the scan spent and why it stopped.
+   *
+   * A scan returning zero signals must say WHICH zero it is — quiet market,
+   * provider refusal, budget ceiling, or declined credits. Those were one
+   * answer, which is how ninety consecutive Firecrawl 429s read as "nothing
+   * found" for the entire life of the feature.
+   */
+  credit_spend?: {
+    used: number;
+    ceiling: number;
+    limited_by: "scan_cap" | "workspace_balance" | "unlimited";
+    exhausted: boolean;
+    price_per_search: number;
+    mode: "observe" | "enforce";
+    refused: number;
+  };
 }
 
 export function useSignalFeed(workspaceId: string | null, limit = 100) {

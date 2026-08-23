@@ -39,7 +39,13 @@ export type UnlockCapability =
   | "find_decision_makers"
   | "find_contact_details"
   | "research_company"
-  | "generate_outreach";
+  | "generate_outreach"
+  // ── SIGNALS ────────────────────────────────────────────────────────────
+  // One provider search issued by a radar scan. Priced per SEARCH, not per
+  // scan: a scan fans out across sources and stages, so a flat per-scan price
+  // would charge once for a scan that made ninety provider calls — which is
+  // how an unmetered path stays unmetered while appearing to be metered.
+  | "signal_search";
 
 /**
  * Credits per row, per unlock.
@@ -84,6 +90,15 @@ export const UNLOCK_PRICES: Readonly<Record<UnlockCapability, number>> = Object.
    * here would bill one cost twice, in two units.
    */
   generate_outreach: 0,
+  /**
+   * One provider search issued by a radar scan.
+   *
+   * The scan that exposed this path made NINETY searches, so the UNIT matters
+   * more than the number. Per-search keeps the cost proportional to the work
+   * and makes a runaway fan-out visible in the ledger rather than hidden
+   * behind a single per-scan charge.
+   */
+  signal_search: 1,
 });
 
 /**

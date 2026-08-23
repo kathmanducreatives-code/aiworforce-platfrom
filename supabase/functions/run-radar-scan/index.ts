@@ -7,7 +7,13 @@ import { signalDedupeKey } from "../_shared/signalQuality.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
 import { scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
-import { runFirecrawlSource } from "../_shared/radarSourceExecution.ts";
+import { runFirecrawlSource, type FirecrawlSearchResult } from "../_shared/radarSourceExecution.ts";
+import {
+  authorizeProviderCall, settleProviderCall, resolveCreditEnforcement,
+  CREDIT_REFUSED_ERROR, type CreditDb,
+} from "../_shared/creditAuthorization.ts";
+import { priceFor } from "../_shared/creditPricing.ts";
+import { resolveScanBudget, ScanBudgetTracker } from "../_shared/signalScanBudget.ts";
 import type { RadarSource } from "../_shared/radarScanPlanner.ts";
 import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
 import { buildRadarIntelligenceProfile } from "../_shared/radarIntel/radarIntelligenceProfile.ts";
@@ -64,22 +70,44 @@ interface FirecrawlSearchHit {
   markdown?: string;
 }
 
-async function firecrawlSearch(query: string, limit: number): Promise<FirecrawlSearchHit[]> {
+/**
+ * One Firecrawl search — hits, or the reason there are none.
+ *
+ * ── WHAT THIS RETURNED BEFORE ─────────────────────────────────────────────
+ *
+ *     if (!res.ok) { console.warn("firecrawl search non-200", res.status); return []; }
+ *
+ * A refusal and an empty market were the same value. On 2026-08-23 Firecrawl
+ * returned 429 to all NINETY searches of one scan; each became `[]`, every
+ * source reported `raw_count: 0` with no error, and the scan returned 200. That
+ * is why `signals` had held zero rows since the feature was built — and why the
+ * cause was invisible in the response, the diagnostics and the UI.
+ *
+ * The status is now carried out. `error` is a bounded, sanitized string: a
+ * status code or a short message, never a body that could echo the key.
+ */
+async function firecrawlSearchRaw(query: string, limit: number): Promise<FirecrawlSearchResult> {
   const key = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!key) return [];
+  // NOT CONFIGURED IS A REASON, not an empty result.
+  if (!key) return { hits: [], error: "not_configured" };
   try {
     const res = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ query, limit }),
     });
-    if (!res.ok) { console.warn("firecrawl search non-200", res.status); return []; }
+    if (!res.ok) {
+      // 429 IS THE ONE A PERSON HAS TO ACT ON — a rate limit or an exhausted
+      // plan, and no amount of retrying inside one scan clears either.
+      console.warn("firecrawl search non-200", res.status);
+      return { hits: [], error: `http_${res.status}` };
+    }
     const data = await res.json();
     const list = (data?.data ?? data?.web ?? []) as FirecrawlSearchHit[];
-    return Array.isArray(list) ? list : [];
+    return { hits: Array.isArray(list) ? list : [], error: null };
   } catch (e) {
     console.warn("firecrawl search failed", e);
-    return [];
+    return { hits: [], error: `transport_error: ${String(e).slice(0, 120)}` };
   }
 }
 
@@ -221,6 +249,70 @@ Deno.serve(async (req) => {
   // Brain-driven Firecrawl execution: staged queries (exact→synonym→adjacent) with
   // disqualifier exclusions applied, and a hard setup_required short-circuit — an
   // unusable Brain makes ZERO provider calls instead of running generic searches.
+  // ── THE MONEY BOUNDARY FOR SIGNALS ──────────────────────────────────────
+  //
+  // Radar called Firecrawl directly, so `authorizeProviderCall` never saw it:
+  // with enforcement live for Leads, a workspace at zero credits was blocked
+  // from Leads and unrestricted on Signals. Every provider search now reserves
+  // before the call and settles on what actually happened.
+  //
+  // The budget is checked FIRST and costs nothing. A scan that has hit its
+  // ceiling must not reserve a credit it is not going to use.
+  const creditMode = resolveCreditEnforcement();
+  const searchPrice = priceFor("signal_search");
+  const { data: balRow } = await admin
+    .from("workspace_credit_balances")
+    .select("balance_credits").eq("workspace_id", workspace_id).maybeSingle();
+  const budget = resolveScanBudget({
+    balance: typeof balRow?.balance_credits === "number" ? balRow.balance_credits : null,
+    pricePerSearch: searchPrice,
+  });
+  const tracker = new ScanBudgetTracker(budget);
+  let creditRefusals = 0;
+
+  const firecrawlSearch = async (
+    query: string, limit: number,
+  ): Promise<FirecrawlSearchResult> => {
+    if (!tracker.take()) {
+      // NOT AN ERROR. The scan keeps what it already collected and says it
+      // stopped early — throwing away paid-for results because the budget ran
+      // out would waste the credits already spent.
+      return { hits: [], error: "scan_budget_exhausted" };
+    }
+    // ONE LOGICAL CALL PER QUERY, so a replayed or retried scan reserves
+    // nothing further — the same idempotency rule the lead path uses.
+    const key = `signal_scan:${scan_run_id}:${query}`.slice(0, 200);
+    const auth = await authorizeProviderCall({
+      db: admin as unknown as CreditDb,
+      workspace_id, logical_call_key: key, task_id: null,
+      capability: "signal_search", mode: creditMode, amount: searchPrice,
+    });
+    if (!auth.allowed) {
+      creditRefusals++;
+      return { hits: [], error: CREDIT_REFUSED_ERROR };
+    }
+    let started = false;
+    try {
+      const res = await firecrawlSearchRaw(query, limit);
+      // STARTED means the provider was actually reached. A 429 was reached and
+      // refused us; a transport error may not have been. Both are charged the
+      // same here because the provider processed the request either way — what
+      // must never be charged is a call the budget or the reserve prevented.
+      started = res.error !== "not_configured";
+      return res;
+    } finally {
+      await settleProviderCall({
+        db: admin as unknown as CreditDb,
+        transaction_id: auth.transaction_id, started, amount: searchPrice,
+      });
+    }
+  };
+
+  // Provider refusals per category, so the diagnostics below can tell "found
+  // nothing" from "the provider refused every request".
+  const providerErrors: Partial<Record<Category, string | null>> = {};
+  const providerFailures: Partial<Record<Category, number>> = {};
+
   async function runFirecrawlCategory(cat: Exclude<Category, "people">, wanted: number): Promise<ScoredCandidate[]> {
     const plan = planFor(CAT_TO_PLAN_SOURCE[cat]);
     if (!plan || wanted <= 0) { perCategory[cat] = { found: 0, accepted: 0, status: "skipped" }; return []; }
@@ -228,6 +320,8 @@ Deno.serve(async (req) => {
     const res = await runFirecrawlSource({
       plan, wanted, search: firecrawlSearch, scanPlanReason: plan.reason, setupRequired: scanPlan.setup_required,
     });
+    providerErrors[cat] = res.provider_error;
+    providerFailures[cat] = res.provider_failures;
     perCategory[cat] = {
       found: res.found, accepted: 0,
       status: res.status === "setup_needed" ? "setup_needed" : res.status === "ready" ? "ready" : "skipped",
@@ -338,14 +432,40 @@ Deno.serve(async (req) => {
   const verifiedByType = (t: string) => kept.filter((r) => r.signal_type === t && String((r.raw as Record<string, unknown>)["verification_status"]) === "verified").length;
   const hiringRejected = (enrich.rejection_reasons["unrelated_role"] ?? 0) + (enrich.rejection_reasons["excluded_company"] ?? 0);
   const diagnostics: SourceDiagnostics[] = [
-    buildSourceDiagnostics({ source: "hiring", configured: caps.hiring.ready, execution_status: perCategory.hiring.status === "setup_needed" ? "skipped_setup_required" : "ran", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
-    buildSourceDiagnostics({ source: "competitor", configured: caps.competitor.ready, queries_attempted: planFor("competitor")?.queries ?? [], raw_count: perCategory.competitor.found, accepted_count: keptByType("competitor"), verified_count: verifiedByType("competitor") }),
-    buildSourceDiagnostics({ source: "workflow_trend", configured: caps.workflow_trend.ready, queries_attempted: planFor("workflow_trends")?.queries ?? [], raw_count: perCategory.workflow_trend.found, accepted_count: keptByType("workflow_trend"), verified_count: verifiedByType("workflow_trend") }),
+    buildSourceDiagnostics({ source: "hiring", configured: caps.hiring.ready, provider_error: providerErrors.hiring ?? null, auth_failed: /401|403/.test(providerErrors.hiring ?? ""), execution_status: perCategory.hiring.status === "setup_needed" ? "skipped_setup_required" : "ran", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
+    buildSourceDiagnostics({ source: "competitor", configured: caps.competitor.ready, provider_error: providerErrors.competitor ?? null, auth_failed: /401|403/.test(providerErrors.competitor ?? ""), queries_attempted: planFor("competitor")?.queries ?? [], raw_count: perCategory.competitor.found, accepted_count: keptByType("competitor"), verified_count: verifiedByType("competitor") }),
+    buildSourceDiagnostics({ source: "workflow_trend", configured: caps.workflow_trend.ready, provider_error: providerErrors.workflow_trend ?? null, auth_failed: /401|403/.test(providerErrors.workflow_trend ?? ""), queries_attempted: planFor("workflow_trends")?.queries ?? [], raw_count: perCategory.workflow_trend.found, accepted_count: keptByType("workflow_trend"), verified_count: verifiedByType("workflow_trend") }),
     buildSourceDiagnostics({ source: "linkedin_post", configured: postsAdapter.configured, execution_status: postsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: postsErr ?? (postsAdapter.configured ? null : postsAdapter.reason), auth_failed: /401|403|auth/i.test(postsErr ?? ""), raw_count: postsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_post"), rejected_count: postsBuilt?.rejected ?? 0, rejection_reasons: postsBuilt?.rejection_reasons ?? {} }),
     buildSourceDiagnostics({ source: "linkedin_comment", configured: commentsAdapter.configured, execution_status: commentsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: commentsErr ?? (commentsAdapter.configured ? null : commentsAdapter.reason), auth_failed: /401|403|auth/i.test(commentsErr ?? ""), raw_count: commentsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_comment"), rejected_count: commentsBuilt?.rejected ?? 0, rejection_reasons: commentsBuilt?.rejection_reasons ?? {} }),
     buildSourceDiagnostics({ source: "funding", configured: false, execution_status: "skipped_not_configured" }),
     buildSourceDiagnostics({ source: "decision_maker", configured: peopleAdapter.configured, execution_status: peopleAdapter.configured ? "ran" : "skipped_not_configured", provider_error: peopleAdapter.configured ? null : peopleAdapter.reason }),
   ];
+
+  // ── TEMPORARY PHASE-0/1 DIAGNOSTIC ──────────────────────────────────────
+  //
+  // The Signals UI has no scan-details panel, so a scan's per-source outcome is
+  // unreadable after the fact. This puts it in the function log, which IS
+  // queryable — the same place `firecrawl search non-200 429` was found, and
+  // the only reason that scan was ever explained.
+  //
+  // Kept deliberately small and structured: one line, no payloads, no query
+  // text that could echo Brain content into a log. Remove once a diagnostics
+  // surface exists, or promote it to the execution ledger in Phase 2.
+  console.log("[radar-scan][diagnostics]", JSON.stringify({
+    scan_run_id,
+    inserted: kept.length,
+    credit_spend: { ...tracker.spend, refused: creditRefusals, mode: creditMode },
+    sources: diagnostics.map((d) => ({
+      source: d.source,
+      readiness: d.readiness,
+      execution_status: d.execution_status,
+      raw: d.raw_count, normalized: d.normalized_count,
+      accepted: d.accepted_count, rejected: d.rejected_count,
+      duplicates: d.duplicate_count, verified: d.verified_count,
+      rejection_reasons: d.rejection_reasons,
+      provider_error: d.provider_error,
+    })),
+  }));
 
   return json({
     ok: true,
@@ -363,5 +483,18 @@ Deno.serve(async (req) => {
     setup_required: scanPlan.setup_required,
     warnings: scanPlan.warnings,
     mode,
+    // ── WHAT THIS SCAN SPENT, AND WHY IT STOPPED ──────────────────────────
+    //
+    // A scan that returns zero signals now has to say which zero it is: the
+    // market was quiet, the provider refused, the budget ran out, or credits
+    // were declined. Those were one indistinguishable answer, which is how
+    // ninety consecutive 429s read as "nothing found" for the life of the
+    // feature.
+    credit_spend: {
+      ...tracker.spend,
+      price_per_search: searchPrice,
+      mode: creditMode,
+      refused: creditRefusals,
+    },
   });
 });

@@ -36,7 +36,21 @@ function stubSearch(hitsPerCall: number, record: string[]): FirecrawlSearchFn {
     const hits: FirecrawlHit[] = Array.from({ length: hitsPerCall }, (_v, i) => ({
       url: `https://acme${i}.com/jobs/1`, title: `Acme ${i} is hiring a RevOps lead`, description: "B2B SaaS company scaling revenue",
     }));
-    return Promise.resolve(hits);
+    // `{ hits, error }`, not a bare array.
+    //
+    // The search contract widened so a provider REFUSAL stops being
+    // indistinguishable from an empty market — the shape that let ninety
+    // Firecrawl 429s report as `raw_count: 0` with no error on 2026-08-23.
+    // A stub that returns success now has to say so.
+    return Promise.resolve({ hits, error: null });
+  };
+}
+
+/** A provider that refuses every call, for the failure paths. */
+function refusingSearch(error: string, record: string[]): FirecrawlSearchFn {
+  return (query: string, _limit: number) => {
+    record.push(query);
+    return Promise.resolve({ hits: [], error });
   };
 }
 
@@ -98,4 +112,30 @@ Deno.test("exec-7. buildFirecrawlQuery caps and formats negatives", () => {
   assert(q.startsWith("B2B SaaS hiring "));
   assertEquals((q.match(/-"/g) ?? []).length, 4, "negatives capped at 4");
   assertEquals(buildFirecrawlQuery("x", []), "x", "no negatives → base unchanged");
+});
+
+// ═══ PROVIDER REFUSAL IS NOT AN EMPTY MARKET ═══════════════════════════════
+
+Deno.test("exec-9. a refused source reports the provider error and is not `ready`", async () => {
+  const { src } = planSource(saasBrain(), "hiring");
+  const calls: string[] = [];
+  const res = await runFirecrawlSource({
+    plan: src, wanted: 5, search: refusingSearch("http_429", calls),
+    scanPlanReason: "r", setupRequired: false,
+  });
+  assertEquals(res.found, 0);
+  assertEquals(res.provider_error, "http_429");
+  assert(res.provider_failures > 0);
+  assertEquals(res.status, "skipped",
+    "`ready` with found:0 is what made 90 refusals look like a quiet market");
+});
+
+Deno.test("exec-10. an honestly empty search stays `ready` with no error", async () => {
+  const { src } = planSource(saasBrain(), "hiring");
+  const res = await runFirecrawlSource({
+    plan: src, wanted: 5, search: stubSearch(0, []), scanPlanReason: "r", setupRequired: false,
+  });
+  assertEquals(res.found, 0);
+  assertEquals(res.provider_error, null, "nothing refused us — the market is quiet");
+  assertEquals(res.status, "ready");
 });
