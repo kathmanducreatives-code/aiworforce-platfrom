@@ -66,6 +66,10 @@ export interface RadarRunResult {
     price_per_search: number;
     mode: "observe" | "enforce";
     refused: number;
+    /** Requests/minute the scan planned around — see RADAR_PROVIDER_RPM. */
+    provider_rpm?: number;
+    /** How many searches fit the wall clock at that rate. */
+    time_capacity?: number;
   };
 }
 

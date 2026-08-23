@@ -13,7 +13,13 @@ import {
   CREDIT_REFUSED_ERROR, type CreditDb,
 } from "../_shared/creditAuthorization.ts";
 import { priceFor } from "../_shared/creditPricing.ts";
-import { resolveScanBudget, ScanBudgetTracker } from "../_shared/signalScanBudget.ts";
+import {
+  resolveScanBudget, ScanBudgetTracker, MAX_SEARCHES_PER_SCAN,
+} from "../_shared/signalScanBudget.ts";
+import {
+  ProviderRateLimiter, DEFAULT_PROVIDER_RPM, DEFAULT_SCAN_WALL_CLOCK_MS,
+  parseRetryAfterMs, classifyRateLimitBody,
+} from "../_shared/providerRateLimit.ts";
 import type { RadarSource } from "../_shared/radarScanPlanner.ts";
 import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
 import { buildRadarIntelligenceProfile } from "../_shared/radarIntel/radarIntelligenceProfile.ts";
@@ -86,29 +92,78 @@ interface FirecrawlSearchHit {
  * The status is now carried out. `error` is a bounded, sanitized string: a
  * status code or a short message, never a body that could echo the key.
  */
-async function firecrawlSearchRaw(query: string, limit: number): Promise<FirecrawlSearchResult> {
+/**
+ * One Firecrawl search — hits, or the reason there are none.
+ *
+ * ── WHAT THIS RETURNED BEFORE ─────────────────────────────────────────────
+ *
+ *     if (!res.ok) { console.warn("firecrawl search non-200", res.status); return []; }
+ *
+ * A refusal and an empty market were the same value, so ninety 429s read as
+ * "nothing found" and `signals` held zero rows for the life of the feature.
+ *
+ * ── AND WHY THE 429s WERE OURS ────────────────────────────────────────────
+ *
+ * Measured: 21 × 429 in 3.4 seconds — 6.2 req/sec, ~371/min, against a
+ * provider whose free tier allows ~10/min. The scan was rate-limiting itself
+ * and would have done so on any key. `limiter` is the shared gate that stops
+ * it; the retry below honours what the provider actually asks for.
+ */
+async function firecrawlSearchRaw(
+  query: string, limit: number, limiter: ProviderRateLimiter,
+): Promise<FirecrawlSearchResult> {
   const key = Deno.env.get("FIRECRAWL_API_KEY");
   // NOT CONFIGURED IS A REASON, not an empty result.
   if (!key) return { hits: [], error: "not_configured" };
-  try {
-    const res = await fetch("https://api.firecrawl.dev/v2/search", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query, limit }),
-    });
-    if (!res.ok) {
-      // 429 IS THE ONE A PERSON HAS TO ACT ON — a rate limit or an exhausted
-      // plan, and no amount of retrying inside one scan clears either.
-      console.warn("firecrawl search non-200", res.status);
-      return { hits: [], error: `http_${res.status}` };
+
+  // ONE RETRY, and only when the provider itself said to wait.
+  //
+  // Inside the metered wrapper, so this attempt and its retry are ONE logical
+  // call and reserve ONE credit — the provider refused us, it did not do the
+  // work twice.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await limiter.acquire();
+    try {
+      const res = await fetch("https://api.firecrawl.dev/v2/search", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit }),
+      });
+
+      if (res.status === 429) {
+        // THE BODY SAYS WHICH 429 THIS IS. "Going too fast" and "account
+        // empty" are the same status and have opposite remedies: one is ours
+        // to fix by slowing down, the other needs a human.
+        const body = await res.text().catch(() => "");
+        const why = classifyRateLimitBody(body);
+        const retryMs = parseRetryAfterMs(res.headers.get("retry-after"));
+
+        // BACK OFF THE SHARED GATE, not just this request. A 429 is a statement
+        // about the account; letting the other queued callers carry on at full
+        // speed is how a rate limit becomes permanent.
+        limiter.backOff(retryMs ?? limiter.minIntervalMs * 4);
+
+        const canRetry = attempt === 0 && why !== "out_of_credits";
+        if (canRetry) continue;
+
+        console.warn("firecrawl 429", why, retryMs ?? "no-retry-after");
+        return { hits: [], error: `http_429:${why}` };
+      }
+
+      if (!res.ok) {
+        console.warn("firecrawl search non-200", res.status);
+        return { hits: [], error: `http_${res.status}` };
+      }
+
+      const data = await res.json();
+      const list = (data?.data ?? data?.web ?? []) as FirecrawlSearchHit[];
+      return { hits: Array.isArray(list) ? list : [], error: null };
+    } catch (e) {
+      console.warn("firecrawl search failed", e);
+      return { hits: [], error: `transport_error: ${String(e).slice(0, 120)}` };
     }
-    const data = await res.json();
-    const list = (data?.data ?? data?.web ?? []) as FirecrawlSearchHit[];
-    return { hits: Array.isArray(list) ? list : [], error: null };
-  } catch (e) {
-    console.warn("firecrawl search failed", e);
-    return { hits: [], error: `transport_error: ${String(e).slice(0, 120)}` };
   }
+  return { hits: [], error: "http_429:rate_limited" };
 }
 
 // NOTE: the legacy generic query builders (intentQueries/competitorQueries/
@@ -263,9 +318,26 @@ Deno.serve(async (req) => {
   const { data: balRow } = await admin
     .from("workspace_credit_balances")
     .select("balance_credits").eq("workspace_id", workspace_id).maybeSingle();
+  // ── THE SHARED RATE GATE ────────────────────────────────────────────────
+  //
+  // Every Firecrawl request in this scan passes through one limiter, so the
+  // three categories running under `Promise.all` below take turns instead of
+  // bursting. Configurable because the right number is the KEY'S tier, which
+  // this code cannot see: a Free-tier key needs RADAR_PROVIDER_RPM=10.
+  const rpm = Number(Deno.env.get("RADAR_PROVIDER_RPM") ?? "") || DEFAULT_PROVIDER_RPM;
+  const limiter = ProviderRateLimiter.fromRpm(rpm);
+
+  // AND A THIRD CEILING: what fits in the wall clock.
+  //
+  // Spacing requests makes them slower, and an edge invocation gets killed. At
+  // 10 req/min a 30-search scan needs three minutes and would die mid-flight,
+  // losing everything it had already paid for. Better to plan a smaller scan
+  // and finish it.
+  const timeCapacity = limiter.capacityWithin(DEFAULT_SCAN_WALL_CLOCK_MS);
   const budget = resolveScanBudget({
     balance: typeof balRow?.balance_credits === "number" ? balRow.balance_credits : null,
     pricePerSearch: searchPrice,
+    maxPerScan: Math.min(MAX_SEARCHES_PER_SCAN, timeCapacity),
   });
   const tracker = new ScanBudgetTracker(budget);
   let creditRefusals = 0;
@@ -293,7 +365,7 @@ Deno.serve(async (req) => {
     }
     let started = false;
     try {
-      const res = await firecrawlSearchRaw(query, limit);
+      const res = await firecrawlSearchRaw(query, limit, limiter);
       // STARTED means the provider was actually reached. A 429 was reached and
       // refused us; a transport error may not have been. Both are charged the
       // same here because the provider processed the request either way — what
@@ -454,7 +526,10 @@ Deno.serve(async (req) => {
   console.log("[radar-scan][diagnostics]", JSON.stringify({
     scan_run_id,
     inserted: kept.length,
-    credit_spend: { ...tracker.spend, refused: creditRefusals, mode: creditMode },
+    credit_spend: {
+      ...tracker.spend, refused: creditRefusals, mode: creditMode,
+      provider_rpm: rpm, time_capacity: timeCapacity,
+    },
     sources: diagnostics.map((d) => ({
       source: d.source,
       readiness: d.readiness,
@@ -495,6 +570,11 @@ Deno.serve(async (req) => {
       price_per_search: searchPrice,
       mode: creditMode,
       refused: creditRefusals,
+      // The rate the scan planned around. A 429 alongside this says the tier
+      // is lower than configured — the one number that turns "it failed again"
+      // into "set RADAR_PROVIDER_RPM to 10".
+      provider_rpm: rpm,
+      time_capacity: timeCapacity,
     },
   });
 });

@@ -161,7 +161,9 @@ Deno.test("11. budget is checked BEFORE the reserve", () => {
 
 Deno.test("12. the reserve happens BEFORE the provider call", () => {
   const auth = code.indexOf("authorizeProviderCall({");
-  const call = code.indexOf("firecrawlSearchRaw(query, limit)");
+  // The signature gained the shared rate limiter, so match on the CALL rather
+  // than its exact argument list — the property is the ordering, not the arity.
+  const call = code.indexOf("firecrawlSearchRaw(query, limit");
   assert(auth !== -1 && call !== -1);
   assert(auth < call, "no provider work before authorization");
 });
