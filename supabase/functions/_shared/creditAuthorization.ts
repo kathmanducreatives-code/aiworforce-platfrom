@@ -203,7 +203,26 @@ export async function settleProviderCall(i: {
     const { data, error } = await i.db.rpc("credits_finalize", {
       p_transaction_id: i.transaction_id,
       p_actual: charged,
-      p_status: i.started ? "consumed" : "released",
+      // ── THE STATUS THE SCHEMA ACTUALLY ACCEPTS ──────────────────────────
+      //
+      // This read `"consumed"`, which `credit_transactions_status_check` has
+      // never allowed. The permitted set is:
+      //
+      //     reserved · charged · partial · not_charged · released · granted
+      //
+      // So EVERY settle threw a constraint violation, was caught by the guard
+      // below, and returned `settled: false`. Ninety reservations from two
+      // radar scans sat `reserved` — 90 credits held, none charged, none
+      // released — until the stale reaper would have freed them.
+      //
+      // SECOND TIME IN THIS FILE. `kind` had the identical defect: the code
+      // sent `provider_call`, which the kind CHECK did not permit, and every
+      // RESERVE threw. That one was found by running the RPC directly; this one
+      // survived because the proof exercised `credits_finalize` with a VALID
+      // status by hand and never checked what the caller actually sends.
+      //
+      // Proving an RPC works is not proving the code calls it correctly.
+      p_status: i.started ? "charged" : "not_charged",
       p_reason: i.reason ?? null,
     });
     if (error) return { settled: false, charged: 0, detail: describeRpcError(error) };

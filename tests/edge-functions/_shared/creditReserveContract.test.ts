@@ -32,6 +32,17 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 const read = (p: string) => Deno.readTextFileSync(new URL(p, import.meta.url));
 const AUTH = read("../../../supabase/functions/_shared/creditAuthorization.ts");
 
+/**
+ * Every `status` the schema accepts, read from the baseline migration.
+ *
+ * The `kind` allow-list and the `status` allow-list are two separate CHECK
+ * constraints and each has now produced the identical defect: code sending a
+ * value the schema rejects, every call throwing, and the guard swallowing it.
+ */
+const ALLOWED_STATUSES = [
+  "reserved", "charged", "partial", "not_charged", "released", "granted",
+] as const;
+
 /** Every `kind` literal the schema currently accepts. */
 function allowedKinds(): string[] {
   const mig = read(
@@ -104,4 +115,42 @@ Deno.test("7. the idempotency key is the logical call key", () => {
   // What makes a retried or continued call reserve nothing further. Proven
   // live: a replayed reserve returns the ORIGINAL transaction id.
   assert(/p_idempotency_key:\s*i\.logical_call_key/.test(AUTH));
+});
+
+// ═══ THE SETTLE STATUS — THE SAME DEFECT, ONE FIELD OVER ═══════════════════
+
+Deno.test("8. EVERY STATUS THE CODE SENDS IS ONE THE SCHEMA ACCEPTS", () => {
+  // `p_status: i.started ? "consumed" : "released"` — and `consumed` has never
+  // been permitted. Every settle threw a constraint violation, was caught, and
+  // returned `settled: false`. Ninety reservations from two radar scans sat
+  // `reserved`: 90 credits held, none charged, none released.
+  //
+  // The reserve had the identical bug in `kind`, found by running the RPC
+  // directly. This one survived because the proof called `credits_finalize`
+  // with a VALID status by hand and never checked what the caller sends —
+  // proving an RPC works is not proving the code calls it correctly.
+  const sent = [...AUTH.matchAll(/p_status:\s*i\.started\s*\?\s*"([a-z_]+)"\s*:\s*"([a-z_]+)"/g)];
+  assert(sent.length === 1, "settleProviderCall must state both statuses in one place");
+  const [, whenStarted, whenNot] = sent[0];
+  for (const [label, v] of [["started", whenStarted], ["not started", whenNot]] as const) {
+    assert((ALLOWED_STATUSES as readonly string[]).includes(v),
+      `settle sends "${v}" when ${label}, which credit_transactions_status_check rejects`);
+  }
+});
+
+Deno.test("9. a call that reached the provider is CHARGED; one that did not is NOT", () => {
+  // Verified live: finalize(tx, 1, 'charged') → actual 1, refunded 0.
+  //                finalize(tx, 0, 'not_charged') → actual 0, REFUNDED 1.
+  const sent = AUTH.match(/p_status:\s*i\.started\s*\?\s*"([a-z_]+)"\s*:\s*"([a-z_]+)"/);
+  assertEquals(sent?.[1], "charged");
+  assertEquals(sent?.[2], "not_charged",
+    "`released` is for the stale reaper, not for a call that simply never started");
+});
+
+Deno.test("10. no status literal anywhere in the file is outside the schema", () => {
+  // A second settle path added later must not reintroduce this.
+  for (const m of AUTH.matchAll(/p_status:\s*"([a-z_]+)"/g)) {
+    assert((ALLOWED_STATUSES as readonly string[]).includes(m[1]),
+      `literal status "${m[1]}" is not permitted by the schema`);
+  }
 });
