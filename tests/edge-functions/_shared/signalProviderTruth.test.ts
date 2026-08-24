@@ -235,3 +235,52 @@ Deno.test("20. nothing settles for a call that never reserved", () => {
   assert(budgetExit !== -1 && auth !== -1);
   assert(budgetExit < auth, "the budget check exits before any reservation exists");
 });
+
+// ═══ 5. THE RESULTS ACTUALLY GET READ ══════════════════════════════════════
+
+/** Parse exactly as the scan does, against a captured response shape. */
+function parseHits(data: unknown): unknown[] {
+  const d = data as Record<string, // deno-lint-ignore no-explicit-any
+    any>;
+  return (Array.isArray(d?.data?.web) && d.data.web) ||
+    (Array.isArray(d?.web) && d.web) ||
+    (Array.isArray(d?.data) && d.data) || [];
+}
+
+Deno.test("21. THE DOCUMENTED v2 SHAPE IS READ", () => {
+  // Firecrawl v2 /search returns { success, data: { web: [...] }, creditsUsed }.
+  // The parse was `data?.data ?? data?.web ?? []` — `data.data` is an OBJECT,
+  // truthy, so `??` never reached `data.web`, and `Array.isArray(object)` is
+  // false. Every successful search returned `[]`.
+  //
+  // Ten searches succeeded in the 08:29 scan, incremented Firecrawl's
+  // `creditsUsed`, were charged by us — and every source reported `raw: 0`.
+  const real = {
+    success: true,
+    data: { web: [{ url: "https://acme.com", title: "Acme is hiring" }] },
+    creditsUsed: 1,
+  };
+  assertEquals(parseHits(real).length, 1, "the documented shape must yield hits");
+
+  // The exact failure: the old expression on the real shape.
+  const old = (real as Record<string, unknown>).data ?? (real as Record<string, unknown>).web ?? [];
+  assert(!Array.isArray(old), "…which is precisely why the old parse produced []");
+});
+
+Deno.test("22. older and flatter shapes still degrade rather than break", () => {
+  assertEquals(parseHits({ web: [{ url: "a" }] }).length, 1, "flat .web");
+  assertEquals(parseHits({ data: [{ url: "a" }] }).length, 1, "flat .data array");
+  assertEquals(parseHits({}).length, 0);
+  assertEquals(parseHits(null).length, 0);
+  assertEquals(parseHits({ data: { web: null } }).length, 0, "a null list is not a list");
+});
+
+Deno.test("23. the scan reads data.web and reports the provider's own count", () => {
+  assert(/Array\.isArray\(data\?\.data\?\.web\)/.test(code),
+    "most-specific shape first");
+  assert(code.includes("providerCreditsUsed"),
+    "Firecrawl's `creditsUsed` sits beside ours — two ledgers, neither " +
+    "standing in for the other");
+  assert(!/data\?\.data \?\? data\?\.web/.test(code),
+    "the coalescing that swallowed every result must not return");
+});

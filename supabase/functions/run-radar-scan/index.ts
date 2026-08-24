@@ -109,6 +109,9 @@ interface FirecrawlSearchHit {
  * and would have done so on any key. `limiter` is the shared gate that stops
  * it; the retry below honours what the provider actually asks for.
  */
+/** Firecrawl's own `creditsUsed`, summed across the scan. */
+let providerCreditsUsed = 0;
+
 async function firecrawlSearchRaw(
   query: string, limit: number, limiter: ProviderRateLimiter,
 ): Promise<FirecrawlSearchResult> {
@@ -156,8 +159,32 @@ async function firecrawlSearchRaw(
       }
 
       const data = await res.json();
-      const list = (data?.data ?? data?.web ?? []) as FirecrawlSearchHit[];
-      return { hits: Array.isArray(list) ? list : [], error: null };
+      // ── THE RESULTS LIVE AT data.web ────────────────────────────────────
+      //
+      // This read `data?.data ?? data?.web ?? []`. Firecrawl v2 /search
+      // returns:
+      //
+      //     { success: true, data: { web: [...] }, creditsUsed: N }
+      //
+      // so `data.data` is an OBJECT, truthy, and `??` never fell through to
+      // `data.web`. `Array.isArray({web:[...]})` is false, so every successful
+      // search returned `[]`.
+      //
+      // The provider did the work, incremented `creditsUsed`, we were charged —
+      // and the results were thrown away at the last step. Ten searches
+      // succeeded in the 08:29 scan and every one reported `raw: 0`.
+      //
+      // Ordered most-specific first, with the older shapes kept as fallbacks so
+      // an older account or a changed contract degrades rather than breaks.
+      const hits: FirecrawlSearchHit[] =
+        (Array.isArray(data?.data?.web) && data.data.web) ||
+        (Array.isArray(data?.web) && data.web) ||
+        (Array.isArray(data?.data) && data.data) ||
+        [];
+      // The provider's own count of what this cost, when it says.
+      const used = Number(data?.creditsUsed);
+      if (Number.isFinite(used) && used > 0) providerCreditsUsed += used;
+      return { hits, error: null };
     } catch (e) {
       console.warn("firecrawl search failed", e);
       return { hits: [], error: `transport_error: ${String(e).slice(0, 120)}` };
@@ -586,6 +613,9 @@ Deno.serve(async (req) => {
       // into "set RADAR_PROVIDER_RPM to 10".
       provider_rpm: rpm,
       time_capacity: timeCapacity,
+      // What Firecrawl says it charged, beside what we charged. Two different
+      // ledgers; neither is allowed to stand in for the other.
+      provider_credits_used: providerCreditsUsed,
     },
   });
 });
