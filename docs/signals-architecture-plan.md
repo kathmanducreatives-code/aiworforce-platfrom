@@ -1,7 +1,8 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-22 · **Commit:** `bd177050` · **Status:** proposal, nothing implemented
+**Date:** 2026-08-22 · **Commit:** `bd177050` · **Status:** Phases 0–2 complete and live-verified; 3–7 not started
 **Companion:** `docs/signals-content-backend-audit.md`
+**Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
 ---
 
@@ -211,7 +212,7 @@ reason.** Every phase before 7 is fully buildable with no OpenAI credits.
 
 ---
 
-### Phase 2 — Converge storage (dual-write only; **no read switch**)
+### Phase 2 — Converge storage (dual-write only; **no read switch**) — ✅ COMPLETE 2026-08-24
 
 | | |
 |---|---|
@@ -225,8 +226,26 @@ reason.** Every phase before 7 is fully buildable with no OpenAI credits.
 | **GPT** | No. |
 | **Offline tests** | Dual-write idempotency; sanitization rejects; flag-off = zero DB calls; **every write states an origin**; read parity v1 vs v2 for one scan. |
 | **Live validation** | Enable `SIGNALS_V2`, scan, confirm both stores agree and rows carry the right origin. |
-| **Done** | Both stores agree; every row is attributable to a workflow. **The UI still reads v1.** |
-| **Blocks** | 3, 4, 5, 7. |
+| **Done** | ✅ Both stores agree (4 legacy → 4 events, 1:1); every row attributable to a real subject; **the UI still reads v1**. |
+| **Blocks** | 3, 4, 5, 7 — now unblocked. |
+
+**Two departures from the plan as written, both deliberate:**
+
+1. **The subject model was not in the plan.** This row said the migration adds
+   `origin` only. Enabling Radar exposed that `signal_events` *required* a lead
+   entity, so a competitor's activity could only be stored by attaching it to
+   some account — fabricating attribution and dropping competitor news into
+   prospect queries. `subject_type` + `subject_key` were added so market
+   evidence can be about a competitor or a category without pretending to be
+   about a prospect.
+
+2. **`occurred_at` became nullable.** It was `NOT NULL`, and Radar does not
+   know when the event behind a web-search result happened. The available
+   shortcut — writing the scan time — would have stated a fact nobody observed
+   and made every freshness band derived from it a fiction. `occurred_at_basis`
+   now records how the time is known, and a CHECK makes the pair inseparable:
+   `source_reported` requires a timestamp, `unknown` forbids one. There is no
+   way to record an invented time, and no way to lose a real one.
 
 > **The read switch moved to Phase 3, deliberately.** Flipping it here would
 > point the Signals feed at a store that only Lead missions populate — which is
