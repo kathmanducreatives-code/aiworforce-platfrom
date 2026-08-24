@@ -50,6 +50,21 @@ export const STRUCTURED_COMPANY_ACTOR_KEYS: ReadonlySet<string> = new Set([
   "apify_yc_companies_solidcode",
   "apify_linkedin_company_details",
   "apify_linkedin_company_search",
+  // ── "STRUCTURED" MEANS SHAPE-PRESERVING, NOT LITERALLY "A COMPANY ROW" ────
+  //
+  // A datahyena row is a funding ROUND that names a company, and it belongs
+  // here for exactly the reason the others do: its fields must reach the
+  // normalizer as the provider wrote them.
+  //
+  // Its absence is why funding never worked. Live run 2026-08-24: the actor
+  // succeeded and returned 25 rows; `resolveResponseKind` did not recognise it,
+  // fell through to the tool's declared source type — "hiring" — and read them
+  // through the JOBS path. Every row arrived reshaped into a job record with
+  // the real round buried in `raw.provider_payload`, so
+  // `normalizeDatahyenaFundingRound` found no `round` and no `company`, marked
+  // all 25 `is_evidence: false`, and the engine logged "the actor returned no
+  // rows at all" for a call that had returned twenty-five.
+  "apify_funding_rounds_datahyena",
 ]);
 
 export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
@@ -57,6 +72,10 @@ export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
   "solidcode/ycombinator-scraper",
   "harvestapi/linkedin-company",
   "harvestapi/linkedin-company-search",
+  // BOTH IDENTIFIERS, because `resolveResponseKind` accepts either and a call
+  // that carries only the actor id must resolve the same way as one that
+  // carries the key.
+  "datahyena/company-funding-rounds",
 ]);
 
 /** Source-type aliases that genuinely mean "company row". */

@@ -24,6 +24,9 @@ import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCa
 import { compileMonitoringMission } from "../../../supabase/functions/_shared/monitoringMission.ts";
 import type { CompiledActorCall } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import { stubDiscoverySelector } from "./discoverySelectorFixture.ts";
+import {
+  resolveResponseKind, structuredRowsLookIntact,
+} from "../../../supabase/functions/_shared/providerResponseContract.ts";
 
 /** A datahyena row in its REAL shape — see `normalizeDatahyenaFundingRound`. */
 const ROUND_ROW = {
@@ -222,4 +225,52 @@ Deno.test("6. a hiring mission's eligibility is unchanged by the funding clause"
   const funded = run.companies.filter((c) =>
     (c.evidence_registry?.items ?? []).some((i) => i.evidence_type === "funding_signal"));
   assertEquals(funded.length, 0, "a hiring mission must produce no funding evidence");
+});
+
+// ── 7–8. THE TRANSPORT MUST NOT RESHAPE A FUNDING ROUND ─────────────────────
+//
+// Live run 2026-08-24: `apify_funding_rounds_datahyena` SUCCEEDED and returned
+// 25 rows. `resolveResponseKind` did not recognise the actor, fell through to
+// the tool's declared source type — "hiring" — and read them through the JOBS
+// path. Every row arrived reshaped into a job record, with the real round
+// buried under `raw.provider_payload`, so the normalizer found no `round` and
+// no `company`, marked all 25 `is_evidence: false`, and the engine logged "the
+// actor returned no rows at all" for a call that had returned twenty-five.
+
+Deno.test("7. the funding actor resolves to the shape-preserving path", () => {
+  // BY EITHER IDENTIFIER. `resolveResponseKind` accepts a key or an id, and a
+  // call carrying only one must resolve the same as a call carrying the other.
+  assertEquals(
+    resolveResponseKind({ actorKey: "apify_funding_rounds_datahyena", actorId: null }),
+    "structured_companies",
+  );
+  assertEquals(
+    resolveResponseKind({ actorKey: null, actorId: "datahyena/company-funding-rounds" }),
+    "structured_companies",
+  );
+  // AND THE ACTOR WINS OVER A DECLARED SOURCE TYPE. This is the exact
+  // precedence that failed: the tool declared "hiring" for a funding call.
+  assertEquals(
+    resolveResponseKind({
+      actorKey: "apify_funding_rounds_datahyena",
+      actorId: "datahyena/company-funding-rounds",
+      sourceType: "hiring",
+    }),
+    "structured_companies",
+  );
+});
+
+Deno.test("8. a job-normalized funding row is detected, not read as empty", () => {
+  // What the live run actually received. The guard exists so this is a VISIBLE
+  // transport failure rather than a silent zero.
+  const jobShaped = [{
+    job_title: null, job_url: null, posted_at: null, source_type: "hiring",
+    raw: { provider_payload: { round: "seed", company: { name: "EULER" } } },
+  }];
+  const shape = structuredRowsLookIntact(jobShaped);
+  assertFalse(shape.intact);
+  assert(/provider_payload/.test(shape.reason ?? ""), shape.reason ?? "");
+
+  // And the provider's own shape passes.
+  assertEquals(structuredRowsLookIntact([ROUND_ROW]).intact, true);
 });

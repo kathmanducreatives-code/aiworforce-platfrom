@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–3 complete and live-verified.** The anti-viewer gate passed: a workspace with zero Lead missions collected its own intelligence through the shared capability engine and produced a canonical `signal_events` row. Phase 4 not started.
+**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–3 complete and live-verified.** Phase 4 in progress — collectability is stated rather than assumed, and funding is a real collector for the first time. See the Phase 4 section.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -374,6 +374,81 @@ which nothing has been proven to replace.
 | **Live validation** | One scan per category yields typed `signal_events`. |
 | **Done** | Every UI filter has a real collector or is honestly disabled. |
 | **Depends on** | 3. |
+
+---
+
+#### Phase 4 status, 2026-08-24
+
+**The premise did not survive the audit.** The plan called this phase "wiring,
+not capability", because the funding, expansion, product-launch, technology and
+post capabilities are "all already supported with providers". They are all
+registered and all carded. Only two of them RUN — the rest sit in the engine's
+skip list, declared and unrunnable, exactly as `known_company_resolution` did
+for the whole of Phase 3.
+
+| Signal | `icp` subject | named subject |
+|---|---|---|
+| `hiring` | ✅ `hiring_verification` | ✅ `hiring_verification` |
+| `funding` | ✅ `funding_signal_discovery` | ❌ nothing scheduled |
+| `expansion` | ❌ scheduled, not driven | ❌ scheduled, not driven |
+| `product_launch` | ❌ scheduled, not driven | ❌ scheduled, not driven |
+| `technology` | ❌ scheduled, not driven | ❌ scheduled, not driven |
+| `post` | ❌ scheduled, not driven | ❌ scheduled, not driven |
+| `headcount_change` | ❌ no capability exists | ❌ no capability exists |
+
+**Collectability is now derived, never restated.** `signalCollectability` asks
+the real graph what it would schedule and the real engine-driven list what it
+would run; a test recomputes every verdict independently so the module cannot
+drift from the engine it describes. It is also the first thing to express that
+collectability depends on the SUBJECT KIND: a named subject gets only
+verification capabilities, an ICP subject gets discovery too, and for funding
+the discovery is the proof.
+
+The runner filters signals before compiling, so an uncollectible signal never
+reaches a plan and never costs anything — and the subject is dropped WITH the
+reason, which is the whole difference between an honest refusal and silence.
+
+**Funding became a real collector, which took four fixes.** Three found offline:
+`fundingRounds` was pushed to and never read, so every round the engine paid for
+was discarded; the round could not assert its own verdict; and eligibility for
+qualification was entirely hiring-shaped, so a company discovered by a dated,
+sourced Series A never reached qualification at all.
+
+The fourth was found only live, and is the reason funding had never once
+worked: **the transport reshaped funding rows into job rows.**
+`apify_funding_rounds_datahyena` was in neither structured-company list, so
+`resolveResponseKind` fell through to the tool's declared source type —
+"hiring" — and read the rows through the JOBS path. The live run succeeded,
+returned 25 rows, buried each real round under `raw.provider_payload`, and the
+engine logged "the actor returned no rows at all" for a call that had returned
+twenty-five.
+
+**Live state after the fix:** `funding_signal_discovery` completes, 25 companies
+enter the pool, identity, enrichment and qualification all run, and the
+evaluator judged 18 of them. None passed ICP qualification within the wall
+clock, so no funding `signal_events` row exists yet — the fixture's ICP is
+synthetic and the companies reached the evaluator with thin evidence. The full
+path from round to cited verdict is proven deterministically in
+`fundingCoverage.test.ts`.
+
+**UI filter coverage is enforced.** `uiFilterCoverage.test.ts` reads the filter
+list from the UI and the collector list from the scan planner and
+`signalCollectability`. A filter added with nothing behind it fails the test, and
+a retired source no longer counts as coverage. Every filter the UI offers today
+has a collector or is a view over collected signals.
+
+#### What remains in Phase 4
+
+* **Four categories are still uncollectible** — `expansion`, `product_launch`,
+  `technology`, `post`. Each needs its capability driven by the engine and its
+  evidence carried to the registry, which is the same shape of work funding just
+  took. They are now refused with a stated reason rather than silently empty.
+* **A funding event has not been produced live.** The deterministic path is
+  proven; the live gate needs a workspace whose real ICP the discovered
+  companies can be judged against.
+* **The wall clock bounds a 25-company funding pass.** Qualification stopped
+  with 15 companies still on the frontier. Monitoring's continuation carries
+  pending provider runs, not an unfinished frontier.
 
 ---
 
