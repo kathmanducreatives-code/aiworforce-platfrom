@@ -28,6 +28,7 @@ import {
   compileMonitoringMission, monitoringPlanViolations,
   type MonitoringMissionInput, type MonitoringSubjectInput,
 } from "./monitoringMission.ts";
+import { filterCollectableSignals } from "./signalCollectability.ts";
 import {
   preflight, summarisePreflight,
   type ExistingEvidence, type PlannedInvestigation, type PreflightDecision,
@@ -164,7 +165,36 @@ export async function runMonitoring(
   const log = deps.log ?? (() => {});
   const empty = summarisePreflight([]);
 
-  const compiled = compileMonitoringMission(input);
+  // ── WHAT CAN ACTUALLY BE COLLECTED, DECIDED BEFORE ANYTHING IS COMPILED ──
+  //
+  // A subject naming `funding`, `expansion`, `product_launch`, `technology` or
+  // `post` used to compile cleanly, plan cleanly and run — resolving identity,
+  // paying to enrich, reaching qualification, and establishing nothing, because
+  // the capability that would prove the signal is either not scheduled for that
+  // subject kind or not driven by the engine at all. The run reported `ok` and
+  // the feed stayed empty.
+  //
+  // `signalCollectability` asks the real graph and the real engine-driven list,
+  // so an uncollectible signal never reaches a plan and never costs anything —
+  // and the subject is dropped with the reason, which is the whole difference
+  // between an honest refusal and silence.
+  const uncollectible: MonitoringRunOutcome["dropped_subjects"] = [];
+  const collectableSubjects = input.subjects.map((s) => {
+    const f = filterCollectableSignals(s.signals, s.kind);
+    for (const d of f.dropped) {
+      uncollectible.push({
+        kind: s.kind, identifier: s.identifier ?? null,
+        reason: `${d.event}: ${d.reason}`,
+      });
+    }
+    return { ...s, signals: f.kept };
+  });
+  if (uncollectible.length > 0) log("monitoring_signals_uncollectible", { dropped: uncollectible });
+
+  const compiled = compileMonitoringMission({ ...input, subjects: collectableSubjects });
+  // The reasons a signal could not be collected travel with the run, whether or
+  // not anything survived to be monitored.
+  compiled.dropped.push(...uncollectible);
   if (!compiled.ok || !compiled.mission) {
     return {
       ok: false, refusal: "no_usable_subjects", reason: compiled.reason,

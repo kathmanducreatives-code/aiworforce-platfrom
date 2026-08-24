@@ -1646,6 +1646,15 @@ export async function runCapabilityPlan(
 
   const outcomes: CapabilityRunResult["capability_outcomes"] = [];
   const companies: EngineCompany[] = [];
+  /**
+   * The funding round that discovered each company, by pool key.
+   *
+   * Declared out here because it is WRITTEN in the discovery branch and READ at
+   * qualification, which is exactly the span `fundingRounds` did not cover —
+   * that array was pushed to and never read, so every round this engine paid
+   * for was discarded before anything could cite it.
+   */
+  const roundByCompanyKey = new Map<string, NormalizedFundingRound>();
   // STAGE 2 state, captured inside the qualification capability and read after
   // the plan finishes — ranking compares the whole pool, so it cannot run until
   // every company that is going to be evaluated has been.
@@ -3218,8 +3227,16 @@ export async function runCapabilityPlan(
               // already paid for. Refusing it here keeps that choice from
               // arising.
               if (!round.is_evidence) continue;
-              addCompany(companies, fundingRoundToCompany(round), []);
+              const fundedCompany = fundingRoundToCompany(round);
+              addCompany(companies, fundedCompany, []);
               fundingRounds.push(round);
+              // KEYED THE WAY THE POOL KEYS IT. `fundingRounds` was pushed to
+              // and never read, so the round — stage, amount, announced date,
+              // investors, articles — was collected, paid for and discarded,
+              // and a funding mission proved nothing. The key is derived from
+              // the same company object `addCompany` used, so the two cannot
+              // disagree about which company this round belongs to.
+              roundByCompanyKey.set(companyKey(fundedCompany), round);
             }
           }
           // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
@@ -4392,9 +4409,24 @@ export async function runCapabilityPlan(
           c.hiring_jobs = hiringJobsFor(c, free);
         }
       }
+      // ── ELIGIBILITY WAS ENTIRELY HIRING-SHAPED ───────────────────────────
+      //
+      // Every clause here asks about openings, which was right when hiring was
+      // the only signal the engine could establish. It silently excluded every
+      // other signal class: a company discovered BY a funding round — with a
+      // dated, sourced Series A — has no job evidence, so it never reached
+      // qualification, never got an evidence registry, and its round could
+      // never be cited. A funding mission paid for discovery, identity and
+      // enrichment and qualified nobody, for a reason no diagnostic named.
+      //
+      // SCOPED TO THE SIGNAL THAT FOUND THE COMPANY. The extra clause admits a
+      // company only when THIS run discovered it by a funding round, so a
+      // hiring mission — which has no rounds — filters exactly as it did
+      // before. Test 6 in `fundingCoverage.test.ts` pins that.
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
-        (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false));
+        (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false) ||
+        roundByCompanyKey.has(c.key));
       /** One company's canonical registry. Shared by both evaluation paths. */
       const registryFor = (c: EngineCompany) => buildEvidenceRegistry({
         evidence: buildCompanyEvidence({
@@ -4418,6 +4450,8 @@ export async function runCapabilityPlan(
         }),
         // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
         jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
+        // THE ROUND THAT DISCOVERED THIS COMPANY, when one did.
+        funding_round: roundByCompanyKey.get(c.key) ?? null,
         yc_description: c.company.description ?? null,
         // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
         // found" would let an outage look like a company that is not hiring —
@@ -5206,6 +5240,29 @@ export async function runCapabilityPlan(
           if (jobEvidence.length > 0) {
             provenVerdicts["hiring/company"] = {
               verdict: "verified", evidence_ids: jobEvidence,
+            };
+          }
+        }
+
+        // ── AND WHAT THE FUNDING ROUND PROVED ─────────────────────────────
+        //
+        // Same rule as hiring, same citation discipline: the round is evidence
+        // established by code — a dated, sourced record from a carded provider
+        // — so it may assert its own verdict, and only by pointing at the
+        // registry item that holds it.
+        //
+        // `funding_signal_discovery` ran and returned this company BECAUSE of
+        // the round, so a company in the pool with a `funding_signal` item is a
+        // company whose funding is established. Without the item there is no
+        // verdict: an undated round is not evidence, and the registry refuses
+        // to record one.
+        if (state.completed_capabilities.includes("funding_signal_discovery")) {
+          const fundingEvidence = (c.evidence_registry?.items ?? [])
+            .filter((it) => it.evidence_type === "funding_signal")
+            .map((it) => it.evidence_id);
+          if (fundingEvidence.length > 0) {
+            provenVerdicts["funding/company"] = {
+              verdict: "verified", evidence_ids: fundingEvidence,
             };
           }
         }

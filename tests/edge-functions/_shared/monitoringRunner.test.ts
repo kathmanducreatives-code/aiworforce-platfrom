@@ -127,10 +127,16 @@ Deno.test("3. BOUNDARY THREE: monitoring spends under its own engine authority",
 });
 
 // ═══════════════ 4-5. IT REUSES BEFORE IT BUYS ═════════════════════════════
+//
+// These use `hiring` as the vehicle. They used `funding`, which Phase 4 showed
+// is NOT collectible for a tracked company — nothing that would prove it is
+// scheduled for a named subject — so such a subject is now dropped before it
+// can spend, and a dropped subject has no investigation to reuse against. The
+// property under test is reuse versus staleness and is unchanged.
 
 Deno.test("4. fresh LEAD-origin evidence is reused rather than re-bought", async () => {
   const fresh: ExistingEvidence[] = [{
-    signal_type: "recent_funding",
+    signal_type: "sales_hiring",
     occurred_at: new Date(Date.now() - 3600_000).toISOString(),
     occurred_at_basis: "source_reported",
     observed_at: new Date().toISOString(),
@@ -141,7 +147,7 @@ Deno.test("4. fresh LEAD-origin evidence is reused rather than re-bought", async
   const h = harness({ loadHeldEvidence: () => Promise.resolve(fresh) });
   const out = await run([{
     kind: "tracked_company", identifier: "acme.com", label: "Acme",
-    signals: [{ event: "funding", subject: "company" }],
+    signals: [{ event: "hiring", subject: "company" }],
   }], h);
 
   assert(out.ok);
@@ -152,7 +158,7 @@ Deno.test("4. fresh LEAD-origin evidence is reused rather than re-bought", async
 
 Deno.test("5. STALE lead evidence does not suppress the investigation", async () => {
   const stale: ExistingEvidence[] = [{
-    signal_type: "recent_funding",
+    signal_type: "sales_hiring",
     occurred_at: new Date(Date.now() - 200 * 86_400_000).toISOString(),
     occurred_at_basis: "source_reported",
     observed_at: new Date().toISOString(),
@@ -163,7 +169,7 @@ Deno.test("5. STALE lead evidence does not suppress the investigation", async ()
   const h = harness({ loadHeldEvidence: () => Promise.resolve(stale) });
   const out = await run([{
     kind: "tracked_company", identifier: "acme.com",
-    signals: [{ event: "funding", subject: "company" }], timeframe_days: 30,
+    signals: [{ event: "hiring", subject: "company" }], timeframe_days: 30,
   }], h);
 
   assertEquals(out.preflight.reused, 0);
@@ -549,4 +555,89 @@ Deno.test("17. every layer carries the authority instead of re-deciding it", asy
     seam.includes(`"${MONITORING_AUTHORITY}"`),
     "the monitoring authority must be in the shared list the guards derive from",
   );
+});
+
+// ── PHASE 4: AN UNCOLLECTIBLE SIGNAL COSTS NOTHING AND SAYS WHY ─────────────
+
+Deno.test("18. a subject whose signals cannot be collected never reaches a plan", async () => {
+  // `technology` is scheduled for a tracked company and skipped by the engine.
+  // Before this, such a subject compiled, planned, resolved identity, paid to
+  // enrich — and established nothing, while the run reported `ok`.
+  let planned = 0;
+  let ran = 0;
+  const out = await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "tracked_company", identifier: "acme.com", label: "Acme",
+        signals: [{ event: "technology", subject: "company" }], timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    {
+      buildPlan: () => { planned++; return { steps: [{ capability: "company_enrichment" }] }; },
+      runPlan: () => {
+        ran++;
+        return Promise.resolve({
+          companies: [], state: { qualified_company_keys: [], completed_capabilities: [] },
+        });
+      },
+      loadHeldEvidence: () => Promise.resolve([]),
+      writeEvent: () => Promise.resolve({ written: true }),
+    },
+  );
+
+  assertEquals(out.ok, false, "a run that can establish nothing must not report ok");
+  assertEquals(out.refusal, "no_usable_subjects");
+  assertEquals(planned, 0, "nothing may be planned for a signal that cannot be proved");
+  assertEquals(ran, 0, "and nothing may be executed, so nothing is spent");
+
+  // THE REASON TRAVELS. A dropped subject that does not say why is the silence
+  // this phase exists to remove.
+  assert(out.dropped_subjects.length > 0);
+  const dropped = out.dropped_subjects.find((d) => /technology/.test(d.reason));
+  assert(dropped, `the drop must name the signal: ${JSON.stringify(out.dropped_subjects)}`);
+  assert(
+    /does not drive|would prove/.test(dropped!.reason),
+    `and why it cannot be collected: ${dropped!.reason}`,
+  );
+});
+
+Deno.test("19. a mixed subject keeps what it can collect and reports what it cannot", async () => {
+  let plannedSignals: unknown = null;
+  const out = await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "tracked_company", identifier: "acme.com", label: "Acme",
+        signals: [
+          { event: "hiring", subject: "company" },
+          { event: "funding", subject: "company" },
+        ],
+        timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    {
+      buildPlan: (m) => {
+        plannedSignals = (m as { required_signals?: unknown }).required_signals;
+        return { steps: [{ capability: "hiring_verification" }] };
+      },
+      runPlan: () => Promise.resolve({
+        companies: [], state: { qualified_company_keys: [], completed_capabilities: [] },
+      }),
+      loadHeldEvidence: () => Promise.resolve([]),
+      writeEvent: () => Promise.resolve({ written: true }),
+    },
+  );
+
+  assert(out.ok, `${out.refusal}: ${out.reason}`);
+  assertEquals(out.accepted_subjects, 1, "the subject survives on the signal it can collect");
+  // The mission asks ONLY for what can be established.
+  assertEquals(
+    (plannedSignals as Array<{ type: string }>).map((s) => s.type), ["hiring"],
+    "an uncollectible signal must not appear in the compiled mission",
+  );
+  // And funding is still explained, not dropped in silence.
+  assert(out.dropped_subjects.some((d) => /funding/.test(d.reason)));
 });
