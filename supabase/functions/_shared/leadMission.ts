@@ -388,6 +388,25 @@ export const EXECUTION_PREFERENCES: readonly ExecutionPreference[] =
 
 export interface LeadMissionV1 {
   version: typeof LEAD_MISSION_VERSION;
+  /**
+   * WHY THIS RUN EXISTS, and therefore how it ends.
+   *
+   * `sourcing` (the default, and the value assumed whenever this is absent)
+   * ends by turning qualified companies into leads. `monitoring` ends at
+   * `signal_events` and must never write a lead row — a company that showed a
+   * hiring signal is not thereby a prospect somebody asked to pursue, and a
+   * workspace watching its ICP would otherwise accumulate a pipeline it never
+   * requested.
+   *
+   * OPTIONAL so every existing mission, persisted checkpoint and hand-built
+   * fixture keeps its exact behaviour without being rewritten. Read through
+   * `missionObjective()` in `monitoringMission.ts`, which owns the default.
+   *
+   * Deliberately NOT part of `missionHash`: a monitoring run and a sourcing run
+   * over the same cohort ask the same providers the same questions, so they
+   * share checkpoint identity and neither re-buys what the other already has.
+   */
+  mission_objective?: "sourcing" | "monitoring";
   /** IMMUTABLE. The user's words, never a planner rewrite. */
   original_user_query: string;
   mission_type: MissionType;

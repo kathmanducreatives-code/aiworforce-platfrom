@@ -28,6 +28,7 @@
 
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceProducedBy } from "./actorEvidenceCapability.ts";
+import { isMonitoringMission } from "./monitoringMission.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
 
@@ -962,7 +963,24 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     steps.push(step("company_brain_qualification", order++, "companies are qualified against the Company Brain"));
   }
 
-  steps.push(step("persistence", order++, "results are persisted to the Workbench"));
+  // ── THE TERMINAL IS WHERE SOURCING AND MONITORING DIVERGE ─────────────────
+  //
+  // Everything above is shared by construction: the same discovery routing, the
+  // same actors, the same identity and enrichment, the same qualification. That
+  // is the point — Signals gets its own monitoring INTENT, never its own
+  // provider stack.
+  //
+  // Only the ending differs. A sourcing run turns qualified companies into
+  // leads. A monitoring run stops at qualification and its evidence goes to
+  // `signal_events`; scheduling `persistence` here would turn a watchlist into
+  // a pipeline nobody asked for, and a workspace monitoring its ICP would
+  // silently accumulate prospects it never requested.
+  //
+  // `monitoringPlanViolations` asserts this from the outside, so the rule holds
+  // even if a future branch forgets it.
+  if (!isMonitoringMission(mission)) {
+    steps.push(step("persistence", order++, "results are persisted to the Workbench"));
+  }
 
   // ── PEOPLE ARE OFFERED, NEVER SCHEDULED ────────────────────────────────────
   //
