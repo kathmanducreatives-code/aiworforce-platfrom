@@ -19,6 +19,7 @@
 //   * No raw provider payload, no email/phone, no credentials — ever.
 
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
+import { isSignalOrigin, type SignalOrigin } from "./signalOrigin.ts";
 
 // ------------------------------------------------------------------ types -----
 
@@ -212,6 +213,14 @@ export interface LeadEvidenceV2Input extends CommonV2Input {
 }
 
 export interface SignalEventV2Input extends CommonV2Input {
+  /**
+   * WHICH WORKFLOW PRODUCED THIS. Required, and deliberately not defaulted.
+   *
+   * A default would be a guess about provenance, and the guess would always be
+   * `lead_mission` because that is the only writer today — which is exactly the
+   * claim a monitoring row must not silently make. See `signalOrigin.ts`.
+   */
+  origin: SignalOrigin;
   contact_id?: string | null;
   account_id?: string | null;
   lead_candidate_id?: string | null;
@@ -445,6 +454,9 @@ export async function writeSignalEventV2(
   if (input.lifecycle_status != null && !LIFECYCLES.has(input.lifecycle_status)) {
     return done(skip(enabled, "validation_failed", "lifecycle_status outside canonical vocabulary"));
   }
+  if (!isSignalOrigin(input.origin)) {
+    return done(skip(enabled, "validation_failed", "origin outside canonical vocabulary"));
+  }
   if (!input.dedupe_key?.trim()) return done(skip(enabled, "validation_failed", "dedupe_key required"));
   if (!isUuid(input.contact_id) && !isUuid(input.account_id) && !isUuid(input.lead_candidate_id)) {
     return done(skip(enabled, "missing_entity", "signal event must reference at least one entity"));
@@ -452,6 +464,7 @@ export async function writeSignalEventV2(
 
   const row: Record<string, unknown> = {
     workspace_id: input.workspace_id,
+    origin: input.origin,
     contact_id: isUuid(input.contact_id) ? input.contact_id : null,
     account_id: isUuid(input.account_id) ? input.account_id : null,
     lead_candidate_id: isUuid(input.lead_candidate_id) ? input.lead_candidate_id : null,

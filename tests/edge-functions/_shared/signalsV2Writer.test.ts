@@ -6,6 +6,7 @@
 // reconciling observability contract. No network, no real database.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { SIGNAL_ORIGINS } from "../../../supabase/functions/_shared/signalOrigin.ts";
 import {
   isSanitizedNormalizedValue,
   newSignalsV2Observability,
@@ -160,7 +161,8 @@ Deno.test("lead_evidence: PII in normalized_value is rejected (sanitized policy)
 // ------------------------------------------------------ signal_events ---------
 
 const baseEvent = {
-  workspace_id: WS, account_id: ACCOUNT, signal_type: "sales_hiring", signal_category: "gtm",
+  workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT,
+  signal_type: "sales_hiring", signal_category: "gtm",
   evidence_category: "job_signal", occurred_at: "2026-07-01T00:00:00.000Z", dedupe_key: "ev1",
   verification_status: "provider_verified", confidence: "high", listing_status: "active",
   freshness: "strong", lifecycle_status: "active",
@@ -173,6 +175,37 @@ Deno.test("signal_events: valid sales/revops/growth events write", async () => {
     assertEquals(r.written, true, `${t} must write`);
   }
   assertEquals(store.signal_events.length, 3);
+});
+
+Deno.test("signal_events: a write with no origin is refused", async () => {
+  const { admin, store } = makeAdmin();
+  const { origin: _dropped, ...noOrigin } = baseEvent;
+  const r = await writeSignalEventV2({ admin, enabled: true }, noOrigin as any);
+  assertEquals(r.error_class, "validation_failed");
+  assertEquals((store.signal_events ?? []).length, 0, "an unattributable row must not reach the store");
+});
+
+Deno.test("signal_events: an origin outside the vocabulary is refused", async () => {
+  const { admin, store } = makeAdmin();
+  for (const bad of ["radar", "lead-mission", "LEAD_MISSION", "", "monitor"]) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, { ...baseEvent, origin: bad } as any);
+    assertEquals(r.error_class, "validation_failed", `${bad} must not be accepted`);
+  }
+  assertEquals((store.signal_events ?? []).length, 0);
+});
+
+Deno.test("signal_events: the stored row carries the origin it was given", async () => {
+  const { admin, store } = makeAdmin();
+  // Every origin must survive the write unchanged — a row that silently became
+  // lead_mission would be the exact misattribution this column exists to stop.
+  let i = 0;
+  for (const o of SIGNAL_ORIGINS) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, { ...baseEvent, origin: o, dedupe_key: `ev-o-${o}` } as any);
+    assertEquals(r.written, true, `${o} must write`);
+    assertEquals(store.signal_events[i].origin, o);
+    i++;
+  }
+  assertEquals(store.signal_events.length, SIGNAL_ORIGINS.length);
 });
 
 Deno.test("signal_events: missing/invalid occurred_at skips", async () => {

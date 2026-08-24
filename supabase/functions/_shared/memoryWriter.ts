@@ -582,6 +582,8 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           if (!rejected && signal) {
             await dualWriteHiringSignalV2({ admin: ctx.admin, enabled: v2Enabled }, signal, {
               workspace_id: ctx.workspace_id,
+              // This writer IS the Lead pipeline. Stated, not defaulted.
+              origin: "lead_mission",
               account_id: accountId,
               legacy_signal_id: sig?.id ?? null,
               source_record_id: it.providerJobId ?? it.providerRefId ?? null,

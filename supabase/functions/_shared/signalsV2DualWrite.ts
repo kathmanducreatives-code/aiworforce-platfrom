@@ -18,6 +18,7 @@
 //     — the writer boundary re-checks and would reject a violation anyway.
 
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
+import type { SignalOrigin } from "./signalOrigin.ts";
 import {
   applyResultToObservability,
   writeLeadEvidenceV2,
@@ -228,6 +229,8 @@ const SUPPORTED_HIRING_TYPES = new Set(["sales_hiring", "revops_hiring", "growth
 /** Grounded DB references + legacy anchor for a hiring dual-write. */
 export interface HiringSignalRefs {
   workspace_id: string;
+  /** Which workflow produced this. Threaded from the caller, never assumed. */
+  origin: SignalOrigin;
   account_id?: string | null;
   contact_id?: string | null;
   lead_candidate_id?: string | null;
@@ -285,6 +288,7 @@ export function mapHiringSignalToEventInput(
   const freshness = hiringFreshnessBand(signal.occurred_at, signal.observed_at, listing_status);
   return {
     workspace_id: refs.workspace_id,
+    origin: refs.origin,
     contact_id: refs.contact_id ?? null,
     account_id: refs.account_id ?? null,
     lead_candidate_id: refs.lead_candidate_id ?? null,

@@ -156,7 +156,7 @@ Deno.test("hiring: valid event writes, then attaches evidence to the parent id",
   const { writers, calls } = spyWriters();
   const obs = newSignalsV2Observability(true);
   const r = await dualWriteHiringSignalV2(deps(true, writers, obs), hiringSignal(), {
-    workspace_id: WS, account_id: ACCOUNT, legacy_signal_id: SIG, source_record_id: "job-9",
+    workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT, legacy_signal_id: SIG, source_record_id: "job-9",
   });
   assertEquals(r.event.written, true);
   assertEquals(calls.event[0].signal_type, "sales_hiring");
@@ -180,7 +180,7 @@ Deno.test("hiring: unsupported signal type is skipped (never persisted), no even
   const { writers, calls } = spyWriters();
   const obs = newSignalsV2Observability(true);
   const r = await dualWriteHiringSignalV2(deps(true, writers, obs), hiringSignal({ signal_type: "recent_funding", signal_category: "growth" }), {
-    workspace_id: WS, account_id: ACCOUNT,
+    workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT,
   });
   assertEquals(r.event.error_class, "unsupported_event");
   assertEquals(r.evidence, null);
@@ -190,14 +190,14 @@ Deno.test("hiring: unsupported signal type is skipped (never persisted), no even
 
 Deno.test("hiring: evidence failure leaves the parent event intact (best-effort)", async () => {
   const { writers } = spyWriters({ evidenceThrows: true });
-  const r = await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, account_id: ACCOUNT });
+  const r = await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT });
   assertEquals(r.event.written, true, "parent event stands even when evidence write throws");
   assertEquals(r.evidence?.error_class, "unexpected_error");
 });
 
 Deno.test("hiring: no parent id (dedup lookup miss) ⇒ no evidence attempted", async () => {
   const { writers, calls } = spyWriters({ event: { written: false, deduplicated: true, record_id: null } });
-  const r = await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, account_id: ACCOUNT });
+  const r = await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT });
   assertEquals(r.event.deduplicated, true);
   assertEquals(r.evidence, null);
   assertEquals(calls.evidence.length, 0);
@@ -222,8 +222,8 @@ Deno.test("hiring: closed listing → stale lifecycle; expired listing → expir
 
 Deno.test("hiring: evidence fingerprint distinguishes providers, collapses same provider", async () => {
   const { writers, calls } = spyWriters();
-  await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, account_id: ACCOUNT, source_record_id: "job-9" });
-  await dualWriteHiringSignalV2(deps(true, writers), hiringSignal({ source_provider: "firecrawl", actor_key: "firecrawl_scrape" }), { workspace_id: WS, account_id: ACCOUNT });
+  await dualWriteHiringSignalV2(deps(true, writers), hiringSignal(), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT, source_record_id: "job-9" });
+  await dualWriteHiringSignalV2(deps(true, writers), hiringSignal({ source_provider: "firecrawl", actor_key: "firecrawl_scrape" }), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT });
   assert(calls.evidence[0].evidence_fingerprint.startsWith("apify|"));
   assert(calls.evidence[1].evidence_fingerprint.startsWith("firecrawl|"));
   assert(calls.evidence[0].evidence_fingerprint !== calls.evidence[1].evidence_fingerprint);
@@ -238,7 +238,7 @@ Deno.test("hiring: through the REAL jobsSignalAdapter — GTM role + posting dat
   });
   assertEquals(rejected, false);
   const { writers, calls } = spyWriters();
-  const r = await dualWriteHiringSignalV2(deps(true, writers), signal!, { workspace_id: WS, account_id: ACCOUNT, legacy_signal_id: SIG });
+  const r = await dualWriteHiringSignalV2(deps(true, writers), signal!, { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT, legacy_signal_id: SIG });
   assertEquals(r.event.written, true);
   assertEquals(calls.event[0].signal_type, "sales_hiring");
   assertEquals(calls.event[0].legacy_signal_id, SIG);
@@ -274,8 +274,8 @@ Deno.test("observability reconciles across a mixed run (considered = attempted +
   const { writeLeadEvidenceV2, writeSignalEventV2, writeSignalEventEvidenceV2 } = await import("../../../supabase/functions/_shared/signalsV2Writer.ts");
   const okAdmin = makeOkAdmin();
   await dualWritePeopleProfileV2({ admin: okAdmin, enabled: true, obs }, { workspace_id: WS, contact_id: CONTACT, profile_url: "https://linkedin.com/in/x" });
-  await dualWriteHiringSignalV2({ admin: okAdmin, enabled: true, obs }, hiringSignal(), { workspace_id: WS, account_id: ACCOUNT });
-  await dualWriteHiringSignalV2({ admin: okAdmin, enabled: true, obs }, hiringSignal({ signal_type: "recent_funding", signal_category: "growth" }), { workspace_id: WS, account_id: ACCOUNT });
+  await dualWriteHiringSignalV2({ admin: okAdmin, enabled: true, obs }, hiringSignal(), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT });
+  await dualWriteHiringSignalV2({ admin: okAdmin, enabled: true, obs }, hiringSignal({ signal_type: "recent_funding", signal_category: "growth" }), { workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT });
   assert(signalsV2ObservabilityReconciles(obs));
   assertEquals(obs.lead_evidence.written, 1);
   assertEquals(obs.signal_events.written, 1);
