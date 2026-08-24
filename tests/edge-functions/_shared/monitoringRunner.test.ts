@@ -236,3 +236,42 @@ Deno.test("8. the runner contains no provider, actor or credit logic", async () 
     assertFalse(src.includes(leadWrite), `monitoring must never call ${leadWrite}`);
   }
 });
+
+// ── WHAT A FAILED COLLECTION MUST LOOK LIKE ─────────────────────────────────
+//
+// Live run 2026-08-24: the account's model credits were exhausted, the engine
+// threw `DiscoveryStrategyBlockedError`, and the endpoint answered HTTP 500
+// with the cause visible only in the function logs. A scheduler cannot tell an
+// out-of-credit account from a broken deployment through a 500.
+
+Deno.test("9. an engine that throws is reported as a refusal, not a crash", async () => {
+  const written: unknown[] = [];
+  const out = await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "tracked_company", identifier: "Acme", label: "Acme",
+        signals: [{ event: "hiring", subject: "company" }], timeframe_days: 30,
+      }],
+      icp: null,
+    },
+    {
+      buildPlan: () => ({ steps: [{ capability: "company_identity_resolution" }] }),
+      runPlan: () => {
+        throw new Error("discovery actor selection was blocked (proposal_not_a_list)");
+      },
+      loadHeldEvidence: () => Promise.resolve([]),
+      writeEvent: (i) => { written.push(i); return Promise.resolve({ written: true }); },
+    },
+  );
+
+  assertEquals(out.ok, false);
+  assertEquals(out.refusal, "execution_failed");
+  assert(out.reason.includes("proposal_not_a_list"), "the cause must survive into the outcome");
+  // NOTHING IS PUBLISHED FROM A FAILED RUN. A partial feed would be worse than
+  // no feed: it reads as "these are the signals" when collection never ran.
+  assertEquals(written.length, 0);
+  assertEquals(out.events, { attempted: 0, written: 0, deduplicated: 0, failed: 0 });
+  // The pre-flight already ran, and its accounting is still true.
+  assertEquals(out.preflight.planned, 1);
+});

@@ -66,7 +66,19 @@ export interface MonitoringRunDeps {
 
 export type MonitoringRefusal =
   | "no_usable_subjects"
-  | "plan_violates_monitoring_boundary";
+  | "plan_violates_monitoring_boundary"
+  /**
+   * THE ENGINE COULD NOT RUN — and that is a report, not a crash.
+   *
+   * The shared engine throws for conditions monitoring does not control: a
+   * blocked discovery selector, an exhausted model quota, a provider that
+   * refused. Letting those escape turned a run into an opaque 500 with the
+   * cause visible only in the logs. A monitoring pass that could not collect is
+   * a legitimate outcome, and it must SAY SO — a scheduler reading `ok: false`
+   * with a reason can back off; a scheduler reading a 500 cannot tell an
+   * out-of-credit account from a bug.
+   */
+  | "execution_failed";
 
 export interface MonitoringRunOutcome {
   ok: boolean;
@@ -166,7 +178,24 @@ export async function runMonitoring(
   log("monitoring_preflight", pre);
 
   // ── EXECUTE THROUGH THE SHARED ENGINE ────────────────────────────────────
-  const run = await deps.runPlan(compiled.mission, plan);
+  //
+  // The engine's failures are reported, never swallowed and never re-raised.
+  // Nothing is written on this path: a run that could not collect has no
+  // evidence, so there is no partial feed to publish.
+  let run: Awaited<ReturnType<MonitoringRunDeps["runPlan"]>>;
+  try {
+    run = await deps.runPlan(compiled.mission, plan);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    log("monitoring_execution_failed", { detail });
+    return {
+      ok: false, refusal: "execution_failed", reason: detail,
+      accepted_subjects: compiled.accepted.length, dropped_subjects: compiled.dropped,
+      completed_capabilities: [], preflight: pre,
+      events: { attempted: 0, written: 0, deduplicated: 0, failed: 0 },
+      boundaries: { lead_steps_scheduled: [], authority: MONITORING_AUTHORITY },
+    };
+  }
 
   // ── WRITE CANONICAL EVENTS ───────────────────────────────────────────────
   //
