@@ -142,8 +142,29 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
     {
       source: "hiring",
       provider_preference: (apifyReady && flags.hiring) ? "apify" : "firecrawl",
-      enabled: (apifyReady && !!flags.hiring) || firecrawlReady, // Firecrawl fallback keeps hiring runnable
-      reason: `Your ICP targets ${seeds[0]} companies hiring ${roles[0]} and similar buyer roles (Company Brain).`,
+      // ── PHASE 3H: RETIRED, BECAUSE THE ENGINE ANSWERS THIS BETTER ────────
+      //
+      // Radar looked for hiring by SEARCHING THE WEB and could resolve neither
+      // company identity nor role family from what came back. That is why
+      // `mapRadarSignalToV2` refuses a `hiring` row outright: it cannot be given
+      // an honest subject, so it never reached `signal_events` and — since
+      // Phase 3G — never reaches the feed either. It was spend on a question
+      // whose answer was discarded.
+      //
+      // The shared capability engine resolves the company against LinkedIn,
+      // enriches it, runs a real job search and has `assessHiring` judge actual
+      // postings. Phase 3F proved that live end to end, from a stored
+      // monitoring subject to a canonical `sales_hiring` event.
+      //
+      // The plan entry STAYS, disabled, with its reason visible. Deleting it
+      // would make the source vanish from the diagnostics, and "we stopped
+      // doing this and here is why" is what a reader needs — not silence.
+      enabled: false,
+      reason:
+        "Retired in Phase 3H — hiring is collected by the shared capability " +
+        "engine, which resolves the company and reads real job postings. " +
+        "Radar's web-search version could not establish company identity, so " +
+        "its rows never reached the canonical store.",
       cap: capOf("hiring"),
       queries: hiringQueries,
       staged_queries: hiringStaged,
@@ -153,8 +174,17 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
     {
       source: "funding",
       provider_preference: "firecrawl",
-      enabled: firecrawlReady && !!flags.funding,
-      reason: `Recently funded ${seeds[0]} companies are building revenue — timely for outreach (Company Brain).`,
+      // RETIRED WITH HIRING, AND FOR THE SAME REASON. A funding row needs the
+      // company it is about; a web search result cannot supply one, so
+      // `mapRadarSignalToV2` refuses it too. `funding_signal_discovery` is an
+      // engine-driven capability with a carded provider, a bounded compiler, a
+      // normalizer and a cost model — the four things this path never had.
+      enabled: false,
+      reason:
+        "Retired in Phase 3H — funding is collected by the shared capability " +
+        "engine's `funding_signal_discovery`, against a provider that can keep " +
+        "its claim. Radar's web-search version could not name the company, so " +
+        "its rows never reached the canonical store.",
       cap: capOf("funding"),
       queries: fundingQueries,
       staged_queries: fundingStaged,

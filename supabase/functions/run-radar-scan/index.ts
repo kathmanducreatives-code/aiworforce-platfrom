@@ -24,7 +24,6 @@ import {
   parseRetryAfterMs, classifyRateLimitBody,
 } from "../_shared/providerRateLimit.ts";
 import type { RadarSource } from "../_shared/radarScanPlanner.ts";
-import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
 import { buildRadarIntelligenceProfile } from "../_shared/radarIntel/radarIntelligenceProfile.ts";
 import { enrichAndGateRows, type EnrichableRow } from "../_shared/radarIntel/radarSignalEnrichment.ts";
 import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, runApifyActor } from "../_shared/radarIntel/radarProviderAdapters.ts";
@@ -280,15 +279,32 @@ Deno.serve(async (req) => {
     people: apifyToken && apifyEnabled ? { ready: true } : { ready: false, reason: "Apify people search not configured" },
   };
 
-  // Commit 4A — hiring source: Apify LinkedIn Jobs behind RADAR_ENABLE_APIFY_JOBS,
-  // else Firecrawl fallback. Honest status; never crashes when unconfigured.
-  const HIRING_CAP = 10;
-  const apifyJobsFlag = flag("RADAR_ENABLE_APIFY_JOBS", false);
-  const hiringStatus = apifyJobsSourceStatus({ flagEnabled: apifyJobsFlag, apifyReady: !!apifyToken });
-  const useApifyHiring = hiringStatus.enabled;
-  caps.hiring = useApifyHiring
-    ? { ready: true }
-    : (firecrawl ? { ready: true } : { ready: false, reason: hiringStatus.reason });
+  // ── PHASE 3H: RADAR NO LONGER COLLECTS HIRING ───────────────────────────
+  //
+  // Two hiring paths lived here: a second Apify LinkedIn-Jobs adapter behind
+  // `RADAR_ENABLE_APIFY_JOBS`, and a Firecrawl web-search fallback. Both are
+  // retired, for different reasons that reach the same place.
+  //
+  // The Apify adapter was a SECOND provider stack for a question the shared
+  // capability engine already answers — its own actor call, its own
+  // normalizer, its own recruiter-proxy regex — and the engine's version is
+  // better: `companyAggregatorEvidence` refuses a staffing proxy on EVIDENCE
+  // rather than on the company's name, and `companyFirstStages` rejects it as
+  // `staffing_or_aggregator`.
+  //
+  // The Firecrawl fallback could resolve neither company identity nor role
+  // family, which is why `mapRadarSignalToV2` refuses a `hiring` row: it never
+  // reached the canonical store, and since Phase 3G it never reaches the feed.
+  //
+  // Phase 3F proved the replacement live, end to end, from a stored monitoring
+  // subject to a canonical `sales_hiring` event.
+  //
+  // The capability is reported honestly rather than removed from the response:
+  // a caller that used to see `hiring` must be told where it went.
+  const RETIRED_HIRING_REASON =
+    "Retired in Phase 3H — hiring is collected by the shared capability engine, " +
+    "which resolves the company and reads real job postings.";
+  caps.hiring = { ready: false, reason: RETIRED_HIRING_REASON };
 
   // Mix
   const mix: Record<Category, number> = {
@@ -443,29 +459,13 @@ Deno.serve(async (req) => {
     return res.items;
   }
 
-  // Hiring source: Apify LinkedIn Jobs (flag) → richer candidates, else Brain-driven Firecrawl.
-  let hiringItems: ScoredCandidate[] = [];
-  let hiringCap = mix.hiring;
-  if (mix.hiring > 0) {
-    if (useApifyHiring) {
-      hiringCap = HIRING_CAP;
-      const input = buildApifyJobsInput(brain, HIRING_CAP);
-      if (input.setup_required || input.urls.length === 0) {
-        // Incomplete Brain → never fan out broad provider queries. Ask for setup.
-        perCategory.hiring = { found: 0, accepted: 0, status: "setup_needed", reason: "Company Brain incomplete — complete setup before a high-quality hiring scan." };
-        hiringItems = [];
-      } else {
-        perCategory.hiring.status = "ready";
-        const rows = await fetchApifyJobs(input, Deno.env.get("APIFY_API_TOKEN") ?? "");
-        const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: planReasonFor("hiring") });
-        perCategory.hiring.found = norm.considered;
-        hiringItems = norm.items;
-      }
-    } else {
-      // Firecrawl fallback — now Brain-driven (staged plan), not legacy generic queries.
-      hiringItems = await runFirecrawlCategory("hiring", mix.hiring);
-    }
-  }
+  // RETIRED — see the note above. Kept as an explicit empty rather than deleted
+  // so `perCategory.hiring` still reports, with a reason, instead of vanishing.
+  const hiringItems: ScoredCandidate[] = [];
+  const hiringCap = 0;
+  perCategory.hiring = {
+    found: 0, accepted: 0, status: "skipped", reason: RETIRED_HIRING_REASON,
+  };
 
   // Other categories via Brain-driven Firecrawl execution.
   const [intentItems, compItems, workflowItems] = await Promise.all([
@@ -597,7 +597,10 @@ Deno.serve(async (req) => {
   const verifiedByType = (t: string) => kept.filter((r) => r.signal_type === t && String((r.raw as Record<string, unknown>)["verification_status"]) === "verified").length;
   const hiringRejected = (enrich.rejection_reasons["unrelated_role"] ?? 0) + (enrich.rejection_reasons["excluded_company"] ?? 0);
   const diagnostics: SourceDiagnostics[] = [
-    buildSourceDiagnostics({ source: "hiring", configured: caps.hiring.ready, provider_error: providerErrors.hiring ?? null, auth_failed: /401|403/.test(providerErrors.hiring ?? ""), execution_status: perCategory.hiring.status === "setup_needed" ? "skipped_setup_required" : "ran", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
+    // RETIRED, AND THE DIAGNOSTIC SAYS SO. `ran` would claim a scan that did
+    // not happen; `skipped_not_configured` is the honest reading — Radar has no
+    // hiring provider configured any more, because it has none at all.
+    buildSourceDiagnostics({ source: "hiring", configured: false, provider_error: null, auth_failed: false, execution_status: "skipped_not_configured", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
     buildSourceDiagnostics({ source: "competitor", configured: caps.competitor.ready, provider_error: providerErrors.competitor ?? null, auth_failed: /401|403/.test(providerErrors.competitor ?? ""), queries_attempted: planFor("competitor")?.queries ?? [], raw_count: perCategory.competitor.found, accepted_count: keptByType("competitor"), verified_count: verifiedByType("competitor") }),
     buildSourceDiagnostics({ source: "workflow_trend", configured: caps.workflow_trend.ready, provider_error: providerErrors.workflow_trend ?? null, auth_failed: /401|403/.test(providerErrors.workflow_trend ?? ""), queries_attempted: planFor("workflow_trends")?.queries ?? [], raw_count: perCategory.workflow_trend.found, accepted_count: keptByType("workflow_trend"), verified_count: verifiedByType("workflow_trend") }),
     buildSourceDiagnostics({ source: "linkedin_post", configured: postsAdapter.configured, execution_status: postsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: postsErr ?? (postsAdapter.configured ? null : postsAdapter.reason), auth_failed: /401|403|auth/i.test(postsErr ?? ""), raw_count: postsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_post"), rejected_count: postsBuilt?.rejected ?? 0, rejection_reasons: postsBuilt?.rejection_reasons ?? {} }),
@@ -647,7 +650,9 @@ Deno.serve(async (req) => {
     adapters: { linkedin_posts: postsAdapter, linkedin_comments: commentsAdapter, decision_makers: peopleAdapter },
     per_category: perCategory,
     capabilities: caps,
-    hiring_provider: hiringStatus.provider,
+    // NOTHING. Radar has no hiring provider any more; the capability engine has
+    // one, and reporting a Radar provider here would say otherwise.
+    hiring_provider: null,
     brain_confidence: scanPlan.brain_confidence,
     setup_required: scanPlan.setup_required,
     warnings: scanPlan.warnings,

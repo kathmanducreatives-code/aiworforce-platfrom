@@ -1,6 +1,13 @@
 // Deterministic tests for the Brain-driven Radar execution module. NO live provider
 // calls — the Firecrawl search function is injected and records every query.
 
+// NOTE (Phase 3H): these tests exercise the GENERIC execution behaviour —
+// negative terms, geography retention, staged widening, provider refusals — and
+// used `hiring` merely as a valid plan shape to carry it. `hiring` and `funding`
+// are retired: the shared capability engine collects both, and Radar's
+// web-search versions could not establish company identity, so their rows never
+// reached the canonical store. The vehicle is now `linkedin_posts`, a source
+// Radar still owns. Nothing about what these tests protect has changed.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
 import { buildRadarScanPlan, type RadarSource } from "../../../supabase/functions/_shared/radarScanPlanner.ts";
@@ -57,7 +64,7 @@ function refusingSearch(error: string, record: string[]): FirecrawlSearchFn {
 Deno.test("exec-1. setup_required → ZERO provider calls (no generic search leak)", async () => {
   const emptyBrain = compileCompanyBrainContext({ workspace_id: "ws", profile: {} });
   assertEquals(emptyBrain.meta.setup_required, true);
-  const { src } = planSource(saasBrain(), "hiring"); // borrow a valid plan shape
+  const { src } = planSource(saasBrain(), "linkedin_posts"); // borrow a valid plan shape
   const calls: string[] = [];
   const res = await runFirecrawlSource({
     plan: src, wanted: 5, search: stubSearch(5, calls), scanPlanReason: "r", setupRequired: true,
@@ -68,7 +75,7 @@ Deno.test("exec-1. setup_required → ZERO provider calls (no generic search lea
 });
 
 Deno.test("exec-2. disqualifiers are appended to every executed query as -\"term\"", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const calls: string[] = [];
   await runFirecrawlSource({ plan: src, wanted: 5, search: stubSearch(2, calls), scanPlanReason: "r", setupRequired: false });
   assert(calls.length > 0);
@@ -76,15 +83,21 @@ Deno.test("exec-2. disqualifiers are appended to every executed query as -\"term
   assert(calls.some((q) => /-"staffing"|-"recruiting agency"/i.test(q)), `expected staffing exclusion in ${calls[0]}`);
 });
 
-Deno.test("exec-3. explicit geography is retained in the executed queries", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
-  const calls: string[] = [];
-  await runFirecrawlSource({ plan: src, wanted: 5, search: stubSearch(2, calls), scanPlanReason: "r", setupRequired: false });
-  assert(calls.some((q) => /United States/i.test(q)), `geography missing from ${JSON.stringify(calls)}`);
-});
+// exec-3 IS GONE WITH THE PATH IT TESTED (Phase 3H).
+//
+// It asserted that an explicit geography survives into the executed query, and
+// it could only assert that through the HIRING query builder — geography is a
+// property of a query looking for companies, and `linkedin_posts` queries look
+// for topics. Hiring is retired here.
+//
+// The property is not lost; it moved to where hiring now happens.
+// `identitySearchLocations` puts the mission's declared geography into the
+// identity search and `compileHarvestCompanySearchInput` validates it, which
+// `companyLinkedIn.test.ts` asserts directly. Keeping a test here would keep a
+// retired query builder alive to satisfy it.
 
 Deno.test("exec-4. staged widening — few results escalates past the exact tier", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const calls: string[] = [];
   // 0 hits per call → never satisfies `wanted`, so it must exhaust all non-empty stages.
   const res = await runFirecrawlSource({ plan: src, wanted: 5, search: stubSearch(0, calls), scanPlanReason: "r", setupRequired: false });
@@ -92,7 +105,7 @@ Deno.test("exec-4. staged widening — few results escalates past the exact tier
 });
 
 Deno.test("exec-5. enough results in the exact tier → does NOT widen", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const calls: string[] = [];
   // Plenty of hits per call → satisfied within stage 1.
   const res = await runFirecrawlSource({ plan: src, wanted: 3, search: stubSearch(20, calls), scanPlanReason: "r", setupRequired: false });
@@ -100,7 +113,7 @@ Deno.test("exec-5. enough results in the exact tier → does NOT widen", async (
 });
 
 Deno.test("exec-6. disabled source or wanted<=0 → skipped, no calls", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const calls: string[] = [];
   const res = await runFirecrawlSource({ plan: src, wanted: 0, search: stubSearch(5, calls), scanPlanReason: "r", setupRequired: false });
   assertEquals(res.status, "skipped");
@@ -117,7 +130,7 @@ Deno.test("exec-7. buildFirecrawlQuery caps and formats negatives", () => {
 // ═══ PROVIDER REFUSAL IS NOT AN EMPTY MARKET ═══════════════════════════════
 
 Deno.test("exec-9. a refused source reports the provider error and is not `ready`", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const calls: string[] = [];
   const res = await runFirecrawlSource({
     plan: src, wanted: 5, search: refusingSearch("http_429", calls),
@@ -131,7 +144,7 @@ Deno.test("exec-9. a refused source reports the provider error and is not `ready
 });
 
 Deno.test("exec-10. an honestly empty search stays `ready` with no error", async () => {
-  const { src } = planSource(saasBrain(), "hiring");
+  const { src } = planSource(saasBrain(), "linkedin_posts");
   const res = await runFirecrawlSource({
     plan: src, wanted: 5, search: stubSearch(0, []), scanPlanReason: "r", setupRequired: false,
   });

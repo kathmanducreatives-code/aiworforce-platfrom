@@ -72,18 +72,53 @@ Deno.test("6. caps are enforced per source", () => {
   assertEquals(src(p, "linkedin_comments").cap, 30);
 });
 
-Deno.test("7. apify-only sources disabled without Apify; hiring stays via Firecrawl fallback", () => {
+Deno.test("7. apify-only sources are disabled without Apify, and retired sources stay off", () => {
   const p = plan(agentory, { firecrawlReady: true, apifyReady: false });
   assertEquals(src(p, "linkedin_comments").enabled, false); // no fallback
-  assertEquals(src(p, "hiring").enabled, true); // firecrawl fallback
-  assertEquals(src(p, "hiring").provider_preference, "firecrawl");
+
+  // ── PHASE 3H ────────────────────────────────────────────────────────────
+  //
+  // This asserted the opposite: hiring stayed runnable on a Firecrawl fallback.
+  // That fallback searched the WEB for hiring and could resolve neither company
+  // identity nor role family, which is why `mapRadarSignalToV2` refuses a
+  // `hiring` row — it never reached the canonical store, and since Phase 3G it
+  // never reaches the feed. The shared capability engine collects hiring by
+  // resolving the company and reading real postings.
+  //
+  // A retired source is OFF whatever the providers can do, so this asserts it
+  // under the configuration that used to enable it.
+  for (const retired of ["hiring", "funding"] as const) {
+    assertEquals(src(p, retired).enabled, false, `${retired} must stay retired`);
+  }
+  const withEverything = plan(agentory, { firecrawlReady: true, apifyReady: true });
+  for (const retired of ["hiring", "funding"] as const) {
+    assertEquals(
+      src(withEverything, retired).enabled, false,
+      `${retired} must stay retired even with every provider ready`,
+    );
+  }
+});
+
+Deno.test("7b. a retired source still explains itself", () => {
+  // Deleting the plan entry would make the source vanish from the diagnostics.
+  // "We stopped doing this, and here is why" is what a reader needs.
+  const p = plan();
+  for (const retired of ["hiring", "funding"] as const) {
+    const entry = src(p, retired);
+    assert(/retired in phase 3h/i.test(entry.reason), `${retired}: ${entry.reason}`);
+    assert(
+      /capability engine/i.test(entry.reason),
+      `${retired} must name what collects it now`,
+    );
+  }
 });
 
 Deno.test("8. every source plan has a Brain-derived reason", () => {
   const p = plan();
   for (const s of p.source_plan) assert(s.reason.trim().length > 10, `${s.source} reason`);
-  // enabled sources with queries reference the Brain
-  assert(src(p, "hiring").reason.toLowerCase().includes("company brain"));
+  // enabled sources with queries reference the Brain. `hiring` was the example
+  // and is retired; `competitor` is a live source whose reason is Brain-derived.
+  assert(src(p, "competitor").reason.toLowerCase().includes("company brain"));
 });
 
 Deno.test("9. no provider run happens — plan is data only (no source_url/results)", () => {
