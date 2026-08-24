@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-24 · **Commit:** `6ff08961` · **Status:** Phases 0–2 complete and live-verified. Phase 3A–3F built and offline-proven end to end; **3F's live anti-viewer gate is blocked on two empty provider balances**, so 3G and 3H have not started.
+**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–3 complete and live-verified.** The anti-viewer gate passed: a workspace with zero Lead missions collected its own intelligence through the shared capability engine and produced a canonical `signal_events` row. Phase 4 not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -271,70 +271,86 @@ reason.** Every phase before 7 is fully buildable with no OpenAI credits.
 | **Done** | Signals collects independently; the feed reads `signal_events`; both origins populate it; Radar's own adapters are unreferenced. |
 | **Depends on** | 1, 2. |
 
-#### Phase 3 status, 2026-08-24
+#### Phase 3 completion, 2026-08-24
 
 | Step | State |
 |---|---|
-| **3A** monitoring mission contract | ✅ `monitoringMission.ts` — `mission_objective`, subject kinds, lead-only capability list, boundary check |
-| **3B** monitoring subject store | ✅ `20260824140000_monitoring_subjects.sql`, applied |
-| **3C** monitoring compiler | ✅ subjects → a `LeadMissionV1` with no quota and no persistence terminal |
-| **3D** routing | ✅ graph's terminal branch omits `persistence` for a monitoring mission |
-| **3E** cross-origin reuse pre-flight | ✅ `monitoringPreflight.ts` — keyed on the question, never the origin |
-| **3F** independent collection | ⚠️ **built and deployed, gate not passed** — `run-monitoring-scan` runs end to end and reports honestly, but cannot yet produce a feed. Two blockers below. |
-| **3G** read switch | ⛔ not started — depends on 3F |
-| **3H** retire the Radar provider path | ⛔ not started — depends on 3G |
+| **3A** monitoring mission contract | ✅ |
+| **3B** monitoring subject store | ✅ `monitoring_subjects` |
+| **3C** monitoring compiler | ✅ subjects → a mission with no quota and no persistence terminal |
+| **3D** routing | ✅ the graph's terminal branch omits `persistence` for a monitoring mission |
+| **3E** cross-origin reuse pre-flight | ✅ keyed on the question, never the origin |
+| **3F** independent collection | ✅ **live gate passed** |
+| **3G** read switch | ✅ the feed reads `signal_events`, with measured parity |
+| **3H** retire the duplicate Radar provider paths | ✅ jobs actor and hiring/funding web search retired |
 
-**Blocker 1 — Apify has no credit (external).** The provider returns HTTP 402,
-so `company_identity_resolution` cannot run. The engine defers the company
-rather than recording it unresolved — "no call, no verdict" — which is correct
-and is what the live run showed.
+**The gate, verified in the database rather than inferred.** One
+`signal_events` row: `origin: scheduled_monitor`, `subject_type: competitor`,
+`account_id` NULL, `occurred_at` NULL with basis `unknown`. Zero
+`lead_candidates`, zero v1 `signals`. The real workspace untouched at 32 leads /
+8 events. Credits 50 → 44, one transaction per distinct call, all settled, no
+reservation left held. Provider costs in `lead_execution_calls` with
+`execution_owner: monitoring` and `cost_source: provider_reported`; a timed-out
+call recorded with a null cost and no rows, never as evidence. Repeat passes
+deduplicate.
 
-**Blocker 2 — OpenAI has no credit (external).** `evaluateMission` is the
-qualification authority; without it nothing qualifies and no event is written.
-For an ICP subject `planDiscovery` is also blocked, though a named-subject
-mission schedules no discovery capability and never asks.
+**What had to be fixed to get there** — six defects, each real:
 
-Both block Lead sourcing today exactly as much as they block monitoring. Neither
-needs code.
+1. **No continuation.** The job-search actor finishes in ~156s; the tool's poll
+   gives up at 90s and reports the run PENDING. Monitoring had nowhere to keep
+   that id, so every pass started a second run and discarded the first.
+   `monitoring_runs` now holds the engine state per (workspace, mission_hash). A
+   monitoring resume carries `pending_runs` and DROPS `completed_capabilities`:
+   monitoring keeps no per-company records, so a skipped stage would leave the
+   pool without the results that stage produced.
+2. **The wall clock was invisible.** No `deadline`, no `readPendingRun`, so a
+   worker kill recorded a running provider call as `provider_error`.
+3. **The wrong gate for a named subject.** An ICP subject must qualify; a named
+   subject needs an evidenced signal. The workspace answered the fit question
+   when it chose to watch the company.
+4. **Code had no way to assert what it proved.** `assessSignals` accepted a
+   positive verdict only from the model. `provenVerdicts` now carries a
+   capability's own finding — admitted only where the model contributed nothing
+   usable, never over a cited model verdict, never over a model `absent`, and
+   subject to the same citation rule.
+5. **The evidence that earned the verdict was discarded.** `hiring_jobs` read
+   `yc_open_jobs` unconditionally, so a paid search that upgraded a company had
+   its rows dropped.
+6. **A boundary leak.** Ten v1 `signals` rows had been written into a
+   monitoring-only workspace. `memoryWriter`'s guard was already fixed to accept
+   any engine authority and was unreachable, because `toolRegistry` narrowed
+   anything not exactly `capability_engine` to `legacy` one layer above it. All
+   three layers now derive from `PERSISTENCE_AUTHORITIES`.
 
-**Resolved — `known_company_resolution` is now a real shared capability.** It was
-declared in the graph and skipped as `skipped_no_input`; every route into the
-company pool ran through a discovery provider, so a mission naming its own
-companies discovered nothing. The engine now seeds those companies into the
-ORDINARY pool and stops — it buys nothing, decides no identity, and hands them
-to the same `company_identity_resolution` every discovered company goes through.
+**3G parity, measured.** The real workspace holds 14 v1 rows; 8 have canonical
+counterparts and 6 predate the dual-write. The feed shows 14 — 8 rendered from
+the canonical row, 6 carried through as legacy on an EXACT `legacy_signal_id`
+join. The Radar payload worth keeping (ICP scoring, priority, freshness
+reasoning, diagnostics) now travels in `normalized_value`, backfilled for rows
+written before the mapper carried it.
 
-Identity strictness is unchanged and is the point: a supplied bare NAME reaches
-`ambiguous` and no further, so a `tracked_company` subject identified by a word
-honestly produces nothing, while one identified by a domain or a LinkedIn URL
-carries through. One path serves both callers — a Signals subject and a Lead
-mission naming companies compile to the same `known_companies`, schedule the
-same entry capability and produce the same pool entry.
+**3H scope, and its limit.** Retired: the second Apify jobs adapter, and the
+hiring/funding web search whose rows the canonical store refuses anyway. Kept:
+`linkedin_intent`, `competitor`, `workflow_trend` — no capability searches the
+web for market discussion — and Radar's posts/comments/people Apify adapters,
+which nothing has been proven to replace.
 
-A second collapse surfaced on the way: `freeHiringAssessment` returned
-`hiring_not_verified` for a company carrying no openings, which is right for one
-a provider answered about and wrong for one nobody had asked about. The paid job
-check now also fires for a supplied row with no job evidence, and only for one.
+#### Known limits carried into Phase 4
 
-#### What the live runs proved, and what remains
-
-| Step | Live state |
-|---|---|
-| Scheduler invocation (no user JWT) | ✅ |
-| Subject load, mission compile, boundary check | ✅ |
-| `known_company_resolution` seeding | ✅ `added: 1, by_kind {domain: 1}` |
-| Triage, budget, investigation slice | ✅ |
-| Provider permission (`signals_monitor` on `source_with_apify`) | ✅ after the allow-list fix |
-| Identity resolution | ⛔ Apify 402 — company deferred honestly |
-| Qualification → `signal_events` | ⛔ OpenAI 402, never reached |
-| No Lead rows, no cross-workspace effect | ✅ fixture holds 0/0/0; the real workspace unchanged at 32 leads / 8 events |
-
-The deterministic half is proven in full: `monitoringEndToEnd.test.ts` carries a
-tracked company through the real compiler, the real graph, the real
-`runCapabilityPlan` and the real writer contract to a written `signal_event`
-with `origin: scheduled_monitor`, `occurred_at: null` and
-`occurred_at_basis: unknown`. What remains unproven is the two provider calls
-themselves — not the path they sit in.
+* **Monitoring re-buys on every pass.** The reuse pre-flight only reuses
+  evidence with `occurred_at_basis: source_reported`, and monitoring's own
+  events are `unknown` — undated cannot prove recency. What prevents re-spend is
+  the subject's `cadence_minutes`, not the pre-flight. That is the correct
+  division, but the cadence is not yet enforced by a scheduler.
+* **No scheduler.** `run-monitoring-scan` accepts the service-role caller a
+  cadence needs; nothing calls it on a cadence yet.
+* **Monitoring's ledger keys collide across passes.** With no task id the
+  `logical_call_key` is `no-task:…`, so repeated passes read as replays: credits
+  correctly refuse to double-charge, and the execution ledger does not record
+  the repeat.
+* **A supplied bare NAME cannot resolve.** By design — a name is not an
+  identity. Subjects should be stored as a domain or a LinkedIn URL, and the UI
+  does not yet say so.
 
 > This is the phase the whole rule exists to protect. If it is skipped or
 > reordered after the read switch, Signals silently becomes a Lead viewer and
