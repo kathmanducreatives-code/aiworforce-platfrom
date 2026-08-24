@@ -297,6 +297,9 @@ export function mapHiringSignalToEventInput(
     evidence_category: evidenceCategoryForSignalType(signal.signal_type),
     // occurred_at is the SOURCE event time — never observed_at.
     occurred_at: signal.occurred_at,
+    // A hiring signal always carries the posting's own time; a canonical
+    // SignalEvent cannot exist without one.
+    occurred_at_basis: "source_reported",
     observed_at: signal.observed_at,
     expires_at: signal.expires_at ?? null,
     freshness,

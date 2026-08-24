@@ -80,6 +80,22 @@ export type EngagementSignalType =
   | "direct_reply"
   | "content_engagement";
 
+/**
+ * Market: what is happening AROUND the workspace's category.
+ *
+ * Never a claim about a prospect, which is why this is its own category rather
+ * than more `gtm` types: a competitor's motion must not answer a query meaning
+ * "this prospect is changing how it sells".
+ *
+ * Deliberately coarse. Radar establishes that a named competitor was publicly
+ * active and that the problem space is being discussed; it does not classify
+ * WHAT the competitor did, so `major_release` would assert more than was
+ * observed. A later classifier can refine these into the product types.
+ */
+export type MarketSignalType =
+  | "competitor_activity"
+  | "market_problem_discussion";
+
 /** Risk: source-backed facts that WEAKEN or contradict timing. Never urgency. */
 export type RiskSignalType =
   | "person_left_company"
@@ -90,12 +106,15 @@ export type RiskSignalType =
 
 export type SignalType =
   | GrowthSignalType | GtmSignalType | ProductSignalType
-  | FounderIntentSignalType | EngagementSignalType | RiskSignalType;
+  | FounderIntentSignalType | EngagementSignalType | RiskSignalType
+  | MarketSignalType;
 
-export type SignalCategory = "growth" | "gtm" | "product" | "founder_intent" | "engagement" | "risk";
+export type SignalCategory =
+  | "growth" | "gtm" | "product" | "founder_intent" | "engagement" | "risk" | "market";
 
 const CATEGORY_OF: Readonly<Record<SignalType, SignalCategory>> = {
   recent_funding: "growth", employee_growth: "growth", market_expansion: "growth", geographic_expansion: "growth",
+  competitor_activity: "market", market_problem_discussion: "market",
   sales_hiring: "gtm", revops_hiring: "gtm", growth_hiring: "gtm", new_revenue_leader: "gtm",
   outbound_initiative: "gtm", positioning_change: "gtm",
   product_launch: "product", major_release: "product", new_integration: "product", category_expansion: "product",
@@ -108,6 +127,14 @@ const CATEGORY_OF: Readonly<Record<SignalType, SignalCategory>> = {
   person_left_company: "risk", company_outside_icp: "risk", role_changed: "risk",
   company_inactive: "risk", signal_became_stale: "risk",
 };
+
+/**
+ * Every canonical signal type, derived from the category map rather than
+ * restated — a second hand-written list is a second thing to forget. Used to
+ * pin this vocabulary against the database CHECK that has to accept it.
+ */
+export const SIGNAL_TYPES: readonly SignalType[] =
+  Object.freeze(Object.keys(CATEGORY_OF) as SignalType[]);
 
 export function signalCategoryOf(t: SignalType): SignalCategory {
   return CATEGORY_OF[t];
@@ -143,6 +170,11 @@ export function evidenceCategoryForSignalType(t: SignalType): EvidenceCategory |
     // risk signals are contradictions, never timing proof
     case "person_left_company": case "company_outside_icp": case "role_changed":
     case "company_inactive": case "signal_became_stale":
+      return null;
+    // market — context about the category, never proof of a prospect's timing.
+    // Returning an evidence category here would let competitor news satisfy an
+    // evidence gate about a company it says nothing about.
+    case "competitor_activity": case "market_problem_discussion":
       return null;
   }
 }

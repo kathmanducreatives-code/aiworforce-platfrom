@@ -20,6 +20,7 @@
 
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
 import { isSignalOrigin, type SignalOrigin } from "./signalOrigin.ts";
+import { isSubjectType, SUBJECT_KEY_PATTERN, type SubjectType } from "./signalSubject.ts";
 
 // ------------------------------------------------------------------ types -----
 
@@ -172,8 +173,10 @@ const SIGNAL_EVENT_TYPES = new Set([
   "founder_hiring_post", "founder_problem_statement",
   "person_left_company", "company_outside_icp", "role_changed", "company_inactive",
   "signal_became_stale",
+  // market — about the category, not about a prospect
+  "competitor_activity", "market_problem_discussion",
 ]);
-const SIGNAL_CATEGORIES = new Set(["growth", "gtm", "product", "founder_intent", "risk"]);
+const SIGNAL_CATEGORIES = new Set(["growth", "gtm", "product", "founder_intent", "risk", "market"]);
 const EVIDENCE_CATEGORIES = new Set([
   "job_signal", "funding_signal", "launch_signal", "expansion_signal",
   "founder_activity_signal", "gtm_signal",
@@ -227,7 +230,23 @@ export interface SignalEventV2Input extends CommonV2Input {
   signal_type: string;
   signal_category: string;
   evidence_category?: string | null;
-  occurred_at: string;
+  /**
+   * WHAT THIS EVIDENCE IS ABOUT when it is not a lead entity — a competitor, a
+   * company outside the pipeline, or a market. All-or-nothing with
+   * `subject_key`. See `signalSubject.ts`; this is not a monitoring subscription.
+   */
+  subject_type?: SubjectType | null;
+  subject_key?: string | null;
+  /**
+   * The SOURCE event time, or null when it is genuinely unknown.
+   *
+   * Null is only legal with `occurred_at_basis: "unknown"`. Writing the scan
+   * time here instead would state a fact nobody observed and make every
+   * freshness band derived from it a fiction.
+   */
+  occurred_at: string | null;
+  /** How `occurred_at` is known. Required — the honest answer is sometimes "unknown". */
+  occurred_at_basis: "source_reported" | "unknown";
   expires_at?: string | null;
   freshness?: string | null;
   listing_status?: string | null;
@@ -440,10 +459,20 @@ export async function writeSignalEventV2(
   if (input.evidence_category != null && !EVIDENCE_CATEGORIES.has(input.evidence_category)) {
     return done(skip(enabled, "validation_failed", "evidence_category outside canonical vocabulary"));
   }
-  // occurred_at is the SOURCE event time. It must be supplied and parseable —
-  // observed_at can never stand in for it (freshness truthfulness).
-  if (!validTimestamp(input.occurred_at)) {
-    return done(skip(enabled, "validation_failed", "occurred_at missing or unparseable"));
+  // occurred_at is the SOURCE event time. observed_at can never stand in for it,
+  // and neither can the scan time — the basis says which of the two truthful
+  // states this row is in, and the pair is validated together so there is no way
+  // to record a time nobody observed.
+  if (input.occurred_at_basis === "source_reported") {
+    if (!validTimestamp(input.occurred_at)) {
+      return done(skip(enabled, "validation_failed", "occurred_at missing or unparseable"));
+    }
+  } else if (input.occurred_at_basis === "unknown") {
+    if (input.occurred_at != null) {
+      return done(skip(enabled, "validation_failed", "an unknown occurred_at must not carry a timestamp"));
+    }
+  } else {
+    return done(skip(enabled, "validation_failed", "occurred_at_basis outside canonical vocabulary"));
   }
   if (input.freshness != null && !FRESHNESS_BANDS.has(input.freshness)) {
     return done(skip(enabled, "validation_failed", "freshness outside canonical vocabulary"));
@@ -458,8 +487,25 @@ export async function writeSignalEventV2(
     return done(skip(enabled, "validation_failed", "origin outside canonical vocabulary"));
   }
   if (!input.dedupe_key?.trim()) return done(skip(enabled, "validation_failed", "dedupe_key required"));
-  if (!isUuid(input.contact_id) && !isUuid(input.account_id) && !isUuid(input.lead_candidate_id)) {
-    return done(skip(enabled, "missing_entity", "signal event must reference at least one entity"));
+  const hasSubjectType = input.subject_type != null;
+  const hasSubjectKey = input.subject_key != null;
+  if (hasSubjectType !== hasSubjectKey) {
+    return done(skip(enabled, "validation_failed", "subject_type and subject_key must be given together"));
+  }
+  if (hasSubjectType && !isSubjectType(input.subject_type)) {
+    return done(skip(enabled, "validation_failed", "subject_type outside canonical vocabulary"));
+  }
+  if (hasSubjectKey && !SUBJECT_KEY_PATTERN.test(String(input.subject_key))) {
+    return done(skip(enabled, "validation_failed", "subject_key is not canonical"));
+  }
+  // Attributable to SOMETHING concrete: a lead entity, or a named subject. A row
+  // that is about neither cannot be read, and attaching it to an arbitrary
+  // account to satisfy the old rule would fabricate the attribution.
+  if (
+    !isUuid(input.contact_id) && !isUuid(input.account_id) &&
+    !isUuid(input.lead_candidate_id) && !hasSubjectType
+  ) {
+    return done(skip(enabled, "missing_entity", "signal event must reference a lead entity or a subject"));
   }
 
   const row: Record<string, unknown> = {
@@ -471,7 +517,10 @@ export async function writeSignalEventV2(
     signal_type: input.signal_type,
     signal_category: input.signal_category,
     evidence_category: input.evidence_category ?? null,
-    occurred_at: input.occurred_at,
+    subject_type: hasSubjectType ? input.subject_type : null,
+    subject_key: hasSubjectKey ? input.subject_key : null,
+    occurred_at: input.occurred_at ?? null,
+    occurred_at_basis: input.occurred_at_basis,
     ...(validTimestamp(input.observed_at) ? { observed_at: input.observed_at } : {}),
     expires_at: validTimestamp(input.expires_at) ? input.expires_at : null,
     freshness: input.freshness ?? null,

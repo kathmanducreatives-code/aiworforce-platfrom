@@ -4,6 +4,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signalDedupeKey } from "../_shared/signalQuality.ts";
+import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
+import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
+import { mapRadarSignalToV2, type RadarLegacyRow } from "../_shared/radarSignalToV2.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
 import { scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
@@ -529,11 +532,63 @@ Deno.serve(async (req) => {
   const enrich = enrichAndGateRows(accepted as EnrichableRow[], intel, scan_run_id);
   const kept = enrich.kept;
 
+  // ── LEGACY WRITE — STILL THE AUTHORITY ──────────────────────────────────
+  //
+  // `signals` remains what the Signals UI reads. The v2 write below is a
+  // dual-write behind it and can never affect this result: the read switch
+  // waits for Phase 3's independent-monitoring gate.
+  //
+  // Rows are selected back because the canonical event needs `legacy_signal_id`
+  // to point at the row it was derived from.
+  let persisted: RadarLegacyRow[] = [];
   if (kept.length > 0) {
-    const { error: insErr } = await admin.from("signals").insert(kept);
+    const { data: insRows, error: insErr } = await admin.from("signals")
+      .insert(kept)
+      .select("id, workspace_id, signal_type, title, source, source_url, confidence, raw");
     if (insErr) {
       console.error("signals insert failed", insErr);
       return json({ error: "Failed to save signals", detail: insErr.message }, 500);
+    }
+    persisted = (insRows ?? []) as RadarLegacyRow[];
+  }
+
+  // ── SIGNALS V2 DUAL-WRITE ───────────────────────────────────────────────
+  //
+  // Radar's rows become canonical `signal_events` about a MARKET SUBJECT — a
+  // competitor, or the problem space — never about a fabricated lead account.
+  // Flag-gated, and deliberately unable to fail the scan: an exception here
+  // must not lose a signal the legacy write already stored.
+  //
+  // Every outcome is counted, including the refusals. `hiring` and `funding`
+  // rows are refused because Radar resolves neither company identity nor role
+  // family, and a silent zero is indistinguishable from a broken writer — which
+  // is the failure mode this whole phase exists to make visible.
+  const v2Enabled = isSignalsV2Enabled();
+  const v2 = { enabled: v2Enabled, attempted: 0, written: 0, deduplicated: 0, failed: 0,
+    skipped: {} as Record<string, number> };
+  if (v2Enabled && persisted.length > 0) {
+    const observedAt = new Date().toISOString();
+    for (const row of persisted) {
+      try {
+        // Human-triggered: this endpoint requires an authenticated member. A
+        // scheduled monitor (Phase 3) states `scheduled_monitor` instead.
+        const mapped = mapRadarSignalToV2(row, "manual_scan", observedAt);
+        if (!mapped.ok) {
+          v2.skipped[mapped.reason] = (v2.skipped[mapped.reason] ?? 0) + 1;
+          continue;
+        }
+        v2.attempted++;
+        const res = await writeSignalEventV2({ admin, enabled: true }, mapped.input);
+        if (res.written) v2.written++;
+        else if (res.deduplicated) v2.deduplicated++;
+        else {
+          v2.failed++;
+          v2.skipped[res.error_class ?? "unknown"] = (v2.skipped[res.error_class ?? "unknown"] ?? 0) + 1;
+        }
+      } catch (e) {
+        v2.failed++;
+        console.warn("[radar-scan] signals-v2 dual-write skipped:", (e as Error)?.message);
+      }
     }
   }
 
@@ -588,6 +643,7 @@ Deno.serve(async (req) => {
     decision_counts: enrich.decision_counts,
     scan_run_id,
     diagnostics,
+    signals_v2: v2,
     adapters: { linkedin_posts: postsAdapter, linkedin_comments: commentsAdapter, decision_makers: peopleAdapter },
     per_category: perCategory,
     capabilities: caps,

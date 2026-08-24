@@ -163,7 +163,8 @@ Deno.test("lead_evidence: PII in normalized_value is rejected (sanitized policy)
 const baseEvent = {
   workspace_id: WS, origin: "lead_mission", account_id: ACCOUNT,
   signal_type: "sales_hiring", signal_category: "gtm",
-  evidence_category: "job_signal", occurred_at: "2026-07-01T00:00:00.000Z", dedupe_key: "ev1",
+  evidence_category: "job_signal", occurred_at: "2026-07-01T00:00:00.000Z",
+  occurred_at_basis: "source_reported", dedupe_key: "ev1",
   verification_status: "provider_verified", confidence: "high", listing_status: "active",
   freshness: "strong", lifecycle_status: "active",
 };
@@ -206,6 +207,109 @@ Deno.test("signal_events: the stored row carries the origin it was given", async
     i++;
   }
   assertEquals(store.signal_events.length, SIGNAL_ORIGINS.length);
+});
+
+Deno.test("signal_events: a market event writes with a subject and NO lead entity", async () => {
+  const { admin, store } = makeAdmin();
+  // The capability this whole change exists for. Competitor evidence is about a
+  // competitor; there is no prospect to hang it on, and inventing one would
+  // file competitor news under a company it says nothing about.
+  const r = await writeSignalEventV2({ admin, enabled: true }, {
+    workspace_id: WS, origin: "competitor_monitor",
+    signal_type: "competitor_activity", signal_category: "market",
+    subject_type: "competitor", subject_key: "outreach",
+    occurred_at: null, occurred_at_basis: "unknown",
+    dedupe_key: "comp-outreach-1", verification_status: "unverified",
+  } as any);
+  assertEquals(r.written, true);
+  assertEquals(store.signal_events.length, 1);
+  const row = store.signal_events[0];
+  assertEquals(row.account_id, null);
+  assertEquals(row.contact_id, null);
+  assertEquals(row.lead_candidate_id, null);
+  assertEquals(row.subject_type, "competitor");
+  assertEquals(row.subject_key, "outreach");
+  assertEquals(row.occurred_at, null);
+  assertEquals(row.occurred_at_basis, "unknown");
+});
+
+Deno.test("signal_events: neither entity nor subject is still refused", async () => {
+  const { admin, store } = makeAdmin();
+  const r = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, account_id: null, subject_type: null, subject_key: null,
+  } as any);
+  assertEquals(r.error_class, "missing_entity");
+  assertEquals((store.signal_events ?? []).length, 0);
+});
+
+Deno.test("signal_events: half a subject is refused, in both directions", async () => {
+  const { admin, store } = makeAdmin();
+  const typeOnly = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, account_id: null, subject_type: "competitor",
+  } as any);
+  assertEquals(typeOnly.error_class, "validation_failed");
+  const keyOnly = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, account_id: null, subject_key: "outreach",
+  } as any);
+  assertEquals(keyOnly.error_class, "validation_failed");
+  assertEquals((store.signal_events ?? []).length, 0);
+});
+
+Deno.test("signal_events: a non-canonical subject_key is refused", async () => {
+  const { admin, store } = makeAdmin();
+  // Uncanonical keys are how one subject becomes three across scans.
+  for (const bad of ["Outreach", "outreach.io", " outreach", "outreach-", "out reach", ""]) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, {
+      ...baseEvent, account_id: null, subject_type: "competitor", subject_key: bad,
+    } as any);
+    assertEquals(r.error_class, "validation_failed", `${JSON.stringify(bad)} must be refused`);
+  }
+  const badType = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, account_id: null, subject_type: "vendor", subject_key: "outreach",
+  } as any);
+  assertEquals(badType.error_class, "validation_failed");
+  assertEquals((store.signal_events ?? []).length, 0);
+});
+
+Deno.test("signal_events: an unknown occurred_at may not carry a timestamp", async () => {
+  const { admin, store } = makeAdmin();
+  // The whole point: there must be no way to write the scan time into a column
+  // that means "when the source event happened".
+  const invented = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, occurred_at_basis: "unknown", occurred_at: "2026-08-24T00:00:00.000Z",
+  } as any);
+  assertEquals(invented.error_class, "validation_failed");
+
+  const missingWhenClaimed = await writeSignalEventV2({ admin, enabled: true }, {
+    ...baseEvent, occurred_at_basis: "source_reported", occurred_at: null,
+  } as any);
+  assertEquals(missingWhenClaimed.error_class, "validation_failed");
+
+  for (const bad of ["scan_time", "estimated", "", null, undefined]) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, {
+      ...baseEvent, occurred_at_basis: bad,
+    } as any);
+    assertEquals(r.error_class, "validation_failed", `basis ${JSON.stringify(bad)} must be refused`);
+  }
+  assertEquals((store.signal_events ?? []).length, 0);
+});
+
+Deno.test("signal_events: subject events dedupe on the same key, idempotently", async () => {
+  const { admin, store } = makeAdmin();
+  const ev = {
+    workspace_id: WS, origin: "manual_scan" as const,
+    signal_type: "market_problem_discussion", signal_category: "market",
+    subject_type: "market", subject_key: "sdr-outreach-tooling",
+    occurred_at: null, occurred_at_basis: "unknown" as const,
+    dedupe_key: "mkt-sdr-1",
+  };
+  const first = await writeSignalEventV2({ admin, enabled: true }, ev as any);
+  assertEquals(first.written, true);
+  const again = await writeSignalEventV2({ admin, enabled: true }, ev as any);
+  assertEquals(again.deduplicated, true);
+  const third = await writeSignalEventV2({ admin, enabled: true }, { ...ev, confidence: "high" } as any);
+  assertEquals(third.deduplicated, true);
+  assertEquals(store.signal_events.length, 1, "one subject, one row, however many scans");
 });
 
 Deno.test("signal_events: missing/invalid occurred_at skips", async () => {
