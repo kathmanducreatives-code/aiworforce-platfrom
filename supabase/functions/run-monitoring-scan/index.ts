@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
   // Identical to the one both Lead routes use. Only the authority differs, so
   // monitoring's spend is attributable to monitoring in the ledger.
   const baseCtx = {
-    admin, workspace_id, agent_slug: "signals-monitor",
+    admin, workspace_id, agent_slug: "signals_monitor",
     agent_id: null, agent_name: "Signals Monitor",
     plan_id: null, task_id: null, user_id: userId,
     // Null on a scheduled run, and honestly so: nobody asked for it.

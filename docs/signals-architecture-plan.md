@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-24 · **Commit:** `3a671660` · **Status:** Phases 0–2 complete and live-verified. Phase 3A–3F built and offline-proven; **3F's anti-viewer gate is blocked** (see below), so 3G and 3H have not started.
+**Date:** 2026-08-24 · **Commit:** `6ff08961` · **Status:** Phases 0–2 complete and live-verified. Phase 3A–3F built and offline-proven end to end; **3F's live anti-viewer gate is blocked on two empty provider balances**, so 3G and 3H have not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -284,30 +284,57 @@ reason.** Every phase before 7 is fully buildable with no OpenAI credits.
 | **3G** read switch | ⛔ not started — depends on 3F |
 | **3H** retire the Radar provider path | ⛔ not started — depends on 3G |
 
-**Blocker 1 — the account's model credits are exhausted (external).** OpenAI
-returns `insufficient_quota`. `planDiscovery` absent-or-failed is a *block*, not
-a default, so no actors are chosen; and `evaluateMission` cannot run, so nothing
-qualifies. This blocks Lead sourcing today exactly as much as it blocks
-monitoring — it is not a Signals problem and needs no code.
+**Blocker 1 — Apify has no credit (external).** The provider returns HTTP 402,
+so `company_identity_resolution` cannot run. The engine defers the company
+rather than recording it unresolved — "no call, no verdict" — which is correct
+and is what the live run showed.
 
-**Blocker 2 — `known_company_resolution` is not engine-driven (architectural).**
-The shared engine can obtain companies only by *discovering* them. Every
-`addCompany` call site sits inside a discovery branch driven by a provider
-result; `mission.company_profile.known_companies` is read by the compiler, the
-intent model and the playbook selector, and by nothing that executes.
-`leadCapabilityEngine` skips the capability with `skipped_no_input`, and
-`leadPlaybookExecution` already has a name for the condition:
-`required_capability_not_engine_driven`. `companyFirstRouteExecutor` has no
-supplied-company entry either.
+**Blocker 2 — OpenAI has no credit (external).** `evaluateMission` is the
+qualification authority; without it nothing qualifies and no event is written.
+For an ICP subject `planDiscovery` is also blocked, though a named-subject
+mission schedules no discovery capability and never asks.
 
-The consequence for Signals is specific: every `tracked_company` and
-`competitor` subject compiles to `known_companies`, so **the two subject kinds
-that make Signals *Signals* cannot execute.** Only an `icp` subject reaches a
-discovery branch. This is a pre-existing gap in the Lead path — a mission that
-names its own companies has the same problem — so closing it is an engine
-change, and it is reported here rather than worked around. Seeding the pool from
-the monitoring layer would have been a second identity path, which is the
-parallel stack this phase exists to prevent.
+Both block Lead sourcing today exactly as much as they block monitoring. Neither
+needs code.
+
+**Resolved — `known_company_resolution` is now a real shared capability.** It was
+declared in the graph and skipped as `skipped_no_input`; every route into the
+company pool ran through a discovery provider, so a mission naming its own
+companies discovered nothing. The engine now seeds those companies into the
+ORDINARY pool and stops — it buys nothing, decides no identity, and hands them
+to the same `company_identity_resolution` every discovered company goes through.
+
+Identity strictness is unchanged and is the point: a supplied bare NAME reaches
+`ambiguous` and no further, so a `tracked_company` subject identified by a word
+honestly produces nothing, while one identified by a domain or a LinkedIn URL
+carries through. One path serves both callers — a Signals subject and a Lead
+mission naming companies compile to the same `known_companies`, schedule the
+same entry capability and produce the same pool entry.
+
+A second collapse surfaced on the way: `freeHiringAssessment` returned
+`hiring_not_verified` for a company carrying no openings, which is right for one
+a provider answered about and wrong for one nobody had asked about. The paid job
+check now also fires for a supplied row with no job evidence, and only for one.
+
+#### What the live runs proved, and what remains
+
+| Step | Live state |
+|---|---|
+| Scheduler invocation (no user JWT) | ✅ |
+| Subject load, mission compile, boundary check | ✅ |
+| `known_company_resolution` seeding | ✅ `added: 1, by_kind {domain: 1}` |
+| Triage, budget, investigation slice | ✅ |
+| Provider permission (`signals_monitor` on `source_with_apify`) | ✅ after the allow-list fix |
+| Identity resolution | ⛔ Apify 402 — company deferred honestly |
+| Qualification → `signal_events` | ⛔ OpenAI 402, never reached |
+| No Lead rows, no cross-workspace effect | ✅ fixture holds 0/0/0; the real workspace unchanged at 32 leads / 8 events |
+
+The deterministic half is proven in full: `monitoringEndToEnd.test.ts` carries a
+tracked company through the real compiler, the real graph, the real
+`runCapabilityPlan` and the real writer contract to a written `signal_event`
+with `origin: scheduled_monitor`, `occurred_at: null` and
+`occurred_at_basis: unknown`. What remains unproven is the two provider calls
+themselves — not the path they sit in.
 
 > This is the phase the whole rule exists to protect. If it is skipped or
 > reordered after the read switch, Signals silently becomes a Lead viewer and

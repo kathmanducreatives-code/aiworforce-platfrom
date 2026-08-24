@@ -119,3 +119,30 @@ Deno.test("8. an unconfigured workspace is reported, not silently succeeded", ()
   const around = SRC.slice(idx - 200, idx + 200);
   assertEquals(around.includes("ok: false"), true, "an empty watch list must not read as success");
 });
+
+Deno.test("9. the agent slug it spends under is one the tool registry actually allows", async () => {
+  // Live run 2026-08-24: the endpoint presented `signals-monitor`, which is on
+  // no allow-list, so every provider call returned `tool_forbidden` and the run
+  // reported a clean success having collected nothing. A slug is not a label —
+  // it is the permission, and `logToolCall` writes it to `tool_calls` as the
+  // record of who bought what.
+  const slug = SRC.match(/agent_slug:\s*"([a-z0-9_]+)"/)?.[1];
+  assert(slug, "the endpoint must state the agent slug it spends under");
+
+  const REGISTRY = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/toolRegistry.ts", import.meta.url),
+  );
+  const entry = REGISTRY.slice(REGISTRY.indexOf("  source_with_apify: {"));
+  const allowed = entry.slice(0, entry.indexOf("},")).match(
+    /allowed_agents:\s*\[([^\]]*)\]/,
+  )?.[1] ?? "";
+  assert(
+    allowed.includes(`"${slug}"`),
+    `the registry does not permit "${slug}" to use source_with_apify — every ` +
+    `provider call would be forbidden. Allowed: ${allowed}`,
+  );
+  // AND IT MUST NOT BORROW A LEAD AGENT'S IDENTITY to get that permission.
+  for (const leadAgent of ["scout", "hawk"]) {
+    assert(slug !== leadAgent, `monitoring is spending as the Lead agent "${leadAgent}"`);
+  }
+});

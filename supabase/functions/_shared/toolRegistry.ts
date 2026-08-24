@@ -1437,7 +1437,14 @@ const REGISTRY: Record<string, ToolDef> = {
     name: "source_with_apify",
     provider: "apify",
     description: "Primary tool for hiring/company/job/lead signal sourcing — runs an Apify actor.",
-    allowed_agents: ["scout", "hawk"],
+    // ── WHO MAY SPEND ON A PROVIDER ─────────────────────────────────────
+    //
+    // `signals_monitor` joined when Signals became a caller of the shared
+    // capability engine. It is listed EXPLICITLY rather than borrowing a Lead
+    // agent's slug: `logToolCall` writes this slug to `tool_calls`, so a
+    // monitoring run masquerading as `scout` would put monitoring's spend in
+    // the Lead agent's audit trail — the one record that says who bought what.
+    allowed_agents: ["scout", "hawk", "signals_monitor"],
     requires_approval: false,
     execute: execSourceWithApify,
   },
