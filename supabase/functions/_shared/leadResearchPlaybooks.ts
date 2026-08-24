@@ -57,10 +57,16 @@ export const RESEARCH_PLAYBOOK_VERSION = "lead-research-playbook-v2" as const;
  * it — however many providers its registry entry lists.
  *
  * Phase 2 got this wrong: it marked `funding` and `supplied_company` supported
- * because their capabilities exist and name providers. They are skipped by the
+ * because their capabilities exist and name providers. They were skipped by the
  * engine, so nothing was ever going to run. `leadResearchPlaybooks.test.ts`
  * re-derives this list from the engine's own source, so it cannot drift into a
  * comfortable fiction.
+ *
+ * Both have since EARNED their place, and by opposite routes: `funding` gained
+ * a provider that can keep its claim, and `known_company_resolution` turned out
+ * to need none — the mission already supplied its input, so the engine seeds
+ * the named companies into the ordinary pool and the existing identity stage
+ * does the rest.
  */
 export const ENGINE_DRIVEN_CAPABILITIES: readonly CapabilityId[] = Object.freeze([
   "startup_company_discovery",
@@ -68,6 +74,11 @@ export const ENGINE_DRIVEN_CAPABILITIES: readonly CapabilityId[] = Object.freeze
   // Joined when the funding capability gained a provider that can keep its
   // claim. It runs through the same shared discovery stage as the two above.
   "funding_signal_discovery",
+  // Joined when the engine learned to seed the companies a mission NAMES. It
+  // is the one driven capability that buys nothing: its input arrived with the
+  // mission, and every claim about the companies it seeds is still established
+  // downstream by `company_identity_resolution`.
+  "known_company_resolution",
   "company_identity_resolution",
   "company_enrichment",
   "hiring_verification",
@@ -268,9 +279,12 @@ export const RESEARCH_PLAYBOOKS:
       proving_capabilities: [],
       unwired_actor_keys: [],
       notes: [
-        "the downstream pipeline (identity, enrichment, qualification) IS " +
-        "engine-driven; only the resolution of the supplied list is not, so " +
-        "this shape currently starts with an empty company set",
+        "the whole path is engine-driven: the engine seeds the named companies " +
+        "into the ordinary pool and the SAME identity, enrichment and " +
+        "qualification stages every other shape uses take it from there",
+        "a supplied NAME is not an identity: it can reach `ambiguous` and no " +
+        "further, so a company supplied by name alone is honestly unresolved " +
+        "unless a search result confirms it by domain",
       ],
     },
     social: {

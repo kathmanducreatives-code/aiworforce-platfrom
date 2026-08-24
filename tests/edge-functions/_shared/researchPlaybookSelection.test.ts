@@ -82,9 +82,13 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
   // grounded in the engine's own source — the property it exists to protect —
   // without requiring the engine to spell each capability out in a condition.
   for (const c of ENGINE_DRIVEN_DISCOVERY) implemented.add(c);
-  const skipGuard = ENGINE.slice(
-    ENGINE.indexOf('if (cap === "known_company_resolution" ||'),
-  ).slice(0, 400);
+  const SKIP_ANCHOR = 'if (cap === "job_discovery" ||';
+  const anchorAt = ENGINE.indexOf(SKIP_ANCHOR);
+  // A MISSING ANCHOR MUST FAIL LOUDLY. `indexOf` returning -1 would slice from
+  // the end of the file and silently derive an EMPTY skip set, which makes
+  // every capability look driven — the exact fiction this test exists to stop.
+  assert(anchorAt > 0, "the engine's skip guard was not found; this test is not deriving anything");
+  const skipGuard = ENGINE.slice(anchorAt).slice(0, 400);
   const skipped = new Set(
     [...skipGuard.matchAll(/cap === "([a-z_]+)"/g)].map((m) => m[1]),
   );
@@ -96,38 +100,45 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
       `${c}: ENGINE_DRIVEN_CAPABILITIES says ${isEngineDriven(c)}, the engine says ${driven}`,
     );
   }
-  // And the skip guard really does name the five the engine declines to drive.
-  // `funding_signal_discovery` LEFT this list in Phase 4: it gained a provider
-  // with a verified schema, a bounded compiler, a normalizer and a cost model,
-  // which is what membership of the driven set has always required.
+  // And the skip guard really does name the four the engine declines to drive.
+  //
+  // Two capabilities have LEFT this list, by opposite routes, and the contrast
+  // is the point: `funding_signal_discovery` gained a provider with a verified
+  // schema, a bounded compiler, a normalizer and a cost model;
+  // `known_company_resolution` gained none, because it needs none — its input
+  // arrives with the mission.
   for (const c of [
-    "known_company_resolution", "job_discovery",
+    "job_discovery",
     "expansion_signal_discovery", "job_deduplication", "expansion_signal_verification",
   ]) {
     assert(skipped.has(c), `the engine must still skip ${c}`);
     assertFalse(isEngineDriven(c as never), `${c} must not be marked engine-driven`);
   }
   assertEquals(
-    ENGINE_DRIVEN_CAPABILITIES.length, 11,
-    "eleven capabilities are engine-driven; a change here is a real architecture change",
+    ENGINE_DRIVEN_CAPABILITIES.length, 12,
+    "twelve capabilities are engine-driven; a change here is a real architecture change",
   );
 });
 
-Deno.test("a capability with providers is NOT enough to call a playbook supported", () => {
+Deno.test("a capability with providers is NOT enough to call it engine-driven", () => {
   // The error this pins: naming a capability that names providers proves
   // nothing, because the engine may not drive that capability at all.
   //
-  // `funding` used to be the second example here and no longer is — it gained a
-  // provider that keeps its claim and a stage that runs it, which is exactly
-  // the transition this assertion is meant to make visible rather than silent.
-  // `supplied_company` still names a capability the engine skips.
-  for (const id of ["supplied_company"] as const) {
-    const spec = RESEARCH_PLAYBOOKS[id];
-    const entry = spec.discovery_capabilities[0];
-    assert(entry in CAPABILITY_REGISTRY, `${id} names a real capability`);
-    assertFalse(isEngineDriven(entry), `${entry} is not engine-driven`);
-    assertEquals(playbookSupport(id).status, "unsupported");
-    assertEquals(playbookSupport(id).gaps, ["capability_not_engine_driven"]);
+  // BOTH of this assertion's former examples have since become driven —
+  // `funding` by gaining a provider, `supplied_company` by needing none — so no
+  // PLAYBOOK is blocked this way today. The property is unchanged and is
+  // asserted where it actually lives: on the capabilities themselves.
+  //
+  // Keeping this test example-free is deliberate. Re-pointing it at whichever
+  // playbook happens to be unsupported would make it a record of the current
+  // gap rather than of the rule, and the rule is what must survive.
+  for (const c of ["job_discovery", "expansion_signal_discovery"] as const) {
+    assert(c in CAPABILITY_REGISTRY, `${c} is a real capability`);
+    assert(
+      (CAPABILITY_REGISTRY[c].providers ?? []).length > 0,
+      `${c} names providers — which is exactly what proves nothing`,
+    );
+    assertFalse(isEngineDriven(c), `${c} names providers but the engine skips it`);
   }
 });
 
@@ -166,9 +177,10 @@ Deno.test("hiring and funding are the supported playbooks, and their whole path 
 });
 
 Deno.test("every other playbook is unsupported, each for a stated reason", () => {
-  // `funding` left this table in Phase 4. The rest are unchanged.
+  // `funding` left this table in Phase 4; `supplied_company` left it when the
+  // engine learned to seed the companies a mission names. What remains are the
+  // two shapes with no capability defined at all.
   const expected: Record<string, string[]> = {
-    supplied_company: ["capability_not_engine_driven"],
     social: ["no_capability_defined"],
     news: ["no_capability_defined"],
   };
@@ -189,8 +201,8 @@ Deno.test("an unsupported playbook still carries the facts the next phase needs"
     "the funding source's inability to VERIFY must be recorded, now that it can discover",
   );
   assert(
-    RESEARCH_PLAYBOOKS.supplied_company.notes.some((n) => /engine-driven/.test(n)),
-    "supplied_company's downstream pipeline exists; only resolution does not",
+    RESEARCH_PLAYBOOKS.supplied_company.notes.some((n) => /not an identity/.test(n)),
+    "supplied_company must record the limit that survives: a name is not an identity",
   );
 });
 
@@ -320,12 +332,15 @@ Deno.test("a funding Mission selects the funding playbook and RUNS it", () => {
   assert(s.ok);
 });
 
-Deno.test("a supplied-company Mission selects that shape and reports it blocked", () => {
+Deno.test("a supplied-company Mission selects that shape and can now run it", () => {
+  // This asserted `blocked` with `capability_not_engine_driven`, and was right
+  // to: a mission naming its own companies produced nothing, because the engine
+  // had no way to put them in the pool. It does now.
   const s = selectResearchPlaybooks(mission({ strategies: ["supplied_company"] }));
   assertEquals(selected(s), ["supplied_company"]);
-  assertEquals(s.runnable, []);
-  assertEquals(s.blocked[0].gaps, ["capability_not_engine_driven"]);
-  assertFalse(s.ok);
+  assertEquals(s.runnable, ["supplied_company"]);
+  assertEquals(s.blocked, []);
+  assert(s.ok);
 });
 
 Deno.test("social and news report no capability at all", () => {

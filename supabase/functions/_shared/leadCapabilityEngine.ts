@@ -51,6 +51,9 @@ import {
   type YcCompanyInput,
 } from "./leadCommercialPrequalification.ts";
 import {
+  normalizeSuppliedCompanies, SUPPLIED_COMPANY_PROVENANCE,
+} from "./suppliedCompanyIdentity.ts";
+import {
   prequalifyDiscoveredCompanies, mergePrequalification,
   genericPrequalificationKey,
 } from "./leadGenericPrequalification.ts";
@@ -3588,14 +3591,83 @@ export async function runCapabilityPlan(
     // `funding_signal_discovery` LEFT THIS LIST when it gained a provider that
     // can keep its claim. It is driven through the shared discovery stage like
     // any other discovery capability — see `ENGINE_DRIVEN_DISCOVERY`.
-    if (cap === "known_company_resolution" ||
-        cap === "job_discovery" ||
+    if (cap === "job_discovery" ||
         cap === "expansion_signal_discovery" || cap === "job_deduplication" ||
         cap === "expansion_signal_verification") {
       // Declared in the graph and reachable, but not yet driven by this engine.
       // Recorded honestly rather than silently treated as done.
       finish(cap, "skipped_no_input", 0, [], false,
         "capability is not yet engine-driven; the mission reports a partial result");
+      continue;
+    }
+
+    // ── THE COMPANIES THE MISSION NAMED ──────────────────────────────────────
+    //
+    // WHAT THIS REPLACED, AND WHY IT WAS WRONG.
+    //
+    // This capability sat in the skip list above. Every route into the company
+    // pool ran through a discovery provider, so `known_companies` was read by
+    // the mission compiler, the intent model and the playbook selector — and by
+    // nothing that executes. A mission naming its own companies discovered
+    // nothing and reported a partial result, whichever caller sent it.
+    //
+    // It cost Signals the most: every `tracked_company` and `competitor`
+    // monitoring subject compiles to `known_companies`, so the two subject
+    // kinds that make Signals *Signals* could not run at all.
+    //
+    // ── WHAT IT DOES, AND WHAT IT DELIBERATELY DOES NOT ──────────────────────
+    //
+    // It puts the named companies into the ORDINARY pool and stops. It buys
+    // nothing — this is the one capability that completes without a provider
+    // call, because the mission already supplied its input — and it decides no
+    // identity. Everything after it is the path an actor-discovered company
+    // takes: prequalification scores it, the investigation slice selects it,
+    // `company_identity_resolution` searches for it, and
+    // `resolveIdentityAgainstLookups` applies the same rule to it as to
+    // everyone else — A NAME ALONE NEVER RESOLVES.
+    //
+    // That last point is the whole design. A supplied bare name reaches
+    // `ambiguous`, not `verified_match`, and an ambiguous identity is not
+    // actionable, so nothing downstream enriches or verifies a company we
+    // cannot prove we found. Supplying a domain or a LinkedIn URL is what
+    // carries a company through — because those identify one, and a name
+    // does not.
+    if (cap === "known_company_resolution") {
+      const supplied = normalizeSuppliedCompanies(
+        opts.mission.company_profile?.known_companies ?? [],
+      );
+      const before = companies.length;
+      for (const s of supplied.companies) addCompany(companies, s.company, []);
+      const added = companies.length - before;
+
+      log("known_companies_seeded", {
+        requested: (opts.mission.company_profile?.known_companies ?? []).length,
+        usable: supplied.companies.length,
+        added,
+        rejected: supplied.rejected,
+        // WHAT EACH ONE CAN ACHIEVE, stated before anything is spent. A pool of
+        // bare names is a run that will end ambiguous, and that is worth
+        // knowing from the log rather than from the empty result.
+        by_kind: supplied.companies.reduce((acc: Record<string, number>, c) => {
+          acc[c.kind] = (acc[c.kind] ?? 0) + 1;
+          return acc;
+        }, {}),
+      });
+
+      if (added === 0) {
+        // NO COMPANIES IS NOT A COMPLETED CAPABILITY. The mission named none, or
+        // named nothing usable; either way the pool is empty and saying
+        // otherwise would let the downstream evidence gates read as satisfied.
+        finish(cap, "skipped_no_input", 0, [], false,
+          supplied.rejected.length > 0
+            ? `no usable company in the supplied list (rejected: ${supplied.rejected.length})`
+            : "the mission supplied no companies");
+        continue;
+      }
+      // NO PROVIDER, SO NO PROVIDER IS NAMED. The evidence this capability owes
+      // is "the named companies are in the pool", and they are.
+      finish(cap, "complete", added, [], true, null);
+      await publish("accounts_found");
       continue;
     }
 
@@ -4136,9 +4208,33 @@ export async function runCapabilityPlan(
       for (const c of targets) {
         let assessment = freeHiringAssessment(c);
 
-        // PAID FALLBACK, ONLY FOR A LONE TIER B. Everything else is settled by
-        // evidence already held; re-checking it is pure waste.
-        if (needsPaidJobVerification(assessment) && !deps.deadline?.expired()) {
+        // ── NOBODY ASKED IS NOT "NOTHING FOUND" ─────────────────────────
+        //
+        // `freeHiringAssessment` judges the openings the company already
+        // carries, and with none it returns `hiring_not_verified` — which
+        // `commercialSignalPolicy` documents as correct: "a genuine absence of
+        // evidence rather than a failure to recognise it."
+        //
+        // That is true of a company a provider ANSWERED the jobs question for.
+        // It is false of one the mission simply named: its `yc_open_jobs` is
+        // empty because nothing has ever looked, and reporting that as "no
+        // openings at all" is the same collapse — no-one-asked reported as
+        // nothing-there — that this file keeps taking apart elsewhere.
+        //
+        // SCOPED TO SUPPLIED ROWS, DELIBERATELY. Every other company in the
+        // pool arrived from a discovery provider that either answered the jobs
+        // question or was chosen knowing it would not, so their spend is
+        // unchanged: this can only fire for a row `known_company_resolution`
+        // seeded, and only when that row carries no job evidence at all.
+        const jobEvidenceNeverCollected =
+          c.yc_open_jobs.length === 0 &&
+          c.company.source_provenance === SUPPLIED_COMPANY_PROVENANCE;
+
+        // PAID FALLBACK, FOR A LONE TIER B — or for a named company nobody has
+        // asked about yet. Everything else is settled by evidence already held;
+        // re-checking it is pure waste.
+        if ((needsPaidJobVerification(assessment) || jobEvidenceNeverCollected) &&
+            !deps.deadline?.expired()) {
           const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
           if (url) {
             const compiled = compileHarvestJobSearchInput({

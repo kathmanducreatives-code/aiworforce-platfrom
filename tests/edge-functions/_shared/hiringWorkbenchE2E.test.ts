@@ -445,27 +445,45 @@ Deno.test("variation: the same mission IS authorised at the playbook boundary", 
   assert(authorization.authorized, authorization.reason);
 });
 
-Deno.test("variation: a supplied-company hiring mission is authorised but does not discover", async () => {
-  // `known_company_resolution` is NOT engine-driven. The boundary authorises the
-  // entry because the MISSION forced it — and the engine reports the skip
-  // honestly rather than pretending the companies were resolved.
+Deno.test("variation: a supplied-company hiring mission skips discovery and runs", async () => {
+  // WHAT THIS ASSERTED BEFORE, AND WHY IT CHANGED.
+  //
+  // `known_company_resolution` was not engine-driven, so this test pinned the
+  // honest failure: the boundary authorised the entry because the MISSION
+  // forced it, the engine reported `skipped_no_input`, and no company was
+  // invented. That was the correct assertion about a capability that did
+  // nothing.
+  //
+  // The engine now seeds the named companies into the ordinary pool, so the
+  // same mission runs — through the SAME identity, enrichment and verification
+  // stages a discovered company goes through, and buying no discovery.
   const m = hiringMission({
     company_profile: {
       business_models: [], verticals: [], stages: [], locations: [],
-      known_companies: ["acme.com"],
+      known_companies: ["sortly.com"],
     },
   });
   const r = await runHiring(m);
   assertEquals(r.plan.entry_capability, "known_company_resolution");
   assertEquals(r.authorization.entry_source, "mission_forced");
   assert(r.authorization.authorized);
+
   const entry = r.run!.capability_outcomes[0];
   assertEquals(entry.capability, "known_company_resolution");
-  assertEquals(
-    entry.status, "skipped_no_input",
-    "the engine does not drive this capability, and says so",
+  assertEquals(entry.status, "complete");
+  // IT BOUGHT NOTHING TO GET THEM. The mission supplied the input.
+  assertEquals(entry.providers_used, []);
+  assertEquals(r.run!.companies.length, 1, "the named company is really in the pool");
+
+  // AND NO DISCOVERY ACTOR RAN — which is the point of naming your companies.
+  assertFalse(
+    r.rec.calls.includes("apify_yc_companies_memo23"),
+    `a supplied-company mission must not pay to discover: ${r.rec.calls.join(", ")}`,
   );
-  assertEquals(r.run!.companies.length, 0, "so no company is invented");
+  // The company reached the same identity stage as any other, and resolved
+  // there on domain evidence rather than on the name it was supplied under.
+  assert(r.rec.calls.includes("apify_linkedin_company_search"));
+  assertEquals(r.run!.companies[0].identity?.status, "verified_match");
 });
 
 // ══════════════════════ C. failure cases — no silent success ════════════════
