@@ -72,35 +72,27 @@ import {
   isUnrecoverableModelFailure, type ModelFailure, readModelFailure,
 } from "./modelFailureContract.ts";
 
-export type EnvReader = (key: string) => string | undefined;
 
-export const MISSION_COMPILER_FLAG = "GPT_LEAD_MISSION_COMPILER";
-export const MISSION_COMPILER_WORKSPACES_ENV = "GPT_LEAD_MISSION_COMPILER_WORKSPACES";
-export const MISSION_COMPILER_MODEL_ENV = "GPT_LEAD_MISSION_COMPILER_MODEL";
-
-/**
- * The chosen compiler. Overridable by env, never by user or model input.
- *
- * Canonical by construction — see `leadIntelligenceModel.ts`. Do NOT replace
- * this with a literal: an unprefixed id is the OpenAI *wire* form, and the
- * adapter rejects it with `model_not_allowed` before the request is ever sent,
- * which `proposeMission` reports as "no proposal". That is precisely how this
- * compiler silently never ran.
- */
-export const DEFAULT_MISSION_COMPILER_MODEL: string = DEFAULT_LEAD_INTELLIGENCE_MODEL;
-
-const ENABLED_VALUES: ReadonlySet<string> = new Set(["true", "1", "enabled"]);
-
-/**
- * How many times compilation may be attempted for one request.
- *
- * A CONSTANT, not a condition — the ceiling is structural. Two, because the
- * failure this covers is a transient one (a timeout, a truncated response, a
- * malformed JSON body); a model that misreads the sentence twice will misread it
- * a third time, and burning more calls on that buys nothing.
- */
-export const MAX_COMPILATION_ATTEMPTS = 2;
-
+// The ENABLEMENT half of this stage — the flag names, the model id, the attempt
+// ceiling, `CompilerEnablement` and `isMissionCompilerEnabled` — now lives in
+// `leadMissionCompilerEnablement.ts`, so a caller that needs only the DECISION
+// does not transitively import the compiler and its provider adapter. That
+// caller is `leadIntelligencePolicy`, which is pure by contract.
+//
+// Everything is re-exported here unchanged: this module remains the single
+// import site for the stage, and no existing importer had to move.
+import {
+  type CompilerEnablement, type CompilerEnablementReason, type EnvReader,
+  isMissionCompilerEnabled, MAX_COMPILATION_ATTEMPTS,
+} from "./leadMissionCompilerEnablement.ts";
+export {
+  DEFAULT_MISSION_COMPILER_MODEL, isMissionCompilerEnabled,
+  MAX_COMPILATION_ATTEMPTS, MISSION_COMPILER_FLAG, MISSION_COMPILER_MODEL_ENV,
+  MISSION_COMPILER_WORKSPACES_ENV,
+} from "./leadMissionCompilerEnablement.ts";
+export type {
+  CompilerEnablement, CompilerEnablementReason, EnvReader,
+} from "./leadMissionCompilerEnablement.ts";
 /**
  * Mission compilation failed for a workspace that requires a compiled mission.
  *
@@ -145,53 +137,6 @@ export class MissionCompilationFailedError extends Error {
     this.providerCode = failure?.reported ? failure.code : null;
     this.providerDetail = failure?.detail ?? null;
   }
-}
-
-export type CompilerEnablementReason =
-  | "enabled" | "flag_off" | "no_workspace_allowlist" | "workspace_not_allowed"
-  // THE COMPILER ITSELF REFUSED. Distinct from every reason above, which are
-  // about whether the stage was allowed to RUN: this one means it ran, was asked
-  // twice, and could not read the request into a mission. `compileLeadMission`
-  // no longer answers that with a regex reading of the sentence.
-  | "compilation_blocked";
-
-export interface CompilerEnablement {
-  enabled: boolean;
-  reason: CompilerEnablementReason;
-  model: string | null;
-}
-
-/**
- * May this workspace have its query interpreted by a model?
- *
- * Never throws. A missing env permission resolves to OFF, because a compiler
- * that fails open is one that changes how money is spent without being asked.
- */
-export function isMissionCompilerEnabled(
-  workspaceId: string, read?: EnvReader,
-): CompilerEnablement {
-  const get: EnvReader = read ?? ((k) => {
-    try { return Deno.env.get(k); } catch { return undefined; }
-  });
-  const off = (reason: CompilerEnablementReason): CompilerEnablement =>
-    ({ enabled: false, reason, model: null });
-
-  // ── THE FLAG NO LONGER DECIDES ──────────────────────────────────────────
-  //
-  // Commit 2 stopped `buildMissionCompilerBinding` consulting this, but left
-  // the function itself flag-driven — and `getLeadIntelligenceCapabilities`
-  // reads it. So a workspace whose mission WAS GPT-compiled still reported
-  // `mission_compiler: false`, and with the other five stages now on, the policy
-  // returned `inconsistent`: a mode that blocks paid execution outright. The
-  // last remnant of the flag architecture, and it would have failed every run.
-  void workspaceId;
-  void off;
-
-  return {
-    enabled: true,
-    reason: "enabled",
-    model: (get(MISSION_COMPILER_MODEL_ENV) ?? "").trim() || DEFAULT_MISSION_COMPILER_MODEL,
-  };
 }
 
 export interface MissionCompilerBinding {

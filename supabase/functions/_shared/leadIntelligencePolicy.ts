@@ -29,7 +29,9 @@ import {
   isFullPoolEvaluationEnabled, isPoolRankingEnabled,
 } from "./poolEvaluationBinding.ts";
 import { isMultiRoundEnabled } from "./multiRoundBinding.ts";
-import { isMissionCompilerEnabled } from "./leadMissionCompilerBinding.ts";
+// The ENABLEMENT module, not the binding: this file is pure by contract, and
+// the binding half constructs a provider adapter. Same answer, no compiler.
+import { isMissionCompilerEnabled } from "./leadMissionCompilerEnablement.ts";
 
 export const INTELLIGENCE_POLICY_VERSION = "lead-intelligence-policy-v1" as const;
 
