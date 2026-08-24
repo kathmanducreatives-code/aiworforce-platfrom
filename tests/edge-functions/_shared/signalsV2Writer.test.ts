@@ -8,6 +8,9 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { SIGNAL_ORIGINS } from "../../../supabase/functions/_shared/signalOrigin.ts";
 import {
+  SIGNAL_TYPES, signalCategoryOf, evidenceCategoryForSignalType,
+} from "../../../supabase/functions/_shared/signalEvent.ts";
+import {
   isSanitizedNormalizedValue,
   newSignalsV2Observability,
   sanitizePublicUrl,
@@ -176,6 +179,55 @@ Deno.test("signal_events: valid sales/revops/growth events write", async () => {
     assertEquals(r.written, true, `${t} must write`);
   }
   assertEquals(store.signal_events.length, 3);
+});
+
+Deno.test("signal_events: the WRITER GATE accepts every storable canonical type", async () => {
+  // ── BEHAVIOURAL, NOT DERIVED ─────────────────────────────────────────────
+  //
+  // The vocabulary lived in three places — `signalEvent.ts`, the migration
+  // CHECK, and two private Sets in the writer. The first two were pinned to
+  // each other and the writer's were loose, which is the worst place for a
+  // loose copy: the writer is the GATE, so a type that is canonical and
+  // storable but missing from its Set is refused as `validation_failed` — a
+  // silent, correct-looking skip on a perfectly valid row.
+  //
+  // This drives the real writer with every canonical non-engagement type
+  // rather than re-deriving what it ought to accept. A test that computed the
+  // expectation the same way the writer does would pass no matter what the
+  // writer did, which an earlier version of this guard in fact did.
+  const { admin, store } = makeAdmin();
+  const storable = SIGNAL_TYPES.filter((t) => signalCategoryOf(t) !== "engagement");
+  assert(storable.length > 20, "the canonical vocabulary should not have collapsed");
+
+  const refused: string[] = [];
+  for (const t of storable) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, {
+      ...baseEvent,
+      signal_type: t,
+      signal_category: signalCategoryOf(t),
+      // Only some types carry an evidence category; the mapping owns which.
+      evidence_category: evidenceCategoryForSignalType(t),
+      dedupe_key: `gate-${t}`,
+    } as any);
+    if (!r.written) refused.push(`${t} (${r.error_class}: ${r.reason ?? ""})`);
+  }
+  assertEquals(refused, [], "these types are storable and the writer refused them");
+  assertEquals(store.signal_events.length, storable.length);
+});
+
+Deno.test("signal_events: ENGAGEMENT types are refused — they belong in engagement_events", async () => {
+  // The other half of the same rule. Widening the gate to "everything canonical"
+  // would let an engagement row into the signal store, where the database CHECK
+  // would then reject it — turning a clean refusal into a write failure.
+  const { admin } = makeAdmin();
+  const engagement = SIGNAL_TYPES.filter((t) => signalCategoryOf(t) === "engagement");
+  assert(engagement.length > 0, "there must be engagement types for this to mean anything");
+  for (const t of engagement) {
+    const r = await writeSignalEventV2({ admin, enabled: true }, {
+      ...baseEvent, signal_type: t, signal_category: "engagement", dedupe_key: `eng-${t}`,
+    } as any);
+    assertEquals(r.written, false, `${t} must not enter signal_events`);
+  }
 });
 
 Deno.test("signal_events: a write with no origin is refused", async () => {

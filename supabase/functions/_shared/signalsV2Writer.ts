@@ -21,6 +21,7 @@
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
 import { isSignalOrigin, type SignalOrigin } from "./signalOrigin.ts";
 import { isSubjectType, SUBJECT_KEY_PATTERN, type SubjectType } from "./signalSubject.ts";
+import { SIGNAL_TYPES, signalCategoryOf } from "./signalEvent.ts";
 
 // ------------------------------------------------------------------ types -----
 
@@ -164,19 +165,32 @@ const CONFIDENCES = new Set(["low", "medium", "high"]);
 const LIFECYCLES = new Set([
   "active", "stale", "expired", "contradicted", "superseded", "dismissed", "archived", "retracted",
 ]);
-const SIGNAL_EVENT_TYPES = new Set([
-  "recent_funding", "employee_growth", "market_expansion", "geographic_expansion",
-  "sales_hiring", "revops_hiring", "growth_hiring", "new_revenue_leader",
-  "outbound_initiative", "positioning_change",
-  "product_launch", "major_release", "new_integration", "category_expansion",
-  "founder_pipeline_post", "founder_outbound_post", "founder_customer_acquisition_post",
-  "founder_hiring_post", "founder_problem_statement",
-  "person_left_company", "company_outside_icp", "role_changed", "company_inactive",
-  "signal_became_stale",
-  // market — about the category, not about a prospect
-  "competitor_activity", "market_problem_discussion",
-]);
-const SIGNAL_CATEGORIES = new Set(["growth", "gtm", "product", "founder_intent", "risk", "market"]);
+// ── DERIVED, NOT RESTATED ───────────────────────────────────────────────────
+//
+// These were two hand-written copies of a vocabulary that already exists in
+// `signalEvent.ts` and is already pinned to the database CHECK by test. Three
+// copies, two of them pinned to each other and this one loose.
+//
+// A loose copy here is the worst place for one. The writer is the GATE: a type
+// that is canonical and storable but missing from this Set is rejected as
+// `validation_failed` — a silent, correct-looking skip on a row that was
+// perfectly valid. That is precisely the failure mode this phase exists to make
+// visible, reproduced in the component whose job is to make it visible.
+//
+// Deriving removes the possibility rather than detecting it afterwards. Adding
+// a signal type to `CATEGORY_OF` now widens the canonical list, the database
+// CHECK assertion and this gate together, and there is no third place to forget.
+//
+// ENGAGEMENT IS EXCLUDED, deliberately: those rows live in `engagement_events`,
+// never in `signal_events`, and the database CHECK excludes them for the same
+// reason. The exclusion is computed from the category map so it cannot drift
+// from the migration either.
+const SIGNAL_EVENT_TYPES: ReadonlySet<string> = new Set(
+  SIGNAL_TYPES.filter((t) => signalCategoryOf(t) !== "engagement"),
+);
+const SIGNAL_CATEGORIES: ReadonlySet<string> = new Set(
+  SIGNAL_TYPES.filter((t) => signalCategoryOf(t) !== "engagement").map(signalCategoryOf),
+);
 const EVIDENCE_CATEGORIES = new Set([
   "job_signal", "funding_signal", "launch_signal", "expansion_signal",
   "founder_activity_signal", "gtm_signal",

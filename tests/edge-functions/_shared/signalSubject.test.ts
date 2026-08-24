@@ -87,6 +87,40 @@ Deno.test("vocabulary: the market category is declared, and market types are in 
   assertEquals(cats.sort(), [...expected].sort());
 });
 
+Deno.test("vocabulary: the WRITER gate accepts exactly what the store accepts", () => {
+  // ── THE THIRD COPY ────────────────────────────────────────────────────────
+  //
+  // The vocabulary lived in three places: `signalEvent.ts`, the migration CHECK,
+  // and two private Sets inside the writer. The first two were pinned to each
+  // other; the writer's were loose.
+  //
+  // Loose HERE is the worst case. The writer is the gate, so a type that is
+  // canonical and storable but absent from its Set is refused as
+  // `validation_failed` — a silent, correct-looking skip on a valid row. The
+  // writer now derives both Sets, and this asserts the result against the
+  // database so a future edit cannot separate them.
+  const storeTypes = checkValues("signal_events_type_valid", "signal_type").sort();
+  const storeCats = checkValues("signal_events_category_valid", "signal_category").sort();
+
+  const accepted: string[] = [];
+  const acceptedCats = new Set<string>();
+  for (const t of SIGNAL_TYPES) {
+    if (signalCategoryOf(t) === "engagement") continue;
+    accepted.push(t);
+    acceptedCats.add(signalCategoryOf(t));
+  }
+  assertEquals(accepted.sort(), storeTypes,
+    "a type the store accepts and the writer refuses is a silent skip on a valid row");
+  assertEquals([...acceptedCats].sort(), storeCats);
+
+  // And the market types specifically survive the whole chain, since they are
+  // the ones this phase added.
+  for (const t of ["competitor_activity", "market_problem_discussion"]) {
+    assert(storeTypes.includes(t), `${t} must be storable`);
+    assertEquals(signalCategoryOf(t as never), "market");
+  }
+});
+
 Deno.test("time honesty: the migration makes an invented occurred_at unrepresentable", () => {
   assert(/alter column occurred_at drop not null/i.test(SQL), "unknown times must be storable");
   const coherent = SQL.match(/constraint\s+signal_events_occurred_at_coherent[\s\S]*?check\s*\(([\s\S]*?)\n\s*\);/i);
