@@ -203,3 +203,35 @@ Deno.test("17. the response says WHICH zero it is", () => {
   // rather than being restated here — one source for the shape, so the response
   // cannot drift from what the tracker actually counted.
 });
+
+// ═══ 4. A REFUSED CALL COSTS NOTHING ═══════════════════════════════════════
+
+Deno.test("18. ONLY A PERFORMED SEARCH IS CHARGED", () => {
+  // `started` decided this and read `res.error !== "not_configured"`, which
+  // charged for a 429 because the provider had been "reached". It had — and it
+  // REFUSED. One scan against an empty Firecrawl balance charged 30 credits for
+  // 30 declined requests and returned nothing, and would have repeated that on
+  // every scan until the key was topped up.
+  assert(/started = res\.error === null/.test(code),
+    "a refusal is not work; only `error === null` means the search ran");
+  assert(!/started = res\.error !== "not_configured"/.test(code),
+    "the reached-vs-performed conflation must not come back");
+});
+
+Deno.test("19. an honestly EMPTY search is still charged", () => {
+  // `{ hits: [], error: null }` means the provider did the work and the market
+  // is quiet. That consumed their quota and it consumes ours. The distinction
+  // is refused-vs-performed, never empty-vs-full — and `started` keys off
+  // `error`, not off `hits.length`, which is what makes that true.
+  assert(!/hits\.length/.test(code.slice(code.indexOf("started ="), code.indexOf("started =") + 120)),
+    "charging must not depend on how many results came back");
+});
+
+Deno.test("20. nothing settles for a call that never reserved", () => {
+  // Both pre-provider exits return BEFORE `authorizeProviderCall`, so there is
+  // no transaction to settle and no credit at risk.
+  const budgetExit = code.indexOf('error: "scan_budget_exhausted"');
+  const auth = code.indexOf("authorizeProviderCall({");
+  assert(budgetExit !== -1 && auth !== -1);
+  assert(budgetExit < auth, "the budget check exits before any reservation exists");
+});

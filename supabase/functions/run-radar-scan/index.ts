@@ -366,11 +366,22 @@ Deno.serve(async (req) => {
     let started = false;
     try {
       const res = await firecrawlSearchRaw(query, limit, limiter);
-      // STARTED means the provider was actually reached. A 429 was reached and
-      // refused us; a transport error may not have been. Both are charged the
-      // same here because the provider processed the request either way — what
-      // must never be charged is a call the budget or the reserve prevented.
-      started = res.error !== "not_configured";
+      // ── CHARGE ONLY FOR WORK THE PROVIDER ACTUALLY DID ──────────────────
+      //
+      // This read `res.error !== "not_configured"`, which charged for a 429 on
+      // the grounds that the provider had been "reached". It had — and it
+      // REFUSED. One scan against an empty Firecrawl balance charged 30 credits
+      // for 30 declined requests and returned nothing, and would have done so
+      // on every scan until the key was topped up.
+      //
+      // A refusal is not work. `error === null` is the only state in which the
+      // provider ran the search, so it is the only state that costs anything.
+      //
+      // AN HONEST EMPTY SEARCH IS STILL CHARGED: `{ hits: [], error: null }`
+      // means the provider did the work and the market is quiet. That consumed
+      // their quota and it consumes ours. The distinction being drawn here is
+      // refused-vs-performed, not empty-vs-full.
+      started = res.error === null;
       return res;
     } finally {
       await settleProviderCall({
