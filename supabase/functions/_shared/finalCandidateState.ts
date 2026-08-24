@@ -339,3 +339,21 @@ export function refreshEvidenceMissing(input: {
   }
   return [...new Set(canonical.filter((c) => !closed.has(c)))];
 }
+
+/**
+ * What company enrichment did to one candidate.
+ *
+ * Lives here rather than in `runAgentCompanyEnrichment.ts` because it is a
+ * candidate-STATE type — it is largely made of `CompanyEnrichmentOutcomeForCandidate`,
+ * which is defined in this file. Keeping it beside the implementation meant any
+ * consumer of the type pulled a 65 KB module into its deployment.
+ */
+export interface CandidateEnrichmentOutcome {
+  decisionBefore: string;
+  decisionAfter: SufficiencyDecision | "unknown";
+  sufficientAfter: boolean;
+  /** Authoritative post-enrichment critical gaps (canonical EvidenceCategory names). */
+  missingAfter: EvidenceCategory[];
+  /** How this candidate's company enrichment actually ended. */
+  companyOutcome: CompanyEnrichmentOutcomeForCandidate;
+}

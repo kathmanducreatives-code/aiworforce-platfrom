@@ -1,3 +1,4 @@
+import { DEFAULT_EVIDENCE_BUDGET } from "./conditionalEnrichmentPlanner.ts";
 // Company enrichment observability (Phase 2, Section 15) — pure / sanitized.
 //
 // Explains, per workflow and per company: what was planned, what was called, what
@@ -192,4 +193,26 @@ export function buildCompanyEnrichmentObservability(input: {
     reconciles: planned === called + cached + skipped && called === enriched + noResult + failed,
   };
   return { summary, companies: kept, truncated: Math.max(0, all.length - kept.length) };
+}
+
+/**
+ * The zero state — nothing enriched, nothing spent.
+ *
+ * Lived in `runAgentCompanyEnrichment.ts`, which meant any caller wanting an
+ * empty observability record imported that module and its whole subtree. It
+ * builds a `CompanyEnrichmentObservability` out of `buildCompanyEnrichmentObservability`,
+ * both of which are here, so here is where it belongs.
+ */
+export function emptyCompanyEnrichmentObservability(
+  candidatesConsidered = 0,
+  budgetLimit = DEFAULT_EVIDENCE_BUDGET.companyStructuredEnrichments,
+): CompanyEnrichmentObservability {
+  return buildCompanyEnrichmentObservability({
+    candidatesConsidered,
+    companiesDeduplicated: 0,
+    budgetLimit,
+    budgetConsumed: 0,
+    stopReason: "no_enrichment",
+    companies: [],
+  });
 }

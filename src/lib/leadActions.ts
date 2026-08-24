@@ -1,4 +1,4 @@
-// Direct Workbench lead-action client. Invokes run-agent's
+// Direct Workbench lead-action client. Invokes `run-lead-action`s
 // `tool_input.lead_action` branch with the SELECTED lead candidate IDs — no
 // natural-language chat text, no orchestrator round-trip. Evidence-first,
 // approval-gated: the backend never sends anything.
@@ -42,7 +42,7 @@ export interface LeadActionResult {
 
 /**
  * Fire one Workbench lead action for the selected leads. Guards an empty
- * selection / missing workspace before calling run-agent, and always sends real
+ * selection / missing workspace before calling the function, and always sends real
  * lead candidate IDs.
  */
 export async function runLeadAction(args: RunLeadActionArgs): Promise<LeadActionResult> {
@@ -52,7 +52,19 @@ export async function runLeadAction(args: RunLeadActionArgs): Promise<LeadAction
     return { success: false, error: code, message: ERROR_COPY[code] ?? code, requestError: true };
   }
 
-  const { data, error } = await supabase.functions.invoke('run-agent', { body: req.body });
+  // ── `run-lead-action`, NOT `run-agent` ────────────────────────────────
+  //
+  // The lead-action path was extracted into its own edge function: `run-agent`
+  // reached 5.33 MB against a 5 MB platform limit and could not deploy at all.
+  // The two workloads share no modules — `leadActionExecutor` pulls 24 that the
+  // sourcing engine never touches — so they were two entry points sharing one
+  // deployment unit for no reason.
+  //
+  // The request body and the response shape are UNCHANGED; only the URL moved.
+  // `run-agent` still recognises a lead action and refuses it explicitly with
+  // `lead_action_endpoint_moved`, so a stale client fails loudly rather than
+  // falling through to the orchestrated path and reporting a contract error.
+  const { data, error } = await supabase.functions.invoke('run-lead-action', { body: req.body });
 
   if (error) {
     const { code, message, httpStatus } = await extractFunctionError(error);

@@ -238,6 +238,16 @@ Deno.test("validation is pure: no network, no clock, no provider reachable", () 
 // ---------------------------------------------------------------------------
 
 const RUN_AGENT_SRC = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+/**
+ * Lead actions are served by `run-lead-action` now, not `run-agent`.
+ *
+ * They were extracted because `run-agent` reached 5.33 MB against a 5 MB
+ * platform limit and could not deploy: the executor pulls 24 modules the
+ * sourcing engine never touches. The GUARDS did not change — they moved with
+ * the handler, and this file checks them where they now live.
+ */
+const RUN_LEAD_ACTION_SRC = Deno.readTextFileSync(new URL(
+  "../../../supabase/functions/run-lead-action/index.ts", import.meta.url));
 
 Deno.test("wiring: run-agent passes the VERIFIED service-role flag to the resolver", () => {
   assert(
@@ -272,10 +282,22 @@ Deno.test("wiring: a null resolution is refused before the insert is attempted",
 });
 
 Deno.test("wiring: workspace membership and lead ownership guards remain in place", () => {
-  assert(/decideWorkspaceAccess\(/.test(RUN_AGENT_SRC), "workspace access guard must remain");
-  assert(/lead_not_in_workspace/.test(RUN_AGENT_SRC), "lead ownership guard must remain");
+  // Checked where lead actions are SERVED. Both guards moved intact with the
+  // handler; `run-agent` keeps its own workspace guard for orchestrated steps.
+  assert(/decideWorkspaceAccess\(/.test(RUN_LEAD_ACTION_SRC), "workspace access guard must remain");
+  assert(/decideWorkspaceAccess\(/.test(RUN_AGENT_SRC), "…and run-agent keeps its own");
+  assert(/lead_not_in_workspace/.test(RUN_LEAD_ACTION_SRC), "lead ownership guard must remain");
   assert(
-    /from\("lead_candidates"\)[\s\S]{0,120}?eq\("workspace_id",\s*workspace_id\)/.test(RUN_AGENT_SRC),
+    /from\("lead_candidates"\)[\s\S]{0,160}?eq\("workspace_id",\s*workspace_id\)/.test(RUN_LEAD_ACTION_SRC),
     "lead ownership must stay scoped to the request workspace",
   );
+});
+
+Deno.test("wiring: run-agent refuses a lead action loudly rather than mishandling it", () => {
+  // A silent fall-through would drop the request into the orchestrated path,
+  // which rejects it for a missing plan_id and reports a confusing contract
+  // error instead of the one fact that matters: the endpoint moved.
+  assert(/lead_action_endpoint_moved/.test(RUN_AGENT_SRC));
+  assert(!/executeLeadAction\(/.test(RUN_AGENT_SRC),
+    "the executor must not be reachable from run-agent — that edge is the 270 KB");
 });

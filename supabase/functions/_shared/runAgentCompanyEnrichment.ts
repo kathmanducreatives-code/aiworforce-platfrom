@@ -440,15 +440,13 @@ export function normalizeCompanyOutcome(o: CompanyEnrichmentOutcome): CompanyEnr
   }
 }
 
-export interface CandidateEnrichmentOutcome {
-  decisionBefore: string;
-  decisionAfter: SufficiencyDecision | "unknown";
-  sufficientAfter: boolean;
-  /** Authoritative post-enrichment critical gaps (canonical EvidenceCategory names). */
-  missingAfter: EvidenceCategory[];
-  /** How this candidate's company enrichment actually ended. */
-  companyOutcome: CompanyEnrichmentOutcomeForCandidate;
-}
+// `CandidateEnrichmentOutcome` moved to finalCandidateState.ts, which already
+// owns `CompanyEnrichmentOutcomeForCandidate` — the type it is mostly made of.
+//
+// It lived here, so every consumer of the TYPE had to name this 65 KB module.
+// A type-only import does not help: the deploy uploads the file regardless, and
+// that one edge kept run-agent above the 5 MB limit.
+export type { CandidateEnrichmentOutcome } from "./finalCandidateState.ts";
 
 /**
  * Run the conditional company-enrichment stage ONCE for the whole Scout
@@ -544,19 +542,17 @@ export async function runFindLeadsCompanyEnrichment(
 /** An empty, reconciling company-enrichment observability for terminals that are
  * reached BEFORE any enrichment ran (no accepted people / hard sourcing failure
  * / zero-accepted). Guarantees the object is present in EVERY terminal. */
-export function emptyCompanyEnrichmentObservability(
-  candidatesConsidered = 0,
-  budgetLimit = DEFAULT_EVIDENCE_BUDGET.companyStructuredEnrichments,
-): CompanyEnrichmentObservability {
-  return buildCompanyEnrichmentObservability({
-    candidatesConsidered,
-    companiesDeduplicated: 0,
-    budgetLimit,
-    budgetConsumed: 0,
-    stopReason: "no_enrichment",
-    companies: [],
-  });
-}
+// Re-exported so this module's public API is unchanged for its existing
+// consumers. `run-agent` now imports it from the owning module directly, which
+// is what removes the 65 KB edge — a re-export here does not put it back.
+export { emptyCompanyEnrichmentObservability } from "./companyEnrichmentObservability.ts";
+
+// `emptyCompanyEnrichmentObservability` moved to companyEnrichmentObservability.ts.
+//
+// It is a twelve-line wrapper around `buildCompanyEnrichmentObservability`, and
+// living here meant `run-agent` imported this 65 KB module — plus its subtree —
+// to obtain it. That single edge was enough to push run-agent past the 5 MB
+// deployment limit. A helper belongs with the type it builds.
 
 /**
  * Compute the FINAL accepted person ids and prove the Aria hand-off count.

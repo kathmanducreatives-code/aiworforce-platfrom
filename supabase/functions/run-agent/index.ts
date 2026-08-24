@@ -324,7 +324,12 @@ import {
 import { isFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
 import { projectStatus, RESUMABLE_ROW_STATUS } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
-import { emptyCompanyEnrichmentObservability, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
+import { emptyCompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
+// From the module that OWNS the type. Importing it from
+// `runAgentCompanyEnrichment.ts` — even type-only — put that 65 KB module and
+// its subtree into the deployment, because the deploy uploads every file in the
+// graph whether or not the import is erased at build.
+import type { CandidateEnrichmentOutcome } from "../_shared/finalCandidateState.ts";
 import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
 import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability } from "../_shared/signalEnrichmentObservability.ts";
@@ -927,92 +932,29 @@ Deno.serve(async (req) => {
   // Generate outreach). Additive early-return: only runs when the caller passes
   // tool_input.lead_action + lead_candidate_ids. Evidence-first + approval-gated;
   // Firecrawl/Apify are called per-company via runTool; nothing is ever sent.
+  // ── LEAD ACTIONS MOVED TO `run-lead-action` ─────────────────────────────
+  //
+  // The Workbench per-row unlock path executed here. It was extracted because
+  // `run-agent` reached 5.33 MB against a 5 MB platform limit and could not
+  // deploy: `leadActionExecutor` pulls 24 modules — the `workbench` opener
+  // generation, the `decisionMaker` people search, contact enrichment — that the
+  // sourcing engine never touches, and vice versa. Two entry points with
+  // disjoint dependency graphs were sharing one deployment unit.
+  //
+  // The request is still RECOGNISED here and refused explicitly. A silent
+  // fall-through would drop a lead action into the orchestrated path, which
+  // would reject it for missing `plan_id`/`instruction` and report a confusing
+  // contract error instead of the one fact that matters: this endpoint moved.
   if (directRequest) {
-    const leadAction = directRequest.action;
-    // Already validated above (before the plan gate) — ids are known-good UUIDs
-    // scoped to this workspace, so a lead action can never fall through to Scout
-    // sourcing and start an unrequested provider search.
-    const leadIds = directRequest.lead_candidate_ids;
-
-    // Ownership guard: workspace membership alone is not enough — the caller must
-    // also own every row it named. Without this, a member of workspace A could
-    // pass workspace B's lead ids and have the service-role client happily
-    // enrich/draft against them.
-    const { data: ownedRows, error: ownErr } = await supabase
-      .from("lead_candidates").select("id").eq("workspace_id", workspace_id).in("id", leadIds);
-    if (ownErr) {
-      await supabase.from("tasks").update({ status: "failed", error_message: "lead_ownership_check_failed" }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, error: "lead_ownership_check_failed", message: "Could not verify the selected rows." }, 500);
-    }
-    const ownedIds = new Set((ownedRows ?? []).map((r: { id: string }) => r.id));
-    if (leadIds.some((id) => !ownedIds.has(id))) {
-      await supabase.from("tasks").update({ status: "failed", error_message: "lead_not_in_workspace" }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, error: "lead_not_in_workspace", message: "Those rows aren't in this workspace." }, 403);
-    }
-
-    // Resolved agent always wins; the contract-derived slug is the floor.
-    const execAgentSlug: string = agent_slug ?? directRequest.agent_slug;
-    const toolCtx = { admin: supabase, workspace_id, agent_slug: execAgentSlug, agent_id: agent.id, agent_name: agent.name, plan_id: plan_id ?? null, task_id: task.id, user_id: taskUserId };
-    try {
-      const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
-      const outcome = await executeLeadAction(leadAction, leadIds, {
-        admin: supabase, workspace_id, plan_id: plan_id ?? null, task_id: task.id, agent_id: agent.id,
-        agent_slug: execAgentSlug, agent_name: agent.name, user_id: taskUserId, runTool, toolCtx,
-        // EXPLICIT mode from the validated direct-action contract.
-        output_mode: directRequest.output_mode,
-      });
-      await supabase.from("tasks").update({
-        status: outcome.needs_approval ? "awaiting_approval" : "complete",
-        result: { output: outcome.summary, lead_action: leadAction, per_lead: outcome.per_lead },
-      }).eq("id", task.id);
-      if (outcome.needs_approval) {
-        // Create the approval review item ONLY. We intentionally do NOT flip the
-        // (already-complete) sourcing plan's status — a lead action is a
-        // standalone review item, not a re-opening of the sourcing plan.
-        await supabase.from("approvals").insert({
-          workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
-          title: `${agent.name} needs approval`, description: effectiveInstruction, status: "pending",
-        });
-      }
-      await supabase.from("activity_feed").insert({
-        workspace_id, plan_id, agent_id: agent.id,
-        event_type: outcome.needs_approval ? "awaiting_approval" : "agent_completed",
-        title: `${agent.name}: ${leadAction.replace(/_/g, " ")}`, body: outcome.summary,
-        metadata: { step_index, task_id: task.id, lead_action: leadAction },
-      });
-      // Classify once here so the Workbench renders a status it was handed rather
-      // than re-deriving one from provider-shaped fields.
-      const classified = outcome.per_lead.map((row) => classifyLeadOutcome(leadAction, row));
-      const perLead = outcome.per_lead.map((row, i) => ({ ...row, ...classified[i] }));
-
-      return json({
-        success: true,
-        action: leadAction,
-        task_id: task.id,
-        status: outcome.needs_approval ? "awaiting_approval" : "complete",
-        summary: summarizeDirectAction(classified, leadIds.length),
-        summary_text: outcome.summary,
-        per_lead: perLead,
-      });
-    } catch (e) {
-      // An executor throw is an infrastructure failure, not a business outcome —
-      // but every requested row still gets an honest, retryable per-lead entry so
-      // the batch never silently reports "0 succeeded" with no explanation.
-      console.error("[run-agent] lead_action failed:", e);
-      await supabase.from("tasks").update({ status: "failed", error_message: String(e) }).eq("id", task.id);
-      const failed = leadIds.map((id) => ({
-        lead_candidate_id: id, status: "failed" as const, reason_code: "provider_failed", retryable: true,
-      }));
-      return json({
-        success: false,
-        action: leadAction,
-        task_id: task.id,
-        status: "failed",
-        error: "lead_action_failed",
-        summary: summarizeDirectAction(failed, leadIds.length),
-        per_lead: failed,
-      }, 500);
-    }
+    await supabase.from("tasks").update({
+      status: "failed", error_message: "lead_action_endpoint_moved",
+    }).eq("id", task.id);
+    return json({
+      success: false,
+      task_id: task.id,
+      error: "lead_action_endpoint_moved",
+      message: "Workbench lead actions are served by `run-lead-action`.",
+    }, 410);
   }
 
   // Past the direct-action early return, this is the ORCHESTRATED path only, where
