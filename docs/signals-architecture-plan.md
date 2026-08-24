@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-22 · **Commit:** `bd177050` · **Status:** Phases 0–2 complete and live-verified; 3–7 not started
+**Date:** 2026-08-24 · **Commit:** `3a671660` · **Status:** Phases 0–2 complete and live-verified. Phase 3A–3F built and offline-proven; **3F's anti-viewer gate is blocked** (see below), so 3G and 3H have not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -270,6 +270,44 @@ reason.** Every phase before 7 is fully buildable with no OpenAI credits.
 | **Live validation** | **THE ANTI-VIEWER GATE:** a workspace with zero Lead missions runs monitoring and gets a non-empty feed. Then flip the read to `signal_events` and confirm the feed is unchanged for a workspace that *has* run leads. |
 | **Done** | Signals collects independently; the feed reads `signal_events`; both origins populate it; Radar's own adapters are unreferenced. |
 | **Depends on** | 1, 2. |
+
+#### Phase 3 status, 2026-08-24
+
+| Step | State |
+|---|---|
+| **3A** monitoring mission contract | ✅ `monitoringMission.ts` — `mission_objective`, subject kinds, lead-only capability list, boundary check |
+| **3B** monitoring subject store | ✅ `20260824140000_monitoring_subjects.sql`, applied |
+| **3C** monitoring compiler | ✅ subjects → a `LeadMissionV1` with no quota and no persistence terminal |
+| **3D** routing | ✅ graph's terminal branch omits `persistence` for a monitoring mission |
+| **3E** cross-origin reuse pre-flight | ✅ `monitoringPreflight.ts` — keyed on the question, never the origin |
+| **3F** independent collection | ⚠️ **built and deployed, gate not passed** — `run-monitoring-scan` runs end to end and reports honestly, but cannot yet produce a feed. Two blockers below. |
+| **3G** read switch | ⛔ not started — depends on 3F |
+| **3H** retire the Radar provider path | ⛔ not started — depends on 3G |
+
+**Blocker 1 — the account's model credits are exhausted (external).** OpenAI
+returns `insufficient_quota`. `planDiscovery` absent-or-failed is a *block*, not
+a default, so no actors are chosen; and `evaluateMission` cannot run, so nothing
+qualifies. This blocks Lead sourcing today exactly as much as it blocks
+monitoring — it is not a Signals problem and needs no code.
+
+**Blocker 2 — `known_company_resolution` is not engine-driven (architectural).**
+The shared engine can obtain companies only by *discovering* them. Every
+`addCompany` call site sits inside a discovery branch driven by a provider
+result; `mission.company_profile.known_companies` is read by the compiler, the
+intent model and the playbook selector, and by nothing that executes.
+`leadCapabilityEngine` skips the capability with `skipped_no_input`, and
+`leadPlaybookExecution` already has a name for the condition:
+`required_capability_not_engine_driven`. `companyFirstRouteExecutor` has no
+supplied-company entry either.
+
+The consequence for Signals is specific: every `tracked_company` and
+`competitor` subject compiles to `known_companies`, so **the two subject kinds
+that make Signals *Signals* cannot execute.** Only an `icp` subject reaches a
+discovery branch. This is a pre-existing gap in the Lead path — a mission that
+names its own companies has the same problem — so closing it is an engine
+change, and it is reported here rather than worked around. Seeding the pool from
+the monitoring layer would have been a second identity path, which is the
+parallel stack this phase exists to prevent.
 
 > This is the phase the whole rule exists to protect. If it is skipped or
 > reordered after the read switch, Signals silently becomes a Lead viewer and
