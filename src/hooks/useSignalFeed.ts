@@ -2,7 +2,8 @@
 // `runRadarScan` invocation + per-category capability/status read-out.
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchSignals, fetchOutreachDrafts, fetchSavedOutputs, type DraftRow, type SavedOutputRow } from "@/lib/signalsFeed";
+import { fetchOutreachDrafts, fetchSavedOutputs, type DraftRow, type SavedOutputRow } from "@/lib/signalsFeed";
+import { fetchSignalFeed, type SignalFeedResult } from "@/lib/signalEventsFeed";
 import type { FeedSignal } from "@/lib/signalFeedModel";
 
 export type RadarMode = "default" | "load_more" | "category";
@@ -80,6 +81,8 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  /** What the feed is made of. Exposed so the read switch is inspectable. */
+  const [coverage, setCoverage] = useState<SignalFeedResult["coverage"] | null>(null);
   const [lastRun, setLastRun] = useState<RadarRunResult | null>(null);
 
   const load = useCallback(async () => {
@@ -87,12 +90,16 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
     setLoading(true);
     setError(null);
     try {
+      // PHASE 3G — the feed reads `signal_events`, the canonical store every
+      // origin writes to. `fetchSignalFeed` carries through any legacy row the
+      // canonical store has no counterpart for, so nothing collected before the
+      // dual-write disappears from a feed that showed it yesterday.
       const [s, d, o] = await Promise.all([
-        fetchSignals(workspaceId, limit),
+        fetchSignalFeed(workspaceId, limit),
         fetchOutreachDrafts(workspaceId, 50),
         fetchSavedOutputs(workspaceId, 50),
       ]);
-      setSignals(s); setDrafts(d); setSavedOutputs(o);
+      setSignals(s.signals); setCoverage(s.coverage); setDrafts(d); setSavedOutputs(o);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load signals");
     } finally {
@@ -126,5 +133,5 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
 
   const lastScanAt = useMemo<string | null>(() => signals[0]?.created_at ?? null, [signals]);
 
-  return { signals, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
+  return { signals, coverage, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
 }

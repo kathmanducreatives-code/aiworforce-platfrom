@@ -544,7 +544,7 @@ Deno.serve(async (req) => {
   if (kept.length > 0) {
     const { data: insRows, error: insErr } = await admin.from("signals")
       .insert(kept)
-      .select("id, workspace_id, signal_type, title, source, source_url, confidence, raw");
+      .select("id, workspace_id, signal_type, title, description, source, source_url, confidence, raw");
     if (insErr) {
       console.error("signals insert failed", insErr);
       return json({ error: "Failed to save signals", detail: insErr.message }, 500);

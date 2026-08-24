@@ -37,6 +37,8 @@ export interface RadarLegacyRow {
   workspace_id: string;
   signal_type: string;
   title?: string | null;
+  /** The legacy row's own prose. Carried into `normalized_value` for the feed. */
+  description?: string | null;
   source?: string | null;
   source_url?: string | null;
   confidence?: number | string | null;
@@ -138,6 +140,16 @@ export function radarDedupeKey(
   return `radar|${subject_type}:${subject_key}|${locator}`;
 }
 
+/** A finite number, or null. Never a string coerced into one. */
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** A non-empty trimmed string, or null. */
+function text(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim().slice(0, 500) : null;
+}
+
 export function mapRadarSignalToV2(
   row: RadarLegacyRow, origin: SignalOrigin, observed_at: string,
 ): RadarV2MapResult {
@@ -182,12 +194,44 @@ export function mapRadarSignalToV2(
       // Nothing external verified a search result. Radar's own quality flag is
       // kept in normalized_value rather than promoted to a verification claim.
       verification_status: "unverified",
+      // ── EVERYTHING THE FEED NEEDS, IN THE CANONICAL ROW ──────────────────
+      //
+      // This carried five fields and relied on `legacy_signal_id` for the rest,
+      // which was right while `signals` was still the feed's source. Phase 3G
+      // switches the feed to read HERE, so a row that carries only a title
+      // would drop the deterministic ICP scoring, the freshness reasoning, the
+      // priority and the missing-evidence diagnostics — the parts of Radar most
+      // worth keeping.
+      //
+      // Sanitized by construction: every field below is a score, a band, a
+      // reason or a company-level fact. No person, no email, no phone — the
+      // writer's policy rejects those and this must never be the thing that
+      // tests it.
       normalized_value: {
         title: typeof row.title === "string" ? row.title.slice(0, 500) : null,
+        description: typeof row.description === "string" ? row.description.slice(0, 2000) : null,
         radar_signal_type: row.signal_type,
         radar_signal_quality: raw.signal_quality ?? null,
         radar_confidence: typeof row.confidence === "number" ? row.confidence : null,
         matched_triggers: strings(raw.matched_triggers),
+        // ── DETERMINISTIC ICP SCORING, PRESERVED ──────────────────────────
+        fit_score: num(raw.fit_score) ?? num(raw.icp_fit_score),
+        signal_score: num(raw.signal_score),
+        proof_score: num(raw.proof_score),
+        freshness_score: num(raw.freshness_score),
+        trigger_score: num(raw.trigger_score),
+        priority: text(raw.priority_badge) ?? text(raw.priority),
+        matched_icp: strings(raw.matched_icp),
+        // ── THE DIAGNOSTICS THAT EXPLAIN A VERDICT ────────────────────────
+        why_it_matters: text(raw.why_it_matters),
+        why_now: text(raw.why_now),
+        next_action: text(raw.next_action),
+        missing_evidence: strings(raw.missing_evidence),
+        risk_flags: strings(raw.risk_flags),
+        // ── COMPANY-LEVEL CONTEXT ONLY ────────────────────────────────────
+        company_name: text((raw.source_details as Record<string, unknown> | undefined)?.company),
+        company_domain: text((raw.source_details as Record<string, unknown> | undefined)?.company_domain),
+        company_location: text((raw.source_details as Record<string, unknown> | undefined)?.location),
         // scan_run_id is deliberately NOT carried here. It is a UUID, and the
         // writer's PII guard reads `0000-4000-8000-000000000000` as a phone
         // number — correctly, for a heuristic that must not be loosened to fit
