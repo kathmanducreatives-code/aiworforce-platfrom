@@ -364,7 +364,13 @@ Deno.test("11/12. a refused filter costs nothing, and refusal still stops the co
 Deno.test("13. run-agent sends the compiled input through the passthrough contract", async () => {
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(src.includes("compiled_actor_input: true"),
+  // The envelope now lives in the shared execution seam, called by BOTH Lead
+  // routes and, from Phase 3F, by monitoring. Asserting it here rather than in
+  // run-agent follows the code; the re-inlining check below is what stops a
+  // caller growing its own copy again.
+  const seam = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
+  assert(seam.includes("compiled_actor_input: true"),
     "the compiled payload must be marked authoritative");
   // CORRECTED. This previously asserted `user_input`, which `runTool` does NOT
   // read at the envelope level — so the assertion passed while the payload was
@@ -372,14 +378,14 @@ Deno.test("13. run-agent sends the compiled input through the passthrough contra
   // receiver contract that was never checked is what let runs rWikfnKgnp5DazDYr
   // and eGzD7gzJNGFm4c4IZ happen. The HTTP body itself is now asserted in
   // `apifyTransportIntegrity.test.ts`.
-  assert(src.includes("input: call.input as Record<string, unknown>"),
+  assert(seam.includes("input: call.input as Record<string, unknown>"),
     "it must travel as `input` — the key toolRegistry actually reads");
-  assertFalse(src.includes("user_input: call.input"),
+  assertFalse(seam.includes("user_input: call.input"),
     "the user_input key is the defect and must not return");
-  assert(src.includes("capability_key: call.actorKey"),
+  assert(seam.includes("capability_key: call.actorKey"),
     "the capability must be named so the final-payload validator can check it");
   // The defective top-level spread must not return.
-  assertFalse(/actor_id: call\.actorId,\s*\n\s*\.\.\.\(call\.input/.test(src),
+  assertFalse(/actor_id: call\.actorId,\s*\n\s*\.\.\.\(call\.input/.test(seam),
     "spreading the compiled input at the top level is the defect and must not return");
 });
 

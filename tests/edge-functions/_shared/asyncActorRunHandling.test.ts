@@ -220,9 +220,14 @@ Deno.test("7b. run-agent configures the bands and forwards a resume id", async (
   assert(src.includes('solidcodeTeamSizes: ["2-10", "11-50", "51-200"]'),
     "the fallback must be configured with VALID bands");
   assertFalse(src.includes('"1-10"'), "1-10 is not a SolidCode band");
-  assert(src.includes("resume_run_id: resumeRunId"),
+  // ── RESUME AND FAILURE-EVIDENCE MOVED TO THE SHARED SEAM ────────────────
+  //
+  // Both were written out twice in run-agent. They are now built once, and a
+  // monitoring caller inherits them rather than reimplementing them.
+  const seam = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
+  assert(seam.includes("resume_run_id: resumeRunId"),
     "an in-flight run id must reach runTool");
-  assert(src.includes("err.toolResult = rr.data"),
+  assert(seam.includes("err.toolResult = rr.data"),
     "the failure payload must travel with the error so run_id survives");
 });
 

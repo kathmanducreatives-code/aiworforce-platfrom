@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
+import { buildInvoker } from "../_shared/capabilityExecution.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
@@ -1252,6 +1253,26 @@ Deno.serve(async (req) => {
             planner_fallback_reason: snap.plan_provenance?.fallback_reason ?? null,
           };
         };
+        // ── THE SHARED EXECUTION SEAM ──────────────────────────────────
+        //
+        // Provider dispatch, credits, the ledger and the response contract, in
+        // one place both Lead routes call — and, from Phase 3F, monitoring too.
+        //
+        // The envelope this replaces was written out TWICE in this file, byte
+        // for byte: once for the capability engine and once for the
+        // company-first route. Every field in it has a production incident
+        // behind it, and a third copy for monitoring is exactly the second
+        // provider stack the convergence exists to prevent.
+        const capabilityInvoke = buildInvoker({
+          runTool,
+          toolCtx: baseCtx,
+          // Re-read per call: planning can fall back to a different adapter
+          // partway through a run.
+          auditOwnership,
+          persistenceAuthority: "capability_engine",
+          log: (msg, meta) => console.error(`[run-agent][${msg}]`, meta),
+        });
+
         const invokeJobs = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
           const rr = await runTool("source_with_apify", { ...envelope, ...auditOwnership() }, baseCtx);
           if (!rr.ok || !rr.data) {
@@ -2161,50 +2182,7 @@ Deno.serve(async (req) => {
               roundResume: typeof leadResumeRecords,
               roundGrounded: typeof restoredPoolResults,
             ) => await runCapabilityPlan({
-              invoke: async (call) => {
-                // THE COMPILED INPUT IS AUTHORITATIVE — send it, do not re-derive it.
-                //
-                // Spreading `call.input` at the TOP level of this envelope is what
-                // broke TEST task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4.
-                // `runTool` only honours a pre-compiled payload when it arrives as
-                // `user_input` alongside `compiled_actor_input: true`; without those
-                // flags it looked up an adapter by actor_id, found none for
-                // memo23/y-combinator-scraper, and synthesised a generic jobs
-                // payload instead — `{query: null, location: null, role_keywords:
-                // null, max_results}`. Apify answered "Field input.location must be
-                // string" and the run treated that as "no candidates".
-                //
-                // This is the SAME defect `finalActorPayload.ts` was written for
-                // after production task 2425ec4f; the passthrough contract already
-                // existed and the new engine simply was not using it.
-                const resumeRunId = (call as { resumeRunId?: string }).resumeRunId;
-                const rows = await invokeJobs({
-                  selected_actor_key: call.actorKey,
-                  actor_id: call.actorId,
-                  compiled_actor_input: true,
-                  capability_key: call.actorKey,
-                  // `input` — the key `runTool` ACTUALLY reads (toolRegistry.ts:884).
-                  //
-                  // This was `user_input`, which runTool never reads at the
-                  // envelope level: `user_input` exists there only as a parameter
-                  // name INSIDE input_adapter callbacks. So `i.input` was
-                  // undefined, the passthrough branch assigned `{}`, and
-                  // `JSON.stringify({})` went to Apify — which filled every field
-                  // with its schema defaults and ran a Jobs-mode scrape. Runs
-                  // rWikfnKgnp5DazDYr and eGzD7gzJNGFm4c4IZ were both empty bodies.
-                  input: call.input as Record<string, unknown>,
-                  // The hash of what we intend to send, checked against the hash
-                  // of what is actually serialized, immediately before the POST.
-                  compiled_input_hash: call.inputHash,
-                  // The engine qualifies and persists; the legacy writer must not
-                  // publish raw discovery alongside it.
-                  persistence_authority: "capability_engine" as const,
-                  // Adopting an in-flight run costs nothing; starting a second
-                  // one costs the whole Actor again.
-                  ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
-                });
-                return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
-              },
+              invoke: capabilityInvoke,
               verifyEmployer: (person, companyUrl) => {
                 const v = verifyCurrentEmployer(
                   {
@@ -3341,50 +3319,7 @@ Deno.serve(async (req) => {
             companyFirstRoute = await executeCompanyFirstRoute({
               // The SAME provider entry point the rest of run-agent uses. The
               // executor holds no provider import of its own.
-              invoke: async (call) => {
-                // THE COMPILED INPUT IS AUTHORITATIVE — send it, do not re-derive it.
-                //
-                // Spreading `call.input` at the TOP level of this envelope is what
-                // broke TEST task e8abeb8f-9503-4dfe-84cc-cfcbc6a416d4.
-                // `runTool` only honours a pre-compiled payload when it arrives as
-                // `user_input` alongside `compiled_actor_input: true`; without those
-                // flags it looked up an adapter by actor_id, found none for
-                // memo23/y-combinator-scraper, and synthesised a generic jobs
-                // payload instead — `{query: null, location: null, role_keywords:
-                // null, max_results}`. Apify answered "Field input.location must be
-                // string" and the run treated that as "no candidates".
-                //
-                // This is the SAME defect `finalActorPayload.ts` was written for
-                // after production task 2425ec4f; the passthrough contract already
-                // existed and the new engine simply was not using it.
-                const resumeRunId = (call as { resumeRunId?: string }).resumeRunId;
-                const rows = await invokeJobs({
-                  selected_actor_key: call.actorKey,
-                  actor_id: call.actorId,
-                  compiled_actor_input: true,
-                  capability_key: call.actorKey,
-                  // `input` — the key `runTool` ACTUALLY reads (toolRegistry.ts:884).
-                  //
-                  // This was `user_input`, which runTool never reads at the
-                  // envelope level: `user_input` exists there only as a parameter
-                  // name INSIDE input_adapter callbacks. So `i.input` was
-                  // undefined, the passthrough branch assigned `{}`, and
-                  // `JSON.stringify({})` went to Apify — which filled every field
-                  // with its schema defaults and ran a Jobs-mode scrape. Runs
-                  // rWikfnKgnp5DazDYr and eGzD7gzJNGFm4c4IZ were both empty bodies.
-                  input: call.input as Record<string, unknown>,
-                  // The hash of what we intend to send, checked against the hash
-                  // of what is actually serialized, immediately before the POST.
-                  compiled_input_hash: call.inputHash,
-                  // The engine qualifies and persists; the legacy writer must not
-                  // publish raw discovery alongside it.
-                  persistence_authority: "capability_engine" as const,
-                  // Adopting an in-flight run costs nothing; starting a second
-                  // one costs the whole Actor again.
-                  ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
-                });
-                return (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
-              },
+              invoke: capabilityInvoke,
               // THE EXISTING canonical verifier — never re-implemented here.
               verifyEmployer: (person, companyUrl) => {
                 const v = verifyCurrentEmployer(

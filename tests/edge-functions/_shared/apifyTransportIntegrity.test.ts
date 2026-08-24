@@ -153,14 +153,28 @@ Deno.test("1. run-agent writes `input` — the key toolRegistry actually reads",
 
   assert(registry.includes("const userInput = (i.input && typeof i.input === \"object\")"),
     "the receiver reads i.input");
-  assertEquals(
-    (runAgent.match(/input: call\.input as Record<string, unknown>,/g) ?? []).length, 2,
-    "BOTH invocation sites must send the canonical `input` key");
-  assertFalse(runAgent.includes("user_input: call.input"),
+  // ── THE ENVELOPE MOVED; THE CONTRACT DID NOT ────────────────────────────
+  //
+  // This counted two inline copies in run-agent — one for the capability engine
+  // and one for the company-first route, byte for byte identical. Both now call
+  // the shared seam, so the assertion follows the code rather than pinning a
+  // duplication that a third caller (monitoring) would have made a triplication.
+  const seam = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
+  assert(seam.includes("input: call.input as Record<string, unknown>,"),
+    "the seam must send the canonical `input` key");
+  assert(seam.includes("compiled_input_hash: call.inputHash,"),
+    "the seam must carry the integrity hash");
+  assert(seam.includes("compiled_actor_input: true,"),
+    "without this flag runTool never takes the passthrough branch at all");
+  assertFalse(seam.includes("user_input: call.input"),
     "the user_input key is the defect and must not return");
-  assertEquals(
-    (runAgent.match(/compiled_input_hash: call\.inputHash,/g) ?? []).length, 2,
-    "both sites must carry the integrity hash");
+
+  // AND run-agent MUST NOT have grown its own copy back. A re-inlined envelope
+  // is how the two would drift apart again.
+  assertEquals((runAgent.match(/compiled_actor_input: true,/g) ?? []).length, 0,
+    "run-agent must build no envelope of its own — it calls the seam");
+  assertEquals((runAgent.match(/invoke: capabilityInvoke,/g) ?? []).length, 2,
+    "both engine call sites must use the shared invoker");
 });
 
 // ═══════════════════════ 2. the captured HTTP body is the compiled input ══
@@ -318,9 +332,11 @@ Deno.test("8. the resume path uses the same canonical contract and starts nothin
     assert(reads.length > 0, "the existing run must be read by id");
     assertEquals(reads[0].method, "GET");
 
-    // And run-agent forwards the same canonical keys on the resume site.
-    const src = await Deno.readTextFile(
-      new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-    assert(src.includes("resume_run_id: resumeRunId"));
+    // And the shared seam forwards the same canonical key on the resume site.
+    // It moved out of run-agent, where it was written twice; both Lead routes
+    // and monitoring now inherit one implementation.
+    const seamSrc = await Deno.readTextFile(
+      new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
+    assert(seamSrc.includes("resume_run_id: resumeRunId"));
   } finally { cap.restore(); }
 });

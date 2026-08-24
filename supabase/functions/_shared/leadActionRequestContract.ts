@@ -34,6 +34,9 @@ export const LEAD_ACTION_KINDS: readonly LeadActionKind[] = [
 export const DIRECT_ACTION_AGENT: Record<LeadActionKind, string> = {
   research_company: "hawk",
   find_decision_makers: "hawk",
+  // Same agent as decision-maker discovery: the same kind of work on the same
+  // account, one step further in.
+  find_contact_details: "hawk",
   generate_outreach: "penn",
 };
 
@@ -45,6 +48,7 @@ export const DIRECT_ACTION_AGENT: Record<LeadActionKind, string> = {
 export const DIRECT_ACTION_INSTRUCTION: Record<LeadActionKind, string> = {
   research_company: "Research company context for the selected lead(s).",
   find_decision_makers: "Find decision-makers for the selected lead(s).",
+  find_contact_details: "Look up business contact details for the resolved decision-maker.",
   generate_outreach: "Prepare an approval-ready outreach draft for the selected lead(s).",
 };
 

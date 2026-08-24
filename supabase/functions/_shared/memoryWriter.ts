@@ -17,6 +17,16 @@ import type { NormalizedProviderItem, ProvenanceCtx } from "./leadHandoffGuard.t
 // provider-free modules; importing them has no side effects and no DB access until
 // a writer is explicitly called under an enabled flag.
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
+import { PERSISTENCE_AUTHORITIES } from "./capabilityExecution.ts";
+
+/**
+ * Authorities under which an ENGINE, not this writer, owns publication.
+ *
+ * Derived from the shared execution seam rather than restated, so adding a
+ * third workflow cannot leave this guard behind — which is exactly how
+ * monitoring nearly slipped through it.
+ */
+const ENGINE_OWNED_AUTHORITIES: ReadonlySet<string> = new Set(PERSISTENCE_AUTHORITIES);
 import { dualWritePeopleProfileV2, dualWriteHiringSignalV2 } from "./signalsV2DualWrite.ts";
 import { jobRecordToSignalEvent, type NormalizedJobLike } from "./jobsSignalAdapter.ts";
 
@@ -315,9 +325,23 @@ export async function writeMemoryFromToolCall(ctx: ToolCallCtx): Promise<void> {
     // Anything this writer would add is unevaluated discovery, and an
     // unevaluated row that reaches the Workbench is indistinguishable from a
     // qualified one.
-    if (ctx.persistence_authority === "capability_engine") {
-      console.log("[memoryWriter] skipped: capability_engine owns persistence", {
-        tool, plan_id: ctx.plan_id, task_id: ctx.task_id,
+    //
+    // ── WHY THIS IS A SET AND NO LONGER ONE STRING ───────────────────────
+    //
+    // It read `=== "capability_engine"` exactly. Monitoring spends under
+    // `monitoring_engine` so its ledger rows can be attributed to the workflow
+    // that caused them — and that one exact comparison meant a monitoring run
+    // fell straight through this guard and let the legacy writer publish Lead
+    // rows from a watchlist. A workspace monitoring its ICP would have
+    // accumulated a pipeline nobody asked for, which is the single thing a
+    // monitoring mission must never do.
+    //
+    // The rule is "an ENGINE owns persistence", not "one particular engine
+    // does", so the check is membership.
+    if (ENGINE_OWNED_AUTHORITIES.has(String(ctx.persistence_authority ?? ""))) {
+      console.log("[memoryWriter] skipped: an engine owns persistence", {
+        tool, authority: ctx.persistence_authority,
+        plan_id: ctx.plan_id, task_id: ctx.task_id,
       });
       return;
     }

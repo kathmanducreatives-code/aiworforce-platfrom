@@ -49,15 +49,26 @@ Deno.test("1. a LeadMission run has exactly ONE persistence writer", async () =>
   const runAgent = await Deno.readTextFile(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
 
-  assert(writer.includes('if (ctx.persistence_authority === "capability_engine") {'),
-    "the legacy writer must refuse to publish when the engine owns persistence");
+  // ── THE GUARD IS A SET, NOT ONE STRING ──────────────────────────────────
+  //
+  // It compared `=== "capability_engine"` exactly. Monitoring spends under
+  // `monitoring_engine`, so that comparison let a monitoring run fall straight
+  // through and publish Lead rows from a watchlist. The rule is "an ENGINE owns
+  // persistence", not "one particular engine does".
+  assert(writer.includes("ENGINE_OWNED_AUTHORITIES.has(String(ctx.persistence_authority ?? \"\"))"),
+    "the legacy writer must refuse to publish for ANY engine-owned authority");
+  assert(writer.includes("new Set(PERSISTENCE_AUTHORITIES)"),
+    "the authority set must be DERIVED, so a third workflow cannot leave the guard behind");
   assert(writer.includes('persistence_authority?: "capability_engine" | "legacy" | null;'),
     "the authority is an explicit typed field");
   assert(registry.includes("persistence_authority:"),
     "runTool must forward the declared authority");
-  assertEquals(
-    (runAgent.match(/persistence_authority: "capability_engine" as const,/g) ?? []).length, 2,
-    "BOTH engine invocation sites must declare the engine as the authority");
+  const seam = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
+  assert(seam.includes("persistence_authority: ctx.persistenceAuthority,"),
+    "the seam declares the authority on every call it makes");
+  assert(runAgent.includes('persistenceAuthority: "capability_engine",'),
+    "a Lead run must still declare the capability engine as its authority");
 });
 
 Deno.test("2. the authority is declared, never inferred from data shape", async () => {
