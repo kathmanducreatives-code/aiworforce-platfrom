@@ -59,10 +59,18 @@ Deno.test("1. a LeadMission run has exactly ONE persistence writer", async () =>
     "the legacy writer must refuse to publish for ANY engine-owned authority");
   assert(writer.includes("new Set(PERSISTENCE_AUTHORITIES)"),
     "the authority set must be DERIVED, so a third workflow cannot leave the guard behind");
-  assert(writer.includes('persistence_authority?: "capability_engine" | "legacy" | null;'),
-    "the authority is an explicit typed field");
-  assert(registry.includes("persistence_authority:"),
-    "runTool must forward the declared authority");
+  // TYPED FROM THE SHARED LIST, not from a literal. The field used to name
+  // `"capability_engine"` inline, which is how a second engine gets forgotten.
+  assert(writer.includes('persistence_authority?: PersistenceAuthority | "legacy" | null;'),
+    "the authority is an explicit field typed from the shared list");
+  assert(registry.includes("persistence_authority: engineAuthorityOf(input)"),
+    "runTool must FORWARD the declared authority, not re-decide it");
+  // The narrowing that made the guard below unreachable: anything not exactly
+  // `capability_engine` became `legacy` one layer above the guard.
+  assertFalse(
+    /persistence_authority\s*===\s*"capability_engine"/.test(registry),
+    "runTool narrows the authority to one literal — a second engine is downgraded",
+  );
   const seam = await Deno.readTextFile(
     new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url));
   assert(seam.includes("persistence_authority: ctx.persistenceAuthority,"),
@@ -86,10 +94,18 @@ Deno.test("2. the authority is declared, never inferred from data shape", async 
 });
 
 Deno.test("3. legacy workflows keep the legacy writer", async () => {
+  // The property is unchanged; where it is decided moved. `engineAuthorityOf`
+  // passes through a RECOGNISED engine authority and returns `legacy` for
+  // everything else — an unknown value must never acquire engine privileges,
+  // and the legacy writer is the safe default because it predates authorities.
   const registry = await Deno.readTextFile(
     new URL("../../../supabase/functions/_shared/toolRegistry.ts", import.meta.url));
-  assert(registry.includes('? "capability_engine" as const') && registry.includes(': "legacy" as const'),
-    "anything that does not declare the engine stays on the legacy path");
+  const fn = registry.slice(registry.indexOf("function engineAuthorityOf("));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+  assert(body.includes("PERSISTENCE_AUTHORITIES"),
+    "the recognised set must be the shared one");
+  assert(body.includes('"legacy"'),
+    "anything not recognised stays on the legacy path");
 });
 
 // ══════════════════════════════════ 4. qualification fails closed ══

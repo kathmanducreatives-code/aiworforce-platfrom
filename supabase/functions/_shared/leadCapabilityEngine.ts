@@ -1621,9 +1621,27 @@ export async function runCapabilityPlan(
     );
   };
 
-  /** The openings that earned the verdict, as normalized rows. */
-  const hiringJobsFor = (c: EngineCompany, a: HiringAssessment): NormalizedHiringJob[] =>
-    dedupeJobs(c.yc_open_jobs.filter((j) =>
+  /**
+   * The openings that earned the verdict, as normalized rows.
+   *
+   * ── THE POOL IS AN ARGUMENT BECAUSE THERE IS MORE THAN ONE ──────────────
+   *
+   * This read `c.yc_open_jobs` unconditionally, and the verdict does not always
+   * come from there. When the paid external search UPGRADES a company to
+   * `hiring_verified`, the rows that earned that upgrade were dropped on the
+   * floor: `hiring_jobs` stayed empty, so the evidence registry got no
+   * `job_posting` items, so the evaluator had nothing to cite for hiring and
+   * answered `insufficient_evidence` about a company with twelve open
+   * commercial roles (live run 2026-08-24, Vercel).
+   *
+   * It is worst for a company the mission NAMED, which carries no embedded
+   * openings at all — the external search is the only source it can ever have.
+   */
+  const hiringJobsFor = (
+    c: EngineCompany, a: HiringAssessment,
+    pool: readonly NormalizedHiringJob[] = c.yc_open_jobs,
+  ): NormalizedHiringJob[] =>
+    dedupeJobs(pool.filter((j) =>
       a.commercial_jobs.some((cj) => cj.title === j.title)));
 
   const outcomes: CapabilityRunResult["capability_outcomes"] = [];
@@ -4207,6 +4225,9 @@ export async function runCapabilityPlan(
       let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
       for (const c of targets) {
         let assessment = freeHiringAssessment(c);
+        /** Rows the paid search returned, kept so the verdict can cite them. */
+        let externalJobs: NormalizedHiringJob[] = [];
+        let verdictFromExternal = false;
 
         // ── NOBODY ASKED IS NOT "NOTHING FOUND" ─────────────────────────
         //
@@ -4246,8 +4267,11 @@ export async function runCapabilityPlan(
             const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
             paidCalls++;
             if (rows.length > 0) {
+              // KEPT, NOT JUST COUNTED. These are the rows that may earn the
+              // verdict, and the verdict's evidence has to be citable.
+              externalJobs = rows.map(normalizeLinkedInJob);
               const external = assessHiring(
-                rows.map(normalizeLinkedInJob).map((j) => ({
+                externalJobs.map((j) => ({
                   title: j.title ?? "", url: j.job_url, location: j.location })),
                 [...assessment.supporting_signals, "another_active_gtm_opening"],
                 // SAME VOCABULARY AS THE FREE PASS. An external check that
@@ -4257,13 +4281,19 @@ export async function runCapabilityPlan(
                 { source: "external_job_search", vocab: qualificationCtx.role_vocabulary });
               // The external pass only ever UPGRADES; it cannot demote evidence
               // the free pass already accepted.
-              if (external.verdict === "hiring_verified") assessment = external;
+              if (external.verdict === "hiring_verified") {
+                assessment = external;
+                verdictFromExternal = true;
+              }
             }
           }
         }
 
         c.hiring_assessment = assessment;
-        c.hiring_jobs = hiringJobsFor(c, assessment);
+        // The pool that actually earned the verdict — see `hiringJobsFor`.
+        c.hiring_jobs = verdictFromExternal
+          ? hiringJobsFor(c, assessment, externalJobs)
+          : hiringJobsFor(c, assessment);
 
         if (assessment.verdict === "hiring_verified") {
           c.record = advance(c.record, "hiring_verified",
@@ -5157,8 +5187,32 @@ export async function runCapabilityPlan(
               .map((m) => m.evidence_id).filter(Boolean),
           };
         }
+        // ── WHAT CODE PROVED, WITH CODE'S OWN CITATIONS ──────────────────
+        //
+        // `hiring_verification` reads real postings and `assessHiring` decides
+        // on them. That verdict had no way into the signal assessment: the only
+        // positive channel was the model's claim. Live run 2026-08-24 is the
+        // cost — twelve verified openings reported as `not_investigated`
+        // because the evaluator had answered a different question.
+        //
+        // The citations are the registry's own `job_posting` items, so this
+        // asserts nothing the run cannot point at. Absent a registry or absent
+        // openings there is no proven verdict, and the previous answer stands.
+        const provenVerdicts: Record<string, { verdict: string; evidence_ids: string[] }> = {};
+        if (c.hiring_assessment?.verdict === "hiring_verified") {
+          const jobEvidence = (c.evidence_registry?.items ?? [])
+            .filter((it) => it.evidence_type === "job_posting" || it.evidence_type === "yc_job")
+            .map((it) => it.evidence_id);
+          if (jobEvidence.length > 0) {
+            provenVerdicts["hiring/company"] = {
+              verdict: "verified", evidence_ids: jobEvidence,
+            };
+          }
+        }
+
         const signals = assessSignals({
           required: requiredForQual,
+          provenVerdicts,
           completed: state.completed_capabilities.map(String),
           // A PROVIDER THAT ERRORED IS NOT A PROVIDER THAT FOUND NOTHING.
           // `empty` is deliberately absent: an actor that ran and returned no

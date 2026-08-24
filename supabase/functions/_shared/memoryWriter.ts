@@ -17,7 +17,9 @@ import type { NormalizedProviderItem, ProvenanceCtx } from "./leadHandoffGuard.t
 // provider-free modules; importing them has no side effects and no DB access until
 // a writer is explicitly called under an enabled flag.
 import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
-import { PERSISTENCE_AUTHORITIES } from "./capabilityExecution.ts";
+import {
+  PERSISTENCE_AUTHORITIES, type PersistenceAuthority,
+} from "./capabilityExecution.ts";
 
 /**
  * Authorities under which an ENGINE, not this writer, owns publication.
@@ -201,7 +203,7 @@ interface BaseCtx {
    * workflows. It is set EXPLICITLY by the caller and never inferred from the
    * shape of the data.
    */
-  persistence_authority?: "capability_engine" | "legacy" | null;
+  persistence_authority?: PersistenceAuthority | "legacy" | null;
   // ---- provider provenance context (Find Leads sourcing) ----
   /** Provider name (e.g. "apify"). */
   provider?: string | null;

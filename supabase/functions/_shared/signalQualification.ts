@@ -143,6 +143,35 @@ export interface SignalCoverageInput {
    * coverage alone, which is the honest answer rather than a default of absent.
    */
   modelVerdicts?: Readonly<Record<string, { verdict: string; evidence_ids?: readonly string[] }>>;
+  /**
+   * WHAT CODE PROVED, keyed like `modelVerdicts`.
+   *
+   * ── WHY A SECOND CHANNEL EXISTS ────────────────────────────────────────
+   *
+   * Until now the only way to assert a POSITIVE signal verdict was for the
+   * model to claim one and cite it. Coverage alone yields `not_investigated`,
+   * which is the honest answer when nothing judged the evidence.
+   *
+   * But something does judge it. `hiring_verification` runs a paid job search
+   * and `assessHiring` — deterministic code, reading real postings — returns
+   * `hiring_verified` with the titles it found. Live run 2026-08-24: twelve
+   * openings, verified by code, and this module could only report
+   * `not_investigated`, because the model had answered a different question
+   * (mission fit) and its uncited claim was rightly downgraded.
+   *
+   * ── WHERE IT IS ADMITTED, AND WHERE IT IS NOT ──────────────────────────
+   *
+   * Only where the model contributed no usable judgement: it had nothing to
+   * say, or it made a positive claim it could not cite. A model verdict that
+   * IS cited still stands, and a model verdict of `absent` is never overturned
+   * — code proving openings exist does not make the model's reading of them
+   * wrong, and the conservative answer is the one that does not qualify anyone.
+   *
+   * The same citation rule applies to code: a proven verdict with no evidence
+   * ids is not admitted either. The channel is about WHO establishes a fact,
+   * never about relaxing what a fact requires.
+   */
+  provenVerdicts?: Readonly<Record<string, { verdict: string; evidence_ids: readonly string[] }>>;
 }
 
 /**
@@ -200,10 +229,35 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
     const claimed = said?.verdict;
     const evidence = said?.evidence_ids ?? [];
 
+    /** A verdict code established, admitted only if it cites evidence. */
+    const proven = (() => {
+      const p = i.provenVerdicts?.[key];
+      if (!p || !(MODEL_ASSERTABLE as readonly string[]).includes(p.verdict)) return null;
+      if (POSITIVE.includes(p.verdict as SignalVerdict) && p.evidence_ids.length === 0) {
+        return null;
+      }
+      return p;
+    })();
+
     if (claimed && (MODEL_ASSERTABLE as readonly string[]).includes(claimed)) {
       // A POSITIVE VERDICT MUST CITE SOMETHING. An uncited "verified" is the
       // model's opinion, and the whole architecture rests on the difference.
       if (POSITIVE.includes(claimed as SignalVerdict) && evidence.length === 0) {
+        // UNLESS CODE ALREADY PROVED IT. The model's verdict is discarded
+        // either way — what stands is the capability's own finding, with the
+        // capability's own citations. This is not the model being believed
+        // after all: nothing here reads `claimed`.
+        if (proven) {
+          return {
+            signal: key, event: String(sig.event), subject: String(sig.subject),
+            verdict: proven.verdict as SignalVerdict,
+            established_by: ran[0], evidence_ids: [...proven.evidence_ids],
+            requires_unlock: false,
+            reason: `${ran.join(", ")} established ${proven.verdict} on ` +
+              `${proven.evidence_ids.length} item(s); the model's uncited ` +
+              `"${claimed}" was discarded`,
+          };
+        }
         return {
           signal: key, event: String(sig.event), subject: String(sig.subject),
           verdict: "absent" as SignalVerdict,
@@ -225,6 +279,19 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
 
     // ── 4. IT RAN AND NOTHING JUDGED IT ──────────────────────────────────
     //
+    // Unless CODE judged it. A deterministic capability that read real evidence
+    // and cited it is a stronger authority than a model, not a weaker one.
+    if (proven) {
+      return {
+        signal: key, event: String(sig.event), subject: String(sig.subject),
+        verdict: proven.verdict as SignalVerdict,
+        established_by: ran[0], evidence_ids: [...proven.evidence_ids],
+        requires_unlock: false,
+        reason: `${ran.join(", ")} established ${proven.verdict} on ` +
+          `${proven.evidence_ids.length} item(s), with no evaluator involved`,
+      };
+    }
+
     // The common case with no model credit. `absent` would be a lie — the
     // investigation happened but nobody read it — so this stays honest.
     return {

@@ -21,7 +21,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
-import { buildInvoker } from "../_shared/capabilityExecution.ts";
+import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
+import { createExecutionDeadline } from "../_shared/leadExecutionFinalizer.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import {
   runCapabilityPlan,
@@ -197,7 +198,7 @@ Deno.serve(async (req) => {
     { workspace_id, subjects, icp },
     {
       buildPlan: buildCapabilityGraph,
-      runPlan: async (mission, plan) => {
+      runPlan: async (mission, plan, resume) => {
         // ── THE SAME ENGINE, THE SAME MODEL SEAMS ─────────────────────────
         //
         // Two of the engine's dependencies are not optional in practice, and
@@ -227,6 +228,20 @@ Deno.serve(async (req) => {
         const run = await runCapabilityPlan(
           {
             invoke,
+            // ── THE WALL CLOCK, AND WHAT A RUN THAT HITS IT MUST DO ────────
+            //
+            // Without these two the engine cannot see the edge worker's limit
+            // coming. The first two-company live run is what that costs: it was
+            // killed mid-flight with `WORKER_RESOURCE_LIMIT`, and an Apify job
+            // search that was still RUNNING was recorded as `provider_error` —
+            // a paid run discarded and a capability failed for a reason that
+            // was not the provider's.
+            //
+            // Both are the same wiring `run-agent` has, and `readPendingRun` is
+            // now literally the same function: it reads the error shape
+            // `buildInvoker` throws, so the seam owns both halves.
+            deadline: createExecutionDeadline(),
+            readPendingRun,
             // THE ENGINE'S OWN DIAGNOSTICS. Optional in the type, and its
             // absence is why the first live run reported "nothing completed"
             // with no explanation of what it had refused to do.
@@ -274,10 +289,31 @@ Deno.serve(async (req) => {
           } satisfies CapabilityEngineDeps,
           {
             mission, plan, maxCandidates: MONITORING_MAX_CANDIDATES,
+            // The engine reads `pending_runs` off this to adopt a provider run
+            // an earlier pass started and paid for, rather than starting a
+            // second one. `resumableState` decided what was safe to carry.
+            ...(resume ? { state: resume as CapabilityEngineOpts["state"] } : {}),
           } as CapabilityEngineOpts,
         );
         // deno-lint-ignore no-explicit-any
         return run as any;
+      },
+      loadRunState: async (ws, hash) => {
+        const { data } = await admin
+          .from("monitoring_runs").select("state")
+          .eq("workspace_id", ws).eq("mission_hash", hash).maybeSingle();
+        return data?.state ?? null;
+      },
+      saveRunState: async (ws, hash, state, pendingRuns) => {
+        const { error } = await admin.from("monitoring_runs").upsert({
+          workspace_id: ws, mission_hash: hash,
+          state: state as Record<string, unknown>,
+          pending_runs: pendingRuns,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "workspace_id,mission_hash" });
+        // NOT FATAL, AND NOT SILENT. Losing the bookkeeping costs the next pass
+        // a re-run; losing this pass's feed over it would cost more.
+        if (error) console.error("[monitoring][run-state-save-failed]", error.message);
       },
       loadHeldEvidence: async (ws) => {
         // CROSS-ORIGIN BY CONSTRUCTION: no origin filter. Evidence a Lead

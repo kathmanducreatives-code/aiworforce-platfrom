@@ -6,7 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
-import { buildInvoker } from "../_shared/capabilityExecution.ts";
+import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
@@ -1313,24 +1313,6 @@ Deno.serve(async (req) => {
             }
           }
           return items;
-        };
-        /**
-         * Recognise a started-but-unfinished Apify run on a thrown invoker error.
-         *
-         * Only a run that Apify says is RUNNING/READY counts — a schema
-         * rejection, an auth failure or a timeout are NOT pending and must keep
-         * failing, or "pending" becomes a way to swallow real errors.
-         */
-        const readPendingRun = (e: unknown) => {
-          const d = (e as { toolResult?: Record<string, unknown> } | null)?.toolResult;
-          if (!d || typeof d !== "object") return null;
-          const runId = typeof d.run_id === "string" ? d.run_id : "";
-          if (!runId || d.pending !== true) return null;
-          return {
-            run_id: runId,
-            dataset_id: typeof d.dataset_id === "string" ? d.dataset_id : null,
-            actor_build_id: typeof d.build_id === "string" ? d.build_id : null,
-          };
         };
         const invokePeople = async (envelope: Record<string, unknown>): Promise<unknown[]> => {
           const rr = await runTool("source_with_apify", { ...envelope, ...auditOwnership() }, baseCtx);

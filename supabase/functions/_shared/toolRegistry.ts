@@ -10,6 +10,9 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hashInput } from "./hiringActorInputs.ts";
+import {
+  PERSISTENCE_AUTHORITIES, type PersistenceAuthority,
+} from "./capabilityExecution.ts";
 import { validateFinalActorPayload, finalPayloadDiagnostics } from "./finalActorPayload.ts";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
@@ -1482,6 +1485,21 @@ export function listTools() {
 }
 
 
+/**
+ * The persistence authority a caller declared, or `legacy` if it declared none.
+ *
+ * Recognised engine authorities pass through unchanged. Anything unrecognised
+ * is `legacy` — an unknown value must not silently acquire engine privileges,
+ * and the legacy writer is the safe default because it is the one that existed
+ * before authorities did.
+ */
+function engineAuthorityOf(input: unknown): PersistenceAuthority | "legacy" {
+  const a = (input as { persistence_authority?: unknown } | null)?.persistence_authority;
+  return (PERSISTENCE_AUTHORITIES as readonly string[]).includes(String(a ?? ""))
+    ? (a as PersistenceAuthority)
+    : "legacy";
+}
+
 // ---------- Main entry point ----------
 
 export async function runTool(
@@ -1745,10 +1763,19 @@ export async function runTool(
     await writeMemoryFromToolCall({
       // Declared by the caller, never inferred. The capability engine sets this
       // so the legacy writer publishes nothing for a LeadMissionV1 run.
-      persistence_authority:
-        (input as { persistence_authority?: unknown } | null)?.persistence_authority === "capability_engine"
-          ? "capability_engine" as const
-          : "legacy" as const,
+      // ── THE AUTHORITY IS PASSED THROUGH, NOT RE-DECIDED ─────────────────
+      //
+      // This narrowed anything that was not exactly `capability_engine` to
+      // `legacy`, which is the same mistake `memoryWriter` had and is where it
+      // actually bit: monitoring spends under `monitoring_engine`, that value
+      // was flattened to `legacy` HERE, and the guard downstream — already
+      // fixed to accept any engine — never saw it. Live run 2026-08-24: ten v1
+      // `signals` rows written into a monitoring-only workspace, one per pass,
+      // from a watchlist nobody asked to turn into a pipeline.
+      //
+      // Membership in the shared list, so a future authority is carried by
+      // default instead of being silently downgraded to the legacy writer.
+      persistence_authority: engineAuthorityOf(input),
       admin: ctx.admin,
       workspace_id: ctx.workspace_id,
       plan_id: ctx.plan_id ?? null,

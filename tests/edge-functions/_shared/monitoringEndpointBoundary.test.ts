@@ -7,7 +7,7 @@
 // spends under the Lead authority, or wires the chain re-planner back in, fails
 // here rather than in production.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const SRC = await Deno.readTextFile(
   new URL("../../../supabase/functions/run-monitoring-scan/index.ts", import.meta.url),
@@ -145,4 +145,34 @@ Deno.test("9. the agent slug it spends under is one the tool registry actually a
   for (const leadAgent of ["scout", "hawk"]) {
     assert(slug !== leadAgent, `monitoring is spending as the Lead agent "${leadAgent}"`);
   }
+});
+
+Deno.test("10. it can see the wall clock, and a pending provider run is not a failure", async () => {
+  // Live run 2026-08-24: the worker was killed with WORKER_RESOURCE_LIMIT while
+  // an Apify job search was still RUNNING, and the engine recorded it as
+  // `provider_error` — a paid run discarded, a capability failed for a reason
+  // that was not the provider's, and a fallback free to spend against it.
+  assert(
+    SRC.includes("deadline: createExecutionDeadline("),
+    "without a deadline the engine cannot reserve time to checkpoint",
+  );
+  assert(SRC.includes("readPendingRun"), "a started-but-unfinished run must not read as an error");
+
+  // AND IT MUST BE THE SAME FUNCTION LEADS USE, not a second reading of the
+  // same error shape. Both import it from the seam that throws that shape.
+  const seam = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/capabilityExecution.ts", import.meta.url),
+  );
+  assert(seam.includes("export function readPendingRun("));
+  const runAgent = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
+  );
+  assert(
+    /import \{[^}]*readPendingRun[^}]*\} from "\.\.\/_shared\/capabilityExecution\.ts"/.test(runAgent),
+    "run-agent must read pending runs through the shared seam, not a local copy",
+  );
+  assertFalse(
+    /const readPendingRun\s*=/.test(runAgent),
+    "run-agent still defines its own readPendingRun — two readings of one contract",
+  );
 });

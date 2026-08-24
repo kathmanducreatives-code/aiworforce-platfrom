@@ -23,7 +23,7 @@
 //
 // PURE ORCHESTRATION. Engine, store and writer are all injected.
 
-import type { LeadMissionV1 } from "./leadMission.ts";
+import { missionHash, type LeadMissionV1 } from "./leadMission.ts";
 import {
   compileMonitoringMission, monitoringPlanViolations,
   type MonitoringMissionInput, type MonitoringSubjectInput,
@@ -38,23 +38,62 @@ export const MONITORING_RUNNER_VERSION = "monitoring-runner-v1" as const;
 /** The authority monitoring spends under. Recognised as engine-owned. */
 export const MONITORING_AUTHORITY = "monitoring_engine" as const;
 
+/**
+ * The prefix `known_company_resolution` gives a supplied company's id.
+ *
+ * Restated rather than imported to keep this module free of engine internals;
+ * `monitoringRunner.test.ts` asserts the two agree.
+ */
+const SUPPLIED_ID_PREFIX = "mission_supplied:";
+
 export interface MonitoringRunDeps {
   /** Builds the plan. The SAME builder Leads use. */
   buildPlan: (mission: LeadMissionV1) => {
     steps: Array<{ capability: string }>;
     offered_capabilities?: string[];
   };
-  /** Runs it. The SAME engine Leads use, with the shared execution seam. */
-  runPlan: (mission: LeadMissionV1, plan: unknown) => Promise<{
+  /**
+   * Runs it. The SAME engine Leads use, with the shared execution seam.
+   *
+   * `resume` carries what an earlier invocation already paid for. See
+   * `loadRunState` for what monitoring may and may not resume.
+   */
+  runPlan: (mission: LeadMissionV1, plan: unknown, resume: unknown | null) => Promise<{
     companies: Array<{
       key: string;
       company: { company_name: string | null; canonical_domain: string | null;
-                 linkedin_company_url: string | null };
+                 linkedin_company_url: string | null;
+                 /** Set by `known_company_resolution` for a company the mission NAMED. */
+                 external_source_id?: string | null };
       verdict?: string | null;
       signal_assessments?: Array<{ signal: string; verdict: string; evidence_ids: readonly string[] }>;
     }>;
     state: { qualified_company_keys: string[]; completed_capabilities: string[] };
   }>;
+  /**
+   * THE EXECUTION STATE AN EARLIER INVOCATION LEFT BEHIND.
+   *
+   * ── WHAT MONITORING MAY RESUME, AND WHAT IT MAY NOT ──────────────────────
+   *
+   * A Lead continuation restores two things: capability-level completion, and
+   * the per-company records that make that completion meaningful. Monitoring
+   * persists only the first — it has no per-company store — so honouring
+   * `completed_capabilities` would skip stages whose RESULTS are gone, leaving
+   * hiring verification with a company pool that has no identities.
+   *
+   * So a monitoring resume keeps exactly one thing: `pending_runs`. That is the
+   * part that is expensive to lose — a provider run that started, was billed,
+   * and finished after the tool stopped polling. The engine adopts its id
+   * instead of starting a second one. Everything else re-runs, which for a
+   * named company is free until enrichment.
+   *
+   * Null on the first pass, and null is the ordinary case.
+   */
+  loadRunState?: (workspaceId: string, missionHash: string) => Promise<unknown | null>;
+  /** Persist the state this pass produced, for the next one. */
+  saveRunState?: (
+    workspaceId: string, missionHash: string, state: unknown, pendingRuns: number,
+  ) => Promise<void>;
   /** Evidence already held, for the pre-flight. Never written by this module. */
   loadHeldEvidence: (workspaceId: string) => Promise<ExistingEvidence[]>;
   /** Writes one canonical event. Owned by `signalsV2Writer`. */
@@ -182,9 +221,23 @@ export async function runMonitoring(
   // The engine's failures are reported, never swallowed and never re-raised.
   // Nothing is written on this path: a run that could not collect has no
   // evidence, so there is no partial feed to publish.
+  // ── WHAT AN EARLIER PASS LEFT IN FLIGHT ──────────────────────────────────
+  const hash = await missionHash(compiled.mission);
+  const stored = deps.loadRunState
+    ? await deps.loadRunState(input.workspace_id, hash)
+    : null;
+  const resume = resumableState(stored, hash);
+  if (resume) {
+    log("monitoring_resume", {
+      mission_hash: hash,
+      pending_runs: (resume.pending_runs as Array<{ capability: string; run_id: string }>)
+        .map((r) => `${r.capability}:${r.run_id}`),
+    });
+  }
+
   let run: Awaited<ReturnType<MonitoringRunDeps["runPlan"]>>;
   try {
-    run = await deps.runPlan(compiled.mission, plan);
+    run = await deps.runPlan(compiled.mission, plan, resume);
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     log("monitoring_execution_failed", { detail });
@@ -197,21 +250,89 @@ export async function runMonitoring(
     };
   }
 
+  // ── KEEP WHAT THIS PASS PAID FOR ─────────────────────────────────────────
+  //
+  // Written before the events, deliberately: a pending provider run is money
+  // already spent, and losing its id costs more than losing this pass's feed.
+  if (deps.saveRunState) {
+    const pending = (run.state as { pending_runs?: unknown[] }).pending_runs ?? [];
+    await deps.saveRunState(input.workspace_id, hash, run.state, pending.length);
+  }
+
   // ── WRITE CANONICAL EVENTS ───────────────────────────────────────────────
   //
-  // Only for companies that QUALIFIED and only for signals that were actually
-  // evidenced. A monitoring run that wrote an event per discovered company
-  // would be a feed of everything it looked at, not of what changed.
+  // ── WHICH COMPANIES MAY PRODUCE ONE, AND WHY IT DEPENDS ON THE SUBJECT ───
+  //
+  // This required `verdict === "pass"` for every company, and the reason was
+  // sound for the case it was written against: an ICP monitor DISCOVERS
+  // companies, and without a fit verdict its feed would be everything it looked
+  // at rather than what changed.
+  //
+  // Live run 2026-08-24 showed it is the wrong question for a NAMED subject.
+  // The evaluator was asked whether Vercel satisfies a mission whose ICP is
+  // empty — because a `competitor` subject states no verticals, stages or
+  // locations — and answered `insufficient_evidence`, which is correct. There
+  // was no fit question to answer: the workspace had already answered it by
+  // naming the company.
+  //
+  // So the gate is the subject's, not one rule for both:
+  //
+  //   ICP subject     — the company must QUALIFY. It was discovered, and fit is
+  //                     precisely what is in doubt.
+  //   NAMED subject   — the SIGNAL must be evidenced. Fit was decided when the
+  //                     workspace chose to watch this company.
+  //
+  // Both still require a verified or plausible signal verdict, and those come
+  // from `assessSignals`, which is computed from what actually RAN — so a
+  // signal nobody investigated can never produce an event either way.
   const events = { attempted: 0, written: 0, deduplicated: 0, failed: 0 };
   const qualified = new Set(run.state.qualified_company_keys);
 
+  /**
+   * The subject a company came from, or null if the engine discovered it.
+   *
+   * Matched on `external_source_id`, which `known_company_resolution` sets to
+   * the supplied string verbatim. Matching on the company's domain or name
+   * instead would fail for a subject identified by LinkedIn URL, which carries
+   * neither.
+   */
+  const subjectFor = (c: { company: { external_source_id?: string | null } }) => {
+    const id = String(c.company.external_source_id ?? "");
+    if (!id.startsWith(SUPPLIED_ID_PREFIX)) return null;
+    const raw = id.slice(SUPPLIED_ID_PREFIX.length);
+    return compiled.accepted.find((s) =>
+      (s.identifier ?? "").trim().toLowerCase() === raw) ?? null;
+  };
+
   for (const c of run.companies) {
-    if (!qualified.has(c.key)) continue;
+    const subject = subjectFor(c);
+    // A discovered company still has to qualify. A named one does not.
+    if (!subject && !qualified.has(c.key)) continue;
+
     for (const a of c.signal_assessments ?? []) {
       if (a.verdict !== "verified" && a.verdict !== "plausible") continue;
       const event = a.signal.split("/")[0];
       const canon = CANONICAL_TYPE_FOR[event];
       if (!canon) continue;
+
+      // ── THE SUBJECT MODEL, CARRIED THROUGH ───────────────────────────────
+      //
+      // This wrote `subject_type: "company"` for everything, which erases the
+      // distinction Phase 2 exists to hold: a competitor is not an account.
+      //
+      // And the KEY has to be the one the pre-flight asks with. It read the
+      // company's domain or name; the pre-flight reads the subject's own
+      // identifier. For a subject named by LinkedIn URL the first is null and
+      // the two could never match, so held evidence would never be found and
+      // every pass would re-buy what the last one proved.
+      const subjectType = subject?.kind === "competitor" ? "competitor" : "company";
+      const subjectKey = subject
+        ? canonicalise(subject.identifier)
+        : canonicalise(c.company.canonical_domain ?? c.company.company_name);
+      if (!subjectKey) {
+        log("monitoring_event_skipped_no_subject", { company: c.key });
+        continue;
+      }
 
       events.attempted++;
       try {
@@ -225,16 +346,21 @@ export async function runMonitoring(
           // rather than writing the run time.
           occurred_at: null,
           occurred_at_basis: "unknown",
-          subject_type: "company",
-          subject_key: canonicalise(
-            c.company.canonical_domain ?? c.company.company_name),
-          dedupe_key: `monitor|${c.key}|${canon.type}`,
+          subject_type: subjectType,
+          subject_key: subjectKey,
+          dedupe_key: `monitor|${subjectType}|${subjectKey}|${canon.type}`,
           verification_status: "unverified",
           lifecycle_status: "active",
           normalized_value: {
-            company_name: c.company.company_name,
+            // THE NAME A READER WILL RECOGNISE. A company supplied by LinkedIn
+            // URL carries no name of its own until enrichment, and a feed row
+            // reading `null` is useless. The subject's label is what the
+            // workspace called it, so it is the honest fallback — never a name
+            // derived from the URL, which would be a guess.
+            company_name: c.company.company_name ?? subject?.label ?? null,
             signal: a.signal,
             verdict: a.verdict,
+            subject_kind: subject?.kind ?? "discovered",
           },
         });
         if (res.written) events.written++;
@@ -266,4 +392,48 @@ function canonicalise(raw: string | null | undefined): string {
     .replace(/^https?:\/\//, "").replace(/^www\./, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)
     .replace(/^-+|-+$/g, "") || "unknown";
+}
+
+
+/**
+ * The part of a stored state a monitoring pass may act on.
+ *
+ * Two checks, both refusals rather than repairs: the state must be the version
+ * this code understands, and it must belong to THIS question — the engine
+ * re-checks the hash too, and a mismatch there silently discards the state,
+ * which would make a resumed run look like a fresh one for no stated reason.
+ *
+ * What survives is `pending_runs` alone. `completed_capabilities` is
+ * deliberately dropped: monitoring keeps no per-company records, so a skipped
+ * stage would leave the pool without the results that stage produced.
+ */
+export function resumableState(
+  stored: unknown, expectedHash: string,
+): Record<string, unknown> | null {
+  if (!stored || typeof stored !== "object") return null;
+  const s = stored as Record<string, unknown>;
+  if (typeof s.version !== "string" || !s.version.startsWith("capability-execution-state-")) {
+    return null;
+  }
+  if (s.mission_hash !== expectedHash) return null;
+  const pending = Array.isArray(s.pending_runs) ? s.pending_runs : [];
+  if (pending.length === 0) return null;
+
+  // THE STORED STATE, KEPT WHOLE — with one field emptied.
+  //
+  // Returning a hand-built subset was the first attempt and it was wrong twice
+  // over: the engine spreads this object and reads `provider_attempts`, so a
+  // partial state crashed the run; and the accounting it carries —
+  // `provider_attempts`, `accumulated_cost_units` — is the TRUE record of what
+  // this question has already cost and must not be reset to zero by a resume.
+  //
+  // `completed_capabilities` is the one thing that cannot be honoured. See the
+  // note on `loadRunState`: monitoring keeps no per-company records, so a stage
+  // marked complete would be skipped while the results it produced are gone.
+  return {
+    ...s,
+    provider_attempts: Array.isArray(s.provider_attempts) ? s.provider_attempts : [],
+    pending_runs: pending,
+    completed_capabilities: [],
+  };
 }

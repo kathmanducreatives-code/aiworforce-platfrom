@@ -433,3 +433,42 @@ Deno.test("13. a DISCOVERED company with no openings is unchanged — still no p
     `a discovery mission's spend changed: ${calls.map((c) => c.actorKey).join(", ")}`,
   );
 });
+
+// ── 14. THE EVIDENCE THAT EARNED THE VERDICT MUST BE CITABLE ────────────────
+
+Deno.test("14. an externally-verified company carries the jobs that proved it", async () => {
+  // `hiring_jobs` read `yc_open_jobs` unconditionally, so when the PAID search
+  // upgraded a company to `hiring_verified` its rows were dropped: no
+  // `job_posting` evidence, nothing for the evaluator to cite, and — live run
+  // 2026-08-24 — `insufficient_evidence` about a company with twelve open
+  // commercial roles. A named company carries no embedded openings at all, so
+  // the external search is the only source it can ever have.
+  const JOB = {
+    id: "j1", title: "Account Executive",
+    company: { name: "Acme", linkedinUrl: "https://www.linkedin.com/company/acme" },
+    postedDate: "2026-07-20",
+  };
+  const { run } = await runNamed(
+    sourcingMissionNaming(["acme.com"]),
+    [CONFIRMING_ROW],
+    {
+      // deno-lint-ignore no-explicit-any
+      invoke: ((call: CompiledActorCall<unknown>) =>
+        Promise.resolve(
+          call.actorKey === "apify_linkedin_company_search"
+            ? [CONFIRMING_ROW]
+            : call.actorKey === "apify_linkedin_job_search"
+            ? [JOB]
+            : [],
+        )) as never,
+    },
+  );
+
+  const c = run.companies[0];
+  assertEquals(c.hiring_assessment?.verdict, "hiring_verified");
+  assert(
+    (c.hiring_jobs ?? []).length > 0,
+    "the openings that earned the verdict must survive into the company",
+  );
+  assertEquals(c.hiring_jobs[0].title, "Account Executive");
+});

@@ -232,3 +232,39 @@ export function isPersistenceAuthority(v: unknown): v is PersistenceAuthority {
   return typeof v === "string" &&
     (PERSISTENCE_AUTHORITIES as readonly string[]).includes(v);
 }
+
+/**
+ * Recognise a started-but-unfinished Apify run on a thrown invoker error.
+ *
+ * ── WHY THIS LIVES BESIDE `buildInvoker` ────────────────────────────────────
+ *
+ * It reads the error shape `buildInvoker` throws — the `toolResult` it attaches
+ * — so the two are one contract, and a caller that uses the invoker without
+ * this reads a PENDING run as a failure. Phase 3F's first two-company live run
+ * is what that costs: a job search that was still running when the worker hit
+ * its wall clock was recorded as `provider_error`, which fails the capability,
+ * discards a run that had already been paid for, and lets a fallback spend
+ * against it.
+ *
+ * ONLY A RUN APIFY SAYS IS RUNNING/READY COUNTS. A schema rejection, an auth
+ * failure or a timeout are NOT pending and must keep failing, or "pending"
+ * becomes a way to swallow real errors.
+ */
+export function readPendingRun(e: unknown): PendingRunLike | null {
+  const d = (e as { toolResult?: Record<string, unknown> } | null)?.toolResult;
+  if (!d || typeof d !== "object") return null;
+  const runId = typeof d.run_id === "string" ? d.run_id : "";
+  if (!runId || d.pending !== true) return null;
+  return {
+    run_id: runId,
+    dataset_id: typeof d.dataset_id === "string" ? d.dataset_id : null,
+    actor_build_id: typeof d.build_id === "string" ? d.build_id : null,
+  };
+}
+
+/** The engine's `PendingRun`, restated structurally to avoid a cycle. */
+export interface PendingRunLike {
+  run_id: string;
+  dataset_id: string | null;
+  actor_build_id?: string | null;
+}

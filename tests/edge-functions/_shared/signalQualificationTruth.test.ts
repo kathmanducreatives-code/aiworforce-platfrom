@@ -272,3 +272,81 @@ Deno.test("12. every SIGNAL EVENT is either mapped or honestly unmapped", () => 
     }
   }
 });
+
+// ══════════════ THE SECOND CHANNEL: WHAT CODE PROVED ═══════════════════════
+//
+// Until 2026-08-24 the only way to assert a POSITIVE verdict was for the model
+// to claim one and cite it. But `hiring_verification` runs a paid job search
+// and `assessHiring` — deterministic code reading real postings — returns
+// `hiring_verified`. That finding had no way in. Live run: twelve verified
+// openings reported as `not_investigated`, because the evaluator had answered a
+// different question (mission fit) and its uncited claim was rightly discarded.
+
+const HIRING: RequiredSignal[] = [{ event: "hiring", subject: "company" }];
+const RAN = ["hiring_verification"];
+
+Deno.test("proven: code's verdict stands when nothing else judged the evidence", () => {
+  const [a] = assessSignals({
+    required: HIRING, completed: RAN,
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: ["job_posting:x"] } },
+  });
+  assertEquals(a.verdict, "verified");
+  assertEquals(a.evidence_ids, ["job_posting:x"]);
+  assert(/no evaluator involved/.test(a.reason), a.reason);
+});
+
+Deno.test("proven: it replaces an uncited model claim rather than the claim being believed", () => {
+  const [a] = assessSignals({
+    required: HIRING, completed: RAN,
+    // The model said "verified" and cited nothing — its opinion, not evidence.
+    modelVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: [] } },
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: ["job_posting:x"] } },
+  });
+  assertEquals(a.verdict, "verified");
+  // What stands is the CAPABILITY's citation, never the model's absence of one.
+  assertEquals(a.evidence_ids, ["job_posting:x"]);
+  assert(/uncited .* was discarded/.test(a.reason), a.reason);
+});
+
+Deno.test("proven: a CITED model verdict is not overridden", () => {
+  const [a] = assessSignals({
+    required: HIRING, completed: RAN,
+    modelVerdicts: { "hiring/company": { verdict: "plausible", evidence_ids: ["m1"] } },
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: ["job_posting:x"] } },
+  });
+  assertEquals(a.verdict, "plausible", "a model that cited its evidence still decides");
+  assertEquals(a.evidence_ids, ["m1"]);
+});
+
+Deno.test("proven: a model verdict of absent is never overturned by code", () => {
+  const [a] = assessSignals({
+    required: HIRING, completed: RAN,
+    modelVerdicts: { "hiring/company": { verdict: "absent", evidence_ids: [] } },
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: ["job_posting:x"] } },
+  });
+  // Openings existing does not make the model's reading of them wrong, and the
+  // conservative answer is the one that does not qualify anyone.
+  assertEquals(a.verdict, "absent");
+});
+
+Deno.test("proven: the citation rule applies to code too", () => {
+  const [a] = assessSignals({
+    required: HIRING, completed: RAN,
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: [] } },
+  });
+  assertEquals(
+    a.verdict, "not_investigated",
+    "an uncited positive is not admitted from code either",
+  );
+});
+
+Deno.test("proven: it cannot assert a signal nobody investigated", () => {
+  const [a] = assessSignals({
+    required: HIRING,
+    completed: [], // hiring_verification never ran
+    provenVerdicts: { "hiring/company": { verdict: "verified", evidence_ids: ["job_posting:x"] } },
+  });
+  assertEquals(a.verdict, "not_investigated");
+  assertEquals(a.evidence_ids, []);
+  assertEquals(verdictsClaimingUninvestigatedSignals([a]), []);
+});

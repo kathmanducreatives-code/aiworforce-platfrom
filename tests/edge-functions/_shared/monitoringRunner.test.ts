@@ -25,6 +25,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   runMonitoring, MONITORING_AUTHORITY,
+  resumableState,
 } from "../../../supabase/functions/_shared/monitoringRunner.ts";
 import {
   buildCapabilityGraph,
@@ -274,4 +275,278 @@ Deno.test("9. an engine that throws is reported as a refusal, not a crash", asyn
   assertEquals(out.events, { attempted: 0, written: 0, deduplicated: 0, failed: 0 });
   // The pre-flight already ran, and its accounting is still true.
   assertEquals(out.preflight.planned, 1);
+});
+
+// ── WHAT A MONITORING RESUME MAY CARRY ──────────────────────────────────────
+//
+// Live run 2026-08-24: `harvestapi/linkedin-job-search` SUCCEEDED in 156s with
+// 12 openings. The tool's poll gives up at 90s and reports the run PENDING with
+// its id — by design. With nowhere to keep that id, the next invocation started
+// a SECOND run of the same search and threw the first one's result away.
+
+Deno.test("10. a stored state's pending runs are carried, its completions are not", () => {
+  const stored = {
+    version: "capability-execution-state-v1",
+    mission_hash: "abc123",
+    provider_attempts: [{ capability: "hiring_verification", outcome: "pending" }],
+    accumulated_cost_units: 3,
+    completed_capabilities: ["company_enrichment", "company_identity_resolution"],
+    pending_runs: [{
+      capability: "hiring_verification", provider: "apify_linkedin_job_search",
+      run_id: "O4zCsy1DB1Rc2JgSk", dataset_id: "ds1", actor_build_id: null,
+      started_at: "2026-08-24T16:27:55Z",
+    }],
+  };
+  const r = resumableState(stored, "abc123");
+  assert(r, "a matching state must be resumable");
+  const pr = r!.pending_runs as Array<{ run_id: string }>;
+  assertEquals(pr.length, 1);
+  assertEquals(pr[0].run_id, "O4zCsy1DB1Rc2JgSk");
+  // THE ACCOUNTING SURVIVES. `provider_attempts` and the accumulated cost are
+  // the true record of what this question has already cost; a resume that reset
+  // them would under-report spend.
+  assert(Array.isArray(r!.provider_attempts), "the engine spreads this and iterates it");
+  // THE COMPLETIONS ARE DROPPED. Monitoring keeps no per-company records, so
+  // skipping a stage would leave the pool without the results that stage made.
+  assertEquals(
+    r!.completed_capabilities, [],
+    "a resumed monitoring pass must not skip stages whose results it did not keep",
+  );
+  assertEquals(r!.accumulated_cost_units, 3, "a resume must not reset what the run has cost");
+});
+
+Deno.test("11. a state for a different question is refused, not adapted", () => {
+  const stored = {
+    version: "capability-execution-state-v1",
+    mission_hash: "someone-elses-question",
+    pending_runs: [{
+      capability: "hiring_verification", provider: "apify_linkedin_job_search",
+      run_id: "X", dataset_id: null, actor_build_id: null, started_at: "t",
+    }],
+  };
+  assertEquals(resumableState(stored, "abc123"), null);
+  // And an unrecognised version is refused rather than read optimistically.
+  assertEquals(
+    resumableState({ ...stored, version: "something-else", mission_hash: "abc123" }, "abc123"),
+    null,
+  );
+  // Nothing in flight is nothing to resume.
+  assertEquals(
+    resumableState({ ...stored, mission_hash: "abc123", pending_runs: [] }, "abc123"),
+    null,
+  );
+});
+
+Deno.test("12. the pending run is persisted before the feed is written", async () => {
+  const order: string[] = [];
+  await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "tracked_company", identifier: "acme.com", label: "Acme",
+        signals: [{ event: "hiring", subject: "company" }], timeframe_days: 30,
+      }],
+      icp: null,
+    },
+    {
+      buildPlan: () => ({ steps: [{ capability: "company_identity_resolution" }] }),
+      runPlan: (_m, _p, resume) => {
+        order.push(resume ? "run:resumed" : "run:fresh");
+        return Promise.resolve({
+          companies: [], state: { qualified_company_keys: [], completed_capabilities: [] },
+        });
+      },
+      loadRunState: () => { order.push("load"); return Promise.resolve(null); },
+      saveRunState: () => { order.push("save"); return Promise.resolve(); },
+      loadHeldEvidence: () => { order.push("evidence"); return Promise.resolve([]); },
+      writeEvent: () => { order.push("write"); return Promise.resolve({ written: true }); },
+    },
+  );
+  // A pending provider run is money already spent. Losing its id costs more
+  // than losing a pass's feed, so it is written first.
+  assertEquals(order, ["evidence", "load", "run:fresh", "save"]);
+});
+
+// ── THE GATE IS THE SUBJECT'S ───────────────────────────────────────────────
+
+/** A run result carrying one company, seeded from a named subject. */
+function namedCompanyRun(identifier: string, opts: {
+  qualified: boolean; verdict?: string;
+}) {
+  const key = identifier.toLowerCase();
+  return {
+    companies: [{
+      key,
+      company: {
+        company_name: "Acme", canonical_domain: null, linkedin_company_url: null,
+        external_source_id: `mission_supplied:${identifier.trim().toLowerCase()}`,
+      },
+      signal_assessments: [{
+        signal: "hiring/company", verdict: opts.verdict ?? "verified", evidence_ids: ["e1"],
+      }],
+    }],
+    state: {
+      qualified_company_keys: opts.qualified ? [key] : [],
+      completed_capabilities: ["hiring_verification"],
+    },
+  };
+}
+
+const namedDeps = (
+  run: ReturnType<typeof namedCompanyRun>, written: Record<string, unknown>[],
+) => ({
+  buildPlan: () => ({ steps: [{ capability: "hiring_verification" }] }),
+  runPlan: () => Promise.resolve(run),
+  loadHeldEvidence: () => Promise.resolve([]),
+  writeEvent: (i: Record<string, unknown>) => {
+    written.push(i);
+    return Promise.resolve({ written: true });
+  },
+});
+
+Deno.test("13. a NAMED subject needs an evidenced signal, not a Lead-fit verdict", async () => {
+  // Live run 2026-08-24: the evaluator was asked whether Vercel satisfies a
+  // mission whose ICP is empty — a competitor subject states none — and
+  // answered `insufficient_evidence`, correctly. There was no fit question to
+  // answer; the workspace answered it by choosing to watch the company.
+  const written: Record<string, unknown>[] = [];
+  const out = await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "competitor", identifier: "https://www.linkedin.com/company/vercel/",
+        label: "Vercel", signals: [{ event: "hiring", subject: "company" }],
+        timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    namedDeps(
+      namedCompanyRun("https://www.linkedin.com/company/vercel/", { qualified: false }),
+      written,
+    ),
+  );
+  assert(out.ok);
+  assertEquals(written.length, 1, "a watched competitor that is hiring must produce an event");
+  // THE SUBJECT MODEL SURVIVES: a competitor is not an account.
+  assertEquals(written[0].subject_type, "competitor");
+  assertEquals(written[0].origin, "scheduled_monitor");
+});
+
+Deno.test("14. an unevidenced signal still produces nothing, however it was named", async () => {
+  const written: Record<string, unknown>[] = [];
+  await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "tracked_company", identifier: "acme.com", label: "Acme",
+        signals: [{ event: "hiring", subject: "company" }], timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    namedDeps(
+      namedCompanyRun("acme.com", { qualified: true, verdict: "absent" }), written,
+    ),
+  );
+  assertEquals(written.length, 0, "an absent signal must never reach the feed");
+});
+
+Deno.test("15. a DISCOVERED company still has to qualify", async () => {
+  const written: Record<string, unknown>[] = [];
+  await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "icp", identifier: null, label: "our ICP",
+        signals: [{ event: "hiring", subject: "company" }], timeframe_days: 90,
+      }],
+      icp: { verticals: ["b2b saas"], business_models: [], locations: [], stages: [] },
+    },
+    {
+      buildPlan: () => ({ steps: [{ capability: "hiring_verification" }] }),
+      // No `external_source_id` — the engine found this one itself.
+      runPlan: () => Promise.resolve({
+        companies: [{
+          key: "found.com",
+          company: {
+            company_name: "Found", canonical_domain: "found.com",
+            linkedin_company_url: null,
+          },
+          signal_assessments: [{
+            signal: "hiring/company", verdict: "verified", evidence_ids: ["e1"],
+          }],
+        }],
+        state: { qualified_company_keys: [], completed_capabilities: ["hiring_verification"] },
+      }),
+      loadHeldEvidence: () => Promise.resolve([]),
+      writeEvent: (i) => { written.push(i as Record<string, unknown>); return Promise.resolve({ written: true }); },
+    },
+  );
+  assertEquals(
+    written.length, 0,
+    "an ICP monitor's feed must be what qualified, not everything it looked at",
+  );
+});
+
+Deno.test("16. the event key is the one the pre-flight asks with", async () => {
+  // A subject named by LinkedIn URL carries no domain and no name. Keying the
+  // event on the company's domain would write an empty key, and the pre-flight
+  // — which asks with the subject's own identifier — could never match it, so
+  // every pass would re-buy what the last one proved.
+  const written: Record<string, unknown>[] = [];
+  const id = "https://www.linkedin.com/company/vercel/";
+  await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "competitor", identifier: id, label: "Vercel",
+        signals: [{ event: "hiring", subject: "company" }], timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    namedDeps(namedCompanyRun(id, { qualified: false }), written),
+  );
+  assertEquals(written.length, 1);
+  const key = String(written[0].subject_key);
+  assert(key.length > 0, "an event must never be written with an empty subject key");
+  // The same canonical form the pre-flight uses for this subject.
+  assertEquals(key, key.trim().toLowerCase());
+  assert(key.includes("vercel"));
+});
+
+// ── THE AUTHORITY MUST SURVIVE THE WHOLE WAY DOWN ───────────────────────────
+//
+// The guard that stops the legacy writer publishing behind an engine lives in
+// `memoryWriter`. It was fixed to accept any engine authority — and stayed
+// unreachable, because `toolRegistry` narrowed anything that was not exactly
+// `capability_engine` to `legacy` one layer above it. Live run 2026-08-24: ten
+// v1 `signals` rows in a monitoring-only workspace, one per pass, from a
+// watchlist nobody asked to turn into a pipeline.
+//
+// Three files now share one list. This test is what stops a fourth copy.
+
+Deno.test("17. every layer carries the authority instead of re-deciding it", async () => {
+  const read = (f: string) =>
+    Deno.readTextFile(new URL(`../../../supabase/functions/_shared/${f}`, import.meta.url));
+
+  for (const f of ["toolRegistry.ts", "memoryWriter.ts"]) {
+    const src = await read(f);
+    assert(
+      src.includes("PERSISTENCE_AUTHORITIES"),
+      `${f} must derive the authority list from the seam, not restate it`,
+    );
+    // The exact-equality narrowing is the bug, in either file.
+    assertFalse(
+      /persistence_authority\s*===\s*"capability_engine"/.test(src),
+      `${f} compares the authority to one literal — a second engine is silently downgraded`,
+    );
+  }
+
+  // And the runner still spends under its own authority, so the guard has
+  // something to recognise.
+  assertEquals(MONITORING_AUTHORITY, "monitoring_engine");
+  const seam = await read("capabilityExecution.ts");
+  assert(
+    seam.includes(`"${MONITORING_AUTHORITY}"`),
+    "the monitoring authority must be in the shared list the guards derive from",
+  );
 });
