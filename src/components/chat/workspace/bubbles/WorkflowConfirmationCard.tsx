@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Play, Settings2, ShieldCheck, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
-  isMission, missionCapabilities, missionDryRun, missionRejectedBroadening, missionRows,
+  capabilityLabel, isMission, missionCapabilities, missionDryRun, missionRejectedBroadening, missionRows,
   provenanceLabel, type MissionLike,
 } from '@/lib/leadMission/missionView';
 import { Label } from '@/components/ui/label';
@@ -35,7 +35,7 @@ interface WorkflowConfirmationPayload {
   };
   output: string;
   safety: string;
-  estimated_credits: number;
+  estimated_credits: number | null;
   // Company-Brain transparency: the target company profile vs. what's excluded.
   target_company?: string[];
   excluded_company?: string[];
@@ -293,6 +293,30 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
                   {(dryRun.blocked_reasons ?? []).join('; ')}
                 </div>
               )}
+
+              {/* ── WHAT THIS RUN PROVES, AND WHAT IT WILL NOT ──────────────
+                  The capability list says what will RUN. These say what will be
+                  ESTABLISHED — the distinction that let a four-step card for
+                  "companies hiring sales roles" prove no hiring at all. */}
+              {(dryRun.proves ?? []).length > 0 && (
+                <div className="text-[11.5px] text-[#9aa4af]" data-testid="dry-run-proves">
+                  Proves:{' '}
+                  {(dryRun.proves ?? []).map((p: { requirement: string; by_capability: string }) =>
+                    `${p.requirement} (${capabilityLabel(p.by_capability)})`).join(' · ')}
+                </div>
+              )}
+              {(dryRun.will_not_establish ?? []).length > 0 && (
+                <div className="text-[11.5px] text-amber-300/90" data-testid="dry-run-gaps">
+                  Will not establish:{' '}
+                  {(dryRun.will_not_establish ?? []).map((g: { requirement: string }) => g.requirement).join(', ')}
+                </div>
+              )}
+              {(dryRun.requires_unlock ?? []).length > 0 && (
+                <div className="text-[11.5px] text-[#9aa4af]" data-testid="dry-run-unlock">
+                  Needs an explicit unlock:{' '}
+                  {(dryRun.requires_unlock ?? []).map((u: { requirement: string }) => u.requirement).join(', ')}
+                </div>
+              )}
             </div>
           )}
 
@@ -434,7 +458,14 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80 shrink-0" />
           <span className="truncate">{payload.safety}</span>
         </div>
-        <span className="text-[#7D8590] shrink-0">~<span className="font-mono text-emerald-300">{payload.estimated_credits}</span> credits</span>
+        {/* A price is shown only when a compiled plan produced one. The
+            conversational categories used to print a hardcoded "5" that no
+            executable object backed. */}
+        {payload.estimated_credits != null ? (
+          <span className="text-[#7D8590] shrink-0">~<span className="font-mono text-emerald-300">{payload.estimated_credits}</span> credits</span>
+        ) : (
+          <span className="text-[#7D8590] shrink-0 text-[11.5px]" data-testid="no-planned-spend">No planned provider spend</span>
+        )}
       </div>
 
       {/* Actions */}

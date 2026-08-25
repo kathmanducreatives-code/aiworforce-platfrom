@@ -1,0 +1,140 @@
+// THE CARD MAY NOT PROMISE WHAT NO GRAPH BACKS.
+//
+// `generateWorkflowConfirmation` had two branches. One compiled a mission,
+// built a graph and ran a preflight. The other asked a helper model to pick a
+// "workflow" from a seven-item menu written into its own prompt — every option
+// carrying a hardcoded `Estimated Credits: 5` — and on model failure returned
+// `find_hiring_signal_accounts`, a Lead workflow, whatever had been asked.
+//
+// Nothing behind that branch compiled anything, so the card stated a plan and a
+// price that no executable object could be checked against. This file pins that
+// it is gone and cannot come back by editing a prompt string.
+//
+// Pure. Reads source; no network, no provider, no model call.
+
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { parseLeadMissionDeterministic } from "../../../supabase/functions/_shared/leadMission.ts";
+import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import {
+  buildPaidExecutionPreflight,
+  preflightDryRun,
+} from "../../../supabase/functions/_shared/leadPaidExecutionPreflight.ts";
+
+const PILOT = Deno.readTextFileSync(
+  new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
+);
+
+// ── the fabricated card is gone ────────────────────────────────────────────
+
+Deno.test("no hardcoded credit price survives in the confirmation path", () => {
+  assertEquals(
+    /Estimated Credits:\s*\d/.test(PILOT), false,
+    "a priced menu option in a prompt is a price no plan computed",
+  );
+});
+
+Deno.test("the workflow menu prompt is gone", () => {
+  for (const id of [
+    '"find_hiring_signal_accounts"',
+    '"linkedin_post_from_signals"',
+    '"competitor_snapshot"',
+    '"website_audit"',
+  ]) {
+    assertEquals(
+      PILOT.includes(`ID: ${id}`), false,
+      `${id} was a menu option a model chose between; it must not return`,
+    );
+  }
+});
+
+Deno.test("a non-Lead request cannot fall back to a Lead workflow", () => {
+  // The old failure mode: the model call throws, and every category — content
+  // included — got `find_hiring_signal_accounts`.
+  assertEquals(
+    PILOT.includes("workflow_id: \"find_hiring_signal_accounts\""), false,
+    "no category may default into a Lead workflow",
+  );
+});
+
+Deno.test("only categories with a real graph produce a priced card", () => {
+  // `LEAD_CONFIRMATION_CATEGORIES` is the set that compiles a mission. Anything
+  // outside it must be flagged `planned_workflow: false` with no estimate.
+  assert(PILOT.includes("planned_workflow: false"),
+    "the unplanned branch must say so explicitly");
+  assert(PILOT.includes("estimated_credits: null"),
+    "an unplanned request may not carry a credit estimate");
+});
+
+// ── the priced card is derived from the gating record ──────────────────────
+
+Deno.test("the dry run carries what the run proves, not just what it runs", () => {
+  const m = parseLeadMissionDeterministic(
+    "Find companies matching my ICP that are actively hiring sales roles.", {});
+  const plan = buildCapabilityGraph(m);
+  const dry = preflightDryRun(buildPaidExecutionPreflight({
+    mission: m, plan,
+    firstProvider: plan.steps[0].providers[0] ?? null,
+    firstProviderInput: {}, firstProviderCompileOk: true, firstProviderErrors: [],
+  }));
+
+  // The capability list alone said nothing about proof — that is exactly how a
+  // four-step card for this sentence proved no hiring.
+  assert(dry.capability_order.includes("hiring_verification"));
+  assert(
+    dry.proves.some((p) => p.by_capability === "hiring_verification"),
+    `the card must name what establishes hiring: ${JSON.stringify(dry.proves)}`,
+  );
+  assertEquals(dry.will_not_establish, []);
+});
+
+Deno.test("a gap the run cannot close is disclosed on the card", () => {
+  const base = parseLeadMissionDeterministic("Find companies hiring sales roles.", {});
+  const m = {
+    ...base,
+    required_signals: [...base.required_signals, { type: "headcount_change" } as never],
+  };
+  const plan = buildCapabilityGraph(m);
+  const dry = preflightDryRun(buildPaidExecutionPreflight({
+    mission: m, plan,
+    firstProvider: plan.steps[0].providers[0] ?? null,
+    firstProviderInput: {}, firstProviderCompileOk: true, firstProviderErrors: [],
+  }));
+  assert(
+    dry.will_not_establish.some((g) => g.requirement === "headcount_change"),
+    `the card must disclose the gap before payment: ${JSON.stringify(dry.will_not_establish)}`,
+  );
+});
+
+Deno.test("an unlock-staged output is shown as staged, not promised", () => {
+  const m = parseLeadMissionDeterministic(
+    "Find decision makers at companies matching my ICP.", {});
+  const plan = buildCapabilityGraph(m);
+  const dry = preflightDryRun(buildPaidExecutionPreflight({
+    mission: m, plan,
+    firstProvider: plan.steps[0].providers[0] ?? null,
+    firstProviderInput: {}, firstProviderCompileOk: true, firstProviderErrors: [],
+  }));
+  // NB: `dry.ok` is false here for an unrelated pre-existing reason — a bare
+  // deterministic mission carries no qualification contract. What matters is
+  // that FEASIBILITY did not refuse it: the person boundary is staged, not broken.
+  assertEquals(
+    dry.blocked_reasons.filter((r) => r.startsWith("request_not_feasible")), [],
+    "the person boundary must not be a feasibility refusal");
+  assert(
+    dry.requires_unlock.some((u) => u.requirement.includes("contact_ready_leads")),
+    `the card must say contacts need an unlock: ${JSON.stringify(dry.requires_unlock)}`,
+  );
+});
+
+Deno.test("a refused request says so on the card, before credits", () => {
+  const m = parseLeadMissionDeterministic("Find companies with headcount growth.", {});
+  const plan = buildCapabilityGraph(m);
+  const dry = preflightDryRun(buildPaidExecutionPreflight({
+    mission: m, plan,
+    firstProvider: plan.steps[0].providers[0] ?? null,
+    firstProviderInput: {}, firstProviderCompileOk: true, firstProviderErrors: [],
+  }));
+  assertEquals(dry.ok, false);
+  assert(dry.blocked_reasons.some((r) => r.startsWith("request_not_feasible")),
+    `expected a feasibility refusal: ${JSON.stringify(dry.blocked_reasons)}`);
+});

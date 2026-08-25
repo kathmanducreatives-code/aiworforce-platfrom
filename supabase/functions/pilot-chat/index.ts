@@ -875,111 +875,55 @@ async function generateWorkflowConfirmation(
     return buildHiringConfirmation(prompt, cardMission, company, cardBrainLite);
   }
 
-  const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.
-Your goal is to parse their request and generate a structured workflow confirmation object.
-Use the following templates as your reference for matching workflows:
-1. ID: "find_hiring_signal_accounts"
-   Name: "Find hiring-signal accounts"
-   Team: ["pilot", "scout", "aria"]
-   Inputs: {"count": number (default 5), "source": "hiring signals", "industry": "...", "location": "...", "persona": "..."}
-   Output: "Account opportunities in Workbench"
-   Safety: "Nothing will be sent. Draft-only by default."
-   Estimated Credits: 5
-
-2. ID: "find_decision_makers"
-   Name: "Find decision-makers"
-   Team: ["pilot", "scout"]
-   Inputs: {"count": number (default 5), "industry": "...", "location": "...", "persona": "..."}
-   Output: "Decision-maker contacts in Workbench"
-   Safety: "Nothing will be sent. Draft-only by default."
-   Estimated Credits: 5
-
-3. ID: "enrich_companies"
-   Name: "Enrich target companies"
-   Team: ["pilot", "hawk"]
-   Inputs: {"count": number (default 5), "industry": "...", "location": "..."}
-   Output: "Company details and context in Workbench"
-   Safety: "Nothing will be sent."
-   Estimated Credits: 5
-
-4. ID: "draft_outreach"
-   Name: "Draft outreach sequences"
-   Team: ["pilot", "penn"]
-   Inputs: {"count": number (default 5), "persona": "..."}
-   Output: "Outreach drafts in Awaiting You"
-   Safety: "Nothing will be sent. Draft-only by default."
-   Estimated Credits: 5
-
-5. ID: "linkedin_post_from_signals"
-   Name: "Create LinkedIn content"
-   Team: ["pilot", "scribe"]
-   Inputs: {"topic": "...", "style": "tactical insight"}
-   Output: "Social post drafts in content draft panel"
-   Safety: "Nothing will be sent."
-   Estimated Credits: 5
-
-6. ID: "website_audit"
-   Name: "Website Audit"
-   Team: ["pilot", "hawk", "scribe"]
-   Inputs: {"url": "..."}
-   Output: "Website audit report in report panel"
-   Safety: "Nothing will be sent."
-   Estimated Credits: 5
-
-7. ID: "competitor_snapshot"
-   Name: "Competitor Snapshot"
-   Team: ["pilot", "hawk", "aria"]
-   Inputs: {"competitor": "..."}
-   Output: "Competitor analysis report"
-   Safety: "Nothing will be sent."
-   Estimated Credits: 5
-
-Use these default company values if the user's prompt is missing them:
-- Company Industry: "\${company.industry ?? "B2B SaaS"}"
-- Company Location: "\${company.location ?? "USA"}"
-- Target Persona: "\${icp.buyer_roles?.[0] ?? "Founder / Head of Growth"}"
-
-Response format: Return ONLY a JSON object of this structure:
-{
-  "workflow_id": "string",
-  "workflow_name": "string",
-  "goal": "string (clear, concise description of the user request)",
-  "agent_team": ["pilot", "scout", ...],
-  "inputs": { ... },
-  "output": "string",
-  "safety": "string",
-  "estimated_credits": number
-}`;
-
-  try {
-    const ai = await generateJson({
-      taskType: "helper",
-      systemPrompt,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      maxTokens: 500,
-      jsonMode: true,
-      functionName: "generateWorkflowConfirmation",
-      workspaceId,
-    });
-    if (ai.ok && ai.json) {
-      return ai.json;
-    }
-  } catch (e) {
-    console.error("generateWorkflowConfirmation failed:", e);
-  }
-
+  // ── NO EXECUTABLE GRAPH, NO PRICED WORKFLOW ──────────────────────────────
+  //
+  // This branch used to ask a helper model to pick a "workflow" from a
+  // seven-item menu written into its own prompt, each with
+  // a hardcoded five-credit estimate on every option, and on model failure it returned
+  // `find_hiring_signal_accounts` — a Lead workflow — whatever the user had
+  // actually asked for. Nothing behind it compiled a mission, built a graph or
+  // ran a preflight, so the card stated a price and a plan that no executable
+  // object backed.
+  //
+  // Only `LEAD_CONFIRMATION_CATEGORIES` reaches the branch above, which is the
+  // one that has a real graph. Everything else is handled conversationally by
+  // orchestrate, and the honest card says so: what will happen, and that no
+  // planned provider spend is attached to it. `planned_workflow: false` is the
+  // flag the card reads to suppress the credits line rather than print a
+  // number nobody computed.
+  //
+  // This is deliberately not a refusal. These requests still run; they simply
+  // stop being described as costed workflows they never were. When Signals and
+  // Content gain real objectives and graphs, they graduate into the branch
+  // above and get a real preview with a real estimate.
   return {
-    workflow_id: "find_hiring_signal_accounts",
-    workflow_name: "Find hiring-signal accounts",
+    workflow_id: `assistant_${category}`,
+    workflow_name: ASSISTANT_WORKFLOW_NAMES[category] ?? "Work on this request",
     goal: prompt,
-    agent_team: ["pilot", "scout", "aria"],
-    inputs: { count: 5, source: "hiring signals", location: company.location ?? "USA", industry: company.industry ?? "B2B SaaS" },
-    output: "Account opportunities in Workbench",
-    safety: "Nothing will be sent. Draft-only by default.",
-    estimated_credits: 5,
+    agent_team: ["pilot"],
+    output: "Answered in chat, with anything produced saved where it belongs.",
+    safety: "Nothing will be sent.",
+    planned_workflow: false,
+    estimated_credits: null,
+    unplanned_reason:
+      "This request is handled conversationally. There is no compiled plan " +
+      "behind it yet, so no provider spend is scheduled or estimated.",
   };
 }
+
+/**
+ * Honest names for the conversational categories.
+ *
+ * Deterministic, because a model picking a label from a menu is what produced
+ * a Lead workflow name for a content request.
+ */
+const ASSISTANT_WORKFLOW_NAMES: Record<string, string> = {
+  signal_sourcing: "Look at your signals",
+  content_creation: "Work on content",
+  market_research: "Research this",
+  url_analysis: "Analyse this link",
+  outreach: "Draft outreach",
+};
 
 // Short, natural Pilot reply shown ABOVE the compact workflow card. This is the
 // "conversational handoff" — Pilot acknowledges the request and previews who

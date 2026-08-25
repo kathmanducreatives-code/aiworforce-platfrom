@@ -36,6 +36,7 @@ import type { ContractCompatibility } from "./leadRuntimeIdentity.ts";
 import {
   CAPABILITY_REGISTRY, type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
+import { assessRequestFeasibility, type FeasibilityReport } from "./requestFeasibility.ts";
 
 export const PREFLIGHT_VERSION = "paid-execution-preflight-v1" as const;
 
@@ -80,7 +81,12 @@ export type PreflightBlockCode =
    * The scheduled plan does not execute the research playbook that was
    * selected from the Mission. See `authorizePlaybookExecution`.
    */
-  | "playbook_not_authorized";
+  | "playbook_not_authorized"
+  /**
+   * The final graph cannot establish a material requirement, or cannot produce
+   * the output the mission promises. See `requestFeasibility`.
+   */
+  | "request_not_feasible";
 
 export class PaidExecutionBlockedError extends Error {
   readonly code: PreflightBlockCode;
@@ -109,6 +115,15 @@ export interface PaidExecutionPreflight {
   estimated_cost_units: number;
   /** Populated only when the preflight FAILED. Empty means paid work may start. */
   blocked: Array<{ code: PreflightBlockCode; message: string }>;
+  /**
+   * Whether the graph can prove what the request promises.
+   *
+   * Carried on the record — not just folded into `blocked` — because the
+   * workflow preview shows the SATISFIED list too: "verified by
+   * hiring_verification" is what makes the card's promise checkable by the
+   * person reading it.
+   */
+  feasibility: FeasibilityReport;
   ok: boolean;
 }
 
@@ -420,6 +435,18 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     block("playbook_not_authorized", i.playbook.reason);
   }
 
+  // ── CAN THIS GRAPH PROVE WHAT THE REQUEST PROMISES? ────────────────────
+  //
+  // Last, because it is the only check that reads the FINAL step list — every
+  // block above can still change what is scheduled. A requirement with no
+  // proof path is not a weak plan, it is a false one: it would spend on
+  // discovery, enrichment and qualification and then report success for a fact
+  // nothing investigated.
+  const feasibility = assessRequestFeasibility(mission, plan);
+  for (const r of feasibility.refusals) {
+    block("request_not_feasible", `${r.requirement} — ${r.message}`);
+  }
+
   const inputValid = i.firstProviderCompileOk !== false;
   if (!inputValid) {
     block("input_validation_failed",
@@ -439,6 +466,7 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
     input_errors: i.firstProviderErrors ?? [],
     estimated_cost_units: plan?.estimated_cost_units ?? 0,
     blocked,
+    feasibility,
     ok: blocked.length === 0,
   };
 }
@@ -512,6 +540,23 @@ export interface PreflightDryRun {
   estimated_cost_units: number;
   ok: boolean;
   blocked_reasons: string[];
+  /**
+   * ── WHAT THIS RUN WILL AND WILL NOT ESTABLISH ────────────────────────────
+   *
+   * The capability list alone says what will RUN; it does not say what will be
+   * PROVEN, and those came apart badly enough to be worth showing separately.
+   * A card listing four steps for "companies hiring sales roles" looked
+   * complete while proving no hiring at all.
+   *
+   * `proves` names the step behind each requirement so the promise is
+   * checkable. `will_not_establish` is the honest other half — a requirement
+   * this plan cannot serve, disclosed before the user pays rather than
+   * discovered in the results.
+   */
+  proves: Array<{ requirement: string; by_capability: string }>;
+  will_not_establish: Array<{ requirement: string; status: string; why: string }>;
+  /** Outputs staged behind an explicit user unlock, with what unlocks them. */
+  requires_unlock: Array<{ requirement: string; why: string }>;
 }
 
 /**
@@ -539,5 +584,14 @@ export function preflightDryRun(p: PaidExecutionPreflight): PreflightDryRun {
     estimated_cost_units: p.estimated_cost_units,
     ok: p.ok,
     blocked_reasons: p.blocked.map((b) => `${b.code}: ${b.message}`),
+    proves: [...p.feasibility.requirements, ...p.feasibility.outputs]
+      .filter((r) => r.status === "satisfied" && r.by_capability)
+      .map((r) => ({ requirement: r.requirement, by_capability: r.by_capability! })),
+    will_not_establish: [...p.feasibility.requirements, ...p.feasibility.outputs]
+      .filter((r) => r.status === "unsupported" || r.status === "population_mismatch")
+      .map((r) => ({ requirement: r.requirement, status: r.status, why: r.message })),
+    requires_unlock: [...p.feasibility.requirements, ...p.feasibility.outputs]
+      .filter((r) => r.status === "requires_unlock")
+      .map((r) => ({ requirement: r.requirement, why: r.message })),
   };
 }

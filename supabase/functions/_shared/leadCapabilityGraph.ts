@@ -184,7 +184,14 @@ export function unsupportedCapabilities(): CapabilitySpec[] {
  * pipeline artifact like `company_candidate` or `company_identity`, which the
  * evidence table deliberately says nothing about.
  */
-const CLAIM_TO_EVENT: Readonly<Record<string, string>> = Object.freeze({
+/**
+ * Capability ARTIFACT -> the signal event it constitutes proof of.
+ *
+ * Exported because `requestFeasibility` derives "can this graph prove the
+ * requirement" from it rather than carrying a second signal->provider table.
+ * One bridge, two readers.
+ */
+export const CLAIM_TO_EVENT: Readonly<Record<string, string>> = Object.freeze({
   hiring_evidence: "hiring",
   funding_signal: "funding",
   funding_event: "funding",
