@@ -374,13 +374,22 @@ Deno.test("12. a general company query selects general_company_discovery", () =>
   const plan = buildCapabilityGraph(
     compile(AUTOMATION_QUERY, AUTOMATION_PROPOSAL).final_mission);
   assertEquals(plan.entry_capability, "general_company_discovery");
-  // The discovery universe is PERMITTED; the planner decides which member runs,
-  // and `validateDiscoveryStrategy` refuses one whose card cannot serve the
-  // mission. "No YC for an industrial query" is asserted where it is now
-  // enforced — on the calls actually made, in leadGeneralCompanyRoute #12.
-  assertEquals(plan.steps[0].providers,
-    ["apify_yc_companies_memo23", "apify_yc_companies_solidcode",
-      "apify_linkedin_company_search"]);
+  // COHORT IS CONTAINMENT, NOT RANKING — AND IT BELONGS IN THE PLAN.
+  //
+  // This asserted the full discovery universe, on the reasoning that the
+  // planner picks a member and `validateDiscoveryStrategy` refuses one whose
+  // card cannot serve the mission. Task eeb02852 showed what that costs: the
+  // confirmation card names a FIRST PAID ACTOR taken from the head of this
+  // list, so for a non-YC mission it promised `apify_yc_companies_memo23`,
+  // and then execution blocked every YC step as `actor_outside_mission_cohort`
+  // until nothing survived (`no_valid_step`). Nothing was bought, but the
+  // preview had already described a run execution would not accept.
+  //
+  // The cohort rule is a correctness constraint, not a preference, so the plan
+  // now applies the SAME `cohortRefusalFor` execution applies. Ranking among
+  // admissible actors is still the planner's call, and a YC mission still
+  // keeps both YC actors.
+  assertEquals(plan.steps[0].providers, ["apify_linkedin_company_search"]);
 });
 
 Deno.test("13. a hiring-first non-YC query reaches external hiring evidence", () => {

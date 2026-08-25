@@ -29,6 +29,8 @@
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
+import { cohortRefusalFor } from "./leadDiscoveryStrategy.ts";
+import { hiringActorCard } from "./hiringActorCatalog.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
 
@@ -724,6 +726,49 @@ function hasSignalSubject(m: LeadMissionV1, type: string, subject: string): bool
  * the entry follows from `allowed_next`, so an ordering that the registry does
  * not permit cannot be produced here.
  */
+/**
+ * Drop providers this mission's cohort forbids, from every scheduled step.
+ *
+ * ── WHY THE PLAN MUST KNOW THIS ────────────────────────────────────────────
+ *
+ * `leadExecutionPlan` already refuses a cohort-scoped Actor for a mission that
+ * does not target that cohort (`actor_outside_mission_cohort`, severity
+ * "block"). The graph did not, so the two disagreed about the same run — and
+ * the confirmation card is built from the graph.
+ *
+ * Task eeb02852 is what that cost. "Find 3 companies matching my ICP that are
+ * actively hiring sales roles" has `stages: []` and never names YC, yet the
+ * card announced `First paid Actor: apify_yc_companies_memo23`, because
+ * `general_company_discovery` lists both YC Actors ahead of the unrestricted
+ * one. At execution every proposed YC step was blocked by the cohort rule,
+ * nothing survived, and the run died as `no_valid_step` — after telling the
+ * user precisely which Actor it would spend on.
+ *
+ * Nothing was bought (0 units, 0 provider attempts), so the spend boundary
+ * held. What failed was the PROMISE: the preview described a plan execution
+ * would not accept. Applied here, the card shows the Actor that will actually
+ * run, and it is derived from the SAME `cohortRefusalFor` execution applies
+ * rather than a second rule free to drift from it.
+ *
+ * A step whose every provider is out-of-cohort keeps its list unchanged.
+ * Emptying it would hide the step's real shape from the preview and from
+ * `requestFeasibility`; "this cannot run" is a conclusion those two already
+ * reach honestly, and it belongs to them.
+ */
+function withAdmissibleProviders(
+  steps: CapabilityStep[], mission: LeadMissionV1,
+): CapabilityStep[] {
+  return steps.map((s) => {
+    const kept = s.providers.filter((key) => {
+      const card = hiringActorCard(String(key));
+      return card ? cohortRefusalFor(card, mission) === null : true;
+    });
+    return kept.length > 0 && kept.length < s.providers.length
+      ? { ...s, providers: kept }
+      : s;
+  });
+}
+
 export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   const steps: CapabilityStep[] = [];
   const known = mission.company_profile.known_companies ?? [];
@@ -1111,7 +1156,11 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   // provider-level prohibition contract exists. If one is ever added, it
   // belongs in its own field (`prohibited_providers`) and applies here — never
   // inferred from capability membership.
-  const allowed_providers = [...new Set(steps.flatMap((s) => s.providers))];
+  // Filtered FIRST, so `allowed_providers` and the steps cannot disagree: a
+  // provider allowed but scheduled nowhere is exactly the drift
+  // `providerFilterAndProvenance` refuses.
+  const admissibleSteps = withAdmissibleProviders(steps, mission);
+  const allowed_providers = [...new Set(admissibleSteps.flatMap((s) => s.providers))];
 
   // ── WHAT THE ROUTER KNOWS AND THE MODEL CANNOT INFER ──────────────────────
   //
@@ -1186,11 +1235,11 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
 
   return {
     version: CAPABILITY_GRAPH_VERSION,
-    steps,
+    steps: admissibleSteps,
     prohibited,
     allowed_providers,
     entry_capability: entry,
-    estimated_cost_units: steps.reduce((n, s) => n + s.cost_units * s.max_attempts, 0),
+    estimated_cost_units: admissibleSteps.reduce((n, s) => n + s.cost_units * s.max_attempts, 0),
     offered_capabilities,
     routing_reason: entryReason,
     routing_advisories,

@@ -138,3 +138,64 @@ Deno.test("a refused request says so on the card, before credits", () => {
   assert(dry.blocked_reasons.some((r) => r.startsWith("request_not_feasible")),
     `expected a feasibility refusal: ${JSON.stringify(dry.blocked_reasons)}`);
 });
+
+// ── the card may not name an Actor execution will refuse ───────────────────
+//
+// Task eeb02852, from the real app: "Find 3 companies matching my ICP that are
+// actively hiring sales roles". `stages: []`, no mention of YC. The card said
+//
+//     First paid Actor: apify_yc_companies_memo23
+//
+// because `general_company_discovery` listed both YC Actors ahead of the
+// unrestricted one. At execution `leadExecutionPlan` blocked every YC step as
+// `actor_outside_mission_cohort` until none survived, and the run failed with
+// `no_valid_step` — 0 units, 0 provider attempts, so the spend boundary held,
+// but the preview had promised a run execution would not accept.
+
+import { cohortRefusalFor } from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
+import { hiringActorCard } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
+
+Deno.test("no scheduled provider is one the mission's cohort forbids", () => {
+  for (const q of [
+    "Find 3 companies matching my ICP that are actively hiring sales roles.",
+    "Find companies expanding into Europe and hiring salespeople.",
+    "Find SaaS companies that raised funding in the last 90 days.",
+  ]) {
+    const m = parseLeadMissionDeterministic(q, {});
+    const plan = buildCapabilityGraph(m);
+    for (const step of plan.steps) {
+      for (const key of step.providers) {
+        const card = hiringActorCard(String(key));
+        if (!card) continue;
+        assertEquals(
+          cohortRefusalFor(card, m), null,
+          `${key} is scheduled for ${step.capability} but execution refuses it ` +
+            `as outside this mission's cohort — the card would promise it anyway`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test("a YC mission still keeps its YC actors", () => {
+  // The filter is a correctness constraint, not a preference. It must not
+  // strip the cohort actors from a mission that actually targets the cohort.
+  const m = parseLeadMissionDeterministic("Find YC startups hiring sales roles.", {});
+  const plan = buildCapabilityGraph(m);
+  const all = plan.steps.flatMap((s) => s.providers.map(String));
+  assert(
+    all.some((k) => k.startsWith("apify_yc_companies")),
+    `a YC mission must retain YC discovery: ${JSON.stringify(all)}`,
+  );
+});
+
+Deno.test("allowed_providers cannot drift from the scheduled steps", () => {
+  const m = parseLeadMissionDeterministic(
+    "Find 3 companies matching my ICP that are actively hiring sales roles.", {});
+  const plan = buildCapabilityGraph(m);
+  const scheduled = new Set(plan.steps.flatMap((s) => s.providers.map(String)));
+  for (const p of plan.allowed_providers) {
+    assert(scheduled.has(String(p)),
+      `${p} is allowed but no scheduled step uses it`);
+  }
+});
