@@ -3686,10 +3686,27 @@ export async function runCapabilityPlan(
 
       let found = 0;
       let asked = 0;
+      /** Targets with no name to search for — see the note in the loop. */
+      let unnamed = 0;
       for (const c of targets) {
         if (deps.deadline?.expired()) break;
+        // ── NO NAME, NO SEARCH — AND THE SKIP IS RECORDED ──────────────────
+        //
+        // A news search needs something to search FOR. A company supplied by
+        // LinkedIn URL carries no name of its own — deriving one from the slug
+        // would be a guess — so its name comes from enrichment, and when
+        // enrichment fails there is nothing to ask about.
+        //
+        // Live run 2026-08-24: enrichment returned 403, every target was
+        // skipped, and the stage reported `asked: 0` with no reason. A count
+        // that says "we asked nobody" and does not say why is the silence this
+        // phase keeps removing.
         const name = (c.enriched?.company_name ?? c.company.company_name ?? "").trim();
-        if (!name) continue;
+        if (!name) {
+          unnamed++;
+          c.record.missing_evidence.push(`${event}_search_needs_company_name`);
+          continue;
+        }
 
         const compiled = compileGoogleNewsInput({
           // THE COMPANY AND THE CLAIM, TOGETHER. A search for the terms alone
@@ -3728,12 +3745,19 @@ export async function runCapabilityPlan(
 
       log(`${event}_verification_complete`, {
         targets: targets.length, asked, with_evidence: found,
+        skipped_unnamed: unnamed,
       });
       // EVIDENCE FOR SOMEBODY IS WHAT COMPLETES THIS. Asking every company and
       // finding nothing is an answered question, so the capability completed —
       // but with no evidence, which is what `assessSignals` reads.
       finish(cap, asked > 0 ? "complete" : "skipped_no_input", found, [provider],
-        found > 0, found > 0 ? null : "no dated public statement was found");
+        found > 0,
+        found > 0
+          ? null
+          : unnamed > 0
+          ? `${unnamed} target(s) had no company name to search for — enrichment ` +
+            `supplies it, and a name cannot be guessed from a LinkedIn slug`
+          : "no dated public statement was found");
       continue;
     }
 

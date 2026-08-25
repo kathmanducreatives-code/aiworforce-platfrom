@@ -380,75 +380,86 @@ which nothing has been proven to replace.
 #### Phase 4 status, 2026-08-24
 
 **The premise did not survive the audit.** The plan called this phase "wiring,
-not capability", because the funding, expansion, product-launch, technology and
-post capabilities are "all already supported with providers". They are all
-registered and all carded. Only two of them RUN — the rest sit in the engine's
-skip list, declared and unrunnable, exactly as `known_company_resolution` did
-for the whole of Phase 3.
+not capability", because five capabilities are "all already supported with
+providers". They are all registered and all carded. Two of them ran.
 
-| Signal | `icp` subject | named subject |
-|---|---|---|
-| `hiring` | ✅ `hiring_verification` | ✅ `hiring_verification` |
-| `funding` | ✅ `funding_signal_discovery` | ❌ nothing scheduled |
-| `expansion` | ❌ scheduled, not driven | ❌ scheduled, not driven |
-| `product_launch` | ❌ scheduled, not driven | ❌ scheduled, not driven |
-| `technology` | ❌ scheduled, not driven | ❌ scheduled, not driven |
-| `post` | ❌ scheduled, not driven | ❌ scheduled, not driven |
-| `headcount_change` | ❌ no capability exists | ❌ no capability exists |
+| Signal | `icp` | named | State |
+|---|---|---|---|
+| `hiring` | ✅ | ✅ | live-proven in 3F |
+| `funding` | ✅ | ❌ nothing scheduled | chain proven; live blocked |
+| `expansion` | ✅ | ✅ | chain proven; live blocked |
+| `product_launch` | ✅ | ✅ | chain proven; live blocked |
+| `technology` | ⛔ | ⛔ | **no canonical type can exist** |
+| `post` | ⛔ | ⛔ | **evidence source, not a signal** |
+| `headcount_change` | ⛔ | ⛔ | no capability exists |
 
-**Collectability is now derived, never restated.** `signalCollectability` asks
-the real graph what it would schedule and the real engine-driven list what it
-would run; a test recomputes every verdict independently so the module cannot
-drift from the engine it describes. It is also the first thing to express that
-collectability depends on the SUBJECT KIND: a named subject gets only
-verification capabilities, an ICP subject gets discovery too, and for funding
-the discovery is the proof.
+**Collectability now checks the whole chain, cheapest link first.** It required
+a driven capability; it also requires a canonical type to file the finding
+under. Without that, `company_post_verification` could be driven tomorrow and
+`post` would report "collectible" while the runner reached `if (!canon)
+continue` and wrote silence — the very failure this module exists to remove.
 
-The runner filters signals before compiling, so an uncollectible signal never
-reaches a plan and never costs anything — and the subject is dropped WITH the
-reason, which is the whole difference between an honest refusal and silence.
+**Expansion and product launch are driven, through ONE stage.** They ask the
+same provider the same shape of question about the same company; a branch each
+is how `general_company_discovery` acquired a hardcoded provider. The engine
+exports the set, because a test deriving "implemented" from single-condition
+`if (cap === "…")` cannot see a shared branch.
 
-**Funding became a real collector, which took four fixes.** Three found offline:
-`fundingRounds` was pushed to and never read, so every round the engine paid for
-was discarded; the round could not assert its own verdict; and eligibility for
-qualification was entirely hiring-shaped, so a company discovered by a dated,
-sourced Series A never reached qualification at all.
+Four defects were fixed to close their chain, and the third is the one that
+matters most:
 
-The fourth was found only live, and is the reason funding had never once
-worked: **the transport reshaped funding rows into job rows.**
-`apify_funding_rounds_datahyena` was in neither structured-company list, so
-`resolveResponseKind` fell through to the tool's declared source type —
-"hiring" — and read the rows through the JOBS path. The live run succeeded,
-returned 25 rows, buried each real round under `raw.provider_payload`, and the
-engine logged "the actor returned no rows at all" for a call that had returned
-twenty-five.
+1. Not engine-driven — both sat in the skip list.
+2. No evidence type — `expansion_signal` and `launch_signal` are separate, so an
+   article proving a launch cannot be cited as an expansion.
+3. **The transport reshaped news rows into job rows.** `resolveResponseKind`
+   returned "jobs" for `apify_google_news`, exactly as it did for the funding
+   actor. The first offline test could not have caught it: it handed the engine
+   the provider's shape, and the transport sits between them.
+4. The eligibility gate was still hiring-shaped for every non-funding signal.
 
-**Live state after the fix:** `funding_signal_discovery` completes, 25 companies
-enter the pool, identity, enrichment and qualification all run, and the
-evaluator judged 18 of them. None passed ICP qualification within the wall
-clock, so no funding `signal_events` row exists yet — the fixture's ICP is
-synthetic and the companies reached the evaluator with thin evidence. The full
-path from round to cited verdict is proven deterministically in
-`fundingCoverage.test.ts`.
+The window is enforced on the ARTICLE, not the query: the actor's vocabulary is
+1h/1d/7d/30d/1y/all, so a 90-day request goes as "1y" — the narrowest bucket
+that certainly contains it — and the cutoff is then applied to each article's
+own publication date. The verdict is `plausible`, never `verified`: a publisher
+reported the claim and we read a headline.
 
-**UI filter coverage is enforced.** `uiFilterCoverage.test.ts` reads the filter
-list from the UI and the collector list from the scan planner and
-`signalCollectability`. A filter added with nothing behind it fails the test, and
-a retired source no longer counts as coverage. Every filter the UI offers today
-has a collector or is a view over collected signals.
+**Technology and post are refused, for different reasons.** `technology`:
+BuiltWith reports what a domain runs NOW and publishes no adoption date —
+`adopted_at` is always null, deliberately — so an event store whose every row
+carries `occurred_at_basis` has nothing to hold, and "adopted X" needs two
+observations over time. `post`: a company's own post is an evidence SOURCE,
+which is why the capability registry already lists
+`apify_linkedin_company_posts` as a provider for expansion and launch
+VERIFICATION. Filing "they posted" as a signal would file evidence as a
+conclusion.
+
+#### The live validation is blocked — Apify returns 403 for every actor
+
+At 17:31 UTC `apify_funding_rounds_datahyena` succeeded with 25 rows and at
+17:35 `apify_linkedin_company_details` succeeded with 9. From 01:43 UTC every
+actor returns `apify_unauthorized` (403), including that same funding actor and
+both harvestapi actors. This is account-level and external — a lapsed rental, a
+billing state, or a rotated token — and no code change addresses it. It blocks
+identity resolution and enrichment for EVERY signal, hiring included.
+
+What the live runs did establish before it: `funding_signal_discovery`
+completes, 25 companies enter the pool, identity, enrichment and qualification
+all run, and the evaluator judged 18 of them. And one gap the runs exposed and
+the code now reports: a company supplied by LinkedIn URL carries no name of its
+own, so its news search has nothing to search for until enrichment supplies one
+— the stage counted `asked: 0` and said nothing, and now names the reason.
 
 #### What remains in Phase 4
 
-* **Four categories are still uncollectible** — `expansion`, `product_launch`,
-  `technology`, `post`. Each needs its capability driven by the engine and its
-  evidence carried to the registry, which is the same shape of work funding just
-  took. They are now refused with a stated reason rather than silently empty.
-* **A funding event has not been produced live.** The deterministic path is
-  proven; the live gate needs a workspace whose real ICP the discovered
-  companies can be judged against.
-* **The wall clock bounds a 25-company funding pass.** Qualification stopped
-  with 15 companies still on the frontier. Monitoring's continuation carries
-  pending provider runs, not an unfinished frontier.
+* **The live gate for funding, expansion and launch.** Each chain is proven
+  deterministically, link by link, including the transport link. Restoring
+  Apify access is the only thing between that and a live event.
+* **`technology` and `post` need a modelling decision, not code.** A technology
+  signal needs either a canonical undated type or a state-diff mechanism; a
+  company post needs an evaluator to say what the post means.
+* **A named subject cannot monitor funding.** Nothing schedules a funding
+  capability for a supplied company — it is refused with that reason rather than
+  spending on identity and enrichment first.
 
 ---
 
