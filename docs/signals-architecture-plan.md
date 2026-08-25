@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–5 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call, every signal it cannot collect refuses with a stated reason, and the feed shows situations rather than rows. Phase 6 not started.
+**Date:** 2026-08-25 · **Commit:** `b6b60b82` · **Status:** **Phases 0–6 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call, every signal it cannot collect refuses with a stated reason, the feed shows situations rather than rows, and monitoring runs on a schedule inside a per-workspace ceiling. Phase 7 not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -579,6 +579,77 @@ simplest thing that works and leaves materialisation as an optimisation.
 | **Live validation** | Two consecutive scheduled runs: the second must cost materially less than the first. |
 | **Done** | Scheduled scans run within budget and demonstrably reuse cached evidence. |
 | **Depends on** | 1 (hard), 3, 5. |
+
+---
+
+#### Phase 6 status, 2026-08-25
+
+**The plan expected Phase 3's pre-flight to prevent the re-spend.** It does — for
+DATED evidence. Its rule is `occurred_at_basis === "source_reported"`, because an
+undated event cannot be shown to fall inside a recency window, and monitoring
+writes every event with `occurred_at: null`. So the pre-flight can never reuse
+monitoring's own evidence.
+
+That is not a defect to route around. The two mechanisms answer different
+questions and neither substitutes for the other:
+
+| Mechanism | Question | Answerable from |
+|---|---|---|
+| Pre-flight (Phase 3E) | is the ANSWER still fresh? | evidence with a source date |
+| Cadence (Phase 6) | did we ASK recently? | `last_run_at` + `cadence_minutes` |
+
+**Three guards, each for something the others cannot do.**
+
+* **The cadence** decides whether to ask. A subject that has never run is due
+  immediately — waiting a full cadence for the first answer is the opposite of
+  what somebody who just added a subject wants.
+* **The period ceiling** bounds unattended spend. Every other guard answers "may
+  THIS call happen"; none can stop a hundred small calls a day for a month. It
+  refuses rather than truncating, and is checked BEFORE the claim so a refused
+  workspace does not have its cadence advanced for a pass that never ran.
+* **The claim** is a compare-and-swap in one statement, so two ticks produce one
+  scan — and a LEASE, not a flag, because a flag set by a run that crashes
+  freezes the subject forever.
+
+**Unattended spend has its own name in the ledger.** Every provider charge was
+`provider_call`, so a period total could not tell a scheduled pass from a person
+clicking Scan. `task_id IS NULL` does not separate them either — a Radar scan is
+taskless too. The distinction is who decided to spend, which the system already
+records as the persistence authority, so `monitoring_call` is charged exactly
+when the engine runs under `monitoring_engine`.
+
+**The tick owns no engine.** It decides and then calls `run-monitoring-scan` —
+the same endpoint a person triggers. A scheduled pass and a manual one must be
+the same pass, or the thing that runs unattended is not the thing anybody
+tested.
+
+| Live validation | Result |
+|---|---|
+| dry run decides, spends nothing | 1 due, "would scan — 200 of 200 credits left" |
+| tick 1 scans unattended | 5 capabilities completed, event deduplicated |
+| **tick 2, immediately** | **0 due, `inside_cadence: 1`, nothing scanned, 0.22s** |
+| ledger records unattended spend separately | `monitoring_call` charged 1 |
+| ceiling 0 refuses | "scheduled scans are off", `claimed: 0`, `last_run_at` unchanged |
+| two ticks fired together | one claimed and scanned; the other stood down |
+
+`pg_cron` and `pg_net` are enabled and `monitoring-tick` runs every 15 minutes.
+That is not how often a workspace is scanned — the cadence decides that. A
+frequent tick is a single indexed read when nothing is due, and it means a
+newly-added subject answers within fifteen minutes rather than within its
+cadence. The service key lives in `vault.decrypted_secrets`, never in a
+migration.
+
+#### What Phase 6 does NOT do
+
+* **No workspace auto-scans until it enables a monitoring subject.** The real
+  workspace's subject is disabled; enabling it is a spend decision and belongs
+  to its owner.
+* **The Signals page updates on load, not by push.** Clusters are computed from
+  the rows the feed already fetches, so a scheduled scan appears on the next
+  visit. Live push is a Phase 7+ concern.
+* **The ceiling counts credits, not dollars.** One credit is one provider call
+  whatever it cost; a per-dollar ceiling would need the ledger's
+  `actual_cost_usd`, which is recorded but not yet summed.
 
 ---
 
