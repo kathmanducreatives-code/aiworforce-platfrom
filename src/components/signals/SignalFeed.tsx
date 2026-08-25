@@ -40,6 +40,7 @@ import ScanDetailsPanel from "./ScanDetailsPanel";
 import { currentScanRunId, signalsForRun, listScanRuns } from "@/lib/radarScanHistory";
 import { categoryEmptyState } from "@/lib/radarCategoryModel";
 import RadarSummaryCards from "./RadarSummaryCards";
+import SituationStrip from "./SituationStrip";
 import RadarBrief from "./RadarBrief";
 import RadarSourceStrip from "./RadarSourceStrip";
 import SignalDetailDrawer from "./SignalDetailDrawer";
@@ -101,7 +102,7 @@ const TAB_TO_CATEGORY: Record<Tab, Parameters<typeof categoryEmptyState>[0]["cat
 export default function SignalFeed() {
   const { workspaceId } = useWorkspace();
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
-  const { signals, drafts, savedOutputs, loading, error, refresh, runRadarScan, scanning, lastRun, lastScanAt } = useSignalFeed(workspaceId);
+  const { signals, clusters, drafts, savedOutputs, loading, error, refresh, runRadarScan, scanning, lastRun, lastScanAt } = useSignalFeed(workspaceId);
   const { reviewsBySignal, setReview, bulkSetReview } = useSignalReviews(workspaceId);
 
   const [tab, setTab] = useState<Tab>("all");
@@ -432,6 +433,21 @@ export default function SignalFeed() {
           </div>
         </div>
       )}
+
+      {/* ── SITUATIONS ─────────────────────────────────────────────────────
+          Above the sources, because a company showing three signals is the
+          thing to act on and a source is how it was found. Renders nothing
+          when no company shows more than one signal. */}
+      <SituationStrip
+        clusters={clusters}
+        onFocus={(c) => {
+          // FILTER THE FEED TO THE SITUATION rather than opening a new view.
+          // The rows below are already the evidence; the strip is the reason to
+          // look at them.
+          setTab("all");
+          setQuery(c.subject_key ?? "");
+        }}
+      />
 
       {/* Radar summary */}
       <section className="space-y-3">

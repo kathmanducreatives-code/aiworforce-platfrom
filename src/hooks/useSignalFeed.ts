@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchOutreachDrafts, fetchSavedOutputs, type DraftRow, type SavedOutputRow } from "@/lib/signalsFeed";
 import { fetchSignalFeed, type SignalFeedResult } from "@/lib/signalEventsFeed";
+import type { SignalCluster } from "../../supabase/functions/_shared/signalCluster.ts";
 import type { FeedSignal } from "@/lib/signalFeedModel";
 
 export type RadarMode = "default" | "load_more" | "category";
@@ -83,10 +84,12 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
   const [scanning, setScanning] = useState(false);
   /** What the feed is made of. Exposed so the read switch is inspectable. */
   const [coverage, setCoverage] = useState<SignalFeedResult["coverage"] | null>(null);
+  /** The same intelligence as `signals`, grouped into situations. */
+  const [clusters, setClusters] = useState<SignalCluster[]>([]);
   const [lastRun, setLastRun] = useState<RadarRunResult | null>(null);
 
   const load = useCallback(async () => {
-    if (!workspaceId) { setSignals([]); setDrafts([]); setSavedOutputs([]); setLoading(false); return; }
+    if (!workspaceId) { setSignals([]); setClusters([]); setDrafts([]); setSavedOutputs([]); setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -99,7 +102,8 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
         fetchOutreachDrafts(workspaceId, 50),
         fetchSavedOutputs(workspaceId, 50),
       ]);
-      setSignals(s.signals); setCoverage(s.coverage); setDrafts(d); setSavedOutputs(o);
+      setSignals(s.signals); setCoverage(s.coverage); setClusters(s.clusters);
+      setDrafts(d); setSavedOutputs(o);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load signals");
     } finally {
@@ -133,5 +137,5 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
 
   const lastScanAt = useMemo<string | null>(() => signals[0]?.created_at ?? null, [signals]);
 
-  return { signals, coverage, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
+  return { signals, clusters, coverage, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
 }

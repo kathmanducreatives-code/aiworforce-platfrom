@@ -29,9 +29,29 @@ import { normalizeSignalRow, type RawSignalRow } from "@/lib/signalFeedModel";
 import {
   mergeSignalFeed, EVENT_COLUMNS, type RawSignalEventRow,
 } from "@/lib/signalEventProjection";
+// ── IMPORTED, NOT MIRRORED ────────────────────────────────────────────────
+//
+// `signalCluster` is pure and import-free, so the browser can use the SAME file
+// the edge runtime does. The codebase's other cross-runtime modules are
+// mirrored into `src/`, and a mirror is a second copy that drifts — which is
+// the failure this phase's own join key exists to avoid. Phase 9's Content
+// consumer reads this exact structure, so there must be exactly one of it.
+import {
+  clusterSignalEvents, type SignalCluster,
+} from "../../supabase/functions/_shared/signalCluster.ts";
 
 export interface SignalFeedResult {
   signals: FeedSignal[];
+  /**
+   * The same intelligence, grouped into situations.
+   *
+   * Built from the CANONICAL rows, not from the projected feed shape: a cluster
+   * groups on `account_id` or the subject pair, and the projection keeps
+   * neither. Legacy rows do not participate — they carry no subject model, so
+   * there is nothing to correlate them on, and inventing one would merge
+   * companies.
+   */
+  clusters: SignalCluster[];
   /** What the feed is actually made of, so the switch is inspectable. */
   coverage: {
     canonical: number;
@@ -66,6 +86,9 @@ export async function fetchSignalFeed(
     const legacy = await fetchLegacySignals(workspaceId, limit);
     return {
       signals: legacy.map(normalizeSignalRow),
+      // NO CANONICAL ROWS, NO SITUATIONS. A legacy row carries no subject
+      // model, so correlating one would mean inventing an identity for it.
+      clusters: [],
       coverage: { canonical: 0, legacy_only: legacy.length, source: "signals" },
     };
   }
@@ -76,6 +99,7 @@ export async function fetchSignalFeed(
 
   return {
     signals: merged.signals.slice(0, limit),
+    clusters: clusterSignalEvents(rows as never, { window_days: 90 }).clusters,
     coverage: {
       canonical: merged.canonical,
       legacy_only: merged.legacy_only,
