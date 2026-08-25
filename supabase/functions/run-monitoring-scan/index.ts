@@ -52,6 +52,26 @@ import type { ExistingEvidence } from "../_shared/monitoringPreflight.ts";
  */
 const MONITORING_MAX_CANDIDATES = 25;
 
+/**
+ * A caller may ask for a SMALLER pass, never a larger one.
+ *
+ * The ceiling above is what an unattended cadence should use. But a pass has a
+ * wall clock, and qualification costs a model call per company: live run
+ * 2026-08-25 discovered 25 funded companies, enriched ten, and
+ * `qualification_deadline_stop` fired with `evaluated: 0` — the budget was gone
+ * before the first evaluation, so nothing could qualify and the feed stayed
+ * empty for a run that had paid for everything up to that point.
+ *
+ * So the size is a parameter, clamped: a scheduler running a first pass, or an
+ * operator validating a provider, can ask for three. Nothing can ask for more
+ * than the ceiling, and an absent or unusable value keeps today's behaviour.
+ */
+function requestedMaxCandidates(body: Record<string, unknown>): number {
+  const n = Number(body.max_candidates);
+  if (!Number.isFinite(n) || n < 1) return MONITORING_MAX_CANDIDATES;
+  return Math.min(Math.floor(n), MONITORING_MAX_CANDIDATES);
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -192,6 +212,7 @@ Deno.serve(async (req) => {
   // exactly the order monitoring already validated, so omitting it keeps the
   // boundary check meaningful rather than advisory.
 
+  const maxCandidates = requestedMaxCandidates(body);
   const v2Enabled = isSignalsV2Enabled();
 
   const outcome = await runMonitoring(
@@ -220,7 +241,7 @@ Deno.serve(async (req) => {
           // MONITORING HAS NO REQUESTED COUNT, so it has no quota-derived
           // shortlist. The candidate ceiling is the budget: never more calls
           // than companies, which is the same rule Leads apply.
-          shortlistSize: MONITORING_MAX_CANDIDATES,
+          shortlistSize: maxCandidates,
         });
         let evalCalls = 0;
         console.log("[monitoring][mission-evaluation][binding]", evalBinding.diagnostics);
@@ -288,7 +309,7 @@ Deno.serve(async (req) => {
               : undefined,
           } satisfies CapabilityEngineDeps,
           {
-            mission, plan, maxCandidates: MONITORING_MAX_CANDIDATES,
+            mission, plan, maxCandidates,
             // The engine reads `pending_runs` off this to adopt a provider run
             // an earlier pass started and paid for, rather than starting a
             // second one. `resumableState` decided what was safe to carry.
@@ -352,5 +373,6 @@ Deno.serve(async (req) => {
     signals_v2_enabled: v2Enabled,
     workspace_id,
     invoked_by: scheduled ? "scheduler" : "user",
+    max_candidates: maxCandidates,
   }, outcome.ok ? 200 : 409);
 });

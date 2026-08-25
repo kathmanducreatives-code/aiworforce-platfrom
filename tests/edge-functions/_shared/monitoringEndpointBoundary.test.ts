@@ -176,3 +176,30 @@ Deno.test("10. it can see the wall clock, and a pending provider run is not a fa
     "run-agent still defines its own readPendingRun — two readings of one contract",
   );
 });
+
+Deno.test("11. a pass may ask to be smaller, never larger", () => {
+  // Live run 2026-08-25: 25 funded companies discovered, ten enriched, and
+  // `qualification_deadline_stop` fired with `evaluated: 0` — the wall clock was
+  // gone before the first model call, so nothing could qualify and the feed
+  // stayed empty for a run that had paid for everything up to that point.
+  const fn = SRC.slice(SRC.indexOf("function requestedMaxCandidates("));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+
+  // Clamped to the ceiling, never above it.
+  assert(
+    body.includes("Math.min(Math.floor(n), MONITORING_MAX_CANDIDATES)"),
+    "a caller must not be able to ask for a larger pass than the ceiling",
+  );
+  // An absent or unusable value keeps today's behaviour.
+  assert(
+    /!Number\.isFinite\(n\) \|\| n < 1/.test(body),
+    "an absent or unusable size must fall back to the ceiling, not to zero",
+  );
+  // And the size actually reaches BOTH the engine and the evaluation budget —
+  // a shortlist of 25 with a pool of 3 would authorise calls for companies
+  // that do not exist.
+  assert(SRC.includes("shortlistSize: maxCandidates"), "the evaluation budget must follow");
+  assert(SRC.includes("mission, plan, maxCandidates,"), "and so must the engine's pool bound");
+  // It is reported, so a reader knows how big the pass actually was.
+  assert(SRC.includes("max_candidates: maxCandidates"));
+});
