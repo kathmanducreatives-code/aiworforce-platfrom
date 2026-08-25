@@ -65,6 +65,14 @@ export const STRUCTURED_COMPANY_ACTOR_KEYS: ReadonlySet<string> = new Set([
   // all 25 `is_evidence: false`, and the engine logged "the actor returned no
   // rows at all" for a call that had returned twenty-five.
   "apify_funding_rounds_datahyena",
+  // A NEWS ARTICLE IS NOT A COMPANY ROW EITHER, and belongs here for the same
+  // reason: its `title`, `url`, `source` and `publishedAt` must reach
+  // `normalizeNewsArticle` as the provider wrote them. Without this the rows
+  // resolve to "jobs" — the tool's declared source type wins — and arrive
+  // reshaped into job records, which is precisely how funding was silently
+  // broken until a live run caught it. Registered WITH the capability that
+  // reads them, so the two cannot ship apart.
+  "apify_google_news",
 ]);
 
 export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
@@ -76,6 +84,7 @@ export const STRUCTURED_COMPANY_ACTOR_IDS: ReadonlySet<string> = new Set([
   // that carries only the actor id must resolve the same way as one that
   // carries the key.
   "datahyena/company-funding-rounds",
+  "data_xplorer/google-news-scraper-fast",
 ]);
 
 /** Source-type aliases that genuinely mean "company row". */

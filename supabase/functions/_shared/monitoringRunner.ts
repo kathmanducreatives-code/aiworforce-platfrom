@@ -143,12 +143,18 @@ export interface MonitoringRunOutcome {
  * default, because a signal with no canonical type must produce no event rather
  * than a plausible-looking one.
  */
-const CANONICAL_TYPE_FOR: Readonly<Record<string, { type: string; category: string }>> =
+export const CANONICAL_TYPE_FOR: Readonly<Record<string, { type: string; category: string }>> =
   Object.freeze({
     hiring: { type: "sales_hiring", category: "gtm" },
     funding: { type: "recent_funding", category: "growth" },
     expansion: { type: "market_expansion", category: "growth" },
     product_launch: { type: "product_launch", category: "product" },
+    // NO CANONICAL TYPE EXISTS for a technology reading or for "the company
+    // posted something", so neither can become an event and both are refused
+    // by `signalCollectability` before anything is spent. `headcount_change`
+    // has a type and no capability. All three are listed nowhere rather than
+    // mapped to an approximation — a signal filed under the wrong type is
+    // worse than a signal nobody collected.
     headcount_change: { type: "employee_growth", category: "growth" },
   });
 

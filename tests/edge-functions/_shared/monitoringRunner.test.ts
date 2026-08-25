@@ -598,7 +598,7 @@ Deno.test("18. a subject whose signals cannot be collected never reaches a plan"
   const dropped = out.dropped_subjects.find((d) => /technology/.test(d.reason));
   assert(dropped, `the drop must name the signal: ${JSON.stringify(out.dropped_subjects)}`);
   assert(
-    /does not drive|would prove/.test(dropped!.reason),
+    /no canonical signal type|does not drive|would prove/.test(dropped!.reason),
     `and why it cannot be collected: ${dropped!.reason}`,
   );
 });

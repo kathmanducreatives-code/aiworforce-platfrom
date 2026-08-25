@@ -28,6 +28,7 @@ import {
 import {
   CAPABILITY_REGISTRY, CAPABILITY_IDS,
 } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { ENGINE_DRIVEN_SIGNAL_VERIFICATION } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { ENGINE_DRIVEN_DISCOVERY }
   from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { SOURCE_STRATEGIES } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -82,6 +83,9 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
   // grounded in the engine's own source — the property it exists to protect —
   // without requiring the engine to spell each capability out in a condition.
   for (const c of ENGINE_DRIVEN_DISCOVERY) implemented.add(c);
+  // The signal-verification capabilities share a stage for the same reason the
+  // discovery ones do, and are re-derived from the engine's own exported set.
+  for (const c of ENGINE_DRIVEN_SIGNAL_VERIFICATION) implemented.add(c);
   const SKIP_ANCHOR = 'if (cap === "job_discovery" ||';
   const anchorAt = ENGINE.indexOf(SKIP_ANCHOR);
   // A MISSING ANCHOR MUST FAIL LOUDLY. `indexOf` returning -1 would slice from
@@ -100,7 +104,7 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
       `${c}: ENGINE_DRIVEN_CAPABILITIES says ${isEngineDriven(c)}, the engine says ${driven}`,
     );
   }
-  // And the skip guard really does name the four the engine declines to drive.
+  // And the skip guard really does name the ones the engine declines to drive.
   //
   // Two capabilities have LEFT this list, by opposite routes, and the contrast
   // is the point: `funding_signal_discovery` gained a provider with a verified
@@ -108,15 +112,14 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
   // `known_company_resolution` gained none, because it needs none — its input
   // arrives with the mission.
   for (const c of [
-    "job_discovery",
-    "expansion_signal_discovery", "job_deduplication", "expansion_signal_verification",
+    "job_discovery", "expansion_signal_discovery", "job_deduplication",
   ]) {
     assert(skipped.has(c), `the engine must still skip ${c}`);
     assertFalse(isEngineDriven(c as never), `${c} must not be marked engine-driven`);
   }
   assertEquals(
-    ENGINE_DRIVEN_CAPABILITIES.length, 12,
-    "twelve capabilities are engine-driven; a change here is a real architecture change",
+    ENGINE_DRIVEN_CAPABILITIES.length, 14,
+    "fourteen capabilities are engine-driven; a change here is a real architecture change",
   );
 });
 

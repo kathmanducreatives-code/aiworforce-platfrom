@@ -35,6 +35,7 @@ import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCa
 import { compileMonitoringMission } from "../../../supabase/functions/_shared/monitoringMission.ts";
 import { isEngineDriven } from "../../../supabase/functions/_shared/leadResearchPlaybooks.ts";
 import { provingCapabilities } from "../../../supabase/functions/_shared/signalQualification.ts";
+import { CANONICAL_TYPE_FOR } from "../../../supabase/functions/_shared/monitoringRunner.ts";
 
 const KINDS = ["tracked_company", "competitor", "icp"] as const;
 const EVENTS = [
@@ -68,17 +69,43 @@ Deno.test("2. funding is collectible for an ICP subject and not for a named one"
   }
 });
 
-Deno.test("3. the four declared-but-undriven categories are refused, with the reason", () => {
-  for (const e of ["expansion", "product_launch", "technology", "post"] as const) {
+Deno.test("3a. expansion and product launch are collectible for every subject kind", () => {
+  // Phase 4 drove both through ONE stage: they ask the same provider the same
+  // shape of question about the same company, and a branch each is how
+  // `general_company_discovery` acquired a hardcoded provider.
+  for (const e of ["expansion", "product_launch"] as const) {
+    for (const k of KINDS) {
+      const c = signalCollectability(e, k);
+      assert(c.collectible, `${k}/${e}: ${c.reason}`);
+      assertEquals(
+        c.proven_by,
+        e === "expansion" ? "expansion_signal_verification" : "product_launch_verification",
+      );
+    }
+  }
+});
+
+Deno.test("3b. technology and company posts are refused, with the reason", () => {
+  // NOT AN OVERSIGHT, AND THE REASONS DIFFER.
+  //
+  // `technology`: BuiltWith reports what a domain runs NOW and publishes no
+  // adoption date — `NormalizedTechnologyProfile.adopted_at` is always null, on
+  // purpose. An event store whose every row carries `occurred_at_basis` cannot
+  // hold an undated state, and there is no canonical signal type for one.
+  //
+  // `post`: a company's own post is an EVIDENCE SOURCE, not a signal. The
+  // registry already lists `apify_linkedin_company_posts` as a provider for
+  // expansion and launch VERIFICATION, which is what reading a company's posts
+  // is for. There is no canonical type for "the company posted something",
+  // and inventing one would file evidence as a finding.
+  for (const e of ["technology", "post"] as const) {
     for (const k of KINDS) {
       const c = signalCollectability(e, k);
       assertFalse(c.collectible, `${k}/${e} claims to be collectible`);
+      // THE REASON IS THE LAST LINK, not a missing capability. Both have a
+      // driven-or-drivable capability; neither has a canonical type to become.
       assert(
-        c.scheduled_but_not_driven.length > 0 || /would prove/.test(c.reason),
-        `${k}/${e} must name the capability that would have proved it: ${c.reason}`,
-      );
-      assert(
-        /does not drive|not in this plan|would prove/.test(c.reason),
+        /no canonical signal type exists/.test(c.reason),
         `${k}/${e}: ${c.reason}`,
       );
     }
@@ -159,4 +186,30 @@ Deno.test("8. the filter preserves the signal's own shape, not just its event", 
   const original = { event: "hiring", subject: "company", extra: "kept" };
   const f = filterCollectableSignals([original], "icp");
   assertEquals(f.kept[0], original);
+});
+
+
+// ── 9. THE CHAIN IS CHECKED END TO END, NOT AT ITS FIRST LINK ───────────────
+
+Deno.test("9. a capability that runs but has nowhere to file its finding is refused", () => {
+  // The failure this closes: `company_post_verification` could be driven
+  // tomorrow, and `post` would then report "collectible" while the monitoring
+  // runner reached `if (!canon) continue` and wrote silence. Collectability
+  // must mean the WHOLE chain, and the cheapest link is checked first.
+  for (const e of ["technology", "post"] as const) {
+    const c = signalCollectability(e, "icp");
+    assertFalse(c.collectible);
+    assert(/never become a signal_event/.test(c.reason), c.reason);
+    // And it does NOT blame a capability, because a capability is not what is
+    // missing — saying so would send someone to fix the wrong thing.
+    assertEquals(c.scheduled_but_not_driven, []);
+  }
+
+  // Every collectible signal, by contrast, has a canonical type to become.
+  for (const e of ["hiring", "funding", "expansion", "product_launch"] as const) {
+    const kinds = (["icp", "tracked_company", "competitor"] as const)
+      .filter((k) => signalCollectability(e, k).collectible);
+    assert(kinds.length > 0, `${e} should be collectible somewhere`);
+    assert(CANONICAL_TYPE_FOR[e], `${e} is collectible but has no canonical type`);
+  }
 });

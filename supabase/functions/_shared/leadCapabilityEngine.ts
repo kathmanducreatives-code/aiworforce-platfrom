@@ -54,6 +54,11 @@ import {
   normalizeSuppliedCompanies, SUPPLIED_COMPANY_PROVENANCE,
 } from "./suppliedCompanyIdentity.ts";
 import {
+  compileGoogleNewsInput,
+} from "./hiringActorInputs.ts";
+import type { NormalizedNewsArticle } from "./hiringActorNormalizers.ts";
+import { normalizeNewsArticle } from "./hiringActorNormalizers.ts";
+import {
   prequalifyDiscoveredCompanies, mergePrequalification,
   genericPrequalificationKey,
 } from "./leadGenericPrequalification.ts";
@@ -1106,6 +1111,15 @@ export interface EngineCompany {
   enrichment_outcome: EnrichmentOutcome;
   yc_open_jobs: NormalizedHiringJob[];
   hiring_jobs: NormalizedHiringJob[];
+  /**
+   * DATED PUBLIC EVIDENCE FOR A NON-HIRING SIGNAL, by signal event name.
+   *
+   * A map rather than a field per signal: `expansion` and `product_launch`
+   * arrive the same way, from the same provider, and a third signal must not
+   * need a fourth field before it can be carried. The key is the mission's own
+   * signal event, so nothing has to translate between vocabularies to find it.
+   */
+  signal_evidence: Record<string, NormalizedNewsArticle[]>;
   fit: CompanyFitResult | null;
   /** The canonical hiring decision, with its evidence and reason. */
   hiring_assessment: HiringAssessment | null;
@@ -3627,12 +3641,99 @@ export async function runCapabilityPlan(
     // can keep its claim. It is driven through the shared discovery stage like
     // any other discovery capability — see `ENGINE_DRIVEN_DISCOVERY`.
     if (cap === "job_discovery" ||
-        cap === "expansion_signal_discovery" || cap === "job_deduplication" ||
-        cap === "expansion_signal_verification") {
+        cap === "expansion_signal_discovery" || cap === "job_deduplication") {
       // Declared in the graph and reachable, but not yet driven by this engine.
       // Recorded honestly rather than silently treated as done.
       finish(cap, "skipped_no_input", 0, [], false,
         "capability is not yet engine-driven; the mission reports a partial result");
+      continue;
+    }
+
+    // ── DATED PUBLIC EVIDENCE FOR A NON-HIRING SIGNAL ────────────────────────
+    //
+    // ONE STAGE, TWO CAPABILITIES, for the same reason discovery has one stage:
+    // `expansion_signal_verification` and `product_launch_verification` ask the
+    // same provider the same shape of question about the same company, and
+    // giving them a branch each is how `general_company_discovery` acquired a
+    // hardcoded provider and skipped the planner.
+    //
+    // ── WHAT THIS ESTABLISHES, AND WHAT IT REFUSES TO ────────────────────────
+    //
+    // A DATED, SOURCED PUBLIC STATEMENT. `normalizeNewsArticle` marks an item
+    // `is_evidence` only with a followable URL and a publication date, and an
+    // item without both never reaches the registry — so "we found something"
+    // can never stand in for "something happened, on a date, and here is where
+    // it was said".
+    //
+    // It does NOT read the article. Whether the story means what the mission
+    // needs is the evaluator's judgement, made from the cited item; this stage
+    // establishes that the statement exists and when it was made.
+    if (ENGINE_DRIVEN_SIGNAL_VERIFICATION.has(cap)) {
+      const event = cap === "expansion_signal_verification" ? "expansion" : "product_launch";
+      const provider = "apify_google_news";
+      await ensureMissionIntelligence(companies);
+
+      // ONLY THE SLICE, AND ONLY A RESOLVED COMPANY. Asking the news for a
+      // company we could not identify would attribute a story to a name.
+      const targets = companies.filter((c) =>
+        c.shortlisted && c.identity && identityIsActionable(c.identity));
+      const sig = (opts.mission.required_signals ?? [])
+        .find((x) => String(x.type ?? "") === event);
+      const days = Number((sig as { timeframe_days?: number } | undefined)?.timeframe_days ?? 0);
+      // The Actor's own vocabulary, never a raw day count.
+      const timeframe = days > 0 && days <= 1 ? "1d" : days > 0 && days <= 7 ? "7d"
+        : days > 0 && days <= 30 ? "30d" : "1y";
+
+      let found = 0;
+      let asked = 0;
+      for (const c of targets) {
+        if (deps.deadline?.expired()) break;
+        const name = (c.enriched?.company_name ?? c.company.company_name ?? "").trim();
+        if (!name) continue;
+
+        const compiled = compileGoogleNewsInput({
+          // THE COMPANY AND THE CLAIM, TOGETHER. A search for the terms alone
+          // returns the industry's news; a search for the name alone returns
+          // everything about the company. Neither is evidence of this signal.
+          keywords: SIGNAL_NEWS_TERMS[event].map((t) => `"${name}" ${t}`),
+          maxArticles: NEWS_ARTICLES_PER_COMPANY,
+          timeframe,
+          extractDescriptions: true,
+        });
+        asked++;
+        const rows = await callProvider(cap, provider, compiled, c);
+        // ── THE ACTOR'S WINDOW IS COARSER THAN THE MISSION'S ────────────────
+        //
+        // Its vocabulary is 1h/1d/7d/30d/1y/all, so a 90-day request is sent as
+        // "1y" — the narrowest bucket that certainly contains it. Sending "30d"
+        // instead would silently shrink what the mission asked for.
+        //
+        // The consequence is that results can be OLDER than the window, and a
+        // story from last spring is not evidence of an expansion this quarter.
+        // So the window is enforced HERE, on the article's own publication
+        // date, which is the only place it can be enforced exactly.
+        const cutoff = days > 0 ? Date.now() - days * 86_400_000 : null;
+        const articles = rows.map(normalizeNewsArticle)
+          .filter((a) => a.is_evidence)
+          .filter((a) => {
+            if (cutoff === null) return true;
+            const t = Date.parse(a.published_at ?? "");
+            return Number.isFinite(t) && t >= cutoff;
+          });
+        if (articles.length > 0) {
+          c.signal_evidence[event] = [...(c.signal_evidence[event] ?? []), ...articles];
+          found++;
+        }
+      }
+
+      log(`${event}_verification_complete`, {
+        targets: targets.length, asked, with_evidence: found,
+      });
+      // EVIDENCE FOR SOMEBODY IS WHAT COMPLETES THIS. Asking every company and
+      // finding nothing is an answered question, so the capability completed —
+      // but with no evidence, which is what `assessSignals` reads.
+      finish(cap, asked > 0 ? "complete" : "skipped_no_input", found, [provider],
+        found > 0, found > 0 ? null : "no dated public statement was found");
       continue;
     }
 
@@ -4426,7 +4527,15 @@ export async function runCapabilityPlan(
       const eligible = companies.filter((c) =>
         c.record.stage === "hiring_verified" || c.hiring_jobs.length > 0 ||
         (c.hiring_assessment ? reachesCompanyBrain(c.hiring_assessment) : false) ||
-        roundByCompanyKey.has(c.key));
+        roundByCompanyKey.has(c.key) ||
+        // ── OR ANY OTHER SIGNAL THE MISSION ASKED FOR ──────────────────────
+        //
+        // The funding clause above was the first crack in a hiring-shaped
+        // gate; this is the general form. A company with a dated public
+        // statement that it expanded, or launched, carries evidence for the
+        // signal the mission required — and a filter that only asks about
+        // openings cannot see it.
+        Object.values(c.signal_evidence).some((a) => a.length > 0));
       /** One company's canonical registry. Shared by both evaluation paths. */
       const registryFor = (c: EngineCompany) => buildEvidenceRegistry({
         evidence: buildCompanyEvidence({
@@ -4452,6 +4561,11 @@ export async function runCapabilityPlan(
         jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
         // THE ROUND THAT DISCOVERED THIS COMPANY, when one did.
         funding_round: roundByCompanyKey.get(c.key) ?? null,
+        // DATED PUBLIC STATEMENTS, kept apart by the signal they prove. An
+        // article proving a launch is not evidence of an expansion, and one
+        // bucket would let a verdict cite the wrong one.
+        expansion_evidence: c.signal_evidence["expansion"] ?? [],
+        launch_evidence: c.signal_evidence["product_launch"] ?? [],
         yc_description: c.company.description ?? null,
         // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
         // found" would let an outage look like a company that is not hiring —
@@ -5264,6 +5378,29 @@ export async function runCapabilityPlan(
             provenVerdicts["funding/company"] = {
               verdict: "verified", evidence_ids: fundingEvidence,
             };
+          }
+        }
+
+        // ── AND WHAT THE PUBLIC RECORD PROVED ─────────────────────────────
+        //
+        // Same rule again, and the third time it is worth stating as a rule:
+        // code may assert a signal it established, and only by citing the
+        // registry item that holds it. The verdict is `plausible`, not
+        // `verified` — a publisher reported the claim, which is source-backed
+        // and is not a verification we performed. `verified` would say we
+        // confirmed it, and we read a headline.
+        for (const [event, type] of [
+          ["expansion", "expansion_signal"] as const,
+          ["product_launch", "launch_signal"] as const,
+        ]) {
+          if (!state.completed_capabilities.some((x) => x.startsWith(event === "expansion" ? "expansion_signal_verification" : "product_launch_verification"))) {
+            continue;
+          }
+          const ids = (c.evidence_registry?.items ?? [])
+            .filter((it) => it.evidence_type === type)
+            .map((it) => it.evidence_id);
+          if (ids.length > 0) {
+            provenVerdicts[`${event}/company`] = { verdict: "plausible", evidence_ids: ids };
           }
         }
 
@@ -6520,7 +6657,8 @@ function addCompany(
     // NOT_ATTEMPTED IS THE HONEST DEFAULT, exactly as with `evaluation_path`.
     // A company leaves it only when the stage actually tries.
     enrichment_outcome: "not_attempted",
-    yc_open_jobs: ycJobs, hiring_jobs: [], fit: null, hiring_assessment: null,
+    yc_open_jobs: ycJobs, hiring_jobs: [], signal_evidence: {},
+    fit: null, hiring_assessment: null,
     brain: null, completed_operations: [],
     evidence_registry: null, grounded: null,
     classification: null, verdict: null,
@@ -6535,6 +6673,40 @@ function addCompany(
 }
 
 // --------------------------------------------------- evaluation telemetry ----
+
+/**
+ * How many articles one company's signal search may buy.
+ *
+ * Small on purpose. The question is "did they say this, and when", which one
+ * dated story answers; paging deeper buys restatements of the same story.
+ */
+const NEWS_ARTICLES_PER_COMPANY = 5;
+
+/**
+ * Signal-verification capabilities this engine drives, through ONE shared stage.
+ *
+ * Exported for the same reason `ENGINE_DRIVEN_DISCOVERY` is: they share a
+ * branch, so a test that derives "implemented" from single-condition `if (cap
+ * === "…")` cannot see them, and the honest answer is for the engine to name
+ * the set rather than for the test to hardcode one.
+ */
+export const ENGINE_DRIVEN_SIGNAL_VERIFICATION: ReadonlySet<CapabilityId> =
+  new Set<CapabilityId>([
+    "expansion_signal_verification",
+    "product_launch_verification",
+  ]);
+
+/**
+ * The words that make a search about THIS SIGNAL rather than the company.
+ *
+ * Deliberately narrow and deliberately not a model call: a compiled query is
+ * inspectable, and the stage does not read the article anyway — the evaluator
+ * judges the cited item.
+ */
+const SIGNAL_NEWS_TERMS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  expansion: ["expands", "new office", "enters market", "expansion"],
+  product_launch: ["launches", "announces", "unveils", "new product"],
+});
 
 export const EVALUATION_PATH_VERSION = "evaluation-path-telemetry-v1" as const;
 

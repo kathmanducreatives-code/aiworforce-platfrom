@@ -79,6 +79,13 @@ export const ENGINE_DRIVEN_CAPABILITIES: readonly CapabilityId[] = Object.freeze
   // mission, and every claim about the companies it seeds is still established
   // downstream by `company_identity_resolution`.
   "known_company_resolution",
+  // Joined in Phase 4, when the engine learned to ask the public record about a
+  // company and to carry what it found to the evidence registry. Both run
+  // through ONE stage, because they ask the same provider the same shape of
+  // question — the duplication a branch each would create is what let
+  // `general_company_discovery` acquire a hardcoded provider.
+  "expansion_signal_verification",
+  "product_launch_verification",
   "company_identity_resolution",
   "company_enrichment",
   "hiring_verification",

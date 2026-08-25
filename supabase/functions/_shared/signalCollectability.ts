@@ -37,6 +37,7 @@ import { buildCapabilityGraph } from "./leadCapabilityGraph.ts";
 import { compileMonitoringMission, type MonitoringSubjectKind } from "./monitoringMission.ts";
 import { isEngineDriven } from "./leadResearchPlaybooks.ts";
 import { provingCapabilities } from "./signalQualification.ts";
+import { CANONICAL_TYPE_FOR } from "./monitoringRunner.ts";
 
 export const SIGNAL_COLLECTABILITY_VERSION = "signal-collectability-v1" as const;
 
@@ -100,6 +101,35 @@ export function signalCollectability(
     return {
       collectible: false, proven_by: null, scheduled_but_not_driven: [],
       reason: `no plan could be built: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+
+  // ── THE LAST LINK: CAN THIS EVER BECOME AN EVENT? ─────────────────────────
+  //
+  // Checked FIRST, because it is the cheapest question and the most absolute.
+  // A capability that runs, returns evidence and produces a verdict still
+  // yields nothing if the canonical store has no type to file it under — the
+  // runner would reach `if (!canon) continue` and write silence, which is the
+  // failure this whole module exists to remove.
+  //
+  // Two signals sit here, for different reasons worth keeping distinct:
+  //
+  //   `technology` — BuiltWith reports what a domain runs NOW and publishes no
+  //   adoption date; `NormalizedTechnologyProfile.adopted_at` is always null,
+  //   deliberately. A store whose every row carries `occurred_at_basis` cannot
+  //   hold an undated state, and "adopted X" needs two observations over time.
+  //
+  //   `post` — a company's own post is an EVIDENCE SOURCE, not a finding. The
+  //   capability registry already lists `apify_linkedin_company_posts` as a
+  //   provider for expansion and launch VERIFICATION, which is what reading a
+  //   company's posts is for. Filing "they posted" as a signal would file
+  //   evidence as a conclusion.
+  if (!CANONICAL_TYPE_FOR[event]) {
+    return {
+      collectible: false, proven_by: null, scheduled_but_not_driven: [],
+      reason:
+        `no canonical signal type exists for "${event}", so it could never ` +
+        `become a signal_event however well it was collected`,
     };
   }
 
