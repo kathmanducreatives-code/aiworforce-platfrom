@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–4 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call; every signal it cannot collect refuses with a stated reason. Phase 5 not started.
+**Date:** 2026-08-24 · **Commit:** `4567ca5a` · **Status:** **Phases 0–5 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call, every signal it cannot collect refuses with a stated reason, and the feed shows situations rather than rows. Phase 6 not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -495,6 +495,71 @@ for a run that had paid for everything up to that point.
 > **Identity is the risk here.** Correlation is only as good as `account_id`.
 > Companies arriving from different providers must resolve to one account or
 > clusters fragment silently.
+
+---
+
+#### Phase 5 completion, 2026-08-25
+
+**The plan said group by `account_id` over an `occurred_at` window. Neither
+exists.** Both columns are in the schema, which is what made them look
+available. Read from the store: all thirteen events carry `account_id: NULL` and
+all thirteen carry `occurred_at: NULL` with basis `unknown`. Grouping by account
+would produce one cluster of nulls; a window over `occurred_at` would select
+nothing.
+
+That is Phase 2's rule holding, not a data gap: a market or competitor signal
+uses a REAL SUBJECT MODEL rather than a borrowed account identity, and no source
+time is invented. So the cluster key is `account_id` when an event has one and
+the subject pair otherwise, and the window is over the best time each event
+actually has — with the cluster stating which it used.
+
+**An observation is never presented as an occurrence.** Every cluster reports
+`timing: { occurred, observed_only }`, an undated cluster says so in its own
+priority reasons, and the UI says "3 signals seen" rather than "3 signals this
+week". The distinction is the difference between a claim about the company and a
+claim about when we looked.
+
+**Priority is deterministic and origin-agnostic.** Breadth over volume — three
+funding rows about one company is one fact reported three times, so distinct
+categories weigh most and raw count is capped. Proven over asserted, dated over
+merely noticed. Nothing reads `origin` except to count it, so the same facts
+rank identically whether a Lead mission or a monitor found them. Phase 9's
+Content consumer reads this exact structure, which is why the output is not
+Signals-shaped.
+
+**The risk the plan named is reported, not papered over.** A company watched by
+LinkedIn URL and the same company discovered by a funding round land under
+different keys and split silently. `identityFragmentationRisk` NAMES the
+candidate pairs and merges nothing — joining them needs
+`company_identity_resolution`, and guessing from string shape would merge two
+companies sharing a word.
+
+**Imported, not mirrored.** The module is pure and import-free, so the browser
+uses the same file the edge runtime does. The codebase's other cross-runtime
+modules are mirrored into `src/`, and a mirror is a second copy that drifts — a
+test asserts no mirror exists.
+
+| Live validation | Result |
+|---|---|
+| clustering the real store | 13 events → 6 clusters, 0 excluded |
+| a real multi-signal company as one card | Vercel at priority 93 — `market_expansion` + `product_launch` + `sales_hiring`, three categories |
+| single-signal clusters below it | 11–15 |
+| fragmentation candidates in current data | none |
+| the feed renders it | "1 situation · Vercel · Expansion · Product launch · Hiring · 3 signals seen" |
+
+No database object was added. The plan allowed a materialised table or a view;
+the clusters are computed from rows the feed already fetches, which is the
+simplest thing that works and leaves materialisation as an optimisation.
+
+#### Known limits carried into Phase 6
+
+* **Correlation is per-namespace.** Subject keys and account ids do not meet.
+  Nothing in the current data fragments, but nothing prevents it either.
+* **Every cluster is undated.** No event yet carries `occurred_at`, so every
+  window is over observation time. A dated event would improve ranking
+  immediately — the scoring already rewards it.
+* **A cluster is computed per feed load.** Fine at 13 events; a materialised
+  table is the answer when a workspace holds thousands.
 
 ---
 

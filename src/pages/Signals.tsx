@@ -9,6 +9,7 @@ import ScoutCopilot from '@/components/signals/workspace/ScoutCopilot';
 import SignalsFilters, { type SecondaryCategory } from '@/components/signals/workspace/SignalsFilters';
 import TodaysSignalBrief from '@/components/signals/workspace/TodaysSignalBrief';
 import SignalsFeedList from '@/components/signals/workspace/SignalsFeedList';
+import SituationStrip from '@/components/signals/SituationStrip';
 import EditRadarDrawer from '@/components/signals/EditRadarDrawer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
@@ -59,7 +60,7 @@ function matchesSecondary(s: FeedSignal, cat: SecondaryCategory): boolean {
 export default function Signals() {
   const { workspaceId } = useWorkspace();
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
-  const { signals, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
+  const { signals, clusters, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
 
   const [tab, setTab] = useState<PrimaryTab>('today');
@@ -201,6 +202,14 @@ export default function Signals() {
             accentHex={accent}
           />
         )}
+        {/* ── SITUATIONS, ABOVE THE ROWS ──────────────────────────────────
+            A company showing three signals is the thing to act on; the rows
+            below are the evidence for it. Renders nothing when no company
+            shows more than one signal. */}
+        <SituationStrip
+          clusters={clusters}
+          onFocus={(c) => setQuery(c.subject_key ?? '')}
+        />
         <SignalsFeedList
           signals={filtered}
           loading={loading}
