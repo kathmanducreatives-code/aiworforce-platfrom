@@ -176,3 +176,36 @@ Deno.test("validation preserves the qualifier the compiler read", () => {
     "the role qualifier must reach the mission, not be dropped by the mapper");
   assertEquals(hiring!.subject, "company");
 });
+
+// ── the live regression: same count, wrong qualifier ───────────────────────
+//
+// Caught on a real card, 2026-08-25. The model wrote
+// `preferred_signals: ["active hiring", "sales roles"]` and the merge refused,
+// because it compared qualifier COUNT and the reader gives:
+//
+//     "active hiring"             -> role_terms ["active"]        (1)
+//     "active hiring sales roles" -> role_terms ["sales roles"]   (1)
+//
+// So the mission kept a hiring signal qualified by the junk term "active" AND
+// a second `{type:"sales roles"}` matching nothing. Counting was a proxy for
+// the real question — does this fragment belong to that signal — which
+// `qualifierAbsorbs` now asks directly.
+
+Deno.test("a same-count merge that CORRECTS the qualifier is taken", () => {
+  const sigs = readSignalPhrases(["active hiring", "sales roles"]);
+  assertEquals(sigs.length, 1, "one requirement, not two");
+  assertEquals(sigs[0].type, "hiring");
+  assertEquals(
+    (sigs[0].qualifier as Record<string, unknown>).role_terms, ["sales roles"],
+    "the junk term 'active' must be replaced by the real role",
+  );
+  assertEquals(sigs.some((x) => x.type === "sales roles"), false);
+});
+
+Deno.test("a fragment the combined reading does NOT absorb stays separate", () => {
+  // The merge must remain a test of belonging, not a licence to glue any two
+  // phrases together.
+  const sigs = readSignalPhrases(["recently funded", "active hiring"]);
+  assertEquals(sigs.length, 2);
+  assertEquals(new Set(sigs.map((x) => x.type)), new Set(["funding", "hiring"]));
+});

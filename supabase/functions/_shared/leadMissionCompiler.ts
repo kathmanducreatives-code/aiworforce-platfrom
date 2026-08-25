@@ -1122,7 +1122,7 @@ export function readSignalPhrases(
       for (const combined of [`${host.phrase} ${frag.phrase}`, `${frag.phrase} ${host.phrase}`]) {
         const merged = readSignalPhrase(combined);
         if (!merged || merged.type !== host.d!.type) continue;
-        if (!isRicherQualifier(merged.qualifier, host.d!.qualifier)) continue;
+        if (!qualifierAbsorbs(merged.qualifier, frag.phrase)) continue;
         host.d = merged;
         consumed.add(frag.phrase);
         break;
@@ -1140,15 +1140,35 @@ export function readSignalPhrases(
   return out;
 }
 
-/** Strictly more qualifier information than before — never merely different. */
-function isRicherQualifier(
-  next: Record<string, unknown> | undefined,
-  prev: Record<string, unknown> | undefined,
+/**
+ * Did the combined reading actually take the fragment IN as a qualifier?
+ *
+ * This replaced a "strictly richer qualifier" count. Counting was a proxy, and
+ * it failed on the case it most needed to catch. For
+ * `preferred_signals: ["active hiring", "sales roles"]` the reader gives:
+ *
+ *     "active hiring"             -> role_terms ["active"]        (1)
+ *     "active hiring sales roles" -> role_terms ["sales roles"]   (1)
+ *
+ * Same count, so the merge was refused and the mission kept BOTH a hiring
+ * signal qualified by the junk term "active" and a second signal
+ * `{type:"sales roles"}` that matches nothing — the exact shape the rejoin
+ * exists to remove. The merge is not about having MORE qualifier, it is about
+ * whether this fragment belongs to that signal, so ask that directly.
+ */
+function qualifierAbsorbs(
+  qualifier: Record<string, unknown> | undefined,
+  fragment: string,
 ): boolean {
-  const count = (q: Record<string, unknown> | undefined) =>
-    Object.values(q ?? {}).reduce<number>(
-      (n, v) => n + (Array.isArray(v) ? v.length : v == null ? 0 : 1), 0);
-  return count(next) > count(prev);
+  const frag = fragment.trim().toLowerCase();
+  if (!frag) return false;
+  for (const v of Object.values(qualifier ?? {})) {
+    for (const term of Array.isArray(v) ? v : [v]) {
+      const t = String(term ?? "").trim().toLowerCase();
+      if (t && (t.includes(frag) || frag.includes(t))) return true;
+    }
+  }
+  return false;
 }
 
 function proposalToMissionCandidate(
