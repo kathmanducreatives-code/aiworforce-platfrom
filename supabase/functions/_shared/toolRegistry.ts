@@ -1675,6 +1675,9 @@ export async function runTool(
       task_id: auditSpec.task_id,
       capability: auditSpec.capability,
       mode: creditMode,
+      // The authority already resolved for the persistence guard, reused so the
+      // ledger can tell unattended spend from a person clicking Scan.
+      persistence_authority: engineAuthorityOf(input),
       ...(quoted != null ? { amount: quoted } : {}),
     });
     console.log("[credits][authorization]", {

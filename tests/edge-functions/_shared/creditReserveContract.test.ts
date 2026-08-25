@@ -43,22 +43,52 @@ const ALLOWED_STATUSES = [
   "reserved", "charged", "partial", "not_charged", "released", "granted",
 ] as const;
 
-/** Every `kind` literal the schema currently accepts. */
+/**
+ * Every `kind` literal the schema currently accepts.
+ *
+ * Read from the LATEST migration that redefines the constraint, not from one
+ * filename. Pinning the filename meant a later widening was invisible here —
+ * the test would keep checking a superseded list and pass while the code sent a
+ * kind the live CHECK rejected, which is the exact defect it exists to catch.
+ */
 function allowedKinds(): string[] {
-  const mig = read(
-    "../../../supabase/migrations/20260822130000_credit_kind_provider_call.sql");
-  const block = mig.slice(mig.indexOf("check (kind in ("), mig.indexOf("));"));
+  const dir = new URL("../../../supabase/migrations/", import.meta.url);
+  const defining = [...Deno.readDirSync(dir)]
+    .map((e) => e.name)
+    .filter((n) => n.endsWith(".sql"))
+    .sort()
+    .map((n) => ({ n, sql: read(`../../../supabase/migrations/${n}`) }))
+    .filter((f) => /(check\s*\(kind\s+in\s*\(|check\s*\(kind\s*=\s*any)/i.test(f.sql));
+  assert(defining.length > 0, "no migration defines the credit kind allow-list");
+  const latest = defining[defining.length - 1].sql;
+  const start = latest.search(/check\s*\(kind\s*(in\s*\(|=\s*any)/i);
+  const block = latest.slice(start, latest.indexOf("));", start));
   return [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 }
 
-Deno.test("1. THE KIND THE CODE SENDS IS A KIND THE SCHEMA ACCEPTS", () => {
-  const sent = AUTH.match(/p_kind:\s*"([a-z_]+)"/)?.[1];
-  assert(sent, "authorizeProviderCall must name a kind");
-  assertEquals(sent, "provider_call");
-  assert(allowedKinds().includes(sent),
-    `credits_reserve is called with kind "${sent}", which the CHECK constraint ` +
-    "rejects — every reserve would throw, and under enforce every paid call in " +
-    "the product would be refused");
+/** Every `kind` literal `authorizeProviderCall` can send. */
+function sentKinds(): string[] {
+  const call = AUTH.slice(AUTH.indexOf("p_kind:"), AUTH.indexOf("p_task_id:"));
+  return [...call.matchAll(/"([a-z_]+)"/g)]
+    .map((m) => m[1])
+    .filter((k) => k !== "monitoring_engine");
+}
+
+Deno.test("1. EVERY KIND THE CODE SENDS IS A KIND THE SCHEMA ACCEPTS", () => {
+  const sent = sentKinds();
+  assert(sent.length > 0, "authorizeProviderCall must name a kind");
+  // Both of them: an attended provider call, and an unattended monitoring one.
+  // The two exist because only one of them has a period ceiling, and a period
+  // total that cannot tell them apart would pause a schedule over a person's
+  // manual scans.
+  assertEquals(sent.sort(), ["monitoring_call", "provider_call"]);
+  const allowed = allowedKinds();
+  for (const k of sent) {
+    assert(allowed.includes(k),
+      `credits_reserve can be called with kind "${k}", which the CHECK ` +
+      "constraint rejects — that reserve would throw, and under enforce the " +
+      "call would be refused");
+  }
 });
 
 Deno.test("2. the widening kept every kind that was already legal", () => {

@@ -124,6 +124,16 @@ export async function authorizeProviderCall(i: {
   capability?: string | null;
   mode: CreditEnforcementMode;
   amount?: number;
+  /**
+   * The authority this call spends under.
+   *
+   * Decides the LEDGER KIND, and nothing else. Unattended monitoring has a
+   * period ceiling and a person clicking Scan does not, so a period total has
+   * to be able to tell them apart — and `task_id IS NULL` cannot, because a
+   * Radar scan is taskless too. The distinction is who decided to spend, which
+   * the persistence authority already records.
+   */
+  persistence_authority?: string | null;
 }): Promise<CreditAuthorization> {
   const mode = i.mode;
   const amount = i.amount ?? CREDITS_PER_PROVIDER_CALL;
@@ -145,7 +155,9 @@ export async function authorizeProviderCall(i: {
       p_workspace: i.workspace_id,
       p_amount: amount,
       p_idempotency_key: i.logical_call_key,
-      p_kind: "provider_call",
+      p_kind: i.persistence_authority === "monitoring_engine"
+        ? "monitoring_call"
+        : "provider_call",
       p_task_id: i.task_id ?? null,
       p_company_key: i.capability ?? null,
     });
