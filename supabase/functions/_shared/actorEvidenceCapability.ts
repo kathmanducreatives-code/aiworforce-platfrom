@@ -653,6 +653,38 @@ export function evidenceProducedBy(actorKeys: readonly string[]): EvidenceProduc
   return out;
 }
 
+/**
+ * Whether these providers actually deliver (event, subject) evidence FOR THE
+ * POPULATION a mission will discover.
+ *
+ * `evidenceProducedBy` answers "can any of these prove it at all", which is not
+ * the same question and was the gap behind conversation bcbabb10: a
+ * general-company hiring mission scheduled `general_company_discovery`, whose
+ * provider list contains the YC actor, and the YC actor does produce
+ * `isHiring`/`openJobs[]` — so "embedded hiring evidence is available" looked
+ * true. It was true only for YC companies, and the mission's own entry reason
+ * was "outside startup cohorts". Every other company arrived with no hiring
+ * evidence and nothing was scheduled to fill the gap.
+ *
+ * `cohort_scope` is what separates the two. A cohort-scoped Actor covers the
+ * mission only when the mission is itself scoped to that cohort.
+ */
+export function evidenceCoversPopulation(
+  actorKeys: readonly string[],
+  event: SignalEvent,
+  subject: SignalSubject,
+  missionCohort: string | null,
+): boolean {
+  for (const key of actorKeys) {
+    const rec = ACTOR_EVIDENCE.find((a) => a.actor_key === key);
+    if (!rec) continue;
+    if (rec.unlock_gated) continue; // needs an explicit unlock; not free evidence
+    if (rec.cohort_scope !== null && rec.cohort_scope !== missionCohort) continue;
+    if (rec.produces.some((p) => p.event === event && p.subject === subject)) return true;
+  }
+  return false;
+}
+
 /** Every (event, subject) pair any executable, non-gated Actor can serve. */
 export function supportedEvidencePairs(): Array<{ event: SignalEvent; subject: SignalSubject }> {
   const seen = new Set<string>();

@@ -1086,6 +1086,71 @@ const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
   social_posts: "qualified_lead_sourcing",
 };
 
+/**
+ * Read the model's signal prose into requirements, REJOINING fragments.
+ *
+ * `preferred_signals` is a list of phrases, and the compiler used to map it
+ * one-to-one onto `required_signals`. That assumes each phrase is a whole
+ * requirement. Conversation bcbabb10 shows it is not: for "companies matching
+ * my ICP that are actively hiring sales roles" the model wrote
+ *
+ *     ["sales roles", "actively hiring"]
+ *
+ * — one requirement in two fragments. Mapped independently, "sales roles" is
+ * unreadable and became a verbatim `{type:"sales roles"}` matching nothing,
+ * while "actively hiring" became a hiring signal with NO role_terms. The run
+ * would have verified hiring in general and called it sales hiring.
+ *
+ * `readSignalPhrase` reads the whole phrase correctly — "actively hiring sales
+ * roles" yields `role_terms:["sales roles"]`. So an unreadable fragment is
+ * offered to each readable signal, and adopted only when THE READER ITSELF
+ * returns the same event with a strictly richer qualifier. Nothing is merged
+ * on a keyword or a guess, and a fragment that qualifies nothing keeps the old
+ * verbatim fallback so coverage still reports it as unrecognised.
+ */
+export function readSignalPhrases(
+  phrases: readonly string[],
+): Array<Record<string, unknown>> {
+  const read = phrases.map((phrase) => ({ phrase, d: readSignalPhrase(phrase) }));
+  const readable = read.filter((r) => r.d);
+  const consumed = new Set<string>();
+
+  for (const frag of read) {
+    if (frag.d) continue;
+    for (const host of readable) {
+      // Both orders: the fragment may precede or follow the event word.
+      for (const combined of [`${host.phrase} ${frag.phrase}`, `${frag.phrase} ${host.phrase}`]) {
+        const merged = readSignalPhrase(combined);
+        if (!merged || merged.type !== host.d!.type) continue;
+        if (!isRicherQualifier(merged.qualifier, host.d!.qualifier)) continue;
+        host.d = merged;
+        consumed.add(frag.phrase);
+        break;
+      }
+      if (consumed.has(frag.phrase)) break;
+    }
+  }
+
+  const out: Array<Record<string, unknown>> = [];
+  for (const r of read) {
+    if (consumed.has(r.phrase)) continue;
+    if (r.d) out.push({ ...r.d } as unknown as Record<string, unknown>);
+    else out.push({ type: canonicalSignalType(r.phrase), phrase: r.phrase });
+  }
+  return out;
+}
+
+/** Strictly more qualifier information than before — never merely different. */
+function isRicherQualifier(
+  next: Record<string, unknown> | undefined,
+  prev: Record<string, unknown> | undefined,
+): boolean {
+  const count = (q: Record<string, unknown> | undefined) =>
+    Object.values(q ?? {}).reduce<number>(
+      (n, v) => n + (Array.isArray(v) ? v.length : v == null ? 0 : 1), 0);
+  return count(next) > count(prev);
+}
+
 function proposalToMissionCandidate(
   p: GptMissionProposal, internal: CapabilityId[], base: LeadMissionV1,
 ): Record<string, unknown> {
@@ -1162,23 +1227,10 @@ function proposalToMissionCandidate(
     // both paths turn the same words into the same requirement. A phrase it
     // cannot read yields null — recorded below as unrepresented, never rounded
     // to the nearest event.
-    required_signals: p.preferred_signals.map((s) => {
-      const d = readSignalPhrase(s);
-      if (!d) {
-        // Preserve the old behaviour for a phrase with no readable event: the
-        // canonical head word, kept verbatim when it matches nothing, so
-        // coverage still reports it as unrecognised rather than dropping it.
-        return {
-          type: canonicalSignalType(s),
-          phrase: s,
-          ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
-        };
-      }
-      return {
-        ...d,
-        ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
-      };
-    }),
+    required_signals: readSignalPhrases(p.preferred_signals).map((d) => ({
+      ...d,
+      ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
+    })),
     decision_makers: {
       roles: p.decision_maker_roles,
       current_employment_required: true,

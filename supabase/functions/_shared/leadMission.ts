@@ -1004,6 +1004,22 @@ export function validateLeadMission(
         type: String(s.type).trim().toLowerCase(),
         ...(strArray(s.role_families).length ? { role_families: strArray(s.role_families) } : {}),
         ...(Number.isFinite(Number(s.timeframe_days)) ? { timeframe_days: Math.trunc(Number(s.timeframe_days)) } : {}),
+        // ── THE STRUCTURED READING SURVIVES VALIDATION ────────────────────
+        //
+        // This mapper rebuilt each signal from `type`/`role_families`/
+        // `timeframe_days` alone, which silently discarded the three fields
+        // `MissionSignal` declares directly above as the ones that stop "an
+        // enterprise-seller role being mistaken for any open role at all".
+        //
+        // The compiler would read "actively hiring sales roles" correctly,
+        // produce `qualifier.role_terms = ["sales roles"]`, and then lose it
+        // here — so the run verified hiring in general and reported it as
+        // sales hiring. Carried through as-is; still optional, so an older
+        // persisted mission without them behaves exactly as before.
+        ...(typeof s.event === "string" ? { event: s.event } : {}),
+        ...(typeof s.subject === "string" ? { subject: s.subject } : {}),
+        ...(s.qualifier && typeof s.qualifier === "object" ? { qualifier: s.qualifier } : {}),
+        ...(typeof s.phrase === "string" ? { phrase: s.phrase } : {}),
       }))
     : base.required_signals;
 

@@ -27,7 +27,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { LeadMissionV1 } from "./leadMission.ts";
-import { evidenceProducedBy } from "./actorEvidenceCapability.ts";
+import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
 
 export const CAPABILITY_GRAPH_VERSION = "lead-capability-graph-v1" as const;
@@ -903,14 +903,43 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     // A compiled mission states whether it needs EXTERNAL verification. When it
     // does not, embedded evidence answers for nothing. Only a mission with no
     // compiled capabilities falls back to the old signal-presence reading.
+    //
+    // ── AND "EMBEDDED EVIDENCE" MUST ACTUALLY REACH THIS POPULATION ────────
+    //
+    // `embedded_hiring_evidence` maps to no internal stage on purpose: it is
+    // the free branch INSIDE `hiring_verification`, reading YC `openJobs[]`.
+    // That branch only exists if something schedules the stage, so asking for
+    // it and nothing else used to mean no hiring evidence was collected at
+    // all — not even the free kind.
+    //
+    // Conversation bcbabb10 is the cost: "companies matching my ICP that are
+    // actively hiring sales roles" planned discovery, identity, enrichment and
+    // qualification, and bought nothing that could prove hiring. The YC actor
+    // sits in `general_company_discovery`'s provider list and does produce
+    // `isHiring`, so the embedded assumption looked satisfied — but it is
+    // `cohort_scope: "y_combinator"` and that mission's own entry reason is
+    // "outside startup cohorts". Every non-YC company arrived unproven.
+    //
+    // So the assumption is CHECKED against the evidence table rather than
+    // taken on trust. This is not the old "the word hiring appeared" rule
+    // returning: a mission with no hiring signal still schedules nothing, and
+    // a genuinely covered mission still pays nothing.
+    const missionCohort = entry === "startup_company_discovery" ? "y_combinator" : null;
+    const discoveryProviders = steps.find((s) => s.capability === entry)?.providers ?? [];
+    const embeddedCovers = evidenceCoversPopulation(
+      discoveryProviders, "hiring", "company", missionCohort);
+    const embeddedGap = hasSignal(mission, "hiring") && !embeddedCovers;
     const needsPaidHiring = missionSaysSo
-      ? asked("hiring_verification")
+      ? (asked("hiring_verification") || embeddedGap)
       : hasSignal(mission, "hiring");
     if (needsPaidHiring) {
       steps.push(step("hiring_verification", order++,
-        missionSaysSo
+        !missionSaysSo
+          ? "the mission requires a verified hiring signal"
+          : asked("hiring_verification")
           ? "the mission requires externally verified hiring evidence"
-          : "the mission requires a verified hiring signal"));
+          : "the mission requires hiring evidence and no discovery provider " +
+            "supplies it for this population"));
     } else if (hasSignal(mission, "hiring")) {
       // Recorded so the ABSENCE is legible: hiring matters to this mission and
       // embedded evidence is expected to settle it without a paid call.
