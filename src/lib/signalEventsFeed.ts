@@ -52,6 +52,15 @@ export interface SignalFeedResult {
    * companies.
    */
   clusters: SignalCluster[];
+  /**
+   * The relevance verdict for each cluster, by cluster key.
+   *
+   * A CACHE OF AN OPINION. Absent for a cluster no judge has read, and absent
+   * for every cluster when the model was unavailable — in both cases the feed
+   * shows the deterministic ranking, which is the same thing it showed before
+   * Phase 7 existed.
+   */
+  relevance: Record<string, ClusterRelevanceRow>;
   /** What the feed is actually made of, so the switch is inspectable. */
   coverage: {
     canonical: number;
@@ -89,6 +98,7 @@ export async function fetchSignalFeed(
       // NO CANONICAL ROWS, NO SITUATIONS. A legacy row carries no subject
       // model, so correlating one would mean inventing an identity for it.
       clusters: [],
+      relevance: {},
       coverage: { canonical: 0, legacy_only: legacy.length, source: "signals" },
     };
   }
@@ -100,6 +110,7 @@ export async function fetchSignalFeed(
   return {
     signals: merged.signals.slice(0, limit),
     clusters: clusterSignalEvents(rows as never, { window_days: 90 }).clusters,
+    relevance: await fetchClusterRelevance(workspaceId),
     coverage: {
       canonical: merged.canonical,
       legacy_only: merged.legacy_only,
@@ -122,4 +133,43 @@ async function fetchLegacySignals(
     return [];
   }
   return (data ?? []) as unknown as RawSignalRow[];
+}
+
+
+/** A stored relevance verdict, as the feed reads it. */
+export interface ClusterRelevanceRow {
+  cluster_key: string;
+  relevance: "high" | "medium" | "low" | "none";
+  why_now: string | null;
+  why_it_matters: string | null;
+  evidence_event_ids: string[];
+  timely: boolean;
+  deterministic_priority: number;
+  adjusted_priority: number;
+  source: "model" | "deterministic";
+  judged_at: string | null;
+}
+
+/**
+ * Read the stored verdicts.
+ *
+ * A FAILURE HERE IS NOT A FEED FAILURE. Relevance is commentary on collection;
+ * if it cannot be read the feed shows what it always showed.
+ */
+async function fetchClusterRelevance(
+  workspaceId: string,
+): Promise<Record<string, ClusterRelevanceRow>> {
+  const { data, error } = await supabase
+    .from("signal_cluster_relevance" as never)
+    .select("cluster_key, relevance, why_now, why_it_matters, evidence_event_ids, timely, deterministic_priority, adjusted_priority, source, judged_at")
+    .eq("workspace_id", workspaceId);
+  if (error) {
+    console.error("fetchClusterRelevance", error);
+    return {};
+  }
+  const out: Record<string, ClusterRelevanceRow> = {};
+  for (const r of (data ?? []) as unknown as ClusterRelevanceRow[]) {
+    out[r.cluster_key] = r;
+  }
+  return out;
 }

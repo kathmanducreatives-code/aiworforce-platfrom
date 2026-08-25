@@ -86,10 +86,12 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
   const [coverage, setCoverage] = useState<SignalFeedResult["coverage"] | null>(null);
   /** The same intelligence as `signals`, grouped into situations. */
   const [clusters, setClusters] = useState<SignalCluster[]>([]);
+  /** Relevance verdicts by cluster key. Empty when no judge has run. */
+  const [relevance, setRelevance] = useState<SignalFeedResult["relevance"]>({});
   const [lastRun, setLastRun] = useState<RadarRunResult | null>(null);
 
   const load = useCallback(async () => {
-    if (!workspaceId) { setSignals([]); setClusters([]); setDrafts([]); setSavedOutputs([]); setLoading(false); return; }
+    if (!workspaceId) { setSignals([]); setClusters([]); setRelevance({}); setDrafts([]); setSavedOutputs([]); setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -103,6 +105,7 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
         fetchSavedOutputs(workspaceId, 50),
       ]);
       setSignals(s.signals); setCoverage(s.coverage); setClusters(s.clusters);
+      setRelevance(s.relevance);
       setDrafts(d); setSavedOutputs(o);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load signals");
@@ -137,5 +140,5 @@ export function useSignalFeed(workspaceId: string | null, limit = 100) {
 
   const lastScanAt = useMemo<string | null>(() => signals[0]?.created_at ?? null, [signals]);
 
-  return { signals, clusters, coverage, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
+  return { signals, clusters, relevance, coverage, drafts, savedOutputs, loading, error, refresh: load, runRadarScan, scanning, lastRun, lastScanAt };
 }

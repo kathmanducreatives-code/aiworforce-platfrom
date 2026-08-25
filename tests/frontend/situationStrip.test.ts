@@ -35,7 +35,7 @@ const ev = (over: Partial<ClusterableEvent> = {}): ClusterableEvent => ({
 
 Deno.test("1. only multi-signal clusters are situations", () => {
   assert(
-    SRC.includes("clusters.filter((c) => c.signal_types.length > 1)"),
+    SRC.includes(".filter((c) => c.signal_types.length > 1)"),
     "a cluster of one is a row; the feed below already shows rows",
   );
   // And with nothing multi-signal there is no strip at all — not an empty
@@ -94,4 +94,39 @@ Deno.test("5. the strip reads the canonical module, not a copy of it", () => {
     mirrored = true;
   } catch { /* absent, as intended */ }
   assertFalse(mirrored, "src/lib/signalCluster.ts is a second copy of the cluster model");
+});
+
+
+// ── 6–8. PHASE 7: WHAT A JUDGED SITUATION MAY SAY ───────────────────────────
+
+Deno.test("6. the explanation is shown only for a verdict that was BELIEVED", () => {
+  // A refused verdict shows nothing rather than a hedge: the validator already
+  // decided the claim was not grounded, and printing it anyway would publish
+  // exactly what the boundary exists to withhold.
+  assert(SRC.includes('const judged = r && r.source === "model";'));
+  assert(
+    SRC.includes("{judged && (r.why_now || r.why_it_matters) && ("),
+    "the explanation must be gated on a believed verdict",
+  );
+});
+
+Deno.test("7. relevance may reorder within the evidence's ceiling, never above it", () => {
+  // The strip sorts by the ADJUSTED priority where one exists. That can only be
+  // lower than the deterministic one — the validator caps it and the table's
+  // CHECK refuses a row that does not — so this reorders and cannot promote.
+  assert(SRC.includes("relevance[b.key]?.adjusted_priority ?? b.priority"));
+  assert(
+    SRC.includes("b.priority - a.priority || a.key.localeCompare(b.key)"),
+    "equal judged priorities must fall back to the evidence's order",
+  );
+});
+
+Deno.test("8. an unjudged cluster looks exactly as it did before Phase 7", () => {
+  // Absent is the ORDINARY case: no judge has read it, or the model was
+  // unavailable. Neither is an error and neither may empty the strip.
+  assert(SRC.includes("relevance = {}"), "the verdict map must default to empty");
+  assert(
+    SRC.includes("?? b.priority") && SRC.includes("?? a.priority"),
+    "an unjudged cluster must rank by its deterministic priority",
+  );
 });

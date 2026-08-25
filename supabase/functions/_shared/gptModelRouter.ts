@@ -114,6 +114,17 @@ export const GPT_STAGES = [
   "pool_evaluation",
   /** Free-text the user reads: summaries and generated UI copy. */
   "summary_generation",
+  /**
+   * Judges whether a DETERMINISTIC cluster matters to THIS workspace.
+   *
+   * It re-ranks what the floor already accepted and explains why, citing the
+   * cluster's own events. It cannot create a cluster, add an event, or raise a
+   * cluster the evidence gate refused — so a wrong answer costs a misordered
+   * card, never a fabricated signal. That ceiling is why Luna leads.
+   */
+  "signal_relevance",
+  /** Terra re-reading a relevance answer the validator could repair. */
+  "signal_relevance_repair",
 ] as const;
 
 export type GptStage = typeof GPT_STAGES[number];
@@ -248,6 +259,20 @@ const POLICY: Readonly<Record<GptStage, StagePolicy>> = Object.freeze({
       "final qualification authority over already-paid-for evidence; the " +
       "evidence is the same on a second reading, so a retry changes cost, not " +
       "information",
+  },
+  signal_relevance: {
+    primary: LUNA, effort: "low", escalation: TERRA,
+    reason:
+      "re-ranks and explains clusters the deterministic floor already built; " +
+      "it may demote and must cite, and cannot invent a signal — so the cost " +
+      "of a wrong answer is a misordered card, not a fabricated one",
+  },
+  signal_relevance_repair: {
+    primary: TERRA, effort: "low", escalation: null,
+    reason:
+      "a relevance answer whose SHAPE the validator could repair — a miscited " +
+      "id, a missing field. Never used for an unavailable model: a provider " +
+      "failure falls back to the deterministic cluster rather than paying more",
   },
   company_qualification: {
     primary: LUNA, effort: "none", escalation: null,

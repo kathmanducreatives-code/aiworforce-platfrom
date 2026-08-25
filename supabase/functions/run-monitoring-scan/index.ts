@@ -41,6 +41,8 @@ import {
 } from "../_shared/monitoringRunner.ts";
 import type { MonitoringSubjectInput } from "../_shared/monitoringMission.ts";
 import type { ExistingEvidence } from "../_shared/monitoringPreflight.ts";
+import { clusterSignalEvents } from "../_shared/signalCluster.ts";
+import { judgeCluster, type RelevanceContext } from "../_shared/signalRelevanceJudge.ts";
 
 /**
  * THE CANDIDATE CEILING FOR ONE MONITORING PASS.
@@ -213,6 +215,8 @@ Deno.serve(async (req) => {
   // boundary check meaningful rather than advisory.
 
   const maxCandidates = requestedMaxCandidates(body);
+  /** When this pass began — used to find the situations it could have changed. */
+  const startedAt = Date.now();
   const v2Enabled = isSignalsV2Enabled();
 
   const outcome = await runMonitoring(
@@ -361,6 +365,132 @@ Deno.serve(async (req) => {
     },
   );
 
+  // ── PHASE 7: DOES ANY OF THIS MATTER TO THIS WORKSPACE? ──────────────────
+  //
+  // Runs AFTER the events are written, on the canonical rows — so the judge
+  // sees exactly what the feed will, and cannot influence what was collected.
+  // A failure here changes nothing: the clusters keep their deterministic
+  // ranking and the pass is still a success.
+  const relevance: Array<Record<string, unknown>> = [];
+  if (outcome.ok && outcome.events.written > 0) {
+    try {
+      const { data: freshRows } = await admin
+        .from("signal_events")
+        .select("id, workspace_id, signal_type, signal_category, origin, subject_type, subject_key, account_id, occurred_at, occurred_at_basis, observed_at, verification_status, confidence, lifecycle_status")
+        .eq("workspace_id", workspace_id)
+        .eq("lifecycle_status", "active")
+        .order("observed_at", { ascending: false })
+        .limit(200);
+
+      const { clusters } = clusterSignalEvents((freshRows ?? []) as never, { window_days: 90 });
+      // ONLY THE SITUATIONS THIS PASS COULD HAVE CHANGED. Re-judging a whole
+      // feed on every scan would pay for opinions nothing new bears on.
+      const touched = clusters.filter((c) =>
+        c.events.some((e) => Date.parse(e.observed_at) >= startedAt));
+
+      const ctx: RelevanceContext = {
+        offer: brain.company_summary?.value_prop ?? brain.company_summary?.description ?? null,
+        problem_solved: brain.company_summary?.target_outcome ?? null,
+        icp_industries: brain.icp.industries ?? [],
+        icp_business_models: brain.icp.business_models ?? [],
+        icp_locations: brain.icp.locations ?? [],
+        buyer_roles: brain.buyer_personas?.titles ?? [],
+        disqualifiers: brain.disqualifiers?.keywords ?? [],
+      };
+
+      for (const c of touched) {
+        const verdict = await judgeCluster(c, ctx, {
+          readEnv: (k) => { try { return Deno.env.get(k); } catch { return undefined; } },
+          log: (m, meta) => console.log(`[monitoring][relevance] ${m}`, meta ?? ""),
+          // THE MODEL CALL REACHES THE EXECUTION LEDGER, in dollars — model
+          // spend is not credits, and a ledger that records only provider calls
+          // cannot answer what a judgement cost.
+          onJudgeCall: async (row) => {
+            const { error } = await admin.from("lead_execution_calls").insert({
+              record_kind: "model_call",
+              workspace_id,
+              execution_owner: "monitoring",
+              planner_owner: "gpt",
+              stage: row.stage,
+              capability: row.stage,
+              // REQUIRED, AND WORTH FILLING HONESTLY. `reason` is what a reader
+              // of the ledger sees when asking why this call was made and what
+              // it bought — the outcome is the answer, and it is the field the
+              // first attempt left null and had the insert refused for.
+              reason: `relevance judgement for ${c.subject_type}/${c.subject_key}: ` +
+                `${row.outcome}${row.detail ? ` — ${row.detail}` : ""}`,
+              provider_id: "openai",
+              // ── THE SCHEMA ALREADY DEFINED THIS SHAPE ────────────────────
+              //
+              // `lead_execution_calls_model_call_names_model` requires a
+              // non-empty `metadata.model` on every `model_call` row, and
+              // forbids provider run ids on one. The record kind was declared
+              // with a contract and nothing had written one yet; this follows
+              // it rather than inventing a second convention.
+              metadata: {
+                model: row.model,
+                stage: row.stage,
+                outcome: row.outcome,
+                input_tokens: row.input_tokens,
+                output_tokens: row.output_tokens,
+                cluster_key: c.key,
+              },
+              logical_call_key: `relevance:${c.key}:${row.stage}`,
+              attempt_number: 1,
+              status: row.outcome === "failed" ? "failed" : "succeeded",
+              failure_message: row.detail,
+              duration_ms: row.latency_ms,
+              raw_count: row.input_tokens,
+              normalized_count: row.output_tokens,
+              estimated_cost_usd: row.estimated_cost_usd,
+              cost_source: row.cost_source,
+              next_decision: row.outcome,
+            });
+            if (error) console.error("[monitoring][relevance][ledger]", error.message);
+          },
+        });
+        // ── PERSIST, SO THE FEED CAN SHOW IT ──────────────────────────────
+        //
+        // A cache of an opinion. The table's own CHECK refuses a row whose
+        // adjusted priority exceeds the deterministic one, so the boundary
+        // holds even against a caller that bypassed the validator.
+        const { error: relErr } = await admin
+          .from("signal_cluster_relevance")
+          .upsert({
+            workspace_id, cluster_key: c.key,
+            relevance: verdict.relevance,
+            why_now: verdict.why_now,
+            why_it_matters: verdict.why_it_matters,
+            evidence_event_ids: verdict.evidence_event_ids,
+            timely: verdict.timely,
+            deterministic_priority: c.priority,
+            adjusted_priority: verdict.adjusted_priority,
+            source: verdict.source,
+            model: verdict.source === "model" ? "gpt-5.6-luna" : null,
+            judged_at: new Date().toISOString(),
+          }, { onConflict: "workspace_id,cluster_key" });
+        if (relErr) console.error("[monitoring][relevance][store]", relErr.message);
+
+        relevance.push({
+          key: c.key, subject: c.subject_key,
+          deterministic_priority: c.priority,
+          adjusted_priority: verdict.adjusted_priority,
+          relevance: verdict.relevance,
+          source: verdict.source,
+          cited: verdict.evidence_event_ids.length,
+          why_now: verdict.why_now,
+          why_it_matters: verdict.why_it_matters,
+          timely: verdict.timely,
+        });
+      }
+    } catch (e) {
+      // THE PASS IS STILL A SUCCESS. Relevance is commentary on collection, and
+      // commentary failing must not retract what was collected.
+      console.error("[monitoring][relevance][failed]",
+        e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // Stamp the run so a subject's cadence has a last-run to measure from.
   if (outcome.ok) {
     await admin.from("monitoring_subjects")
@@ -374,5 +504,6 @@ Deno.serve(async (req) => {
     workspace_id,
     invoked_by: scheduled ? "scheduler" : "user",
     max_candidates: maxCandidates,
+    relevance,
   }, outcome.ok ? 200 : 409);
 });

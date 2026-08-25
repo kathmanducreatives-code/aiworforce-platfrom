@@ -15,8 +15,9 @@
 // — when we looked, not when it happened. A strip that showed "3 signals this
 // week" without that distinction would be claiming something nobody
 // established.
-import { Layers, Clock, ShieldCheck } from "lucide-react";
+import { Layers, Clock, ShieldCheck, Sparkles } from "lucide-react";
 import type { SignalCluster } from "../../../supabase/functions/_shared/signalCluster.ts";
+import type { ClusterRelevanceRow } from "@/lib/signalEventsFeed";
 
 /** Canonical type → what a reader calls it. Never invents a label it lacks. */
 const SIGNAL_LABEL: Record<string, string> = {
@@ -57,15 +58,44 @@ const KIND_TINT: Record<string, string> = {
   market: "border-sky-500/25 bg-sky-500/[0.04]",
 };
 
+/** How a band reads to somebody scanning the feed. */
+const BAND_LABEL: Record<string, string> = {
+  high: "High priority", medium: "Worth a look", low: "Low relevance", none: "Not relevant",
+};
+const BAND_TINT: Record<string, string> = {
+  high: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10",
+  medium: "text-sky-300 border-sky-500/30 bg-sky-500/10",
+  low: "text-neutral-400 border-border bg-muted/30",
+  none: "text-neutral-500 border-border bg-muted/20",
+};
+
 export interface SituationStripProps {
   clusters: SignalCluster[];
+  /**
+   * Relevance verdicts by cluster key.
+   *
+   * ABSENT IS THE ORDINARY CASE, not an error: no judge has read this cluster
+   * yet, or the model was unavailable. The strip then shows exactly what it
+   * showed before Phase 7 — the deterministic situation, unexplained.
+   */
+  relevance?: Record<string, ClusterRelevanceRow>;
   /** Called with the cluster's subject so the feed can filter to it. */
   onFocus?: (c: SignalCluster) => void;
 }
 
-export default function SituationStrip({ clusters, onFocus }: SituationStripProps) {
+export default function SituationStrip({
+  clusters, relevance = {}, onFocus,
+}: SituationStripProps) {
   // A CLUSTER OF ONE IS A ROW. Only situations belong here.
-  const situations = clusters.filter((c) => c.signal_types.length > 1);
+  const situations = clusters
+    .filter((c) => c.signal_types.length > 1)
+    // ORDERED BY THE JUDGED PRIORITY WHERE ONE EXISTS, and by the deterministic
+    // one where it does not. A verdict can only lower a cluster, so this can
+    // reorder within the evidence's ceiling and never above it.
+    .sort((a, b) =>
+      (relevance[b.key]?.adjusted_priority ?? b.priority) -
+        (relevance[a.key]?.adjusted_priority ?? a.priority) ||
+      b.priority - a.priority || a.key.localeCompare(b.key));
   if (situations.length === 0) return null;
 
   return (
@@ -83,6 +113,8 @@ export default function SituationStrip({ clusters, onFocus }: SituationStripProp
       <div className="grid gap-2 sm:grid-cols-2">
         {situations.map((c) => {
           const undated = c.timing.occurred === 0;
+          const r = relevance[c.key];
+          const judged = r && r.source === "model";
           return (
             <button
               key={c.key}
@@ -94,9 +126,21 @@ export default function SituationStrip({ clusters, onFocus }: SituationStripProp
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-medium">{subjectName(c)}</span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {c.subject_type ?? "subject"}
-                </span>
+                {judged
+                  ? (
+                    <span
+                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] ${
+                        BAND_TINT[r.relevance] ?? BAND_TINT.low
+                      }`}
+                    >
+                      {BAND_LABEL[r.relevance] ?? r.relevance}
+                    </span>
+                  )
+                  : (
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {c.subject_type ?? "subject"}
+                    </span>
+                  )}
               </div>
 
               <div className="mt-1.5 flex flex-wrap gap-1">
@@ -110,6 +154,27 @@ export default function SituationStrip({ clusters, onFocus }: SituationStripProp
                 ))}
               </div>
 
+              {/* ── THE GROUNDED EXPLANATION ─────────────────────────────
+                  Shown only for a verdict the validator believed, and every
+                  claim in it cites an event this cluster actually contains. A
+                  refused verdict shows nothing rather than a hedge. */}
+              {judged && (r.why_now || r.why_it_matters) && (
+                <div className="mt-2 space-y-1 border-l-2 border-border/60 pl-2">
+                  {r.why_now && (
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      <span className="font-medium text-foreground/80">Why now: </span>
+                      {r.why_now}
+                    </p>
+                  )}
+                  {r.why_it_matters && (
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      <span className="font-medium text-foreground/80">Why it matters: </span>
+                      {r.why_it_matters}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />
@@ -118,6 +183,12 @@ export default function SituationStrip({ clusters, onFocus }: SituationStripProp
                     ? `${c.events.length} signals seen`
                     : `${c.timing.occurred} dated · ${c.timing.observed_only} seen`}
                 </span>
+                {judged && (
+                  <span className="inline-flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    {r.evidence_event_ids.length} cited
+                  </span>
+                )}
                 {c.events.some((e) => e.verification_status === "provider_verified") && (
                   <span className="inline-flex items-center gap-1">
                     <ShieldCheck className="h-3 w-3" />

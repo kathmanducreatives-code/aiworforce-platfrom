@@ -60,7 +60,7 @@ function matchesSecondary(s: FeedSignal, cat: SecondaryCategory): boolean {
 export default function Signals() {
   const { workspaceId } = useWorkspace();
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
-  const { signals, clusters, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
+  const { signals, clusters, relevance, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
 
   const [tab, setTab] = useState<PrimaryTab>('today');
@@ -208,6 +208,7 @@ export default function Signals() {
             shows more than one signal. */}
         <SituationStrip
           clusters={clusters}
+          relevance={relevance}
           onFocus={(c) => setQuery(c.subject_key ?? '')}
         />
         <SignalsFeedList

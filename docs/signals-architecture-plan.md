@@ -1,6 +1,6 @@
 # Signals — final architecture & phased plan
 
-**Date:** 2026-08-25 · **Commit:** `b6b60b82` · **Status:** **Phases 0–6 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call, every signal it cannot collect refuses with a stated reason, the feed shows situations rather than rows, and monitoring runs on a schedule inside a per-workspace ceiling. Phase 7 not started.
+**Date:** 2026-08-25 · **Commit:** `616ec721` · **Status:** **Phases 0–7 complete and live-verified.** Every signal the system claims to collect has produced a canonical `signal_event` from a real provider call, every signal it cannot collect refuses with a stated reason, the feed shows situations rather than rows, monitoring runs on a schedule inside a per-workspace ceiling, and clusters carry a grounded relevance verdict citing their own evidence. Phase 8 not started.
 **Companion:** `docs/signals-content-backend-audit.md`
 **Progress:** see `docs/signals-phase-2-completion.md` for the Phase 2 verification record.
 
@@ -685,6 +685,65 @@ migration.
 | **Live validation** | Blind comparison of deterministic vs re-ranked ordering on real clusters. |
 | **Done** | Clusters carry a grounded "why this matters" citing their own evidence. |
 | **Depends on** | 5. **Blocked on OpenAI credits.** |
+
+---
+
+#### Phase 7 completion, 2026-08-25
+
+**The boundary is code, not a prompt instruction.** A prompt that says "only
+cite real events" is a request; a validator that drops uncited claims is a
+guarantee. Every rule is enforced against the cluster the model was given, and
+two of them are enforced again by the database.
+
+| Rule | Where it is enforced |
+|---|---|
+| cannot invent a signal | every cited id must be an event in this cluster; a verdict left with none is refused |
+| cannot promote | the band is a multiplier in (0, 1] — no arithmetic raises a cluster — **and a CHECK refuses a stored row whose adjusted priority exceeds the deterministic one** |
+| cannot call a stale situation timely | `timely` needs a cited event with a SOURCE date inside 45 days; an observation date is when we looked |
+| a believed verdict must cite | the validator refuses it, **and a CHECK refuses the row** |
+| failure changes nothing | any provider error, unparseable answer or refused verdict returns the deterministic cluster untouched |
+
+**Luna, validate, then Terra — and only then.** Terra is bought exactly once,
+and only when the validator found something a re-read could FIX: a miscited id,
+a missing field, a band outside the vocabulary. A provider that is unavailable
+produces no verdict to repair, so those fall straight back. Sol is never routed
+here; the stage policy names only Luna and Terra.
+
+| Live validation | Result |
+|---|---|
+| **identical evidence, different Company Brain** | generic B2B SaaS reads `low`, 96 to 38; developer-tooling reads `medium`, 96 to 67 |
+| the explanation cites a real event | the verdict's `evidence_event_ids` JOIN to a `signal_events` row dated 2026-07-28 |
+| it uses the SOURCE date, not the observation | "a reported market-expansion event from 28 days ago" — the article's date, not today |
+| model cost, latency, usage in the ledger | `model_call` row: Luna, 3806 ms, 786 in / 286 out, $0.0005, `event_priced`, outcome `believed` |
+| the database refuses a promotion | insert with adjusted 999 over deterministic 10 rejected |
+| the database refuses an uncited believed verdict | rejected — after a fix; see below |
+| the feed shows it | "Vercel · Worth a look · Why now: … 28 days ago · Why it matters: … · 1 dated · 2 seen · 1 cited" |
+
+**A CHECK that passed on NULL was not a CHECK.** The first version of
+`signal_cluster_relevance_model_verdict_cites` read
+`array_length(evidence_event_ids, 1) >= 1`. `array_length` of an EMPTY array is
+NULL, `NULL >= 1` is NULL, and a CHECK rejects only FALSE — so a believed
+verdict citing nothing was accepted. Found by inserting one and watching it go
+in. The point of restating the validator's rule in the database was to hold when
+a caller bypasses the validator; a constraint that cannot fail is the appearance
+of a second line of defence, which is worse than none.
+
+**`model_call` already had a contract nobody had used.** The record kind was
+declared, and two CHECKs required a non-empty `metadata.model` and forbade
+provider run ids on such a row. Following the existing contract was the fix,
+rather than inventing a second convention beside it.
+
+#### What Phase 7 does NOT do
+
+* **It judges only what a pass touched.** Re-judging a whole feed on every scan
+  would pay for opinions nothing new bears on. A cluster no pass has touched
+  keeps its last verdict, or none.
+* **It never promotes, so it cannot surface something the floor missed.** If the
+  evidence gate refused a signal, no amount of relevance brings it back — that
+  is the boundary, not a gap.
+* **The verdict is a cache of an opinion.** Deleting
+  `signal_cluster_relevance` loses no intelligence: the events remain, the
+  clusters rebuild, and the feed falls back to the deterministic ranking.
 
 ---
 

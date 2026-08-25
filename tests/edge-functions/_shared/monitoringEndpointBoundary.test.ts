@@ -49,7 +49,17 @@ Deno.test("3. it owns no provider call — every actor invocation is the shared 
     !SRC.includes("source_with_apify"),
     "the endpoint names an actor tool directly — that is a second provider stack",
   );
-  assert(!/apify\.com|actor_id\s*:/i.test(SRC), "the endpoint carries actor knowledge");
+  // NAMING AN ACTOR is the thing forbidden — not the ledger column that happens
+  // to be called `actor_id`, which Phase 7 fills with the MODEL that judged a
+  // cluster. The property is "this endpoint chooses no provider", so the check
+  // is for provider identifiers, not for a column name.
+  assert(!/apify\.com/i.test(SRC), "the endpoint names an Apify actor");
+  assertFalse(
+    /actor_id:\s*"[a-z0-9_]+\/[a-z0-9-]+"/i.test(SRC),
+    "the endpoint hardcodes an actor id",
+  );
+  assertFalse(/harvestapi|memo23|datahyena|solidcode/i.test(SRC),
+    "the endpoint names a provider actor");
 });
 
 Deno.test("4. it does not wire the runtime chain re-planner", () => {
