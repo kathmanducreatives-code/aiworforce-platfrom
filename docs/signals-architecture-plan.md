@@ -626,11 +626,27 @@ tested.
 | Live validation | Result |
 |---|---|
 | dry run decides, spends nothing | 1 due, "would scan — 200 of 200 credits left" |
-| tick 1 scans unattended | 5 capabilities completed, event deduplicated |
+| tick 1 scans unattended | 5 capabilities completed |
 | **tick 2, immediately** | **0 due, `inside_cadence: 1`, nothing scanned, 0.22s** |
 | ledger records unattended spend separately | `monitoring_call` charged 1 |
 | ceiling 0 refuses | "scheduled scans are off", `claimed: 0`, `last_run_at` unchanged |
 | two ticks fired together | one claimed and scanned; the other stood down |
+| **the real cron fired unattended** | claimed 09:15:00.9 → scanned → `last_run_at` 09:15:59.8 → claim released |
+| **evidence is reused, not just cadence-gated** | `reused: 1, investigating: 0` — "1 investigation(s) reused, 0 bought" |
+
+**The event now carries the source's own date, which is what makes that last row
+possible.** It was written `occurred_at: null` unconditionally, on the grounds
+that the stage states no source time of its own. The stage does not — but the
+EVIDENCE does: a funding round has an announced date, a news article a
+publication date, a job posting a posted date. Discarding it made every
+monitoring event undated, which then made the pre-flight unable to reuse one, so
+a monitor re-bought answers it already held. A live expansion event now reads
+`occurred_at: 2026-07-28` with basis `source_reported` against
+`observed_at: 2026-08-25` — when it happened, and when we looked.
+
+Still null when nothing cited carries a date, and a future date is refused
+outright: a provider reporting tomorrow is reporting a mistake, and writing it
+would make an event look fresher than anything that has happened.
 
 `pg_cron` and `pg_net` are enabled and `monitoring-tick` runs every 15 minutes.
 That is not how often a workspace is scanned — the cadence decides that. A

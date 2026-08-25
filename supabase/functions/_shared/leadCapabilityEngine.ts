@@ -5359,6 +5359,24 @@ export async function runCapabilityPlan(
               .map((m) => m.evidence_id).filter(Boolean),
           };
         }
+        /**
+         * The newest source date among a set of registry items.
+         *
+         * `observed_at` on a registry item is the SOURCE's date — the round's
+         * announced date, the article's publication date, the posting's posted
+         * date — because that is what each builder puts there. Newest, because
+         * a signal's recency is the most recent thing that proves it.
+         */
+        const newestSourceDate = (ids: readonly string[]): string | null => {
+          const items = (c.evidence_registry?.items ?? [])
+            .filter((it) => ids.includes(it.evidence_id));
+          const dates = items
+            .map((it) => it.observed_at)
+            .filter((d): d is string => !!d && Number.isFinite(Date.parse(d)))
+            .sort((a, b) => Date.parse(b) - Date.parse(a));
+          return dates[0] ?? null;
+        };
+
         // ── WHAT CODE PROVED, WITH CODE'S OWN CITATIONS ──────────────────
         //
         // `hiring_verification` reads real postings and `assessHiring` decides
@@ -5370,7 +5388,9 @@ export async function runCapabilityPlan(
         // The citations are the registry's own `job_posting` items, so this
         // asserts nothing the run cannot point at. Absent a registry or absent
         // openings there is no proven verdict, and the previous answer stands.
-        const provenVerdicts: Record<string, { verdict: string; evidence_ids: string[] }> = {};
+        const provenVerdicts: Record<string, {
+          verdict: string; evidence_ids: string[]; occurred_at?: string | null;
+        }> = {};
         if (c.hiring_assessment?.verdict === "hiring_verified") {
           const jobEvidence = (c.evidence_registry?.items ?? [])
             .filter((it) => it.evidence_type === "job_posting" || it.evidence_type === "yc_job")
@@ -5378,6 +5398,7 @@ export async function runCapabilityPlan(
           if (jobEvidence.length > 0) {
             provenVerdicts["hiring/company"] = {
               verdict: "verified", evidence_ids: jobEvidence,
+              occurred_at: newestSourceDate(jobEvidence),
             };
           }
         }
@@ -5401,6 +5422,7 @@ export async function runCapabilityPlan(
           if (fundingEvidence.length > 0) {
             provenVerdicts["funding/company"] = {
               verdict: "verified", evidence_ids: fundingEvidence,
+              occurred_at: newestSourceDate(fundingEvidence),
             };
           }
         }
@@ -5424,7 +5446,10 @@ export async function runCapabilityPlan(
             .filter((it) => it.evidence_type === type)
             .map((it) => it.evidence_id);
           if (ids.length > 0) {
-            provenVerdicts[`${event}/company`] = { verdict: "plausible", evidence_ids: ids };
+            provenVerdicts[`${event}/company`] = {
+              verdict: "plausible", evidence_ids: ids,
+              occurred_at: newestSourceDate(ids),
+            };
           }
         }
 

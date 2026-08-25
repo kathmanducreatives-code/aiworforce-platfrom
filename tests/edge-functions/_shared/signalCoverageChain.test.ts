@@ -283,10 +283,16 @@ Deno.test("7. a canonical signal_event is produced, typed and dated honestly", a
       e.signal_type,
       event === "expansion" ? "market_expansion" : "product_launch",
     );
-    // THE MONITORING RUN DID NOT OBSERVE WHEN IT HAPPENED. The article's date
-    // lives on the evidence; this stage states no source time of its own.
-    assertEquals(e.occurred_at, null);
-    assertEquals(e.occurred_at_basis, "unknown");
+    // ── THE ARTICLE'S DATE REACHES THE EVENT ──────────────────────────────
+    //
+    // It used to be discarded here: the event was written `occurred_at: null`
+    // on the grounds that this stage states no source time of its own. It does
+    // not — but the EVIDENCE does, and throwing it away made every monitoring
+    // event undated, which then made the reuse pre-flight unable to reuse one
+    // (an undated event cannot be shown to fall inside a recency window). A
+    // monitor re-bought answers it already held.
+    assertEquals(e.occurred_at, NEWS_ISO, "the publisher's date is a source-reported date");
+    assertEquals(e.occurred_at_basis, "source_reported");
     assertEquals((e.normalized_value as Record<string, unknown>).verdict, "plausible");
   }
 });
@@ -305,4 +311,72 @@ Deno.test("8. a story older than the window the mission asked for is refused", a
       `${event} accepted a story from outside its window`,
     );
   }
+});
+
+
+// ── 9. AND THE DATE IS ONLY WRITTEN WHEN IT IS REAL ─────────────────────────
+
+Deno.test("9. an undated story still yields an undated event", async () => {
+  // The rule that nothing may acquire a time from the moment we happened to
+  // look is unchanged. What changed is that a real reported date survives.
+  const written: Record<string, unknown>[] = [];
+  await runMonitoring(
+    {
+      workspace_id: "w",
+      subjects: [{
+        kind: "competitor", identifier: "acme.com", label: "Acme",
+        signals: [{ event: "expansion", subject: "company" }], timeframe_days: 90,
+      }],
+      icp: null,
+    },
+    {
+      buildPlan: buildCapabilityGraph as never,
+      // A verdict with no cited date at all — the shape a model verdict has.
+      runPlan: () =>
+        Promise.resolve({
+          companies: [{
+            key: "acme.com",
+            company: {
+              company_name: "Acme", canonical_domain: "acme.com",
+              linkedin_company_url: null,
+              external_source_id: "mission_supplied:acme.com",
+            },
+            signal_assessments: [{
+              signal: "expansion/company", verdict: "plausible",
+              evidence_ids: ["expansion_signal:x"], occurred_at: null,
+            }],
+          }],
+          state: {
+            qualified_company_keys: [],
+            completed_capabilities: ["expansion_signal_verification"],
+          },
+          // deno-lint-ignore no-explicit-any
+        }) as any,
+      loadHeldEvidence: () => Promise.resolve([]),
+      writeEvent: (i) => {
+        written.push(i as Record<string, unknown>);
+        return Promise.resolve({ written: true });
+      },
+    },
+  );
+  assertEquals(written.length, 1);
+  assertEquals(written[0].occurred_at, null);
+  assertEquals(written[0].occurred_at_basis, "unknown");
+});
+
+Deno.test("10. a future date is refused, never written as an occurrence", async () => {
+  // A provider reporting tomorrow is reporting a mistake, and writing it would
+  // make the event look fresher than anything that has happened — the one
+  // direction a timing error must never go.
+  const { validSourceDate } = await import(
+    "../../../supabase/functions/_shared/monitoringRunner.ts"
+  );
+  const now = Date.parse("2026-08-25T12:00:00.000Z");
+  assertEquals(validSourceDate(new Date(now + 5 * 86_400_000).toISOString(), now), null);
+  assertEquals(validSourceDate("not a date", now), null);
+  assertEquals(validSourceDate(null, now), null);
+  // A real past date survives, canonicalised.
+  assertEquals(
+    validSourceDate("2026-08-10T09:00:00Z", now), "2026-08-10T09:00:00.000Z",
+  );
 });

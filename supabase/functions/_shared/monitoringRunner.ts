@@ -67,7 +67,11 @@ export interface MonitoringRunDeps {
                  /** Set by `known_company_resolution` for a company the mission NAMED. */
                  external_source_id?: string | null };
       verdict?: string | null;
-      signal_assessments?: Array<{ signal: string; verdict: string; evidence_ids: readonly string[] }>;
+      signal_assessments?: Array<{
+        signal: string; verdict: string; evidence_ids: readonly string[];
+        /** When the SOURCE says it happened, when any cited item carries a date. */
+        occurred_at?: string | null;
+      }>;
     }>;
     state: { qualified_company_keys: string[]; completed_capabilities: string[] };
   }>;
@@ -370,6 +374,8 @@ export async function runMonitoring(
         continue;
       }
 
+      const sourceDate = validSourceDate(a.occurred_at);
+
       events.attempted++;
       try {
         const res = await deps.writeEvent({
@@ -377,11 +383,24 @@ export async function runMonitoring(
           origin: "scheduled_monitor",
           signal_type: canon.type,
           signal_category: canon.category,
-          // NO SOURCE TIME IS INVENTED. The engine's evidence carries dates
-          // where a provider reported one; this stage does not, so it says so
-          // rather than writing the run time.
-          occurred_at: null,
-          occurred_at_basis: "unknown",
+          // ── THE SOURCE'S OWN DATE, WHEN THE EVIDENCE CARRIES ONE ─────────
+          //
+          // This wrote `null` unconditionally, with the note that "this stage
+          // does not [carry a source time]". The stage does not — but the
+          // EVIDENCE does: a funding round has an announced date, a news
+          // article a publication date, a job posting a posted date. Discarding
+          // it made every monitoring event undated, which then made the reuse
+          // pre-flight unable to reuse it — an undated event cannot be shown to
+          // fall inside a recency window — so a monitor re-bought answers it
+          // already held.
+          //
+          // Still null when nothing cited carries a date, and the basis follows
+          // it. The rule that nothing may acquire a time from the moment we
+          // happened to look is unchanged; what changed is that a real reported
+          // date is no longer thrown away.
+          ...(sourceDate
+            ? { occurred_at: sourceDate, occurred_at_basis: "source_reported" }
+            : { occurred_at: null, occurred_at_basis: "unknown" }),
           subject_type: subjectType,
           subject_key: subjectKey,
           dedupe_key: `monitor|${subjectType}|${subjectKey}|${canon.type}`,
@@ -472,4 +491,22 @@ export function resumableState(
     pending_runs: pending,
     completed_capabilities: [],
   };
+}
+
+
+/**
+ * A source date we are willing to write as an occurrence.
+ *
+ * Parseable, and not in the future. A provider reporting tomorrow's date is
+ * reporting a mistake, and writing it would make the event look fresher than
+ * anything that has happened — which is the one direction a timing error must
+ * never go.
+ */
+export function validSourceDate(v: unknown, now: number = Date.now()): string | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) return null;
+  // A day of slack for clock skew and date-only values in another timezone.
+  if (t > now + 86_400_000) return null;
+  return new Date(t).toISOString();
 }

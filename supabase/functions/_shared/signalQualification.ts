@@ -127,6 +127,23 @@ export interface SignalAssessment {
   evidence_ids: readonly string[];
   /** True when the only route to this signal is a user-authorised unlock. */
   requires_unlock: boolean;
+  /**
+   * WHEN THE SOURCE SAYS IT HAPPENED, if any cited item carries a date.
+   *
+   * ── WHY THIS TRAVELS WITH THE VERDICT ─────────────────────────────────────
+   *
+   * The evidence knows: a funding round has an announced date, a news article a
+   * publication date, a job posting a posted date. The verdict was throwing
+   * that away, so every event written from it carried
+   * `occurred_at_basis: unknown` — which then made the reuse pre-flight unable
+   * to reuse it, because an undated event cannot be shown to fall inside a
+   * recency window. A monitor re-bought answers it already held.
+   *
+   * Null when nothing cited carries a date, which stays the honest default: an
+   * undated verdict must not acquire a time from the moment we happened to
+   * look.
+   */
+  occurred_at: string | null;
   reason: string;
 }
 
@@ -171,7 +188,14 @@ export interface SignalCoverageInput {
    * ids is not admitted either. The channel is about WHO establishes a fact,
    * never about relaxing what a fact requires.
    */
-  provenVerdicts?: Readonly<Record<string, { verdict: string; evidence_ids: readonly string[] }>>;
+  provenVerdicts?: Readonly<
+    Record<string, {
+      verdict: string;
+      evidence_ids: readonly string[];
+      /** The newest source date among the cited items, when they carry one. */
+      occurred_at?: string | null;
+    }>
+  >;
 }
 
 /**
@@ -201,7 +225,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
       return {
         signal: key, event: String(sig.event), subject: String(sig.subject),
         verdict: "not_investigated" as SignalVerdict,
-        established_by: null, evidence_ids: [],
+        established_by: null, evidence_ids: [], occurred_at: null,
         requires_unlock: personSubject,
         reason: personSubject
           ? `${key} is a claim about a person and is only reachable through a ` +
@@ -215,7 +239,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
       return {
         signal: key, event: String(sig.event), subject: String(sig.subject),
         verdict: (broke.length > 0 ? "investigation_failed" : "not_investigated") as SignalVerdict,
-        established_by: null, evidence_ids: [],
+        established_by: null, evidence_ids: [], occurred_at: null,
         requires_unlock: false,
         reason: broke.length > 0
           ? `${broke.join(", ")} ran and the provider failed, so nothing about ` +
@@ -252,6 +276,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
             signal: key, event: String(sig.event), subject: String(sig.subject),
             verdict: proven.verdict as SignalVerdict,
             established_by: ran[0], evidence_ids: [...proven.evidence_ids],
+            occurred_at: proven.occurred_at ?? null,
             requires_unlock: false,
             reason: `${ran.join(", ")} established ${proven.verdict} on ` +
               `${proven.evidence_ids.length} item(s); the model's uncited ` +
@@ -261,7 +286,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
         return {
           signal: key, event: String(sig.event), subject: String(sig.subject),
           verdict: "absent" as SignalVerdict,
-          established_by: ran[0], evidence_ids: [],
+          established_by: ran[0], evidence_ids: [], occurred_at: null,
           requires_unlock: false,
           reason: `${ran.join(", ")} ran, and the claimed "${claimed}" cited no ` +
             `evidence — an uncited positive verdict is downgraded, never trusted`,
@@ -271,6 +296,9 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
         signal: key, event: String(sig.event), subject: String(sig.subject),
         verdict: claimed as SignalVerdict,
         established_by: ran[0], evidence_ids: evidence,
+        // A MODEL VERDICT CARRIES NO DATE. It cited items; what those items say
+        // about time is the evidence's to state, not the model's.
+        occurred_at: null,
         requires_unlock: false,
         reason: `${ran.join(", ")} ran; ${claimed}` +
           (evidence.length ? ` on ${evidence.length} cited item(s)` : ""),
@@ -286,6 +314,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
         signal: key, event: String(sig.event), subject: String(sig.subject),
         verdict: proven.verdict as SignalVerdict,
         established_by: ran[0], evidence_ids: [...proven.evidence_ids],
+        occurred_at: proven.occurred_at ?? null,
         requires_unlock: false,
         reason: `${ran.join(", ")} established ${proven.verdict} on ` +
           `${proven.evidence_ids.length} item(s), with no evaluator involved`,
@@ -297,7 +326,7 @@ export function assessSignals(i: SignalCoverageInput): SignalAssessment[] {
     return {
       signal: key, event: String(sig.event), subject: String(sig.subject),
       verdict: "not_investigated" as SignalVerdict,
-      established_by: ran[0], evidence_ids: [],
+      established_by: ran[0], evidence_ids: [], occurred_at: null,
       requires_unlock: false,
       reason: `${ran.join(", ")} ran but no evaluator judged ${key}`,
     };
