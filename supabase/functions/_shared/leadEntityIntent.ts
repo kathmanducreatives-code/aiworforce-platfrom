@@ -523,7 +523,14 @@ export function artifactMayPersist(intent: LeadEntityIntent, candidateArtifactTy
  * Returns the intent unchanged when no Mission exists — the deterministic
  * workspace path, gated separately by orchestrate.
  */
-export function applyMissionEntityAuthority<T extends { target_entity: string; clarification_required?: boolean }>(
+export function applyMissionEntityAuthority<
+  T extends {
+    target_entity: string;
+    clarification_required?: boolean;
+    execution_mode?: ExecutionMode;
+    company_gate_required?: boolean;
+  },
+>(
   intent: T,
   mission: { target_entity?: string } | null | undefined,
 ): T {
@@ -532,7 +539,32 @@ export function applyMissionEntityAuthority<T extends { target_entity: string; c
   // A decided mission also resolves ambiguity: the model read the sentence and
   // committed. Leaving `clarification_required` set would send a resolved
   // request down the "ask the user" branch on the strength of a regex's doubt.
-  return { ...intent, target_entity: decided, clarification_required: false };
+  //
+  // ── AND THE MODE MUST FOLLOW THE ENTITY ──────────────────────────────────
+  //
+  // Overriding `target_entity` alone used to leave the intent contradicting
+  // itself. `compileLeadEntityIntent` degrades an unsure reading to
+  // `person_first` with no company gate; overlaying "company" on top of that
+  // produced an intent that SAID company and EXECUTED person_first. run-agent
+  // nests the whole mission-driven capability engine inside
+  // `isCompanyFirstRequest`, which needs both flags — so a company-only
+  // mission over an ambiguous sentence ("Check Vercel for hiring signals")
+  // was refused with `sourcing_requires_mission_architecture` and no provider
+  // was ever called.
+  //
+  // Only the entity's UNCONDITIONAL rules are restored here, exactly as the
+  // compiler states them above: company is always company_first + gated, job
+  // is always job_first. The person branch and the job gate are
+  // text-dependent, so they are left precisely as compiled — this reinstates
+  // the compiler's own invariant, it does not add a second routing rule.
+  const settled: T = { ...intent, target_entity: decided, clarification_required: false };
+  if (decided === "company") {
+    settled.execution_mode = "company_first";
+    settled.company_gate_required = true;
+  } else if (decided === "job") {
+    settled.execution_mode = "job_first";
+  }
+  return settled;
 }
 
 /**

@@ -194,9 +194,14 @@ Deno.test("6. events are written for qualified companies with EVIDENCED signals 
   // A SUBJECT, never a fabricated lead entity.
   assertEquals(e.subject_type, "company");
   assertEquals(e.subject_key, "acme-com");
+  // EXPLICITLY NULL, not merely absent. The shared projection states "no
+  // account, no lead candidate" rather than leaving the fields unmentioned —
+  // which matters now that the Lead path uses the same projection and DOES set
+  // them: a reader can tell "monitoring found this and it belongs to nobody"
+  // from "the writer forgot to say".
   assertEquals(e.contact_id, undefined);
-  assertEquals(e.account_id, undefined);
-  assertEquals(e.lead_candidate_id, undefined);
+  assertEquals(e.account_id, null);
+  assertEquals(e.lead_candidate_id, null);
 });
 
 Deno.test("7. an UNQUALIFIED company, or an unevidenced signal, writes nothing", async () => {

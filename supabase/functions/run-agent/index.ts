@@ -7,6 +7,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
 import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
+import { projectCanonicalEvents } from "../_shared/canonicalSignalEvent.ts";
+import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
+import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
+import { canonicalSubjectKey } from "../_shared/signalSubject.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
@@ -3913,6 +3917,81 @@ Deno.serve(async (req) => {
         const taskStatus = statuses.taskStatus;
         // The claim is RELEASED here so the next Continue can take it. Leaving it
         // set would make the task look permanently in-flight.
+        // ── PHASE 8: LEADS → SIGNALS ────────────────────────────────────────
+        //
+        // A Lead mission that PROVED a signal has produced shared intelligence,
+        // and the Signals surface should have it without buying it again.
+        //
+        // ── WHY NOT `memoryWriter`, WHICH THE PLAN SAID ALREADY DID THIS ────
+        //
+        // It has a `lead_mission` dual-write, and it is unreachable. Phase 3F
+        // gave the legacy writer a guard — an engine that owns persistence
+        // publishes its own rows — and a LeadMissionV1 run spends under
+        // `capability_engine`, so `writeMemoryFromToolCall` returns before the
+        // dispatch that would reach it. The store proves it: thirteen events,
+        // none of them `lead_mission`.
+        //
+        // Re-opening that guard is not the fix. It exists to stop the legacy
+        // writer publishing LEAD ROWS, and a canonical signal event is not a
+        // lead row — it is the shared record Phase 2 built the store for. So
+        // the engine writes its own, through the SAME projection monitoring
+        // uses, and the guard stays exactly as strict as it was.
+        //
+        // NO ORIGIN BRANCHING ANYWHERE. The only difference from a monitoring
+        // write is the `origin` value, which is provenance; the dedupe key is
+        // the question, so a fact both surfaces prove is one row.
+        if (capabilityRun && isSignalsV2Enabled()) {
+          const qualified = new Set(capabilityRun.state.qualified_company_keys);
+          let leadSignals = { attempted: 0, written: 0, deduplicated: 0, failed: 0 };
+          for (const c of capabilityRun.companies) {
+            // THE LEAD SURFACE'S OWN GATE. A company that did not qualify is a
+            // company this mission did not conclude anything about, and its
+            // signals are not intelligence yet.
+            if (!qualified.has(c.key)) continue;
+
+            // ── CANONICAL IDENTITY, OR NOTHING ──────────────────────────────
+            //
+            // The domain, then the resolved LinkedIn URL. Never the company
+            // NAME: two companies share a word, and a subject key built from
+            // one would merge them in every cluster afterwards.
+            const domain = (c.enriched ?? c.company).canonical_domain ?? null;
+            const li = c.identity?.linkedin_company_url ??
+              c.company.linkedin_company_url ?? null;
+            const subjectKey = canonicalSubjectKey(domain ?? li ?? "");
+            if (!subjectKey) continue;
+
+            for (const row of projectCanonicalEvents({
+              workspace_id,
+              origin: "lead_mission",
+              subject: {
+                subject_type: "company", subject_key: subjectKey,
+                // The domain or resolved URL this company was proved under.
+                subject_identifier: domain ?? li,
+              },
+              company_name: (c.enriched ?? c.company).company_name ?? null,
+              assessments: (c.signal_assessments ?? []).map((a) => ({
+                signal: a.signal, verdict: a.verdict,
+                evidence_ids: a.evidence_ids, occurred_at: a.occurred_at,
+              })),
+            })) {
+              leadSignals.attempted++;
+              try {
+                const r = await writeSignalEventV2(
+                  { admin: supabase as never, enabled: true }, row as never);
+                if (r.written) leadSignals.written++;
+                else if (r.deduplicated) leadSignals.deduplicated++;
+                else leadSignals.failed++;
+              } catch (e) {
+                leadSignals.failed++;
+                console.warn("[run-agent][lead-signals]", String(e).slice(0, 160));
+              }
+            }
+          }
+          if (leadSignals.attempted > 0) {
+            console.log("[run-agent][lead-signals]", leadSignals);
+          }
+        }
+
         const { data: finishedRow } = await supabase.from("tasks").select("result").eq("id", task.id).maybeSingle();
         const priorTaskResult = releaseClaim(((finishedRow as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>);
         await supabase.from("tasks").update({

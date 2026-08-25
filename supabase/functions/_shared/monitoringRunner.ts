@@ -30,6 +30,9 @@ import {
 } from "./monitoringMission.ts";
 import { filterCollectableSignals } from "./signalCollectability.ts";
 import {
+  projectCanonicalEvents, CANONICAL_TYPE_FOR as CANON,
+} from "./canonicalSignalEvent.ts";
+import {
   preflight, summarisePreflight,
   type ExistingEvidence, type PlannedInvestigation, type PreflightDecision,
 } from "./monitoringPreflight.ts";
@@ -147,20 +150,10 @@ export interface MonitoringRunOutcome {
  * default, because a signal with no canonical type must produce no event rather
  * than a plausible-looking one.
  */
-export const CANONICAL_TYPE_FOR: Readonly<Record<string, { type: string; category: string }>> =
-  Object.freeze({
-    hiring: { type: "sales_hiring", category: "gtm" },
-    funding: { type: "recent_funding", category: "growth" },
-    expansion: { type: "market_expansion", category: "growth" },
-    product_launch: { type: "product_launch", category: "product" },
-    // NO CANONICAL TYPE EXISTS for a technology reading or for "the company
-    // posted something", so neither can become an event and both are refused
-    // by `signalCollectability` before anything is spent. `headcount_change`
-    // has a type and no capability. All three are listed nowhere rather than
-    // mapped to an approximation — a signal filed under the wrong type is
-    // worse than a signal nobody collected.
-    headcount_change: { type: "employee_growth", category: "growth" },
-  });
+// RE-EXPORTED, NOT REDECLARED. `canonicalSignalEvent` owns the vocabulary now,
+// because the Lead path needs the same mapping and two copies would disagree
+// the first time either changed. `signalCollectability` imports it from here.
+export { CANONICAL_TYPE_FOR } from "./canonicalSignalEvent.ts";
 
 /**
  * Run one monitoring pass.
@@ -349,75 +342,41 @@ export async function runMonitoring(
     // A discovered company still has to qualify. A named one does not.
     if (!subject && !qualified.has(c.key)) continue;
 
-    for (const a of c.signal_assessments ?? []) {
-      if (a.verdict !== "verified" && a.verdict !== "plausible") continue;
-      const event = a.signal.split("/")[0];
-      const canon = CANONICAL_TYPE_FOR[event];
-      if (!canon) continue;
+    // ── THE SHARED PROJECTION ────────────────────────────────────────────
+    //
+    // The same function the Lead path uses, so one fact produces one row
+    // whichever surface found it. The GATE above is monitoring's — who is
+    // eligible differs by surface — but the row does not.
+    const subjectType = subject?.kind === "competitor" ? "competitor" : "company";
+    const subjectKey = subject
+      ? canonicalise(subject.identifier)
+      : canonicalise(c.company.canonical_domain ?? c.company.company_name);
+    if (!subjectKey) {
+      log("monitoring_event_skipped_no_subject", { company: c.key });
+      continue;
+    }
 
-      // ── THE SUBJECT MODEL, CARRIED THROUGH ───────────────────────────────
-      //
-      // This wrote `subject_type: "company"` for everything, which erases the
-      // distinction Phase 2 exists to hold: a competitor is not an account.
-      //
-      // And the KEY has to be the one the pre-flight asks with. It read the
-      // company's domain or name; the pre-flight reads the subject's own
-      // identifier. For a subject named by LinkedIn URL the first is null and
-      // the two could never match, so held evidence would never be found and
-      // every pass would re-buy what the last one proved.
-      const subjectType = subject?.kind === "competitor" ? "competitor" : "company";
-      const subjectKey = subject
-        ? canonicalise(subject.identifier)
-        : canonicalise(c.company.canonical_domain ?? c.company.company_name);
-      if (!subjectKey) {
-        log("monitoring_event_skipped_no_subject", { company: c.key });
-        continue;
-      }
+    const projected = projectCanonicalEvents({
+      workspace_id: input.workspace_id,
+      origin: "scheduled_monitor",
+      subject: {
+        subject_type: subjectType, subject_key: subjectKey,
+        // WHAT THE WORKSPACE ACTUALLY TYPED, so a later "Open in Leads" has a
+        // real identifier rather than a reversed slug.
+        subject_identifier: subject?.identifier ??
+          c.company.canonical_domain ?? c.company.linkedin_company_url ?? null,
+      },
+      company_name: c.company.company_name ?? subject?.label ?? null,
+      assessments: (c.signal_assessments ?? []).map((a) => ({
+        signal: a.signal, verdict: a.verdict,
+        evidence_ids: a.evidence_ids, occurred_at: a.occurred_at,
+      })),
+    });
 
-      const sourceDate = validSourceDate(a.occurred_at);
-
+    for (const input_row of projected) {
       events.attempted++;
       try {
-        const res = await deps.writeEvent({
-          workspace_id: input.workspace_id,
-          origin: "scheduled_monitor",
-          signal_type: canon.type,
-          signal_category: canon.category,
-          // ── THE SOURCE'S OWN DATE, WHEN THE EVIDENCE CARRIES ONE ─────────
-          //
-          // This wrote `null` unconditionally, with the note that "this stage
-          // does not [carry a source time]". The stage does not — but the
-          // EVIDENCE does: a funding round has an announced date, a news
-          // article a publication date, a job posting a posted date. Discarding
-          // it made every monitoring event undated, which then made the reuse
-          // pre-flight unable to reuse it — an undated event cannot be shown to
-          // fall inside a recency window — so a monitor re-bought answers it
-          // already held.
-          //
-          // Still null when nothing cited carries a date, and the basis follows
-          // it. The rule that nothing may acquire a time from the moment we
-          // happened to look is unchanged; what changed is that a real reported
-          // date is no longer thrown away.
-          ...(sourceDate
-            ? { occurred_at: sourceDate, occurred_at_basis: "source_reported" }
-            : { occurred_at: null, occurred_at_basis: "unknown" }),
-          subject_type: subjectType,
-          subject_key: subjectKey,
-          dedupe_key: `monitor|${subjectType}|${subjectKey}|${canon.type}`,
-          verification_status: "unverified",
-          lifecycle_status: "active",
-          normalized_value: {
-            // THE NAME A READER WILL RECOGNISE. A company supplied by LinkedIn
-            // URL carries no name of its own until enrichment, and a feed row
-            // reading `null` is useless. The subject's label is what the
-            // workspace called it, so it is the honest fallback — never a name
-            // derived from the URL, which would be a guess.
-            company_name: c.company.company_name ?? subject?.label ?? null,
-            signal: a.signal,
-            verdict: a.verdict,
-            subject_kind: subject?.kind ?? "discovered",
-          },
-        });
+        const res = await deps.writeEvent(input_row);
         if (res.written) events.written++;
         else if (res.deduplicated) events.deduplicated++;
         else events.failed++;

@@ -857,6 +857,90 @@ scaffolding. If GPT never arrives, Signals still works; it explains less.
    bought; too tight and the same fact is purchased twice. Needs measuring in
    Phase 3, not assuming.
 
+#### Phase 8 record — Leads ↔ Signals integration, 2026-08-25
+
+**Status: shared execution path built and proven offline; one live gate open.**
+
+##### What the audit found (the plan's premises were again not all true)
+
+1. **"Lead → Signals already works via `memoryWriter`" — false.** The Phase 3F
+   guard returns at `memoryWriter.ts:343`, before the dispatch at line 350, so
+   a Lead mission never reached the canonical writer at all.
+
+2. **Dedupe keys were namespaced by surface.** Keys carried a surface prefix,
+   which made cross-surface dedupe structurally impossible: monitoring and a
+   Lead mission observing the same fact could not collide by construction.
+   Fixed by `canonicalSignalEvent.ts` (origin-free projection) plus migration
+   `20260825170000_canonical_dedupe_keys.sql`, which backfills existing rows.
+
+3. **The Lead mission compiler could NOT accept a company-only mission.** This
+   is the answer to the audit question the phase asked, and it was the real
+   blocker. `compileLeadEntityIntent` asserts its own invariant — a
+   `target_entity` of `company` always means `execution_mode: "company_first"`
+   with `company_gate_required: true`. But its ambiguity fallback degrades an
+   unsure sentence to `person_first` with no gate, and
+   `applyMissionEntityAuthority` then overlaid the mission's `target_entity`
+   and cleared `clarification_required` **without restoring the mode**. The
+   result was an intent that said *company* and executed *person_first*.
+
+   That is not cosmetic. `run-agent/index.ts:1230` nests the entire
+   mission-driven capability engine inside `isCompanyFirstRequest`, which
+   requires both flags. A company-only mission — exactly the shape a Signals
+   "Investigate company" action produces — was refused with
+   `sourcing_requires_mission_architecture` and no provider was ever called.
+
+   Fixed in the shared path (`applyMissionEntityAuthority`), not with a
+   Signals-specific executor: the overlay now restores only the entity's
+   *unconditional* rules, exactly as the compiler states them. The person
+   branch and the job gate stay text-dependent and are left as compiled, so
+   this reinstates the compiler's invariant rather than adding a second
+   routing rule. Covered by `missionEntityAuthorityCoherence.test.ts`, whose
+   three failing assertions were written before the fix and which keeps two
+   guard tests (person untouched, no-mission passthrough) green.
+
+##### Proven
+
+- Cross-surface dedupe, **live**: inserting a `lead_mission` row with key
+  `competitor|linkedin-com-company-vercel|sales_hiring` was refused by
+  `signal_events_workspace_dedupe_uniq`. Before the backfill it would have
+  created a duplicate.
+- The paid-execution boundary is real, **live**: a hand-written mission was
+  refused by `PaidExecutionBlockedError` with `incompatible_planner_contract`
+  and `mission_compilation_failed`. An uncompiled mission cannot be spent
+  against — the guard was not worked around.
+- Signals → Leads decisioning (`signalsToLeads.ts`): `openInLeads` refuses
+  `not_a_company_subject` and `no_safe_identifier`; only a domain or a
+  LinkedIn company URL is a safe identifier, so no company is ever merged
+  from a fuzzy name. `investigateMissionFields` runs every requested signal
+  through the existing origin-agnostic preflight and drops already-answered
+  signals, returning `everything_already_known` when nothing remains.
+- Opening a situation creates no Lead rows and spends nothing: the fixture
+  workspace still reports `lead_candidates = 0`.
+- 5724 edge-function tests, 235 frontend tests, `tsc --noEmit` clean.
+- Five mutations confirmed to bite: surface prefix restored to the dedupe key;
+  slug reversal; name-as-identifier; stale evidence suppressing purchase;
+  origin-filtered reuse.
+
+##### Open — the live half of requirement 1
+
+A Lead-mission run that writes a `lead_mission`-origin `signal_event` has not
+been observed live. The write block is implemented, deployed (`run-agent` v68)
+and type-checked, and the routing defect that blocked it is fixed, but
+executing it end-to-end requires a **model-compiled** mission, and the only
+entry point that compiles one — `pilot-chat` — requires an authenticated user
+JWT and correctly rejects the service key. Minting one is not something this
+work should do.
+
+**To close it:** run one Lead mission from the app against a workspace, then
+confirm a row with `origin = 'lead_mission'` appears in `signal_events`.
+
+Requirements 2, 6 and 9 depend on the same live gate. Per the phase's own
+instruction — *integrate into the real Signals UI only after the underlying
+shared execution path is proven* — the situation actions
+(`Open in Leads` / `Investigate` / `Track` / `Find decision makers`) are
+**deliberately not wired into `SituationStrip.tsx` yet**. The decision layer
+they will call is built and tested.
+
 ## 8. Recommended first phase
 
 **Phase 0 — prove the Radar path persists a row.** It is hours, not days; it
