@@ -522,6 +522,35 @@ export function isFrontier(s: InvestigationState): boolean {
   return s === "pending_investigation";
 }
 
+/**
+ * Is this company still waiting to be investigated — including one the run
+ * BUDGETED and then abandoned?
+ *
+ * `isFrontier` recognises only `pending_investigation`. That is right for the
+ * within-run passes, where a selected company moves to `in_flight` and the
+ * slice logic carries it. It is wrong for the CONTINUATION decision at the end
+ * of an invocation, because a company deferred for time capacity has already
+ * been moved out of `pending_investigation` and so vanishes from the count
+ * without ever having been looked at.
+ *
+ * Live run e3b7d3a7: 29 discovered, capacity 1 (a 22.7s identity call against
+ * 26.7s of usable wall clock), 19 deferred — and `frontierRemaining` reported
+ * 0, so `decideAutoContinuation` correctly concluded `frontier_exhausted` from
+ * an incorrect input and told the user "every discovered candidate has been
+ * investigated". Twenty-eight companies were abandoned.
+ *
+ * `deferred` is the engine's own signal — `stage_block.reason === "deferred"`,
+ * which its comment calls "budgeted and abandoned". A permanently excluded
+ * company never returns: that was a DECISION, not a deferral, and re-queueing
+ * it would spend again on an answer already given.
+ */
+export function isUnfinishedFrontier(
+  s: InvestigationState, deferred: boolean,
+): boolean {
+  if (s === "excluded_permanently") return false;
+  return isFrontier(s) || deferred;
+}
+
 /** Has anything been spent on this company? */
 export function wasInvestigated(s: InvestigationState): boolean {
   return s === "in_flight" || s === "investigated";

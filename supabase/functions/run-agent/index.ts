@@ -326,7 +326,7 @@ import {
 import {
   dispatchContinuation, type DispatchOutcome,
 } from "../_shared/leadContinuationDispatch.ts";
-import { isFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
+import { isFrontier, isUnfinishedFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
 import { projectStatus, RESUMABLE_ROW_STATUS } from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
@@ -3853,9 +3853,27 @@ Deno.serve(async (req) => {
         // ledger, applied to the status the resume gate actually reads.
         const sliceQualified = capabilityRun
           ? capabilityRun.state.qualified_company_keys.length : 0;
+        // ── DEFERRED IS NOT INVESTIGATED ────────────────────────────────
+        //
+        // This counted only `pending_investigation`, so a company the slice
+        // budgeted and then abandoned for time capacity was invisible here —
+        // it had already been moved to `in_flight`/`investigated`.
+        //
+        // Run e3b7d3a7 is what that cost: 29 companies discovered, capacity 1,
+        // 19 deferred, and this reported a frontier of 0. Auto-continuation
+        // then stopped with `frontier_exhausted` and told the user "every
+        // discovered candidate has been investigated" while abandoning 28 of
+        // them. Nothing qualified, so nothing was written.
+        //
+        // `stage_block.reason === "deferred"` is the engine's own record of
+        // "budgeted and abandoned"; `isUnfinishedFrontier` reads it and keeps
+        // a permanently excluded company out.
         const sliceFrontier = capabilityRun
-          ? capabilityRun.companies.filter(
-            (c) => isFrontier(c.investigation_state)).length
+          ? capabilityRun.companies.filter((c) =>
+            isUnfinishedFrontier(
+              c.investigation_state,
+              (c as { stage_block?: { reason?: string } | null }).stage_block?.reason === "deferred",
+            )).length
           : 0;
         const priorTaskRow = await supabase
           .from("tasks").select("result").eq("id", task.id).maybeSingle();
