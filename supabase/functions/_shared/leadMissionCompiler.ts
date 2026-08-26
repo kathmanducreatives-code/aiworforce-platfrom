@@ -1140,6 +1140,20 @@ export function readSignalPhrases(
     const t = String(term ?? "").trim();
     if (!t) continue;
     for (const host of readable) {
+      // ── ALREADY SAID IS NOT SAID TWICE ────────────────────────────────
+      //
+      // The model may put the SAME words in both fields, and does: one card
+      // arrived with `preferred_signals: ["actively hiring sales roles"]` and
+      // `required_signal_terms: ["actively hiring sales roles"]`. Comparing the
+      // term against the captured QUALIFIER is not enough there — the reader
+      // had captured only "sales roles", so the full phrase looked unexpressed
+      // and merged into itself, yielding the phrase "actively hiring sales
+      // roles actively hiring sales roles" and a role term to match.
+      //
+      // The host's own phrase is the right thing to test: if it already
+      // contains the term, the term adds nothing.
+      const hostPhrase = String(host.d!.phrase ?? host.phrase).toLowerCase();
+      if (hostPhrase.includes(t.toLowerCase())) break;
       if (qualifierAbsorbs(host.d!.qualifier, t)) break; // already expressed
       let merged = null;
       for (const combined of [`${host.phrase} ${t}`, `${t} ${host.phrase}`]) {

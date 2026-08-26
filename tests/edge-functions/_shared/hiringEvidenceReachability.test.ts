@@ -325,3 +325,24 @@ Deno.test("LIVE PROPOSAL: the compiler folds the term into the signal", async ()
   // And the parallel channel is still carried, so nothing downstream regresses.
   assertEquals(m.required_signal_terms, ["sales roles"]);
 });
+
+Deno.test("the same words in BOTH fields are not folded twice", () => {
+  // A real card: the model put the identical phrase in `preferred_signals` and
+  // `required_signal_terms`. Comparing the term against the captured qualifier
+  // ("sales roles") made the full phrase look unexpressed, and it merged into
+  // itself — "actively hiring sales roles actively hiring sales roles".
+  const sigs = readSignalPhrases(
+    ["actively hiring sales roles"], ["actively hiring sales roles"]);
+  assertEquals(sigs.length, 1);
+  assertEquals(sigs[0].phrase, "actively hiring sales roles", "said once");
+  assertEquals(
+    (sigs[0].qualifier as Record<string, string[]>).role_terms, ["sales roles"],
+    "and the role is still captured exactly once",
+  );
+});
+
+Deno.test("a term already inside the signal phrase is a no-op", () => {
+  const sigs = readSignalPhrases(["hiring sales roles"], ["sales roles"]);
+  assertEquals(sigs[0].phrase, "hiring sales roles");
+  assertEquals((sigs[0].qualifier as Record<string, string[]>).role_terms, ["sales roles"]);
+});
