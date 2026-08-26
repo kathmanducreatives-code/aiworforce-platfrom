@@ -24,7 +24,7 @@ import { buildCuriousCoderLinkedInJobsInput } from "./curiousCoderJobsInput.ts";
 // ONE OBSERVABILITY LAYER for every paid lead-sourcing call. Observes only —
 // it never selects a provider, sets a budget, decides a retry or gates a result.
 import {
-  withExecutionAudit, createLedgerWriter, inferStage, logicalCallKey,
+  withExecutionAudit, createLedgerWriter, inferStage, logicalCallKey, type LedgerProgress,
   type ExecutionCallSpec, type ExecutionOutcome, type ExecutionStage,
   type ExecutionReason, type LedgerDb,
 } from "./executionLedger.ts";
@@ -35,6 +35,16 @@ import { normalizeApifyJobRow } from "./apifyJobsNormalizer.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
+  /**
+   * Called the moment a provider run exists, before anything waits on it.
+   *
+   * The run id is created by the start POST and used to live only in memory
+   * until the call returned or the poll gave up. A function killed inside that
+   * window — which is what the Edge wall clock does — left a billed, running
+   * Apify job that nothing durable named, so the resume machinery could not
+   * adopt it (run 78cff5e5).
+   */
+  onRunStarted?: (info: { run_id: string; dataset_id: string | null }) => Promise<void> | void;
   workspace_id: string;
   agent_slug: string;
   agent_id: string | null;
@@ -750,7 +760,9 @@ async function apifyFetch(
   }
 }
 
-async function execSourceWithApify(input: unknown): Promise<ToolResult> {
+async function execSourceWithApify(
+  input: unknown, ctx?: ToolContext,
+): Promise<ToolResult> {
   const APIFY_API_TOKEN = Deno.env.get("APIFY_API_TOKEN");
   if (!APIFY_API_TOKEN) {
     return { ok: false, unavailable: true, error: "apify_not_configured" };
@@ -1123,6 +1135,19 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   const run_id: string | undefined = run.id;
   const dataset_id: string | undefined = run.defaultDatasetId;
   if (!run_id) return { ok: false, error: "apify_missing_run_id" };
+
+  // ── PERSIST BEFORE WAITING ───────────────────────────────────────────────
+  //
+  // Everything below this line can be killed by the platform without warning.
+  // From here the run is billed and running, so its identifiers are written now
+  // rather than when the poll gives up — that is the difference between a
+  // resumable run and an abandoned one. Awaited so the write actually lands,
+  // and never allowed to fail the call.
+  try {
+    await ctx?.onRunStarted?.({ run_id, dataset_id: dataset_id ?? null });
+  } catch (e) {
+    console.error("[toolRegistry] onRunStarted failed", String(e));
+  }
 
   const deadline = Date.now() + 90_000;
   let status: string = run.status ?? "READY";
@@ -1639,10 +1664,19 @@ export async function runTool(
     } satisfies ExecutionCallSpec
     : null;
 
-  const executeOnce = async (): Promise<{ result: ToolResult; outcome: ExecutionOutcome }> => {
+  const executeOnce = async (
+    progress: LedgerProgress,
+  ): Promise<{ result: ToolResult; outcome: ExecutionOutcome }> => {
     let r: ToolResult;
     try {
-      r = await tool.execute(input, ctx);
+      // The run id reaches the ledger row the instant it exists, so a hard kill
+      // leaves a row that names the run instead of `provider_run_id: null`.
+      r = await tool.execute(input, {
+        ...ctx,
+        onRunStarted: async ({ run_id, dataset_id }) => {
+          await progress({ provider_run_id: run_id, dataset_id });
+        },
+      });
     } catch (e) {
       r = { ok: false, error: `tool_threw:${String(e)}` };
     }

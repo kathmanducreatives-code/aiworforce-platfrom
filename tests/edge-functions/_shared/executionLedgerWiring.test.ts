@@ -196,8 +196,19 @@ Deno.test("wiring: the ledger cannot influence what runs", async () => {
   const registry = await Deno.readTextFile(TOOL_REGISTRY);
   // The audited branch and the plain branch must both simply execute the tool.
   // If the ledger ever gates execution, this phrase stops being true.
-  assert(registry.includes("const executeOnce = async ()"),
+  // NARROWED FROM AN EXACT SIGNATURE, 2026-08-26. This matched
+  // `const executeOnce = async ()` literally, as a proxy for "the ledger does
+  // not gate execution". `executeOnce` now takes a `progress` writer so a
+  // provider run id can reach its row the instant the run exists — a hard kill
+  // used to leave `provider_run_id: null` for a billed, running Apify job that
+  // nothing could resume (run 78cff5e5).
+  //
+  // The property being defended is unchanged and is asserted directly below:
+  // the ledger writes, and contains no function that decides what runs.
+  assert(registry.includes("const executeOnce = async ("),
     "execution must be a plain closure the ledger wraps, not a decision it makes");
+  assert(registry.includes("await withExecutionAudit(writer, auditSpec, executeOnce)"),
+    "the audit wraps execution; it is not consulted before it");
   const module = await Deno.readTextFile(new URL(
     "../../../supabase/functions/_shared/executionLedger.ts", import.meta.url));
   for (const name of ["selectProvider", "decideRetry", "shouldBroaden", "computeQuota"]) {

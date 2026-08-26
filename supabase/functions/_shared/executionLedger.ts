@@ -465,14 +465,32 @@ export interface AuditedResult<T> {
  * Writer failures are logged and dropped — observability must not be able to fail
  * a run it is only watching.
  */
+/**
+ * Persist facts about a call that are known BEFORE it finishes.
+ *
+ * ── A RUN THAT EXISTS MUST BE REFERENCEABLE ──────────────────────────────
+ *
+ * The provider run id is created by the start POST and, until now, lived only
+ * in memory until the call returned or the poll gave up. A run killed inside
+ * that window — which is what the Edge Function wall clock does — left a row
+ * reading `status: "started", provider_run_id: null` for an Apify run that was
+ * started, billed, and unreferenceable.
+ *
+ * Run 78cff5e5 is exactly that: `harvestapi/linkedin-job-search` began at
+ * 09:13:05, the function was hard-killed mid-call, and the task sat `running`
+ * with `updated_at` frozen at creation. The resume machinery could not adopt
+ * the run because nothing durable named it.
+ */
+export type LedgerProgress = (patch: Partial<ExecutionLedgerRow>) => Promise<void>;
+
 export async function withExecutionAudit<T>(
   writer: LedgerWriter | null | undefined,
   spec: ExecutionCallSpec,
-  fn: () => Promise<{ result: T; outcome: ExecutionOutcome }>,
+  fn: (progress: LedgerProgress) => Promise<{ result: T; outcome: ExecutionOutcome }>,
 ): Promise<T> {
   // A null writer is a supported no-op: it is how the "auditing disabled behaves
   // identically" property is tested, and how a context without a database runs.
-  if (!writer) return (await fn()).result;
+  if (!writer) return (await fn(async () => {})).result;
 
   const row = buildStartedRow(spec);
   try {
@@ -486,8 +504,18 @@ export async function withExecutionAudit<T>(
     failure_code: "unfinished",
     failure_message: "execution did not report an outcome",
   };
+  // Mid-flight facts go straight to the row. Failures are logged, never thrown:
+  // losing a progress write must not fail a call that is otherwise fine.
+  const progress: LedgerProgress = async (patch) => {
+    try {
+      await writer.finalize(row.id, patch);
+    } catch (e) {
+      console.error("[execution-ledger] progress failed", String(e));
+    }
+  };
+
   try {
-    const r = await fn();
+    const r = await fn(progress);
     outcome = r.outcome;
     return r.result;
   } catch (e) {
