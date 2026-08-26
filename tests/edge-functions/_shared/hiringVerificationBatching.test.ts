@@ -258,3 +258,51 @@ Deno.test("the engine DROPS an unattributable row rather than guessing an owner"
     "ownership comes from the row's own company URL, never from position",
   );
 });
+
+// ── A PENDING RUN BELONGS TO THE QUESTION THAT STARTED IT ─────────────────
+//
+// Run ede69c8c, live, on the first batched mission. Batching worked — ten
+// companies in one call, then one — but BOTH ledger rows carried the same
+// provider_run_id:
+//
+//   call 1  companies=10  run_id=ju8MYeOYSgoQ9zBAv  timed_out
+//   call 2  companies=1   run_id=ju8MYeOYSgoQ9zBAv  timed_out
+//
+// The batch of ten timed out and was recorded pending; the batch of one then
+// ADOPTED it, because adoption matched on capability+provider alone. That
+// company was never asked about, and the other batch's answer would have been
+// read as its own.
+//
+// The flaw predates batching — a per-company call would have inherited another
+// company's run the same way — but a batch of ten beside a batch of one is
+// what made it unmissable.
+
+Deno.test("adoption requires the same input, not just the same stage", () => {
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  const i = ENGINE.indexOf("const inFlight = (opts.state?.pending_runs ?? []).find(");
+  assert(i > 0, "the adoption lookup must exist");
+  const block = ENGINE.slice(i, i + 400);
+  assert(
+    block.includes("r.input_fingerprint === thisFingerprint"),
+    "a run may only be adopted by a call asking the same question",
+  );
+  assert(
+    block.includes("!!r.input_fingerprint"),
+    "an entry with no recorded question is not adopted — one re-POST is cheaper " +
+      "than attributing one batch's answer to another",
+  );
+});
+
+Deno.test("a pending run records what it was asked", () => {
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  const i = ENGINE.indexOf("state.pending_runs.push({");
+  const block = ENGINE.slice(i, i + 500);
+  assert(
+    block.includes("input_fingerprint: attemptFingerprint"),
+    "without the fingerprint the adoption check above can never match",
+  );
+});

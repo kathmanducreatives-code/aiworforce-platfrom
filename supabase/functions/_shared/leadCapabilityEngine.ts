@@ -572,6 +572,21 @@ export interface CapabilityExecutionState {
   pending_runs: Array<{
     capability: CapabilityId; provider: string; run_id: string;
     dataset_id: string | null; actor_build_id: string | null; started_at: string;
+    /**
+     * The input that STARTED this run.
+     *
+     * Adoption used to match on capability+provider alone, so any later call to
+     * the same stage inherited whatever run was pending — regardless of whether
+     * it was asking the same question. Run ede69c8c made that unmissable: a
+     * batch of ten companies timed out and went pending, and the following
+     * batch of ONE adopted its run id. That company was never asked about, and
+     * the other run's answer would have been read as its own.
+     *
+     * Optional because a run pending from before this field existed has none;
+     * such an entry is not adopted, which costs one re-POST and cannot
+     * attribute one question's answer to another.
+     */
+    input_fingerprint?: string;
   }>;
   /**
    * The FREE decision about who was worth paying to identify.
@@ -2516,8 +2531,12 @@ export async function runCapabilityPlan(
     // RESUME BEFORE START. If a run for this capability+provider is already in
     // flight from an earlier invocation, adopt its id: the caller reads that run
     // and its dataset instead of issuing a second, separately-billed start.
+    // ADOPT ONLY THE RUN THAT ASKED THIS QUESTION. Matching capability and
+    // provider alone let a batch of one inherit a batch of ten's run id.
+    const thisFingerprint = compiled.ok ? inputFingerprint(call.input) : null;
     const inFlight = (opts.state?.pending_runs ?? []).find(
-      (r) => r.capability === capability && r.provider === provider);
+      (r) => r.capability === capability && r.provider === provider &&
+        !!r.input_fingerprint && r.input_fingerprint === thisFingerprint);
     // `capabilityId` is what lets `guardedInvoker` enforce per-capability
     // containment rather than the plan-wide union.
     const outbound = {
@@ -2575,6 +2594,9 @@ export async function runCapabilityPlan(
             dataset_id: pending.dataset_id ?? null,
             actor_build_id: pending.actor_build_id ?? null,
             started_at: new Date().toISOString(),
+            // What this run was asked. Only a call asking the same thing may
+            // adopt it.
+            ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
           });
         }
         log("provider_pending", { capability, provider, run_id: pending.run_id });
