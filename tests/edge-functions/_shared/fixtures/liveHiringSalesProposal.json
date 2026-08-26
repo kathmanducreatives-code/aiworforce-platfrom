@@ -1,0 +1,77 @@
+{
+ "unknowns": [],
+ "confidence": 0.98,
+ "strategies": [
+  "hiring",
+  "multi_signal"
+ ],
+ "geographies": [],
+ "prohibitions": [],
+ "company_types": [
+  "B2B SaaS (founder-led or small teams)",
+  "Recruiting / Talent Acquisition / Staffing Agencies"
+ ],
+ "output_intent": "qualified_companies",
+ "employee_range": {
+  "max": null,
+  "min": null
+ },
+ "known_companies": [],
+ "adjacent_signals": [],
+ "excluded_signals": [],
+ "hard_constraints": [
+  {
+   "field": "hiring_activity",
+   "value": true,
+   "reason": "Companies must be actively hiring sales roles.",
+   "operator": "currently_active"
+  },
+  {
+   "field": "open_role_type",
+   "value": "sales roles",
+   "reason": "The hiring activity must concern sales roles.",
+   "operator": "matches"
+  }
+ ],
+ "soft_preferences": [],
+ "geography_is_hard": false,
+ "preferred_signals": [
+  "hiring"
+ ],
+ "required_evidence": [
+  "Evidence that the company is actively hiring for sales roles.",
+  "Evidence that the company matches one of the stated ICP company types."
+ ],
+ "allowed_broadening": {
+  "geographies": [],
+  "company_types": [],
+  "role_families": [],
+  "employee_range": {
+   "max": null,
+   "min": null
+  }
+ },
+ "signal_recency_days": null,
+ "decision_maker_roles": [],
+ "disallowed_broadening": [],
+ "required_capabilities": [
+  "general_company_discovery",
+  "embedded_hiring_evidence",
+  "company_details_enrichment",
+  "company_semantic_evaluation",
+  "portfolio_ranking"
+ ],
+ "required_signal_terms": [
+  "sales roles"
+ ],
+ "evaluation_instructions": "Return up to three distinct companies that match either B2B SaaS (founder-led or small teams) or Recruiting / Talent Acquisition / Staffing Agencies and carry evidence of actively hiring for sales roles. Reject companies without relevant sales-role hiring evidence or without a clear fit to the stated ICP. Rank qualified companies by strength and report an honest shortfall if fewer than three qualify.",
+ "no_broadening_requested": false,
+ "preferred_source_strategy": [
+  "job_signal_first",
+  "company_profile_first",
+  "evidence_reuse_first"
+ ],
+ "founder_unlock_recommended": false,
+ "requested_opportunity_count": 3,
+ "requested_contact_ready_count": null
+}

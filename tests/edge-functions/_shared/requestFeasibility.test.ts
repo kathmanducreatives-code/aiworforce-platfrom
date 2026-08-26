@@ -174,3 +174,47 @@ Deno.test("every gap carries a requirement, a reason and structured detail", () 
 Deno.test("no mission or no plan is not reported as infeasible", () => {
   assertEquals(assessRequestFeasibility(null, null).ok, true);
 });
+
+// ── a stated constraint that reached no signal must be declared ────────────
+//
+// `required_signal_terms` records the material constraints the user named.
+// `readSignalPhrases` folds each into the signal it qualifies; anything left
+// unattached was understood, carried, and yet is verified by nothing. The card
+// must say so rather than let it pass.
+
+Deno.test("a folded term is NOT reported as a gap", () => {
+  const base = parseLeadMissionDeterministic(
+    "Find companies actively hiring sales roles.", {});
+  const m = {
+    ...base,
+    required_signals: [{
+      type: "hiring", event: "hiring", subject: "company",
+      qualifier: { role_terms: ["sales roles"] }, phrase: "hiring sales roles",
+    }],
+    required_signal_terms: ["sales roles"],
+  } as unknown as typeof base;
+  const report = assessRequestFeasibility(m, buildCapabilityGraph(m));
+  assertEquals(
+    report.declared_gaps.filter((g) => g.startsWith("sales roles")), [],
+    "the constraint reached the signal, so it is not a gap",
+  );
+});
+
+Deno.test("an unattached term IS reported as a gap", () => {
+  // The exact pre-fix shape from the authenticated card: the signal carried an
+  // empty qualifier while the constraint sat in a parallel field.
+  const base = parseLeadMissionDeterministic(
+    "Find companies actively hiring sales roles.", {});
+  const m = {
+    ...base,
+    required_signals: [{
+      type: "hiring", event: "hiring", subject: "company", qualifier: {}, phrase: "hiring",
+    }],
+    required_signal_terms: ["sales roles"],
+  } as unknown as typeof base;
+  const report = assessRequestFeasibility(m, buildCapabilityGraph(m));
+  assert(
+    report.declared_gaps.some((g) => g.startsWith("sales roles")),
+    `a stated constraint verified by nothing must be declared: ${JSON.stringify(report.declared_gaps)}`,
+  );
+});

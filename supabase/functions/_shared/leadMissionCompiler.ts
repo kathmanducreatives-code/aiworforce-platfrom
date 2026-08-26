@@ -1110,10 +1110,48 @@ const MISSION_TYPE_FOR_OUTPUT: Record<RequestedOutput, MissionType> = {
  */
 export function readSignalPhrases(
   phrases: readonly string[],
+  declaredTerms: readonly string[] = [],
 ): Array<Record<string, unknown>> {
   const read = phrases.map((phrase) => ({ phrase, d: readSignalPhrase(phrase) }));
   const readable = read.filter((r) => r.d);
   const consumed = new Set<string>();
+
+  // ── THE PARALLEL CHANNEL FOLDS IN HERE ──────────────────────────────────
+  //
+  // The proposal contract asks the model for a signal in `preferred_signals`
+  // and its material constraints in `required_signal_terms`. It answers both —
+  // "actively hiring sales roles" arrived as `["hiring"]` plus
+  // `["sales roles"]`. This function read only the first, so the role and the
+  // signal never met and the mission promised "hiring" with an empty qualifier
+  // while the user had asked for sales hiring.
+  //
+  // `missionSignalDescriptor`'s header calls that channel out by name: the role
+  // "survived only through a parallel channel — `role_families` plus
+  // `required_signal_terms` — which exists for roles and nothing else." The
+  // structured qualifier exists to end it.
+  //
+  // A declared term is offered to every readable signal through the SAME
+  // `qualifierAbsorbs` rule that rejoins split prose, so belonging is decided
+  // by the reader rather than by a list of words. A term nothing absorbs stays
+  // exactly where it was — `required_signal_terms` is still carried on the
+  // mission and still read by role classification and evaluation — so folding
+  // adds precision and removes nothing.
+  for (const term of declaredTerms) {
+    const t = String(term ?? "").trim();
+    if (!t) continue;
+    for (const host of readable) {
+      if (qualifierAbsorbs(host.d!.qualifier, t)) break; // already expressed
+      let merged = null;
+      for (const combined of [`${host.phrase} ${t}`, `${t} ${host.phrase}`]) {
+        const r = readSignalPhrase(combined);
+        if (r && r.type === host.d!.type && qualifierAbsorbs(r.qualifier, t)) {
+          merged = r;
+          break;
+        }
+      }
+      if (merged) { host.d = merged; break; }
+    }
+  }
 
   for (const frag of read) {
     if (frag.d) continue;
@@ -1165,7 +1203,16 @@ function qualifierAbsorbs(
   for (const v of Object.values(qualifier ?? {})) {
     for (const term of Array.isArray(v) ? v : [v]) {
       const t = String(term ?? "").trim().toLowerCase();
-      if (t && (t.includes(frag) || frag.includes(t))) return true;
+      // ONE DIRECTION ONLY. The qualifier must have captured the WHOLE
+      // fragment; a shared word is not absorption.
+      //
+      // The reverse test looked harmless and was not: "10-50 employees hiring"
+      // reads as `role_terms: ["employees"]`, and `"10-50 employees".includes(
+      // "employees")` is true — so a company-SIZE constraint was accepted as a
+      // ROLE qualifier and the hiring signal became "hiring 10-50 employees".
+      // Requiring the qualifier to contain the full term keeps "sales roles"
+      // (captured whole) and rejects "employees" (a fragment of the term).
+      if (t && t.includes(frag)) return true;
     }
   }
   return false;
@@ -1247,7 +1294,7 @@ function proposalToMissionCandidate(
     // both paths turn the same words into the same requirement. A phrase it
     // cannot read yields null — recorded below as unrepresented, never rounded
     // to the nearest event.
-    required_signals: readSignalPhrases(p.preferred_signals).map((d) => ({
+    required_signals: readSignalPhrases(p.preferred_signals, p.required_signal_terms).map((d) => ({
       ...d,
       ...(p.signal_recency_days != null ? { timeframe_days: p.signal_recency_days } : {}),
     })),

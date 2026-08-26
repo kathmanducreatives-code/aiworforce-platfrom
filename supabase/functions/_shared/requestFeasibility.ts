@@ -312,6 +312,43 @@ export function assessRequestFeasibility(
     }
   }
 
+  // ── A STATED CONSTRAINT THAT REACHED NO SIGNAL IS A GAP ──────────────────
+  //
+  // `required_signal_terms` is the model's record of the material constraints
+  // the user named. `readSignalPhrases` folds each one into the signal it
+  // qualifies, so anything still unattached here was understood by the model,
+  // carried onto the mission, and yet is not part of what any capability will
+  // verify.
+  //
+  // That is not necessarily a defect — the term may be a company attribute
+  // rather than a signal qualifier, and role classification and evaluation
+  // still read it. But it must not pass silently: the user asked for it, and
+  // the card should say whether this run will establish it.
+  const stated = ((mission as { required_signal_terms?: unknown }).required_signal_terms ?? []) as unknown[];
+  for (const raw of Array.isArray(stated) ? stated : []) {
+    const term = String(raw ?? "").trim();
+    if (!term) continue;
+    const expressed = (mission.required_signals ?? []).some((sig) => {
+      const q = (sig as { qualifier?: Record<string, unknown> }).qualifier ?? {};
+      return Object.values(q).some((v) =>
+        (Array.isArray(v) ? v : [v]).some((x) => {
+          const t = String(x ?? "").trim().toLowerCase();
+          const n = term.toLowerCase();
+          return t.length > 0 && (t.includes(n) || n.includes(t));
+        }));
+    });
+    if (!expressed) {
+      report.requirements.push({
+        requirement: term,
+        status: "unsupported",
+        message:
+          `"${term}" was stated as a required signal term but is not attached to ` +
+          `any signal this plan verifies, so no capability will establish it.`,
+        detail: { term, source: "required_signal_terms" },
+      });
+    }
+  }
+
   // ── decide what BLOCKS ───────────────────────────────────────────────────
   //
   // Narrow on purpose. A gap is a thing to disclose; only two states make the

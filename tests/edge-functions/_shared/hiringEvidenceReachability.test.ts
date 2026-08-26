@@ -209,3 +209,119 @@ Deno.test("a fragment the combined reading does NOT absorb stays separate", () =
   assertEquals(sigs.length, 2);
   assertEquals(new Set(sigs.map((x) => x.type)), new Set(["funding", "hiring"]));
 });
+
+// ── THE PARALLEL CHANNEL MUST FOLD INTO THE SIGNAL ─────────────────────────
+//
+// From the authenticated card, 2026-08-26. The user asked for "actively hiring
+// sales roles" and the compiled mission carried:
+//
+//   required_signals      [{ type: "hiring", qualifier: {} }]
+//   required_signal_terms ["sales roles"]
+//
+// The model lost nothing — it put the signal in `preferred_signals` and the
+// material constraint in `required_signal_terms`, which is exactly what the
+// proposal contract asks of it. The COMPILER read only the first field, so the
+// role and the signal never met and the preview could only promise "hiring".
+//
+// `missionSignalDescriptor`'s own header names this: the role "survived only
+// through a parallel channel — `role_families` plus `required_signal_terms` —
+// which exists for roles and nothing else." That module exists to end the
+// parallel channel; this is the compiler catching up to it.
+//
+// Solved at the contract level: every declared signal term is offered to each
+// readable signal through the SAME `qualifierAbsorbs` rule that rejoins split
+// prose. No vocabulary is named anywhere.
+
+Deno.test("a declared signal term folds into the signal it qualifies", () => {
+  const sigs = readSignalPhrases(["hiring"], ["sales roles"]);
+  assertEquals(sigs.length, 1);
+  assertEquals(sigs[0].type, "hiring");
+  assertEquals(
+    (sigs[0].qualifier as Record<string, unknown>).role_terms, ["sales roles"],
+    "the constraint the user stated must reach the signal",
+  );
+});
+
+Deno.test("paraphrases fold the same way, with no vocabulary in the code", () => {
+  for (const [signal, term, expected] of [
+    ["hiring", "account executives", "account executives"],
+    ["hiring", "customer success managers", "customer success managers"],
+    ["actively hiring", "SDRs", "sdrs"],
+    ["recruiting", "engineers", "engineers"],
+  ] as const) {
+    const sigs = readSignalPhrases([signal], [term]);
+    const q = (sigs[0]?.qualifier ?? {}) as Record<string, string[]>;
+    const got = (q.role_terms ?? []).map((t) => t.toLowerCase());
+    assert(
+      got.some((t) => t.includes(expected)),
+      `"${signal}" + "${term}" lost the constraint; got ${JSON.stringify(sigs)}`,
+    );
+  }
+});
+
+Deno.test("a term no signal absorbs is NOT silently attached", () => {
+  // The merge stays a test of belonging. Without the absorption guard the
+  // reader still returns the SAME event for the combined phrase — it simply
+  // absorbs nothing — so the host signal would be replaced by one whose
+  // `phrase` now carries an unrelated constraint. These are the two shapes
+  // where that actually happens, found by scanning the reader rather than
+  // guessed:
+  //
+  //   "hiring"         + "10-50 employees"  -> hiring, qualifier {}
+  //   "recently funded" + "sales roles"     -> funding, qualifier {}
+  //
+  // A company-size constraint is not a hiring qualifier and a role is not a
+  // funding qualifier; both must be left alone.
+  const size = readSignalPhrases(["hiring"], ["10-50 employees"]);
+  assertEquals(size[0].phrase, "hiring",
+    `an employee range must not be absorbed into the hiring signal: ${JSON.stringify(size)}`);
+  assertEquals(size[0].qualifier, {});
+
+  const funding = readSignalPhrases(["recently funded"], ["sales roles"]);
+  const f = funding.find((s) => s.type === "funding")!;
+  assertEquals(f.phrase, "recently funded",
+    `a role term may not rewrite a funding signal: ${JSON.stringify(funding)}`);
+  assertEquals(
+    ((f.qualifier ?? {}) as Record<string, string[]>).role_terms ?? [], [],
+    "a role term may not qualify a funding signal",
+  );
+});
+
+Deno.test("declared terms never invent a signal that was not requested", () => {
+  const sigs = readSignalPhrases([], ["sales roles"]);
+  assertEquals(sigs, [], "a qualifier alone is not a requirement");
+});
+
+// ── THE CALL SITE, NOT JUST THE FUNCTION ───────────────────────────────────
+//
+// The tests above exercise `readSignalPhrases` directly, so they pass even when
+// the COMPILER stops passing `required_signal_terms` to it — which is exactly
+// the bug that shipped. This one runs the real `compileLeadMission` over the
+// verbatim model proposal from the authenticated card that produced
+// `qualifier: {}`, so the wiring itself is pinned.
+
+Deno.test("LIVE PROPOSAL: the compiler folds the term into the signal", async () => {
+  const proposal = JSON.parse(
+    Deno.readTextFileSync(new URL("./fixtures/liveHiringSalesProposal.json", import.meta.url)),
+  );
+  // The model's own split, as recorded on the card.
+  assertEquals(proposal.preferred_signals, ["hiring"]);
+  assertEquals(proposal.required_signal_terms, ["sales roles"]);
+
+  const { compileLeadMission } = await import(
+    "../../../supabase/functions/_shared/leadMissionCompiler.ts"
+  );
+  const m = compileLeadMission({
+    originalUserQuery: "Find 3 companies matching my ICP that are actively hiring sales roles.",
+    proposal,
+  }).final_mission;
+
+  const hiring = m.required_signals.find((s) => s.type === "hiring");
+  assert(hiring, "the hiring signal survives compilation");
+  assertEquals(
+    hiring!.qualifier?.role_terms, ["sales roles"],
+    `the compiler must pass required_signal_terms through; got ${JSON.stringify(hiring)}`,
+  );
+  // And the parallel channel is still carried, so nothing downstream regresses.
+  assertEquals(m.required_signal_terms, ["sales roles"]);
+});
