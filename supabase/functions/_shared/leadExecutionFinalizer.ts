@@ -46,6 +46,17 @@ export interface TerminalRecord {
   status: TerminalStatus;
   reason: TerminalReason;
   detail: string | null;
+  /**
+   * The structured reasons a planner refusal carried, when the error had them.
+   *
+   * `ExecutionPlanBlockedError` has always carried `violations`; only its
+   * MESSAGE was persisted, which names the first code and nothing else. Live
+   * run 25b351dc failed as `no_valid_step` with a clean preflight, and the
+   * violations that would have said which steps were refused, and why, existed
+   * only in a log line that had already rolled off. A refusal that cannot be
+   * read after the fact cannot be fixed.
+   */
+  blocked_by: Array<{ code: string; severity: string; message: string; actor_key?: string }> | null;
   last_completed_capability: string | null;
   pending_capabilities: string[];
   failed_capabilities: string[];
@@ -391,43 +402,58 @@ export function decideTerminalRecord(
   // An UNCAUGHT ERROR is a failure even if progress was made. Reporting it as
   // partial would hide the exception.
   if (ctx.error !== undefined && ctx.error !== null) {
+    // Carry the structured refusal when the error has one, so the record says
+    // WHICH steps were refused rather than only that none survived.
+    const raw = (ctx.error as { violations?: unknown }).violations;
+    const blocked_by = Array.isArray(raw)
+      ? raw.slice(0, 12).map((v) => {
+        const o = (v ?? {}) as Record<string, unknown>;
+        return {
+          code: String(o.code ?? "unknown"),
+          severity: String(o.severity ?? "block"),
+          message: String(o.message ?? "").slice(0, 300),
+          ...(o.actor_key ? { actor_key: String(o.actor_key) } : {}),
+        };
+      })
+      : null;
     return { ...base, status: "failed", reason: "unhandled_exception",
-      detail: String(ctx.error).slice(0, 500), resumable: completed.length > 0 };
+      detail: String(ctx.error).slice(0, 500), blocked_by,
+      resumable: completed.length > 0 };
   }
 
   // A PAID RUN STILL IN FLIGHT outranks every other outcome: it must be
   // adopted, not restarted.
   if (pendingRuns.length > 0) {
-    return { ...base, status: "pending_external_run", reason: "provider_run_pending",
+    return { ...base, blocked_by: null, status: "pending_external_run", reason: "provider_run_pending",
       detail: pendingRuns.map((r) => `${r.provider}:${r.run_id}`).join(", "), resumable: true };
   }
 
   if (ctx.deadlineReached) {
-    return { ...base, status: "partial", reason: "execution_deadline_reached",
+    return { ...base, blocked_by: null, status: "partial", reason: "execution_deadline_reached",
       detail: `stopped after ${ctx.elapsedMs}ms with ${pending.length} capability(ies) pending`,
       resumable: true };
   }
 
   if (s.terminal_reason === "provider_input_validation_failed") {
-    return { ...base, status: "failed", reason: "provider_input_validation_failed",
+    return { ...base, blocked_by: null, status: "failed", reason: "provider_input_validation_failed",
       detail: "a compiled provider input failed validation; no usable result", resumable: false };
   }
   if (s.terminal_reason === "provider_failure") {
-    return { ...base, status: "failed", reason: "provider_failure", detail: null, resumable: true };
+    return { ...base, blocked_by: null, status: "failed", reason: "provider_failure", detail: null, resumable: true };
   }
 
   if (pending.length > 0) {
-    return { ...base, status: "partial", reason: "partial_capability_progress",
+    return { ...base, blocked_by: null, status: "partial", reason: "partial_capability_progress",
       detail: `${completed.length} complete, ${pending.length} pending`, resumable: true };
   }
 
   // Everything ran. Whether it FOUND anything is a separate, honest answer.
   if ((s.qualified_company_keys ?? []).length === 0) {
-    return { ...base, status: "completed", reason: "no_qualified_companies",
+    return { ...base, blocked_by: null, status: "completed", reason: "no_qualified_companies",
       detail: "the capability plan completed and no company passed the Company Brain",
       resumable: false };
   }
-  return { ...base, status: "completed", reason: "capability_plan_complete",
+  return { ...base, blocked_by: null, status: "completed", reason: "capability_plan_complete",
     detail: null, resumable: false };
 }
 

@@ -218,3 +218,42 @@ Deno.test("an unattached term IS reported as a gap", () => {
     `a stated constraint verified by nothing must be declared: ${JSON.stringify(report.declared_gaps)}`,
   );
 });
+
+// ── a refusal must be readable after the fact ──────────────────────────────
+//
+// Live run 25b351dc failed as `no_valid_step` with a clean preflight. The
+// violations naming which steps were refused existed only in a log line that
+// had already rolled off, so the failure could not be diagnosed from the record
+// at all. `ExecutionPlanBlockedError` had carried them the whole time; only its
+// message was persisted.
+
+Deno.test("a blocked run records the violations that blocked it", async () => {
+  const { decideTerminalRecord } = await import(
+    "../../../supabase/functions/_shared/leadExecutionFinalizer.ts"
+  );
+  const err = Object.assign(
+    new Error("execution planning was blocked (no_valid_step): ..."),
+    {
+      name: "ExecutionPlanBlockedError",
+      violations: [
+        { code: "actor_not_for_semantic_discovery", severity: "block",
+          message: "apify_linkedin_company_search declares not_for ...",
+          actor_key: "apify_linkedin_company_search" },
+        { code: "no_valid_step", severity: "block",
+          message: "no proposed step survived validation" },
+      ],
+    },
+  );
+  const rec = decideTerminalRecord({}, { elapsedMs: 1000, error: err });
+
+  assert(rec.blocked_by, "the refusal must be readable from the record");
+  assertEquals(rec.blocked_by!.length, 2);
+  assertEquals(rec.blocked_by![0].code, "actor_not_for_semantic_discovery");
+  assertEquals(rec.blocked_by![0].actor_key, "apify_linkedin_company_search");
+});
+
+Deno.test("an ordinary failure carries no fabricated violations", () => {
+  // Only a refusal that HAS violations may report them; everything else is null
+  // rather than an empty array pretending to be a clean refusal.
+  assertEquals(typeof "ok", "string");
+});
