@@ -1015,6 +1015,13 @@ interface DelegateArgs {
    * `new_architecture` orchestrate now refuses the request without one.
    */
   leadMission?: LeadMissionV1 | null;
+  /**
+   * WHICH branch produced `leadMission`, for the failure record.
+   *
+   * Four call sites supply a mission and three of them can supply null; the
+   * failure message named none of them.
+   */
+  missionOrigin?: string;
   modelUsed: string;
   providerUsed: string;
   workflowInputs?: Record<string, any> | null;
@@ -1063,6 +1070,33 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
 
   if (!orchResponse.ok) {
     console.error("[pilot-chat] orchestrate failed:", orchResponse.status, orchBody);
+    // ── A DELEGATION FAILURE MUST SAY WHAT IT SENT ────────────────────────
+    //
+    // `mission_not_compiled` means orchestrate received no valid mission. This
+    // handler reported only that word, with EMPTY metadata, so which of the
+    // four delegate branches produced the null — and whether a mission was
+    // sent at all — could not be recovered afterwards. One live Start failed
+    // exactly this way and left nothing to diagnose from.
+    //
+    // The same lesson as `blocked_by` on the executor: a refusal that cannot
+    // be read after the fact cannot be fixed. Recorded on the message rather
+    // than only logged, because logs roll off and this one already had.
+    const delegation = {
+      orchestrate_status: orchResponse.status,
+      orchestrate_error: orchBody?.error ?? null,
+      orchestrate_details: typeof orchBody?.details === "string"
+        ? orchBody.details.slice(0, 300) : null,
+      mission_sent: a.leadMission != null,
+      mission_origin: a.missionOrigin ?? "unspecified",
+      mission_signals: Array.isArray(
+          (a.leadMission as { required_signals?: Array<{ type?: string }> } | null)?.required_signals)
+        ? (a.leadMission as { required_signals: Array<{ type?: string }> })
+          .required_signals.map((x) => String(x?.type ?? "")).slice(0, 6)
+        : null,
+      tool_input_had_mission: (toolInput as { lead_mission?: unknown } | null)?.lead_mission != null,
+      instruction_preview: String(a.instruction ?? "").slice(0, 160),
+    };
+    console.error("[pilot-chat][delegation-failed]", delegation);
     const errMsg = `I started building a plan but the orchestrator failed: ${orchBody?.error ?? "unknown"}`;
     const { data: saved } = await a.admin
       .from("messages")
@@ -1073,6 +1107,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
         agent_slug: "pilot",
         model_used: a.modelUsed,
         is_error: true,
+        metadata: { delegation_failure: delegation },
       })
       .select("*")
       .single();
@@ -2088,6 +2123,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
       conversationId: conversationId!, workspaceId, instruction,
       leadMission: briefMission,
+    missionOrigin: "brief_rewrite",
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
     });
@@ -2161,6 +2197,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
         conversationId, workspaceId, instruction: intakeInstruction,
         leadMission: intakeMission,
+    missionOrigin: "lead_intake",
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
         } as unknown as ToolInput,
@@ -2636,6 +2673,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
     return await delegateToOrchestrate({
       leadMission: compiledLeadMission,
+    missionOrigin: "confirmed_card",
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
@@ -2709,6 +2747,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
     return await delegateToOrchestrate({
       leadMission: peopleMission,
+    missionOrigin: "people_sourcing",
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {

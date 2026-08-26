@@ -1209,12 +1209,18 @@ export function readSignalPhrases(
  * whether this fragment belongs to that signal, so ask that directly.
  */
 function qualifierAbsorbs(
-  qualifier: Record<string, unknown> | undefined,
+  // Widened deliberately: `SignalQualifier` is a typed shape, and this reads it
+  // structurally — every value, whatever the key — so it must not be pinned to
+  // one record type.
+  // `SignalQualifier` is a typed shape with no index signature, and this reads
+  // it structurally — every value, whatever the key. `object` accepts both that
+  // and a plain record without asserting either.
+  qualifier: object | undefined | null,
   fragment: string,
 ): boolean {
   const frag = fragment.trim().toLowerCase();
   if (!frag) return false;
-  for (const v of Object.values(qualifier ?? {})) {
+  for (const v of Object.values((qualifier ?? {}) as Record<string, unknown>)) {
     for (const term of Array.isArray(v) ? v : [v]) {
       const t = String(term ?? "").trim().toLowerCase();
       // ONE DIRECTION ONLY. The qualifier must have captured the WHOLE
