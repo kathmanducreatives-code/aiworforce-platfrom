@@ -4453,8 +4453,16 @@ export async function runCapabilityPlan(
         // PAID FALLBACK, FOR A LONE TIER B — or for a named company nobody has
         // asked about yet. Everything else is settled by evidence already held;
         // re-checking it is pure waste.
+        // ── ASK THE DEADLINE ABOUT *THIS* CALL ──────────────────────────
+        //
+        // `expired()` with no operation compares against the slowest estimate
+        // OBSERVED so far, which on the first job search of a run is some other,
+        // faster stage. Naming the operation makes the check use this Actor's
+        // own floor (`ASSUMED_MS_BY_OP`), so a call that cannot finish is
+        // deferred to a continuation instead of being started and killed —
+        // run 78cff5e5, which hung with no terminal record.
         if ((needsPaidJobVerification(assessment) || jobEvidenceNeverCollected) &&
-            !deps.deadline?.expired()) {
+            !deps.deadline?.expired("apify_linkedin_job_search")) {
           const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
           if (url) {
             const compiled = compileHarvestJobSearchInput({

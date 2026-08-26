@@ -142,6 +142,23 @@ const ASSUMED_MS_BY_OP: Readonly<Record<string, number>> = Object.freeze({
   // One evaluator call. Observed evaluator latency is ~5s; 7s leaves headroom
   // and is still less than half the two-call assumption.
   [QUALIFICATION_PREGROUNDED_OP]: 7_000,
+  // ── THE SLOWEST PAID CALL IN THE PIPELINE ────────────────────────────────
+  //
+  // A company-scoped job search carries the whole role vocabulary — the stage
+  // sends `[...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20)` — and LinkedIn
+  // is queried per title. Measured on the real payload: 2 titles finished in
+  // 13.9s; the production 20-title call was STILL RUNNING at 46s.
+  //
+  // Without an entry here the operation inherited the generic ~12s assumption,
+  // so run 78cff5e5 started one at 09:13:05 with ~29s of budget left, was
+  // hard-killed mid-call, and left the task `running` with no terminal record
+  // and `updated_at` frozen at creation. The call itself was correct — LHH,
+  // twenty sales titles — it simply could not fit.
+  //
+  // 60s is above the measured floor and deliberately conservative: the cost of
+  // over-estimating is one deferred call on a continuation that has the budget,
+  // and the cost of under-estimating is a dead run.
+  ["apify_linkedin_job_search"]: 60_000,
 });
 
 /**

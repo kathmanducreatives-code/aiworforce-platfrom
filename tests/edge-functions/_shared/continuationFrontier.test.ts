@@ -172,3 +172,57 @@ Deno.test("the hiring gate derives the scope instead of listing provenances", ()
     "a provenance allow-list cannot keep step with new discovery Actors",
   );
 });
+
+// ── A CALL THAT CANNOT FINISH MUST NOT BE STARTED ─────────────────────────
+//
+// Run 78cff5e5 hung. The hiring fix worked — `harvestapi/linkedin-job-search`
+// was finally called, for a real staffing firm, with twenty sales titles — but
+// it began at 09:13:05 with ~29s of budget left, was hard-killed mid-call, and
+// left the task `running` with no terminal record and `updated_at` frozen at
+// creation.
+//
+// Measured on the real payload: 2 titles finished in 13.9s; the production
+// 20-title call was still running at 46s. The operation had no entry in
+// `ASSUMED_MS_BY_OP`, so it inherited the generic ~12s assumption, and the call
+// site asked `expired()` with no operation — which compares against the slowest
+// estimate observed so far, i.e. some other, faster stage.
+
+import { createExecutionDeadline } from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
+
+Deno.test("a job search is refused when it cannot fit the remaining budget", () => {
+  let now = 0;
+  const d = createExecutionDeadline({ budgetMs: 125_000, now: () => now });
+  now = 96_000; // the live moment: ~29s left
+  assertEquals(
+    d.expired("apify_linkedin_job_search"), true,
+    "29s cannot hold a call measured still running at 46s",
+  );
+});
+
+Deno.test("the same moment looks fine without naming the operation", () => {
+  // The exact hole: the unscoped question compares against a faster stage.
+  let now = 0;
+  const d = createExecutionDeadline({ budgetMs: 125_000, now: () => now });
+  now = 96_000;
+  assertEquals(
+    d.expired(), false,
+    "this is why the call was started — the check was asked the wrong question",
+  );
+});
+
+Deno.test("a fresh continuation has room for the job search", () => {
+  let now = 0;
+  const d = createExecutionDeadline({ budgetMs: 125_000, now: () => now });
+  now = 10_000; // early in a continuation slice
+  assertEquals(d.expired("apify_linkedin_job_search"), false);
+});
+
+Deno.test("the hiring call site names the operation", () => {
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  assert(
+    ENGINE.includes('deps.deadline?.expired("apify_linkedin_job_search")'),
+    "the paid hiring check must ask about its own operation",
+  );
+});
