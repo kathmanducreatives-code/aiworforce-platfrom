@@ -121,3 +121,54 @@ Deno.test("run-agent counts deferred companies into the frontier", () => {
     "the pending-only count is what reported an exhausted frontier for 19 deferred candidates",
   );
 });
+
+// ── NO-ONE-ASKED IS NOT NOTHING-THERE, FOR THE NEW DISCOVERY PATH ─────────
+//
+// `hiring_verification` skips its paid check when the free assessment finds no
+// openings, scoped by `jobEvidenceNeverCollected`. That scope was
+// `source_provenance === "mission_supplied"`, on the stage's stated reasoning
+// that every other company "arrived from a discovery provider that either
+// answered the jobs question or was chosen knowing it would not".
+//
+// True while general discovery meant YC. False the moment it became
+// `apify_linkedin_company_search`, which returns no job data at all — so its
+// companies carry an empty job list because nothing looked.
+//
+// Run 93218483, live: 11 identities resolved, ZERO paid hiring calls, "no
+// company had a relevant commercial role", 27 companies reaching qualification
+// with no hiring assessment.
+
+import { actorAnsweredHiring } from "../../../supabase/functions/_shared/actorEvidenceCapability.ts";
+
+Deno.test("the LinkedIn company search never answers the jobs question", () => {
+  // By actor_key and by the actor_id carried in `source_provenance`.
+  assertEquals(actorAnsweredHiring("apify_linkedin_company_search"), false);
+  assertEquals(actorAnsweredHiring("harvestapi/linkedin-company-search"), false);
+});
+
+Deno.test("the YC scraper DOES answer it, so its empty list is a real absence", () => {
+  assert(actorAnsweredHiring("apify_yc_companies_memo23"));
+  assert(actorAnsweredHiring("memo23/y-combinator-scraper"));
+});
+
+Deno.test("an unknown or supplied provenance answers false", () => {
+  // A supplied row had no Actor produce it, so nobody asked.
+  assertEquals(actorAnsweredHiring("mission_supplied"), false);
+  assertEquals(actorAnsweredHiring(""), false);
+});
+
+Deno.test("the hiring gate derives the scope instead of listing provenances", () => {
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  const i = ENGINE.indexOf("const jobEvidenceNeverCollected");
+  const block = ENGINE.slice(i, i + 400);
+  assert(
+    block.includes("actorAnsweredHiring"),
+    "the scope must be derived from ACTOR_EVIDENCE",
+  );
+  assertEquals(
+    block.includes("SUPPLIED_COMPANY_PROVENANCE"), false,
+    "a provenance allow-list cannot keep step with new discovery Actors",
+  );
+});

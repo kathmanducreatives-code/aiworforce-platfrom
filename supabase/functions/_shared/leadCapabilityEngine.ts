@@ -44,6 +44,7 @@ import {
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
 import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
+import { actorAnsweredHiring } from "./actorEvidenceCapability.ts";
 import {
   acceptLinkedInMatch, linkedInSearchQueryFor, linkedInSlugToken,
   LINKEDIN_RESOLUTION_CONCURRENCY,
@@ -4426,14 +4427,28 @@ export async function runCapabilityPlan(
         // openings at all" is the same collapse — no-one-asked reported as
         // nothing-there — that this file keeps taking apart elsewhere.
         //
-        // SCOPED TO SUPPLIED ROWS, DELIBERATELY. Every other company in the
-        // pool arrived from a discovery provider that either answered the jobs
-        // question or was chosen knowing it would not, so their spend is
-        // unchanged: this can only fire for a row `known_company_resolution`
-        // seeded, and only when that row carries no job evidence at all.
+        // SCOPED TO ROWS NOBODY ASKED FOR, which is derived rather than listed.
+        //
+        // This read `source_provenance === SUPPLIED_COMPANY_PROVENANCE`, on the
+        // reasoning quoted above: every OTHER company came from a provider that
+        // either answered the jobs question or was chosen knowing it would not.
+        // True while general discovery meant YC — `memo23` returns `openJobs[]`,
+        // so an empty list is a real absence.
+        //
+        // It stopped being true when general discovery moved to
+        // `apify_linkedin_company_search`, which returns no job data at all.
+        // Run 93218483: 11 identities resolved, ZERO paid hiring calls, "no
+        // company had a relevant commercial role", and 27 companies reached
+        // qualification carrying no hiring assessment — every one of them
+        // discovered by an Actor that was never asked about jobs.
+        //
+        // `actorAnsweredHiring` reads ACTOR_EVIDENCE, so the question is "did
+        // the Actor that produced this row answer the jobs question" rather
+        // than a list of provenances to keep in step. A supplied row answers
+        // false because no Actor produced it at all.
         const jobEvidenceNeverCollected =
           c.yc_open_jobs.length === 0 &&
-          c.company.source_provenance === SUPPLIED_COMPANY_PROVENANCE;
+          !actorAnsweredHiring(String(c.company.source_provenance ?? ""));
 
         // PAID FALLBACK, FOR A LONE TIER B — or for a named company nobody has
         // asked about yet. Everything else is settled by evidence already held;

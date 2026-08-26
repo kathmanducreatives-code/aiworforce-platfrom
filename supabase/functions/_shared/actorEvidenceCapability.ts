@@ -49,6 +49,7 @@
 // PURE. No network, provider, model or database access.
 
 import { HIRING_ACTOR_CATALOG } from "./hiringActorCatalog.ts";
+import { hiringActorCard } from "./hiringActorCatalog.ts";
 import type {
   MissionSignalDescriptor, QualifierKey, SignalEvent, SignalSubject,
 } from "./missionSignalDescriptor.ts";
@@ -681,6 +682,42 @@ export function evidenceCoversPopulation(
     if (rec.unlock_gated) continue; // needs an explicit unlock; not free evidence
     if (rec.cohort_scope !== null && rec.cohort_scope !== missionCohort) continue;
     if (rec.produces.some((p) => p.event === event && p.subject === subject)) return true;
+  }
+  return false;
+}
+
+/**
+ * Did the Actor that produced a company ANSWER the jobs question?
+ *
+ * ── NO-ONE-ASKED IS NOT NOTHING-THERE ──────────────────────────────────────
+ *
+ * `hiring_verification` skips its paid check for a company whose free
+ * assessment found no openings, on the reasoning that "every company in the
+ * pool arrived from a discovery provider that either answered the jobs question
+ * or was chosen knowing it would not". That was true while discovery meant YC:
+ * `memo23` returns `openJobs[]`, so an empty list is a real absence.
+ *
+ * It stopped being true the moment general discovery moved to
+ * `apify_linkedin_company_search`, which returns no job data at all. Its
+ * companies carry an empty job list because NOTHING EVER LOOKED, and reading
+ * that as "no openings" is the same collapse the stage's own comment warns
+ * about — reported live by run 93218483: 11 identities resolved, 0 paid hiring
+ * calls, "no company had a relevant commercial role", and 27 companies reaching
+ * qualification with no hiring assessment at all.
+ *
+ * Accepts an `actor_key` or the `actor_id` carried in `source_provenance`, so
+ * a caller holding either can ask. Derived from ACTOR_EVIDENCE: adding a
+ * discovery Actor that does return openings makes this true for it with no
+ * change here.
+ */
+export function actorAnsweredHiring(actorKeyOrId: string): boolean {
+  const needle = String(actorKeyOrId ?? "").trim();
+  if (!needle) return false;
+  for (const rec of ACTOR_EVIDENCE) {
+    const card = hiringActorCard(rec.actor_key);
+    const matches = rec.actor_key === needle || card?.actor_id === needle;
+    if (!matches) continue;
+    return rec.produces.some((p) => p.event === "hiring" && p.subject === "company");
   }
   return false;
 }
