@@ -11,6 +11,7 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 // COMPOSES them one capability at a time, which is what buys genuine resume
 // granularity: a run that stopped after enrichment resumes at hiring
 // verification rather than re-paying for discovery.
@@ -852,6 +853,38 @@ export const SEARCH_SCRAPER_MODE: "short" | "full" = "short";
  * recognise costs this one search its results; a location silently dropped
  * costs the mission its geography on every search.
  */
+/**
+ * Companies per paid hiring search.
+ *
+ * `compileHarvestJobSearchInput` validates `company[]` at a maximum of 10, and
+ * that limit comes from the Actor's own verified card. A call carrying ten
+ * companies costs the same ~48s as one carrying a single company, so this is
+ * the difference between assessing one company per slice and assessing ten.
+ */
+export const HIRING_VERIFICATION_BATCH_SIZE = 10;
+
+/**
+ * Job rows requested per company in a batch.
+ *
+ * Held at the per-company figure the single-company call used, multiplied by
+ * the batch size, so a batch asks for exactly what the individual calls it
+ * replaces would have asked for. Raising it would change the evidence
+ * standard, which this work deliberately does not.
+ */
+export const HIRING_JOBS_PER_BATCH_COMPANY = 10;
+
+/**
+ * THE ROLE VOCABULARY, UNCHANGED.
+ *
+ * Named rather than inlined so the batched call and the operation key that
+ * decides whether to make it read the SAME list — a fingerprint computed over a
+ * different vocabulary than the call uses would skip work that was never done.
+ * Still `[...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20)`: same titles, same
+ * order, same evidence standard.
+ */
+export const HIRING_JOB_TITLES: string[] =
+  [...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20);
+
 export function identitySearchLocations(mission: LeadMissionV1): string[] {
   if (!mission?.geography_is_hard) return [];
   const seen = new Set<string>();
@@ -4408,91 +4441,160 @@ export async function runCapabilityPlan(
       }
       const targets = companies.filter((c) => c.identity && identityIsActionable(c.identity));
       let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
+
+      // ── ONE QUESTION, ASKED FOR TEN COMPANIES AT A TIME ─────────────────
+      //
+      // This asked the provider once PER COMPANY. The Actor accepts
+      // `company[]` up to 10 (`compileHarvestJobSearchInput` validates it), and
+      // a single call takes ~48s whether it carries one company or ten — so a
+      // slice that could afford one paid search answered one company and left
+      // the rest unassessed. Run 07e973f1: eleven companies enriched, ONE
+      // hiring call, "the eligible set was empty (29 companies carried no
+      // hiring assessment)", nothing qualified.
+      //
+      // The semantics are unchanged. Every company is judged by
+      // `freeHiringAssessment` first, exactly as before, and the paid rows only
+      // ever UPGRADE a verdict. What changes is how many HTTP calls carry the
+      // same twenty titles.
+      //
+      // EVIDENCE IS PARTITIONED BY COMPANY, NEVER SHARED. Each returned job row
+      // names its own `company_linkedin_url`, so rows are routed back to the
+      // company they belong to and a company that got no rows gets none. One
+      // company's opening can never earn another company's verdict.
+      const BATCH = HIRING_VERIFICATION_BATCH_SIZE;
+
+      /** The paid rows that belong to each company, keyed by company key. */
+      const batchedJobs = new Map<string, NormalizedHiringJob[]>();
+      /** Companies the provider was actually asked about on this pass. */
+      const asked = new Set<string>();
+
+      /**
+       * The operation key for asking the jobs question about ONE company.
+       *
+       * Deliberately fingerprinted on the SINGLE-company input rather than the
+       * batch it happened to travel in. Batch composition changes between
+       * slices — ten remaining, then one — and a key derived from it would
+       * differ every time, so a continuation would re-POST companies already
+       * answered. Keying per company makes a partially completed batch resume
+       * exactly: the answered companies are skipped, the rest are re-batched.
+       */
+      const hiringOperationKey = (c: EngineCompany, url: string): string | null =>
+        resumeScope
+          ? providerOperationKey({
+            workspace_id: resumeScope.workspace_id,
+            lineage_root_task_id: resumeScope.lineage_root_task_id,
+            company_key: c.key,
+            capability: cap, provider: "apify_linkedin_job_search",
+            input_fingerprint: inputFingerprint({
+              company: [url], jobTitles: HIRING_JOB_TITLES,
+              ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
+            }),
+          })
+          : null;
+
+      // WHO STILL NEEDS ASKING. Evaluated before any batching so the skip
+      // reasons are per company and unchanged: a company whose verdict is
+      // already settled by free evidence is not paid for, and one a previous
+      // slice already asked about is not asked again.
+      const needsPaid: Array<{ c: EngineCompany; url: string; opKey: string | null }> = [];
+      for (const c of targets) {
+        // Named `assessment` deliberately: the paid-search gate below is the
+        // same expression the per-company loop used, and
+        // `commercialPolicyAndPortfolio` pins it by name as the guarantee that
+        // a paid search stays gated on the lone-Tier-B case.
+        const assessment = freeHiringAssessment(c);
+        const jobEvidenceNeverCollected =
+          c.yc_open_jobs.length === 0 &&
+          !actorAnsweredHiring(String(c.company.source_provenance ?? ""));
+        if (!(needsPaidJobVerification(assessment) || jobEvidenceNeverCollected)) continue;
+        const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
+        if (!url) continue;
+        const opKey = hiringOperationKey(c, url);
+        if (opKey) {
+          const verdict = shouldSkipProviderCall(priorRecords.get(c.key), opKey);
+          if (verdict.skip) {
+            log("hiring_paid_skipped_resume_reuse",
+              { company_key: c.key, reason: verdict.reason });
+            continue;
+          }
+          if (c.completed_operations.includes(opKey)) continue;
+        }
+        needsPaid.push({ c, url, opKey });
+      }
+
+      for (let i = 0; i < needsPaid.length; i += BATCH) {
+        // THE CLOCK IS CHECKED PER BATCH, not per company. A batch costs one
+        // call, so one batch's worth of budget is what has to be available.
+        if (deps.deadline?.expired("apify_linkedin_job_search")) {
+          log("hiring_batch_deferred_for_deadline",
+            { remaining: needsPaid.length - i });
+          break;
+        }
+        const group = needsPaid.slice(i, i + BATCH);
+        const compiled = compileHarvestJobSearchInput({
+          company: group.map((g) => g.url),
+          jobTitles: HIRING_JOB_TITLES,
+          maxItems: HIRING_JOBS_PER_BATCH_COMPANY * group.length,
+          ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
+        });
+        const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
+        paidCalls++;
+
+        // ROUTED BACK BY IDENTITY. `normalizeLinkedInJob` carries the row's own
+        // `company_linkedin_url`, so a row can only ever reach the company it
+        // names. A row naming a company outside this batch is dropped rather
+        // than attributed to whoever happens to be nearby.
+        const byUrl = new Map<string, EngineCompany>();
+        for (const g of group) {
+          const k = normalizeCompanyLinkedInUrl(g.url);
+          if (k) byUrl.set(k, g.c);
+        }
+        for (const raw of rows) {
+          const j = normalizeLinkedInJob(raw);
+          const owner = j.company_linkedin_url ? byUrl.get(j.company_linkedin_url) : undefined;
+          if (!owner) continue;
+          const list = batchedJobs.get(owner.key) ?? [];
+          list.push(j);
+          batchedJobs.set(owner.key, list);
+        }
+
+        // ASKED IS RECORDED FOR EVERY COMPANY IN THE BATCH, including the ones
+        // that came back with nothing. A company the provider answered "no
+        // openings" about has been investigated; leaving it unmarked is the
+        // no-one-asked/nothing-there collapse in its other direction, and it
+        // would make the next slice pay to ask again.
+        for (const g of group) {
+          asked.add(g.c.key);
+          if (g.opKey && !g.c.completed_operations.includes(g.opKey)) {
+            g.c.completed_operations.push(g.opKey);
+          }
+        }
+      }
+
       for (const c of targets) {
         let assessment = freeHiringAssessment(c);
         /** Rows the paid search returned, kept so the verdict can cite them. */
         let externalJobs: NormalizedHiringJob[] = [];
         let verdictFromExternal = false;
 
-        // ── NOBODY ASKED IS NOT "NOTHING FOUND" ─────────────────────────
-        //
-        // `freeHiringAssessment` judges the openings the company already
-        // carries, and with none it returns `hiring_not_verified` — which
-        // `commercialSignalPolicy` documents as correct: "a genuine absence of
-        // evidence rather than a failure to recognise it."
-        //
-        // That is true of a company a provider ANSWERED the jobs question for.
-        // It is false of one the mission simply named: its `yc_open_jobs` is
-        // empty because nothing has ever looked, and reporting that as "no
-        // openings at all" is the same collapse — no-one-asked reported as
-        // nothing-there — that this file keeps taking apart elsewhere.
-        //
-        // SCOPED TO ROWS NOBODY ASKED FOR, which is derived rather than listed.
-        //
-        // This read `source_provenance === SUPPLIED_COMPANY_PROVENANCE`, on the
-        // reasoning quoted above: every OTHER company came from a provider that
-        // either answered the jobs question or was chosen knowing it would not.
-        // True while general discovery meant YC — `memo23` returns `openJobs[]`,
-        // so an empty list is a real absence.
-        //
-        // It stopped being true when general discovery moved to
-        // `apify_linkedin_company_search`, which returns no job data at all.
-        // Run 93218483: 11 identities resolved, ZERO paid hiring calls, "no
-        // company had a relevant commercial role", and 27 companies reached
-        // qualification carrying no hiring assessment — every one of them
-        // discovered by an Actor that was never asked about jobs.
-        //
-        // `actorAnsweredHiring` reads ACTOR_EVIDENCE, so the question is "did
-        // the Actor that produced this row answer the jobs question" rather
-        // than a list of provenances to keep in step. A supplied row answers
-        // false because no Actor produced it at all.
-        const jobEvidenceNeverCollected =
-          c.yc_open_jobs.length === 0 &&
-          !actorAnsweredHiring(String(c.company.source_provenance ?? ""));
-
-        // PAID FALLBACK, FOR A LONE TIER B — or for a named company nobody has
-        // asked about yet. Everything else is settled by evidence already held;
-        // re-checking it is pure waste.
-        // ── ASK THE DEADLINE ABOUT *THIS* CALL ──────────────────────────
-        //
-        // `expired()` with no operation compares against the slowest estimate
-        // OBSERVED so far, which on the first job search of a run is some other,
-        // faster stage. Naming the operation makes the check use this Actor's
-        // own floor (`ASSUMED_MS_BY_OP`), so a call that cannot finish is
-        // deferred to a continuation instead of being started and killed —
-        // run 78cff5e5, which hung with no terminal record.
-        if ((needsPaidJobVerification(assessment) || jobEvidenceNeverCollected) &&
-            !deps.deadline?.expired("apify_linkedin_job_search")) {
-          const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
-          if (url) {
-            const compiled = compileHarvestJobSearchInput({
-              company: [url],
-              jobTitles: [...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20),
-              maxItems: 10,
-              ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
-            });
-            const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
-            paidCalls++;
-            if (rows.length > 0) {
-              // KEPT, NOT JUST COUNTED. These are the rows that may earn the
-              // verdict, and the verdict's evidence has to be citable.
-              externalJobs = rows.map(normalizeLinkedInJob);
-              const external = assessHiring(
-                externalJobs.map((j) => ({
-                  title: j.title ?? "", url: j.job_url, location: j.location })),
-                [...assessment.supporting_signals, "another_active_gtm_opening"],
-                // SAME VOCABULARY AS THE FREE PASS. An external check that
-                // judged on a different role list could contradict evidence the
-                // free pass already accepted, which is the divergence
-                // `commercialSignalPolicy` exists to prevent.
-                { source: "external_job_search", vocab: qualificationCtx.role_vocabulary });
-              // The external pass only ever UPGRADES; it cannot demote evidence
-              // the free pass already accepted.
-              if (external.verdict === "hiring_verified") {
-                assessment = external;
-                verdictFromExternal = true;
-              }
-            }
+        // THIS COMPANY'S ROWS, AND ONLY THIS COMPANY'S.
+        const mine = batchedJobs.get(c.key) ?? [];
+        if (mine.length > 0) {
+          externalJobs = mine;
+          const external = assessHiring(
+            externalJobs.map((j) => ({
+              title: j.title ?? "", url: j.job_url, location: j.location })),
+            [...assessment.supporting_signals, "another_active_gtm_opening"],
+            // SAME VOCABULARY AS THE FREE PASS. An external check that judged
+            // on a different role list could contradict evidence the free pass
+            // already accepted, which is the divergence
+            // `commercialSignalPolicy` exists to prevent.
+            { source: "external_job_search", vocab: qualificationCtx.role_vocabulary });
+          // The external pass only ever UPGRADES; it cannot demote evidence the
+          // free pass already accepted.
+          if (external.verdict === "hiring_verified") {
+            assessment = external;
+            verdictFromExternal = true;
           }
         }
 
@@ -4515,7 +4617,12 @@ export async function runCapabilityPlan(
           c.record.stage_reason = `hiring_watch:${assessment.reason}`;
         } else {
           notVerified++;
-          c.record = advance(c.record, "hiring_not_verified", "no_matching_open_role");
+          // A COMPANY THE PROVIDER ANSWERED ABOUT IS INVESTIGATED, EVEN AT ZERO.
+          // "We asked and there are no matching roles" is a finding; leaving it
+          // indistinguishable from "nobody looked" is what emptied the eligible
+          // set on run 07e973f1.
+          c.record = advance(c.record, "hiring_not_verified",
+            asked.has(c.key) ? "job_search_returned_no_matching_role" : "no_matching_open_role");
           c.record.stage_reason = assessment.reason;
         }
       }
