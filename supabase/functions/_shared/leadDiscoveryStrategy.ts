@@ -48,6 +48,7 @@
 import {
   actorsForPurpose, hiringActorCard, type HiringActorCard,
 } from "./hiringActorCatalog.ts";
+import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { coverMissionSignals } from "./signalActorCoverage.ts";
 import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
@@ -433,8 +434,50 @@ export function missionNeedsSemanticDiscovery(mission: LeadMissionV1): boolean {
  */
 const SEMANTIC_UNFIT = /semantic|concept/i;
 
-export function declaresUnfitForSemantic(card: HiringActorCard): boolean {
+/**
+ * FIELD-LEVEL, NOT ACTOR-LEVEL.
+ *
+ * `not_for: "semantic/concept search"` is true of `searchQuery` — it is a
+ * company-NAME index, and task e01dbd5b proved it: "AI startups" returned a
+ * newsletter, two city communities and two big-co sub-pages. That finding
+ * stands, and `invalidCompanyNameQueryReason` still refuses a concept phrase in
+ * that field.
+ *
+ * What did NOT follow is that the ACTOR cannot serve a concept mission. This
+ * function used to say exactly that, and the consequence was a mission with no
+ * non-YC discovery source at all, dying as `no_valid_step` after the user
+ * clicked Start (tasks eeb02852, 58ada236).
+ *
+ * A probe settled the premise the block rested on. The card claimed a
+ * query-less search "returns nothing at full price"; run RidX3qBPdnjToMcqM sent
+ * `industryIds:["104"] + locations:["United States"] + companySize:["11-50"]`
+ * with NO `searchQuery` and got 5/5 genuine US staffing agencies from ~10,952
+ * matches in 4.5s. The structured filters are real discovery inputs.
+ *
+ * So an Actor is unfit for a concept mission only when it can express the
+ * concept NEITHER as a name NOR as a structured filter. Callers that can supply
+ * structured constraints pass them; callers that cannot get the old answer.
+ */
+export function declaresUnfitForSemantic(
+  card: HiringActorCard,
+  opts: { hasStructuredConstraints?: boolean } = {},
+): boolean {
+  if (opts.hasStructuredConstraints && supportsStructuredDiscovery(card)) return false;
   return (card.not_for ?? []).some((n) => SEMANTIC_UNFIT.test(String(n)));
+}
+
+/** Filters that narrow a search by something other than a name. */
+const STRUCTURED_DISCOVERY_FILTERS = ["industryIds", "locations", "companySize"];
+
+/**
+ * Can this Actor be pointed at a population without naming it?
+ *
+ * Read from the card's own `supported_filters`, so an Actor that gains or loses
+ * a filter changes this answer by being re-verified, not by being special-cased.
+ */
+export function supportsStructuredDiscovery(card: HiringActorCard): boolean {
+  const filters = (card.supported_filters ?? []).map(String);
+  return STRUCTURED_DISCOVERY_FILTERS.some((f) => filters.includes(f));
 }
 
 /**
@@ -554,7 +597,16 @@ export function validateDiscoveryStrategy(
     // A mission that names no specific companies and discovers by concept
     // (vertical, stage, business model) IS a semantic search. An actor that
     // declares itself unfit for one may not perform it.
-    if (missionNeedsSemanticDiscovery(mission) && declaresUnfitForSemantic(card)) {
+    if (
+        missionNeedsSemanticDiscovery(mission) &&
+        declaresUnfitForSemantic(card, {
+          // The mission's own ICP decides this, and only an INDUSTRY filter
+          // counts: geography and headcount refine a population, they do not
+          // select one. "AI startups in the US" filtered by country alone is
+          // still an unconstrained search.
+          hasStructuredConstraints: icpDiscoveryConstraints(mission).expresses_concept,
+        })
+      ) {
       violations.push({
         code: "actor_not_for_semantic_discovery", actor_key: key,
         message:

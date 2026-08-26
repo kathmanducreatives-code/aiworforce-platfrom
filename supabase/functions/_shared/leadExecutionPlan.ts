@@ -40,6 +40,7 @@ import {
   CAPABILITY_REGISTRY, isCapabilityId,
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
+import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
 import {
@@ -284,7 +285,16 @@ export function validateExecutionPlan(
     // produce a population outside its cohort. Applied here so a CHAIN cannot
     // smuggle in the actor a single-stage plan would have been refused for.
     if (PRODUCERS.has(capability)) {
-      if (missionNeedsSemanticDiscovery(mission) && declaresUnfitForSemantic(card)) {
+      if (
+        missionNeedsSemanticDiscovery(mission) &&
+        declaresUnfitForSemantic(card, {
+          // The mission's own ICP decides this, and only an INDUSTRY filter
+          // counts: geography and headcount refine a population, they do not
+          // select one. "AI startups in the US" filtered by country alone is
+          // still an unconstrained search.
+          hasStructuredConstraints: icpDiscoveryConstraints(mission).expresses_concept,
+        })
+      ) {
         violations.push({
           code: "actor_not_for_semantic_discovery", actor_key: actorKey, message:
             `${actorKey} declares not_for "${card.not_for.join('", "')}" — this ` +

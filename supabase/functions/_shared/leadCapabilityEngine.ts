@@ -43,6 +43,7 @@ import {
   compileDatahyenaFundingInput, compileMemo23YcInput, fanOutSolidcodeTeamSizes,
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
+import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
 import {
   acceptLinkedInMatch, linkedInSearchQueryFor, linkedInSlugToken,
   LINKEDIN_RESOLUTION_CONCURRENCY,
@@ -3188,18 +3189,59 @@ export async function runCapabilityPlan(
             const query = typeof sel.input.searchQuery === "string"
               ? sel.input.searchQuery
               : null;
-            if (!query) {
+
+            // ── A NAME, OR STRUCTURED FILTERS. NEVER NEITHER. ───────────────
+            //
+            // This required a `searchQuery` and skipped otherwise, on the
+            // recorded belief that "a query-less company search returns nothing
+            // at full price". That belief was wrong, and it cost two live runs:
+            // a concept mission had no usable non-YC source and died as
+            // `no_valid_step` (tasks eeb02852, 58ada236).
+            //
+            // Run RidX3qBPdnjToMcqM settled it — `industryIds:["104"] +
+            // locations:["United States"] + companySize:["11-50"]`, no
+            // `searchQuery`, returned 5/5 genuine US staffing agencies out of
+            // ~10,952 matches. Structured filters ARE a search.
+            //
+            // The ICP supplies them, the strategy may refine them, and
+            // `searchQuery` stays a NAME index guarded by
+            // `invalidCompanyNameQueryReason` — this branch never writes a
+            // concept phrase into it.
+            //
+            // The one thing that must not happen is an UNFILTERED search: no
+            // name and no filters returns arbitrary companies, and junk that
+            // reaches qualification looks like work. That is skipped, loudly.
+            const icp = icpDiscoveryConstraints(opts.mission);
+            const structured = {
+              ...(icp.industryIds.length ? { industryIds: icp.industryIds } : {}),
+              ...(icp.locations.length ? { locations: icp.locations } : {}),
+              ...(icp.companySize.length ? { companySize: icp.companySize } : {}),
+            };
+            // A search must SELECT a population, not merely refine one. A name
+            // does that; so does an industry. Geography and headcount do not —
+            // "companies sized 10-500 in the United States" is an unfiltered
+            // search wearing two filters, and it returns the same arbitrary
+            // rows. So the concept, or a name, or nothing.
+            const selSelectsPopulation =
+              Array.isArray((sel.input as Record<string, unknown>).industryIds) &&
+              ((sel.input as Record<string, string[]>).industryIds ?? []).length > 0;
+            if (!query && !icp.expresses_concept && !selSelectsPopulation) {
               state.provider_attempts.push({
                 capability: cap, provider, attempt: 1, outcome: "skipped_not_configured",
                 rows: 0, cost_units: 0,
-                reason: "the strategy named this actor without a searchQuery; a query-less company search returns nothing at full price",
+                reason:
+                  "no company name and no structured constraint could be derived " +
+                  `from this ICP (unmapped: ${icp.unmapped_verticals.join(", ") || "none"}) ` +
+                  "— an unfiltered company search returns arbitrary companies",
               });
               continue;
             }
             const compiled = compileHarvestCompanySearchInput({
               maxItems: maxCandidates,
+              ...structured,
+              // The strategy refines the ICP's filters; it never removes them all.
               ...sel.input,
-              searchQuery: query,
+              ...(query ? { searchQuery: query } : {}),
               // `full` is required: `short` returns employeeCount === null, and an
               // unverifiable size cannot settle an employee-ceiling gate.
               scraperMode: "full",

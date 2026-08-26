@@ -168,18 +168,28 @@ export function missionCohortOf(plan: CapabilityPlan): string | null {
 
 interface Step { capability: string; providers: string[] }
 
-/** Does this step establish `event`/`subject` for this population? */
+/**
+ * Does this step establish `event`/`subject` for this population?
+ *
+ * `event`/`subject` arrive as plain strings because a MISSION may name a
+ * requirement the evidence vocabulary does not have — `headcount_change` is
+ * exactly that case, and refusing it is the point. They are widened at this
+ * boundary rather than narrowed upstream: a value outside the union simply
+ * matches no evidence, which is the correct answer.
+ */
 function stepProves(step: Step, event: string, subject: string, cohort: string | null): boolean {
+  const ev = event as Parameters<typeof evidenceCoversPopulation>[1];
+  const su = subject as Parameters<typeof evidenceCoversPopulation>[2];
   // Two declared routes, no inference:
   //   1. its PROVIDERS return evidence for that event (ACTOR_EVIDENCE), or
   //   2. its own declared artifact IS proof of that event (CLAIM_TO_EVENT),
   //      which still requires a provider behind it.
-  if (evidenceCoversPopulation(step.providers, event, subject, cohort)) return true;
+  if (evidenceCoversPopulation(step.providers, ev, su, cohort)) return true;
   const spec = CAPABILITY_REGISTRY[step.capability as keyof typeof CAPABILITY_REGISTRY];
   if (!spec) return false;
   return spec.produces.some((artifact) =>
     CLAIM_TO_EVENT[artifact] === event &&
-    evidenceCoversPopulation(spec.providers, event, subject, cohort));
+    evidenceCoversPopulation(spec.providers, ev, su, cohort));
 }
 
 /** Can ANY capability in the catalogue produce this artifact, scheduled or not? */

@@ -290,9 +290,17 @@ Deno.test("7. an actor the catalog does not permit never becomes a call", async 
   );
 });
 
-Deno.test("8. a company search named without a query is skipped, not called", async () => {
-  // This Actor matches company NAMES and reports a query-less or conceptual
-  // search as a successful empty run — the cost is real and the failure silent.
+Deno.test("8. a company search with neither a query nor filters is skipped", async () => {
+  // NARROWED, 2026-08-26. This asserted that ANY query-less call is skipped, on
+  // the card's claim that "a query-less company search returns nothing at full
+  // price". Run RidX3qBPdnjToMcqM disproved that: `industryIds:["104"] +
+  // locations:["United States"] + companySize:["11-50"]` with no `searchQuery`
+  // returned 5/5 genuine US staffing agencies out of ~10,952 matches.
+  //
+  // The real rule is narrower and still holds: a call with NO name and NO
+  // structured filter is unfiltered, and an unfiltered company search returns
+  // arbitrary companies. This mission's ICP yields no industry, so nothing can
+  // be derived and the skip stands.
   const { seen, result } = await run({
     planDiscovery: () => Promise.resolve([
       { actor_key: "apify_yc_companies_memo23", role: "primary", input: {} },
