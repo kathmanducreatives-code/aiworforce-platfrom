@@ -199,3 +199,87 @@ Deno.test("allowed_providers cannot drift from the scheduled steps", () => {
       `${p} is allowed but no scheduled step uses it`);
   }
 });
+
+// ── THE MODEL MUST BE TOLD THE SAME TRUTH THE VALIDATOR ENFORCES ──────────
+//
+// Runs 25b351dc and ba336520 failed as `no_valid_step` with a clean preflight
+// and — once `blocked_by` was persisted — a LONE violation, no per-step
+// refusals. That shape means the planner proposed NOTHING.
+//
+// The payload was why. It listed actors from CAPABILITY_REGISTRY rather than
+// the plan's admitted set, so both YC sources were offered for a mission the
+// cohort rule forbids them on; and it passed `not_for: "semantic/concept
+// search"` verbatim with no mention that the same Actor takes structured
+// filters. Given a concept ICP and an Actor that says it cannot do concept
+// search, proposing nothing is the correct reading of what it was told.
+
+import { buildExecutionPlannerPayload } from "../../../supabase/functions/_shared/leadExecutionPlan.ts";
+
+Deno.test("the planner is offered only actors the plan admitted", () => {
+  const m = parseLeadMissionDeterministic(
+    "Find 3 companies matching my ICP that are actively hiring sales roles.", {});
+  const withIcp = {
+    ...m,
+    company_profile: {
+      ...m.company_profile,
+      verticals: ["Recruiting / Talent Acquisition / Staffing Agencies"],
+    },
+  } as typeof m;
+  const graph = buildCapabilityGraph(withIcp);
+  const payload = buildExecutionPlannerPayload(withIcp, graph) as Record<string, unknown>;
+
+  const caps = payload.authorised_capabilities as Array<
+    { capability: string; actors: Array<{ actor_key: string }> }
+  >;
+  for (const cap of caps) {
+    const step = graph.steps.find((s) => s.capability === cap.capability)!;
+    assertEquals(
+      cap.actors.map((a) => a.actor_key), step.providers.map(String),
+      `${cap.capability}: the payload must offer exactly what the plan admitted`,
+    );
+  }
+  // The concrete regression: no YC actor for a non-YC mission.
+  const discovery = caps.find((c) => c.capability === "general_company_discovery")!;
+  assertEquals(
+    discovery.actors.some((a) => a.actor_key.startsWith("apify_yc_companies")), false,
+    "a cohort-refused actor must not be offered to the planner",
+  );
+});
+
+Deno.test("the planner is told HOW to discover a concept population", () => {
+  const m = parseLeadMissionDeterministic("Find recruiting agencies matching my ICP.", {});
+  const withIcp = {
+    ...m,
+    company_profile: {
+      ...m.company_profile,
+      verticals: ["Recruiting / Talent Acquisition / Staffing Agencies"],
+    },
+  } as typeof m;
+  const payload = buildExecutionPlannerPayload(
+    withIcp, buildCapabilityGraph(withIcp)) as Record<string, unknown>;
+
+  const dc = payload.discovery_constraints as Record<string, unknown> | undefined;
+  assert(dc, "an expressible ICP must reach the planner as filters");
+  assert(
+    (dc!.industryIds as string[]).includes("104"),
+    `the derived filters must be supplied: ${JSON.stringify(dc)}`,
+  );
+
+  // And the actor must say the structured path exists, or `not_for` reads as
+  // a flat refusal.
+  const caps = payload.authorised_capabilities as Array<
+    { capability: string; actors: Array<Record<string, unknown>> }
+  >;
+  const search = caps.flatMap((c) => c.actors)
+    .find((a) => a.actor_key === "apify_linkedin_company_search");
+  assert(search, "the search actor is in the plan");
+  assert(
+    String(search!.concept_discovery ?? "").includes("industryIds"),
+    `the actor must state the structured path: ${JSON.stringify(search)}`,
+  );
+  // The name-index warning must survive — it is still true of searchQuery.
+  assert(
+    (search!.not_for as string[]).some((n) => /semantic|concept/i.test(n)),
+    "the searchQuery limitation is still declared",
+  );
+});

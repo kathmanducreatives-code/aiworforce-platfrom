@@ -45,6 +45,7 @@ import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
 import {
   cohortRefusalFor, declaresUnfitForSemantic, missionNeedsSemanticDiscovery,
+  supportsStructuredDiscovery,
   conceptTermsOf, type StrategyViolation,
 } from "./leadDiscoveryStrategy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
@@ -446,14 +447,60 @@ export function buildExecutionPlannerPayload(
     // THE STAGES THIS MISSION AUTHORISED, and the Actors each may reach. A
     // capability absent from this list cannot be planned; an Actor absent from a
     // capability's list cannot serve it.
+    // ── THE ICP, AS SOMETHING SEARCHABLE ───────────────────────────────
+    //
+    // Without this the model is handed a concept ("Recruiting / Talent
+    // Acquisition / Staffing Agencies") and a company-search Actor whose card
+    // says `not_for: "semantic/concept search"`, and correctly concludes that
+    // nothing can serve the request — so it proposes NO steps and the run dies
+    // as `no_valid_step` with no per-step violation to explain it. Runs
+    // 25b351dc and ba336520 are exactly that, and `blocked_by` carrying a lone
+    // `no_valid_step` is what finally showed it.
+    //
+    // The card is right about `searchQuery`; it is a NAME index. What it does
+    // not say, and what the model therefore never knew, is that the same Actor
+    // takes `industryIds`/`locations`/`companySize` — and that this mission's
+    // ICP resolves to real values for them.
+    ...(icpDiscoveryConstraints(mission).expressible
+      ? {
+        discovery_constraints: {
+          note:
+            "This ICP resolves to structured search filters. A company-search " +
+            "Actor that supports them can discover this population WITHOUT a " +
+            "searchQuery. Do not put a concept phrase in searchQuery — it " +
+            "matches company names only.",
+          ...(() => {
+            const c = icpDiscoveryConstraints(mission);
+            return {
+              ...(c.industryIds.length ? { industryIds: c.industryIds } : {}),
+              ...(c.locations.length ? { locations: c.locations } : {}),
+              ...(c.companySize.length ? { companySize: c.companySize } : {}),
+              ...(c.unmapped_verticals.length
+                ? { not_expressible_as_filters: c.unmapped_verticals }
+                : {}),
+            };
+          })(),
+        },
+      }
+      : {}),
+    // THE STAGES THIS MISSION AUTHORISED, and the Actors each may reach. A
+    // capability absent from this list cannot be planned; an Actor absent from a
+    // capability's list cannot serve it.
     authorised_capabilities: graph.steps.map((s) => {
       const spec = CAPABILITY_REGISTRY[s.capability];
       return {
         capability: s.capability,
         label: spec.label,
         why_it_is_in_the_plan: s.reason,
-        runs_an_actor: spec.providers.length > 0,
-        actors: spec.providers.map((key) => {
+        runs_an_actor: s.providers.length > 0,
+        // ── THE ADMITTED SET, NOT THE REGISTRY ──────────────────────────
+        //
+        // This read `spec.providers`, so the model was offered Actors the plan
+        // had already removed — both YC sources appeared for a mission the
+        // cohort rule forbids them on. Offering an Actor the validator will
+        // refuse is the same preview/execution drift `withAdmissibleProviders`
+        // fixed one layer up; `s.providers` is that layer's answer.
+        actors: s.providers.map((key) => {
           const card = hiringActorCard(key);
           return card
             ? {
@@ -466,6 +513,14 @@ export function buildExecutionPlannerPayload(
               requires_enrichment_before_qualification:
                 card.requires_enrichment_before_qualification,
               ...(card.cohort_scope ? { only_returns: card.cohort_scope.label } : {}),
+              // `not_for: "semantic/concept search"` is true of `searchQuery`
+              // and of nothing else. Said without this, the model reads it as
+              // "cannot discover a concept population" and plans nothing.
+              ...(supportsStructuredDiscovery(card)
+                ? {
+                  concept_discovery: "via industryIds/locations/companySize, not searchQuery",
+                }
+                : {}),
               known_defects: card.known_defects.map((d) => d.summary),
               // The live input shape and the store's own maturity signal. A
               // planner that knows a field is an ARRAY of enum values does not
