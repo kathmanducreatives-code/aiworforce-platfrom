@@ -570,6 +570,7 @@ Deno.serve(async (req) => {
       execution_mode?: "fast" | "deep" | "outreach" | "source_and_qualify_only";
       confidence?: number;
       lead_mission?: unknown;
+      lead_referent_bindings?: unknown;
     };
     // THE MISSION, CARRIED NOT RE-DERIVED. pilot-chat interpreted the user's
     // words once; orchestrate's job is to put that object on the plan step so
@@ -595,6 +596,20 @@ Deno.serve(async (req) => {
     }
 
     const suppliedMission = (b.lead_mission ?? tool_input?.lead_mission ?? null) as unknown;
+    // ── THE IDENTITY SIDECAR IS TRANSPORTED, NOT INTERPRETED ───────────────
+    //
+    // Which real company each referent resolved to, decided by
+    // `resolveReferents` in pilot-chat. Orchestrate does not read it, validate
+    // it or act on it — `readPersistedBindings` does that at the engine, where
+    // it is used. Everything here does is make sure it reaches the plan step by
+    // BOTH routes a step's `tool_input` can arrive on, because a sidecar that
+    // survives only the fallback planner is one that disappears on exactly the
+    // qualified-lead runs it exists for.
+    const suppliedBindings = ((b as Record<string, unknown>).lead_referent_bindings
+      ?? tool_input?.lead_referent_bindings ?? null) as unknown;
+    const bindingsCarrier = Array.isArray(suppliedBindings) && suppliedBindings.length > 0
+      ? { lead_referent_bindings: suppliedBindings }
+      : null;
 
     // ── ORCHESTRATE TRANSPORTS A MISSION. IT DOES NOT WRITE ONE. ───────────
     //
@@ -981,7 +996,9 @@ Deno.serve(async (req) => {
         },
       );
       (sourcingStep as Step & { metadata?: Record<string, unknown> }).metadata = {
-        tool_input: lead_mission ? { ...tool_input, lead_mission } : tool_input,
+        tool_input: lead_mission
+          ? { ...tool_input, lead_mission, ...(bindingsCarrier ?? {}) }
+          : bindingsCarrier ? { ...tool_input, ...bindingsCarrier } : tool_input,
       };
 
       const steps: Step[] = [sourcingStep];
@@ -1432,6 +1449,10 @@ Return ONLY valid JSON, no prose, no markdown:
         // run-agent planning the same mission a second time — one initial planner
         // request per run, and the strategy that executes is the one on screen.
         ...(qlPlan ? { qualified_lead_plan: qlPlan.artifact } : {}),
+        // AT THE TOP LEVEL TOO. `readPersistedBindings` checks the body before
+        // the step's `tool_input`, so the sidecar arrives whether or not the
+        // branch that built this step happened to spread the original input.
+        ...(bindingsCarrier ?? {}),
       },
       // A PLAN MUST NEVER SIT IN `executing` WITH NOTHING RUNNING.
       //

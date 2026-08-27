@@ -28,6 +28,7 @@
 
 import type { RequestV1, RequestPart } from "./requestV1.ts";
 import { isSignalEvent } from "./missionSignalDescriptor.ts";
+import type { ResolvedReferentBinding } from "./referentBinding.ts";
 
 export const MONITOR_SURFACE_VERSION = "monitor-surface-v1" as const;
 
@@ -48,7 +49,16 @@ export interface MonitorPlan {
  * row exists — an unattended recurring spend against the wrong company is the
  * worst outcome this surface can produce.
  */
-export function planMonitor(request: RequestV1): MonitorPlan {
+export function planMonitor(
+  request: RequestV1,
+  /**
+   * The bindings the RESOLVER produced for this request, if any.
+   *
+   * Optional so every existing caller is unaffected; supplied, they are the
+   * only source of an exact identity this function will accept.
+   */
+  bindings: readonly ResolvedReferentBinding[] = [],
+): MonitorPlan {
   const base = {
     version: MONITOR_SURFACE_VERSION, signals: [] as string[],
     timeframe_days: null as number | null,
@@ -59,14 +69,31 @@ export function planMonitor(request: RequestV1): MonitorPlan {
     return { ...base, subject: null, refusal: "not_monitorable" };
   }
 
-  // A RESOLVED KEY IS THE IDENTITY; the user's words are only a label. A
-  // reference that was never resolved is not an identity, and Phase E is what
-  // resolves them — until then a bare "them" is stopped by blocking ambiguity
-  // before it reaches here.
   const ref = (part.subject.references ?? [])[0];
   const named = (part.subject.filters ?? [])
     .find((f) => f.field === "company_name");
-  const identifier = ref?.resolved_key
+
+  // ── THE BINDING IS THE IDENTITY. `resolved_key` IS NOT. ──────────────────
+  //
+  // This read `ref.resolved_key` first, and `resolved_key` arrives from the
+  // MODEL: `parseRequestStrict` copies it verbatim off whatever the model
+  // returned. So a model that emitted a plausible-looking key decided which
+  // real company this workspace pays to watch, every cadence period, forever
+  // — the precise authority the binding sidecar exists to take away from it,
+  // and the one asserted by "a forged resolved_key is ignored".
+  //
+  // A binding is produced by `resolveReferents` from records the system itself
+  // wrote, using `resolveCompanyIdentity`. Its domain or canonical LinkedIn URL
+  // is what `monitoring_subjects.identifier` is documented to hold, and its
+  // `entity_key` is never a bare name — weak dedupe kinds do not bind.
+  const bound = bindings.find((b) => b.part_id === part.id && b.entity_type === "company");
+  const boundIdentifier = bound
+    ? (bound.identity.canonicalDomain ?? bound.identity.linkedinUrl)
+    : null;
+
+  // Without a binding the user's own words stand, exactly as before — a NAMED
+  // company the user typed is their statement, not the model's inference.
+  const identifier = boundIdentifier
     ?? (ref ? ref.value : null)
     ?? (Array.isArray(named?.value) ? String(named!.value[0]) : null);
   if (!identifier) return { ...base, subject: null, refusal: "no_subject" };
@@ -78,7 +105,12 @@ export function planMonitor(request: RequestV1): MonitorPlan {
 
   return {
     ...base,
-    subject: { kind: "company", identifier, label: ref?.value ?? identifier },
+    subject: {
+      kind: "company", identifier,
+      // The label is what to CALL it, never what identifies it. A binding
+      // carries the label the user was shown; otherwise their own words.
+      label: bound?.label ?? ref?.value ?? identifier,
+    },
     signals, timeframe_days: timeframe, refusal: null,
   };
 }

@@ -180,6 +180,41 @@ export async function executeRead(
 }
 
 /**
+ * How many entities the answer actually lists.
+ *
+ * The renderer's own slice, named. `presentedCompanies` and the prose below
+ * must agree on it, and a literal repeated in two places is how they stop
+ * agreeing.
+ */
+export const READ_DISPLAY_LIMIT = 5;
+
+/**
+ * The companies this answer PUTS ON SCREEN, in the order it puts them there.
+ *
+ * ── WHY THIS IS AN EXPORT AND NOT AN INLINE MAP ────────────────────────────
+ *
+ * "The second company" is a position in what was displayed. The read answer
+ * lists only the WATCHED half — leads are counted, not named — and only the
+ * first few of those, so the displayed order is neither the query order nor the
+ * full result set. Anything persisting referents for this message has to apply
+ * exactly that filter and exactly that slice, and the only way to guarantee it
+ * does is for the renderer to call the same function.
+ */
+export function presentedCompanies(
+  result: ReadResult | null,
+): Array<{ display: string; label: string | null; identifier: string | null }> {
+  if (!result || result.target !== "companies") return [];
+  return result.items
+    .filter((i) => i.kind === "watched")
+    .slice(0, READ_DISPLAY_LIMIT)
+    .map((i) => ({
+      display: String(i.label ?? i.identifier),
+      label: typeof i.label === "string" ? i.label : null,
+      identifier: typeof i.identifier === "string" ? i.identifier : null,
+    }));
+}
+
+/**
  * Say what was found, in the user's terms.
  *
  * ── WHY THE RENDERER IS DETERMINISTIC ──────────────────────────────────────
@@ -225,8 +260,11 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     const bits: string[] = [];
     if (leads) bits.push(`${leads} lead${leads === 1 ? "" : "s"} saved`);
     if (watched) bits.push(`${watched} compan${watched === 1 ? "y" : "ies"} being watched`);
-    const names = result.items.filter((i) => i.kind === "watched")
-      .slice(0, 5).map((i) => `• ${String(i.label ?? i.identifier)}`).join("\n");
+    // RENDERED FROM THE SAME LIST THAT IS PERSISTED AS REFERENTS. Two walks of
+    // `result.items` with the same filter and the same slice would be two
+    // orderings that can drift, and "the second company" indexes this one.
+    const names = presentedCompanies(result)
+      .map((e) => `• ${e.display}`).join("\n");
     return `${bits.join(" and ")}${window}.${names ? `\n\nWatching:\n${names}` : ""}`;
   }
 

@@ -37,8 +37,16 @@ import {
   bindRoute, chatBrainEnabled, type BindingOutcome,
 } from "../_shared/chatBrainBinding.ts";
 import {
-  planRead, executeRead, renderReadAnswer, type ReadDb,
+  planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
 } from "../_shared/readSurface.ts";
+import {
+  resolveReferents, type ResolvedReferentBinding,
+} from "../_shared/referentBinding.ts";
+import {
+  buildPresentedReferents, presentedFromIdentifier, requestHasBackReference,
+  PRESENTED_REFERENTS_KEY,
+} from "../_shared/referentPersistence.ts";
+import { loadLatestReferents, type ReferentDb } from "../_shared/referentLookup.ts";
 import {
   planMonitor, executeMonitor, type MonitorDb,
 } from "../_shared/monitorSurface.ts";
@@ -1039,6 +1047,18 @@ interface DelegateArgs {
    * failure message named none of them.
    */
   missionOrigin?: string;
+  /**
+   * THE IDENTITY SIDECAR, TRAVELLING BESIDE THE MISSION.
+   *
+   * Which real company each resolved referent meant. It cannot go inside
+   * `leadMission`: `missionHash` is computed from the mission, so a new field
+   * would change checkpoint identity for every run, and a binding carries the
+   * URLs `scanProposalForViolations` refuses. So it rides as a sibling key and
+   * `readPersistedBindings` reads it back at the engine.
+   *
+   * Absent for every request that names its own companies, which is most.
+   */
+  leadBindings?: readonly ResolvedReferentBinding[] | null;
   modelUsed: string;
   providerUsed: string;
   workflowInputs?: Record<string, any> | null;
@@ -1080,7 +1100,16 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
       // shown on the card, then dropped before execution, leaving
       // `planToolInput()` as the de facto planner.
       lead_mission: a.leadMission ?? null,
-      tool_input: toolInput ?? null,
+      // BESIDE THE MISSION, NEVER IN IT — see `leadBindings`. Sent at the top
+      // level AND on `tool_input` below, because the two reach the plan step by
+      // different routes depending on which planner branch runs, and a sidecar
+      // that survives only one of them is a sidecar that silently vanishes.
+      ...(a.leadBindings?.length
+        ? { lead_referent_bindings: a.leadBindings }
+        : {}),
+      tool_input: a.leadBindings?.length
+        ? { ...(toolInput ?? {}), lead_referent_bindings: a.leadBindings }
+        : toolInput ?? null,
     }),
   });
   const orchBody = await orchResponse.json().catch(() => ({} as any));
@@ -1596,6 +1625,15 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   };
   let brainRoute: Route | null = null;
   let brainBinding: BindingOutcome | null = null;
+  /**
+   * WHICH REAL COMPANIES THIS TURN'S REFERENTS RESOLVED TO.
+   *
+   * Produced by `resolveReferents` below and read by everything downstream that
+   * needs an exact entity — the router's projection, the monitor surface, and
+   * the sidecar delegated to orchestrate. Empty for a request that names its own
+   * subject, which is most of them.
+   */
+  let resolvedBindings: ResolvedReferentBinding[] = [];
   if (chatBrainEnabled(readEnvSafe)) {
     const understood = await understandRequest(message, {
       workspaceContext: workspaceContextBlock,
@@ -1603,11 +1641,86 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     }, { readEnv: readEnvSafe });
 
     if (understood.ok) {
+      // ══ PHASE E — WHICH REAL ENTITY THE REQUEST POINTS AT ═══════════════
+      //
+      // BEFORE THE ROUTER, AND THEREFORE BEFORE ANY SPEND. A reference that
+      // cannot be resolved is a question about WHICH company, and the cheapest
+      // place to ask it is before a surface has been chosen, before a mission
+      // is projected and before a credit is reserved. Routing first and
+      // discovering the ambiguity later would mean the refusal arrives after
+      // the commitment.
+      //
+      // The database is touched only for a request that actually points
+      // backwards. A request naming its own subject resolves to no bindings and
+      // costs no query.
+      const referents = requestHasBackReference(understood.request)
+        ? await loadLatestReferents(admin as unknown as ReferentDb, conversationId)
+        : null;
+      // DETERMINISTIC, AND THE MODEL IS NOT CONSULTED. Chat Brain said a
+      // reference EXISTS; `resolveReferents` decides what it resolves to, from
+      // records this system wrote, using the same `resolveCompanyIdentity` the
+      // rest of the pipeline uses. A `resolved_key` the model invented is not
+      // read by anything on this path.
+      const resolution = resolveReferents(understood.request, referents?.source ?? null);
+      resolvedBindings = resolution.bindings;
+
+      if (resolution.failures.length > 0) {
+        // ── ASK, NEVER GUESS ─────────────────────────────────────────────
+        //
+        // Two prior companies and "check them" is a genuine ambiguity, and the
+        // nearest-name fallback that would resolve it is exactly how a
+        // follow-up silently investigates a company the user never mentioned.
+        // Nothing has been routed, no provider has been reached and no credit
+        // has been reserved at this point — which is the property that makes
+        // asking cheap.
+        const first = resolution.failures[0];
+        const { data: saved } = await admin.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: first.question,
+          agent_slug: "pilot",
+          metadata: {
+            pending_clarification: true,
+            clarification_type: "referent",
+            chat_brain: {
+              route: "referent_unresolved",
+              reason: `referent:${first.reason}`,
+              part_id: first.part_id,
+              source_message_id: referents?.message_id ?? null,
+              candidates: referents?.set?.entities.length ?? 0,
+            },
+          },
+        }).select("*").single();
+        await recordUnderstanding(admin as unknown as UnderstandingWriter, {
+          workspaceId, conversationId,
+          source: "chat_brain_shadow",
+          utterance: message,
+          objective: understood.request.objective,
+          confidence: understood.request.confidence,
+          metadata: {
+            authoritative: true,
+            route: "referent_unresolved",
+            route_reason: `referent:${first.reason}`,
+            spent: false,
+            failures: resolution.failures.map((f) => f.reason),
+          },
+        });
+        return json({
+          type: "reply", conversation_id: conversationId,
+          clarification: true, message: saved,
+        });
+      }
+
       brainRoute = routeRequest(understood.request, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
         spendAllowed: true,
         confirmationRequired: true,
+        // READ BY THE PROJECTION, so a bound referent contributes the company's
+        // real name to `known_companies` instead of the word the user used for
+        // it. The exact identity does NOT travel this way — it stays in the
+        // sidecar, so no proposal gains a URL and no safety gate is relaxed.
+        bindings: resolvedBindings,
       });
       brainBinding = bindRoute(brainRoute);
 
@@ -1622,6 +1735,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           route: brainRoute.kind,
           route_reason: brainRoute.reason,
           binding: brainBinding.kind,
+          bound_referents: resolvedBindings.length,
           may_spend: brainRoute.may_spend,
           parts: understood.request.parts.map((x) => x.objective),
           repaired: understood.repaired,
@@ -1657,12 +1771,28 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           ? await executeRead(admin as unknown as ReadDb, plan, workspaceId)
           : null;
         const answer = renderReadAnswer(plan, result);
+        // ── WHAT THIS ANSWER PUT ON SCREEN, SO A FOLLOW-UP CAN POINT AT IT ─
+        //
+        // `presentedCompanies` is the function the renderer itself calls, so
+        // the persisted order IS the displayed order rather than a second walk
+        // of the rows that could filter or slice differently. A read answer
+        // lists only the watched half and only the first few of those; "the
+        // second company" indexes that list, not the query behind it.
+        const shown = presentedCompanies(result);
         const { data: saved } = await admin.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
           content: answer, agent_slug: "pilot",
           metadata: {
             chat_brain: { route: "read", target: plan.target,
               counts: result?.counts ?? null, reason: brainRoute.reason },
+            ...(shown.length > 0
+              ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+                  shown.map((e) => presentedFromIdentifier(e.label, e.identifier)),
+                  "watched_companies",
+                ),
+              }
+              : {}),
           },
         }).select("*").single();
         return json({ type: "reply", conversation_id: conversationId, message: saved });
@@ -1670,7 +1800,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
       // ── MONITOR: RECORDS AN INTENTION, BUYS NOTHING NOW ───────────────
       if (brainBinding.kind === "monitor") {
-        const plan = planMonitor(understood.request);
+        // THE BINDING IS THE IDENTITY. Without it `planMonitor` would fall back
+        // to the user's own words, and a subject created for the wrong company
+        // spends every cadence period, unattended, forever.
+        const plan = planMonitor(understood.request, resolvedBindings);
         const outcome = await executeMonitor(
           admin as unknown as MonitorDb, plan, workspaceId);
         const answer = outcome.error
@@ -2346,6 +2479,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
       conversationId: conversationId!, workspaceId, instruction,
       leadMission: briefMission,
+      // The sidecar follows the mission on every branch that can reach a paid
+      // run, so a bound company is never re-resolved by name downstream.
+      leadBindings: resolvedBindings,
     missionOrigin: "brief_rewrite",
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
@@ -2420,6 +2556,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
         conversationId, workspaceId, instruction: intakeInstruction,
         leadMission: intakeMission,
+        // The sidecar follows the mission on every branch that can reach a paid
+        // run, so a bound company is never re-resolved by name downstream.
+        leadBindings: resolvedBindings,
     missionOrigin: "lead_intake",
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
@@ -2896,6 +3035,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
     return await delegateToOrchestrate({
       leadMission: compiledLeadMission,
+      // The sidecar follows the mission on every branch that can reach a paid
+      // run, so a bound company is never re-resolved by name downstream.
+      leadBindings: resolvedBindings,
     missionOrigin: "confirmed_card",
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
@@ -2970,6 +3112,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
     return await delegateToOrchestrate({
       leadMission: peopleMission,
+      // The sidecar follows the mission on every branch that can reach a paid
+      // run, so a bound company is never re-resolved by name downstream.
+      leadBindings: resolvedBindings,
     missionOrigin: "people_sourcing",
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,

@@ -19,6 +19,9 @@ import {
   type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import type { FallbackReason, HiringRoute } from "./hiringRouteContract.ts";
+import {
+  REFERENT_BINDING_VERSION, type ResolvedReferentBinding,
+} from "./referentBinding.ts";
 
 /**
  * Find a persisted mission on whatever the caller was given.
@@ -42,6 +45,65 @@ export function readPersistedLeadMission(
   }
   for (const c of candidates) if (isLeadMissionV1(c)) return c;
   return null;
+}
+
+/** The transport key for the binding sidecar. Beside the mission, never in it. */
+export const LEAD_BINDINGS_KEY = "lead_referent_bindings" as const;
+
+/**
+ * Find the resolved bindings on whatever the caller was given.
+ *
+ * ── WHY THE SIDECAR TRAVELS SEPARATELY, AND IS RE-VALIDATED HERE ───────────
+ *
+ * The bindings cannot ride inside `lead_mission`: `missionHash` is computed
+ * from the mission, so adding a field would change checkpoint identity for
+ * every run, and `scanProposalForViolations` refuses the URLs a binding
+ * carries. So they travel as a sibling key and are read back here.
+ *
+ * STRUCTURALLY CHECKED, NOT TRUSTED. What arrives has been through a JSON
+ * round-trip on a plan step, so it is untyped data by the time it is read. A
+ * binding missing its version, its entity key or its identity is DROPPED rather
+ * than repaired — a half-read binding would decide which real company a paid
+ * run investigates, and the honest failure is to resolve the name the ordinary
+ * way instead of acting on a fragment.
+ */
+export function readPersistedBindings(
+  toolInput: unknown, bodyBindings?: unknown,
+): ResolvedReferentBinding[] {
+  const candidates: unknown[] = [bodyBindings];
+  if (toolInput && typeof toolInput === "object") {
+    const ti = toolInput as Record<string, unknown>;
+    candidates.push(ti[LEAD_BINDINGS_KEY]);
+    const qlp = ti.qualified_lead_plan;
+    if (qlp && typeof qlp === "object") {
+      candidates.push((qlp as Record<string, unknown>)[LEAD_BINDINGS_KEY]);
+    }
+  }
+  for (const c of candidates) {
+    if (!Array.isArray(c)) continue;
+    const out = c.filter(isResolvedReferentBinding);
+    if (out.length > 0) return out;
+  }
+  return [];
+}
+
+/** The structural guard. Every field the engine and the fingerprint read. */
+export function isResolvedReferentBinding(v: unknown): v is ResolvedReferentBinding {
+  if (!v || typeof v !== "object") return false;
+  const b = v as Record<string, unknown>;
+  if (b.version !== REFERENT_BINDING_VERSION) return false;
+  if (b.entity_type !== "company") return false;
+  if (typeof b.part_id !== "string" || !b.part_id) return false;
+  if (typeof b.entity_key !== "string" || !b.entity_key) return false;
+  const id = b.identity;
+  if (!id || typeof id !== "object") return false;
+  const i = id as Record<string, unknown>;
+  // THE STRONG IDENTIFIERS ARE THE POINT. A binding that arrives with neither
+  // proves nothing the mission's own name did not already prove, and seeding a
+  // pool row from it would claim a certainty that did not survive transport.
+  const strong = typeof i.canonicalDomain === "string" && i.canonicalDomain
+    || typeof i.linkedinUrl === "string" && i.linkedinUrl;
+  return !!strong;
 }
 
 export interface MissionRouteRequest {

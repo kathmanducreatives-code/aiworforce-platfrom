@@ -16,6 +16,12 @@ import {
 import {
   REQUEST_V1_VERSION, type RequestV1, type RequestPart, type RequestEntity,
 } from "../../../supabase/functions/_shared/requestV1.ts";
+import {
+  REFERENT_BINDING_VERSION,
+} from "../../../supabase/functions/_shared/referentBinding.ts";
+import {
+  resolveCompanyIdentity,
+} from "../../../supabase/functions/_shared/companyIdentity.ts";
 
 const req = (parts: RequestPart[]): RequestV1 => ({
   version: REQUEST_V1_VERSION, utterance: "u", objective: parts[0].objective,
@@ -132,13 +138,51 @@ Deno.test("a monitor with no nameable subject is REFUSED, not guessed", () => {
   assertEquals(p.refusal, "no_subject");
 });
 
-Deno.test("a resolved key is the identity; the user's words are the label", () => {
+Deno.test("the BINDING is the identity; the user's words are the label", () => {
+  // Phase E moved where the identity comes from, and the move is the point.
+  //
+  // This asserted that `resolved_key` was the identity — and `resolved_key`
+  // arrives from the MODEL, copied verbatim by `parseRequestStrict` off
+  // whatever it returned. So the model decided which real company this
+  // workspace pays to watch, every cadence period, unattended, forever. That is
+  // precisely the authority the binding sidecar exists to take away from it.
+  //
+  // The binding is produced by `resolveReferents` from a record the system
+  // itself wrote, and its identity comes from `resolveCompanyIdentity` — the
+  // same function the rest of the pipeline uses.
+  const p = planMonitor(
+    req([monitorPart({
+      subject: {
+        entity: "company",
+        references: [{ kind: "prior_result", value: "them" }],
+      },
+    })]),
+    [{
+      version: REFERENT_BINDING_VERSION,
+      part_id: "p1", entity_type: "company",
+      entity_key: "domain:vercel.com", label: "Vercel",
+      identity: resolveCompanyIdentity({
+        name: "Vercel", domain: "vercel.com",
+        linkedin_url: "https://www.linkedin.com/company/vercel",
+      }),
+      source: { message_id: "m1", result_index: 0, kind: "prior_result" },
+      status: "verified_match",
+    }],
+  );
+  assertEquals(p.subject!.identifier, "vercel.com");
+  assertEquals(p.subject!.label, "Vercel");
+});
+
+Deno.test("a forged resolved_key never becomes a monitoring subject", () => {
+  // The same claim from the attacker's side. A subject is a recurring, unattended
+  // spend; a model that could name one could point it at any company it liked.
   const p = planMonitor(req([monitorPart({
     subject: { entity: "company", references: [{ kind: "prior_result", value: "Vercel",
-      resolved_key: "https://www.linkedin.com/company/vercel" }] },
+      resolved_key: "https://www.linkedin.com/company/attacker" }] },
   })]));
-  assertEquals(p.subject!.identifier, "https://www.linkedin.com/company/vercel");
-  assertEquals(p.subject!.label, "Vercel");
+  assertEquals(p.subject!.identifier, "Vercel");
+  // Nothing the model wrote reached the row.
+  assertEquals(/attacker/.test(JSON.stringify(p)), false);
 });
 
 Deno.test("only real signal events are recorded on a subject", () => {

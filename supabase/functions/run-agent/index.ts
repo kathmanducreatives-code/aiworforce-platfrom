@@ -11,6 +11,9 @@ import { projectCanonicalEvents } from "../_shared/canonicalSignalEvent.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
 import { canonicalSubjectKey } from "../_shared/signalSubject.ts";
+import {
+  buildPresentedReferents, PRESENTED_REFERENTS_KEY,
+} from "../_shared/referentPersistence.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
@@ -88,6 +91,7 @@ const readEnvSafe = (key: string): string | undefined => {
 };
 import {
   legacyLoopReachable, missionRouteRequest, readPersistedLeadMission,
+  readPersistedBindings,
 } from "../_shared/leadMissionRuntime.ts";
 import {
   CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
@@ -1618,6 +1622,15 @@ Deno.serve(async (req) => {
         // existed.
         const persistedMission = readPersistedLeadMission(
           tool_input_body, (body as Record<string, unknown>).lead_mission);
+        // ── THE IDENTITY SIDECAR, BESIDE THE MISSION ────────────────────────
+        //
+        // Which real company each referent resolved to, decided upstream by
+        // `resolveReferents` and carried here rather than re-derived. Empty for
+        // every mission that named its own companies, and for every task
+        // planned before Phase E — in both cases the engine behaves exactly as
+        // it did before this existed.
+        const persistedBindings = readPersistedBindings(
+          tool_input_body, (body as Record<string, unknown>).lead_referent_bindings);
         const missionPlan = persistedMission ? buildCapabilityGraph(persistedMission) : null;
         console.log("[run-agent][lead-mission]", {
           task_id: task.id,
@@ -1626,6 +1639,7 @@ Deno.serve(async (req) => {
           mission_type: persistedMission?.mission_type ?? null,
           requested_output: persistedMission?.requested_output ?? null,
           entry_capability: missionPlan?.entry_capability ?? null,
+          bound_referents: persistedBindings.length,
           capabilities: missionPlan?.steps.map((s) => s.capability) ?? null,
           allowed_providers: missionPlan?.allowed_providers ?? null,
           // The compatibility path is a fact worth seeing, not an implementation
@@ -2635,6 +2649,18 @@ Deno.serve(async (req) => {
             }, {
               mission: roundMission,
               plan: roundGraph,
+              // ── WHICH REAL COMPANY EACH REFERENT MEANT ──────────────────
+              //
+              // Read off the plan step, never re-derived. Two effects and no
+              // others: `known_company_resolution` seeds a bound company's
+              // identity instead of buying a LinkedIn search for a name it
+              // already resolved, and the resume check gains a second
+              // fingerprint so a checkpoint written against one company cannot
+              // continue against another that shares its name.
+              //
+              // Empty for every mission that named its own companies, and for
+              // every task planned before Phase E.
+              bindings: persistedBindings,
               // THE FALLBACK IS CONFIGURED, so an unconfigured-fallback skip can
               // no longer masquerade as a memo23 input failure. One call per
               // band: this Actor ANDs multiple values and returns zero rows.
@@ -5537,7 +5563,33 @@ Deno.serve(async (req) => {
           role: "assistant",
           content: pilotWrap,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, agent_id: "pilot", workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, next_actions: outcome.next_actions, source_brief: sourceBrief },
+          metadata: {
+            ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id,
+            agent_id: "pilot", workflow_status: planStatus, can_draft: canDraft,
+            next_action: nextAction.action, next_actions: outcome.next_actions,
+            source_brief: sourceBrief,
+            // ── WHAT "THE SECOND COMPANY" WILL MEAN ───────────────────────
+            //
+            // THE SET THE USER IS ABOUT TO SEE, in the order they will see it.
+            // `leadRows` is what `lead_candidate_ids` is built from and what
+            // Workbench renders, so this list and the display cannot disagree
+            // — they are the same array, walked once.
+            //
+            // Persisted here rather than recovered from the prose above,
+            // because the prose is a template: rewording it would silently
+            // move which company "the second" is. A row carrying nothing
+            // identifiable keeps its position and fails to bind later, rather
+            // than being dropped and renumbering everything after it.
+            [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+              leadRows.map((l) => ({
+                label: l.account?.name ?? null,
+                name: l.account?.name ?? null,
+                domain: l.account?.domain ?? null,
+                linkedin_url: l.account?.linkedin_url ?? null,
+              })),
+              "lead_results",
+            ),
+          },
         });
       }
     }

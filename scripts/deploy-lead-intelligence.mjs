@@ -36,6 +36,23 @@ const LEAD_INTELLIGENCE_MODULES = [
   "poolRanking", "groundedBatchEvaluation", "groundedClaims",
   "multiRoundController", "multiRoundBinding", "multiRoundState",
   "roundPlanContract", "crossRoundDedupe", "poolCheckpoint",
+  // ── THE UNDERSTANDING LAYER AND THE IDENTITY SIDECAR ────────────────────
+  //
+  // `leadMissionRuntime` was missing, and `unlock-founders` imports it
+  // directly — so a change to how a persisted mission is read would have left
+  // that function bundling the old copy, which is the exact failure this
+  // script exists to prevent. It was invisible because the seed list names
+  // modules while the script derives FUNCTIONS: a module absent from the seed
+  // produces no warning, just a smaller set.
+  //
+  // The Phase A–E modules are seeded together for the same reason. They decide
+  // what a request means, which real company a referent resolved to, and
+  // whether a checkpoint may resume — contracts that must not differ between
+  // the function that writes them and the function that reads them.
+  "leadMissionRuntime", "suppliedCompanyIdentity",
+  "requestV1", "requestV1Parser", "objectiveRouter", "projectToLeadMission",
+  "chatBrain", "chatBrainBinding", "readSurface", "monitorSurface",
+  "referentBinding", "referentPersistence", "referentLookup",
 ];
 
 /** NEVER deployed by this script, whatever it imports. */

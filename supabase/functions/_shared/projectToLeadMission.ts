@@ -44,6 +44,7 @@ import type {
 import type {
   GptMissionProposal, ProposalConstraint, ProposalPreference,
 } from "./leadMissionCompiler.ts";
+import type { ResolvedReferentBinding } from "./referentBinding.ts";
 
 export const LEAD_PROJECTION_VERSION = "request-v1-to-lead-proposal-1" as const;
 
@@ -255,7 +256,17 @@ function leadParts(r: RequestV1): RequestPart[] {
  * a half-built mission is the thing Stage 0 exists to refuse, and producing
  * one here would move that refusal somewhere less honest.
  */
-export function projectToLeadMission(request: RequestV1): LeadProjection {
+export function projectToLeadMission(
+  request: RequestV1,
+  /**
+   * The bindings the RESOLVER produced, if any.
+   *
+   * The request itself is never mutated — the semantic object stays what the
+   * model said. This is the sidecar being READ, which is the only way a
+   * resolved referent can contribute a real company name to the proposal.
+   */
+  bindings: readonly ResolvedReferentBinding[] = [],
+): LeadProjection {
   const unprojected: string[] = [];
   const proposal = emptyProposal();
 
@@ -305,6 +316,10 @@ export function projectToLeadMission(request: RequestV1): LeadProjection {
       unprojected.push(...applyRequirement(proposal, req));
     }
 
+    // WHICH COMPANY THIS PART WAS BOUND TO, if the resolver bound one.
+    const bound = bindings.find(
+      (b) => b.part_id === part.id && b.entity_type === "company");
+
     for (const ref of part.subject.references ?? []) {
       // ── THE NAME TRAVELS, THE URL DOES NOT ──────────────────────────────
       //
@@ -321,7 +336,25 @@ export function projectToLeadMission(request: RequestV1): LeadProjection {
       // A resolved referent therefore needs a channel that is NOT the proposal.
       // Phase E owns that; until it exists, a referent contributes its label
       // and the pipeline re-resolves it.
-      const label = (ref.value ?? "").trim();
+      // ── A BOUND REFERENT CONTRIBUTES THE COMPANY'S NAME, NOT THE WORD ──
+      //
+      // Without this, "check the second company" put the literal string "the
+      // second company" into `known_companies` and the mission asked the
+      // pipeline to go and find a company by that name. The binding is what
+      // knows the phrase meant Linear.
+      //
+      // STILL ONLY A NAME. The binding's exact identity — its domain and its
+      // LinkedIn URL — does NOT come through here; it travels in the sidecar to
+      // `known_company_resolution`. So `scanProposalForViolations` is unweakened
+      // and still refuses every URL, and the guard below makes that structural
+      // rather than a property of whatever produced the label: a company name
+      // has no slash in it, and anything that does falls back to the resolved
+      // name and then to the user's own words.
+      const boundName = bound
+        ? [bound.label, bound.identity.name].find(
+          (v): v is string => typeof v === "string" && !!v.trim() && !v.includes("/"))
+        : undefined;
+      const label = (boundName ?? ref.value ?? "").trim();
       if (label) proposal.known_companies.push(label);
     }
 

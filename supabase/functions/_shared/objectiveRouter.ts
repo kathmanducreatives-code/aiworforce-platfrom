@@ -30,6 +30,7 @@ import {
   type RequestV1, type RequestPart, type RequestObjective,
 } from "./requestV1.ts";
 import { projectToLeadMission, type LeadProjection } from "./projectToLeadMission.ts";
+import type { ResolvedReferentBinding } from "./referentBinding.ts";
 
 export const OBJECTIVE_ROUTER_VERSION = "objective-router-v1" as const;
 
@@ -84,6 +85,15 @@ export interface RouteOptions {
   spendAllowed: boolean;
   /** True when the surface requires an explicit Start before buying. */
   confirmationRequired?: boolean;
+  /**
+   * The bindings the resolver produced for this request, if any.
+   *
+   * READ, NEVER DECIDED HERE. The router does not resolve referents and cannot;
+   * it passes them to the projection so a bound referent contributes the
+   * company's real name instead of the word the user used for it. A caller that
+   * supplies none behaves exactly as it did before bindings existed.
+   */
+  bindings?: readonly ResolvedReferentBinding[];
 }
 
 const partsFor = (r: RequestV1, pred: (p: RequestPart) => boolean) =>
@@ -164,7 +174,7 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
   // They differ by whether an entity was named, which the projection already
   // reads as `known_companies`. One surface, one contract, one set of gates —
   // Stage 0, Stage 1, credits and provider selection all unchanged.
-  const lead = projectToLeadMission(request);
+  const lead = projectToLeadMission(request, opts.bindings ?? []);
   if (lead.refusal) {
     return {
       ...base, kind: "clarify",

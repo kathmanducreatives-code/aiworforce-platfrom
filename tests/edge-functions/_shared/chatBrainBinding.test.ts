@@ -106,7 +106,12 @@ Deno.test("pilot-chat overrides the classifier only for a bound category", async
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
   const i = SRC.indexOf("if (chatBrainEnabled(readEnvSafe))");
   assert(i > 0, "Chat Brain must be wired");
-  const block = SRC.slice(i, i + 8000);
+  // WIDE ENOUGH FOR THE WHOLE WIRING BLOCK. Phase E put referent resolution
+  // ahead of the router inside this same block, so the category override now
+  // sits further down it. The window is a proximity check, not a length check —
+  // what it must contain is the wiring, and it still ends before the Phase 0
+  // baseline that follows.
+  const block = SRC.slice(i, i + 12000);
   assert(block.includes('if (brainBinding.kind === "category")'),
     "only a bound category replaces the classifier's verdict");
   assert(block.includes("decision.workflow_category ="),
@@ -135,7 +140,9 @@ Deno.test("pilot-chat answers a read without reaching a provider", async () => {
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
   const i = SRC.indexOf('if (brainBinding.kind === "read")');
   assert(i > 0, "the read surface must be wired");
-  const block = SRC.slice(i, i + 1200);
+  // Sized to end just before the monitor block: the negative assertion below is
+  // only meaningful while the window covers the read path and nothing else.
+  const block = SRC.slice(i, i + 1650);
   assert(block.includes("planRead(") && block.includes("executeRead("));
   assert(block.includes("return json("), "a read answers and stops");
   // Nothing on this path may start work.

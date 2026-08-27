@@ -125,7 +125,10 @@ import {
   type RankingShadowComparison,
 } from "./poolRanking.ts";
 import { poolFingerprintOf } from "./poolCheckpoint.ts";
-import { bindingsMatchCheckpoint } from "./referentBinding.ts";
+import {
+  bindingsMatchCheckpoint, bindingFingerprint,
+  type ResolvedReferentBinding,
+} from "./referentBinding.ts";
 import {
   CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS,
   providerOperationKey,
@@ -1644,6 +1647,22 @@ export interface CapabilityEngineOpts {
    * explicit budget rather than inheriting the deployment's.
    */
   readEnv?: (key: string) => string | undefined;
+  /**
+   * WHICH REAL COMPANIES THIS RUN'S REFERENTS RESOLVED TO.
+   *
+   * The sidecar, arriving at the engine. It does two things and no others:
+   * `known_company_resolution` seeds a bound company's identity instead of
+   * paying to rediscover it, and `bindingFingerprint` becomes the second half
+   * of the resume check so a checkpoint written for one company cannot resume
+   * against another that shares its name.
+   *
+   * It NEVER widens the run. A binding matching no company the mission named
+   * adds nothing — the mission stays the only authority on scope.
+   *
+   * Omitted, every behaviour below is exactly what it was before bindings
+   * existed, which is what keeps existing checkpoints resumable.
+   */
+  bindings?: readonly ResolvedReferentBinding[];
   maxCandidates?: number;
   rolePacks?: readonly RolePack[];
   postedLimit?: "1h" | "24h" | "week" | "month";
@@ -1786,9 +1805,19 @@ export async function runCapabilityPlan(
    */
   const headcountSnapshots: HeadcountSnapshotRow[] = [];
 
-  const state: CapabilityExecutionState = stateMatchesMission(opts.state, hash)
-    ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
-    : newExecutionState(opts.plan, hash);
+  // ── THE SECOND FINGERPRINT, COMPUTED ONCE ────────────────────────────────
+  //
+  // `missionHash` covers company NAMES and cannot tell two real companies that
+  // share one apart. This can. Null when the run has no bindings — which is
+  // every run written before they existed and every run that names its own
+  // companies — and `bindingsMatchCheckpoint` treats null-on-both-sides as
+  // compatible, so nothing already persisted is stranded.
+  const bindingPrint = await bindingFingerprint(opts.bindings ?? []);
+
+  const state: CapabilityExecutionState =
+    stateMatchesMission(opts.state, hash, bindingPrint)
+      ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
+      : newExecutionState(opts.plan, hash, bindingPrint);
 
   // ── WHOSE QUESTION THIS RUN ANSWERS, DECIDED ONCE ────────────────────────
   //
@@ -4201,8 +4230,24 @@ export async function runCapabilityPlan(
     // carries a company through — because those identify one, and a name
     // does not.
     if (cap === "known_company_resolution") {
+      // ── A BOUND COMPANY IS NOT RESOLVED AGAIN ──────────────────────────
+      //
+      // The mission carries the safe semantic label — "Linear" — and without
+      // the sidecar this stage could only put that NAME in the pool, leaving
+      // `company_identity_resolution` to buy a LinkedIn search establishing an
+      // identity the resolver already established deterministically, from a
+      // result this system itself produced and the user pointed at.
+      //
+      // With the binding the row enters carrying its domain and canonical
+      // LinkedIn URL, so the paid stage's own guard
+      // (`!c.company.linkedin_company_url`) skips the call and
+      // `resolveIdentityAgainstLookups` returns `verified_match` from the
+      // supplied URL. One less provider call, and — more importantly — no
+      // second chance for a name search to come back ambiguous about a company
+      // that was never ambiguous.
       const supplied = normalizeSuppliedCompanies(
         opts.mission.company_profile?.known_companies ?? [],
+        opts.bindings ?? [],
       );
       const before = companies.length;
       for (const s of supplied.companies) addCompany(companies, s.company, []);
@@ -4213,6 +4258,9 @@ export async function runCapabilityPlan(
         usable: supplied.companies.length,
         added,
         rejected: supplied.rejected,
+        // HOW MANY ARRIVED ALREADY IDENTIFIED. The difference between this and
+        // `usable` is the number of paid identity lookups this run still owes.
+        seeded_from_binding: supplied.seeded,
         // WHAT EACH ONE CAN ACHIEVE, stated before anything is spent. A pool of
         // bare names is a run that will end ambiguous, and that is worth
         // knowing from the log rather than from the empty result.
