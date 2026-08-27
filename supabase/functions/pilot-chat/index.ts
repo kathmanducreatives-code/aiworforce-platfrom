@@ -32,6 +32,7 @@ import {
   recordUnderstanding, type UnderstandingWriter,
 } from "../_shared/requestUnderstandingLog.ts";
 import { understandRequest } from "../_shared/chatBrain.ts";
+import { REQUEST_V1_VERSION } from "../_shared/requestV1.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import {
   bindRoute, chatBrainEnabled, type BindingOutcome,
@@ -2756,44 +2757,34 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   }
 
   if (decision.workflow_category === "approval_review") {
-    // Phase 1 patch: pending approvals live in the `approvals` table (Penn writes
-    // them there). Prefer it; fall back to tasks.status='awaiting_approval' for
-    // older flows that only created tasks.
-    let pending: any[] = [];
-    let approvalSource: "approvals" | "tasks" = "approvals";
-    const { data: approvalRows, error: approvalsErr } = await admin
-      .from("approvals")
-      .select("id, agent_slug, title, summary, description, created_at")
-      .eq("workspace_id", workspaceId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(10);
-    if (!approvalsErr && approvalRows && approvalRows.length > 0) {
-      pending = approvalRows;
-    } else {
-      approvalSource = "tasks";
-      const { data: taskRows } = await admin
-        .from("tasks")
-        .select("id, agent_slug, description, created_at")
-        .eq("workspace_id", workspaceId)
-        .eq("status", "awaiting_approval")
-        .order("created_at", { ascending: false })
-        .limit(10);
-      pending = taskRows ?? [];
-    }
-    if (pending.length === 0) {
-      return await replyAndReturn(
-        "No drafts are waiting for approval right now. When Penn drafts outreach, it will appear here for you to review.",
-        { approval_source: approvalSource },
-      );
-    }
-    const lines = pending
-      .map((t: any) => `• ${t.agent_slug ?? "agent"}: ${t.title ?? t.description ?? t.summary ?? t.id}`)
-      .join("\n");
-    return await replyAndReturn(
-      `You have ${pending.length} pending approval${pending.length === 1 ? "" : "s"}:\n${lines}\n\nOpen the Workbench to approve or edit each draft.`,
-      { approval_source: approvalSource, pending_count: pending.length },
-    );
+    // ── ONE IMPLEMENTATION, REACHED FROM TWO PLACES ─────────────────────────
+    //
+    // The query and the wording moved to `readSurface` as the `approvals`
+    // target, where Chat Brain reaches them through the ordinary read route
+    // (`entity: "approval"`). This branch stays only until `workflowClassifier`
+    // is deleted, and it now DELEGATES rather than duplicating: two copies of
+    // "what is waiting for you" would be two answers to one question, and the
+    // one the user got would depend on which classifier ran.
+    const plan = planRead({
+      version: REQUEST_V1_VERSION,
+      utterance: message,
+      objective: "read",
+      parts: [{
+        id: "approval_review",
+        objective: "read",
+        subject: { entity: "approval", references: [] },
+        output: { shape: "records", count: null },
+      }],
+      ambiguity: [],
+      authority: { may_spend: false, max_cost_units: null, requires_confirmation: true },
+      provenance: {},
+      confidence: 1,
+    });
+    const result = await executeRead(admin as unknown as ReadDb, plan, workspaceId);
+    return await replyAndReturn(renderReadAnswer(plan, result), {
+      approval_source: result?.items[0]?.source ?? "approvals",
+      pending_count: result?.counts.total ?? 0,
+    });
   }
 
   // 5c.iii-b Phase 7 — Founder Content + Engagement Loop. content_creation +

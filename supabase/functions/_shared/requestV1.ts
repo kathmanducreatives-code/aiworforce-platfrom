@@ -95,6 +95,20 @@ export function objectiveMaySpend(o: RequestObjective): boolean {
 /** The kind of thing a request is about. */
 export const REQUEST_ENTITIES = [
   "company", "person", "job", "signal", "content", "conversation",
+  /**
+   * A DRAFT WAITING FOR THE USER'S DECISION.
+   *
+   * Approvals are a first-class thing in this product — their own table, their
+   * own nav item, their own dashboard counter — and the vocabulary simply did
+   * not name them. "What's waiting for me to approve?" had to be forced into
+   * `content`, which is a different question: the drafts Penn has written are
+   * not the same set as the drafts still blocking on a person.
+   *
+   * Adding it is not a new capability. The surface already existed; it was
+   * reachable only by a classifier category, so the semantic layer had no way to
+   * ask for it.
+   */
+  "approval",
 ] as const;
 export type RequestEntity = typeof REQUEST_ENTITIES[number];
 

@@ -47,7 +47,14 @@ export type ReadTarget =
    * existing `daily-brief` function, which is why this target carries no query
    * of its own: `executeRead` returns null for it and the caller delegates.
    */
-  | "brief";
+  | "brief"
+  /**
+   * DRAFTS WAITING ON A PERSON.
+   *
+   * Read from `approvals`, falling back to `tasks.status = 'awaiting_approval'`
+   * for flows that predate that table. Zero-spend like every other read.
+   */
+  | "approvals";
 
 /**
  * ONE company, identified — the scope a resolved referent creates.
@@ -209,6 +216,8 @@ export function planRead(
         : { ...base, target: "companies", limit, since_days: recency };
     case "conversation":
       return { ...base, target: "runs", limit, since_days: recency };
+    case "approval":
+      return { ...base, target: "approvals", limit, since_days: recency };
     default:
       return {
         ...base, target: null,
@@ -352,6 +361,39 @@ export async function executeRead(
       };
     }
 
+    if (plan.target === "approvals") {
+      // ── THE TABLE FIRST, THE OLD SHAPE SECOND ────────────────────────
+      //
+      // Penn writes to `approvals`. Flows that predate it only ever set
+      // `tasks.status = 'awaiting_approval'`, and those rows are still real
+      // work waiting on a person — so an empty `approvals` result is not
+      // evidence that nothing is pending.
+      const { data: rows, error } = await db.from("approvals")
+        .select("id, agent_slug, title, summary, description, created_at")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(plan.limit);
+      let items = (!error && rows ? rows : []) as Array<Record<string, unknown>>;
+      let source = "approvals";
+      if (items.length === 0) {
+        source = "tasks";
+        const { data: taskRows } = await db.from("tasks")
+          .select("id, agent_slug, description, created_at")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "awaiting_approval")
+          .order("created_at", { ascending: false })
+          .limit(plan.limit);
+        items = (taskRows ?? []) as Array<Record<string, unknown>>;
+      }
+      return {
+        target: "approvals",
+        counts: { total: items.length },
+        items: items.map((i) => ({ kind: "approval", source, ...i })),
+        empty: items.length === 0,
+      };
+    }
+
     // runs
     let rq = db.from("tasks")
       .select("id, status, created_at, updated_at")
@@ -457,6 +499,18 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
   // one of them is true.
   if (plan.target === "brief") {
     return "I couldn't pull your workspace summary just now. Nothing is wrong with your data — the brief itself didn't come back. Try again in a moment, or ask me about your signals, leads or recent runs directly.";
+  }
+
+  if (plan.target === "approvals") {
+    const total = result?.counts.total ?? 0;
+    if (!result || result.empty) {
+      return "No drafts are waiting for approval right now. When Penn drafts outreach, it will appear here for you to review.";
+    }
+    const lines = result.items.slice(0, 10)
+      .map((t) => `• ${String(t.agent_slug ?? "agent")}: ${
+        String(t.title ?? t.description ?? t.summary ?? t.id)}`)
+      .join("\n");
+    return `You have ${total} pending approval${total === 1 ? "" : "s"}:\n${lines}\n\nOpen the Workbench to approve or edit each draft.`;
   }
 
   if (!result || result.empty) {

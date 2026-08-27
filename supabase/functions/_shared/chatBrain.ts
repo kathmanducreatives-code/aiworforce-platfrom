@@ -83,6 +83,7 @@ If answering only requires ranking, filtering, selecting or summarising things t
 EVERY PART IS JUDGED ON ITS OWN. In a message with several asks, decide each part's objective independently, by what THAT ask needs. Do not let a later expensive ask pull an earlier cheap one up to match it: "look at what I have, then go find more" is read followed by source, not source twice.
 
 ENTITY: ${REQUEST_ENTITIES.join(", ")}.
+"approval" means a draft or action waiting for the user to approve it - "what needs my sign-off", "anything waiting on me to approve", "show me pending approvals". It is not the same as "content", which is what has been written.
 
 REFERENCES — what the message points at. Pick the kind by WHERE the thing lives, not by how it is worded.
 named         The user's own words for a specific thing: "Vercel", "acme.com", a URL they pasted.
