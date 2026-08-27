@@ -127,14 +127,37 @@ Deno.test("non-blocking ambiguity does not stop the run", () => {
 
 // ══ 4. AN OBJECTIVE WITH NO SURFACE SAYS SO ════════════════════════════════
 
-Deno.test("compose clarifies rather than falling back to something nearby", () => {
-  // A router that quietly served the nearest thing would answer a different
-  // question than the one asked — the failure this migration exists to end.
+Deno.test("compose is SERVED — the refusal was the bug, not the guard", () => {
+  // This asserted that compose clarified with "content generation isn't wired
+  // up yet". The reasoning was sound and the premise was false: two surfaces
+  // existed the whole time — Penn's approval-gated outreach drafts and Scribe's
+  // content — and this refusal returned from the Chat Brain block before either
+  // could be reached. Making Chat Brain authoritative silently disabled two
+  // working features.
+  //
+  // The guard it was protecting still holds, one layer down: a compose request
+  // is routed to a compose surface and NEVER to the nearest thing that happens
+  // to be servable.
   const r = routeRequest(req([part("compose")]), ALLOW);
-  assertEquals(r.kind, "clarify");
+  assertEquals(r.kind, "compose");
+  assertEquals(r.compose!.kind, "content", "no recipient means a post, not outreach");
+  assertEquals(r.may_spend, false, "writing is never a provider purchase from here");
+  assertEquals(r.lead, undefined, "and it must not become a sourcing run");
+});
+
+Deno.test("compose aimed at people is outreach, and requires confirmation", () => {
+  // The distinction that carries the safety rule: a message to someone is
+  // approval-gated, a blog post is not.
+  const r = routeRequest(req([part("compose", {
+    subject: { entity: "person", references: [{ kind: "saved_set", value: "my leads" }] },
+    output: { shape: "artifact", count: 5 },
+  })]), ALLOW);
+  assertEquals(r.kind, "compose");
+  assertEquals(r.compose!.kind, "outreach");
+  assertEquals(r.compose!.targets_existing, true);
+  assertEquals(r.compose!.count, 5);
+  assertEquals(r.requires_confirmation, true);
   assertEquals(r.may_spend, false);
-  assert(r.message && /content/i.test(r.message));
-  assertEquals(r.reason, "no_surface:compose");
 });
 
 Deno.test("a request the lead pipeline cannot serve clarifies, not half-runs", () => {

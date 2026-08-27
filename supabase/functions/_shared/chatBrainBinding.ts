@@ -67,6 +67,8 @@ export type BindingOutcome =
   | { kind: "url_analysis"; reason: string }
   /** Research a topic via live web search, or say it is not configured. */
   | { kind: "market_research"; reason: string }
+  /** Write something. Approval-gated when it has a recipient. */
+  | { kind: "compose"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -132,6 +134,11 @@ export function bindRoute(route: Route): BindingOutcome {
       // bound it — so an unconfigured deployment must say so rather than
       // returning a confident empty result.
       return { kind: "market_research", reason: route.reason };
+
+    case "compose":
+      // Two surfaces behind one objective: Penn for a message with a recipient,
+      // Scribe for a post without one. The caller reads `route.compose.kind`.
+      return { kind: "compose", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`

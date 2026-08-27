@@ -35,6 +35,7 @@ import { planUrlAnalysis, type UrlAnalysisPlan } from "./urlAnalysisSurface.ts";
 import {
   planMarketResearch, type MarketResearchPlan,
 } from "./marketResearchSurface.ts";
+import { planCompose, type ComposePlan } from "./composeSurface.ts";
 
 export const OBJECTIVE_ROUTER_VERSION = "objective-router-v1" as const;
 
@@ -65,7 +66,9 @@ export type RouteKind =
    * A topic, not an organisation. Served by live web search when the deployment
    * has it, and refused honestly when it does not.
    */
-  | "market_research";
+  | "market_research"
+  /** Write something. `compose.kind` says whether it has a recipient. */
+  | "compose";
 
 export interface Route {
   version: typeof OBJECTIVE_ROUTER_VERSION;
@@ -77,6 +80,8 @@ export interface Route {
   url?: UrlAnalysisPlan;
   /** Present only for `market_research`. Carries the topic. */
   market?: MarketResearchPlan;
+  /** Present only for `compose`. Says what is written and for whom. */
+  compose?: ComposePlan;
   /** Which parts this route serves. */
   part_ids: string[];
   /**
@@ -91,9 +96,17 @@ export interface Route {
   reason: string;
 }
 
-/** Objectives with a surface today. `compose` is deliberately absent. */
+/**
+ * Objectives with a surface.
+ *
+ * `compose` used to be deliberately absent, on the reasoning that the Content
+ * surface did not exist. Two DID exist — Penn's approval-gated outreach drafts
+ * and Scribe's content — and both sat below a refusal that returned before
+ * either could be reached. Absence here is a claim that nothing can serve the
+ * objective, and that claim was false.
+ */
 const SERVABLE: ReadonlySet<RequestObjective> = new Set<RequestObjective>([
-  "converse", "read", "research", "source", "monitor",
+  "converse", "read", "research", "source", "monitor", "compose",
 ]);
 
 export interface RouteOptions {
@@ -188,6 +201,25 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
       part_ids: partsFor(request, (p) => p.objective === "monitor"),
       may_spend: opts.spendAllowed && objectiveMaySpend("monitor"),
       reason: "future_observation",
+    };
+  }
+
+  // ── WRITING IS ITS OWN WORK ──────────────────────────────────────────────
+  //
+  // Before the lead projection: a request to write is not a request to find,
+  // and projecting it would read the description of what to write as a
+  // description of companies to source.
+  const composePlan = planCompose(request);
+  if (composePlan) {
+    return {
+      ...base, kind: "compose", compose: composePlan,
+      part_ids: [composePlan.part_id],
+      // OUTREACH NEVER SPENDS FROM HERE. Drafting is a model call the existing
+      // path owns, and sending is approval-gated downstream — neither is a
+      // provider purchase this router authorises.
+      may_spend: false,
+      requires_confirmation: composePlan.kind === "outreach",
+      reason: `compose:${composePlan.kind}`,
     };
   }
 

@@ -36,6 +36,7 @@ import { REQUEST_V1_VERSION } from "../_shared/requestV1.ts";
 import {
   webSearchAvailable, SEARCH_WEB_UNAVAILABLE,
 } from "../_shared/marketResearchSurface.ts";
+import { OUTREACH_WITHOUT_LEADS } from "../_shared/composeSurface.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import {
   bindRoute, chatBrainEnabled, type BindingOutcome,
@@ -1626,6 +1627,22 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   const readEnvSafe = (k: string): string | undefined => {
     try { return Deno.env.get(k); } catch { return undefined; }
   };
+  // ── CONVERSATION MEMORY, HOISTED ABOVE UNDERSTANDING ────────────────────
+  //
+  // It used to load below the whole classifier chain, which meant the semantic
+  // layer could not see what the conversation already held — so a request to
+  // "draft outreach to the top 5" could be understood but not served, because
+  // the leads it referred to were not readable yet at the point of routing.
+  //
+  // It depends on nothing the classifier produces: a workspace, a conversation
+  // and a limit. Reading it first costs one query that was already being made.
+  const memory: ConversationMemory = await loadConversationMemory({
+    admin,
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    limit: 50,
+  });
+
   let brainRoute: Route | null = null;
   let brainBinding: BindingOutcome | null = null;
   /**
@@ -1986,6 +2003,96 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         });
       }
 
+      // ── WRITING: PENN FOR A RECIPIENT, SCRIBE FOR A POST ──────────────
+      //
+      // `compose` used to return "content generation isn't wired up yet" from
+      // the router, because the objective was absent from `SERVABLE`. Both
+      // surfaces existed and worked; the refusal simply returned before either
+      // could be reached.
+      if (brainRoute.kind === "compose" && brainRoute.compose) {
+        const plan = brainRoute.compose;
+
+        if (plan.kind === "outreach") {
+          // NOBODY TO WRITE TO IS NOT A DRAFT. It is a question about who.
+          if (memory.lead_candidates.length === 0) {
+            return await replyAndReturn(OUTREACH_WITHOUT_LEADS, {
+              followup: "no_memory", reason: "outreach_requires_existing_leads",
+              chat_brain: { route: "compose", kind: "outreach", served: false },
+            });
+          }
+          // THE APPROVAL GATE IS UNCHANGED. Drafting still needs an explicit
+          // confirmation, and nothing is ever sent without one.
+          if (!isPreConfirmed) {
+            // THE CARD DESCRIBES THE REQUEST, NOT A CLASSIFIER VERDICT.
+            // `baseMeta` below is built entirely from `decision` — the
+            // classifier's category, its confidence, its chosen actor. Carrying
+            // that onto a card for a route Chat Brain decided would record the
+            // wrong provenance for the run the user is about to confirm.
+            return await showWorkflowConfirmation(
+              message, conversationId!, workspaceId, admin,
+              {
+                workflow_category: "outreach",
+                business_goal: "draft outreach to remembered leads",
+                intent: "draft_outreach",
+                confidence: understood.request.confidence,
+                execution_mode: "outreach",
+                requires_approval: true,
+                classifier_source: "chat_brain",
+                objective: understood.request.objective,
+                prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+              },
+              "outreach");
+          }
+          const n = plan.count ?? extractTopN(message, 5);
+          const top = memory.lead_candidates.slice(0, n);
+          const seed = top
+            .map((l, i) => `${i + 1}. ${l.contact?.full_name ?? l.account?.name ?? "Lead"}${
+              l.account?.domain ? ` (${l.account.domain})` : ""} — ${l.reason ?? ""}`)
+            .join("\n");
+          return await delegateToOrchestrate({
+            admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+            conversationId, workspaceId,
+            instruction:
+              `Draft personalized outreach for the following ${top.length} leads from our prior results. Do not source new leads. Approval is required before sending.\n\n${seed}`,
+            missionOrigin: "chat_brain_compose_outreach",
+            toolInput: {
+              intent: "draft_outreach",
+              tool_name: null, selected_actor_key: null, source_type: null,
+              query: message, role_keywords: [], location: null,
+              max_results: top.length,
+              lead_candidate_ids: top.map((l) => l.id),
+              needs_enrichment: false,
+              needs_outreach: true,
+              execution_mode: "outreach",
+              confidence: understood.request.confidence,
+              missing_fields: [],
+              reason: "chat brain: draft outreach to remembered leads",
+            } as unknown as ToolInput,
+            modelUsed: "chat-brain", providerUsed: "openai",
+          });
+        }
+
+        // CONTENT: no recipient, no approval gate, no sourcing tools.
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId,
+          instruction: message,
+          missionOrigin: "chat_brain_compose_content",
+          toolInput: {
+            intent: "content_creation",
+            tool_name: null, selected_actor_key: null, source_type: null,
+            query: message, role_keywords: [], location: null,
+            max_results: plan.count ?? 1,
+            needs_enrichment: false, needs_outreach: false,
+            execution_mode: "fast",
+            confidence: understood.request.confidence,
+            missing_fields: [],
+            reason: "chat brain: content with no recipient",
+          } as unknown as ToolInput,
+          modelUsed: "chat-brain", providerUsed: "openai",
+        });
+      }
+
       // ── A TOPIC: LIVE SEARCH, OR AN HONEST "NOT CONFIGURED" ───────────
       //
       // The capability is ASKED, not inferred. This used to be decided by
@@ -2134,13 +2241,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     validator_reason: validated.reason,
   });
 
-  // Phase 2: load persistent signal memory for this conversation.
-  const memory: ConversationMemory = await loadConversationMemory({
-    admin,
-    workspace_id: workspaceId,
-    conversation_id: conversationId,
-    limit: 50,
-  });
+  // Loaded ABOVE the Chat Brain block — see the hoist there.
   console.log("[pilot-chat] memory:", {
     has_any_memory: memory.has_any_memory,
     leads: memory.lead_candidates.length,
