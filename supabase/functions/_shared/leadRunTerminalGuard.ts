@@ -102,11 +102,43 @@ export function mapTerminalRecordToRows(record: TerminalRecord): TerminalRowWrit
     };
   }
 
+  // ── AND SO IS A PARTIAL RUN THAT SAID IT WAS RESUMABLE ──────────────────
+  //
+  // The branch above states the rule and applied it to one of the two resumable
+  // outcomes. `partial` is the other, and it fell through to
+  // `terminal_status: record.reason` — a FINALIZER REASON written into a field
+  // whose vocabulary is `TERMINAL_STATUSES`. "execution_deadline_reached" is not
+  // in that list, and `claim_sourcing_continuation` refuses anything that is not
+  // `continuation_required` as `already_terminal`.
+  //
+  // So a run that had checkpointed, declared `resumable: true`, and asked to
+  // continue wrote the one value guaranteed to lock its own successor out. Task
+  // fafd9912, verbatim:
+  //
+  //     terminal_record   { status: "partial",
+  //                         reason: "execution_deadline_reached",
+  //                         resumable: true }
+  //     auto_continuation { decision: "quota_unmet_frontier_remains",
+  //                         continuing: true }
+  //     result.terminal_status  "execution_deadline_reached"   ← claim refuses
+  //
+  // This is the same defect the `round_limit_reached` note in `run-agent`
+  // describes — "the run declared itself finished and then enforced it against
+  // its own successor" — reaching the resume gate by a second route.
+  //
+  // `resumable` is the finalizer's own answer, so it is what decides. A partial
+  // run that is NOT resumable keeps its reason verbatim: there is nothing to
+  // continue, and dressing it as `continuation_required` would invite a claim
+  // that must then be refused deeper in.
   if (record.status === "partial") {
     return {
       task_status: "ready",
       plan_status: "partial",
-      result_patch: { ...base, task_status: "partial" },
+      result_patch: {
+        ...base,
+        task_status: "partial",
+        ...(record.resumable ? { terminal_status: "continuation_required" } : {}),
+      },
       error_message: null,
     };
   }

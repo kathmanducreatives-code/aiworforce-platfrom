@@ -132,8 +132,26 @@ Deno.test("3. hitting the deadline is written as partial and resumable", async (
   assertEquals(rows.plan, "partial");
   const r = rows.result as Record<string, unknown>;
   assertEquals(r.task_status, "partial");
-  assertEquals(r.terminal_status, "execution_deadline_reached");
   assertEquals(r.resumable, true);
+
+  // ── AND THE STATUS THE RESUME GATE READS ────────────────────────────────
+  //
+  // This asserted `terminal_status: "execution_deadline_reached"` — the
+  // finalizer's REASON, written into a field whose vocabulary is
+  // `TERMINAL_STATUSES`. That string is not in the list, and
+  // `claim_sourcing_continuation` refuses anything that is not
+  // `continuation_required` as `already_terminal`. So a run that had
+  // checkpointed and declared itself RESUMABLE wrote the one value guaranteed
+  // to lock its own successor out — task fafd9912 stalled on exactly that, with
+  // `auto_continuation.continuing: true` and a paid Apify run still going.
+  //
+  // The reason is not lost; it moves to where a reason belongs.
+  assertEquals(r.terminal_status, "continuation_required");
+  assertEquals(
+    (r.terminal_record as Record<string, unknown>).reason,
+    "execution_deadline_reached",
+    "the untranslated reason survives on the record",
+  );
 });
 
 Deno.test("4. capability state is persisted before the deadline exit", async () => {

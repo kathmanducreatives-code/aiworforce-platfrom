@@ -217,12 +217,45 @@ Deno.test("a fresh continuation has room for the job search", () => {
   assertEquals(d.expired("apify_linkedin_job_search"), false);
 });
 
-Deno.test("the hiring call site names the operation", () => {
+// ── AND THEN THE OPERATION TURNED OUT NOT TO FIT ANY SLICE ────────────────
+//
+// The two tests above still hold: 29s cannot complete a 20-title job search,
+// and the unscoped question wrongly says it can. What changed is the CONCLUSION
+// drawn from that.
+//
+// Task 783fa163 measured the operation properly — 72.0s for one company
+// (Ot2Jpwe8ezMvbe6Eu), 796.4s for ten (Zs5bYFGlnua1hJWYg), linear in
+// company×title queries. Even ONE company exceeds the 60s estimate, so
+// `expired("apify_linkedin_job_search")` is true from the moment the stage
+// begins and hiring verification would be deferred for ever.
+//
+// Persist-on-start is what makes the right question answerable. The run id
+// reaches `lead_execution_calls` before any polling, so a slice killed while
+// waiting loses nothing and the next slice adopts the run with a free GET. The
+// call site therefore asks whether it can START the call durably, not whether
+// it can finish it.
+
+Deno.test("the hiring call site asks whether it can start durably", () => {
   const ENGINE = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
   assert(
-    ENGINE.includes('deps.deadline?.expired("apify_linkedin_job_search")'),
-    "the paid hiring check must ask about its own operation",
+    ENGINE.includes("deps.deadline?.expiredForDurableStart()"),
+    "the paid hiring check must ask a question that can be true",
+  );
+  assertEquals(
+    ENGINE.includes('deps.deadline?.expired("apify_linkedin_job_search")'), false,
+    "no batch of any size completes in a slice; asking that defers hiring for ever",
+  );
+});
+
+Deno.test("starting durably is affordable at the moment completing is not", () => {
+  let clock = 0;
+  const d = createExecutionDeadline({ budgetMs: 125_000, now: () => clock });
+  clock = 96_000; // run 78cff5e5's exact moment: ~29s left
+  assertEquals(d.expired("apify_linkedin_job_search"), true);
+  assertEquals(
+    d.expiredForDurableStart(), false,
+    "29s is ample to POST a run and persist its id, which is all that is at risk now",
   );
 });

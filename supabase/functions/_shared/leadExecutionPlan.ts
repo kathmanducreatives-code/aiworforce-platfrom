@@ -40,7 +40,9 @@ import {
   CAPABILITY_REGISTRY, isCapabilityId,
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
-import { icpDiscoveryConstraints } from "./icpDiscoveryConstraints.ts";
+import {
+  icpDiscoveryConstraints, type DiscoveryPolicySize,
+} from "./icpDiscoveryConstraints.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
 import {
@@ -128,6 +130,15 @@ function intArray(v: unknown): number[] {
 
 export interface ExecutionPlanOptions {
   maxSteps?: number;
+  /**
+   * The workspace's compiled Company Brain headcount policy.
+   *
+   * Supplied so the PREVIEW states the same `companySize` filter execution will
+   * send. Without it the planner payload advertised a search the engine no
+   * longer runs, and a preview that differs from the run is the one defect this
+   * layer exists to prevent.
+   */
+  brain?: DiscoveryPolicySize | null;
 }
 
 /**
@@ -293,7 +304,7 @@ export function validateExecutionPlan(
           // counts: geography and headcount refine a population, they do not
           // select one. "AI startups in the US" filtered by country alone is
           // still an unconstrained search.
-          hasStructuredConstraints: icpDiscoveryConstraints(mission).expresses_concept,
+          hasStructuredConstraints: icpDiscoveryConstraints(mission, opts.brain).expresses_concept,
         })
       ) {
         violations.push({
@@ -461,7 +472,7 @@ export function buildExecutionPlannerPayload(
     // not say, and what the model therefore never knew, is that the same Actor
     // takes `industryIds`/`locations`/`companySize` — and that this mission's
     // ICP resolves to real values for them.
-    ...(icpDiscoveryConstraints(mission).expressible
+    ...(icpDiscoveryConstraints(mission, opts.brain).expressible
       ? {
         discovery_constraints: {
           note:
@@ -470,7 +481,7 @@ export function buildExecutionPlannerPayload(
             "searchQuery. Do not put a concept phrase in searchQuery — it " +
             "matches company names only.",
           ...(() => {
-            const c = icpDiscoveryConstraints(mission);
+            const c = icpDiscoveryConstraints(mission, opts.brain);
             return {
               ...(c.industryIds.length ? { industryIds: c.industryIds } : {}),
               ...(c.locations.length ? { locations: c.locations } : {}),

@@ -96,11 +96,52 @@ export interface AutoContinuationInput {
   /** The last slice ended on a provider failure. */
   providerFailed?: boolean;
   cancelled?: boolean;
+  /**
+   * Paid provider runs still in flight, from `state.pending_runs`.
+   *
+   * ── WHY THIS DECISION NEEDS IT ──────────────────────────────────────────
+   *
+   * Run 783fa163. The finalizer wrote
+   * `{ status: "pending_external_run", reason: "provider_run_pending",
+   * resumable: true }` for Apify run `Zs5bYFGlnua1hJWYg`, and this function —
+   * which had no notion of a pending run — wrote `no_progress` for the same
+   * moment: "2 consecutive slices qualified and investigated nobody". The
+   * lineage stopped. The run then SUCCEEDED, in 796s, with 1,394 job rows
+   * carrying exactly the evidence the mission asked for — "Senior Sales
+   * Operations Manager, New Seller Recruitment" at Amazon, "Account Executive
+   * (Enterprise)" at Salesforce, "Leader, Inside Sales" at Cisco — and nothing
+   * will ever read them. The stage reported "no company had a relevant
+   * commercial role", which was false for that pool.
+   *
+   * Two components describing one moment in contradictory terms is the defect.
+   * The finalizer is the one that is right: a run that has been paid for and is
+   * still executing has not finished telling us anything, so no FINDING about
+   * the candidates can be true yet.
+   */
+  pendingRuns?: number;
 }
 
 export interface AutoContinuationDecision {
   continue: boolean;
-  reason: StopReason | "quota_unmet_frontier_remains";
+  reason: StopReason | "quota_unmet_frontier_remains" | "awaiting_provider_run";
+  /**
+   * HOW the next slice should be started.
+   *
+   * `immediate` — self-dispatch now. The user asked once and is watching; a
+   * slice that has work to do should get on with it.
+   *
+   * `deferred`  — checkpoint and let `resume-stalled-leads` pick it up on its
+   *               next tick. For a run WAITING ON A PROVIDER there is nothing
+   *               to do until the provider finishes, and self-dispatching turns
+   *               the wait into a spin: run 8f59170d took ten four-second
+   *               slices in about forty seconds and hit `continuation_ceiling`
+   *               with the run still pending. The ceiling bounded it, as
+   *               designed — but it bounded it by burning the entire lineage
+   *               budget instead of waiting three minutes.
+   *
+   * Absent on a stop, where there is no next slice.
+   */
+  dispatch_mode?: "immediate" | "deferred";
   detail: string;
   /** What the Workbench should say while the next slice runs. */
   user_message: string | null;
@@ -120,6 +161,23 @@ const stop = (
  * ceilings, which are protections rather than findings — a run that stops on one
  * of them has NOT established anything about the remaining candidates, and the
  * detail string says so.
+ *
+ * ── AND WHERE A PENDING RUN SITS IN THAT ORDER ─────────────────────────────
+ *
+ * Exactly on the seam the paragraph above already describes. `pendingRuns`
+ * suppresses the three FINDINGS — an exhausted frontier, a provider failure, a
+ * barren streak — because each of them asserts something about the candidates
+ * that a still-executing paid call may be about to contradict. It does NOT
+ * suppress the ceilings, because those are protections and a run that never
+ * finishes must still be bounded: `continuationsUsed` is what stops an
+ * indefinite wait, and it is checked below on exactly the path a pending run
+ * takes. Cancellation and a met quota still outrank it — a user who stopped
+ * must not be billed for another slice, and a request already satisfied does
+ * not need more evidence.
+ *
+ * Adopting a pending run is a free `GET /actor-runs/{id}`; it re-reads work
+ * already charged for and cannot buy the same call twice. So waiting spends a
+ * continuation, never a credit.
  */
 export function decideAutoContinuation(
   i: AutoContinuationInput,
@@ -131,21 +189,28 @@ export function decideAutoContinuation(
       `${i.qualified} of ${i.requestedCount} qualified — the request is met`);
   }
 
+  const awaiting = (i.pendingRuns ?? 0) > 0;
+
+  // ── THE THREE FINDINGS, EACH UNSAYABLE WHILE A PAID RUN IS IN FLIGHT ─────
+  //
+  // Every one of these tells the user something about the candidates. None of
+  // them can be known yet if a call we already paid for is still running.
+
   // AN EXHAUSTED POOL IS A REAL ANSWER. Everything discovered has been
   // investigated or decided; a further slice has nothing to look at.
-  if (i.frontierRemaining <= 0) {
+  if (!awaiting && i.frontierRemaining <= 0) {
     return stop("frontier_exhausted",
       `every discovered candidate has been investigated; ` +
       `${i.qualified} of ${i.requestedCount} qualified`);
   }
 
-  if (i.providerFailed) {
+  if (!awaiting && i.providerFailed) {
     return stop("provider_failure",
       "the last slice ended on a provider failure; the frontier is preserved");
   }
 
   // NOTHING TWICE RUNNING IS EVIDENCE. See `MAX_BARREN_SLICES`.
-  if (i.barrenSlices >= MAX_BARREN_SLICES) {
+  if (!awaiting && i.barrenSlices >= MAX_BARREN_SLICES) {
     return stop("no_progress",
       `${i.barrenSlices} consecutive slices qualified and investigated nobody; ` +
       `${i.frontierRemaining} candidates remain unexamined`);
@@ -163,10 +228,33 @@ export function decideAutoContinuation(
       `${i.frontierRemaining} candidates remain unexamined`);
   }
 
+  // ── THE PROTECTIONS HELD. NOW SAY WHY WE ARE CONTINUING ─────────────────
+  //
+  // Reached only after the ceilings, so an indefinitely pending run is bounded
+  // by `continuationsUsed` like anything else.
+  if (awaiting) {
+    const n = i.pendingRuns ?? 0;
+    return {
+      continue: true,
+      reason: "awaiting_provider_run",
+      // WAITING IS NOT WORK. The sweeper's cadence is the backoff.
+      dispatch_mode: "deferred",
+      detail:
+        `${n} paid provider run(s) still executing; adopting the result costs ` +
+        `nothing further and no finding about the remaining ` +
+        `${i.frontierRemaining} candidate(s) is established yet`,
+      user_message:
+        `Still working — waiting on ${n} provider search${n === 1 ? "" : "es"} ` +
+        `already in progress.`,
+    };
+  }
+
   const need = i.requestedCount - i.qualified;
   return {
     continue: true,
     reason: "quota_unmet_frontier_remains",
+    // There are candidates to investigate right now.
+    dispatch_mode: "immediate",
     detail:
       `${i.qualified} of ${i.requestedCount} qualified, ${i.frontierRemaining} ` +
       `candidates still to investigate`,

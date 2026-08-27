@@ -26,6 +26,7 @@ import {
 } from "./hiringActorInputs.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson, normalizeLinkedInCompanyEnriched,
+  nonCompanyPageReason,
   normalizeLinkedInCompanyCandidate, normalizeLinkedInJob, normalizeMemo23Company,
   normalizeMemo23OpenJobs, normalizeSolidcodeCompany,
   type NormalizedHiringCompany, type NormalizedHiringJob,
@@ -264,9 +265,15 @@ export async function executeCompanyFirstRoute(
       });
       if (!compiled.ok) { log("company_search_compile_failed", compiled.errors); continue; }
       const rows = await run(compiled as CompiledActorCall<unknown>);
-      for (const r of rows) discovered.push(normalizeLinkedInCompanyCandidate(r));
+      // Showcase and school pages are not companies. `short` mode carries no
+      // `pageType`, but the `/showcase/` URL path is present in both modes,
+      // which is why `nonCompanyPageReason` reads the URL and not only the
+      // field. Kept identical to the capability engine so the legacy route
+      // cannot admit a candidate the engine refuses.
+      const usable = rows.filter((r) => nonCompanyPageReason(r) === null);
+      for (const r of usable) discovered.push(normalizeLinkedInCompanyCandidate(r));
       d.discovery.push({ actor_key: source, input_hash: compiled.inputHash,
-        batch: compiled.batchIdentity, rows: rows.length, deduped: rows.length });
+        batch: compiled.batchIdentity, rows: rows.length, deduped: usable.length });
       recordExecutedSource(opts.routeRecord, source);
     }
   }

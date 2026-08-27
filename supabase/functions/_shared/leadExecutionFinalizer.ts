@@ -138,6 +138,15 @@ export const BATCH_EVALUATION_OP = "stage2_batch_evaluation";
  * do, and the money already spent on it is discarded. A floor below the global
  * one is only ever declared here, never inferred.
  */
+/**
+ * Budget needed to fire a provider run and persist its id before polling.
+ *
+ * Generous on purpose. The work is one POST and one row write, both of which
+ * take a second or two; the margin covers a slow round trip without ever
+ * approaching the cost of the call itself.
+ */
+export const DURABLE_START_MS = 15_000;
+
 const ASSUMED_MS_BY_OP: Readonly<Record<string, number>> = Object.freeze({
   // One evaluator call. Observed evaluator latency is ~5s; 7s leaves headroom
   // and is still less than half the two-call assumption.
@@ -158,6 +167,24 @@ const ASSUMED_MS_BY_OP: Readonly<Record<string, number>> = Object.freeze({
   // 60s is above the measured floor and deliberately conservative: the cost of
   // over-estimating is one deferred call on a continuation that has the budget,
   // and the cost of under-estimating is a dead run.
+  //
+  // ── AND THE FULL MEASUREMENT, FROM TWO REAL RUNS OF ONE MISSION ──────────
+  //
+  // Task 783fa163 ran this operation twice with the same 20 titles:
+  //
+  //     companies  queries  duration  per query  per company  run
+  //             1       20     72.0s      3.60s        72.0s  Ot2Jpwe8ezMvbe6Eu
+  //            10      200    796.4s      3.98s        79.6s  Zs5bYFGlnua1hJWYg
+  //
+  // Linear in company×title queries at ~4s each, with no meaningful fixed
+  // overhead — fitted slope 80.5s per company. So even ONE company exceeds this
+  // 60s figure, and NO batch of any size fits a 125s slice.
+  //
+  // That does not make 60s wrong for what it guards; it makes `expired` the
+  // wrong guard for this operation. The hiring stage now asks
+  // `expiredForDurableStart` instead, because the run id is persisted before
+  // the poll and a slice killed while waiting loses nothing. This entry stays
+  // for every unscoped caller.
   ["apify_linkedin_job_search"]: 60_000,
 });
 
@@ -229,6 +256,30 @@ export interface ExecutionDeadline {
    * conservative global one.
    */
   expired(op?: DeadlineOperation): boolean;
+  /**
+   * Is there room to START a durable async call — POST it and persist the run
+   * id — even though it plainly cannot COMPLETE in what is left?
+   *
+   * ── WHY THIS IS A DIFFERENT QUESTION FROM `expired` ─────────────────────
+   *
+   * `expired` asks whether a call can FINISH, and refusing to start one that
+   * cannot is right for a synchronous call: run 78cff5e5 started a 20-title job
+   * search with ~29s left, was hard-killed mid-call, and lost the paid run
+   * entirely because nothing had recorded it.
+   *
+   * Persist-on-start removed that failure mode. The run id now reaches
+   * `lead_execution_calls` the instant the run exists, BEFORE any polling, so a
+   * slice killed mid-poll loses nothing — the next one adopts the run with a
+   * free `GET /actor-runs/{id}`. Run 783fa163 demonstrates both halves: Apify
+   * run `Zs5bYFGlnua1hJWYg` was durably recorded in `pending_runs`, and it took
+   * 796s, which no slice budget could ever have contained.
+   *
+   * So for an operation that is genuinely longer than a slice, `expired` asks
+   * the impossible and answers "never start it". This asks the answerable
+   * question instead: is there time to fire the request and write down what we
+   * fired. Use it ONLY where the run id is persisted before the poll.
+   */
+  expiredForDurableStart(): boolean;
   /** Record how long a call actually took, so the estimate tracks reality. */
   observeCall(ms: number, op?: DeadlineOperation): void;
   /** The duration currently assumed for `op` — the number `expired` compares against. */
@@ -288,6 +339,11 @@ export function createExecutionDeadline(
     // it never read.
     expired: (op?: DeadlineOperation) =>
       (budgetMs - (now() - startedAt)) <= estimateFor(op),
+    // POST + persist, not POST + poll. Deliberately NOT derived from
+    // `estimateFor`: the learned figure is how long the ACTOR takes, and this
+    // is how long WE take to record that it started.
+    expiredForDurableStart: () =>
+      (budgetMs - (now() - startedAt)) <= DURABLE_START_MS,
     observeCall: (ms: number, op?: DeadlineOperation) => {
       // BOTH, always. The global figure still backs every unscoped caller —
       // the terminal guard and the finalizer among them — so scoping the

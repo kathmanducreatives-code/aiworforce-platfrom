@@ -1,13 +1,31 @@
-// ONE QUESTION, ASKED FOR TEN COMPANIES AT A TIME.
+// ONE QUESTION, ASKED FOR SEVERAL COMPANIES AT A TIME.
 //
 // `hiring_verification` asked the provider once per company. The Actor accepts
-// `company[]` up to 10 and a call takes ~48s whether it carries one company or
-// ten, so a slice that could afford one paid search answered ONE company and
-// left the rest unassessed.
+// `company[]` up to 10, so a slice that could afford one paid search answered
+// ONE company and left the rest unassessed.
 //
 // Run 07e973f1, live: eleven companies enriched, ONE hiring call,
 // "the eligible set was empty (29 companies carried no hiring assessment)",
 // nothing qualified, no canonical event written.
+//
+// ── THE BATCH SIZE WAS 10, ON A PREMISE THAT MEASUREMENT DISPROVED ─────────
+//
+// This file used to state that "a call takes ~48s whether it carries one
+// company or ten", and 10 followed from it. Task 783fa163 ran the same Actor
+// on the same twenty titles twice:
+//
+//     companies  queries  duration  per query  per company  run
+//             1       20     72.0s      3.60s        72.0s  Ot2Jpwe8ezMvbe6Eu
+//            10      200    796.4s      3.98s        79.6s  Zs5bYFGlnua1hJWYg
+//
+// The Actor fans out one query per company×title pair, so duration is LINEAR at
+// ~4s a query — the flat-cost premise was simply wrong. Ten companies is ~800s,
+// which is 6.4 of the lineage's 10 continuation slices spent watching one call.
+//
+// So the batch is now DERIVED from that measurement against a wait budget
+// (`HIRING_BATCH_WAIT_BUDGET_MS / HIRING_MS_PER_COMPANY`), which is 3. These
+// tests assert the derivation and the invariants, not the literal 3 — a future
+// re-measurement should move the number without rewriting the file.
 //
 // THE SEMANTICS DO NOT CHANGE. Same twenty titles, same evidence standard,
 // same `freeHiringAssessment` first and paid rows only ever upgrading. What
@@ -17,10 +35,18 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  HIRING_BATCH_WAIT_BUDGET_MS,
   HIRING_JOB_TITLES,
   HIRING_JOBS_PER_BATCH_COMPANY,
+  HIRING_MS_PER_COMPANY,
   HIRING_VERIFICATION_BATCH_SIZE,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import {
+  createExecutionDeadline,
+} from "../../../supabase/functions/_shared/leadExecutionFinalizer.ts";
+
+/** Injected clock for the deadline tests at the end of this file. */
+let now = 0;
 import { compileHarvestJobSearchInput } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
 import {
   dedupeJobs,
@@ -40,13 +66,40 @@ const batches = (urls: string[]) => {
   return out;
 };
 
-// ── 11 companies → a batch of 10 and a batch of 1 ─────────────────────────
+// ── the size is derived from measurement, not chosen ──────────────────────
 
-Deno.test("11 companies batch as 10 + 1", () => {
+Deno.test("the batch size is the wait budget divided by the measured cost", () => {
+  assertEquals(
+    HIRING_VERIFICATION_BATCH_SIZE,
+    Math.max(1, Math.min(10,
+      Math.floor(HIRING_BATCH_WAIT_BUDGET_MS / HIRING_MS_PER_COMPANY))),
+    "the constant must follow the measurement, not sit beside it",
+  );
+  assert(HIRING_VERIFICATION_BATCH_SIZE >= 1, "a batch of none asks nothing");
+  assert(HIRING_VERIFICATION_BATCH_SIZE <= 10, "the Actor's own company[] ceiling");
+});
+
+Deno.test("a batch never keeps the lineage waiting past its budget", () => {
+  // THE PROPERTY THE OLD SIZE VIOLATED. At 10 companies the wait was ~800s,
+  // 6.4 of the 10 continuations a lineage gets — spent entirely on polling.
+  assert(
+    HIRING_VERIFICATION_BATCH_SIZE * HIRING_MS_PER_COMPANY
+      <= HIRING_BATCH_WAIT_BUDGET_MS,
+    "a batch that outlives the wait budget starves the lineage of continuations",
+  );
+});
+
+// ── 11 companies partition into full batches plus a remainder ─────────────
+
+Deno.test("11 companies partition into full batches and a remainder", () => {
+  const B = HIRING_VERIFICATION_BATCH_SIZE;
   const b = batches(companies(11));
-  assertEquals(b.length, 2, "two calls, not eleven");
-  assertEquals(b[0].length, 10);
-  assertEquals(b[1].length, 1);
+  assertEquals(b.length, Math.ceil(11 / B), "one call per batch, not one per company");
+  for (const g of b.slice(0, -1)) {
+    assertEquals(g.length, B, "every batch but the last is full");
+  }
+  assertEquals(b[b.length - 1].length, 11 - B * (b.length - 1), "the remainder");
+  assert(b[b.length - 1].length >= 1, "and it is never empty");
 });
 
 Deno.test("the same companies are asked about, none dropped or repeated", () => {
@@ -58,11 +111,13 @@ Deno.test("the same companies are asked about, none dropped or repeated", () => 
 });
 
 Deno.test("fewer provider calls for the same work", () => {
-  // The property that motivated this: eleven calls become two.
+  // The property that motivated this: one call per company becomes one per
+  // batch. Still true at 3, and it is the property — not the count — that has
+  // to hold if the measurement moves again.
   const before = 11;
   const after = batches(companies(11)).length;
   assert(after < before, `${after} calls must be fewer than ${before}`);
-  assertEquals(after, 2);
+  assertEquals(after, Math.ceil(before / HIRING_VERIFICATION_BATCH_SIZE));
 });
 
 Deno.test("every batch compiles against the Actor's own limit", () => {
@@ -78,13 +133,18 @@ Deno.test("every batch compiles against the Actor's own limit", () => {
 
 Deno.test("a batch may never exceed the compiler's company ceiling", () => {
   // `compileHarvestJobSearchInput` caps `company[]` at 10, from the Actor's
-  // verified card. The batch size must be that limit, not a guess beside it.
-  const over = compileHarvestJobSearchInput({
-    company: companies(HIRING_VERIFICATION_BATCH_SIZE + 1),
+  // verified card. The derived size must stay under it whatever the wait budget
+  // says — which is what the `Math.min(10, …)` in the derivation is for.
+  assert(HIRING_VERIFICATION_BATCH_SIZE <= 10);
+  const atCeiling = compileHarvestJobSearchInput({
+    company: companies(HIRING_VERIFICATION_BATCH_SIZE),
     jobTitles: HIRING_JOB_TITLES, maxItems: 10,
   });
+  assert(atCeiling.ok, "the derived batch size must itself compile");
+  const over = compileHarvestJobSearchInput({
+    company: companies(11), jobTitles: HIRING_JOB_TITLES, maxItems: 10,
+  });
   assertEquals(over.ok, false, "the compiler rejects a batch above its limit");
-  assert(HIRING_VERIFICATION_BATCH_SIZE <= 10);
 });
 
 // ── the qualifier and evidence standard are untouched ─────────────────────
@@ -225,17 +285,48 @@ Deno.test("a zero-result company gets an explicit investigated reason", () => {
   );
 });
 
+// ── THE CLOCK QUESTION CHANGED, BECAUSE THE ANSWER WAS ALWAYS "NO" ────────
+//
+// This pinned `expired("apify_linkedin_job_search")`, whose estimate is 60s.
+// The measurement above puts ONE company at ~72-80s, so that check is false
+// from the start of the stage and every batch would be deferred for ever.
+//
+// It asks whether the call can FINISH. Since persist-on-start the run id
+// reaches `lead_execution_calls` before any polling — run 783fa163's
+// Zs5bYFGlnua1hJWYg was durably recorded and adopted from `pending_runs` — so a
+// slice killed mid-poll loses nothing and the next one re-reads the run for
+// free. The answerable question is whether it can be STARTED and written down.
+
 Deno.test("the deadline is checked per batch, not per company", () => {
   const ENGINE = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
   const i = ENGINE.indexOf("for (let i = 0; i < needsPaid.length; i += BATCH)");
   assert(i > 0);
-  const block = ENGINE.slice(i, i + 400);
+  const block = ENGINE.slice(i, i + 1400);
   assert(
-    block.includes('deps.deadline?.expired("apify_linkedin_job_search")'),
-    "a batch costs one call, so one call's budget is what must be available",
+    block.includes("deps.deadline?.expiredForDurableStart()"),
+    "a batch costs one call, so one start's budget is what must be available",
   );
+  assertEquals(
+    block.includes('deps.deadline?.expired("apify_linkedin_job_search")'), false,
+    "asking whether a 796s call fits a 125s slice defers hiring for ever",
+  );
+});
+
+Deno.test("a durable start is affordable where completion never is", () => {
+  const d = createExecutionDeadline({ budgetMs: 125_000, now: () => now });
+  now = 96_000; // the live moment: ~29s left
+  assertEquals(
+    d.expired("apify_linkedin_job_search"), true,
+    "29s cannot COMPLETE a call measured at 72s for a single company",
+  );
+  assertEquals(
+    d.expiredForDurableStart(), false,
+    "but it is ample to POST the run and persist its id",
+  );
+  now = 118_000; // ~7s left — not even enough to start and write
+  assertEquals(d.expiredForDurableStart(), true, "a start still needs room to be recorded");
 });
 
 Deno.test("the engine DROPS an unattributable row rather than guessing an owner", () => {

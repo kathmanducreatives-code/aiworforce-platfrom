@@ -181,3 +181,159 @@ Deno.test("every filter carries provenance back to the ICP field", () => {
     );
   }
 });
+
+// ══ THE BRAIN'S SIZE POLICY IS PART OF THE SEARCH ══════════════════════════
+//
+// Task 783fa163: 29 companies discovered, 0 qualified, ~$0.10 spent, and the
+// reason was one filter that never left the building.
+//
+// The workspace's Company Brain carried
+// `size: { min: 1, max: 150, source: "explicit_numeric", enforced: true }` with
+// `employee_count` among its HARD constraints — all of it known before the
+// first call. `company_profile.employee_range` was empty, and that was the only
+// field this module read, so `companySize` went unsent. LinkedIn answered
+// `industryIds:["4","6","104","137"]` with the most prominent of 2,752,712
+// matches:
+//
+//     Amazon 769,019 · Google 307,615 · Microsoft 232,851 · Fiverr 227,818
+//     Upwork 178,528 · Uber 166,404 · Meta 164,238 · SAP 149,489 · ADP 102,680
+//
+// Twenty-eight of twenty-nine then failed the very policy that could have
+// excluded them for free — each after two paid calls. The engine's own
+// rejection text: "exact headcount 102680 exceeds the maximum — excluded
+// before identity resolution and enrichment, which is two paid calls this row
+// already answered".
+
+import {
+  resolveEmployeeWindow,
+} from "../../../supabase/functions/_shared/icpDiscoveryConstraints.ts";
+
+const brainOnlyMission = () =>
+  missionFor("Find 3 companies matching my ICP that are actively hiring sales roles.", {
+    verticals: [
+      "B2B SaaS (founder-led or small teams)",
+      "Recruiting / Talent Acquisition / Staffing Agencies",
+    ],
+    locations: [],
+  });
+
+Deno.test("the live mission sends NO size filter without the policy", () => {
+  // The exact defect, reproduced: this is what run 783fa163 actually sent.
+  const c = icpDiscoveryConstraints(brainOnlyMission());
+  assertEquals(c.companySize, [], "no employee_range on the mission, so no band");
+  assertEquals(c.employee_window.source, "none");
+});
+
+Deno.test("the same mission with the Brain's policy searches 1-150", () => {
+  const c = icpDiscoveryConstraints(brainOnlyMission(), {
+    employee_min: 1, employee_max: 150,
+  });
+  assertEquals(c.companySize, ["1-10", "11-50", "51-200"]);
+  assertEquals(c.employee_window.source, "company_brain_policy");
+  assertEquals(c.employee_window.conflict, false);
+  const prov = c.provenance.find((p) => p.filter === "companySize");
+  assert(prov, "the filter must say which authority produced it");
+  assert(prov!.from.startsWith("company_brain_policy.size"), prov!.from);
+  // AND WHICH FIELD IT ACTUALLY CONSTRAINS. `companySize` filters LinkedIn's
+  // self-reported band, not the exact count the Brain gates on — run fafd9912
+  // returned "Freelance | Self-Employed" with band 2-10 and employeeCount
+  // 414,811. Naming the target field is what stops the next reader assuming
+  // the two are the same quantity.
+  assert(prov!.from.endsWith("→employeeCountRange"), prov!.from);
+
+});
+
+Deno.test("every company that pool actually returned is now excluded by the filter", () => {
+  // The 1-150 policy against the real headcounts. `51-200` is the widest band
+  // the policy touches, so 200 is the highest a filtered search can surface —
+  // and the smallest real company in that pool was Google for Developers at
+  // 1,700, itself a showcase page.
+  const bands = icpDiscoveryConstraints(brainOnlyMission(), {
+    employee_min: 1, employee_max: 150,
+  }).companySize;
+  assertEquals(bands.includes("201-500"), false, "no band above the ceiling");
+  assertEquals(bands.includes("10001+"), false, "least of all Amazon's");
+  for (const real of [769019, 307615, 232851, 102680, 6810, 1700]) {
+    assert(real > 200, `${real} is above every band the policy admits`);
+  }
+});
+
+Deno.test("a stated mission range narrows the policy rather than replacing it", () => {
+  const m = missionFor("Find B2B SaaS companies with 10-50 people.", {
+    verticals: ["B2B SaaS"], employee_range: { min: 10, max: 50 },
+  });
+  const c = icpDiscoveryConstraints(m, { employee_min: 1, employee_max: 150 });
+  assertEquals(c.employee_window, { min: 10, max: 50, source: "intersection", conflict: false });
+  assertEquals(c.companySize, ["1-10", "11-50"]);
+});
+
+Deno.test("a mission range with no policy behaves exactly as before", () => {
+  // The no-regression guarantee: an absent policy must not change any answer.
+  const m = missionFor("Find B2B SaaS companies with 10-50 people.", {
+    verticals: ["B2B SaaS"], employee_range: { min: 10, max: 50 },
+  });
+  assertEquals(
+    icpDiscoveryConstraints(m).companySize,
+    icpDiscoveryConstraints(m, null).companySize,
+  );
+  assertEquals(icpDiscoveryConstraints(m).employee_window.source, "mission");
+});
+
+Deno.test("contradictory windows resolve to the one that REJECTS, and say so", () => {
+  // A user asking for 500-1000 inside a 1-150 policy. Searching 500-1000 buys a
+  // pool the Brain gate discards in full — which is this whole defect again,
+  // with the numbers swapped.
+  const w = resolveEmployeeWindow({ min: 500, max: 1000 }, { employee_min: 1, employee_max: 150 });
+  assertEquals(w.source, "company_brain_policy");
+  assertEquals(w.conflict, true, "a substitution must never be silent");
+  assertEquals([w.min, w.max], [1, 150]);
+});
+
+Deno.test("a size policy alone can never make a search RUN", () => {
+  // `expressible` may become true from size, but only an INDUSTRY selects a
+  // population — and the engine's guard is on `expresses_concept`. A policy
+  // must not turn "no concept" into an unfiltered search wearing one filter.
+  const m = missionFor("Find companies.", { verticals: [], business_models: [] });
+  const c = icpDiscoveryConstraints(m, { employee_min: 1, employee_max: 150 });
+  assertEquals(c.expresses_concept, false, "headcount refines; it does not select");
+  assertEquals(c.industryIds, []);
+});
+
+// ── THE CALL SITES, NOT JUST THE HELPER ───────────────────────────────────
+//
+// The tests above exercise the function directly, so they pass even if the
+// engine still calls it with one argument — which is exactly the hole that let
+// the compiler fold and the frontier count ship broken. Pinned by source.
+
+Deno.test("the engine passes the Brain policy into the discovery filters", () => {
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  assert(
+    ENGINE.includes("icpDiscoveryConstraints(opts.mission, opts.brain)"),
+    "the paid discovery call must see the policy that will reject its results",
+  );
+  assertEquals(
+    ENGINE.includes("icpDiscoveryConstraints(opts.mission);"), false,
+    "the one-argument form is what sent an unbounded search",
+  );
+});
+
+Deno.test("the preview states the same size filter execution will send", () => {
+  // A preview that advertises a wider search than the engine runs is the one
+  // defect the Stage 1 work exists to prevent.
+  const PLAN = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadExecutionPlan.ts", import.meta.url),
+  );
+  assert(PLAN.includes("icpDiscoveryConstraints(mission, opts.brain)"));
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  assertEquals(
+    ENGINE.includes("buildExecutionPlannerPayload(opts.mission, opts.plan)," +
+      " { brain: opts.brain })") ||
+      ENGINE.includes("buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain })"),
+    true,
+    "the planner payload must carry the policy too",
+  );
+});

@@ -253,6 +253,24 @@ export interface CompanyWorkingSetSnapshot {
    * `not_attempted` rather than failing to restore.
    */
   enrichment_outcome?: string | null;
+  /**
+   * WHAT IDENTITY RESOLUTION PRODUCED, not merely that it ran.
+   *
+   * `CompanyResumeRecord.identity` is a STAGE ("resolved"), and
+   * `linkedin_company_url` is one field of the answer. Every paid stage after
+   * identity selects on the OBJECT — `hiring_verification` filters
+   * `c.identity && identityIsActionable(c.identity)` — so a company restored
+   * without it is invisible to them.
+   *
+   * A resumed slice reported "no company had a relevant commercial role" with
+   * `targets: 0`, holding a fully enriched company and a paid hiring run
+   * waiting to be adopted, because identity resolution was skipped as complete
+   * and nothing rebuilt what it had made.
+   *
+   * Optional: a checkpoint from before this field existed has none, and the
+   * engine simply leaves `c.identity` null rather than failing to restore.
+   */
+  identity?: Record<string, unknown> | null;
 }
 
 /**
@@ -537,6 +555,9 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     triage: asObjectOrNull(s.triage),
     enriched: asObjectOrNull(s.enriched),
     enrichment_outcome: asStringOrNull(s.enrichment_outcome),
+    // Carried across the JSON boundary like everything else here. A field
+    // written but not read back is a field that does not survive a resume.
+    identity: asObjectOrNull(s.identity),
   };
 }
 

@@ -125,6 +125,7 @@ import {
   type RankingShadowComparison,
 } from "./poolRanking.ts";
 import { poolFingerprintOf } from "./poolCheckpoint.ts";
+import { bindingsMatchCheckpoint } from "./referentBinding.ts";
 import {
   CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS,
   providerOperationKey,
@@ -148,6 +149,7 @@ import {
 } from "./leadInvestigationBudget.ts";
 import {
   dedupeJobs, dedupePeople, normalizeHarvestPerson,
+  nonCompanyPageReason,
   normalizeLinkedInCompanyCandidate, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
   normalizeSolidcodeCompany,
@@ -277,7 +279,21 @@ export interface ProviderAttempt {
      * A previous invocation already bought this exact answer, or already gave up
      * on this company. Costs nothing and is not a failure.
      */
-    | "skipped_resume_reuse";
+    | "skipped_resume_reuse"
+    /**
+     * A run left pending by an EARLIER invocation finished, and this attempt
+     * read its dataset. Costs nothing — the run was charged when it started —
+     * and it is the only record that a pending run ever ended. See
+     * `pending_runs`.
+     */
+    | "run_adopted"
+    /**
+     * The call SUCCEEDED and some rows it returned were not usable candidates.
+     * Not a failure and not a skip — it is the difference between the row count
+     * the provider reports and the row count that entered the pool, which is
+     * otherwise invisible. See `nonCompanyPageReason`.
+     */
+    | "rows_dropped";
   rows: number;
   cost_units: number;
   reason: string | null;
@@ -421,6 +437,23 @@ export interface CapabilityExecutionState {
   version: typeof CAPABILITY_EXECUTION_STATE_VERSION;
   /** Binds this state to the mission it was produced for. */
   mission_hash: string;
+  /**
+   * WHICH REAL ENTITIES THIS STATE WAS PRODUCED AGAINST.
+   *
+   * `mission_hash` covers `company_profile`, which carries company NAMES — so
+   * two different real companies that share a name produce the SAME mission
+   * hash, and `stateMatchesMission` would accept a checkpoint written for one
+   * while executing against the other. A referent binding is exactly the thing
+   * that changes which entity is acted on, so it needs its own identity.
+   *
+   * Deliberately a SECOND fingerprint rather than a change to `missionHash`:
+   * altering what that hash covers would invalidate every persisted checkpoint
+   * in the system at once. Null when the run has no bindings, which is every
+   * run written before they existed — and `bindingsMatchCheckpoint` treats
+   * null-against-null as compatible, so nothing already checkpointed is
+   * stranded.
+   */
+  binding_fingerprint?: string | null;
   entry_capability: CapabilityId;
   completed_capabilities: CapabilityId[];
   current_capability: CapabilityId | null;
@@ -570,7 +603,12 @@ export interface CapabilityExecutionState {
    * A resume adopts the run id instead of starting a second Actor.
    */
   pending_runs: Array<{
-    capability: CapabilityId; provider: string; run_id: string;
+    /**
+     * NULL when the entry was rebuilt from `lead_execution_calls` by
+     * `recoverPendingRuns` — the ledger stores the actor key, and the
+     * actor→capability mapping is ambiguous. Adoption reads null as "any".
+     */
+    capability: CapabilityId | null; provider: string; run_id: string;
     dataset_id: string | null; actor_build_id: string | null; started_at: string;
     /**
      * The input that STARTED this run.
@@ -726,10 +764,12 @@ export interface CapabilityExecutionState {
 
 export function newExecutionState(
   plan: CapabilityPlan, missionHashValue: string,
+  bindingFingerprintValue: string | null = null,
 ): CapabilityExecutionState {
   return {
     version: CAPABILITY_EXECUTION_STATE_VERSION,
     mission_hash: missionHashValue,
+    binding_fingerprint: bindingFingerprintValue,
     entry_capability: plan.entry_capability,
     completed_capabilities: [],
     current_capability: null,
@@ -764,9 +804,21 @@ export function newExecutionState(
  */
 export function stateMatchesMission(
   state: CapabilityExecutionState | null | undefined, missionHashValue: string,
+  /**
+   * The bindings this invocation resolved. Omitted, only the mission is
+   * compared — which is the behaviour every caller had before bindings
+   * existed, and is why no existing checkpoint is stranded.
+   */
+  bindingFingerprintValue: string | null = null,
 ): boolean {
-  return !!state && state.version === CAPABILITY_EXECUTION_STATE_VERSION &&
-    state.mission_hash === missionHashValue;
+  if (!state || state.version !== CAPABILITY_EXECUTION_STATE_VERSION) return false;
+  if (state.mission_hash !== missionHashValue) return false;
+  // ── A CHECKPOINT FOR COMPANY A MUST NEVER RESUME AGAINST COMPANY B ───────
+  //
+  // The mission hash cannot see this: it covers company NAMES, and two real
+  // companies can share one. `bindingsMatchCheckpoint` treats absent-on-both
+  // as compatible, so this is inert for every run that has no bindings.
+  return bindingsMatchCheckpoint(state.binding_fingerprint, bindingFingerprintValue);
 }
 
 /**
@@ -869,14 +921,62 @@ export const SEARCH_SCRAPER_MODE: "short" | "full" = "short";
  * costs the mission its geography on every search.
  */
 /**
+ * Measured cost of one company in a job search carrying the 20-title vocabulary.
+ *
+ * NOT an assumption. Task 783fa163 ran this Actor twice on the same titles:
+ *
+ *     companies  queries  duration  per query  per company  run
+ *             1       20     72.0s      3.60s        72.0s  Ot2Jpwe8ezMvbe6Eu
+ *            10      200    796.4s      3.98s        79.6s  Zs5bYFGlnua1hJWYg
+ *
+ * The Actor fans out one LinkedIn query per company×title pair — its rows carry
+ * `query.company` and `query.search`, which is how this is knowable — so the
+ * duration is linear in that product at ~4s a query. Fitted slope: 80.5s.
+ */
+export const HIRING_MS_PER_COMPANY = 80_000;
+
+/**
+ * How long a batch may keep the lineage waiting.
+ *
+ * ── WHY A WAIT BUDGET AND NOT A SLICE BUDGET ────────────────────────────────
+ *
+ * This constant was 10, on the recorded belief that "a call carrying ten
+ * companies costs the same ~48s as one carrying a single company". The table
+ * above is that belief measured, and it is false: cost is linear, so ten
+ * companies is ~800s. Nothing about that fits a 125s slice — not ten, not
+ * three, not one.
+ *
+ * So the batch cannot be sized against the slice. What it CAN be sized against
+ * is the wait: the run is persisted on start and adopted by a later slice for
+ * free, but every slice spent polling is one drawn from
+ * `DEFAULT_MAX_CONTINUATIONS`, which is 10. At the old batch size that is
+ * ~6.4 slices of pure waiting — a mission spending two thirds of its
+ * continuation budget watching one call, which is what run 783fa163 did before
+ * `no_progress` cut it off at 796s with the results unread.
+ *
+ * 250s is ~2 slices of waiting. It is the largest batch that leaves the lineage
+ * enough continuations to do anything with the answer.
+ */
+export const HIRING_BATCH_WAIT_BUDGET_MS = 250_000;
+
+/**
  * Companies per paid hiring search.
  *
- * `compileHarvestJobSearchInput` validates `company[]` at a maximum of 10, and
- * that limit comes from the Actor's own verified card. A call carrying ten
- * companies costs the same ~48s as one carrying a single company, so this is
- * the difference between assessing one company per slice and assessing ten.
+ * Derived, not chosen: the wait budget divided by the measured per-company
+ * cost, floored at 1 because a batch of none asks nothing, and capped at 10
+ * because `compileHarvestJobSearchInput` validates `company[]` at the Actor's
+ * own verified maximum of 10.
+ *
+ * Evidence handling is UNAFFECTED at any size. Rows are routed by
+ * `company_linkedin_url` and a row naming a company outside the batch is
+ * dropped, so a smaller batch changes how many HTTP calls carry the twenty
+ * titles and nothing else. The 20-title vocabulary, the evidence standard and
+ * the per-company operation key are all unchanged.
  */
-export const HIRING_VERIFICATION_BATCH_SIZE = 10;
+export const HIRING_VERIFICATION_BATCH_SIZE = Math.max(
+  1,
+  Math.min(10, Math.floor(HIRING_BATCH_WAIT_BUDGET_MS / HIRING_MS_PER_COMPANY)),
+);
 
 /**
  * Job rows requested per company in a batch.
@@ -1267,6 +1367,27 @@ export interface CapabilityEngineDeps {
    * failed and no fallback is allowed to spend against it.
    */
   readPendingRun?: (e: unknown) => PendingRun | null;
+  /**
+   * A run started by an EARLIER invocation has just been re-read successfully.
+   *
+   * The engine cannot settle the ledger itself — it has no database — and the
+   * resumed call cannot write its own row, because `logical_call_key` is unique
+   * and the adopted call computes the same key, so the insert collides and is
+   * dropped. This is the seam that lets the owner mark the original row
+   * finished, so a completed run stops advertising itself as recoverable work
+   * to `recoverPendingRuns`.
+   *
+   * Optional: a caller that does not supply it simply leaves the row as it was,
+   * which is exactly the behaviour before this existed. Never throws into the
+   * run — the caller is expected to swallow its own failures.
+   */
+  onRunAdopted?: (info: {
+    run_id: string;
+    dataset_id: string | null;
+    provider: string;
+    capability: CapabilityId;
+    rows: number;
+  }) => Promise<void> | void;
   verifyEmployer: (
     person: NormalizedHiringPerson, companyLinkedInUrl: string,
   ) => { verified: boolean; outcome: string };
@@ -1450,7 +1571,25 @@ export interface CapabilityEngineDeps {
    */
   onProgress?: (p: EngineProgress) => void | Promise<void>;
   /** The state after each capability, so a caller can persist it as it grows. */
-  onStateChange?: (s: CapabilityExecutionState) => void;
+  /**
+   * The state changed, at a stage boundary.
+   *
+   * AWAITED, like `onProgress` beside it and for the same reason: the owner
+   * uses this to write a DURABLE checkpoint, and a fire-and-forget write in an
+   * edge function is a write that may never land. It used to be called and
+   * dropped, which was fine while its only consumer kept state in memory.
+   */
+  onStateChange?: (s: CapabilityExecutionState) => void | Promise<void>;
+  /**
+   * A durable checkpoint may be taken now.
+   *
+   * Separate from `onStateChange`, which hands over the raw state for in-memory
+   * observation. This hands over a `CheckpointSnapshot` — state AND working set,
+   * derived together — because those are the only terms in which a checkpoint
+   * can be correct. AWAITED: an edge isolate can be torn down before an
+   * unawaited write settles.
+   */
+  onCheckpoint?: (snapshot: CheckpointSnapshot) => void | Promise<void>;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -1465,6 +1604,15 @@ export interface CapabilityEngineOpts {
     positive_industries?: string[];
     excluded_industries?: string[];
     required_geography?: string | null;
+    /**
+     * The Brain's compiled `hard_constraints`, verbatim.
+     *
+     * Supplied so `resolveEmployeeBounds` can tell a workspace RULE from a
+     * workspace preference. Absent, the employee bound stays advisory and
+     * behaviour is exactly as it was before this field existed — which is what
+     * every missionless and every legacy caller gets.
+     */
+    hard_constraints?: readonly string[] | null;
     /**
      * RICHER ICP, for the evaluator only.
      *
@@ -1776,12 +1924,19 @@ export async function runCapabilityPlan(
       frontierRestored.add(c.key);
       const snap = prior.snapshot as unknown as {
         investigation_state?: unknown; investigation_rank?: unknown;
+        identity?: unknown;
       };
       c.investigation_state = asInvestigationState(snap.investigation_state);
       if (typeof snap.investigation_rank === "number") {
         c.investigation_rank = snap.investigation_rank;
       }
       c.shortlisted = wasInvestigated(c.investigation_state);
+      // WHAT IDENTITY RESOLUTION ACTUALLY PRODUCED. Restored only when this
+      // slice has not resolved one itself, so live progress always wins — the
+      // same rule the frontier fields above follow.
+      if (!c.identity && snap.identity && typeof snap.identity === "object") {
+        c.identity = snap.identity as unknown as typeof c.identity;
+      }
     }
     if (prior.identity === "resolved" && prior.linkedin_company_url &&
         !c.company.linkedin_company_url) {
@@ -2441,16 +2596,40 @@ export async function runCapabilityPlan(
     // failure has no input to fingerprint and needs none: it never reached a
     // provider, so there is no question to avoid repeating.
     const attemptFingerprint = compiled.ok ? inputFingerprint(compiled.input) : undefined;
+    // ── A RUN WE ARE ONLY RE-READING WAS ALREADY PAID FOR ───────────────────
+    //
+    // Set when this call adopts a run some earlier invocation started. Adoption
+    // is `GET /actor-runs/{id}` on a run that was charged when it was POSTed,
+    // so it must add NOTHING to the lineage's cost.
+    //
+    // It did. Run fafd9912's resumed slice adopted `ub2qunSMAKTNf5AKv` and
+    // recorded two attempts for the one call — `run_adopted` at `cost_units: 0`
+    // and, from `record` below, `ok` at `cost_units: 1`. Credits were unaffected
+    // (`authorizeProviderCall` is keyed by `logical_call_key`, so no second
+    // reservation was ever made) but `accumulated_cost_units` counted a free
+    // read as spend, and that number is the lineage ceiling
+    // `decideAutoContinuation` stops on. The error was in the safe direction —
+    // it stops a run early, never spends more — which is exactly why it could
+    // sit there unnoticed.
+    //
+    // A `let` rather than a read of `inFlight`: `record` is called for
+    // `compile_failed` before `inFlight` is in scope, and closing over a `const`
+    // declared later would put that path in the temporal dead zone.
+    let adoptedRunId: string | null = null;
+
     const record = (outcome: ProviderAttempt["outcome"], rows: number, reason: string | null) => {
       const attempt = state.provider_attempts
         .filter((a) => a.capability === capability && a.provider === provider).length + 1;
+      // An outcome that returned data is chargeable ONLY if this call is what
+      // bought it.
+      const chargeable = (outcome === "ok" || outcome === "empty") && !adoptedRunId;
       state.provider_attempts.push({
         capability, provider, attempt, outcome, rows,
-        cost_units: outcome === "ok" || outcome === "empty" ? spec.cost_units : 0,
+        cost_units: chargeable ? spec.cost_units : 0,
         reason,
         ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
       });
-      if (outcome === "ok" || outcome === "empty") {
+      if (chargeable) {
         state.accumulated_cost_units += spec.cost_units;
       }
     };
@@ -2534,11 +2713,29 @@ export async function runCapabilityPlan(
     // ADOPT ONLY THE RUN THAT ASKED THIS QUESTION. Matching capability and
     // provider alone let a batch of one inherit a batch of ten's run id.
     const thisFingerprint = compiled.ok ? inputFingerprint(call.input) : null;
+    // A NULL CAPABILITY MEANS "DO NOT KNOW", NOT "DOES NOT MATCH".
+    //
+    // Entries rebuilt by `recoverPendingRuns` carry `capability: null`: the
+    // ledger records the ACTOR key, and the actor→capability mapping is
+    // ambiguous (`apify_linkedin_company_search` serves both discovery and
+    // identity resolution in the same run). Abstaining is honest; guessing
+    // would attach a paid run to the wrong stage.
+    //
+    // Nothing is weakened by admitting them. The `input_fingerprint` is still
+    // REQUIRED and still exact, and it is a strictly stronger key than the
+    // capability — the same input to the same provider is the same purchase
+    // whichever stage asked for it. The batch-of-one-inheriting-a-batch-of-ten
+    // failure was caused by dropping the fingerprint, not the capability.
     const inFlight = (opts.state?.pending_runs ?? []).find(
-      (r) => r.capability === capability && r.provider === provider &&
+      (r) => (r.capability === capability || r.capability === null) &&
+        r.provider === provider &&
         !!r.input_fingerprint && r.input_fingerprint === thisFingerprint);
     // `capabilityId` is what lets `guardedInvoker` enforce per-capability
     // containment rather than the plan-wide union.
+    // FROM HERE ON THIS CALL IS A RE-READ, NOT A PURCHASE. Recorded before
+    // `invoke` so every outcome of an adopted call — ok, empty, error — is
+    // uncharged, rather than only the one that happens to succeed.
+    if (inFlight) adoptedRunId = inFlight.run_id;
     const outbound = {
       ...call,
       capabilityId: capability,
@@ -2547,6 +2744,64 @@ export async function runCapabilityPlan(
     const startedAt = Date.now();
     try {
       const rows = await invoke(outbound);
+      // ── A RUN THAT RESOLVED IS NO LONGER PENDING ─────────────────────────
+      //
+      // `pending_runs` was push-only. Nothing ever removed an entry, and
+      // `state` is spread wholesale from the checkpoint on every continuation,
+      // so the first pending run a lineage ever started stayed "pending" for
+      // the rest of that lineage's life — after it had succeeded, been adopted
+      // and been read. `awaiting_external_run` and the finalizer's
+      // `pending_external_run` verdict both key off this list, so both would
+      // keep asserting a wait that had already ended.
+      //
+      // It also has to be true for the continuation gate to be SAFE: that gate
+      // now refuses to call a run barren while a paid call is in flight, and a
+      // list that never empties would turn that into "continue until the
+      // ceiling", every time. Reaching here means `invoke` returned rows rather
+      // than throwing pending, so this run is done.
+      if (inFlight) {
+        const at = state.pending_runs.findIndex((r) => r.run_id === inFlight.run_id);
+        if (at >= 0) state.pending_runs.splice(at, 1);
+        // WHAT THE AUDIT HAD TO GO TO THE APIFY CONSOLE FOR. The persisted
+        // state of run 783fa163 recorded that Zs5bYFGlnua1hJWYg was pending and
+        // never that it finished, so its 1,394 rows were invisible to every
+        // artefact this system writes. Adoption is free — a `GET` on a run
+        // already charged for — hence `cost_units: 0`.
+        state.provider_attempts.push({
+          capability, provider,
+          attempt: state.provider_attempts
+            .filter((a) => a.capability === capability && a.provider === provider).length + 1,
+          outcome: "run_adopted", rows: rows.length, cost_units: 0,
+          reason: `adopted run ${inFlight.run_id} started at ${inFlight.started_at}` +
+            `; ${rows.length} row(s) read without a second charge`,
+          ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
+        });
+        log("provider_run_adopted", {
+          capability, provider, run_id: inFlight.run_id, rows: rows.length,
+        });
+        // ── AND THE LEDGER ROW STOPS SAYING "started" ────────────────────
+        //
+        // The row that recorded the POST keeps `status: "started"` for ever:
+        // adoption cannot insert its own row, because `logical_call_key` is
+        // unique and the resumed call computes the SAME key — the insert
+        // collides and `withExecutionAudit` logs and drops it by design.
+        //
+        // So the run stayed permanently "recoverable". `recoverPendingRuns`
+        // would resurrect `ub2qunSMAKTNf5AKv` on every future resume of run
+        // fafd9912, and `resume-stalled-leads` would keep reading it as
+        // outstanding paid work. Harmless in effect — the companies are in
+        // `completed_operations`, so nothing is re-bought, and adoption is
+        // free — but it is a fact about the world that the ledger had wrong.
+        //
+        // Best-effort, like every other ledger write: a failure here is logged
+        // and dropped, because bookkeeping must never fail a run it is only
+        // describing.
+        await deps.onRunAdopted?.({
+          run_id: inFlight.run_id,
+          dataset_id: inFlight.dataset_id ?? null,
+          provider, capability, rows: rows.length,
+        });
+      }
       // THE ESTIMATE LEARNS FROM REALITY. memo23 took 24s on task c8a6e53d; a
       // deadline still assuming 12s would have authorised one more call it could
       // not finish.
@@ -2599,6 +2854,19 @@ export async function runCapabilityPlan(
             ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
           });
         }
+        // NOBODY WAS ANSWERED. The deadline and credit paths both set this,
+        // with the reason spelled out there: without it the caller reads an
+        // empty result and resolves it into "nothing matched", turning a
+        // CLOCK decision into a permanent fact about a company. A pending run
+        // is the same situation — the provider has not spoken yet — and this
+        // branch was the one place that did not say so.
+        //
+        // Run 8f59170d: the batched hiring search went pending, its group was
+        // marked `asked`, and Sortly resolved to `hiring: "not_verified"`. That
+        // is not a resumable stage, so the continuation skipped hiring
+        // entirely, never adopted the run, and investigated nobody.
+        if (company) company.stage_block = { capability, reason: "deferred" };
+        lastCallBlock = "deferred";
         log("provider_pending", { capability, provider, run_id: pending.run_id });
         return [];
       }
@@ -2671,7 +2939,19 @@ export async function runCapabilityPlan(
     // never land — the process can be torn down before the promise settles,
     // which is the same class of loss the terminal guard exists to stop.
     await deps.onProgress?.(progress);
-    deps.onStateChange?.(state);
+    await deps.onStateChange?.(state);
+    // ── AND A CHECKPOINT THE NEXT SLICE COULD ACTUALLY USE ─────────────────
+    //
+    // Run 83d544a5: the first slice POSTed a job search, was killed mid-poll
+    // before any terminal write, and left a task with no checkpoint at all —
+    // `claim_sourcing_continuation` correctly refuses to manufacture a
+    // resumable run out of one with no state, so 44 paid job rows were
+    // stranded. Run 8f59170d then showed the other half: a checkpoint written
+    // from `state` alone claims completed capabilities it holds no data for.
+    //
+    // `checkpointSnapshot` takes both halves together and says whether the
+    // result is coherent. AWAITED, because the write it drives must land.
+    await deps.onCheckpoint?.(checkpointSnapshot(state, companies));
   };
 
   const finish = (
@@ -2720,7 +3000,7 @@ export async function runCapabilityPlan(
   let executionPlan: ExecutionPlan | null = null;
   if (deps.planExecution) {
     try {
-      const payload = buildExecutionPlannerPayload(opts.mission, opts.plan);
+      const payload = buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain });
       const hash = await missionHash(opts.mission);
       const stepsOf = (proposed: unknown) =>
         Array.isArray(proposed)
@@ -3267,7 +3547,9 @@ export async function runCapabilityPlan(
             // The one thing that must not happen is an UNFILTERED search: no
             // name and no filters returns arbitrary companies, and junk that
             // reaches qualification looks like work. That is skipped, loudly.
-            const icp = icpDiscoveryConstraints(opts.mission);
+            // `opts.brain` carries employee_min/max ONLY when the Brain is
+            // enforced, so an advisory policy still cannot narrow a search.
+            const icp = icpDiscoveryConstraints(opts.mission, opts.brain);
             const structured = {
               ...(icp.industryIds.length ? { industryIds: icp.industryIds } : {}),
               ...(icp.locations.length ? { locations: icp.locations } : {}),
@@ -3302,13 +3584,37 @@ export async function runCapabilityPlan(
               // unverifiable size cannot settle an employee-ceiling gate.
               scraperMode: "full",
             });
+            const droppedPages = new Map<string, number>();
             for (const r of await callProvider(cap, provider, compiled)) {
+              // A SHOWCASE PAGE IS NOT A COMPANY. Dropped HERE, at the pool
+              // boundary, because everything downstream treats a pool row as
+              // something worth paying to resolve — and a showcase row has no
+              // `/company/` URL, so it goes to the paid NAME search and asks
+              // for "LinkedIn Guide to Creating". See `nonCompanyPageReason`.
+              const notACompany = nonCompanyPageReason(r);
+              if (notACompany) {
+                droppedPages.set(notACompany, (droppedPages.get(notACompany) ?? 0) + 1);
+                continue;
+              }
               // DEDUPED BY `addCompany` against everything the earlier actors
               // returned — it keys on LinkedIn URL then domain, so a company YC
               // and LinkedIn both surface is one row, identified and enriched
               // once. This is the diagram's "deduplication is global across all
               // actors", and it needed no new machinery.
               addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
+            }
+            // RECORDED, not silent. A pool that shrank between the provider's
+            // row count and ours must say why, or the next audit re-derives it
+            // from the Apify console like this one had to.
+            if (droppedPages.size > 0) {
+              state.provider_attempts.push({
+                capability: cap, provider, attempt: 1, outcome: "rows_dropped",
+                rows: [...droppedPages.values()].reduce((a, b) => a + b, 0),
+                cost_units: 0,
+                reason: [...droppedPages.entries()]
+                  .map(([why, n]) => `${n} ${why}`).join(", ") +
+                  " — not companies, excluded before any paid identity call",
+              });
             }
           } else if (provider === "apify_funding_rounds_datahyena") {
             // ── DISCOVERY BY FUNDING EVENT ──────────────────────────────────
@@ -3539,6 +3845,10 @@ export async function runCapabilityPlan(
       applyPrequalification(state, companies, rawYcRows, {
         min: opts.brain?.employee_min ?? null,
         max: opts.brain?.employee_max ?? null,
+        // WHETHER THE WORKSPACE MEANT A RULE OR A PREFERENCE. Without it the
+        // free pre-pass computed `above_max` for 27 of 29 companies on run
+        // fafd9912, wrote the reason on every one, and excluded none.
+        hard_constraints: opts.brain?.hard_constraints ?? null,
       }, qualificationCtx, opts.mission?.required_signals ?? null);
       // The working set may have shrunk — artifacts are gone.
       // `state.company_keys` is DERIVED once, at the return. See the note there.
@@ -3626,7 +3936,7 @@ export async function runCapabilityPlan(
           const amended = validateExecutionPlan(
             ((p: unknown) => Array.isArray(p) ? p : (p as { steps?: unknown } | null)?.steps)(
               await deps.planExecution({
-                payload: buildExecutionPlannerPayload(opts.mission, opts.plan),
+                payload: buildExecutionPlannerPayload(opts.mission, opts.plan, { brain: opts.brain }),
                 mission_hash: await missionHash(opts.mission),
                 results: summary,
               })),
@@ -4514,6 +4824,19 @@ export async function runCapabilityPlan(
           })
           : null;
 
+      // ── A BLOCK BELONGS TO THE SLICE THAT RECORDED IT ────────────────────
+      //
+      // `stage_block` says "this slice ran out of time / credit / patience for
+      // this company". It travels in the resume snapshot, so a NEW slice
+      // restores the previous one's block — and the deferral guards below would
+      // then skip the company for ever, which is the opposite of what a
+      // deferral means. Cleared here, at the start of the stage that is about
+      // to re-attempt it: this slice has its own clock and will record its own
+      // block if it runs out again.
+      for (const c of targets) {
+        if (c.stage_block?.capability === cap) c.stage_block = null;
+      }
+
       // WHO STILL NEEDS ASKING. Evaluated before any batching so the skip
       // reasons are per company and unchanged: a company whose verdict is
       // already settled by free evidence is not paid for, and one a previous
@@ -4547,7 +4870,15 @@ export async function runCapabilityPlan(
       for (let i = 0; i < needsPaid.length; i += BATCH) {
         // THE CLOCK IS CHECKED PER BATCH, not per company. A batch costs one
         // call, so one batch's worth of budget is what has to be available.
-        if (deps.deadline?.expired("apify_linkedin_job_search")) {
+        //
+        // AND THE QUESTION IS "CAN WE START IT", NOT "CAN WE FINISH IT". At
+        // ~80s per company this call is longer than a slice at ANY batch size
+        // (see `HIRING_MS_PER_COMPANY`), so `expired("apify_linkedin_job_search")`
+        // asks something that can never be true late in a slice and would defer
+        // hiring verification for ever. The run id is persisted before the poll,
+        // so a slice killed while waiting loses nothing and the next one adopts
+        // the run for free — which makes starting safe and finishing optional.
+        if (deps.deadline?.expiredForDurableStart()) {
           log("hiring_batch_deferred_for_deadline",
             { remaining: needsPaid.length - i });
           break;
@@ -4580,6 +4911,25 @@ export async function runCapabilityPlan(
           batchedJobs.set(owner.key, list);
         }
 
+        // ── A BATCH STILL IN FLIGHT ANSWERED NOBODY ──────────────────────
+        //
+        // `lastCallBlock === "deferred"` means the call did not complete: the
+        // run was started and is pending, or the clock or credit stopped it.
+        // Marking the group `asked` here would record "we asked and there are
+        // none" for companies the provider has not answered — and, worse, push
+        // the operation key into `completed_operations`, so the resume that
+        // adopts the run would skip them as already bought.
+        //
+        // They are DEFERRED: no verdict, still on the frontier, and the run id
+        // is already durable for the slice that comes back for it.
+        if (lastCallBlock === "deferred") {
+          for (const g of group) {
+            g.c.stage_block = { capability: cap, reason: "deferred" };
+          }
+          log("hiring_batch_pending_group_deferred", { companies: group.length });
+          continue;
+        }
+
         // ASKED IS RECORDED FOR EVERY COMPANY IN THE BATCH, including the ones
         // that came back with nothing. A company the provider answered "no
         // openings" about has been investigated; leaving it unmarked is the
@@ -4594,6 +4944,20 @@ export async function runCapabilityPlan(
       }
 
       for (const c of targets) {
+        // ── A COMPANY WHOSE PAID CHECK IS STILL IN FLIGHT HAS NO VERDICT ──
+        //
+        // Its batch went pending, so the provider has not answered. Writing
+        // ANY `hiring_assessment` here — even the free one — makes
+        // `toResumeRecord` report a hiring stage other than `not_started`, and
+        // only `not_started` is resumable. Run 8f59170d resolved Sortly to
+        // `not_verified` this way: the continuation then skipped hiring
+        // altogether, never adopted the pending run, and investigated nobody.
+        //
+        // Leaving the assessment unset is what keeps the company on the
+        // frontier with the run still adoptable.
+        if (c.stage_block?.capability === cap && c.stage_block.reason === "deferred") {
+          continue;
+        }
         let assessment = freeHiringAssessment(c);
         /** Rows the paid search returned, kept so the verdict can cite them. */
         let externalJobs: NormalizedHiringJob[] = [];
@@ -4722,6 +5086,21 @@ export async function runCapabilityPlan(
       // "A company we could not identify must not be judged. It is the one case
       // where 'we did not evaluate this' is the correct, final answer."
       for (const c of companies) {
+        // ── EXCEPT A COMPANY WHOSE PAID CHECK IS STILL IN FLIGHT ──────────
+        //
+        // This backfill exists for companies nobody ever needed to pay for. A
+        // company whose batch went PENDING is a different case: the provider
+        // is mid-answer, and writing the free assessment here republishes the
+        // very verdict the deferral above withheld — which is how run 8f59170d
+        // still resolved Sortly to `not_verified` after the batch was deferred,
+        // leaving hiring unresumable and the paid run unadoptable.
+        // NAMED LITERALLY, not via `cap`: this backfill runs in a LATER stage,
+        // where `cap` is that stage's capability and would never match the
+        // hiring block recorded earlier.
+        if (c.stage_block?.capability === "hiring_verification" &&
+            c.stage_block.reason === "deferred") {
+          continue;
+        }
         if (c.hiring_assessment === null && c.identity && identityIsActionable(c.identity)) {
           const free = freeHiringAssessment(c);
           c.hiring_assessment = free;
@@ -6158,6 +6537,95 @@ export async function runCapabilityPlan(
  * tell that SnapMagic's identity and enrichment were already paid for. This is
  * the per-company record a continuation reads.
  */
+/**
+ * THE WHOLE TRUTH A CONTINUATION NEEDS, TAKEN MID-RUN.
+ *
+ * ── WHY THIS EXISTS AND WHY IT LIVES HERE ─────────────────────────────────
+ *
+ * A checkpoint written from `state` alone is a lie waiting to be read. The
+ * working set — `companies` — is the only authority; `state.company_keys` is a
+ * PROJECTION of it, derived at the return so the two are physically incapable
+ * of disagreeing. That rule was learned from task 528c2266, where a row
+ * claiming a hundred companies and holding none destroyed an 83-company
+ * frontier.
+ *
+ * Run 8f59170d broke it again from the other side. A mid-run writer persisted
+ * `capability_execution_state` WITHOUT the working set, so the resumed slice
+ * restored:
+ *
+ *     completed_capabilities: [discovery, identity, enrichment, persistence]
+ *     company_keys:           0
+ *
+ * Discovery was skipped as complete, there was nobody to investigate, and the
+ * lineage burned all ten continuations on four-second barren slices.
+ *
+ * So the snapshot is taken HERE, by the engine, from both halves at once —
+ * exactly as the return path does it. A caller cannot assemble one incorrectly
+ * because a caller is never given the parts.
+ */
+export interface CheckpointSnapshot {
+  state: CapabilityExecutionState;
+  resume_records: CompanyResumeRecord[];
+  /** False when the state describes work whose output is missing. */
+  coherent: boolean;
+  /** Why it is not coherent. Null when it is. */
+  incoherence: string | null;
+}
+
+/**
+ * Capabilities whose completion MUST be visible as companies in the working
+ * set. If one of these is marked complete and the set is empty, the state is
+ * describing work whose product does not exist.
+ *
+ * Qualification and persistence are deliberately absent: both may legitimately
+ * complete having produced nothing — a pool where nobody qualifies is a real
+ * answer, and persistence writes only what qualified.
+ */
+const CAPABILITIES_THAT_MUST_YIELD_COMPANIES: readonly CapabilityId[] = [
+  "general_company_discovery",
+  "startup_company_discovery",
+];
+
+/**
+ * Take a checkpoint that can be trusted, or say why it cannot.
+ *
+ * NEVER CLAIM A CAPABILITY IS COMPLETE WHEN ITS DATA IS MISSING. That is the
+ * whole invariant, and it is checked rather than assumed — a checkpoint that
+ * fails it is reported incoherent and the caller must not persist it. Refusing
+ * to write costs one unrecoverable slice; writing costs the lineage its entire
+ * continuation budget and its frontier.
+ */
+export function checkpointSnapshot(
+  state: CapabilityExecutionState,
+  companies: readonly EngineCompany[],
+): CheckpointSnapshot {
+  // DERIVED, NOT CARRIED — the same line the return path runs, for the same
+  // reason. A snapshot that copied `state.company_keys` verbatim would
+  // faithfully preserve whatever divergence already existed.
+  const projected: CapabilityExecutionState = {
+    ...state,
+    company_keys: companies.map((c) => c.key),
+  };
+  const claimsCompanies = projected.completed_capabilities
+    .filter((c) => CAPABILITIES_THAT_MUST_YIELD_COMPANIES.includes(c));
+  if (companies.length === 0 && claimsCompanies.length > 0) {
+    return {
+      state: projected,
+      resume_records: [],
+      coherent: false,
+      incoherence:
+        `${claimsCompanies.join(", ")} marked complete with an empty working set` +
+        " — a resume would skip discovery and have nobody to investigate",
+    };
+  }
+  return {
+    state: projected,
+    resume_records: companies.map(toResumeRecord),
+    coherent: true,
+    incoherence: null,
+  };
+}
+
 export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
   const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null;
   return {
@@ -6231,6 +6699,20 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       investigation_state: c.investigation_state,
       investigation_rank: c.investigation_rank,
       triage: (c.triage ?? null) as unknown as Record<string, unknown> | null,
+      // ── THE RESOLVED IDENTITY ITSELF ────────────────────────────────────
+      //
+      // `identity: "resolved"` and `linkedin_company_url` on the record say
+      // that identity WAS resolved; they are not the resolution. Every paid
+      // stage after identity selects on the OBJECT — `hiring_verification`
+      // filters `c.identity && identityIsActionable(c.identity)` — so a
+      // restored company without it is invisible to them.
+      //
+      // That is how a resumed slice reported "no company had a relevant
+      // commercial role" with `targets: 0` while holding a fully enriched
+      // company and a paid hiring run waiting to be adopted: identity
+      // resolution was `skipped_resumed: completed in an earlier run`, so
+      // nothing rebuilt the object it had produced.
+      identity: (c.identity ?? null) as unknown as Record<string, unknown> | null,
     },
     updated_at: new Date().toISOString(),
   };
@@ -6524,7 +7006,11 @@ export function applyPrequalification(
   state: CapabilityExecutionState,
   companies: EngineCompany[],
   rawRows: readonly YcCompanyInput[],
-  size: { min: number | null; max: number | null },
+  size: {
+    min: number | null; max: number | null;
+    /** The Brain's own `hard_constraints`. See `resolveEmployeeBounds`. */
+    hard_constraints?: readonly string[] | null;
+  },
   /**
    * The Mission's qualification context. Omitted on a missionless run, where
    * the workspace Brain keeps its previous authority and behaviour is unchanged.
@@ -6544,7 +7030,12 @@ export function applyPrequalification(
   // commercial role list, which is how a "hiring software engineers" Mission
   // qualified zero of a hundred companies (TEST run cf6cce3d).
   const bounds = qualification
-    ? resolveEmployeeBounds(qualification, { employee_min: size.min, employee_max: size.max })
+    ? resolveEmployeeBounds(qualification, {
+      employee_min: size.min, employee_max: size.max,
+      hard_constraints: size.hard_constraints ?? null,
+    })
+    // MISSIONLESS RUNS ARE UNCHANGED: legacy semantics already enforced the
+    // workspace bound, and there is no Mission here to outrank it.
     : { min: size.min, max: size.max, enforceable: true, source: "brain_advisory" as const };
 
   // THE TWO FACTS THE POLICY BELOW IS BUILT FROM, read once.

@@ -271,10 +271,67 @@ export function buildQualificationContext(mission: LeadMissionV1): Qualification
  * nothing the user asked for mentioned company size. This is the rule that
  * would have kept the 7 `employee_size` exclusions in the run above.
  */
+/**
+ * ── TIER 2 WAS DOCUMENTED AND NEVER IMPLEMENTED ────────────────────────────
+ *
+ * This function had two callers' worth of behaviour and three tiers' worth of
+ * documentation. The four-tier model below says:
+ *
+ *   2 BRAIN HARD        an axis the Mission never mentions            absolute
+ *   3 BRAIN PREFERENCE  an axis the Mission never mentions        score only
+ *
+ * and then `employee_range` is filed as "tier 3 ALWAYS" — so a workspace that
+ * had explicitly declared `employee_count` a HARD constraint got tier 3
+ * regardless. There was no way for tier 2 to happen on this axis, and the
+ * distinction the model draws between 2 and 3 was unreachable.
+ *
+ * The cost is measurable. Run fafd9912 carried
+ * `company_brain_policy: { size: { min: 1, max: 150, source: "explicit_numeric",
+ * confirmation_required: false }, enforced: true, hard_constraints:
+ * ["employee_count", …] }` — the workspace stating, explicitly and numerically,
+ * that it does not sell above 150 people. `resolveEmployeeBounds` returned
+ * `enforceable: false`, so `prequalifyGenericCompany` computed
+ * `size_status: "above_max"` for twenty-seven of twenty-nine companies, wrote
+ * the correct reason on each — "exact headcount 29946 exceeds the maximum —
+ * excluded before identity resolution and enrichment" — and then set
+ * `exclusion: null` and let every one of them through. The run paid to enrich
+ * eleven of them and to run a hiring search on three, including
+ * "Confidential Careers" at 29,946 and "Stealth Startup" at 37,306.
+ *
+ * ── WHAT DECIDES, AND WHAT DID NOT CHANGE ─────────────────────────────────
+ *
+ * The Brain's OWN declaration decides, because the Brain is the thing that
+ * knows whether the workspace meant a rule or a preference. It already compiles
+ * and persists that answer as `hard_constraints`; nothing read it.
+ *
+ * A Brain that expresses a size PREFERENCE — bounds with no hard declaration —
+ * is unchanged and still tier 3, ranking only. That is the case
+ * `missionQualificationAuthority.test.ts` pins ("the Brain's 10-150 must be
+ * advisory when the Mission named no range"), and it still passes: its Brain
+ * declares no hard constraints. The Mission still outranks the Brain on an axis
+ * it owns, which is tier 1 and also unchanged.
+ *
+ * THIS IS NOT A SIZE HEURISTIC. The gate it feeds reads `employee_count` only
+ * when `mayGateOn` says the field is trustworthy, and never reads the advisory
+ * band — see `leadGenericPrequalification`. Making the bound enforceable
+ * changes WHO MAY REJECT, not what counts as evidence.
+ */
 export function resolveEmployeeBounds(
   ctx: Pick<QualificationContext, "employee_range" | "mission_owns">,
-  brain: { employee_min?: number | null; employee_max?: number | null } | null | undefined,
-): { min: number | null; max: number | null; enforceable: boolean; source: "mission" | "brain_advisory" | "none" } {
+  brain: {
+    employee_min?: number | null;
+    employee_max?: number | null;
+    /**
+     * The Brain's compiled `hard_constraints`, verbatim. Absent or without
+     * `employee_count`, the bound stays advisory and behaviour is identical to
+     * before this parameter existed.
+     */
+    hard_constraints?: readonly string[] | null;
+  } | null | undefined,
+): {
+  min: number | null; max: number | null; enforceable: boolean;
+  source: "mission" | "brain_hard" | "brain_advisory" | "none";
+} {
   if (ctx.mission_owns.employee_count) {
     return {
       min: ctx.employee_range.min, max: ctx.employee_range.max,
@@ -284,7 +341,11 @@ export function resolveEmployeeBounds(
   const min = brain?.employee_min ?? null;
   const max = brain?.employee_max ?? null;
   if (min == null && max == null) return { min: null, max: null, enforceable: false, source: "none" };
-  // Present for ranking, NOT for rejection.
+  // TIER 2: the workspace said this axis is a rule, and the Mission is silent.
+  const declaredHard = (brain?.hard_constraints ?? [])
+    .some((c) => String(c).trim().toLowerCase() === "employee_count");
+  if (declaredHard) return { min, max, enforceable: true, source: "brain_hard" };
+  // TIER 3: present for ranking, NOT for rejection.
   return { min, max, enforceable: false, source: "brain_advisory" };
 }
 
@@ -345,9 +406,12 @@ export function brainMayReject(
  * for exactly that reason, and a wording mismatch is a question for the
  * evaluator, not a rejection.
  *
- * `employee_range` is tier 3 ALWAYS. A preferred size is a preference; it may
- * order results and may never be the sole reason a company that satisfies the
- * Mission is discarded.
+ * `employee_range` is tier 3 when the Brain expresses it as a PREFERENCE, and
+ * tier 2 when the Brain declares `employee_count` among its `hard_constraints`.
+ * A preferred size may order results and may never be the sole reason a company
+ * that satisfies the Mission is discarded; a size the workspace declared a rule
+ * is a rule. `resolveEmployeeBounds` reads the Brain's own declaration to tell
+ * the two apart, rather than assuming every workspace means the weaker one.
  *
  * `required_geography` is tier 2 when the Mission is silent and tier 4 when it
  * is not — the Mission's own locations then govern.

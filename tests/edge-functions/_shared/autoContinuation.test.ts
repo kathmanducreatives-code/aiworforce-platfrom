@@ -784,3 +784,135 @@ Deno.test("33. a legacy checkpoint's meaningless company count is not inherited"
   assertEquals(legacy.cost_units_used, 158,
     "and an inflated spend figure errs toward stopping early, which is the safe direction");
 });
+
+// ══ A PAID RUN IN FLIGHT IS NOT A FINDING ABOUT THE CANDIDATES ═════════════
+//
+// Task 783fa163, one moment, two components, contradictory answers:
+//
+//   terminal_record    { status: "pending_external_run",
+//                        reason: "provider_run_pending", resumable: true,
+//                        pending_runs: [ Zs5bYFGlnua1hJWYg ] }
+//
+//   auto_continuation  { decision: "no_progress", continuing: false,
+//                        detail: "2 consecutive slices qualified and
+//                                 investigated nobody; 15 candidates remain
+//                                 unexamined" }
+//
+// The lineage stopped. Apify run Zs5bYFGlnua1hJWYg then SUCCEEDED, in 796s,
+// with 1,394 job rows carrying exactly the evidence the mission asked for —
+// "Senior Sales Operations Manager, New Seller Recruitment" (Amazon), "Account
+// Executive (Enterprise)" (Salesforce), "Leader, Inside Sales" (Cisco) — and
+// nothing will ever read them. The stage told the user "no company had a
+// relevant commercial role", which was false for that pool.
+//
+// `decideAutoContinuation` had no notion of a pending run. The finalizer, which
+// ranks one above every other outcome, is the one that is right.
+
+Deno.test("the live contradiction: barren does not outrank a pending run", () => {
+  // The exact input that produced `no_progress` while a run was executing.
+  const live = RUNNING({
+    qualified: 0, requestedCount: 3, frontierRemaining: 15,
+    barrenSlices: MAX_BARREN_SLICES, continuationsUsed: 6, costUnitsUsed: 19,
+  });
+  assertEquals(
+    decideAutoContinuation(live).reason, "no_progress",
+    "precondition: without a pending run this is still an honest stop",
+  );
+  const d = decideAutoContinuation({ ...live, pendingRuns: 1 });
+  assert(d.continue, d.detail);
+  assertEquals(d.reason, "awaiting_provider_run");
+});
+
+Deno.test("nor does an exhausted frontier or a provider failure", () => {
+  // Both assert something about the candidates. Neither can be known while a
+  // call we already paid for is still deciding it.
+  for (const over of [{ frontierRemaining: 0 }, { providerFailed: true }]) {
+    const stopped = decideAutoContinuation(RUNNING(over));
+    assertFalse(stopped.continue, `precondition for ${JSON.stringify(over)}`);
+    const waiting = decideAutoContinuation(RUNNING({ ...over, pendingRuns: 1 }));
+    assert(waiting.continue, waiting.detail);
+    assertEquals(waiting.reason, "awaiting_provider_run");
+  }
+});
+
+Deno.test("but the CEILINGS still bound an indefinite wait", () => {
+  // The protection/finding distinction this module already draws. A run that
+  // never finishes must still stop, and `continuationsUsed` is what stops it —
+  // otherwise `pending_runs` becomes a licence to burn the whole lineage.
+  const atContinuations = decideAutoContinuation(
+    RUNNING({ pendingRuns: 1, continuationsUsed: 10, maxContinuations: 10 }));
+  assertFalse(atContinuations.continue);
+  assertEquals(atContinuations.reason, "continuation_ceiling");
+
+  const atCost = decideAutoContinuation(
+    RUNNING({ pendingRuns: 1, costUnitsUsed: 120, maxCostUnits: 120 }));
+  assertFalse(atCost.continue);
+  assertEquals(atCost.reason, "cost_ceiling");
+});
+
+Deno.test("and cancellation and a met quota still outrank it", () => {
+  // A user who stopped the run must not be billed for another slice, and a
+  // request already satisfied does not need more evidence.
+  assertEquals(
+    decideAutoContinuation(RUNNING({ pendingRuns: 2, cancelled: true })).reason,
+    "cancelled");
+  assertEquals(
+    decideAutoContinuation(RUNNING({ pendingRuns: 2, qualified: 10 })).reason,
+    "quota_met");
+});
+
+Deno.test("zero pending runs changes nothing at all", () => {
+  // The no-regression guarantee: every existing decision is untouched.
+  for (const over of [{}, { frontierRemaining: 0 }, { providerFailed: true },
+    { barrenSlices: MAX_BARREN_SLICES }, { cancelled: true }, { qualified: 10 }]) {
+    assertEquals(
+      decideAutoContinuation(RUNNING({ ...over, pendingRuns: 0 })),
+      decideAutoContinuation(RUNNING(over)),
+      JSON.stringify(over),
+    );
+  }
+});
+
+Deno.test("the wait is explained to the user, not silent", () => {
+  const d = decideAutoContinuation(RUNNING({ pendingRuns: 1, barrenSlices: 2 }));
+  assert(d.user_message, "a continuing run must say it is continuing");
+  assert(/progress/i.test(d.user_message!), d.user_message!);
+  assert(/adopting the result costs/.test(d.detail), d.detail);
+});
+
+// ── THE CALL SITE, AND THE LIST IT READS ──────────────────────────────────
+
+Deno.test("run-agent feeds the engine's own pending_runs into the decision", () => {
+  const RUN = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
+  );
+  assert(
+    /pendingRuns:\s*capabilityRun\?\.state\.pending_runs\?\.length/.test(RUN),
+    "re-deriving the list is how the two components disagreed in the first place",
+  );
+});
+
+Deno.test("a run that resolves is REMOVED from pending_runs", () => {
+  // Without this the gate above is unsafe: `pending_runs` was push-only, and
+  // `state` is spread wholesale from the checkpoint on every continuation, so
+  // the first pending run a lineage started stayed "pending" for the rest of
+  // its life — turning "wait for the run" into "continue until the ceiling",
+  // every time.
+  const ENGINE = Deno.readTextFileSync(
+    new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
+  );
+  assert(
+    ENGINE.includes("state.pending_runs.splice(at, 1)"),
+    "an adopted run must leave the list",
+  );
+  const i = ENGINE.indexOf("state.pending_runs.splice(at, 1)");
+  const block = ENGINE.slice(i - 400, i + 900);
+  assert(
+    block.includes('outcome: "run_adopted"'),
+    "and its completion must be recorded, or the next audit reads the Apify console",
+  );
+  assert(
+    /cost_units:\s*0/.test(block),
+    "adoption is a GET on a run already charged for",
+  );
+});

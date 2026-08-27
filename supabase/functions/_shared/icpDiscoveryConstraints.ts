@@ -72,6 +72,30 @@ export interface IcpDiscoveryConstraints {
   expresses_concept: boolean;
   /** ICP terms no industry code could be found for — reported, never guessed. */
   unmapped_verticals: string[];
+  /**
+   * The numeric headcount window the bands were derived from, and who set it.
+   *
+   * Reported rather than inferred from `companySize`, because the bands are
+   * lossy: `max: 150` and `max: 200` both yield `51-200`, and only this says
+   * which one the run will actually enforce.
+   */
+  employee_window: {
+    min: number | null;
+    max: number | null;
+    /**
+     * `mission` — the user's stated range only.
+     * `company_brain_policy` — the standing workspace policy only.
+     * `intersection` — both, narrowed to the part they agree on.
+     * `none` — neither supplied one.
+     */
+    source: "mission" | "company_brain_policy" | "intersection" | "none";
+    /**
+     * The two ranges do not overlap. The Brain's window is used, because the
+     * Brain is what rejects downstream — searching the mission's window would
+     * buy a pool the gate is guaranteed to reject in full.
+     */
+    conflict: boolean;
+  };
   /** Which ICP field produced each filter, for the preview and the trace. */
   provenance: Array<{ filter: string; from: string; value: string }>;
 }
@@ -182,6 +206,74 @@ export function companySizeBandsFor(
 }
 
 /**
+ * The workspace's standing headcount policy, as the Company Brain compiled it.
+ *
+ * This is `effectiveCompanyPolicy.constraints`, the SAME object the Brain gate
+ * rejects with. Passing it here and rejecting with it there is the point: one
+ * number, enforced in one place, spent against in the other.
+ */
+export interface DiscoveryPolicySize {
+  employee_min?: number | null;
+  employee_max?: number | null;
+}
+
+/**
+ * The headcount window a search should actually cover.
+ *
+ * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
+ *
+ * Run 783fa163 discovered 29 companies and qualified none. Every filter it
+ * sent was correct; what it never sent was the size limit. The workspace's
+ * Brain carried `size: { min: 1, max: 150, source: "explicit_numeric" }` with
+ * `employee_count` among its HARD constraints — known before the first call —
+ * while `company_profile.employee_range` was absent, so the only field this
+ * module read was empty and `companySize` went unsent. LinkedIn answered
+ * `industryIds:["4","6","104","137"]` with the most prominent of 2,752,712
+ * matches: Amazon at 769,019 employees, Google at 307,615, Microsoft at
+ * 232,851. Twenty-eight of twenty-nine were then rejected by the very policy
+ * that could have excluded them for free, each after two paid calls. The
+ * engine's own rejection text said so: "excluded before identity resolution
+ * and enrichment, which is two paid calls this row already answered".
+ *
+ * ── THE MERGE RULE ─────────────────────────────────────────────────────────
+ *
+ * Both windows are enforced downstream, so a search should cover only where
+ * they agree — the intersection, not either alone. A mission asking for 10-50
+ * inside a 1-150 policy searches 10-50; the policy alone searches 1-150.
+ *
+ * When they do NOT overlap, the Brain wins. Not because it outranks the user —
+ * it does not — but because it is the window that REJECTS. Searching the
+ * mission's window in that case buys a pool the gate discards in full, which
+ * is the failure this function exists to prevent. `conflict` records it so the
+ * run can say so rather than quietly substituting.
+ */
+export function resolveEmployeeWindow(
+  range: { min?: number | null; max?: number | null } | null | undefined,
+  policy: DiscoveryPolicySize | null | undefined,
+): IcpDiscoveryConstraints["employee_window"] {
+  const mMin = range?.min ?? null, mMax = range?.max ?? null;
+  const pMin = policy?.employee_min ?? null, pMax = policy?.employee_max ?? null;
+  const hasMission = mMin != null || mMax != null;
+  const hasPolicy = pMin != null || pMax != null;
+
+  if (!hasMission && !hasPolicy) {
+    return { min: null, max: null, source: "none", conflict: false };
+  }
+  if (!hasPolicy) return { min: mMin, max: mMax, source: "mission", conflict: false };
+  if (!hasMission) {
+    return { min: pMin, max: pMax, source: "company_brain_policy", conflict: false };
+  }
+
+  const min = mMin == null ? pMin : pMin == null ? mMin : Math.max(mMin, pMin);
+  const max = mMax == null ? pMax : pMax == null ? mMax : Math.min(mMax, pMax);
+  // An inverted window is not a narrow search, it is an impossible one.
+  if (min != null && max != null && min > max) {
+    return { min: pMin, max: pMax, source: "company_brain_policy", conflict: true };
+  }
+  return { min, max, source: "intersection", conflict: false };
+}
+
+/**
  * Translate a mission's ICP into LinkedIn discovery filters.
  *
  * Geography is read from `company_profile.locations` WITHOUT requiring
@@ -189,8 +281,17 @@ export function companySizeBandsFor(
  * company — a qualification question. Narrowing a search is not rejection, and
  * conflating the two is why a mission with a stated geography still searched
  * everywhere.
+ *
+ * `policy` is the workspace's compiled Company Brain constraints. Optional, and
+ * omitting it reproduces this function's behaviour exactly as it was before the
+ * parameter existed — so a caller with no policy in scope is unchanged, not
+ * silently degraded. Supplying it is what stops a run paying to discover
+ * companies its own gate will reject; see `resolveEmployeeWindow`.
  */
-export function icpDiscoveryConstraints(mission: LeadMissionV1): IcpDiscoveryConstraints {
+export function icpDiscoveryConstraints(
+  mission: LeadMissionV1,
+  policy?: DiscoveryPolicySize | null,
+): IcpDiscoveryConstraints {
   const profile = mission.company_profile ?? ({} as LeadMissionV1["company_profile"]);
   const provenance: IcpDiscoveryConstraints["provenance"] = [];
   const industryIds = new Set<string>();
@@ -214,9 +315,32 @@ export function icpDiscoveryConstraints(mission: LeadMissionV1): IcpDiscoveryCon
     .map((l) => l.trim()).filter(Boolean))].slice(0, 20);
   for (const l of locations) provenance.push({ filter: "locations", from: "company_profile.locations", value: l });
 
-  const companySize = companySizeBandsFor(profile.employee_range);
+  // THE BRAIN'S WINDOW IS PART OF THE SEARCH, not only part of the verdict.
+  const employeeWindow = resolveEmployeeWindow(profile.employee_range, policy);
+  const companySize = companySizeBandsFor(employeeWindow);
+  // ── NAMED FOR WHAT IT ACTUALLY CONSTRAINS ────────────────────────────────
+  //
+  // `companySize` filters LinkedIn's SELF-REPORTED band (`employeeCountRange`),
+  // not the exact figure the Company Brain gates on (`employeeCount`). Run
+  // fafd9912 proved they are different quantities, not noisy versions of one:
+  // every row it returned was inside the requested bands, and
+  //
+  //     Freelance | Self-Employed   band 2-10    employeeCount 414,811
+  //     Confidential Careers        band 2-10    employeeCount  29,946
+  //     Stealth Startup             band 11-50   employeeCount  37,306
+  //
+  // So the provenance says `→employeeCountRange`. Discovery NARROWS on the
+  // advisory band because that is the only size lever a search has; nothing
+  // downstream may read that as a headcount, and nothing does —
+  // `prequalifyGenericCompany` gates on `employee_count` via `mayGateOn` and
+  // refuses the advisory band by name.
+  const sizeFrom = employeeWindow.source === "mission"
+    ? "company_profile.employee_range→employeeCountRange"
+    : employeeWindow.source === "company_brain_policy"
+    ? "company_brain_policy.size→employeeCountRange"
+    : "company_profile.employee_range + company_brain_policy.size→employeeCountRange";
   for (const b of companySize) {
-    provenance.push({ filter: "companySize", from: "company_profile.employee_range", value: b });
+    provenance.push({ filter: "companySize", from: sizeFrom, value: b });
   }
 
   // The Actor caps industryIds at 20.
@@ -228,6 +352,7 @@ export function icpDiscoveryConstraints(mission: LeadMissionV1): IcpDiscoveryCon
     expressible: ids.length > 0 || locations.length > 0 || companySize.length > 0,
     expresses_concept: ids.length > 0,
     unmapped_verticals: unmapped,
+    employee_window: employeeWindow,
     provenance,
   };
 }

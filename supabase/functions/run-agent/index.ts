@@ -99,6 +99,10 @@ import {
   assertPaidExecutionAllowed, buildPaidExecutionPreflight,
 } from "../_shared/leadPaidExecutionPreflight.ts";
 import {
+  mergePendingRuns, recoverPendingRuns, type LedgerStartedRow,
+} from "../_shared/pendingRunRecovery.ts";
+import { LEAD_EXECUTION_CALLS_TABLE } from "../_shared/executionLedger.ts";
+import {
   createRunTerminalGuard, supabaseTerminalGuardDb,
 } from "../_shared/leadRunTerminalGuard.ts";
 import {
@@ -113,7 +117,7 @@ import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfoli
 // longer accepts one. They remain exported for the legacy company-first route,
 // which is a separate execution path and is not part of the Mission pipeline.
 import {
-  buildCheckpoint, CHECKPOINT_RESERVE_MS, LINEAGE_ROOT_RESULT_KEY,
+  buildCheckpoint, CHECKPOINT_RESERVE_MS, CHECKPOINT_RESULT_KEY, LINEAGE_ROOT_RESULT_KEY,
   lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
@@ -314,7 +318,9 @@ import { gptStrategyFromPersistedPlan, isGptLeadStrategyEnabled } from "../_shar
 import { gptAdaptiveStrategyBinding } from "../_shared/leadStrategyAdaptiveBinding.ts";
 
 import { supabaseToolCallReader } from "../_shared/durableIdempotency.ts";
-import { supabaseSourcingStateStore } from "../_shared/companyFirstSourcingState.ts";
+import {
+  supabaseSourcingStateStore, newSourcingState, SOURCING_STATE_VERSION,
+} from "../_shared/companyFirstSourcingState.ts";
 import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../_shared/sourcingContinuation.ts";
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
@@ -2047,6 +2053,52 @@ Deno.serve(async (req) => {
           supabase as never, leadResumeParentTaskId, workspace_id);
         const leadResumeRecords = resumeLoad.records;
 
+        // ── PAID RUNS THE LEDGER REMEMBERS AND THE CHECKPOINT FORGOT ────────
+        //
+        // `pending_runs` is written only when a poll gives up GRACEFULLY. A
+        // slice killed by the wall clock runs no catch block, so a run that was
+        // started and billed leaves a `lead_execution_calls` row and NOTHING in
+        // the checkpoint. Run fafd9912: `ub2qunSMAKTNf5AKv` POSTed at 16:12:14,
+        // slice killed, task still holding slice 1's state with `pending_runs:
+        // []`, and Apify running the job to completion for nobody.
+        //
+        // Read here, beside the checkpoint it repairs, and merged below. The
+        // query is scoped to this task AND this workspace — the same ownership
+        // gate `loadLeadResumeRecords` uses — so a run can only ever be adopted
+        // by the lineage that paid for it.
+        const startedRunRows = await (async () => {
+          try {
+            // deno-lint-ignore no-explicit-any
+            const { data, error } = await (supabase as any)
+              .from(LEAD_EXECUTION_CALLS_TABLE)
+              .select("capability, provider_id, provider_run_id, dataset_id, " +
+                "status, request_input, started_at, created_at")
+              .eq("task_id", leadResumeParentTaskId)
+              .eq("workspace_id", workspace_id)
+              .eq("status", "started")
+              .not("provider_run_id", "is", null)
+              .limit(50) as unknown as { data: LedgerStartedRow[] | null; error: unknown };
+            if (error) {
+              console.error("[run-agent][pending-run-recovery] read failed", String(error));
+              return [];
+            }
+            return data ?? [];
+          } catch (e) {
+            // RECOVERY MUST NOT BE ABLE TO FAIL A RUN IT ONLY REPAIRS. Same
+            // rule the execution ledger follows: observability and repair are
+            // best-effort, the run proceeds either way.
+            console.error("[run-agent][pending-run-recovery] threw", String(e));
+            return [];
+          }
+        })();
+        const recoveredPendingRuns = recoverPendingRuns(startedRunRows);
+        if (recoveredPendingRuns.length > 0) {
+          console.log("[run-agent][pending-run-recovery] rebuilt from ledger", {
+            task_id: task.id,
+            runs: recoveredPendingRuns.map((r) => `${r.provider}:${r.run_id}`),
+          });
+        }
+
         // ══ A CONTINUATION THAT RESTORED NOTHING MUST NOT PROCEED ═══════════
         //
         // ARCHITECTURE: "Results are monotonic and cannot regress" and "once
@@ -2416,6 +2468,45 @@ Deno.serve(async (req) => {
                 }
                 : {}),
               readPendingRun,
+              // ── SETTLE THE ROW THE ADOPTED RUN LEFT BEHIND ──────────────
+              //
+              // Persist-on-start wrote `status: "started"` when the run was
+              // POSTed. The invocation that would have settled it was killed,
+              // and the resumed call cannot write its own row — same
+              // `logical_call_key`, unique index, insert dropped. So the row
+              // stayed "started" for ever and `recoverPendingRuns` would keep
+              // offering an already-read run as recoverable work.
+              //
+              // Scoped by run id AND workspace AND task, and guarded on
+              // `status = 'started'` so this can only ever close a row that is
+              // genuinely open — never reopen or overwrite a settled one.
+              // Best-effort: bookkeeping must not fail the run it describes.
+              onRunAdopted: async (info) => {
+                try {
+                  // deno-lint-ignore no-explicit-any
+                  const { error } = await (supabase as any)
+                    .from(LEAD_EXECUTION_CALLS_TABLE)
+                    .update({
+                      status: "succeeded",
+                      reason: "resumed_run",
+                      raw_count: info.rows,
+                      finished_at: new Date().toISOString(),
+                    })
+                    .eq("provider_run_id", info.run_id)
+                    .eq("task_id", task.id)
+                    .eq("workspace_id", workspace_id)
+                    .eq("status", "started");
+                  if (error) {
+                    console.error("[run-agent][run-adopted] settle failed",
+                      { run_id: info.run_id, error: String(error) });
+                  } else {
+                    console.log("[run-agent][run-adopted] ledger settled",
+                      { run_id: info.run_id, rows: info.rows });
+                  }
+                } catch (e) {
+                  console.error("[run-agent][run-adopted] settle threw", String(e));
+                }
+              },
               // THE SAME BUDGET THE TERMINAL GUARD FINALIZES AGAINST. One clock,
               // so "the engine stopped early" and "the run was written partial"
               // can never disagree about why.
@@ -2440,6 +2531,89 @@ Deno.serve(async (req) => {
                   }).eq("id", task.id);
                 } catch (e) {
                   console.log("[run-agent][capability-engine][progress-error]", String(e));
+                }
+              },
+              // THE GUARD SEES THE LATEST STATE, so a kill after enrichment is
+              // finalized with the attempts, cost and pending runs that existed
+              // at that moment — not an empty state.
+              // ── A DURABLE CHECKPOINT, WITH THE WORKING SET ─────────────
+              //
+              // Written at every stage boundary so a slice killed before its
+              // terminal write still leaves something a continuation can use.
+              //
+              // The snapshot comes from the ENGINE — state and working set
+              // derived together — and carries its own verdict. An incoherent
+              // one is REFUSED, not written: run 8f59170d persisted a state
+              // claiming discovery/identity/enrichment complete with zero
+              // companies, and the resume skipped discovery, found nobody, and
+              // burned all ten continuations on barren four-second slices.
+              // Refusing costs one unrecoverable slice; writing cost the
+              // lineage its whole budget.
+              onCheckpoint: async (snap) => {
+                if (!snap.coherent) {
+                  console.warn("[run-agent][checkpoint] refused as incoherent", {
+                    task_id: task.id, reason: snap.incoherence,
+                  });
+                  return;
+                }
+                // Nothing bought yet is nothing to come back for.
+                if (snap.state.provider_attempts.length === 0 &&
+                    snap.state.pending_runs.length === 0) return;
+                try {
+                  const { data: cur } = await supabase
+                    .from("tasks").select("result").eq("id", task.id).maybeSingle();
+                  const prior = (cur?.result && typeof cur.result === "object")
+                    ? cur.result as Record<string, unknown> : {};
+                  // A FINALIZED VERDICT OWNS THE ROW. A late stage-boundary
+                  // write must never resurrect a completed or failed task.
+                  const priorTerminal = typeof prior.terminal_status === "string"
+                    ? prior.terminal_status : null;
+                  if (priorTerminal && priorTerminal !== "continuation_required") return;
+                  await supabase.from("tasks").update({
+                    result: {
+                      ...prior,
+                      task_status: "partial",
+                      terminal_status: "continuation_required",
+                      // Built by the owner's factory so `version` — which
+                      // `decideResume` checks — is right by construction.
+                      company_first_state: {
+                        ...newSourcingState({
+                          workspaceId: workspace_id, taskId: task.id,
+                          requestedLeadCount: quota.requestedLeadCount,
+                          quotaPolicy: quota.source, now: new Date().toISOString(),
+                        }),
+                        ...(prior.company_first_state && typeof prior.company_first_state === "object"
+                          ? prior.company_first_state as Record<string, unknown> : {}),
+                        next_action: "start_round",
+                        terminal_status: null, terminal_reason: null,
+                        version: SOURCING_STATE_VERSION,
+                      },
+                      // THE STATE AND THE WORKING SET, TOGETHER OR NOT AT ALL.
+                      capability_execution_state: snap.state,
+                      [CHECKPOINT_RESULT_KEY]: buildCheckpoint({
+                        now: Date.now(),
+                        deadlineAt: terminalGuard.deadline.startedAt +
+                          terminalGuard.deadline.budgetMs,
+                        remainingMs: terminalGuard.deadline.remainingMs(),
+                        lastCompletedCapability:
+                          snap.state.completed_capabilities.slice(-1)[0] ?? null,
+                        nextPendingCapability:
+                          snap.state.pending_capabilities[0] ?? null,
+                        companies: snap.resume_records,
+                        reason: "execution_deadline_checkpoint",
+                      }),
+                      [LINEAGE_ROOT_RESULT_KEY]: leadResumeLineageRoot,
+                      ...(persistedMission
+                        ? {
+                          lead_mission: persistedMission,
+                          original_user_query:
+                            persistedMission.original_user_query ?? routeUserRequest,
+                        }
+                        : {}),
+                    },
+                  }).eq("id", task.id);
+                } catch (e) {
+                  console.log("[run-agent][checkpoint] write failed", String(e));
                 }
               },
               // THE GUARD SEES THE LATEST STATE, so a kill after enrichment is
@@ -2478,8 +2652,22 @@ Deno.serve(async (req) => {
               // Loaded from the resumed row instead, where the previous slice
               // already wrote it. Body-supplied state still wins when present,
               // so the legacy path is unchanged.
-              state: readCapabilityExecutionState(body as Record<string, unknown>) ??
-                readCapabilityExecutionState(resumedTaskResult),
+              //
+              // AND ANY PAID RUN THE CHECKPOINT LOST. `mergePendingRuns` only
+              // ADDS entries the checkpoint does not already name, so a
+              // gracefully-checkpointed run keeps its precise `capability` and
+              // recovery changes nothing for it.
+              state: (() => {
+                const restored =
+                  readCapabilityExecutionState(body as Record<string, unknown>) ??
+                  readCapabilityExecutionState(resumedTaskResult);
+                if (!restored || recoveredPendingRuns.length === 0) return restored;
+                return {
+                  ...restored,
+                  pending_runs: mergePendingRuns(
+                    restored.pending_runs ?? [], recoveredPendingRuns),
+                } as typeof restored;
+              })(),
               // THE RESUME GUARD'S SCOPE — supplied on EVERY run, not only on a
               // continuation.
               //
@@ -2531,6 +2719,13 @@ Deno.serve(async (req) => {
                     excluded_industries: effectivePolicy.constraints.negative_industries ?? [],
                     required_geography: null,
                     disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
+                    // WHICH AXES THE WORKSPACE DECLARED RULES RATHER THAN
+                    // PREFERENCES. Persisted in `company_brain_policy` since
+                    // that record existed and read by nothing until now — which
+                    // is why an explicit, numeric 1-150 ceiling scored 27
+                    // companies as `above_max` on run fafd9912 and excluded
+                    // none of them. See `resolveEmployeeBounds`.
+                    hard_constraints: effectivePolicy.provenance.hard_constraints ?? [],
                   }
                   : {}),
                 business_models: brainIcpCtx.icp.business_models ?? [],
@@ -3914,6 +4109,12 @@ Deno.serve(async (req) => {
           maxCostUnits: resolveMaxLineageCostUnits(),
           barrenSlices: progress.barren_slices,
           providerFailed: cf.status === "provider_failure",
+          // THE SAME LIST THE FINALIZER RANKS ABOVE EVERY OTHER OUTCOME.
+          // Read from the engine state rather than re-derived, so the two
+          // cannot describe one moment differently — which is what let run
+          // 783fa163 report `no_progress` while Apify run Zs5bYFGlnua1hJWYg
+          // was still executing, and then abandon its 1,394 rows.
+          pendingRuns: capabilityRun?.state.pending_runs?.length ?? 0,
         });
         // The status the REST of this branch persists and projects from.
         const effectiveTerminal = autoDecision.continue
@@ -4186,7 +4387,27 @@ Deno.serve(async (req) => {
         // decided after it. Only the dispatch happens here, once the result is
         // durable and the lease released.
         let dispatchOutcome: DispatchOutcome | null = null;
-        if (autoDecision.continue) {
+        // ── A RUN THAT IS ONLY WAITING MUST NOT SPIN ──────────────────────
+        //
+        // `dispatch_mode: "deferred"` means the next slice has nothing to do
+        // until a provider finishes. Self-dispatching it immediately turns a
+        // wait into a tight loop: run 8f59170d ran ten four-second slices in
+        // roughly forty seconds and stopped on `continuation_ceiling` with its
+        // provider run still executing. The ceiling bounded it — by spending
+        // the whole lineage budget rather than waiting.
+        //
+        // The checkpoint is already durable and the lease already released at
+        // this point, so `resume-stalled-leads` will claim it on its next tick.
+        // That cadence IS the backoff; no timer, no new executor.
+        const deferToSweeper = autoDecision.continue &&
+          autoDecision.dispatch_mode === "deferred";
+        if (deferToSweeper) {
+          console.log("[run-agent][auto-continuation] deferred to sweeper", {
+            task_id: task.id, reason: autoDecision.reason,
+            detail: autoDecision.detail,
+          });
+        }
+        if (autoDecision.continue && !deferToSweeper) {
           dispatchOutcome = await dispatchContinuation({
             resumeTaskId: task.id,
             workspaceId: workspace_id,
