@@ -29,6 +29,7 @@
 import type { RequestV1, RequestPart } from "./requestV1.ts";
 import { isSignalEvent } from "./missionSignalDescriptor.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
+import { canonicalLinkedinCompanyUrl } from "./companyIdentity.ts";
 
 export const MONITOR_SURFACE_VERSION = "monitor-surface-v1" as const;
 
@@ -87,8 +88,13 @@ export function planMonitor(
   // is what `monitoring_subjects.identifier` is documented to hold, and its
   // `entity_key` is never a bare name — weak dedupe kinds do not bind.
   const bound = bindings.find((b) => b.part_id === part.id && b.entity_type === "company");
+  // THE FULL URL, NOT THE COMPARISON KEY. `identity.linkedinUrl` is stored
+  // schemeless, and `monitoring_subjects.identifier` is documented as a domain
+  // or a LinkedIn company URL — half a URL is neither, and the scan that later
+  // reads this row classifies it with `normalizeCompanyLinkedInUrl`, which
+  // refuses anything unparseable.
   const boundIdentifier = bound
-    ? (bound.identity.canonicalDomain ?? bound.identity.linkedinUrl)
+    ? (bound.identity.canonicalDomain ?? canonicalLinkedinCompanyUrl(bound.identity))
     : null;
 
   // Without a binding the user's own words stand, exactly as before — a NAMED

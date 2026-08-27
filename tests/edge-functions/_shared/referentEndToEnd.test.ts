@@ -36,6 +36,9 @@ import {
 } from "../../../supabase/functions/_shared/referentBinding.ts";
 import { routeRequest } from "../../../supabase/functions/_shared/objectiveRouter.ts";
 import {
+  planRead, executeRead, renderReadAnswer,
+} from "../../../supabase/functions/_shared/readSurface.ts";
+import {
   planMonitor, executeMonitor,
 } from "../../../supabase/functions/_shared/monitorSurface.ts";
 import {
@@ -666,4 +669,223 @@ Deno.test("31. an UNLABELLED subject still contributes a usable name", async () 
   const route = routeRequest(request, { spendAllowed: true, bindings: r.bindings });
   assertEquals(route.lead!.proposal.known_companies, ["vercel"]);
   assertFalse(/https?:\/\//.test(JSON.stringify(route.lead!.proposal)));
+});
+
+// ══ 10. THE SCOPED READ — ONE COMPANY, STILL ZERO SPEND ════════════════════
+
+/** A `signal_events` / `monitoring_subjects` stub that RECORDS its filters. */
+function scopedDb(rows: {
+  events?: Array<Record<string, unknown>>;
+  watched?: Array<Record<string, unknown>>;
+}) {
+  const queries: Array<{ table: string; filters: Record<string, unknown> }> = [];
+  const build = (table: string) => {
+    const filters: Record<string, unknown> = {};
+    queries.push({ table, filters });
+    const q: Record<string, unknown> = {};
+    const chain = () => q;
+    q.select = chain;
+    q.order = chain;
+    q.limit = () => Promise.resolve({
+      data: table === "signal_events" ? (rows.events ?? []) : (rows.watched ?? []),
+      error: null,
+    });
+    q.eq = (k: string, v: unknown) => { filters[`eq:${k}`] = v; return q; };
+    q.gte = (k: string, v: unknown) => { filters[`gte:${k}`] = v; return q; };
+    q.in = (k: string, v: unknown) => { filters[`in:${k}`] = v; return q; };
+    return q;
+  };
+  return { db: { from: (t: string) => build(t) }, queries };
+}
+
+async function bindingForRead(entity: typeof SHOWN[number]) {
+  const request = req("read", [{ kind: "prior_result", value: "them" }]);
+  request.parts[0].objective = "read";
+  const { bindings } = await resolveAgainstConversation(
+    request, [resultMessage("m1", [entity], "2026-08-27T10:00:00Z")]);
+  return { request, bindings };
+}
+
+Deno.test("32. 'what about the second company?' scopes the read to that company", async () => {
+  // THE WHOLE FLOW. Displayed list -> persisted set -> lookup -> resolver ->
+  // binding -> read plan. Every boundary crossed with the real module on both
+  // sides of it.
+  const request = req("read", [{ kind: "prior_result", value: "the second company" }]);
+  request.parts[0].objective = "read";
+  const { bindings } = await resolveAgainstConversation(
+    request, [resultMessage("m1", SHOWN, "2026-08-27T10:00:00Z")]);
+  assertEquals(bindings[0].label, "Linear");
+
+  const plan = planRead(request, bindings);
+  assertEquals(plan.target, "company_detail");
+  assertEquals(plan.subject!.entity_key, "domain:linear.app");
+  assertEquals(plan.subject!.label, "Linear");
+  assertEquals(plan.subject!.domain, "linear.app");
+  // THE FULL URL, not the schemeless comparison key — the shape every writer
+  // and every consumer downstream actually uses.
+  assertEquals(plan.subject!.linkedin_url, "https://www.linkedin.com/company/linear");
+});
+
+Deno.test("33. the scoped query filters on THIS company, by strong identifier", async () => {
+  const { request, bindings } = await bindingForRead(SHOWN[1]);
+  const plan = planRead(request, bindings);
+  const { db, queries } = scopedDb({
+    events: [{ signal_type: "hiring", subject_key: "linear-app",
+      occurred_at: "2026-08-20T00:00:00Z" }],
+    watched: [],
+  });
+  // deno-lint-ignore no-explicit-any
+  const result = await executeRead(db as any, plan, "w1");
+  assertEquals(result!.target, "company_detail");
+  assertEquals(result!.counts.total, 1);
+
+  const events = queries.find((q) => q.table === "signal_events")!;
+  assertEquals(events.filters["eq:workspace_id"], "w1");
+  // THE KEYS THE WRITERS USE: `canonicalSubjectKey(domain ?? linkedinUrl)`.
+  assertEquals(events.filters["in:subject_key"],
+    ["linear-app", "https-www-linkedin-com-company-linear"]);
+
+  const watch = queries.find((q) => q.table === "monitoring_subjects")!;
+  assertEquals(watch.filters["in:identifier"],
+    ["linear.app", "https://www.linkedin.com/company/linear"]);
+});
+
+Deno.test("34. the scoped read matches on NO name-derived key", async () => {
+  // `run-agent` refuses to write a name-derived subject key, for the stated
+  // reason that two companies share a word. A READ that matched on one would
+  // show another company's evidence under this company's name — a wrong answer
+  // rather than a missing one, and only the missing one is recoverable.
+  const { request, bindings } = await bindingForRead(SHOWN[1]);
+  const plan = planRead(request, bindings);
+  assertFalse(plan.subject!.subject_keys.includes("linear"),
+    "a bare name must never be a match key");
+  for (const k of plan.subject!.subject_keys) {
+    assert(/linear-app|linkedin/.test(k), `unexpected match key: ${k}`);
+  }
+});
+
+Deno.test("35. the scoped answer NAMES the company it is about", async () => {
+  const { request, bindings } = await bindingForRead(SHOWN[1]);
+  const plan = planRead(request, bindings);
+  const { db } = scopedDb({
+    events: [{ signal_type: "hiring", occurred_at: "2026-08-20T00:00:00Z" },
+             { signal_type: "funding", occurred_at: "2026-08-18T00:00:00Z" }],
+    watched: [],
+  });
+  // deno-lint-ignore no-explicit-any
+  const answer = renderReadAnswer(plan, await executeRead(db as any, plan, "w1"));
+  assert(answer.includes("Linear"),
+    "a scoped answer that does not name its subject is indistinguishable from a workspace-wide one");
+  assert(/2 signals/.test(answer));
+
+  // AND AN EMPTY SCOPED READ SAYS SO WITHOUT INVENTING A SEARCH.
+  const { db: empty } = scopedDb({ events: [], watched: [] });
+  // deno-lint-ignore no-explicit-any
+  const none = renderReadAnswer(plan, await executeRead(empty as any, plan, "w1"));
+  assert(none.includes("Linear"));
+  assert(/haven't gone looking/.test(none), "an empty read must not imply a search ran");
+});
+
+Deno.test("36. NO binding leaves the workspace-wide read exactly as it was", async () => {
+  // The compatibility half. Every caller that predates the scope, and every
+  // request that names no referent, must reach the identical plan.
+  const plain = req("read", [{ kind: "named", value: "signals" }]);
+  plain.parts[0].objective = "read";
+  plain.parts[0].subject.entity = "signal";
+
+  const before = planRead(plain);
+  const after = planRead(plain, []);
+  assertEquals(before, after);
+  assertEquals(before.target, "signals");
+  assertEquals(before.subject, null);
+
+  const companies = req("read", []);
+  companies.parts[0].objective = "read";
+  assertEquals(planRead(companies).target, "companies");
+  assertEquals(planRead(companies).subject, null);
+});
+
+Deno.test("37. an AMBIGUOUS referent never produces a scoped read — it clarifies", async () => {
+  const request = req("read", [{ kind: "prior_result", value: "them" }]);
+  request.parts[0].objective = "read";
+  const r = await resolveAgainstConversation(
+    request, [resultMessage("m1", SHOWN, "2026-08-27T10:00:00Z")]);
+  assertEquals(r.bindings, []);
+  assertEquals(r.failures[0].reason, "ambiguous_referent");
+  // With no binding the plan cannot be scoped, so there is no path on which an
+  // unresolved pronoun reads one company's data. pilot-chat returns before
+  // this point regardless — pinned in test 15.
+  assertEquals(planRead(request, r.bindings).subject, null);
+});
+
+Deno.test("38. GPT cannot scope a read — only a binding can", async () => {
+  // A forged `resolved_key` aimed at another company must not steer the scope.
+  const request = req("read", [{ kind: "prior_result", value: "the second company",
+    resolved_key: "https://www.linkedin.com/company/attacker" }]);
+  request.parts[0].objective = "read";
+  const { bindings } = await resolveAgainstConversation(
+    request, [resultMessage("m1", SHOWN, "2026-08-27T10:00:00Z")]);
+  const plan = planRead(request, bindings);
+  assertEquals(plan.subject!.entity_key, "domain:linear.app");
+  assertFalse(/attacker/.test(JSON.stringify(plan)));
+
+  // And with NO binding, the model's key scopes nothing at all.
+  assertEquals(planRead(request, []).subject, null);
+});
+
+Deno.test("39. a scoped read is STRUCTURALLY unable to spend", async () => {
+  // The guarantee is the absence, not a flag. `readSurface` imports no tool
+  // registry, no capability engine, no credit path — so there is nothing on
+  // this path to invoke, scoped or not. Asserted on the source because that is
+  // where the property lives.
+  const SRC = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/readSurface.ts", import.meta.url));
+  const imports = SRC.split("\n").filter((l) => /^import /.test(l)).join("\n");
+  assertFalse(/toolRegistry|capabilityExecution|leadCapabilityEngine|credit|apify|invoke/i
+    .test(imports), "the read surface must import nothing that can spend");
+
+  const code = SRC.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(/callProvider|runTool|reserveCredits|invoke\(/.test(code));
+
+  // And the route that carries a read still attaches no mission to spend from.
+  const request = req("read", [{ kind: "prior_result", value: "the second company" }]);
+  request.parts[0].objective = "read";
+  const { bindings } = await resolveAgainstConversation(
+    request, [resultMessage("m1", SHOWN, "2026-08-27T10:00:00Z")]);
+  const route = routeRequest(request, { spendAllowed: true, bindings });
+  assertEquals(route.kind, "read");
+  assertEquals(route.may_spend, false, "a read may never spend, bound or not");
+  assertEquals(route.lead, undefined, "a read route carries no mission to execute");
+});
+
+Deno.test("40. after a scoped read, 'them' means THAT company", async () => {
+  // The referent chain. Having just been told about one company, "monitor
+  // them" must mean that one — not ask which of the three that preceded it.
+  const { request, bindings } = await bindingForRead(SHOWN[1]);
+  const plan = planRead(request, bindings);
+  const scopedSet = buildPresentedReferents([{
+    label: plan.subject!.label, name: plan.subject!.label,
+    domain: plan.subject!.domain, linkedin_url: plan.subject!.linkedin_url,
+  }], "watched_companies");
+
+  const follow = req("monitor", [{ kind: "prior_result", value: "them" }]);
+  const r = await resolveAgainstConversation(follow, [
+    // The scoped answer is NEWER than the three-company list it came from.
+    { id: "m2", created_at: "2026-08-27T11:00:00Z",
+      metadata: { [PRESENTED_REFERENTS_KEY]: scopedSet } },
+    resultMessage("m1", SHOWN, "2026-08-27T10:00:00Z"),
+  ]);
+  assertEquals(r.failures, []);
+  assertEquals(r.bindings[0].entity_key, "domain:linear.app");
+  assertEquals(planMonitor(follow, r.bindings).subject!.identifier, "linear.app");
+});
+
+Deno.test("41. pilot-chat passes the bindings to the read, and records the scope", async () => {
+  const SRC = await Deno.readTextFile(
+    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
+  assert(SRC.includes("planRead(understood.request, resolvedBindings)"),
+    "the read surface must receive the bindings the resolver produced");
+  assert(SRC.includes("scoped_to: plan.subject?.entity_key ?? null"),
+    "which company a read was scoped to must be recoverable afterwards");
 });

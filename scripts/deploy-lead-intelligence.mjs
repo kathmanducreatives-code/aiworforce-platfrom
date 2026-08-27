@@ -163,24 +163,51 @@ function main() {
   // instead of inferred from behaviour.
   const buildInfoPath = join(FUNCTIONS_DIR, "_shared", "buildInfo.ts");
   const stamp = new Date().toISOString();
+  // ── READ THE TREE BEFORE WRITING TO IT ──────────────────────────────────
+  //
+  // `dirty` was evaluated twice: once into the file, and once into the console
+  // line below — AFTER `writeFileSync` had modified a tracked file. So the
+  // stamp could say `dirty: false` while the line a human reads said "(dirty)",
+  // and the script could never report a clean build however clean the tree was.
+  // That line is exactly what someone checks to decide whether production
+  // matches Git, so it lying is worse than not printing it.
+  const wasDirty = gitDirty();
   writeFileSync(buildInfoPath,
     `// GENERATED AT DEPLOY TIME by scripts/deploy-lead-intelligence.mjs.\n` +
     `// Do not hand-edit. Regenerate by deploying.\n\n` +
     `export const BUILD_INFO = {\n` +
     `  git_sha: ${JSON.stringify(gitSha())},\n` +
     `  build_timestamp: ${JSON.stringify(stamp)},\n` +
-    `  dirty: ${gitDirty()},\n` +
+    `  dirty: ${wasDirty},\n` +
     `} as const;\n`);
-  console.log(`\n── build stamp ──\n  ${gitShort()} @ ${stamp}${gitDirty() ? " (dirty)" : ""}`);
+  console.log(`\n── build stamp ──\n  ${gitShort()} @ ${stamp}` +
+    (wasDirty ? " (dirty)" : " (clean — production matches this commit)"));
 
   console.log("\n── deploying ──");
+  const unchanged = new Set();
   for (const f of fns) {
     process.stdout.write(`  ${f.name} ... `);
     try {
-      execFileSync("supabase",
+      const out = String(execFileSync("supabase",
         ["functions", "deploy", f.name, "--project-ref", TEST_REF],
-        { stdio: ["ignore", "pipe", "pipe"] });
-      console.log("ok");
+        { stdio: ["ignore", "pipe", "pipe"] }) ?? "");
+      // ── "NO CHANGE FOUND" IS A RESULT, NOT A NON-EVENT ──────────────────
+      //
+      // The CLI hashes the bundle and skips an identical one, so `UPDATED_AT`
+      // does not move — and this script printed "ok" beside a stale timestamp
+      // with no explanation. That is indistinguishable, in the output, from
+      // the partial-deploy incident the whole script exists to prevent, and it
+      // costs whoever reads it an afternoon proving which one it was.
+      //
+      // A skipped bundle is the CLI stating that what is deployed already
+      // matches what is here, which is the property being checked. Said out
+      // loud, it answers the question instead of raising it.
+      if (/No change found in Function/i.test(out)) {
+        unchanged.add(f.name);
+        console.log("unchanged (deployed bundle already identical)");
+      } else {
+        console.log("ok");
+      }
     } catch (e) {
       // FAIL IMMEDIATELY. A partial deploy across functions that share code is
       // the exact state this script exists to prevent.
@@ -196,7 +223,8 @@ function main() {
   const after = deployedState();
   for (const f of fns) {
     const d = after.get(f.name);
-    console.log(`  ${f.name.padEnd(20)} ${d?.updatedAt ?? "unknown"}  (version ${d?.version ?? "?"})`);
+    console.log(`  ${f.name.padEnd(20)} ${d?.updatedAt ?? "unknown"}  (version ${d?.version ?? "?"})` +
+      (unchanged.has(f.name) ? "  [bundle unchanged — timestamp correctly did not move]" : ""));
   }
 
   console.log("\n── environment bindings ──");

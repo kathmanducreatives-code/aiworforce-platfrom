@@ -1766,7 +1766,12 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       }
       // ── READ: ANSWERED FROM HELD EVIDENCE, NO PROVIDER REACHED ────────
       if (brainBinding.kind === "read") {
-        const plan = planRead(understood.request);
+        // SCOPED BY THE BINDING, IF ONE RESOLVED. "What about the second
+        // company?" resolved to a real company; answering it with a
+        // workspace-wide count answers a different question. This changes what
+        // is read, never what may be spent — `readSurface` reaches no provider
+        // either way.
+        const plan = planRead(understood.request, resolvedBindings);
         const result = plan.target
           ? await executeRead(admin as unknown as ReadDb, plan, workspaceId)
           : null;
@@ -1779,13 +1784,35 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // lists only the watched half and only the first few of those; "the
         // second company" indexes that list, not the query behind it.
         const shown = presentedCompanies(result);
+        // ── A SCOPED ANSWER IS ITSELF A REFERENT ─────────────────────────
+        //
+        // After "what about the second company?" the thing on screen is ONE
+        // company, and "monitor them" means that one. Without this the newest
+        // presented set is still the three-company list that came before, so
+        // the follow-up would ask which of three the user meant — having just
+        // been told about exactly one. The narrower, more recent set is the
+        // honest answer to what "them" now refers to.
+        const scoped = plan.target === "company_detail" && plan.subject
+          ? [{
+            label: plan.subject.label,
+            name: plan.subject.label,
+            domain: plan.subject.domain,
+            linkedin_url: plan.subject.linkedin_url,
+          }]
+          : [];
         const { data: saved } = await admin.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
           content: answer, agent_slug: "pilot",
           metadata: {
             chat_brain: { route: "read", target: plan.target,
+              scoped_to: plan.subject?.entity_key ?? null,
               counts: result?.counts ?? null, reason: brainRoute.reason },
-            ...(shown.length > 0
+            ...(scoped.length > 0
+              ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+                  scoped, "watched_companies"),
+              }
+              : shown.length > 0
               ? {
                 [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
                   shown.map((e) => presentedFromIdentifier(e.label, e.identifier)),

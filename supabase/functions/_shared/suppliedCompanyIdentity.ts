@@ -34,6 +34,7 @@ import type { NormalizedHiringCompany } from "./hiringActorNormalizers.ts";
 import { normalizeDomain } from "./leadCommercialPrequalification.ts";
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
+import { canonicalLinkedinCompanyUrl } from "./companyIdentity.ts";
 
 /** Says where the row came from, everywhere provenance is read. */
 export const SUPPLIED_COMPANY_PROVENANCE = "mission_supplied" as const;
@@ -201,14 +202,8 @@ export function suppliedCompanyFromBinding(
   // The slug is the stable identifier and `normalizeCompanyLinkedInUrl` emits
   // exactly this shape from it, so re-attaching the scheme restores the URL the
   // resolver already had rather than inventing one.
-  const linkedinCandidate = binding.identity.linkedinCompanyId
-    ? `https://www.linkedin.com/company/${binding.identity.linkedinCompanyId}`
-    : binding.identity.linkedinUrl
-    ? (/^https?:\/\//i.test(binding.identity.linkedinUrl)
-      ? binding.identity.linkedinUrl
-      : `https://${binding.identity.linkedinUrl}`)
-    : null;
-  const linkedin = normalizeCompanyLinkedInUrl(linkedinCandidate);
+  const linkedin = normalizeCompanyLinkedInUrl(
+    canonicalLinkedinCompanyUrl(binding.identity));
   const domain = binding.identity.canonicalDomain;
   // A binding with neither is not one this pipeline can act on. It cannot occur
   // — `resolveReferents` rejects the weak dedupe kinds — and is refused here

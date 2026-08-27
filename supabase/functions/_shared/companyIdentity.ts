@@ -107,6 +107,43 @@ export function resolveCompanyIdentity(input: CompanyIdentityInput): CompanyIden
   };
 }
 
+/**
+ * The FULL, canonical LinkedIn company URL for an identity.
+ *
+ * ── WHY THIS IS NEEDED AT ALL ───────────────────────────────────────────────
+ *
+ * `CompanyIdentity.linkedinUrl` is stored SCHEMELESS — `linkedin.com/company/x`
+ * — because it is a comparison key and a scheme is noise in a comparison. Every
+ * consumer that needs a URL rather than a key has to put the scheme back, and
+ * each one that forgets fails silently and differently:
+ *
+ *   `normalizeCompanyLinkedInUrl` parses a real URL and returns null otherwise,
+ *   so a seeded pool row quietly lost its LinkedIn identity and paid for a
+ *   search it did not need.
+ *
+ *   `canonicalSubjectKey` is lossy and deterministic, so the schemeless form
+ *   produces `linkedin-com-company-x` while every writer produces
+ *   `https-www-linkedin-com-company-x` — a query that matches nothing and
+ *   reports it as "I hold no evidence".
+ *
+ *   `monitoring_subjects.identifier` is documented as a domain or a LinkedIn
+ *   company URL, and half a URL is neither.
+ *
+ * Three consumers, three different silent failures, one missing function. This
+ * is it. The slug is the stable identifier and this emits exactly the shape
+ * `normalizeCompanyLinkedInUrl` itself produces, so nothing is invented.
+ */
+export function canonicalLinkedinCompanyUrl(
+  identity: Pick<CompanyIdentity, "linkedinCompanyId" | "linkedinUrl">,
+): string | null {
+  if (identity.linkedinCompanyId) {
+    return `https://www.linkedin.com/company/${identity.linkedinCompanyId}`;
+  }
+  const raw = identity.linkedinUrl;
+  if (!raw) return null;
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
 /** Deterministic company equality using the strongest SHARED identifier.
  *  Never collapses two companies on name alone when a strong id disagrees. */
 export function sameCompany(a: CompanyIdentity, b: CompanyIdentity): boolean {

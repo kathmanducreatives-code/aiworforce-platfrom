@@ -30,11 +30,42 @@
 // have", and it is never wrong in the way a guess would be.
 
 import type { RequestV1, RequestPart } from "./requestV1.ts";
+import type { ResolvedReferentBinding } from "./referentBinding.ts";
+import { canonicalLinkedinCompanyUrl } from "./companyIdentity.ts";
+import { canonicalSubjectKey } from "./signalSubject.ts";
 
 export const READ_SURFACE_VERSION = "read-surface-v1" as const;
 
 /** What a read looks at. Derived from the request's entity, never its wording. */
-export type ReadTarget = "signals" | "companies" | "runs";
+export type ReadTarget = "signals" | "companies" | "runs" | "company_detail";
+
+/**
+ * ONE company, identified — the scope a resolved referent creates.
+ *
+ * Built only from a `ResolvedReferentBinding`, never from the request. The
+ * model can say a reference exists; it cannot say which company it is, and this
+ * is the field that would let it if it could reach it.
+ */
+export interface ReadSubject {
+  /** `CompanyIdentity.dedupeKey`. The internal key, for provenance. */
+  entity_key: string;
+  /** What to call it in the answer. Never an identifier. */
+  label: string;
+  domain: string | null;
+  /** The FULL canonical URL, not the schemeless comparison key. */
+  linkedin_url: string | null;
+  /**
+   * The `signal_events.subject_key` values this company's evidence is stored
+   * under — derived exactly as the writers derive them.
+   *
+   * STRONG IDENTIFIERS ONLY. A key built from the company NAME is deliberately
+   * absent: `run-agent` refuses to write one for the stated reason that two
+   * companies share a word, and a READ that matched on a name would show one
+   * company's evidence under another's. That is a wrong answer rather than a
+   * missing one, and a missing one is recoverable.
+   */
+  subject_keys: string[];
+}
 
 export interface ReadPlan {
   version: typeof READ_SURFACE_VERSION;
@@ -43,8 +74,47 @@ export interface ReadPlan {
   limit: number;
   /** Only when the request stated one. */
   since_days: number | null;
+  /**
+   * The one company this read is scoped to, when a referent resolved to one.
+   *
+   * Null is the ordinary case and means exactly what it always meant: a
+   * workspace-wide read. The scoping is additive — an unbound request reaches
+   * the identical queries it reached before this field existed.
+   */
+  subject: ReadSubject | null;
   /** Why no target could be chosen. Null when one was. */
   unsupported: string | null;
+}
+
+/**
+ * The read scope a binding creates, or null.
+ *
+ * Deterministic and total. A binding always carries a strong identifier — the
+ * resolver refuses to bind anything weaker — so the only null case is no
+ * binding at all.
+ */
+export function readSubjectFor(
+  binding: ResolvedReferentBinding | null | undefined,
+): ReadSubject | null {
+  if (!binding || binding.entity_type !== "company") return null;
+  const linkedin = canonicalLinkedinCompanyUrl(binding.identity);
+  const domain = binding.identity.canonicalDomain;
+  // THE SAME DERIVATION THE WRITERS USE: `canonicalSubjectKey(domain ?? li)`.
+  // Both are offered because which one a given event was written under depends
+  // on what the company had been resolved to at the time, and a read that
+  // guessed one would report a real history as an empty one.
+  const subject_keys = [...new Set(
+    [domain, linkedin]
+      .map((v) => canonicalSubjectKey(v))
+      .filter((k): k is string => !!k),
+  )];
+  return {
+    entity_key: binding.entity_key,
+    label: binding.label,
+    domain,
+    linkedin_url: linkedin,
+    subject_keys,
+  };
 }
 
 const DEFAULT_LIMIT = 10;
@@ -55,14 +125,38 @@ const DEFAULT_LIMIT = 10;
  * Pure and total: an entity with no read surface yields `target: null` and a
  * reason, never a nearest-match.
  */
-export function planRead(request: RequestV1): ReadPlan {
+export function planRead(
+  request: RequestV1,
+  /**
+   * The bindings the RESOLVER produced, if any.
+   *
+   * Supplied, a company binding scopes the read to that company. Omitted — the
+   * ordinary case, and every caller that predates this — the plan is exactly
+   * what it was: workspace-wide.
+   */
+  bindings: readonly ResolvedReferentBinding[] = [],
+): ReadPlan {
   const part: RequestPart | undefined =
     request.parts.find((p) => p.objective === "read") ?? request.parts[0];
   const base = {
     version: READ_SURFACE_VERSION, limit: DEFAULT_LIMIT,
     since_days: null as number | null, unsupported: null as string | null,
+    subject: null as ReadSubject | null,
   };
   if (!part) return { ...base, target: null, unsupported: "no_part" };
+
+  // ── A RESOLVED REFERENT SCOPES THE READ ─────────────────────────────────
+  //
+  // "What about the second company?" resolved to one real company, and
+  // answering it with a workspace-wide count is answering a different question
+  // — the failure this whole migration exists to end. The scope is taken from
+  // the BINDING for this part, so nothing the model returned can widen or
+  // redirect it.
+  //
+  // This changes what is READ, never what may be spent. There is still no
+  // provider on this path to reach.
+  const subject = readSubjectFor(
+    bindings.find((b) => b.part_id === part.id && b.entity_type === "company"));
 
   // A stated recency is the only filter a read honours today. Everything else
   // the request carries is reported by the caller rather than silently ignored.
@@ -74,10 +168,15 @@ export function planRead(request: RequestV1): ReadPlan {
 
   switch (part.subject.entity) {
     case "signal":
-      return { ...base, target: "signals", limit, since_days: recency };
+      // A scoped signal question is still about this company's evidence.
+      return subject
+        ? { ...base, target: "company_detail", limit, since_days: recency, subject }
+        : { ...base, target: "signals", limit, since_days: recency };
     case "company":
     case "person":
-      return { ...base, target: "companies", limit, since_days: recency };
+      return subject
+        ? { ...base, target: "company_detail", limit, since_days: recency, subject }
+        : { ...base, target: "companies", limit, since_days: recency };
     case "conversation":
       return { ...base, target: "runs", limit, since_days: recency };
     default:
@@ -119,6 +218,63 @@ export async function executeRead(
     ? new Date(Date.now() - plan.since_days * 86_400_000).toISOString() : null;
 
   try {
+    // ── ONE COMPANY, FROM HELD EVIDENCE ONLY ────────────────────────────
+    //
+    // Two queries, both filtered to this company by a STRONG identifier: the
+    // evidence stored about it, and whether it is being watched. No provider
+    // is reachable from here — this module imports none — so a scoped read is
+    // zero-spend for exactly the reason a workspace-wide one is.
+    if (plan.target === "company_detail") {
+      const subj = plan.subject;
+      if (!subj) {
+        return { target: "company_detail", counts: {}, items: [], empty: true };
+      }
+
+      // EVIDENCE. Matched on the subject keys the writers actually use; an
+      // empty key list means this company has no strong identifier we could
+      // have written under, so it correctly holds nothing rather than
+      // matching everything.
+      let events: Array<Record<string, unknown>> = [];
+      if (subj.subject_keys.length > 0) {
+        let q = db.from("signal_events")
+          .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url")
+          .eq("workspace_id", workspaceId)
+          .in("subject_key", subj.subject_keys)
+          .order("occurred_at", { ascending: false })
+          .limit(plan.limit);
+        if (sinceIso) q = q.gte("occurred_at", sinceIso);
+        const { data } = await q;
+        events = (data ?? []) as Array<Record<string, unknown>>;
+      }
+
+      // WATCH STATUS. `identifier` holds a domain or a LinkedIn company URL,
+      // so both forms are offered rather than guessing which one was stored.
+      const identifiers = [subj.domain, subj.linkedin_url]
+        .filter((v): v is string => !!v);
+      let watched: Array<Record<string, unknown>> = [];
+      if (identifiers.length > 0) {
+        const { data } = await db.from("monitoring_subjects")
+          .select("label, identifier, signals, enabled, last_run_at")
+          .eq("workspace_id", workspaceId)
+          .in("identifier", identifiers)
+          .limit(5);
+        watched = (data ?? []) as Array<Record<string, unknown>>;
+      }
+
+      const byType: Record<string, number> = {};
+      for (const r of events) {
+        const t = String(r.signal_type ?? "unknown");
+        byType[t] = (byType[t] ?? 0) + 1;
+      }
+      return {
+        target: "company_detail",
+        counts: { total: events.length, watched: watched.length, ...byType },
+        items: [...events.map((e) => ({ kind: "signal", ...e })),
+                ...watched.map((w) => ({ kind: "watched", ...w }))],
+        empty: events.length === 0 && watched.length === 0,
+      };
+    }
+
     if (plan.target === "signals") {
       let q = db.from("signal_events")
         .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url")
@@ -234,6 +390,33 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     return "I understood that as a question about what I already know, but I don't have a way to look that up yet.";
   }
   const window = plan.since_days ? ` in the last ${plan.since_days} days` : "";
+
+  // ── THE SCOPED ANSWER NAMES THE COMPANY IT IS ABOUT ─────────────────────
+  //
+  // Said explicitly, because a scoped answer and a workspace-wide one are
+  // otherwise indistinguishable in the chat — and a user who cannot tell which
+  // question was answered cannot tell that the wrong one was.
+  if (plan.target === "company_detail" && plan.subject) {
+    const who = plan.subject.label || plan.subject.domain || "that company";
+    if (!result || result.empty) {
+      return `I don't have anything recorded about ${who}${window} yet — no signals, and it isn't being watched. I haven't gone looking; say the word and I'll run a check.`;
+    }
+    const { total = 0, watched = 0, ...byType } = result.counts;
+    const kinds = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
+    const recent = result.items.filter((i) => i.kind === "signal")
+      .slice(0, 5)
+      .map((r) => `• ${String(r.signal_type ?? "signal").replace(/_/g, " ")}` +
+        `${r.occurred_at ? ` — ${String(r.occurred_at).slice(0, 10)}` : ""}`)
+      .join("\n");
+    const head = total > 0
+      ? `${total} signal${total === 1 ? "" : "s"} recorded for ${who}${window}${kinds ? ` (${kinds})` : ""}.`
+      : `I have nothing recorded for ${who}${window}.`;
+    const watch = watched > 0 ? `\n\nIt's on your watch list.` : "";
+    return `${head}${recent ? `\n\n${recent}` : ""}${watch}`;
+  }
+
   if (!result || result.empty) {
     if (plan.target === "signals") {
       return `I don't have any signals recorded${window} yet. Once a workflow or a monitor runs, they'll show up here.`;
