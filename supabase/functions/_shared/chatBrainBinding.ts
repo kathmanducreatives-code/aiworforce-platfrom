@@ -65,6 +65,8 @@ export type BindingOutcome =
   | { kind: "lead_route"; reason: string }
   /** Read one page the user named. Reaches Firecrawl and nothing else. */
   | { kind: "url_analysis"; reason: string }
+  /** Research a topic via live web search, or say it is not configured. */
+  | { kind: "market_research"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -124,6 +126,12 @@ export function bindRoute(route: Route): BindingOutcome {
       // sourcing category would buy a search for a company already identified
       // by the link.
       return { kind: "url_analysis", reason: route.reason };
+
+    case "market_research":
+      // Its own surface, and the one research path with no named subject to
+      // bound it — so an unconfigured deployment must say so rather than
+      // returning a confident empty result.
+      return { kind: "market_research", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`

@@ -32,6 +32,9 @@ import {
 import { projectToLeadMission, type LeadProjection } from "./projectToLeadMission.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
 import { planUrlAnalysis, type UrlAnalysisPlan } from "./urlAnalysisSurface.ts";
+import {
+  planMarketResearch, type MarketResearchPlan,
+} from "./marketResearchSurface.ts";
 
 export const OBJECTIVE_ROUTER_VERSION = "objective-router-v1" as const;
 
@@ -57,7 +60,12 @@ export type RouteKind =
    * any url in a proposal, so a request the system can serve for the price of
    * one Firecrawl call was being refused as uncompilable.
    */
-  | "url_analysis";
+  | "url_analysis"
+  /**
+   * A topic, not an organisation. Served by live web search when the deployment
+   * has it, and refused honestly when it does not.
+   */
+  | "market_research";
 
 export interface Route {
   version: typeof OBJECTIVE_ROUTER_VERSION;
@@ -67,6 +75,8 @@ export interface Route {
   lead?: LeadProjection;
   /** Present only for `url_analysis`. Carries the page and the question. */
   url?: UrlAnalysisPlan;
+  /** Present only for `market_research`. Carries the topic. */
+  market?: MarketResearchPlan;
   /** Which parts this route serves. */
   part_ids: string[];
   /**
@@ -200,6 +210,22 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
       // exactly like any other research.
       may_spend: opts.spendAllowed,
       reason: "named_page_analysis",
+    };
+  }
+
+  // ── A MARKET IS NOT A POPULATION TO SOURCE ───────────────────────────────
+  //
+  // Also before the lead projection. A topic has no company profile, so the
+  // projection would either refuse it or — worse — treat the topic words as a
+  // description of companies to go and find, buying a discovery run for a
+  // question that asked for none.
+  const marketPlan = planMarketResearch(request);
+  if (marketPlan.topic && marketPlan.part_id) {
+    return {
+      ...base, kind: "market_research", market: marketPlan,
+      part_ids: [marketPlan.part_id],
+      may_spend: opts.spendAllowed,
+      reason: "topic_research",
     };
   }
 

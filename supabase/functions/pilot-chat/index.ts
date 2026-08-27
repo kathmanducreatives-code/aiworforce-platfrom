@@ -33,6 +33,9 @@ import {
 } from "../_shared/requestUnderstandingLog.ts";
 import { understandRequest } from "../_shared/chatBrain.ts";
 import { REQUEST_V1_VERSION } from "../_shared/requestV1.ts";
+import {
+  webSearchAvailable, SEARCH_WEB_UNAVAILABLE,
+} from "../_shared/marketResearchSurface.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import {
   bindRoute, chatBrainEnabled, type BindingOutcome,
@@ -1983,6 +1986,40 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         });
       }
 
+      // ── A TOPIC: LIVE SEARCH, OR AN HONEST "NOT CONFIGURED" ───────────
+      //
+      // The capability is ASKED, not inferred. This used to be decided by
+      // testing whether the validator had cleared `selected_actor_key` — three
+      // components agreeing on the meaning of one null, for a question that was
+      // never semantic: is web search configured in this deployment?
+      if (brainRoute.kind === "market_research" && brainRoute.market?.topic) {
+        if (!webSearchAvailable(readEnvSafe)) {
+          return await replyAndReturn(SEARCH_WEB_UNAVAILABLE, {
+            degraded: "search_web_unavailable",
+            chat_brain: { route: "market_research", served: false },
+          });
+        }
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId,
+          instruction: message,
+          missionOrigin: "chat_brain_market_research",
+          toolInput: {
+            tool_name: "search_web",
+            selected_actor_key: null,
+            source_type: null,
+            query: brainRoute.market.topic,
+            max_results: 10,
+            execution_mode: "research",
+            confidence: understood.request.confidence,
+            missing_fields: [],
+            reason: "chat brain: research on a topic, not an organisation",
+          } as unknown as ToolInput,
+          modelUsed: "chat-brain",
+          providerUsed: "openai",
+        });
+      }
+
       if (brainRoute.kind === "lead_mission" && brainRoute.lead) {
         const compiled = compileRequestMission(understood.request, brainRoute.lead, {
           originalUserQuery: message,
@@ -2901,11 +2938,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     });
   }
 
-  // 5c.v market_research → if validator degraded (no search_web), honest reply.
-  if (decision.workflow_category === "market_research" && !decision.selected_actor_key) {
-    const msg =
-      "Broad live web search isn't configured in this workspace, so I can't pull current market or competitor news on demand. What I can do: analyze a specific URL with Hawk + Firecrawl (paste the link), or collect structured signals with Scout + Apify (e.g. \"find companies hiring AI engineers in the US\"). Which would help most?";
-    return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
+  // 5c.v market_research → honest reply when live search is not configured.
+  //
+  // ASKS THE CAPABILITY DIRECTLY. This tested `!decision.selected_actor_key`,
+  // which the classifier leaves unset so the validator can fill or clear it —
+  // so whether the user got the truth depended on three components agreeing
+  // about one null. The sentence and the rule both live in
+  // `marketResearchSurface` now, reached identically from here and from the
+  // route above.
+  if (decision.workflow_category === "market_research" && !webSearchAvailable(readEnvSafe)) {
+    return await replyAndReturn(SEARCH_WEB_UNAVAILABLE, { degraded: "search_web_unavailable" });
   }
 
   // 5c.v-0 Phase 4.2 — extract commenters from a specific post (opt-in actor;

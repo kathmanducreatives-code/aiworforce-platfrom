@@ -10,6 +10,7 @@ import {
   isActorRuntimeEnabled,
 } from "./actorRegistry.ts";
 import type { WorkflowDecision } from "./workflowClassifier.ts";
+import { webSearchAvailable } from "./marketResearchSurface.ts";
 
 export interface ValidationResult {
   ok: boolean;
@@ -36,11 +37,14 @@ function envFlag(name: string): boolean {
   return ["1", "true", "yes", "on", "enabled"].includes(v.toLowerCase());
 }
 
-function isSearchWebEnabled(): boolean {
-  // Lovable AI grounded-search / Gemini search tool — gated by an explicit env flag.
-  // Default = disabled. We surface an honest message when off.
-  return envFlag("ENABLE_SEARCH_WEB") || !!envStr("SEARCH_WEB_API_KEY");
-}
+// ── ONE DEFINITION OF "IS WEB SEARCH CONFIGURED?" ───────────────────────────
+//
+// This held its own copy of the rule while `pilot-chat` inferred the answer
+// from whether this validator had cleared `selected_actor_key`. Three
+// components had to agree on the meaning of one null for the user to be told
+// the truth. The rule now lives with the surface that explains it, and this
+// file consumes it.
+const isSearchWebEnabled = (): boolean => webSearchAvailable();
 
 export function validateAgainstCapabilities(decision: WorkflowDecision): ValidationResult {
   const notes: string[] = [];

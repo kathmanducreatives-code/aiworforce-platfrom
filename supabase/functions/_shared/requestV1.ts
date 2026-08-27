@@ -109,6 +109,16 @@ export const REQUEST_ENTITIES = [
    * ask for it.
    */
   "approval",
+  /**
+   * A CATEGORY, TOPIC OR PROBLEM SPACE — not an organisation.
+   *
+   * "What's happening in AI recruiting?", "how is the RevOps tooling market
+   * moving?". The word is not invented here: `signal_events.subject_type` is
+   * already `competitor | company | market`, and documents `market` in exactly
+   * these terms. The semantic vocabulary was describing less than the persisted
+   * one; this aligns them rather than adding a third.
+   */
+  "market",
 ] as const;
 export type RequestEntity = typeof REQUEST_ENTITIES[number];
 
