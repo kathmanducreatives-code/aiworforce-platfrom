@@ -63,6 +63,8 @@ export type BindingOutcome =
   | { kind: "category"; category: BoundCategory; reason: string }
   /** A lead mission. The caller compiles `route.lead` and delegates it. */
   | { kind: "lead_route"; reason: string }
+  /** Read one page the user named. Reaches Firecrawl and nothing else. */
+  | { kind: "url_analysis"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -115,6 +117,13 @@ export function bindRoute(route: Route): BindingOutcome {
       // Stage 1, identity, unlocks, credits or provider selection changes — they
       // are downstream of the mission, and now they actually receive one.
       return { kind: "lead_route", reason: route.reason };
+
+    case "url_analysis":
+      // ITS OWN SURFACE, for the same reason `read` and `monitor` have theirs:
+      // a page the user named is served by Firecrawl, and turning it into a
+      // sourcing category would buy a search for a company already identified
+      // by the link.
+      return { kind: "url_analysis", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`

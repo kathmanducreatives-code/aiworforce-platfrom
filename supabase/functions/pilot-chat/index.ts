@@ -1946,6 +1946,43 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         decision.workflow_category = brainBinding.category;
       }
 
+      // ── A PAGE THE USER NAMED: ONE FIRECRAWL FETCH, NO SEARCH ─────────
+      //
+      // Reached from the route, so no regex read the sentence to find the URL.
+      // Three used to: `workflowClassifier.looksLikeURL`, `intentRouter`'s URL
+      // test and `toolInputPlanner`'s `hasUrl`, each over the raw message and
+      // each deciding meaning. The link is now a REFERENCE Chat Brain produced,
+      // and only its format is checked.
+      //
+      // The tool contract is the one `planToolInput` already produces for this
+      // case — same actor, same shape — so orchestrate and run-agent see nothing
+      // new.
+      if (brainRoute.kind === "url_analysis" && brainRoute.url?.url) {
+        console.log("[pilot-chat][url-analysis]", {
+          workspace_id: workspaceId,
+          host: (() => { try { return new URL(brainRoute.url.url).host; } catch { return null; } })(),
+        });
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId,
+          instruction: message,
+          missionOrigin: "chat_brain_url_analysis",
+          toolInput: {
+            tool_name: "scrape_url",
+            selected_actor_key: "firecrawl_scrape_url",
+            source_type: null,
+            query: brainRoute.url.url,
+            max_results: 1,
+            execution_mode: "research",
+            confidence: understood.request.confidence,
+            missing_fields: [],
+            reason: "chat brain: research on a page the user named",
+          } as unknown as ToolInput,
+          modelUsed: "chat-brain",
+          providerUsed: "openai",
+        });
+      }
+
       if (brainRoute.kind === "lead_mission" && brainRoute.lead) {
         const compiled = compileRequestMission(understood.request, brainRoute.lead, {
           originalUserQuery: message,

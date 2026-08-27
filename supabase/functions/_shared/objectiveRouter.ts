@@ -31,6 +31,7 @@ import {
 } from "./requestV1.ts";
 import { projectToLeadMission, type LeadProjection } from "./projectToLeadMission.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
+import { planUrlAnalysis, type UrlAnalysisPlan } from "./urlAnalysisSurface.ts";
 
 export const OBJECTIVE_ROUTER_VERSION = "objective-router-v1" as const;
 
@@ -47,7 +48,16 @@ export type RouteKind =
   /** Understood, but this system cannot serve it yet. */
   | "clarify"
   /** Understood, and blocked until the user resolves something. */
-  | "blocked";
+  | "blocked"
+  /**
+   * A page the user named, read directly.
+   *
+   * `research` whose reference is a URL. It cannot go down the lead path: the
+   * URL would enter `known_companies` and `scanProposalForViolations` refuses
+   * any url in a proposal, so a request the system can serve for the price of
+   * one Firecrawl call was being refused as uncompilable.
+   */
+  | "url_analysis";
 
 export interface Route {
   version: typeof OBJECTIVE_ROUTER_VERSION;
@@ -55,6 +65,8 @@ export interface Route {
   objective: RequestObjective;
   /** Present only for `lead_mission`. Absent everywhere else, deliberately. */
   lead?: LeadProjection;
+  /** Present only for `url_analysis`. Carries the page and the question. */
+  url?: UrlAnalysisPlan;
   /** Which parts this route serves. */
   part_ids: string[];
   /**
@@ -166,6 +178,28 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
       part_ids: partsFor(request, (p) => p.objective === "monitor"),
       may_spend: opts.spendAllowed && objectiveMaySpend("monitor"),
       reason: "future_observation",
+    };
+  }
+
+  // ── A NAMED PAGE IS READ, NOT SEARCHED FOR ───────────────────────────────
+  //
+  // BEFORE the lead projection, and that order is the point: the projection puts
+  // a reference's value into `known_companies`, and a URL there is refused by
+  // the proposal safety scan. Checked here, the URL never reaches a proposal at
+  // all, so the scan stays exactly as strict as it was.
+  //
+  // Only `research` qualifies. A `read` quoting a URL is asking what is already
+  // held about it and must reach no provider; a `source` request describes a
+  // population and has no single page to read.
+  const urlPlan = planUrlAnalysis(request);
+  if (urlPlan.url) {
+    return {
+      ...base, kind: "url_analysis", url: urlPlan,
+      part_ids: urlPlan.part_id ? [urlPlan.part_id] : base.part_ids,
+      // One scoped fetch of a page the user named, under the caller's authority
+      // exactly like any other research.
+      may_spend: opts.spendAllowed,
+      reason: "named_page_analysis",
     };
   }
 
