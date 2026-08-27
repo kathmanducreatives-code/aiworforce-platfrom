@@ -20,7 +20,7 @@
 // goes stale the first time somebody adds an import — which is the same class of
 // bug this script exists to stop. We read the imports.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -187,10 +187,23 @@ function main() {
   const unchanged = new Set();
   for (const f of fns) {
     process.stdout.write(`  ${f.name} ... `);
+    // ── BOTH STREAMS, BECAUSE THE NOTICE IS ON THE OTHER ONE ────────────
+    //
+    // `execFileSync` returns stdout. The Supabase CLI prints "Bundling" and
+    // "No change found in Function" to STDERR and only the success line to
+    // stdout, so reading the return value alone saw every deploy as a fresh
+    // one — the detection below silently never fired.
+    const res = spawnSync("supabase",
+      ["functions", "deploy", f.name, "--project-ref", TEST_REF],
+      { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
     try {
-      const out = String(execFileSync("supabase",
-        ["functions", "deploy", f.name, "--project-ref", TEST_REF],
-        { stdio: ["ignore", "pipe", "pipe"] }) ?? "");
+      if (res.error) throw res.error;
+      if (res.status !== 0) {
+        const e = new Error(`supabase exited ${res.status}`);
+        e.stderr = res.stderr;
+        throw e;
+      }
+      const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
       // ── "NO CHANGE FOUND" IS A RESULT, NOT A NON-EVENT ──────────────────
       //
       // The CLI hashes the bundle and skips an identical one, so `UPDATED_AT`
