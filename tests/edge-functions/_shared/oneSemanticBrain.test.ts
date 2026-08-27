@@ -145,3 +145,44 @@ Deno.test("9. an unowned clarification falls through to understanding", async ()
   assertEquals(clarificationOwnedBy({ pending_clarification: true }, "lead_source_selector"),
     null, "a legacy bare flag is claimed by no one");
 });
+
+// ══ 5. NOTHING SEMANTIC RUNS BEFORE THE BRAIN ══════════════════════════════
+
+Deno.test("10. no regex decides meaning before understandRequest", async () => {
+  // The gates that used to sit here — the daily-brief phrase table and the
+  // people/companies resolver — each decided what a message meant before the
+  // layer that exists to decide that was consulted. A message must reach Chat
+  // Brain unless something NON-semantic stops it: auth, membership, a malformed
+  // body, or a failure to record the turn.
+  const pilot = await read("pilot-chat/index.ts");
+  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
+  assert(brainAt > 0, "Chat Brain must be wired");
+
+  // Only the request handler, not the helpers declared above it.
+  const handlerAt = pilot.indexOf("async function handlePilotChat");
+  assert(handlerAt > 0 && handlerAt < brainAt);
+  const before = code(pilot.slice(handlerAt, brainAt));
+
+  assertFalse(/_RE\s*=|new RegExp\(/.test(before),
+    "no regex may be declared ahead of the semantic layer");
+  assertFalse(/classifyWorkflow\(|classifyIntent\(/.test(before.replace(
+    /const wf = await classifyWorkflow\(message\);[\s\S]*$/, "")),
+    "no classifier may return before Chat Brain is consulted");
+});
+
+Deno.test("11. the pre-brain returns are non-semantic, or owner-scoped", async () => {
+  // Each early return must be infrastructure (auth, membership, body, persistence)
+  // or a resolver answering ITS OWN question. Nothing may claim an arbitrary
+  // message on the strength of what it appears to say.
+  const pilot = await read("pilot-chat/index.ts");
+  const handlerAt = pilot.indexOf("async function handlePilotChat");
+  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
+  const before = pilot.slice(handlerAt, brainAt);
+
+  // The one non-infrastructure gate left is the lead source selector, and it is
+  // gated on ownership — it cannot read a question it did not ask.
+  const clarificationReturns = [...before.matchAll(/clarification: true/g)].length;
+  assert(clarificationReturns > 0, "the selector still resolves its own menu");
+  assert(before.includes('clarificationOwnedBy(meta, "lead_source_selector")'),
+    "and may only do so for clarifications it owns");
+});

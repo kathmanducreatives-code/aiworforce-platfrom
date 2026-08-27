@@ -1558,35 +1558,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     }
   }
 
-  // 5b. Daily-brief intent: deterministic route to daily-brief function.
-  const DAILY_BRIEF_RE =
-    /^\s*(brief me( on today)?|daily brief|today'?s (command )?brief|give me today'?s (command )?brief|what should i know today\??|what happened today\??|plan my day|what needs my attention\??)\s*[.!?]?\s*$/i;
-  if (DAILY_BRIEF_RE.test(message)) {
-    try {
-      const briefResp = await fetch(`${SUPABASE_URL}/functions/v1/daily-brief`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ workspace_id: workspaceId, conversation_id: conversationId }),
-      });
-      if (briefResp.ok) {
-        const briefBody = await briefResp.json();
-        return json({
-          type: "reply",
-          intent: "daily_brief",
-          conversation_id: conversationId,
-          message: briefBody?.message ?? null,
-          connectors_missing: briefBody?.connectors_missing ?? [],
-        });
-      }
-      console.warn("[pilot-chat] daily-brief non-2xx, falling through:", briefResp.status);
-    } catch (e) {
-      console.warn("[pilot-chat] daily-brief threw, falling through:", e);
-    }
-  }
+  // ── 5b REMOVED: THE DAILY-BRIEF REGEX GATE ──────────────────────────────
+  //
+  // It sat here, ahead of Chat Brain, and matched an anchored list of nine exact
+  // phrasings. Anything outside that list was not a brief however plainly it
+  // asked, and a request that WAS one never reached the semantic layer at all —
+  // a regex decided meaning before the brain was consulted.
+  //
+  // The brief is now a READ whose output shape is prose (`readSurface`'s "brief"
+  // target), so Chat Brain decides it from the request like every other
+  // objective and the surface below serves it. Same `daily-brief` function, same
+  // response; one fewer thing that can outrank understanding.
 
   // 5c. NEW: Workflow Classifier (Phase 1) — single source of truth.
   // Regex-first with Gemini fallback. Short-circuits direct-reply categories
@@ -1790,6 +1772,47 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // is read, never what may be spent — `readSurface` reaches no provider
         // either way.
         const plan = planRead(understood.request, resolvedBindings);
+
+        // ── THE BRIEF: SERVED BY THE FUNCTION THAT ALREADY BUILDS IT ──────
+        //
+        // Reached from the read route rather than from a regex gate, so the
+        // request was understood before it was routed here. `daily-brief`
+        // remains the single implementation — assembling a second one from
+        // `executeRead` would give the chat and the dashboard two answers to
+        // the same question, free to drift apart.
+        //
+        // A NON-2xx FALLS THROUGH to the ordinary read, which is honest: the
+        // workspace summary is unavailable, but "what do I hold?" still has an
+        // answer that costs nothing.
+        if (plan.target === "brief") {
+          try {
+            const briefResp = await fetch(`${SUPABASE_URL}/functions/v1/daily-brief`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: authHeader,
+                apikey: SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({
+                workspace_id: workspaceId, conversation_id: conversationId,
+              }),
+            });
+            if (briefResp.ok) {
+              const briefBody = await briefResp.json();
+              return json({
+                type: "reply",
+                intent: "daily_brief",
+                conversation_id: conversationId,
+                message: briefBody?.message ?? null,
+                connectors_missing: briefBody?.connectors_missing ?? [],
+              });
+            }
+            console.warn("[pilot-chat][brief] non-2xx, degrading to read:",
+              briefResp.status);
+          } catch (e) {
+            console.warn("[pilot-chat][brief] threw, degrading to read:", e);
+          }
+        }
         const result = plan.target
           ? await executeRead(admin as unknown as ReadDb, plan, workspaceId)
           : null;

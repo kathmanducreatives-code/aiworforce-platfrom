@@ -37,7 +37,17 @@ import { canonicalSubjectKey } from "./signalSubject.ts";
 export const READ_SURFACE_VERSION = "read-surface-v1" as const;
 
 /** What a read looks at. Derived from the request's entity, never its wording. */
-export type ReadTarget = "signals" | "companies" | "runs" | "company_detail";
+export type ReadTarget =
+  | "signals" | "companies" | "runs" | "company_detail"
+  /**
+   * THE WHOLE WORKSPACE, AS PROSE.
+   *
+   * "Brief me on today", "what needs my attention", "how are things looking?" —
+   * a read whose answer is a summary rather than a list. It is served by the
+   * existing `daily-brief` function, which is why this target carries no query
+   * of its own: `executeRead` returns null for it and the caller delegates.
+   */
+  | "brief";
 
 /**
  * ONE company, identified — the scope a resolved referent creates.
@@ -166,6 +176,26 @@ export function planRead(
   const limit = part.output.count && part.output.count > 0
     ? Math.min(part.output.count, 50) : DEFAULT_LIMIT;
 
+  // ── A READ THAT ASKS FOR PROSE IS A BRIEF ────────────────────────────────
+  //
+  // WHAT THIS REPLACES: a regex gate that ran BEFORE Chat Brain and matched an
+  // anchored list of nine exact phrasings — "brief me", "plan my day", "what
+  // needs my attention". Anything outside the list was not a brief however
+  // plainly it asked for one, and the gate decided meaning before the semantic
+  // layer was consulted at all.
+  //
+  // `output.shape` already carries this distinction and the model already sets
+  // it: `records` asks for a list of entities, `answer` asks for prose. A read
+  // wanting prose about the workspace IS the brief, and that is derived from
+  // the request rather than matched against it.
+  //
+  // A SCOPED read is excluded deliberately — once a referent has fixed one
+  // company, "how are they looking?" is a question about that company, not a
+  // workspace summary.
+  if (part.output.shape === "answer" && !subject) {
+    return { ...base, target: "brief", limit, since_days: recency };
+  }
+
   switch (part.subject.entity) {
     case "signal":
       // A scoped signal question is still about this company's evidence.
@@ -214,6 +244,10 @@ export async function executeRead(
   db: ReadDb, plan: ReadPlan, workspaceId: string,
 ): Promise<ReadResult | null> {
   if (!plan.target) return null;
+  // THE BRIEF IS NOT A QUERY. `daily-brief` already assembles it from approvals,
+  // signals and runs; duplicating that here would be a second answer to the
+  // same question, free to drift from the one the dashboard shows.
+  if (plan.target === "brief") return null;
   const sinceIso = plan.since_days
     ? new Date(Date.now() - plan.since_days * 86_400_000).toISOString() : null;
 
@@ -415,6 +449,14 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
       : `I have nothing recorded for ${who}${window}.`;
     const watch = watched > 0 ? `\n\nIt's on your watch list.` : "";
     return `${head}${recent ? `\n\n${recent}` : ""}${watch}`;
+  }
+
+  // The brief is served by `daily-brief`; reaching the renderer means that call
+  // did not succeed. Say so plainly rather than reporting an empty workspace —
+  // "you have nothing" and "I could not look" are different answers, and only
+  // one of them is true.
+  if (plan.target === "brief") {
+    return "I couldn't pull your workspace summary just now. Nothing is wrong with your data — the brief itself didn't come back. Try again in a moment, or ask me about your signals, leads or recent runs directly.";
   }
 
   if (!result || result.empty) {
