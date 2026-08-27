@@ -1,0 +1,111 @@
+{
+  "_": [
+    "HELD OUT. Authored before the Chat Brain prompt existed, and never edited in",
+    "response to a failure. If a case fails, the prompt or the parser changes —",
+    "not this file. Editing a case to match model behaviour converts the only",
+    "independent measurement in Phase B into a restatement of what the model",
+    "already does.",
+    "",
+    "Six objectives, with the distinctions that actually cost money:",
+    "  read     answer from evidence already held        must reach no provider",
+    "  research fresh check of a KNOWN/NAMED entity      one scoped paid call",
+    "  source   discovery of entities we do not know     full discovery spend",
+    "  monitor  future or recurring observation",
+    "  converse opinion, judgement, discussion           no work product",
+    "  compose  produce content from evidence",
+    "",
+    "Near-miss pairs are deliberate. Cases that differ by one word and route",
+    "differently are what separate understanding from keyword matching."
+  ],
+  "cases": [
+    { "utterance": "Find companies hiring SDRs.", "objective": "source" },
+    { "utterance": "Who's building out their sales org?", "objective": "source",
+      "note": "no named entity, so it is discovery even though it reads as a question" },
+    { "utterance": "I need a list of recruiting agencies in the UK.", "objective": "source" },
+    { "utterance": "Get me 20 fintech companies that just raised.", "objective": "source" },
+    { "utterance": "Which startups are expanding into Europe?", "objective": "source" },
+    { "utterance": "Pull together some B2B SaaS founders for outreach.", "objective": "source" },
+    { "utterance": "Anyone out there scaling their GTM team right now?", "objective": "source" },
+    { "utterance": "Show me new companies matching my ICP.", "objective": "source",
+      "note": "\"show me\" reads like a read, but no such records exist yet" },
+
+    { "utterance": "Check whether Vercel is recruiting.", "objective": "research" },
+    { "utterance": "Is Linear hiring salespeople at the moment?", "objective": "research" },
+    { "utterance": "Look into what Ramp has been posting about.", "objective": "research" },
+    { "utterance": "Dig into that company a bit more.", "objective": "research" },
+    { "utterance": "Find out if Stripe opened any GTM roles this month.", "objective": "research",
+      "note": "\"find out\" about a named company is research, not source" },
+    { "utterance": "Can you verify Notion actually raised a Series C?", "objective": "research" },
+
+    { "utterance": "What are my strongest signals?", "objective": "read" },
+    { "utterance": "Which companies came back from yesterday's run?", "objective": "read" },
+    { "utterance": "How many leads do I have in the library?", "objective": "read" },
+    { "utterance": "Summarise this week's signal activity.", "objective": "read" },
+    { "utterance": "Anything new since Monday?", "objective": "read" },
+    { "utterance": "Remind me which companies I'm already watching.", "objective": "read" },
+    { "utterance": "What did that last workflow actually find?", "objective": "read" },
+
+    { "utterance": "Keep watching Vercel.", "objective": "monitor" },
+    { "utterance": "Let me know if they start hiring.", "objective": "monitor" },
+    { "utterance": "Track funding rounds in the recruiting space from now on.", "objective": "monitor" },
+    { "utterance": "Set up something recurring for expansion signals.", "objective": "monitor" },
+    { "utterance": "Alert me when any of these post a sales role.", "objective": "monitor" },
+
+    { "utterance": "What do you think of my ICP?", "objective": "converse" },
+    { "utterance": "Do you think my ICP is too broad?", "objective": "converse" },
+    { "utterance": "Is targeting agencies a good idea for us?", "objective": "converse" },
+    { "utterance": "Why did that run cost so much?", "objective": "converse" },
+    { "utterance": "How does your hiring detection actually work?", "objective": "converse" },
+    { "utterance": "Thanks, that's helpful.", "objective": "converse" },
+    { "utterance": "Morning!", "objective": "converse" },
+    { "utterance": "Should I be going after enterprise or SMB?", "objective": "converse" },
+
+    { "utterance": "Turn that into a post.", "objective": "compose" },
+    { "utterance": "Draft me a LinkedIn post about this week's findings.", "objective": "compose" },
+    { "utterance": "Write three hooks I could use for that angle.", "objective": "compose" },
+    { "utterance": "Give me some content ideas from these signals.", "objective": "compose" },
+
+    { "utterance": "Find companies hiring sales roles.", "objective": "source",
+      "pair": "named-vs-unnamed" },
+    { "utterance": "Check if Vercel is hiring sales roles.", "objective": "research",
+      "pair": "named-vs-unnamed",
+      "note": "same evidence, same words — only a named entity separates them" },
+
+    { "utterance": "What companies are hiring SDRs?", "objective": "source",
+      "pair": "question-form" },
+    { "utterance": "Which of my companies are hiring SDRs?", "objective": "read",
+      "pair": "question-form",
+      "note": "\"my\" scopes it to evidence already held" },
+
+    { "utterance": "Watch for funding in fintech.", "objective": "monitor",
+      "pair": "now-vs-later" },
+    { "utterance": "Who in fintech just got funded?", "objective": "source",
+      "pair": "now-vs-later" },
+
+    { "utterance": "What do you think of these results?", "objective": "converse",
+      "pair": "opinion-vs-read" },
+    { "utterance": "What were these results?", "objective": "read",
+      "pair": "opinion-vs-read" },
+
+    { "utterance": "Is my ICP too narrow?", "objective": "converse",
+      "pair": "judgement-vs-work" },
+    { "utterance": "Find companies just outside my ICP.", "objective": "source",
+      "pair": "judgement-vs-work" }
+  ],
+  "mixed": [
+    { "utterance": "Find recently funded recruiting agencies and give me 3 post ideas.",
+      "objectives": ["source", "compose"], "dependent": true },
+    { "utterance": "Show me the strongest-signal companies and find the right people there.",
+      "objectives": ["read", "source"], "dependent": true },
+    { "utterance": "Research what recruitment founders are struggling with and build me a content plan.",
+      "objectives": ["research", "compose"], "dependent": true }
+  ],
+  "ambiguous": [
+    { "utterance": "Monitor them.", "blocking": true,
+      "note": "no referent — targeting the wrong entity spends on someone else's company" },
+    { "utterance": "Do that again.", "blocking": true },
+    { "utterance": "What about the second one?", "blocking": true },
+    { "utterance": "Find fast-growing companies.", "blocking": false,
+      "note": "vague but safe — narrows a population, cannot mis-target" }
+  ]
+}

@@ -125,6 +125,17 @@ export const GPT_STAGES = [
   "signal_relevance",
   /** Terra re-reading a relevance answer the validator could repair. */
   "signal_relevance_repair",
+  /**
+   * CHAT BRAIN. Turns arbitrary wording into a `RequestV1`.
+   *
+   * The FIRST decision in the system, and the one every later stage inherits:
+   * an utterance read as `source` when it meant `read` spends money answering a
+   * question, and nothing downstream can undo that. Same standing as
+   * `mission_compilation`, which carries the same note for the same reason.
+   */
+  "request_understanding",
+  /** Terra re-reading an understanding whose SHAPE the parser could repair. */
+  "request_understanding_repair",
 ] as const;
 
 export type GptStage = typeof GPT_STAGES[number];
@@ -266,6 +277,20 @@ const POLICY: Readonly<Record<GptStage, StagePolicy>> = Object.freeze({
       "re-ranks and explains clusters the deterministic floor already built; " +
       "it may demote and must cite, and cannot invent a signal — so the cost " +
       "of a wrong answer is a misordered card, not a fabricated one",
+  },
+  request_understanding: {
+    primary: LUNA, effort: "low", escalation: TERRA,
+    reason:
+      "the first read of what the user wants; an objective misread here spends " +
+      "money on a question, or answers a request that needed fresh evidence, " +
+      "and every later stage inherits the mistake",
+  },
+  request_understanding_repair: {
+    primary: TERRA, effort: "low", escalation: null,
+    reason:
+      "an understanding whose SHAPE the parser could repair — an unknown " +
+      "objective, a malformed part. Never used for an unavailable model: a " +
+      "provider failure degrades to a clarification rather than paying more",
   },
   signal_relevance_repair: {
     primary: TERRA, effort: "low", escalation: null,

@@ -28,6 +28,23 @@ import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflowClassifier.ts";
+import {
+  recordUnderstanding, type UnderstandingWriter,
+} from "../_shared/requestUnderstandingLog.ts";
+import { understandRequest } from "../_shared/chatBrain.ts";
+import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
+import {
+  bindRoute, chatBrainEnabled, type BindingOutcome,
+} from "../_shared/chatBrainBinding.ts";
+import {
+  planRead, executeRead, renderReadAnswer, type ReadDb,
+} from "../_shared/readSurface.ts";
+import {
+  planMonitor, executeMonitor, type MonitorDb,
+} from "../_shared/monitorSurface.ts";
+import {
+  heldEvidenceFor, renderHeldEvidence, type EvidenceDb,
+} from "../_shared/researchEvidenceGate.ts";
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
@@ -1538,6 +1555,212 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   const wf = await classifyWorkflow(message);
   const validated = validateAgainstCapabilities(wf);
   const decision = validated.decision;
+
+  // ══ CHAT BRAIN — THE AUTHORITATIVE UNDERSTANDING PATH ══════════════════
+  //
+  // The old classifiers above still RUN and are still logged; they are simply
+  // no longer what decides. `CHAT_BRAIN_ENABLED=false` restores them as
+  // authoritative in one variable, with no deploy — the whole stack is still
+  // present.
+  //
+  // What crosses this seam is a CATEGORY, nothing more. Every deterministic
+  // boundary below — Stage 0 feasibility, Stage 1 preview, identity, unlocks,
+  // credits, provider selection, execution validation — is downstream of that
+  // category and is untouched. In particular spend authority is computed by
+  // the router from workspace policy and can never be raised by anything the
+  // model returned; `parseRequestStrict` forces `may_spend: false` on every
+  // request before it is even routed.
+  // C0 — THE DURABLE WORKSPACE BLOCK. Already built by `companyBrainContext`;
+  // this is wiring, not authoring. It tells the model what "my ICP" refers to,
+  // and is explicitly not a source of requirements the user did not state.
+  //
+  // Fetched HERE rather than reused from further down: the Company Brain read
+  // at the reply layer happens after this point, and understanding cannot wait
+  // for it. One extra `maybeSingle` on an indexed key, and a failure yields no
+  // context rather than no answer — grounding is an improvement to
+  // understanding, never a precondition for it.
+  const workspaceContextBlock: string | null = await (async () => {
+    try {
+      const { data } = await admin.from("company_brain")
+        .select("profile, onboarding_completed")
+        .eq("workspace_id", workspaceId).maybeSingle();
+      const profile = (data?.profile ?? null) as Record<string, unknown> | null;
+      if (!profile || !hasUsableBrain(profile, data?.onboarding_completed === true)) {
+        return null;
+      }
+      return buildCompanyBrainContext(profile) || null;
+    } catch { return null; }
+  })();
+  const readEnvSafe = (k: string): string | undefined => {
+    try { return Deno.env.get(k); } catch { return undefined; }
+  };
+  let brainRoute: Route | null = null;
+  let brainBinding: BindingOutcome | null = null;
+  if (chatBrainEnabled(readEnvSafe)) {
+    const understood = await understandRequest(message, {
+      workspaceContext: workspaceContextBlock,
+      log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
+    }, { readEnv: readEnvSafe });
+
+    if (understood.ok) {
+      brainRoute = routeRequest(understood.request, {
+        // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
+        // user's explicit Start; this only says spending is possible at all.
+        spendAllowed: true,
+        confirmationRequired: true,
+      });
+      brainBinding = bindRoute(brainRoute);
+
+      await recordUnderstanding(admin as unknown as UnderstandingWriter, {
+        workspaceId, conversationId,
+        source: "chat_brain_shadow",
+        utterance: message,
+        objective: understood.request.objective,
+        confidence: understood.request.confidence,
+        metadata: {
+          authoritative: true,
+          route: brainRoute.kind,
+          route_reason: brainRoute.reason,
+          binding: brainBinding.kind,
+          may_spend: brainRoute.may_spend,
+          parts: understood.request.parts.map((x) => x.objective),
+          repaired: understood.repaired,
+          old_category: decision.workflow_category ?? null,
+          agreed: brainBinding.kind === "category"
+            ? brainBinding.category === decision.workflow_category : null,
+        },
+      });
+
+      // A BLOCKED OR UNSERVABLE REQUEST ANSWERS NOW AND STOPS. Nothing is
+      // executed and nothing is bought.
+      if (brainBinding.kind === "reply") {
+        const { data: saved } = await admin.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: brainBinding.message,
+          agent_slug: "pilot",
+          metadata: {
+            pending_clarification: true,
+            clarification_type: brainRoute.kind,
+            chat_brain: { route: brainRoute.kind, reason: brainRoute.reason },
+          },
+        }).select("*").single();
+        return json({
+          type: "reply", conversation_id: conversationId,
+          clarification: true, message: saved,
+        });
+      }
+      // ── READ: ANSWERED FROM HELD EVIDENCE, NO PROVIDER REACHED ────────
+      if (brainBinding.kind === "read") {
+        const plan = planRead(understood.request);
+        const result = plan.target
+          ? await executeRead(admin as unknown as ReadDb, plan, workspaceId)
+          : null;
+        const answer = renderReadAnswer(plan, result);
+        const { data: saved } = await admin.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: answer, agent_slug: "pilot",
+          metadata: {
+            chat_brain: { route: "read", target: plan.target,
+              counts: result?.counts ?? null, reason: brainRoute.reason },
+          },
+        }).select("*").single();
+        return json({ type: "reply", conversation_id: conversationId, message: saved });
+      }
+
+      // ── MONITOR: RECORDS AN INTENTION, BUYS NOTHING NOW ───────────────
+      if (brainBinding.kind === "monitor") {
+        const plan = planMonitor(understood.request);
+        const outcome = await executeMonitor(
+          admin as unknown as MonitorDb, plan, workspaceId);
+        const answer = outcome.error
+          ? "I couldn't work out exactly what to watch. Tell me the company and I'll set it up."
+          : outcome.already_watching
+          ? `You're already watching ${outcome.label}. I've left it as it is.`
+          : `Done — I'm watching ${outcome.label}${plan.signals.length ? ` for ${plan.signals.join(", ")}` : ""}. It'll be checked on the workspace's normal schedule.`;
+        const { data: saved } = await admin.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: answer, agent_slug: "pilot",
+          metadata: {
+            chat_brain: { route: "monitor", created: outcome.created,
+              already_watching: outcome.already_watching, reason: brainRoute.reason },
+          },
+        }).select("*").single();
+        return json({ type: "reply", conversation_id: conversationId, message: saved });
+      }
+
+      // ── RESEARCH: REUSE FRESH EVIDENCE BEFORE BUYING ANY ──────────────
+      //
+      // `research` asks a fresh question about a company the user named. When
+      // `signal_events` already holds a current answer, paying a provider to
+      // re-establish it is spending to learn what we know. The gate owns no
+      // freshness policy of its own — `signalFreshness` decides what "current"
+      // means, per signal type — and it fails TOWARD spending, so an unreadable
+      // table produces a real run rather than a false silence.
+      if (brainBinding.kind === "category" && brainRoute.kind === "lead_mission" &&
+          brainRoute.reason === "named_entity_investigation") {
+        const known = brainRoute.lead?.proposal.known_companies ?? [];
+        const needed = [...new Set(understood.request.parts
+          .flatMap((x) => (x.requirements ?? []).map((q) => String(q.event))))];
+        if (known.length > 0 && needed.length > 0) {
+          const held = await heldEvidenceFor(
+            admin as unknown as EvidenceDb, workspaceId, known, needed);
+          if (held.sufficient) {
+            const { data: saved } = await admin.from("messages").insert({
+              conversation_id: conversationId, role: "assistant",
+              content: renderHeldEvidence(known.join(", "), held),
+              agent_slug: "pilot",
+              metadata: {
+                chat_brain: { route: "research", served_from: "held_evidence",
+                  fresh: held.fresh.length, stale: held.stale, spent: false },
+              },
+            }).select("*").single();
+            return json({ type: "reply", conversation_id: conversationId, message: saved });
+          }
+          console.log("[pilot-chat][research] held evidence insufficient, running", {
+            known, needed, missing: held.missing, stale: held.stale,
+          });
+        }
+      }
+
+      // CHAT BRAIN OVERRIDES THE CLASSIFIER. `fallback` leaves the old verdict
+      // standing — the case where an objective still has no surface.
+      if (brainBinding.kind === "category") {
+        decision.workflow_category =
+          brainBinding.category as typeof decision.workflow_category;
+      }
+    } else {
+      // A MALFORMED OR UNAVAILABLE MODEL NEVER BECOMES source OR research. The
+      // old classifier decides, exactly as it did before this path existed.
+      console.warn("[pilot-chat][chat-brain] unreadable, deferring to classifier",
+        { reason: understood.reason, violations: understood.violations });
+    }
+  }
+
+  // ── PHASE 0 BASELINE ────────────────────────────────────────────────────
+  //
+  // Record what the CURRENT path decided. Chat Brain's whole safety argument
+  // is equivalence with this, and equivalence needs a baseline that does not
+  // exist anywhere today — none of the three classifiers leaves a durable
+  // trace of its verdict.
+  //
+  // Observation only. `recordUnderstanding` never throws and returns nothing
+  // to branch on, so no decision below can be altered by it. Awaited rather
+  // than fired-and-forgotten because an edge isolate can be torn down before
+  // an unawaited insert settles — the same rule the execution ledger follows.
+  await recordUnderstanding(admin as unknown as UnderstandingWriter, {
+    workspaceId,
+    conversationId,
+    source: "workflow_classifier",
+    utterance: message,
+    category: decision.workflow_category ?? null,
+    confidence: typeof wf.confidence === "number" ? wf.confidence : null,
+    metadata: {
+      source_type: decision.source_type ?? null,
+      validated: validated.ok ?? null,
+      pre_confirmed: isPreConfirmed,
+    },
+  });
 
   // Lead Intelligence Engine — confirmed-Start honor. When the user clicks Start
   // on a workflow-confirmation card, the card threads back the ORIGINAL

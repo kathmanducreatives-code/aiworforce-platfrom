@@ -1,0 +1,99 @@
+{
+  "_": [
+    "DEVELOPMENT SET — iterate against this, never against the held-out suite.",
+    "",
+    "WHY IT EXISTS. The live run scored 96% (53/55) with every single-objective",
+    "group and all ten near-miss pairs at 100%. Both failures were mixed",
+    "requests, and both failed the same way: the FIRST part's objective was read",
+    "as `source` when the message asked to read or to research. Decomposition",
+    "itself was correct in both — two parts, correct dependency direction — and",
+    "the second part was right in one of them.",
+    "",
+    "The error direction matters: read→source and research→source both move",
+    "TOWARD spending. That is the unsafe direction, so this is worth fixing",
+    "rather than accepting.",
+    "",
+    "NONE OF THE PHRASES BELOW APPEAR IN THE HELD-OUT SUITE. Tuning on the two",
+    "failing sentences would make the suite measure memorisation instead of",
+    "understanding; these exercise the same weakness class with different words.",
+    "The suite stays the judge, this stays the workbench."
+  ],
+  "weakness": "first-part objective in a multi-part message collapses to `source`",
+  "cases": [
+    {
+      "utterance": "Pull up my saved agencies and then go find similar ones.",
+      "objectives": [
+        "read",
+        "source"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "Tell me what we already know about Ramp, then check if they're hiring.",
+      "objectives": [
+        "read",
+        "research"
+      ],
+      "dependent": false,
+      "note": "the second ask does not need the first's RESULTS; narration order is not a data dependency"
+    },
+    {
+      "utterance": "Look into Notion's recent posts and draft something from it.",
+      "objectives": [
+        "research",
+        "compose"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "Which leads converted last month, and can you find more like them?",
+      "objectives": [
+        "read",
+        "source"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "Dig into that one company and then keep an eye on it.",
+      "objectives": [
+        "research",
+        "monitor"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "Summarise this week's signals and turn the best one into a hook.",
+      "objectives": [
+        "read",
+        "compose"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "See what Linear has been up to lately and write me a comment for it.",
+      "objectives": [
+        "research",
+        "compose"
+      ],
+      "dependent": true
+    },
+    {
+      "utterance": "Go find fintech companies raising rounds, then watch them.",
+      "objectives": [
+        "source",
+        "monitor"
+      ],
+      "dependent": true,
+      "note": "control — first part genuinely IS source; must not overcorrect"
+    },
+    {
+      "utterance": "Find agencies hiring AEs and give me three angles.",
+      "objectives": [
+        "source",
+        "compose"
+      ],
+      "dependent": true,
+      "note": "control — the one mixed case that already passes, in new words"
+    }
+  ]
+}
