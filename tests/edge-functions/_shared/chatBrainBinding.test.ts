@@ -7,7 +7,7 @@
 //
 // Pure. No network, no model, no database.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   bindRoute, chatBrainEnabled, CHAT_BRAIN_FLAG,
 } from "../../../supabase/functions/_shared/chatBrainBinding.ts";
@@ -62,10 +62,32 @@ Deno.test("conversation becomes conversation", () => {
   assert(b.kind === "category" && b.category === "simple_chat");
 });
 
-Deno.test("a lead mission enters the hardened path by its existing category", () => {
+Deno.test("a lead mission is a ROUTE, never a category", () => {
+  // It used to bind to the category "qualified_lead_sourcing", which is not a
+  // member of `WorkflowCategory`. Nothing downstream matched it, so a correctly
+  // understood sourcing request fell through every branch, delegated with no
+  // mission, and was refused as `mission_not_compiled`.
+  //
+  // The caller now compiles `route.lead` and delegates the mission itself.
   const b = bindRoute(route({ kind: "lead_mission", objective: "source" }));
-  assertEquals(b.kind, "category");
-  assert(b.kind === "category" && b.category === "qualified_lead_sourcing");
+  assertEquals(b.kind, "lead_route");
+  assertEquals(b.kind === "category", false, "a lead route carries a payload, not a string");
+});
+
+Deno.test("the surviving category vocabulary is one value wide", async () => {
+  // `BoundCategory` is what stops the laundering growing back. A category
+  // outside it must not type-check, so the union is asserted literally.
+  const SRC = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/chatBrainBinding.ts", import.meta.url));
+  const m = SRC.match(/export type BoundCategory\s*=\s*([^;]+);/);
+  assert(m, "BoundCategory must be declared");
+  assertEquals(m![1].trim(), '"simple_chat"');
+  // Comments stripped — the header names the removed value in order to record
+  // why it was removed, and that is documentation, not a live category.
+  const code = SRC.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(code.includes("qualified_lead_sourcing"),
+    "the invalid category must not survive in executable code");
 });
 
 Deno.test("read and monitor reach their OWN surfaces, not a category", () => {
@@ -84,7 +106,7 @@ Deno.test("read and monitor reach their OWN surfaces, not a category", () => {
 Deno.test("every route kind is bound — none falls through silently", () => {
   for (const kind of ["blocked", "clarify", "converse", "lead_mission", "read", "monitor"] as Array<Route["kind"]>) {
     const b = bindRoute(route({ kind }));
-    assert(["reply", "category", "read", "monitor", "fallback"].includes(b.kind), kind);
+    assert(["reply", "category", "lead_route", "read", "monitor", "fallback"].includes(b.kind), kind);
     assert(b.reason, `${kind} must state a reason`);
   }
 });
@@ -119,10 +141,31 @@ Deno.test("pilot-chat overrides the classifier only for a bound category", async
   const end = SRC.indexOf("── PHASE 0 BASELINE", i);
   assert(end > i, "the Phase 0 baseline must follow the Chat Brain block");
   const block = SRC.slice(i, end);
-  assert(block.includes('if (brainBinding.kind === "category")'),
-    "only a bound category replaces the classifier's verdict");
-  assert(block.includes("decision.workflow_category ="),
-    "and that is the ONLY thing it replaces");
+  // ── A LEAD ROUTE COMPILES A MISSION; IT DOES NOT SET A CATEGORY ────────
+  //
+  // This asserted the opposite — that the route's only effect was
+  // `decision.workflow_category = ...` — and that assignment was the defect.
+  // The value written was "qualified_lead_sourcing", which is not a member of
+  // `WorkflowCategory`, so no branch matched it, the request fell through to a
+  // deep fallback and delegated with no mission. Orchestrate then refused it as
+  // `mission_not_compiled`. Understanding the request correctly was what broke
+  // it.
+  //
+  // The route now carries its own payload to its own surface.
+  assert(block.includes('brainRoute.kind === "lead_mission"'),
+    "a lead route must be handled as a route, not laundered into a category");
+  assert(block.includes("compileRequestMission("),
+    "the projection Chat Brain produced must be compiled into the mission");
+  assert(block.includes("delegateToOrchestrate("),
+    "and delegated directly, carrying that mission");
+  // Comments stripped: the prose in this region NAMES the removed assignment in
+  // order to explain it, and scanning that as code matches its own explanation.
+  const blockCode = block.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  const assigns = [...blockCode.matchAll(/decision\.workflow_category\s*=\s*([^;]+);/g)]
+    .map((m) => m[1].trim());
+  assertEquals(assigns, ["brainBinding.category"],
+    "the only surviving translation is the typed BoundCategory for converse");
   // A model failure must never become a spending objective.
   assert(block.includes("deferring to classifier"),
     "an unreadable model leaves the old verdict standing");

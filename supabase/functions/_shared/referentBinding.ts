@@ -112,13 +112,28 @@ const ORDINALS: Readonly<Record<string, number>> = Object.freeze({
 });
 
 /**
- * Does this reference point at a prior result rather than name something?
+ * Does this reference point at something displayed EARLIER IN THIS CONVERSATION?
+ *
+ * ── WHY `saved_set` IS NOT ONE ─────────────────────────────────────────────
+ *
+ * This admitted `saved_set` too, and that single word broke ordinary use of the
+ * product. `saved_set` means a DURABLE WORKSPACE COLLECTION — "my leads", "my
+ * ICP", "the companies I'm targeting". Those live in the database and are
+ * resolved by a surface against workspace rows. They are not chat referents,
+ * and this resolver's only corpus is chat referents.
+ *
+ * So every "what leads do I have?" in a fresh conversation resolved against an
+ * empty corpus, failed `no_prior_results`, and returned "I don't have an
+ * earlier result to point back to — which company do you mean?" — a question
+ * about a company, asked because the user said the word "my". Worse, the
+ * failure returns BEFORE the router, so the read surface that could have
+ * answered it was never reached.
  *
  * `kind` is Chat Brain's own classification and is trusted for THAT — it is a
  * judgement about language, which is the model's job. What the model never
- * decides is which record the reference resolves to.
+ * decides is which record a reference resolves to, or which corpus is searched.
  */
-const pointsBack = (kind: string) => kind === "prior_result" || kind === "saved_set";
+const pointsBack = (kind: string) => kind === "prior_result";
 
 /** Pick the entity an ordinal or a name selects, or say why none could be. */
 function selectEntity(
@@ -215,7 +230,10 @@ export function resolveReferents(
         source: {
           message_id: source?.message_id ?? null,
           result_index: entities.indexOf(entity),
-          kind: ref.kind === "saved_set" ? "saved_set" : "prior_result",
+          // Only `prior_result` reaches here now; a saved set is never bound
+          // from chat referents. The union keeps `saved_set` for a future
+          // surface-side binding, which would carry a different provenance.
+          kind: "prior_result",
         },
         // A weak dedupe kind never reaches here, so anything bound is a match
         // on domain, LinkedIn id or LinkedIn URL.

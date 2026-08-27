@@ -84,6 +84,14 @@ EVERY PART IS JUDGED ON ITS OWN. In a message with several asks, decide each par
 
 ENTITY: ${REQUEST_ENTITIES.join(", ")}.
 
+REFERENCES — what the message points at. Pick the kind by WHERE the thing lives, not by how it is worded.
+named         The user's own words for a specific thing: "Vercel", "acme.com", a URL they pasted.
+saved_set     A durable collection in their workspace that exists independently of this conversation: "my leads", "my ICP", "the companies I'm watching", "my pipeline", "the ones I saved". Possessives about their own stored data are almost always this.
+prior_result  Something YOU showed them earlier IN THIS CONVERSATION, referred to by position or pronoun: "them", "that one", "the second company", "the third". Use this ONLY when the message points back at a list or result from an earlier turn of this same conversation.
+
+The difference matters: prior_result is resolved against what was displayed in this chat, and nothing else. If you mark a durable workspace collection as prior_result, the request is refused with a question about which company was meant. When the user is talking about their own saved data rather than something you just showed them, it is saved_set.
+A message with no earlier turn to point back to cannot contain a prior_result.
+
 REQUIREMENTS are evidence that must hold. Use ONLY these events: ${SIGNAL_EVENTS.join(", ")}.
 Subjects: ${SIGNAL_SUBJECTS.join(", ")}.
 Put the user's own words for a role in qualifier.role_terms, verbatim - not a normalised form. Their words decide what counts as evidence.

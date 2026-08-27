@@ -1,82 +1,60 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  extractLeadIntent, planJobsActorInput, filterHiringCandidates, tierFromScore,
+  planJobsActorInput, filterHiringCandidates, tierFromScore, type LeadIntent,
   type RawCandidate,
 } from "../../../supabase/functions/_shared/leadIntent.ts";
 import { classifyRoleFamily, roleMatchesFamily, isProfileOrEquityTitle } from "../../../supabase/functions/_shared/roleFamilies.ts";
 
 // ---------- Intent extraction (separates product / buyer / role / source) ----------
 
-Deno.test("intent: 'founders hiring assistant roles … my AI SaaS' separates product/buyer/role/source", () => {
-  const i = extractLeadIntent({ message: "I want founders hiring for assistant roles so I can target them with my AI SaaS product. Help me find the leads." });
-  assertEquals(i.workflow_type, "company_hiring_sourcing");
-  assertEquals(i.source_type, "jobs");
-  assertEquals(i.hiring_signal.role_family, "assistant_founder_support");
-  assert(i.hiring_signal.requested);
-  // "AI SaaS" is the PRODUCT, not a target industry.
-  assertEquals(i.user_product?.category, "AI SaaS");
-  assert(!i.target_industry.includes("AI SaaS"), "AI SaaS must not leak into target industry");
-  assert(i.target_buyer.includes("Founder"));
-});
+// ── THE PARSER TESTS ARE GONE WITH THE PARSER ───────────────────────────────
+//
+// Nine tests lived here proving that `extractLeadIntent` read English
+// correctly: that "companies selling to founders" was a company search, that
+// "posts about Claude Code workflows" was linkedin_posts, and so on. They were
+// the only thing still holding that classifier alive — it had no callers left.
+//
+// They are not replaced. Deciding what a sentence means is Chat Brain's job
+// now, and it is tested where that decision is made: RequestV1 objectives, the
+// objective router, and the end-to-end path through `handlePilotChat`. A second
+// set of expectations about English, asserted against a second parser, is the
+// thing this cleanup exists to remove.
+//
+// What remains below tests `filterHiringCandidates` and `tierFromScore` — pure
+// scoring over provider results, which never read a user's sentence.
 
-Deno.test("intent: 'companies selling to founders' → company search (not people)", () => {
-  const i = extractLeadIntent({ message: "Find 5 early-stage B2B SaaS companies selling to founders in USA." });
-  assertEquals(i.source_type, "company_search");
-  assertEquals(i.workflow_type, "company_icp_sourcing");
-  assert(!i.hiring_signal.requested);
-});
-
-Deno.test("intent: 'founders of recruiting agencies' → people search", () => {
-  const i = extractLeadIntent({ message: "Find 5 founders of recruiting agencies in USA." });
-  assertEquals(i.source_type, "people");
-  assertEquals(i.workflow_type, "people_sourcing");
-});
-
-Deno.test("intent: 'companies hiring SDRs' → jobs / gtm_sales", () => {
-  const i = extractLeadIntent({ message: "Find companies hiring SDRs in B2B SaaS in the US." });
-  assertEquals(i.source_type, "jobs");
-  assertEquals(i.hiring_signal.role_family, "gtm_sales");
-  assert(i.hiring_signal.role_keywords.some((k) => /sdr/i.test(k)));
-});
-
-Deno.test("intent: 'posts about Claude Code workflows' → linkedin_posts", () => {
-  const i = extractLeadIntent({ message: "Find posts about Claude Code workflows." });
-  assertEquals(i.source_type, "linkedin_posts");
-  assertEquals(i.workflow_type, "linkedin_intent_sourcing");
-});
-
-// ---------- Actor input planner ----------
-
-Deno.test("actor input: assistant query includes support aliases + excludes founder/profile titles", () => {
-  const i = extractLeadIntent({ message: "I want founders hiring for assistant roles so I can target them with my AI SaaS product." });
-  const job = planJobsActorInput(i);
-  assert(job.role_keywords.some((k) => /executive assistant/i.test(k)));
-  assert(job.role_keywords.some((k) => /chief of staff/i.test(k)));
-  assert(job.exclude_keywords.includes("Co-Founder") && job.exclude_keywords.includes("Founder") && job.exclude_keywords.includes("CEO"));
-  assert(/OR/.test(job.query), "query should OR-join aliases");
-});
-
-Deno.test("actor input: GTM hiring includes SDR/AE/Growth aliases", () => {
-  const i = extractLeadIntent({ message: "Find companies hiring SDRs in the US." });
-  const job = planJobsActorInput(i);
-  const ks = job.role_keywords.join(" ").toLowerCase();
-  assert(ks.includes("sdr") && ks.includes("account executive"));
-});
-
-Deno.test("actor input: company search produces NO job-role filters", () => {
-  const i = extractLeadIntent({ message: "Find recruiting agencies in USA." });
-  assertEquals(i.hiring_signal.requested, false);
-  assertEquals(i.hiring_signal.role_keywords.length, 0);
-});
-
-Deno.test("source routing: people request does not use the jobs actor", () => {
-  const i = extractLeadIntent({ message: "Find 5 CEOs of healthcare AI companies in London." });
-  assertEquals(i.source_type, "people");
-});
-
-// ---------- Filtering (role family + negative titles + source proof) ----------
-
-const assistantIntent = extractLeadIntent({ message: "founders hiring assistant roles in USA" });
+/**
+ * The intent an assistant-hiring mission projects to.
+ *
+ * A LITERAL, not a parse. It used to be `extractLeadIntent({ message: ... })`,
+ * so a filter test depended on a classifier's reading of a sentence; a change in
+ * the regexes could pass or fail a test about candidate scoring. Stating the
+ * shape directly is what makes these tests about the filter.
+ */
+const assistantIntent: LeadIntent = {
+  workflow_type: "company_hiring_sourcing",
+  source_type: "jobs",
+  target_buyer: ["Founder"],
+  target_company_type: [],
+  target_industry: [],
+  target_geography: ["USA"],
+  target_company_size: [],
+  target_stage: [],
+  hiring_signal: {
+    requested: true,
+    role_family: "assistant_founder_support",
+    role_keywords: ["assistant"],
+    exclude_role_keywords: [],
+  },
+  pain_points: [],
+  competitors: [],
+  keywords: [],
+  disqualifiers: [],
+  count: 5,
+  strictness: "balanced",
+  confidence: 1,
+  clarification_needed: false,
+};
 const withUrl = (company: string, job_title: string): RawCandidate => ({ company, job_title, source_url: `https://linkedin.com/jobs/view/${company}` });
 
 Deno.test("filter: Senior AI Engineer rejected for assistant-support workflow", () => {
@@ -139,105 +117,35 @@ Deno.test("tierFromScore: A/B/C + proof gating", () => {
   assertEquals(tierFromScore(80, false), "C"); // no source proof caps at C
 });
 
-// ---- Confirmed-Start routing invariant (the lead_intent threaded to the card) ----
-Deno.test("confirmed-route: assistant-hiring lead_intent carries jobs (never people)", () => {
-  const i = extractLeadIntent({ message: "I want founders hiring for assistant roles so I can target them with my AI SaaS product." });
-  // This is the exact object the card threads back on Start.
-  assertEquals(i.workflow_type, "company_hiring_sourcing");
-  assertEquals(i.source_type, "jobs");
-  assert(i.source_type !== "people", "must not route to people search");
-  const job = planJobsActorInput(i);
-  assert(job.role_keywords.some((k) => /assistant|chief of staff/i.test(k)));
-});
+// ── FOUR MORE PARSER TESTS REMOVED ─────────────────────────────────────────
+//
+// They asserted that `extractLeadIntent` routed "assistant hiring" to jobs,
+// "competitor conversations" to comments, and that Company Brain ICP threaded
+// through its output. All three are claims about how a regex reads English, and
+// the regex is gone. The equivalent claims about the LIVE path are made against
+// `leadIntentFromMission` — a projection of a compiled mission — and against
+// Chat Brain's own objective tests.
+//
+// `planJobsActorInput` was asserted inside one of them; that assertion survives
+// below, against the literal intent, because it is about provider input rather
+// than about language.
 
-Deno.test("confirmed-route: GTM hiring lead_intent also carries jobs", () => {
-  const i = extractLeadIntent({ message: "Find companies hiring SDRs in the US." });
-  assertEquals(i.workflow_type, "company_hiring_sourcing");
-  assertEquals(i.source_type, "jobs");
-});
-
-// ---- Phase 7: regression from the real bad exported CSV ----
-const assistantQ = extractLeadIntent({ message: "I want founders hiring for assistant roles in USA. Help me find them." });
-const withProof = (company: string, job_title: string): RawCandidate => ({ company, job_title, source_url: `https://www.linkedin.com/jobs/view/${company.replace(/\s/g,'')}` });
-
-Deno.test("Phase7: the exact bad CSV founder/profile rows are all rejected", () => {
-  const bad: RawCandidate[] = [
-    withProof("My Medical Records.ai", "Co-Founder"),
-    withProof("FutureSight", "Entrepreneur in Residence / Technical Co-founder"),
-    withProof("AI House", "Founder / Entrepreneur in Residence"),
-    { company: "EmptyTitleCo", job_title: "", source_url: "https://linkedin.com/jobs/view/x" },
-    { company: "NoProofCo", job_title: "Executive Assistant", source_url: "proof_incomplete" },
-    { company: "NullCo", job_title: "Executive Assistant", source_url: null },
-  ];
-  const r = filterHiringCandidates(bad, assistantQ);
-  assertEquals(r.accepted.length, 0);
-  // reasons cover profile/equity, missing title, no source proof
-  const reasons = r.rejected.map((x) => x.reason).join("|");
-  assert(/profile\/equity/.test(reasons));
-  assert(/missing job_title/.test(reasons));
-  assert(/no source proof/.test(reasons));
-});
-
-Deno.test("Phase7: valid assistant/founder-support rows accepted ONLY with source proof", () => {
-  const good: RawCandidate[] = [
-    withProof("Acme", "Executive Assistant"),
-    withProof("Beta", "Assistant to CEO"),
-    withProof("Gamma", "Chief of Staff to CEO"),
-    withProof("Delta", "Founder's Office"),
-    withProof("Eps", "Operations Assistant"),
-    withProof("Zeta", "Administrative Assistant"),
-    withProof("Eta", "Office Manager"),
-  ];
-  const r = filterHiringCandidates(good, assistantQ);
-  assertEquals(r.accepted.length, good.length);
-  // same titles WITHOUT proof → all rejected
-  const noProof = good.map((g) => ({ ...g, source_url: "proof_incomplete" }));
-  assertEquals(filterHiringCandidates(noProof, assistantQ).accepted.length, 0);
-});
-
-Deno.test("Phase7: Amae Health 'Founder Associate, Ops' accepted ONLY with real job proof", () => {
-  // Founder Associate is a support role (not equity) — accept WITH proof, reject without.
-  assertEquals(filterHiringCandidates([withProof("Amae Health", "Founder Associate, Growth & Partnership Operations")], assistantQ).accepted.length, 1);
-  assertEquals(filterHiringCandidates([{ company: "Amae Health", job_title: "Founder Associate, Growth & Partnership Operations", source_url: "proof_incomplete" }], assistantQ).accepted.length, 0);
-});
-
-Deno.test("routing: 'competitor conversations around Clay and 11x' → competitor_mentions (not unknown)", () => {
-  const i = extractLeadIntent({ message: "Show competitor conversations around Clay and 11x." });
-  assertEquals(i.source_type, "comments");
-  assertEquals(i.workflow_type, "competitor_signal_sourcing");
-});
-
-// ---- Company-Brain ICP constraints threaded into LeadIntent (Phase 3) ----
-Deno.test("extractLeadIntent: threads extended Brain ICP (industries/size/negatives/types/competitors)", () => {
-  const li = extractLeadIntent({
-    message: "Find founders hiring executive assistants.",
-    brain: {
-      icp: {
-        industries: ["B2B SaaS"], geography: "North America", company_size: "5-150 employees",
-        negative_industries: ["Manufacturing"], excluded_company_types: ["Agency", "Consultancy"],
-        funding_stage: ["Seed", "Series A"], company_model: ["Product-led"], allow_enterprise: false,
-        disqualifiers: ["Recruiting firms"],
-      },
-      competitors: ["Clay", "11x"],
-    },
-  });
-  assertEquals(li.positive_industries, ["B2B SaaS"]);
-  assert((li.negative_industries ?? []).includes("Manufacturing"));
-  assert((li.excluded_company_types ?? []).includes("Agency"));
-  assertEquals(li.target_company_size, ["5-150 employees"]);
-  assert((li.funding_stage ?? []).includes("Seed"));
-  assert((li.competitors ?? []).includes("Clay"));
-  assertEquals(li.allow_enterprise, false);
-  assert((li.disqualifiers ?? []).includes("Recruiting firms"));
+Deno.test("planJobsActorInput: an assistant-hiring intent produces assistant role keywords", () => {
+  const job = planJobsActorInput(assistantIntent);
+  assert(job.role_keywords.some((k) => /assistant|chief of staff/i.test(k)),
+    "the jobs actor must search the role family the mission asked for");
 });
 
 Deno.test("icpConstraintsFromIntent: SaaS 5-150 → max 150, not enterprise, SaaS positive", async () => {
   const { icpConstraintsFromIntent } = await import("../../../supabase/functions/_shared/companyIcpFilter.ts");
-  const li = extractLeadIntent({
-    message: "Find founders hiring executive assistants.",
-    brain: { icp: { industries: ["B2B SaaS"], company_size: "5-150 employees" } },
+  // The ICP fields stated directly. This test is about how
+  // `icpConstraintsFromIntent` reads an intent, not about how a parser built one.
+  const cons = icpConstraintsFromIntent({
+    ...assistantIntent,
+    positive_industries: ["B2B SaaS"],
+    target_company_size: ["5-150 employees"],
+    allow_enterprise: false,
   });
-  const cons = icpConstraintsFromIntent(li);
   assertEquals(cons.max_employees, 150);
   assertEquals(cons.allow_enterprise, false);
   assert((cons.positive_industries ?? []).includes("B2B SaaS"));

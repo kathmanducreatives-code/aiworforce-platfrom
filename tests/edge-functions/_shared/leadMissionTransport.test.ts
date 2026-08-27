@@ -220,7 +220,15 @@ Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail
   // people request the regex-first classifier WAS the interpreter, and under
   // new_architecture orchestrate refused the task outright.
   assert(supplied.includes("peopleMission"), "people sourcing supplies a mission");
-  assertEquals(new Set(supplied).size, 4, "exactly four lead paths supply a mission");
+  // ── AND THE FIFTH: THE ONE THE OTHERS EXIST TO BE REPLACED BY ──────────
+  //
+  // The Chat Brain route compiles `RequestV1` -> `projectToLeadMission` ->
+  // `compileLeadMission` and delegates the result. It is counted here for the
+  // same reason as the other four: a lead-capable delegate that carries no
+  // mission is refused at the chokepoint, so every one of them must supply one.
+  assert(supplied.includes("mission"),
+    "the Chat Brain request route supplies a compiled mission");
+  assertEquals(new Set(supplied).size, 5, "exactly five lead paths supply a mission");
 
   // ANY OTHER BRANCH THAT REACHES ORCHESTRATE WITH LEAD INTENT IS STILL SAFE,
   // because orchestrate is the chokepoint: under new_architecture a request

@@ -48,6 +48,12 @@ import {
 } from "../_shared/referentPersistence.ts";
 import { loadLatestReferents, type ReferentDb } from "../_shared/referentLookup.ts";
 import {
+  pendingClarification, clarificationOwnedBy,
+} from "../_shared/clarificationContract.ts";
+import {
+  compileRequestMission, unrepresentedRequirements,
+} from "../_shared/requestToMission.ts";
+import {
   planMonitor, executeMonitor, type MonitorDb,
 } from "../_shared/monitorSurface.ts";
 import {
@@ -1427,7 +1433,15 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       .maybeSingle();
 
     const meta: any = lastAssistant?.metadata ?? null;
-    if (meta && meta.pending_clarification === true) {
+    // ── ONLY THIS RESOLVER'S OWN QUESTIONS ──────────────────────────────
+    //
+    // This read a bare `pending_clarification === true` written by five
+    // different sites, so it claimed turns belonging to workflows the user had
+    // never entered — Chat Brain asked which company was meant, and this
+    // answered with "individual profiles or companies hiring", then re-armed
+    // the flag. A question nobody claims now falls through to normal
+    // understanding, which is the correct default and was unreachable before.
+    if (meta && clarificationOwnedBy(meta, "lead_source_selector")) {
       const reply = message.toLowerCase();
       const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?|engineers? to hire|hire (someone|engineers?|developers?))\b/i;
       const companiesRe = /\b(compan(?:y|ies)|hiring|jobs?|roles?|openings?|careers?|recruit)\b/i;
@@ -1457,8 +1471,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             model_used: "google/gemini-3-flash-preview",
             metadata: {
               ...meta,
-              pending_clarification: true,
-              clarification_type: "people_unavailable",
+              ...pendingClarification("lead_source_selector", "people_unavailable"),
               prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
             },
           })
@@ -1494,8 +1507,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               model_used: "google/gemini-3-flash-preview",
               metadata: {
                 ...meta,
-                pending_clarification: true,
-                clarification_type: "agency_unavailable",
+                ...pendingClarification("lead_source_selector", "agency_unavailable"),
                 prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
               },
             })
@@ -1534,7 +1546,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             model_used: "google/gemini-3-flash-preview",
             metadata: {
               ...meta,
-              pending_clarification: true,
+              ...pendingClarification("lead_source_selector", "reask_people_or_companies"),
               prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
             },
           })
@@ -1608,12 +1620,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // for it. One extra `maybeSingle` on an indexed key, and a failure yields no
   // context rather than no answer — grounding is an improvement to
   // understanding, never a precondition for it.
+  // The same read serves understanding AND compilation: the compiler applies the
+  // workspace profile under its own precedence rules, and fetching it twice
+  // would let the two layers disagree about what the workspace says.
+  let brainProfileForMission: Record<string, unknown> | null = null;
   const workspaceContextBlock: string | null = await (async () => {
     try {
       const { data } = await admin.from("company_brain")
         .select("profile, onboarding_completed")
         .eq("workspace_id", workspaceId).maybeSingle();
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
+      brainProfileForMission = profile;
       if (!profile || !hasUsableBrain(profile, data?.onboarding_completed === true)) {
         return null;
       }
@@ -1680,8 +1697,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           content: first.question,
           agent_slug: "pilot",
           metadata: {
-            pending_clarification: true,
-            clarification_type: "referent",
+            ...pendingClarification("referent", `referent:${first.reason}`, {
+              request_part_id: first.part_id,
+              required_fields: ["subject.references"],
+            }),
             chat_brain: {
               route: "referent_unresolved",
               reason: `referent:${first.reason}`,
@@ -1754,8 +1773,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           content: brainBinding.message,
           agent_slug: "pilot",
           metadata: {
-            pending_clarification: true,
-            clarification_type: brainRoute.kind,
+            ...pendingClarification("objective_route", brainRoute.reason),
             chat_brain: { route: brainRoute.kind, reason: brainRoute.reason },
           },
         }).select("*").single();
@@ -1883,11 +1901,81 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }
       }
 
-      // CHAT BRAIN OVERRIDES THE CLASSIFIER. `fallback` leaves the old verdict
-      // standing — the case where an objective still has no surface.
+      // ══ SOURCE / RESEARCH: THE UNDERSTANDING BECOMES THE MISSION ═══════
+      //
+      // The seam Phase A designed and nothing connected. The projection Chat
+      // Brain produced is compiled by the EXISTING `compileLeadMission` and
+      // delegated — no second model reads the sentence, and no route is
+      // expressed as a category string.
+      //
+      // What this replaces: `decision.workflow_category = "qualified_lead_sourcing"`,
+      // a value absent from `WorkflowCategory`, which matched no branch, fell
+      // through to a deep fallback and delegated with no mission at all. That
+      // is the whole of `mission_not_compiled`.
+      // ── THE LAST REMAINING TRANSLATION, AND IT IS ONE VALUE WIDE ───────
+      //
+      // `converse` has no surface of its own yet, so it enters the existing
+      // conversational branch. `BoundCategory` is typed `"simple_chat"` and
+      // nothing else, so this cannot silently widen back into the category
+      // laundering that produced `mission_not_compiled`.
       if (brainBinding.kind === "category") {
-        decision.workflow_category =
-          brainBinding.category as typeof decision.workflow_category;
+        decision.workflow_category = brainBinding.category;
+      }
+
+      if (brainRoute.kind === "lead_mission" && brainRoute.lead) {
+        const compiled = compileRequestMission(understood.request, brainRoute.lead, {
+          originalUserQuery: message,
+          companyBrain: companyBrainContextForCompiler(brainProfileForMission),
+        });
+
+        if (!compiled.ok) {
+          // A STATED REFUSAL, NOT A DETERMINISTIC GUESS. Nothing is delegated
+          // and nothing is charged.
+          console.warn("[pilot-chat][mission] not compiled", {
+            reason: compiled.reason, violations: compiled.violations,
+          });
+          const { data: saved } = await admin.from("messages").insert({
+            conversation_id: conversationId, role: "assistant",
+            content: compiled.message, agent_slug: "pilot",
+            metadata: {
+              ...pendingClarification("objective_route", compiled.reason),
+              chat_brain: { route: "lead_mission", compiled: false,
+                reason: compiled.reason, violations: compiled.violations },
+            },
+          }).select("*").single();
+          return json({
+            type: "reply", conversation_id: conversationId,
+            clarification: true, message: saved,
+          });
+        }
+
+        // ALREADY CANONICAL. `canonicalMissionForTransport` exists to strip the
+        // three card-only fields `buildMissionForPrompt` adds; the compiler's
+        // `final_mission` never carries them, so there is nothing to strip and
+        // routing it through that helper would only invite one to be added.
+        const mission = compiled.result.final_mission;
+        console.log("[pilot-chat][mission] compiled from RequestV1", {
+          workspace_id: workspaceId,
+          objective: understood.request.objective,
+          parser_source: compiled.result.parser_source,
+          requested_output: mission?.requested_output ?? null,
+          known_companies: mission?.company_profile?.known_companies?.length ?? 0,
+          unrepresented: unrepresentedRequirements(brainRoute.lead),
+          bound_referents: resolvedBindings.length,
+        });
+
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId,
+          // THE USER'S OWN WORDS. Not a rewrite — the compiler already read
+          // them, and every downstream reader expects the original.
+          instruction: message,
+          leadMission: mission,
+          leadBindings: resolvedBindings,
+          missionOrigin: "chat_brain_request_v1",
+          modelUsed: "chat-brain",
+          providerUsed: "openai",
+        });
       }
     } else {
       // A MALFORMED OR UNAVAILABLE MODEL NEVER BECOMES source OR research. The
@@ -3289,8 +3377,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             intent: intentResult.intent,
             clarification: true,
             missing_fields: toolInput.missing_fields,
-            pending_clarification: !!(toolInput.people_action || toolInput.companies_action || toolInput.agency_action),
-            clarification_type: toolInput.clarification_type ?? "generic",
+            // OWNED, so only the resolver that offers these actions may read
+            // the reply. Written only when there is actually something to
+            // choose between — a menu with no options is not a question.
+            ...((toolInput.people_action || toolInput.companies_action || toolInput.agency_action)
+              ? pendingClarification("lead_source_selector",
+                String(toolInput.clarification_type ?? "generic"),
+                { required_fields: ["entity_kind"] })
+              : {}),
             original_request: message,
             people_action: toolInput.people_action ?? null,
             companies_action: toolInput.companies_action ?? null,

@@ -101,9 +101,32 @@ export type RequestEntity = typeof REQUEST_ENTITIES[number];
 /**
  * A named thing the request points at.
  *
- * `named` is the user's own words for something ("Vercel", "my ICP").
- * `saved_set` is a stored collection. `prior_result` is a referent produced by
- * an earlier turn — Phase E fills these; nothing emits them yet.
+ * ── THE DISTINCTION THAT DECIDES WHERE A REFERENCE IS RESOLVED ─────────────
+ *
+ * Two of these three kinds point at something the system holds, and they are
+ * resolved against COMPLETELY DIFFERENT corpora. Collapsing them is not a
+ * naming detail; it is the difference between answering a question and
+ * refusing it.
+ *
+ *   named        The user's own words for a thing. "Vercel". Resolved, if at
+ *                all, by the surface that consumes it.
+ *
+ *   saved_set    A DURABLE WORKSPACE COLLECTION — "my leads", "my ICP", "the
+ *                companies I'm watching". It lives in the database, it exists
+ *                before this conversation started, and it survives after.
+ *                Resolved by a SURFACE against workspace rows. It is NOT a
+ *                back-reference and must never be resolved against chat
+ *                referents: a fresh conversation holds none, so doing so turns
+ *                every "what leads do I have?" into "which company do you
+ *                mean?".
+ *
+ *   prior_result A CONVERSATIONAL REFERENT produced by an earlier turn in THIS
+ *                conversation — "them", "the second company". Resolved by
+ *                `resolveReferents` against the referents persisted on the
+ *                message that displayed them, and by nothing else.
+ *
+ * `pointsBack()` in `referentBinding.ts` is the one place that decides which
+ * corpus applies, and it admits `prior_result` alone.
  *
  * A reference is what separates `research` from `source`: investigating a
  * KNOWN entity requires one, and a request without any cannot be research.

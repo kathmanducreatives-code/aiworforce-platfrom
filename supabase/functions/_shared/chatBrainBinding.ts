@@ -47,9 +47,22 @@ export function chatBrainEnabled(readEnv: (k: string) => string | undefined): bo
   return String(readEnv(CHAT_BRAIN_FLAG) ?? "true").toLowerCase() !== "false";
 }
 
+/**
+ * The ONLY legacy category a route may still be expressed as.
+ *
+ * `converse` has no surface of its own yet, so it enters pilot-chat's existing
+ * conversational branch. Every other objective now carries a typed payload to
+ * its own surface, and this union exists to make the remaining translation
+ * finite, visible, and impossible to widen by accident — a category outside it
+ * will not type-check.
+ */
+export type BoundCategory = "simple_chat";
+
 export type BindingOutcome =
   /** Chat Brain decided; use `category` and ignore the old classifier. */
-  | { kind: "category"; category: string; reason: string }
+  | { kind: "category"; category: BoundCategory; reason: string }
+  /** A lead mission. The caller compiles `route.lead` and delegates it. */
+  | { kind: "lead_route"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -89,12 +102,19 @@ export function bindRoute(route: Route): BindingOutcome {
       return { kind: "category", category: "simple_chat", reason: route.reason };
 
     case "lead_mission":
-      // THE HARDENED PATH, ENTERED THE WAY IT ALWAYS WAS. Stage 0, Stage 1,
-      // identity, unlocks, credits, provider selection and execution
-      // validation are all downstream of this category and are untouched.
-      return {
-        kind: "category", category: "qualified_lead_sourcing", reason: route.reason,
-      };
+      // ── NOT A CATEGORY. THE ROUTE CARRIES ITS OWN PAYLOAD. ─────────────
+      //
+      // This returned `category: "qualified_lead_sourcing"`, and that string is
+      // not a member of `WorkflowCategory`. No branch matched it, so every
+      // correctly-understood sourcing request fell through the whole category
+      // chain into a deep fallback that delegated with no mission, and
+      // orchestrate refused it as `mission_not_compiled`.
+      //
+      // The caller handles this route directly: it compiles `route.lead` through
+      // `compileLeadMission` and delegates the result. Nothing about Stage 0,
+      // Stage 1, identity, unlocks, credits or provider selection changes — they
+      // are downstream of the mission, and now they actually receive one.
+      return { kind: "lead_route", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`

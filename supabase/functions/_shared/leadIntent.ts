@@ -108,161 +108,27 @@ export interface BrainLite {
   company?: { category?: string; industry?: string };
 }
 
-// ---------- detectors ----------
-
-const PRODUCT_RE =
-  /\b(?:my|our)\s+([a-z0-9][\w/+\-]*(?:\s+[a-z0-9][\w/+\-]*){0,3}?)\s+(?:product|tool|platform|service|app|solution|company)\b|\b(?:i|we)\s+(?:sell|offer|build|make|run)\s+(?:an?\s+)?([a-z0-9][\w/+\-]*(?:\s+[a-z0-9][\w/+\-]*){0,3})/i;
-// Clause that describes selling-to/targeting — strip before parsing the subject.
-const TARGET_CLAUSE_RE = /\b(?:so (?:i|we) can|to)\s+(?:target|sell to|reach|pitch|market to|approach)\b[^.?!]*/i;
-const HIRING_RE = /\bhiring\b|\blooking to hire\b|\bhire(?:s|ing)?\b|\bopen roles?\b|\bjob openings?\b/i;
-const BUYER_RE = /\b(founders?|co-?founders?|ceos?|operators?|owners?)\b/i;
-const COMPANY_NOUN_RE = /\b(compan(?:y|ies)|startups?|agenc(?:y|ies)|businesses?|firms?|organi[sz]ations?|brands?|vendors?)\b/i;
-const PEOPLE_HEAD_RE = /\b(founders?|co-?founders?|ceos?|ctos?|operators?|heads? of [a-z]+|vps?|directors?|executives?|leaders?|decision[- ]?makers?)\b/i;
-const POSTS_RE = /\b(posts?|talking about|discussing|writing about|sharing about|content about)\b/i;
-const COMMENTS_RE = /\b(comment(?:ing|ers)?|replies|replying)\b/i;
-const COMPETITOR_RE = /\b(competitors?|alternatives? to|switching from|vs\.?|complaints? about)\b/i;
-const SELLING_TO_RE = /\b(selling to|sell to|that sell to|whose (?:buyers?|customers?|clients?) are|targeting|market to)\s+([a-z][\w\s/+\-]{2,40})/i;
-
+/** Deduplicate and drop blanks. Used by the mission projection below. */
 function uniq(a: string[]): string[] { return Array.from(new Set(a.filter(Boolean))); }
-function titleCase(s: string): string { return s.replace(/\b\w/g, (c) => c.toUpperCase()).trim(); }
 
-function extractCount(m: string, fallback = 5): number {
-  const mm = m.match(/\b(?:find|get|show|top|first|want)\s+(\d{1,3})\b/i) ?? m.match(/\b(\d{1,3})\s+(?:companies|founders|people|leads|profiles|accounts|results)\b/i);
-  const n = mm ? parseInt(mm[1], 10) : NaN;
-  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.min(50, n)) : fallback;
-}
-
-const GEO_TERMS: Array<[RegExp, string]> = [
-  [/\b(usa|u\.?s\.?a?\.?|united states|america)\b/i, "USA"],
-  [/\b(uk|united kingdom|britain)\b/i, "UK"],
-  [/\blondon\b/i, "London"],
-  [/\b(remote|global|worldwide)\b/i, "Remote"],
-];
-function extractGeo(m: string): string[] {
-  return uniq(GEO_TERMS.filter(([re]) => re.test(m)).map(([, l]) => l));
-}
-
-const INDUSTRY_TERMS: Array<[RegExp, string]> = [
-  [/\bb2b saas|saas\b/i, "B2B SaaS"],
-  [/\bhealthcare|health ?tech|digital health\b/i, "Healthcare"],
-  [/\bfintech|financial\b/i, "Fintech"],
-  [/\bai\b/i, "AI"],
-];
-
-/**
- * Extract a structured LeadIntent from a natural-language lead request.
- * Company Brain backfills geography / industry / disqualifiers when the user
- * left them implicit. Never collapses product/buyer/role/source into one field.
- */
-export function extractLeadIntent(opts: { message: string; brain?: BrainLite | null }): LeadIntent {
-  const brain = opts.brain ?? {};
-  const original = (opts.message ?? "").trim();
-
-  // 1) Pull out what the user SELLS, then strip selling/targeting clauses so the
-  //    product (e.g. "AI SaaS") never leaks into the target filters.
-  let user_product: LeadIntent["user_product"];
-  const pm = original.match(PRODUCT_RE);
-  if (pm) {
-    const cat = titleCase((pm[1] ?? pm[2] ?? "").trim());
-    if (cat) user_product = { category: cat };
-  }
-  const subject = original.replace(TARGET_CLAUSE_RE, " ").replace(PRODUCT_RE, " ");
-
-  // 2) Buyer / company-type / selling-to persona.
-  const target_buyer: string[] = [];
-  const target_company_type: string[] = [];
-  const sellingTo = subject.match(SELLING_TO_RE);
-  const buyerHit = subject.match(BUYER_RE);
-  if (buyerHit) target_buyer.push(titleCase(buyerHit[1].replace(/s$/i, "")));
-  if (sellingTo) target_buyer.push(titleCase(sellingTo[2].trim().replace(/s$/i, "")));
-  if (COMPANY_NOUN_RE.test(subject)) target_company_type.push("Companies");
-
-  // 3) Hiring signal: classify the requested role family from the role phrase.
-  const hiringRequested = HIRING_RE.test(subject);
-  let role_family: RoleFamily = null;
-  if (hiringRequested) {
-    // role phrase = text after "hiring (for)" up to a stop word.
-    const rp = subject.match(/\bhiring(?:\s+for)?\s+([a-z][\w\s/&+\-]{2,50}?)(?=\s+(?:in|at|for|across|roles?|positions?)\b|[.?!,]|$)/i);
-    role_family = classifyRoleFamily(rp?.[1] ?? subject);
-  }
-  const role_keywords = hiringRequested ? roleFamilyAliases(role_family) : [];
-  const exclude_role_keywords = hiringRequested ? hiringExcludeTitles(role_family) : [];
-
-  // 4) Source routing.
-  const route = routeSourceType({ subject, hiringRequested, sellingTo: !!sellingTo, role_family });
-
-  // 5) Geography / industry / size / stage (+ Brain backfill).
-  const target_geography = uniq([...extractGeo(subject), ...(brain.icp?.geography ? [brain.icp.geography] : [])]);
-  const target_industry = uniq([
-    ...INDUSTRY_TERMS.filter(([re]) => re.test(subject)).map(([, l]) => l),
-    ...(brain.icp?.industries ?? []),
-  ]);
-  const target_stage = /\b(early-stage|seed|pre-seed|startup)\b/i.test(subject) ? ["early-stage"] : [];
-
-  const strictness: LeadIntent["strictness"] =
-    /\bonly\b|\bexactly\b|\bmust\b/i.test(subject) ? "strict"
-    : /\bany\b|\bbroad|\binclude/i.test(subject) ? "broad" : "balanced";
-
-  // Confidence + clarification.
-  let confidence = 0.85;
-  if (route.workflow_type === "unknown") confidence = 0.4;
-  if (hiringRequested && !role_family) confidence = 0.55;
-
-  return {
-    workflow_type: route.workflow_type,
-    source_type: route.source_type,
-    user_product,
-    target_buyer: uniq(target_buyer),
-    target_company_type: uniq(target_company_type),
-    target_industry,
-    target_geography,
-    target_company_size: brain.icp?.company_size ? [brain.icp.company_size] : [],
-    target_stage,
-    hiring_signal: { requested: hiringRequested, role_family, role_keywords, exclude_role_keywords },
-    pain_points: [],
-    competitors: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
-    keywords: [],
-    disqualifiers: uniq(brain.icp?.disqualifiers ?? []),
-    count: extractCount(original),
-    strictness,
-    confidence,
-    // Company-Brain ICP constraints (target company definition).
-    positive_industries: target_industry,
-    negative_industries: uniq([...(brain.icp?.negative_industries ?? []), ...(brain.icp?.avoid_industries ?? [])]),
-    positive_keywords: uniq(brain.icp?.keywords ?? []),
-    negative_keywords: uniq(brain.icp?.negative_keywords ?? []),
-    excluded_company_types: uniq([...(brain.icp?.excluded_company_types ?? []), ...(brain.icp?.avoid_company_types ?? [])]),
-    preferred_company_types: uniq(brain.icp?.company_types ?? []),
-    target_regions: target_geography,
-    excluded_regions: uniq(brain.icp?.excluded_regions ?? []),
-    funding_stage: uniq(brain.icp?.funding_stage ?? []),
-    company_stage: uniq([...(brain.icp?.company_stage ?? []), ...target_stage]),
-    company_model: uniq(brain.icp?.company_model ?? []),
-    remote_preference: brain.icp?.remote_preference ?? null,
-    tech_stack: uniq(brain.icp?.tech_stack ?? []),
-    competitor_keywords: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
-    buyer_roles: uniq(brain.icp?.buyer_roles ?? []),
-    allow_enterprise: brain.icp?.allow_enterprise ?? false,
-    clarification_needed: route.workflow_type === "unknown",
-    clarification_question: route.workflow_type === "unknown"
-      ? "What kind of leads — companies hiring a role, companies in an ICP, individual people/founders, or LinkedIn posts/comments?"
-      : undefined,
-  };
-}
-
-// ── THE SAME DTO, PROJECTED FROM THE CANONICAL MISSION ──────────────────────
+// ── THE ENGLISH-PARSING HALF IS GONE ────────────────────────────────────────
 //
-// `extractLeadIntent` above reads the user's sentence. pilot-chat used its answer
-// to fill the confirmation card AND to decide whether a lead card was shown at
-// all — so a regex both interpreted the request and gated the interpreter that
-// was supposed to interpret it.
+// `extractLeadIntent(message)` lived here: ~170 lines of regex tables —
+// PRODUCT_RE, HIRING_RE, BUYER_RE, GEO_TERMS, INDUSTRY_TERMS — that read a
+// user's sentence and decided what kind of lead request it was.
 //
-// This projection fills the same DTO from a decided Mission plus the Company
-// Brain. It parses nothing: every semantic field reads a Mission field, and every
-// ICP field reads the Brain, exactly as before. The only text it touches are
-// already-decided taxonomy terms handed to the role library — the same library
-// call `extractLeadIntent` made after its own regex had chosen the phrase.
-
+// It had already been disconnected from every caller: `compileCanonicalLeadMission`
+// stopped gating on it, the delegation path stopped re-parsing with it, and the
+// card stopped deriving its fields from it. What remained was a second reader of
+// the user's language sitting one import away from the path that decides what
+// gets bought, kept alive only by its own tests.
+//
+// WHAT STAYS is everything below, and none of it reads English:
+// `leadIntentFromMission` PROJECTS a compiled mission into this shape,
+// `routeSource` and `planJobsActorInput` turn that projection into provider
+// input, and `filterHiringCandidates` scores results. They are execution
+// contracts that happen to share the word "intent" with a classifier — which is
+// exactly why deleting by name would have been wrong.
 export interface MissionForLeadIntent {
   original_user_query?: string;
   target_entity?: string;
@@ -400,55 +266,15 @@ export const DEFAULT_LEAD_INTENT_COUNT = 5;
 
 // ---------- SourceRouter ----------
 
-export interface SourceRoute {
-  workflow_type: WorkflowType;
-  source_type: SourceType;
-  provider: string;
-  fallback_providers: string[];
-  reason: string;
-  required_capabilities: string[];
-}
-
-function routeSourceType(o: { subject: string; hiringRequested: boolean; sellingTo: boolean; role_family: RoleFamily }): SourceRoute {
-  const s = o.subject;
-  // Hiring signal → jobs (even when "founders" appear as the company qualifier).
-  if (o.hiringRequested) {
-    return { workflow_type: "company_hiring_sourcing", source_type: "jobs", provider: "apify_jobs", fallback_providers: [], reason: "active hiring signal requested", required_capabilities: ["apify_jobs"] };
-  }
-  if (
-    COMMENTS_RE.test(s) ||
-    /\bcompetitor conversations?\b/i.test(s) ||
-    (COMPETITOR_RE.test(s) && /\b(comment|mention|conversation|talking|discuss|chatter|complain)\b/i.test(s))
-  ) {
-    return { workflow_type: "competitor_signal_sourcing", source_type: "comments", provider: "apify_linkedin_post_comments", fallback_providers: ["apify_linkedin_posts"], reason: "comment / competitor-mention intent", required_capabilities: ["apify_comments"] };
-  }
-  if (POSTS_RE.test(s)) {
-    return { workflow_type: "linkedin_intent_sourcing", source_type: "linkedin_posts", provider: "apify_linkedin_posts", fallback_providers: [], reason: "LinkedIn post / intent intent", required_capabilities: ["apify_posts"] };
-  }
-  // "companies selling to founders" → company ICP search (buyer is the persona).
-  if (o.sellingTo || (COMPANY_NOUN_RE.test(s) && !PEOPLE_HEAD_RE.test(stripSellingTo(s)))) {
-    return { workflow_type: "company_icp_sourcing", source_type: "company_search", provider: "apify_jobs", fallback_providers: [], reason: "company / ICP subject", required_capabilities: ["apify_jobs"] };
-  }
-  // "founders of recruiting agencies" → people search.
-  if (PEOPLE_HEAD_RE.test(s)) {
-    return { workflow_type: "people_sourcing", source_type: "people", provider: "apify_people_search", fallback_providers: ["apify_linkedin_posts"], reason: "individual person subject", required_capabilities: ["apify_people"] };
-  }
-  return { workflow_type: "unknown", source_type: "company_search", provider: "apify_jobs", fallback_providers: [], reason: "could not determine source", required_capabilities: [] };
-}
-
-function stripSellingTo(s: string): string { return s.replace(SELLING_TO_RE, " "); }
-
-/** Public SourceRouter entry: route an already-extracted intent. */
-export function routeSource(intent: LeadIntent): SourceRoute {
-  return routeSourceType({
-    subject: "",
-    hiringRequested: intent.hiring_signal.requested,
-    sellingTo: intent.target_buyer.length > 0 && intent.target_company_type.length > 0,
-    role_family: intent.hiring_signal.role_family,
-  });
-}
-
-// ---------- ActorInputPlanner ----------
+// ── THE SOURCE ROUTER IS GONE TOO ───────────────────────────────────────────
+//
+// `routeSource` / `routeSourceType` decided which provider surface a request
+// belonged to by running six regexes — COMPANY_NOUN_RE, PEOPLE_HEAD_RE,
+// POSTS_RE, COMMENTS_RE, COMPETITOR_RE, SELLING_TO_RE — over a subject string.
+// Nothing had called it since the capability graph became the router, and a
+// dead second router one import from the live one is a standing invitation to
+// reconnect it. Provider selection is decided by `buildCapabilityGraph` and the
+// actor registry, from a compiled mission, and by nothing that reads English.
 
 export interface JobsActorInput {
   query: string;

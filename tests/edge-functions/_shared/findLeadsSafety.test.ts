@@ -12,7 +12,6 @@ import {
   hasValidProvenance, buildSourceFingerprint, zeroResult,
 } from "../../../supabase/functions/_shared/leadProvenance.ts";
 import { evaluateDraftGate } from "../../../supabase/functions/_shared/draftGate.ts";
-import { separateIntent } from "../../../supabase/functions/_shared/leadIntentModel.ts";
 
 // ---- helpers ---------------------------------------------------------------
 const scout = { agent_slug: "scout", tool_needed: "source_with_apify", step_index: 0 };
@@ -85,21 +84,18 @@ Deno.test("8. draft tools cannot execute in source_and_qualify_only", () => {
 });
 
 // ---- 9 & 10 (routing) ------------------------------------------------------
-Deno.test("9. founder + why-now query routes account_first", () => {
-  for (const q of [
-    "Using my ICP, find me 5 hot founders I should contact right now.",
-    "Find me 5 founders who fit my ICP and have a clear reason to talk right now.",
-    "Show me 5 strong leads from my ICP with real proof that they may need us.",
-    "Find me 5 founder-led SaaS companies that match my ICP and are hiring for sales or growth.",
-  ]) {
-    const si = separateIntent({ message: q });
-    assertEquals(si.source_strategy, "account_first", `query routed wrong: ${q}`);
-  }
-});
-Deno.test("10. explicit named-company profile query routes profile_first", () => {
-  const si = separateIntent({ message: "Find the LinkedIn profiles of the founders of Acme and Globex." });
-  assertEquals(si.source_strategy, "profile_first");
-});
+// ── 9-10 REMOVED WITH `separateIntent` ─────────────────────────────────────
+//
+// Both asserted that a regex over the user's sentence chose account-first vs
+// profile-first sourcing. That parser had no production callers left —
+// orchestrate reads the strategy off the compiled mission via
+// `separatedIntentFromMission` — and these two tests were the last thing
+// keeping it importable.
+//
+// The equivalent claim about the live path is asserted in
+// `separatedIntentMissionProjection.test.ts`, which projects the strategy from
+// a `LeadMissionV1` and additionally pins that neither orchestrate nor run-agent
+// may call the sentence-reading form.
 
 // ---- 11 (jobs actor supports signal, not identity invention) ---------------
 Deno.test("11. jobs actor output can support a hiring signal but cannot invent founders", () => {

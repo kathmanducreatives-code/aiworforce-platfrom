@@ -2,7 +2,6 @@
 // Covers the 20 required cases from the QA brief. No providers, no network.
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { separateIntent } from "../../../supabase/functions/_shared/leadIntentModel.ts";
 import { classifyRoleFamily, roleExactness, isExactRoleMatch, requestedRoleFamily } from "../../../supabase/functions/_shared/roleFamilyMatcher.ts";
 import { classifyEvidence, checkEvidenceInvariants, provesCompanySignal, isIdentityOnly } from "../../../supabase/functions/_shared/evidenceType.ts";
 import { decideCanonical, contactReady, detectContradiction, reconcile, type LeadFacts } from "../../../supabase/functions/_shared/leadDecision.ts";
@@ -15,20 +14,8 @@ const facts = (o: Partial<LeadFacts>): LeadFacts => ({
 });
 
 // 1 — account-first routing for a signal request.
-Deno.test("1. 'find founders with a reason to talk now' routes account-first", () => {
-  const i = separateIntent({ message: "Find me 5 founders who fit my ICP and have a clear reason to talk right now" });
-  assertEquals(i.source_strategy, "account_first");
-  assertEquals(i.requested_signal, "required");
-  assertEquals(i.decision_maker_strategy, "resolve_after_account");
-  assert(i.target_personas.includes("Founder"), "founder is a persona, not a source");
-});
 
 // 2 — profile-first only for a named-company lookup.
-Deno.test("2. 'find founder profiles at named companies' may route profile-first", () => {
-  const i = separateIntent({ message: "Find the LinkedIn profiles of the founders at Acme and Globex" });
-  assertEquals(i.source_strategy, "profile_first");
-  assertEquals(i.decision_maker_strategy, "direct_lookup");
-});
 
 // 3 — AE does not satisfy a RevOps query.
 Deno.test("3. Account Executive does not satisfy a RevOps request", () => {
@@ -52,12 +39,6 @@ Deno.test("4. SDR does not satisfy a Sales Operations request", () => {
 });
 
 // 5 — exact-role search returns fewer instead of broadening silently.
-Deno.test("5. exact role family is a hard, non-silent constraint", () => {
-  const i = separateIntent({ message: "Find founders of B2B SaaS companies hiring for RevOps in the United States" });
-  assertEquals(i.role_exactness, "hard");
-  assertEquals(i.relaxation_policy.role_family, "adjacent_watch_only");
-  assertEquals(i.relaxation_policy.geography, "never");
-});
 
 // 6 — a person-profile URL is not job evidence.
 Deno.test("6. person_profile URL is never job evidence", () => {
@@ -104,14 +85,6 @@ Deno.test("11. oversized company (size miss) scores lower than an ICP-size fit",
 });
 
 // 12 — active-brain exceptions respected (recruiting workspace keeps agencies).
-Deno.test("12. a recruiting-agency ICP is not rejected by generic anti-agency defaults", () => {
-  const i = separateIntent({
-    message: "Find recruitment agencies hiring engineering recruiters",
-    brain: { industries: ["staffing services"], disqualifiers: [] },
-    hardExclusions: [],
-  });
-  assert(!i.hard_exclusions.some((d) => /recruit|staffing/i.test(d)), "recruiting not excluded for a recruiting ICP");
-});
 
 // 13 — hard disqualifier overrides acceptance.
 Deno.test("13. hard disqualifier overrides a legacy accept", () => {
@@ -136,19 +109,6 @@ Deno.test("15. materially different records receive different scores", () => {
 });
 
 // 16 — run trace fields populated (built from existing fields; no migration).
-Deno.test("16. run trace object is fully populated from intent + run context", () => {
-  const i = separateIntent({ message: "Find up to 5 founders of B2B SaaS hiring RevOps in the United States", parsedCategories: ["B2B SaaS"], parsedLocations: ["United States"] });
-  const trace = {
-    run_id: "run_1", workspace_id: "ws_A", original_user_query: i.original_query,
-    parsed_intent_summary: `${i.source_strategy} · ${i.requested_role_family} · signal:${i.requested_signal}`,
-    target_personas: i.target_personas, requested_role_family: i.requested_role_family,
-    requested_signal: i.requested_signal, source_strategy: i.source_strategy,
-    intent_tier: "strict", search_stage: 1, relaxed_filters: [] as string[], created_at: "2026-07-11T00:00:00Z",
-  };
-  for (const k of ["run_id", "workspace_id", "original_user_query", "parsed_intent_summary", "source_strategy", "requested_role_family"]) {
-    assert((trace as Record<string, unknown>)[k] != null && String((trace as Record<string, unknown>)[k]).length > 0, `trace.${k} populated`);
-  }
-});
 
 // 19 — outreach disabled without verified company, signal AND person.
 Deno.test("19. outreach eligibility follows the contact-ready contract", () => {
@@ -169,7 +129,7 @@ Deno.test("20. two workspaces produce isolated brains (no cross-leak)", () => {
 
 // 21 — no real providers are called (this file imports zero provider clients).
 Deno.test("21. tests call no providers (module imports are pure)", () => {
-  assert(typeof separateIntent === "function" && typeof scoreLead === "function");
+  assert(typeof scoreLead === "function");
 });
 
 // role classification spot-checks

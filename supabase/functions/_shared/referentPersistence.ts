@@ -232,8 +232,11 @@ export function toReferentSource(
  */
 export function requestHasBackReference(request: RequestV1): boolean {
   return request.parts.some((p) =>
-    (p.subject.references ?? []).some(
-      (r) => r.kind === "prior_result" || r.kind === "saved_set"));
+    // `prior_result` ONLY — a `saved_set` is a durable workspace collection
+    // resolved by a surface against database rows, never against chat
+    // referents. Admitting it here made every "my leads" question load a
+    // referent corpus that could not contain it, and then clarify.
+    (p.subject.references ?? []).some((r) => r.kind === "prior_result"));
 }
 
 /**
