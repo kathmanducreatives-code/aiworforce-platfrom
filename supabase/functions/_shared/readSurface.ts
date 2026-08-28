@@ -33,6 +33,7 @@ import type { RequestV1, RequestPart } from "./requestV1.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
 import { canonicalLinkedinCompanyUrl } from "./companyIdentity.ts";
 import { canonicalSubjectKey } from "./signalSubject.ts";
+import type { DeclaredGap } from "./outcomeContract.ts";
 
 export const READ_SURFACE_VERSION = "read-surface-v1" as const;
 
@@ -199,7 +200,16 @@ export function planRead(
   // A SCOPED read is excluded deliberately — once a referent has fixed one
   // company, "how are they looking?" is a question about that company, not a
   // workspace summary.
-  if (part.output.shape === "answer" && !subject) {
+  //
+  // AND THE ENTITY MUST BE THE WORKSPACE ITSELF. Prose alone was too wide:
+  // "what is my current ICP" is a read wanting prose, and it was answered with
+  // an operational brief about eight failed Scout tasks — byte-identical to the
+  // one "how are things looking" got. `conversation` is the entity that means
+  // the session and the workspace as a whole; every other entity is a question
+  // about a specific thing, and the router sends those to the grounded
+  // conversational surface instead.
+  if (part.output.shape === "answer" && !subject
+      && part.subject.entity === "conversation") {
     return { ...base, target: "brief", limit, since_days: recency };
   }
 
@@ -229,6 +239,18 @@ export function planRead(
 /** Rows a read may return. Shaped for rendering, not for further work. */
 export interface ReadResult {
   target: ReadTarget;
+  /**
+   * WHAT THIS ANSWER COULD NOT ESTABLISH.
+   *
+   * Declared by the query that noticed it, not inferred later from the user's
+   * wording. "Which of those look strongest?" and "list my leads" hit the same
+   * rows and the same absence of scores; only one of them sounds like a ranking
+   * request, and both deserve to be told that nothing is ranked.
+   *
+   * Detecting superlatives in the sentence would be a keyword rule, and would
+   * still be silent for the phrasings it did not anticipate.
+   */
+  gaps: DeclaredGap[];
   /** Headline counts, so an answer can be given even when nothing is listed. */
   counts: Record<string, number>;
   items: Array<Record<string, unknown>>;
@@ -270,7 +292,7 @@ export async function executeRead(
     if (plan.target === "company_detail") {
       const subj = plan.subject;
       if (!subj) {
-        return { target: "company_detail", counts: {}, items: [], empty: true };
+        return { target: "company_detail", counts: {}, items: [], empty: true, gaps: [] };
       }
 
       // EVIDENCE. Matched on the subject keys the writers actually use; an
@@ -315,46 +337,100 @@ export async function executeRead(
         items: [...events.map((e) => ({ kind: "signal", ...e })),
                 ...watched.map((w) => ({ kind: "watched", ...w }))],
         empty: events.length === 0 && watched.length === 0,
+        // Same absence as the workspace-wide signal read: held evidence, no
+        // relevance score against the ICP.
+        gaps: events.length > 0
+          ? [{ code: "signals_unscored",
+               detail: "this company's signals aren't scored against your ICP" }]
+          : [],
       };
     }
 
     if (plan.target === "signals") {
       let q = db.from("signal_events")
-        .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url")
+        .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url",
+          { count: "exact" })
         .eq("workspace_id", workspaceId)
         .order("occurred_at", { ascending: false })
         .limit(plan.limit);
       if (sinceIso) q = q.gte("occurred_at", sinceIso);
-      const { data } = await q;
+      const { data, count: signalCount } = await q;
       const items = (data ?? []) as Array<Record<string, unknown>>;
       const byType: Record<string, number> = {};
       for (const r of items) {
         const t = String(r.signal_type ?? "unknown");
         byType[t] = (byType[t] ?? 0) + 1;
       }
-      return { target: "signals", counts: { total: items.length, ...byType },
-        items, empty: items.length === 0 };
+      // THE TOTAL IS COUNTED; the per-type breakdown is of the PAGE, and is
+      // reported as such by the renderer rather than implying a full census.
+      return {
+        target: "signals",
+        counts: {
+          total: typeof signalCount === "number" ? signalCount : items.length,
+          shown: items.length,
+          ...byType,
+        },
+        items, empty: items.length === 0,
+        // A SIGNAL LIST IS NOT A RANKING. There is no relevance score against
+        // the workspace's ICP, and `occurred_at` is null on every row here, so
+        // even "most recent" is not something this answer can claim.
+        gaps: items.length > 0
+          ? [{
+            code: "signals_unscored",
+            detail: "these aren't scored against your ICP, so I can't say which is strongest",
+          }]
+          : [],
+      };
     }
 
     if (plan.target === "companies") {
       // BOTH HALVES — see the header. "What companies do I have" means the
       // leads held and the subjects watched, and the entity does not separate
       // them.
+      // ── AN EXACT COUNT, NOT THE SIZE OF THE PAGE ──────────────────────
+      //
+      // This reported `l.length` — the length of the rows the limit returned —
+      // as the number of leads the workspace holds. Live, that produced "10
+      // leads saved." against a table holding 32. The query was right for a
+      // preview; the renderer treated a truncated page as a census, and stated
+      // a number nothing had counted.
+      //
+      // `count: "exact"` asks Postgres. The page is still bounded, so the list
+      // stays a preview and only the TOTAL is claimed.
       let lq = db.from("lead_candidates")
-        .select("id, status, fit_score, priority, reason, created_at")
+        .select("id, status, fit_score, priority, reason, created_at",
+          { count: "exact" })
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(plan.limit);
       if (sinceIso) lq = lq.gte("created_at", sinceIso);
-      const { data: leads } = await lq;
-      const { data: watched } = await db.from("monitoring_subjects")
-        .select("label, identifier, signals, enabled, last_run_at")
+      const { data: leads, count: leadCount } = await lq;
+      const { data: watched, count: watchedCount } = await db
+        .from("monitoring_subjects")
+        .select("label, identifier, signals, enabled, last_run_at", { count: "exact" })
         .eq("workspace_id", workspaceId).eq("enabled", true).limit(plan.limit);
       const l = (leads ?? []) as Array<Record<string, unknown>>;
       const w = (watched ?? []) as Array<Record<string, unknown>>;
       return {
         target: "companies",
-        counts: { leads: l.length, watched: w.length },
+        // THE TOTAL WHERE POSTGRES GAVE ONE, the page length only as a
+        // fallback — a null count means the driver did not return one, and
+        // under-reporting is better than inventing a bigger number.
+        counts: {
+          leads: typeof leadCount === "number" ? leadCount : l.length,
+          watched: typeof watchedCount === "number" ? watchedCount : w.length,
+          shown: l.length,
+        },
+        // NOTHING IS SCORED, SO NOTHING CAN BE RANKED. Every lead in this
+        // workspace carries `fit_score: null`; the column exists and no scorer
+        // populates it. Saying so here is what stops a superlative being
+        // answered with whatever the sort happened to return.
+        gaps: l.length > 0 && l.every((x) => x.fit_score == null)
+          ? [{
+            code: "leads_unscored",
+            detail: "none of these leads carry a fit score yet, so they can't be ranked reliably",
+          }]
+          : [],
         items: [...l.map((x) => ({ kind: "lead", ...x })),
                 ...w.map((x) => ({ kind: "watched", ...x }))],
         empty: l.length === 0 && w.length === 0,
@@ -391,6 +467,7 @@ export async function executeRead(
         counts: { total: items.length },
         items: items.map((i) => ({ kind: "approval", source, ...i })),
         empty: items.length === 0,
+        gaps: [],
       };
     }
 
@@ -404,10 +481,15 @@ export async function executeRead(
     const { data } = await rq;
     const items = (data ?? []) as Array<Record<string, unknown>>;
     return { target: "runs", counts: { total: items.length }, items,
-      empty: items.length === 0 };
+      empty: items.length === 0, gaps: [] };
   } catch (e) {
     console.warn("[read-surface] query failed", String(e));
-    return { target: plan.target, counts: {}, items: [], empty: true };
+    // A QUERY THAT FAILED IS NOT AN EMPTY WORKSPACE. The gap says which, so
+    // the renderer does not report a database problem as "you have nothing".
+    return {
+      target: plan.target, counts: {}, items: [], empty: true,
+      gaps: [{ code: "read_failed", detail: "I couldn't reach your saved data just now" }],
+    };
   }
 }
 
@@ -461,6 +543,40 @@ export function presentedCompanies(
  * about held evidence, and dressing it up as a failure would send the user
  * looking for a bug instead of running a search.
  */
+/**
+ * Append what the answer could not establish.
+ *
+ * ── WHY THE GAP IS PART OF THE ANSWER, NOT A FOOTNOTE ──────────────────────
+ *
+ * A list of leads with no scores reads as a ranked list, because lists imply
+ * order. The sentence that says otherwise has to travel with the list, every
+ * time, or the implication stands.
+ *
+ * This is the read surface's half of the product rule: never claim a result
+ * without a proof path. The rows are proved; the ordering is not; the answer
+ * says which is which.
+ */
+/** What "nothing here" sounds like, per surface. Shared by both empty paths. */
+function emptyStateFor(plan: ReadPlan, window: string): string {
+  if (plan.target === "signals") {
+    return `I don't have any signals recorded${window} yet. Once a workflow or a monitor runs, they'll show up here.`;
+  }
+  if (plan.target === "companies") {
+    return "You don't have any leads saved or companies being watched yet.";
+  }
+  return `I don't have any runs recorded${window}.`;
+}
+
+function withGaps(body: string, result: ReadResult | null): string {
+  // OPTIONAL AT RUNTIME EVEN THOUGH IT IS REQUIRED IN THE TYPE. A caller
+  // constructing a `ReadResult` from an older shape — or a test — has no gaps
+  // field, and the renderer must not throw on the path whose whole job is to
+  // answer honestly when something is missing.
+  const gaps = result?.gaps ?? [];
+  if (gaps.length === 0) return body;
+  return `${body}\n\n${gaps.map((g) => g.detail).join(" ")}`;
+}
+
 export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): string {
   if (!plan.target) {
     return "I understood that as a question about what I already know, but I don't have a way to look that up yet.";
@@ -513,14 +629,18 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     return `You have ${total} pending approval${total === 1 ? "" : "s"}:\n${lines}\n\nOpen the Workbench to approve or edit each draft.`;
   }
 
+  // ── AN EMPTY RESULT IS NOT AUTOMATICALLY AN EMPTY WORKSPACE ─────────────
+  //
+  // A query that FAILED also arrives here with `empty: true`, and the canned
+  // "I don't have any signals recorded yet" would report a database problem as
+  // a fact about the user's data. The gap says which, so it must be declared
+  // before the empty-state wording, not after it.
+  if ((!result || result.empty) && (result?.gaps?.length ?? 0) > 0) {
+    return withGaps(emptyStateFor(plan, window), result);
+  }
+
   if (!result || result.empty) {
-    if (plan.target === "signals") {
-      return `I don't have any signals recorded${window} yet. Once a workflow or a monitor runs, they'll show up here.`;
-    }
-    if (plan.target === "companies") {
-      return "You don't have any leads saved or companies being watched yet.";
-    }
-    return `I don't have any runs recorded${window}.`;
+    return emptyStateFor(plan, window);
   }
 
   if (result.target === "signals") {
@@ -528,10 +648,19 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     const kinds = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
-    const recent = result.items.slice(0, 5)
+    const listed = result.items.slice(0, 5);
+    const recent = listed
       .map((r) => `• ${String(r.subject_key ?? "unknown")} — ${String(r.signal_type ?? "signal").replace(/_/g, " ")}`)
       .join("\n");
-    return `You have ${total} signal${total === 1 ? "" : "s"}${window}${kinds ? ` (${kinds})` : ""}.\n\n${recent}`;
+    // THE BREAKDOWN DESCRIBES THE PAGE, NOT THE TOTAL, and the list is a
+    // sample. Saying "(6 market problem discussion, …)" beside a counted total
+    // implies a census of all of them, which the query never performed.
+    const shown = typeof result.counts.shown === "number" ? result.counts.shown : listed.length;
+    const sampled = shown < total;
+    const head = `You have ${total} signal${total === 1 ? "" : "s"}${window}`
+      + (kinds ? ` (of the ${shown} I looked at: ${kinds})` : "") + ".";
+    const lead = sampled ? `\n\nA sample:\n` : `\n\n`;
+    return withGaps(`${head}${lead}${recent}`, result);
   }
 
   if (result.target === "companies") {
@@ -544,7 +673,9 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     // orderings that can drift, and "the second company" indexes this one.
     const names = presentedCompanies(result)
       .map((e) => `• ${e.display}`).join("\n");
-    return `${bits.join(" and ")}${window}.${names ? `\n\nWatching:\n${names}` : ""}`;
+    return withGaps(
+      `${bits.join(" and ")}${window}.${names ? `\n\nWatching:\n${names}` : ""}`,
+      result);
   }
 
   const total = result.counts.total ?? 0;

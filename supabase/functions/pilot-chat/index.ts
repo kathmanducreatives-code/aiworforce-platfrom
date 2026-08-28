@@ -42,6 +42,9 @@ import {
 } from "../_shared/signalSourcingSurface.ts";
 import { shouldGateObjective } from "../_shared/companyBrainGate.ts";
 import {
+  failureMetadata, OUTCOME_CONTRACT_VERSION,
+} from "../_shared/outcomeContract.ts";
+import {
   asksForUnsafeAction, UNSAFE_REQUEST_REPLY,
 } from "../_shared/unsafeRequestGuard.ts";
 import {
@@ -1681,6 +1684,60 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
    * subject, which is most of them.
    */
   let resolvedBindings: ResolvedReferentBinding[] = [];
+  /**
+   * WHAT EVERY ASSISTANT MESSAGE CARRIES.
+   *
+   * ── WHY THIS IS A FUNCTION AND WHY IT LIVES HERE ────────────────────────
+   *
+   * It was `const baseMeta = { … }`, declared AFTER the Chat Brain block that
+   * calls `replyAndReturn`. `replyAndReturn` is a function declaration and
+   * hoists; the `const` it closes over does not. So all seven refusal paths
+   * inside the block — the whole of `converse`, the market-research
+   * "not configured" reply, outreach-without-leads, the signal-sourcing
+   * clarifications, the onboarding gate and the unsafe-request refusal —
+   * threw `ReferenceError: Cannot access 'baseMeta' before initialization`
+   * and surfaced as "Something went wrong handling that message."
+   *
+   * Every one of those is a path whose entire job is to answer honestly, so
+   * the failure mode was: the moment Pilot had something careful to say, it
+   * crashed instead. `hello` reproduced it.
+   *
+   * A function, not a const, because `brainRoute` and `brainConfidence` are
+   * `let` bindings that are still being assigned when the block runs. A
+   * snapshot taken at declaration time would record nulls for every reply the
+   * block produces.
+   */
+  const replyMeta = () => ({
+    classifier_source: "chat_brain",
+    objective: brainRoute?.objective ?? null,
+    route: brainRoute?.kind ?? null,
+    confidence: brainConfidence,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+  });
+
+  async function replyAndReturn(
+    content: string, extraMeta: Record<string, unknown> = {},
+  ): Promise<Response> {
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: { ...replyMeta(), ...extraMeta },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply",
+      conversation_id: conversationId,
+      route: brainRoute?.kind ?? null,
+      message: saved,
+    });
+  }
+
   // ══ START OF THE CHAT BRAIN BLOCK ═════════════════════════════════════════
   //
   // A stable landmark, paired with the end marker below. Tests slice this
@@ -2458,6 +2515,42 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // costs a retry; a guess costs a run.
       console.warn("[pilot-chat][chat-brain] unreadable — no fallback interpreter",
         { reason: understood.reason, violations: understood.violations });
+
+      // ── AND IT DOES NOT LEAK INTO A MISSIONLESS RUN ────────────────────
+      //
+      // Falling through was not free. The tail below ends in a generic
+      // delegate that hands orchestrate a restated instruction and NO mission,
+      // so an unread sourcing request became `422 mission_not_compiled` — an
+      // internal contract name, shown to the user, for what was actually a
+      // model failure. On a second attempt the same fall-through produced a
+      // five-step plan with no mission, which `run-agent` then refused.
+      //
+      // Both traces are in the production audit and both start here.
+      //
+      // A CARD ACTION IS EXEMPT. "Run workflow: …" and a submitted lead brief
+      // carry their own structured metadata and are executed deterministically
+      // below; they never needed the model to read a sentence, so a model
+      // outage must not block them.
+      if (!actionSource && !isPreConfirmed) {
+        return await replyAndReturn(
+          "I couldn't read that request just now — that's my understanding layer, not your data. Nothing was started and nothing was charged. Try again, or say it a different way.",
+          {
+            outcome: {
+              version: OUTCOME_CONTRACT_VERSION,
+              state: "FAILED",
+              category: "model_failure",
+              gaps: [],
+              reason: `chat_brain_unreadable:${understood.reason ?? "unknown"}`,
+            },
+            chat_brain: {
+              route: null,
+              understood: false,
+              reason: understood.reason ?? null,
+              violations: understood.violations ?? null,
+            },
+          },
+        );
+      }
     }
   }
 
@@ -2507,42 +2600,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     last_plan_id: memory.last_plan_id,
   });
 
-  // WHAT EVERY ASSISTANT MESSAGE CARRIES. It used to be the classifier's
-  // verdict — its category, its confidence, the actor it picked. None of those
-  // exist any more, and recording them would have meant recording a component's
-  // opinion after deleting the component. This states what is actually known:
-  // which layer decided, and how sure it was.
-  const baseMeta = {
-    classifier_source: "chat_brain",
-    objective: brainRoute?.objective ?? null,
-    route: brainRoute?.kind ?? null,
-    confidence: brainConfidence,
-    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
-  };
-
-  async function replyAndReturn(content: string, extraMeta: Record<string, unknown> = {}): Promise<Response> {
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content,
-        agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
-        metadata: { ...baseMeta, ...extraMeta },
-      })
-      .select("*")
-      .single();
-    return json({
-      type: "reply",
-      conversation_id: conversationId,
-      // The route that produced this reply. It was the classifier's category —
-      // a field the frontend reads for telemetry only, and one that named a
-      // component that no longer exists.
-      route: brainRoute?.kind ?? null,
-      message: saved,
-    });
-  }
+  // `replyMeta` and `replyAndReturn` are declared ABOVE the Chat Brain block —
+  // see the hoist there for why.
 
   // Company Brain context — load once, reuse for all brain-aware direct replies.
   // (Content/outreach DRAFTING already gets the brain downstream in run-agent;
@@ -2643,7 +2702,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   const enrichAndDraft = /\benrich\b/i.test(message) && draftOutreachRe.test(message);
   if (enrichAndDraft && hasLeads && !newSourcing) {
     if (!isPreConfirmed) {
-      return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "outreach");
+      return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, replyMeta(), "outreach");
     }
     const n = extractTopN(message, 5);
     const top = memory.lead_candidates.slice(0, n);
@@ -2718,7 +2777,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     // Draft outreach to top N
     if (draftOutreachRe.test(message) && hasLeads) {
       if (!isPreConfirmed) {
-        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "outreach");
+        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, replyMeta(), "outreach");
       }
       const n = extractTopN(message, 5);
       const top = memory.lead_candidates.slice(0, n);
@@ -2791,7 +2850,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     // Enrich top N — delegate to Hawk via Firecrawl on remembered account domains.
     if (enrichRe.test(message) && hasLeads) {
       if (!isPreConfirmed) {
-        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "url_analysis");
+        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, replyMeta(), "url_analysis");
       }
       const n = extractTopN(message, 3);
       const top = memory.lead_candidates.slice(0, n);
@@ -3471,11 +3530,20 @@ Deno.serve(async (req) => {
           role: "assistant",
           content,
           agent_slug: "pilot",
-          metadata: {
-            type: "error",
+          // ── THE CATEGORY SURVIVES THE TURN ──────────────────────────
+          //
+          // This wrote `{ type, kind }` and nothing else, discarding
+          // `String(e)` and the provider code that were already in scope one
+          // line above. So a missing capability, a provider outage and a
+          // ReferenceError were all stored as "unexpected", and the six turns
+          // taken out by a temporal dead zone were indistinguishable in the
+          // database from a transient glitch worth retrying.
+          metadata: failureMetadata(e, {
             kind: e instanceof MissionCompilationFailedError
               ? "mission_compilation_failed" : "unexpected",
-          },
+            provider_code: e instanceof MissionCompilationFailedError
+              ? e.providerCode : null,
+          }),
         })
         .select("*")
         .single();

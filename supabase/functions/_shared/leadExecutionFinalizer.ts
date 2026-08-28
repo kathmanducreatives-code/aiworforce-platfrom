@@ -36,7 +36,17 @@ export type TerminalReason =
   | "provider_failure"
   | "provider_input_validation_failed"
   | "no_qualified_companies"
-  | "unhandled_exception";
+  | "unhandled_exception"
+  /**
+   * The run was REFUSED before any paid work, by a guard doing its job.
+   *
+   * Distinct from `unhandled_exception` because nothing went wrong. A
+   * `PaidExecutionBlockedError` is the preflight declining to spend against a
+   * task with no mission — a designed outcome — and recording it as a crash
+   * sends whoever reads the row looking for a defect that is not there, while
+   * hiding the block codes that say exactly what to fix.
+   */
+  | "refused_before_execution";
 
 /** Statuses that mean the run genuinely finished its work. Never overwritten. */
 const SUCCESSFUL: ReadonlySet<TerminalStatus> = new Set<TerminalStatus>(["completed"]);
@@ -478,7 +488,7 @@ export function decideTerminalRecord(
     // Carry the structured refusal when the error has one, so the record says
     // WHICH steps were refused rather than only that none survived.
     const raw = (ctx.error as { violations?: unknown }).violations;
-    const blocked_by = Array.isArray(raw)
+    let blocked_by = Array.isArray(raw)
       ? raw.slice(0, 12).map((v) => {
         const o = (v ?? {}) as Record<string, unknown>;
         return {
@@ -489,6 +499,41 @@ export function decideTerminalRecord(
         };
       })
       : null;
+
+    // ── A REFUSAL IS NOT A CRASH ──────────────────────────────────────────
+    //
+    // `PaidExecutionBlockedError` carries `code` and `detail`, not
+    // `violations`, so the branch above found nothing and the row recorded
+    // `reason: "unhandled_exception", blocked_by: null` for a guard that had
+    // just produced two named block codes. Observed live: a task refused for
+    // `missing_mission` was finalised as an unhandled exception with no trace
+    // of why.
+    //
+    // The codes are on the error. They belong on the record.
+    const errName = (ctx.error as { name?: unknown })?.name;
+    if (errName === "PaidExecutionBlockedError") {
+      const code = String((ctx.error as { code?: unknown }).code ?? "blocked");
+      const detail = (ctx.error as { detail?: unknown }).detail as
+        Record<string, unknown> | undefined;
+      const listed = Array.isArray(detail?.blocked) ? detail!.blocked as unknown[] : null;
+      blocked_by = (listed ?? [{ code, message: String(ctx.error) }])
+        .slice(0, 12).map((v) => {
+          const o = (v ?? {}) as Record<string, unknown>;
+          return {
+            code: String(o.code ?? code),
+            severity: "block",
+            message: String(o.message ?? "").slice(0, 300),
+          };
+        });
+      return {
+        ...base, status: "failed", reason: "refused_before_execution",
+        detail: String(ctx.error).slice(0, 500), blocked_by,
+        // NOT RESUMABLE, and for a reason worth stating: retrying changes
+        // nothing until whatever the block names is supplied.
+        resumable: false,
+      };
+    }
+
     return { ...base, status: "failed", reason: "unhandled_exception",
       detail: String(ctx.error).slice(0, 500), blocked_by,
       resumable: completed.length > 0 };

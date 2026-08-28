@@ -48,8 +48,10 @@ const read = (
 // ══ 1. THE DERIVATION ══════════════════════════════════════════════════════
 
 Deno.test("1. a read that asks for prose is the brief", () => {
-  assertEquals(planRead(read("answer")).target, "brief");
-  assertEquals(planRead(read("answer", "company")).target, "brief");
+  assertEquals(planRead(read("answer", "conversation")).target, "brief");
+  // NARROWED. Prose about a specific entity is no longer a brief: "what is my
+  // current ICP" was answered with an operational summary of failed Scout tasks.
+  assertEquals(planRead(read("answer", "company")).target, "companies");
   assertEquals(planRead(read("answer", "conversation")).target, "brief");
 });
 
@@ -84,7 +86,7 @@ Deno.test("4. the brief runs no query of its own", async () => {
   const queried: string[] = [];
   const db = { from: (t: string) => { queried.push(t); throw new Error("must not query"); } };
   // deno-lint-ignore no-explicit-any
-  const r = await executeRead(db as any, planRead(read("answer")), "w1");
+  const r = await executeRead(db as any, planRead(read("answer", "conversation")), "w1");
   assertEquals(r, null, "the brief target returns no result set");
   assertEquals(queried, [], "and touches no table");
 });
@@ -92,7 +94,7 @@ Deno.test("4. the brief runs no query of its own", async () => {
 Deno.test("5. an unavailable brief says so — it does not report an empty workspace", () => {
   // "You have nothing" and "I could not look" are different answers and only
   // one of them is true. The fall-through must not claim the first.
-  const answer = renderReadAnswer(planRead(read("answer")), null);
+  const answer = renderReadAnswer(planRead(read("answer", "conversation")), null);
   assert(/couldn't pull|didn't come back/i.test(answer));
   assertFalse(/don't have any signals recorded/i.test(answer),
     "a failed brief must not be rendered as an empty workspace");

@@ -76,8 +76,29 @@ Deno.test("3. the catch writes an assistant message into the conversation", () =
   assert(serve.includes('.from("messages")'), "the user must find it in the chat");
   assert(serve.includes('role: "assistant"'));
   assert(serve.includes('agent_slug: "pilot"'));
-  assert(/type:\s*"error"/.test(serve),
-    "and it is marked as an error, so the UI can style it without parsing prose");
+  // The metadata now comes from `failureMetadata`, which sets `type: "error"`
+  // AND the structured category. It used to be an inline `{ type, kind }` that
+  // discarded `String(e)` and the provider code already in scope — so a missing
+  // capability, a provider outage and a ReferenceError were stored identically.
+  assert(serve.includes("failureMetadata(e"),
+    "the failure category must be preserved on the row, not just logged");
+});
+
+Deno.test("3b. the failure record carries a category and the message", async () => {
+  const { failureMetadata } = await import(
+    "../../../supabase/functions/_shared/outcomeContract.ts");
+
+  const tdz = failureMetadata(
+    new ReferenceError("Cannot access 'baseMeta' before initialization"));
+  assertEquals(tdz.type, "error", "the UI still styles it without parsing prose");
+  assertEquals(tdz.outcome.state, "FAILED");
+  assertEquals(tdz.outcome.category, "internal_error",
+    "a temporal dead zone is a defect, never a transient glitch worth retrying");
+  assert(String(tdz.error_message).includes("before initialization"),
+    "the reason must reach the row, not only console.error");
+
+  const quota = failureMetadata(new Error("credits_exhausted for provider"));
+  assertEquals(quota.outcome.category, "provider_failure");
 });
 
 Deno.test("4. it returns the SHAPE of a normal reply", () => {

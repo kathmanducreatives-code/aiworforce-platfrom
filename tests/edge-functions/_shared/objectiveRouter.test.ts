@@ -35,11 +35,38 @@ const DENY = { spendAllowed: false };
 
 // ══ 1. READ CANNOT SPEND, BY CONSTRUCTION ══════════════════════════════════
 
+Deno.test("prose about a specific thing is a conversation, not a table", () => {
+  // "What is my current ICP" is a read wanting prose. It was answered with the
+  // daily brief — byte-identical to the one "how are things looking" received —
+  // because any prose-shaped read claimed that surface. A question about one
+  // stored field has no row-shaped answer.
+  const r = routeRequest(req([part("read", {
+    subject: { entity: "company", references: [] },
+    output: { shape: "answer", count: null },
+  })]), ALLOW);
+  assertEquals(r.kind, "converse");
+  assertEquals(r.reason, "held_knowledge_as_prose");
+  assertEquals(r.may_spend, false, "still zero-spend, whichever surface answers");
+});
+
+Deno.test("prose about the WORKSPACE is still the brief", () => {
+  const r = routeRequest(req([part("read", {
+    subject: { entity: "conversation", references: [] },
+    output: { shape: "answer", count: null },
+  })]), ALLOW);
+  assertEquals(r.kind, "read", "the brief is served through the read route");
+});
+
 Deno.test("a read route carries no provider surface at all", () => {
   // Not "does not spend" — CANNOT. There is no mission attached, so there is
   // nothing downstream could invoke even by mistake. The absence IS the
   // guarantee, and it is stronger than a flag someone can forget to check.
-  const r = routeRequest(req([part("read")]), ALLOW);
+  // A LIST read. The helper defaults `read` to prose, and prose about a
+  // specific entity is now a grounded conversation rather than a table — see
+  // the test below. The zero-spend guarantee holds for both.
+  const r = routeRequest(req([part("read", {
+    output: { shape: "records", count: null },
+  })]), ALLOW);
   assertEquals(r.kind, "read");
   assertEquals(r.may_spend, false);
   assertEquals(r.lead, undefined, "a read must not carry a mission");

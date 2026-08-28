@@ -51,6 +51,13 @@ export function inferAgentFromAction(action?: string | null): string {
  * agent_slug="pilot" but actually describe Scout/Aria/Hawk/Penn/Scribe work.
  * Used as last-resort before defaulting to Pilot.
  */
+/**
+ * @deprecated Guesses a speaker from message text. Not used for attribution.
+ *
+ * Retained only because `inferAgentFromAction` shares its vocabulary and some
+ * non-chat surfaces still label activity rows by action. It must never decide
+ * who spoke a chat message again — see `resolveAgentFromMetadata`.
+ */
 export function inferAgentFromContent(text?: string | null): string | null {
   if (!text) return null;
   const s = String(text).toLowerCase();
@@ -79,11 +86,26 @@ export function resolveAgentFromMetadata(
     if (meta.workflow_step) return resolveAgent(inferAgentFromAction(meta.workflow_step));
     if (meta.tool_name) return resolveAgent(inferAgentFromAction(meta.tool_name));
   }
-  if (fallbackSlug && fallbackSlug.toLowerCase() !== 'pilot') {
-    return resolveAgent(fallbackSlug);
-  }
-  const inferred = inferAgentFromContent(content);
-  if (inferred) return resolveAgent(inferred);
+  // ── THE BACKEND'S ATTRIBUTION IS AUTHORITATIVE ──────────────────────────
+  //
+  // This used to decline `pilot` as a fallback and call
+  // `inferAgentFromContent(content)` — a regex over the message's OWN TEXT —
+  // so the speaker was guessed from what the message happened to say.
+  //
+  // Two live examples, both from rows the backend attributed to `pilot`:
+  //
+  //   "I created a 5-step plan: Scout will source…"  contains "Scout"
+  //     -> attributed to scout -> displayed as Lyra
+  //
+  //   a signals list containing "• outreach — competitor activity", because a
+  //   signal_events row has subject_key = "outreach"
+  //     -> matched the outreach/draft pattern -> penn -> displayed as Mira
+  //
+  // A signal about a company called "outreach" turned Pilot into Mira. Neither
+  // was a handoff; no handoff was recorded, requested or intended.
+  //
+  // Pilot is the conversational coordinator. The speaker changes only when the
+  // backend says it changed — which it already records on every row.
   if (fallbackSlug) return resolveAgent(fallbackSlug);
   return PILOT_PROFILE;
 }

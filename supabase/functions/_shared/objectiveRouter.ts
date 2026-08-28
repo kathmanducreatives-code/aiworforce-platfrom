@@ -200,6 +200,26 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
   //
   // No `lead` projection is attached, so this route carries nothing a provider
   // could be invoked from. The absence IS the guarantee.
+  // ── PROSE ABOUT A SPECIFIC THING IS A CONVERSATION, NOT A TABLE ──────────
+  //
+  // A read whose output is prose and whose subject is NOT the workspace as a
+  // whole — "what is my current ICP", "what do you know about our positioning"
+  // — has no row-shaped answer. Sending it to the read surface returned lead
+  // counts, or the daily brief, for a question about one stored field.
+  //
+  // The grounded conversational surface already receives the Company Brain and
+  // is required to answer only from what it was given, so it can answer this
+  // truthfully or say it does not hold it. That is the right home for it.
+  const proseRead = request.parts.length > 0 && request.parts.every((p) =>
+    p.objective === "read" && p.output.shape === "answer"
+    && p.subject.entity !== "conversation");
+  if (proseRead) {
+    return {
+      ...base, kind: "converse", may_spend: false, requires_confirmation: false,
+      reason: "held_knowledge_as_prose",
+    };
+  }
+
   if (request.parts.every((p) => p.objective === "read" || p.objective === "converse")) {
     return {
       ...base, kind: "read", may_spend: false, requires_confirmation: false,

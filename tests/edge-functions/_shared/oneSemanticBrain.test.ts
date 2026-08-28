@@ -260,3 +260,42 @@ Deno.test("16. the safety refusal survived the deletion, and runs first", async 
   assert(guardAt > start && firstSurface > guardAt,
     "the refusal must run before any surface can be reached");
 });
+
+// ══ 7. NOTHING IN THE BLOCK MAY REACH FORWARD ══════════════════════════════
+
+Deno.test("17. helpers the Chat Brain block calls are declared before it", async () => {
+  // ── THE BUG THIS CATCHES, WHICH NOTHING ELSE COULD ──────────────────────
+  //
+  // `replyAndReturn` is a function declaration and hoists. The `const baseMeta`
+  // it closed over did not, and sat 50 lines BELOW the block that called it. So
+  // every refusal path inside the block — the whole of `converse`, the
+  // market-research reply, outreach-without-leads, the signal-sourcing
+  // clarifications, the onboarding gate and the unsafe-request refusal — threw
+  // `ReferenceError: Cannot access 'baseMeta' before initialization`.
+  //
+  // The moment Pilot had something careful to say, it crashed. `hello`
+  // reproduced it in production.
+  //
+  // `deno check` cannot see this: the reference is well-typed, and only the
+  // execution ORDER is wrong. No unit test saw it either, because none of them
+  // execute the handler. A declaration-order assertion is what is left.
+  const src = await read("pilot-chat/index.ts");
+  const blockStart = src.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const blockEnd = src.indexOf("══ END OF THE CHAT BRAIN BLOCK");
+  assert(blockStart > 0 && blockEnd > blockStart);
+  const block = src.slice(blockStart, blockEnd);
+
+  // Every helper the block invokes must be declared above `blockStart`.
+  for (const helper of ["replyAndReturn", "replyMeta", "showWorkflowConfirmation"]) {
+    if (!new RegExp(`\\b${helper}\\(`).test(block)) continue;
+    const decl = Math.max(
+      src.indexOf(`const ${helper} =`),
+      src.indexOf(`async function ${helper}`),
+      src.indexOf(`function ${helper}`),
+    );
+    assert(decl > 0, `${helper} must be declared somewhere`);
+    assert(decl < blockStart,
+      `${helper} is called inside the Chat Brain block but declared after it — ` +
+      `a const it closes over will be in the temporal dead zone at runtime`);
+  }
+});

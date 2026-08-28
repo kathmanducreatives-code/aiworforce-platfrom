@@ -72,7 +72,9 @@ Deno.test("2. an approval read reaches the approvals target", () => {
 Deno.test("3. prose about the workspace is still the brief, not the approvals list", () => {
   // "What needs my attention?" wants a summary; "show me pending approvals"
   // wants the rows. The output shape separates them, as it does for every read.
-  assertEquals(planRead(read("approval", "answer")).target, "brief");
+  // Prose about approvals is not the workspace brief any more — only the
+  // workspace itself claims that surface.
+  assertEquals(planRead(read("approval", "answer")).target, "approvals");
 });
 
 // ══ 2. THE OLD ROWS ARE STILL REAL WORK ════════════════════════════════════
