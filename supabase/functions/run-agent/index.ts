@@ -2800,16 +2800,40 @@ Deno.serve(async (req) => {
                         await supabase.from("messages").insert({
                           conversation_id: convId,
                           role: "assistant",
+                          // ── NO INSTRUCTION TO TYPE ANYTHING ────────────
+                          //
+                          // This used to end: say "continue" and I'll pick it
+                          // up from here. There was nothing on the other end of
+                          // that sentence. The user did exactly as told, Chat
+                          // Brain read "continue" against a conversation full
+                          // of the original request, returned `objective:
+                          // source, route_reason: discovery`, and the product
+                          // previewed and ran a BRAND NEW sourcing job —
+                          // re-buying the 30 companies and the enrichment the
+                          // checkpoint already held, two credits, right after a
+                          // message promising nothing extra would be charged.
+                          //
+                          // Resumption is a specific task and plan, not a
+                          // sentence to be interpreted. The message carries
+                          // those ids and the chat renders a Continue button
+                          // that calls `continue-workflow` with them.
                           content:
                             `This run hit its time limit partway through, so I've saved where it got to` +
                             `${found > 0 ? ` — ${found} companies found, ${short} shortlisted` : ""}. ` +
-                            `Nothing is lost and nothing extra was charged; say "continue" and I'll pick it up from here.`,
+                            `Nothing is lost and nothing extra was charged. Use Continue below to pick it up ` +
+                            `from here — it reuses the work already paid for instead of searching again.`,
                           agent_slug: "pilot",
                           metadata: {
                             plan_id: plan_id ?? null,
                             task_id: task.id,
                             agent_id: "pilot",
                             kind: "run_checkpoint",
+                            // WHAT THE BUTTON NEEDS. `continue-workflow` takes
+                            // exactly these two ids and derives everything else
+                            // from records the caller is proven to own.
+                            checkpoint_summary: found > 0
+                              ? `${found} companies found, ${short} shortlisted`
+                              : null,
                             terminal_status: "continuation_required",
                             outcome: {
                               version: "outcome-v1", state: "PARTIALLY_SATISFIED",

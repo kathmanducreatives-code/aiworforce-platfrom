@@ -96,3 +96,58 @@ Deno.test("5. a killed run's provider run is still recoverable from the ledger",
     // deno-lint-ignore no-explicit-any
   } as any]).length, 0);
 });
+
+// ══ 6. RESUMING IS AN ACTION, NOT A SENTENCE ═══════════════════════════════
+
+Deno.test("6. the checkpoint carries the ids a resume needs, and no typing instruction", () => {
+  // LIVE, 16:49: the notice ended `say "continue" and I'll pick it up from
+  // here`. Nothing was on the other end. The user did exactly that, Chat Brain
+  // read "continue" against a conversation full of the original request and
+  // returned `objective: source, route_reason: discovery`, and the product
+  // previewed and ran a BRAND NEW sourcing job — re-buying 30 companies and the
+  // enrichment the checkpoint already held. Two credits, immediately after a
+  // message saying nothing extra would be charged.
+  const i = SRC.indexOf('kind: "run_checkpoint"');
+  assert(i > 0);
+  const notice = SRC.slice(Math.max(0, i - 3000), i + 900);
+
+  // THE SENTENCE ITSELF, not the comment explaining why it changed — that
+  // comment quotes the old wording on purpose, and matching the whole region
+  // would make the history of the fix look like the fix being absent.
+  const from = SRC.indexOf("content:\n", Math.max(0, i - 3000));
+  const sentence = SRC.slice(from, SRC.indexOf("agent_slug:", from));
+  assertEquals(/say "continue"/.test(sentence), false,
+    "the notice must not instruct the user to type a word nothing interprets");
+  assert(sentence.includes("Use Continue below"),
+    "it must point at an affordance that exists");
+  assert(sentence.includes("instead of searching again"),
+    "and say what continuing avoids paying for");
+  assert(notice.includes("task_id: task.id") && notice.includes("plan_id"),
+    "and carry the two ids `continue-workflow` takes");
+  assert(notice.includes("checkpoint_summary"),
+    "with what was saved, so the button can say what it will reuse");
+});
+
+Deno.test("7. a new paid preview discloses a paused run in the same conversation", () => {
+  const pilot = Deno.readTextFileSync(new URL(
+    "../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
+  const i = pilot.indexOf("const pausedRun = await");
+  assert(i > 0, "the lead route must look for a paused run before previewing");
+
+  const preview = pilot.indexOf("brainRoute.requires_confirmation && !isPreConfirmed");
+  assert(i < preview, "the check must run before the preview is written");
+
+  const block = pilot.slice(preview, preview + 1400);
+  assert(block.includes("paused run in this conversation"),
+    "the card must say the work already exists");
+  assert(block.includes("reuses work you've already paid for"),
+    "and say plainly which option costs nothing extra");
+
+  // IT DISCLOSES, IT DOES NOT BLOCK. A genuinely new search stays one Start
+  // away — refusing it would be a different kind of wrong.
+  const guard = pilot.slice(i, i + 1800);
+  assert(guard.includes('!== "ready"'),
+    "a checkpoint already continued or finished must not be advertised");
+  assert(guard.includes("return null;"),
+    "and a disclosure that cannot be read must never fail the run");
+});

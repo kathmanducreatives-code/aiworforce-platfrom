@@ -2728,6 +2728,48 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // compiles its own mission — a second interpretation whose narration
         // could describe a run the executor was never going to perform. This
         // path does not use it.
+        // ── A PAUSED RUN IN THIS CONVERSATION IS DISCLOSED ────────────────
+        //
+        // On 2026-08-28 16:49 a run was paused holding 30 discovered companies
+        // and 10 shortlisted. The user typed "continue"; Chat Brain read it
+        // against a conversation full of the original request and returned
+        // `objective: source, route_reason: discovery`. The preview offered a
+        // fresh run, the user pressed Start, and discovery and enrichment were
+        // bought a second time — two credits to re-establish saved work.
+        //
+        // The card disclosed that it would spend. It could not disclose the
+        // thing that mattered: that the same work was already sitting in a
+        // checkpoint one message above. This is not a phrase check and does not
+        // block anything — a genuinely new search is still one Start away. It
+        // states a fact the user needs before spending, from the rows.
+        const pausedRun = await (async () => {
+          try {
+            const { data } = await admin
+              .from("messages")
+              .select("metadata")
+              .eq("conversation_id", conversationId)
+              .filter("metadata->>kind", "eq", "run_checkpoint")
+              .order("created_at", { ascending: false })
+              .limit(1).maybeSingle();
+            const meta = (data as { metadata?: Record<string, unknown> } | null)?.metadata;
+            const taskId = typeof meta?.task_id === "string" ? meta.task_id : null;
+            if (!taskId) return null;
+            // STILL PAUSED, checked now — a checkpoint that has since been
+            // continued or finished must not be advertised as resumable.
+            const { data: t } = await admin
+              .from("tasks").select("status").eq("id", taskId).maybeSingle();
+            if ((t as { status?: string } | null)?.status !== "ready") return null;
+            return {
+              task_id: taskId,
+              summary: typeof meta?.checkpoint_summary === "string"
+                ? meta.checkpoint_summary : null,
+            };
+          } catch {
+            // Best effort. A disclosure that cannot be read must not block a run.
+            return null;
+          }
+        })();
+
         const previewPlan = buildCapabilityGraph(mission as never);
         const feasibility = assessRequestFeasibility(mission, previewPlan);
         const preview = buildMissionPreview(
@@ -2757,7 +2799,12 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // run, and this route delegated straight to orchestrate. The route has
         // carried `requires_confirmation: true` the whole time; nothing read it.
         if (brainRoute.requires_confirmation && !isPreConfirmed) {
-          return await replyAndReturn(preview.narration, {
+          const pausedNote = pausedRun
+            ? `\n\nHeads up: you have a paused run in this conversation${
+              pausedRun.summary ? ` holding ${pausedRun.summary}` : ""
+            }. Continuing that one reuses work you've already paid for; starting this searches again.`
+            : "";
+          return await replyAndReturn(preview.narration + pausedNote, {
             outcome: {
               version: OUTCOME_CONTRACT_VERSION, state: "REQUIRES_UNLOCK",
               category: "requires_approval", gaps: preview.gaps,
@@ -2778,7 +2825,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             // The mission the Start will execute, so confirming runs exactly
             // what was previewed rather than re-reading the sentence.
             lead_mission: mission,
-            chat_brain: { route: "lead_mission", previewed: true },
+            ...(pausedRun ? { paused_run: pausedRun } : {}),
+            chat_brain: { route: "lead_mission", previewed: true,
+              paused_run_disclosed: pausedRun !== null },
           });
         }
 

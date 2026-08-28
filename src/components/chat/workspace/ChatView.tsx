@@ -10,6 +10,7 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import WorkflowConfirmationCard from './bubbles/WorkflowConfirmationCard';
+import ResumeRunCard from './bubbles/ResumeRunCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
@@ -249,6 +250,15 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                       agents: planMeta.agents,
                       connector_limitations: planMeta.connector_limitations,
                     }}
+                  />
+                )}
+                {meta && meta.kind === 'run_checkpoint' && meta.task_id && meta.plan_id && (
+                  <ResumeRunCard
+                    taskId={String(meta.task_id)}
+                    planId={String(meta.plan_id)}
+                    conversationId={m.conversation_id}
+                    summary={typeof meta.checkpoint_summary === 'string'
+                      ? meta.checkpoint_summary : null}
                   />
                 )}
                 {meta && meta.type === 'workflow_confirmation' && meta.workflow_confirmation && (
