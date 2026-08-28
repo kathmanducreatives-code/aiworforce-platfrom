@@ -83,6 +83,7 @@ If answering only requires ranking, filtering, selecting or summarising things t
 EVERY PART IS JUDGED ON ITS OWN. In a message with several asks, decide each part's objective independently, by what THAT ask needs. Do not let a later expensive ask pull an earlier cheap one up to match it: "look at what I have, then go find more" is read followed by source, not source twice.
 
 ENTITY: ${REQUEST_ENTITIES.join(", ")}.
+"competitor" means a rival of the USER'S OWN business - "who are my competitors", "what are my competitors posting". A named company the user is researching for its own sake is "company", not "competitor".
 "market" means a category, topic or problem space rather than a specific organisation - an industry, a trend, "what's happening in AI recruiting". A question about a NAMED company is research on a company, not on a market.
 "approval" means a draft or action waiting for the user to approve it - "what needs my sign-off", "anything waiting on me to approve", "show me pending approvals". It is not the same as "content", which is what has been written.
 

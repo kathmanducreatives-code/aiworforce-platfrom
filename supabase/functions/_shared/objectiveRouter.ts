@@ -36,6 +36,9 @@ import {
   planMarketResearch, type MarketResearchPlan,
 } from "./marketResearchSurface.ts";
 import { planCompose, type ComposePlan } from "./composeSurface.ts";
+import {
+  planSignalSourcing, type SignalSourcingPlan,
+} from "./signalSourcingSurface.ts";
 
 export const OBJECTIVE_ROUTER_VERSION = "objective-router-v1" as const;
 
@@ -68,7 +71,9 @@ export type RouteKind =
    */
   | "market_research"
   /** Write something. `compose.kind` says whether it has a recipient. */
-  | "compose";
+  | "compose"
+  /** Source public activity, rivals, or the people who engaged with a post. */
+  | "signal_sourcing";
 
 export interface Route {
   version: typeof OBJECTIVE_ROUTER_VERSION;
@@ -82,6 +87,8 @@ export interface Route {
   market?: MarketResearchPlan;
   /** Present only for `compose`. Says what is written and for whom. */
   compose?: ComposePlan;
+  /** Present only for `signal_sourcing`. Says which of the three kinds. */
+  signals?: SignalSourcingPlan;
   /** Which parts this route serves. */
   part_ids: string[];
   /**
@@ -201,6 +208,22 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
       part_ids: partsFor(request, (p) => p.objective === "monitor"),
       may_spend: opts.spendAllowed && objectiveMaySpend("monitor"),
       reason: "future_observation",
+    };
+  }
+
+  // ── SOURCING ACTIVITY IS NOT SOURCING COMPANIES ──────────────────────────
+  //
+  // Before the lead projection, and `person` is why the order matters: pulling
+  // the commenters off a post has `entity: person`, which IS a lead entity, so
+  // without this the request would compile into a mission to go and find people
+  // matching a description — buying a discovery run instead of reading one post.
+  const signalPlan = planSignalSourcing(request);
+  if (signalPlan) {
+    return {
+      ...base, kind: "signal_sourcing", signals: signalPlan,
+      part_ids: [signalPlan.part_id],
+      may_spend: opts.spendAllowed,
+      reason: `signal_sourcing:${signalPlan.kind}`,
     };
   }
 

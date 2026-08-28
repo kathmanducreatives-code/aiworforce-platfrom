@@ -119,6 +119,19 @@ export const REQUEST_ENTITIES = [
    * one; this aligns them rather than adding a third.
    */
   "market",
+  /**
+   * A RIVAL OF THE WORKSPACE'S OWN BUSINESS.
+   *
+   * "Who are my competitors?", "what are Clay and 11x posting about?". Distinct
+   * from `company` because the QUESTION is different: a competitor is defined by
+   * its relationship to the workspace, so answering starts from the workspace's
+   * own profile — its website, its description, the rivals it already named —
+   * not from a population filter.
+   *
+   * Third and last of the words taken from `signal_events.subject_type`
+   * (`competitor | company | market`), which has distinguished these all along.
+   */
+  "competitor",
 ] as const;
 export type RequestEntity = typeof REQUEST_ENTITIES[number];
 

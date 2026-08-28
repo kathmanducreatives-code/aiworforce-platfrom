@@ -69,6 +69,8 @@ export type BindingOutcome =
   | { kind: "market_research"; reason: string }
   /** Write something. Approval-gated when it has a recipient. */
   | { kind: "compose"; reason: string }
+  /** Source activity, rivals, or post commenters. */
+  | { kind: "signal_sourcing"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -139,6 +141,11 @@ export function bindRoute(route: Route): BindingOutcome {
       // Two surfaces behind one objective: Penn for a message with a recipient,
       // Scribe for a post without one. The caller reads `route.compose.kind`.
       return { kind: "compose", reason: route.reason };
+
+    case "signal_sourcing":
+      // Three kinds behind one route — post commenters, competitor discovery,
+      // public engagement. The caller reads `route.signals.kind`.
+      return { kind: "signal_sourcing", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`

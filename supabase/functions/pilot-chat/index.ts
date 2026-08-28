@@ -37,6 +37,9 @@ import {
   webSearchAvailable, SEARCH_WEB_UNAVAILABLE,
 } from "../_shared/marketResearchSurface.ts";
 import { OUTREACH_WITHOUT_LEADS } from "../_shared/composeSurface.ts";
+import {
+  COMPETITORS_NEED_CONTEXT, PROFILE_POSTS_NEED_URLS,
+} from "../_shared/signalSourcingSurface.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import {
   bindRoute, chatBrainEnabled, type BindingOutcome,
@@ -2000,6 +2003,131 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           } as unknown as ToolInput,
           modelUsed: "chat-brain",
           providerUsed: "openai",
+        });
+      }
+
+      // ── SOURCING ACTIVITY: THREE KINDS, ONE ROUTE ─────────────────────
+      //
+      // `signal_sourcing` carried eight `WorkflowDecision` fields because the
+      // classifier had no entity to say which of itself it meant. The entity
+      // says it now, and each kind keeps the actor contract it always had.
+      if (brainRoute.kind === "signal_sourcing" && brainRoute.signals) {
+        const sp = brainRoute.signals;
+
+        if (sp.kind === "post_commenters") {
+          return await delegateToOrchestrate({
+            admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+            conversationId, workspaceId, instruction: message,
+            missionOrigin: "chat_brain_post_commenters",
+            toolInput: {
+              intent: "extract_commenters",
+              tool_name: "source_with_apify",
+              selected_actor_key: "apify_linkedin_post_comments",
+              source_type: "linkedin_comments",
+              query: message, role_keywords: [], location: null,
+              max_results: Math.max(1, Math.min(50, sp.count ?? 20)),
+              needs_enrichment: false,
+              needs_outreach: sp.wants_drafts,
+              execution_mode: "fast",
+              confidence: understood.request.confidence,
+              missing_fields: [],
+              reason: "chat brain: commenters on a post the user linked",
+              extract_commenters: true,
+              user_input: { postUrls: sp.post_urls },
+            } as unknown as ToolInput,
+            modelUsed: "chat-brain", providerUsed: "openai",
+          });
+        }
+
+        if (sp.kind === "competitor_discovery") {
+          // THE WORKSPACE'S OWN PROFILE IS THE STARTING POINT — that is what
+          // makes a competitor different from a company. Unchanged resolution
+          // order: what the user said, then the saved profile, then refuse.
+          const profile = (brainProfileForMission ?? {}) as Record<string, unknown>;
+          const website = typeof profile.website === "string" && profile.website
+            ? profile.website : null;
+          const described = [profile.what_we_do, profile.who_we_sell_to]
+            .filter((x) => typeof x === "string" && x).join(". ");
+          const description = described || null;
+          const known = Array.from(new Set([
+            ...sp.competitors, ...brainCompetitors(profile),
+          ].map((c) => String(c).trim()).filter(Boolean)));
+          const mode = website ? "website"
+            : (description || known.length > 0) ? "description" : "needs_context";
+          if (mode === "needs_context") {
+            return await replyAndReturn(COMPETITORS_NEED_CONTEXT, {
+              clarification: true,
+              clarification_type: "competitor_discovery_needs_context",
+            });
+          }
+          return await delegateToOrchestrate({
+            admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+            conversationId, workspaceId, instruction: message,
+            missionOrigin: "chat_brain_competitor_discovery",
+            toolInput: {
+              intent: "competitor_discovery",
+              tool_name: "source_with_apify",
+              selected_actor_key: "apify_linkedin_posts",
+              source_type: "linkedin_engagement",
+              query: description ?? website ?? message,
+              role_keywords: [], location: null,
+              max_results: Math.max(1, Math.min(20, sp.count ?? 5)),
+              needs_enrichment: false,
+              needs_outreach: sp.wants_drafts,
+              execution_mode: "research",
+              confidence: understood.request.confidence,
+              missing_fields: [],
+              reason: `chat brain: competitor discovery (${mode})`,
+              signal_type: "competitor_engagement",
+              competitor_discovery: true,
+              discovery_mode: mode,
+              business_website: website,
+              business_description: description,
+              competitors: known,
+            } as unknown as ToolInput,
+            modelUsed: "chat-brain", providerUsed: "openai",
+          });
+        }
+
+        // ENGAGEMENT. Profile posts when the user named profiles, topic search
+        // otherwise — the same two actors, chosen by what was referenced rather
+        // than by which key a classifier pinned.
+        const isProfilePosts = sp.target_urls.length > 0;
+        if (!isProfilePosts && sp.keywords.length === 0 && sp.competitors.length === 0) {
+          return await replyAndReturn(PROFILE_POSTS_NEED_URLS, {
+            clarification: true,
+            clarification_type: "linkedin_profile_posts_needs_urls",
+          });
+        }
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId, instruction: message,
+          missionOrigin: "chat_brain_engagement",
+          toolInput: {
+            intent: "signal_sourcing",
+            tool_name: "source_with_apify",
+            selected_actor_key: isProfilePosts
+              ? "apify_linkedin_profile_posts" : "apify_linkedin_posts",
+            source_type: "linkedin_engagement",
+            query: sp.keywords.join(", ") || message,
+            role_keywords: [],
+            location: sp.location,
+            max_results: Math.max(1, Math.min(20, sp.count ?? 5)),
+            needs_enrichment: false,
+            needs_outreach: sp.wants_drafts,
+            execution_mode: "fast",
+            confidence: understood.request.confidence,
+            missing_fields: [],
+            reason: "chat brain: linkedin engagement signal sourcing",
+            signal_type: "linkedin_engagement",
+            competitors: sp.competitors,
+            keywords: sp.keywords,
+            user_input: {
+              ...(sp.keywords.length > 0 ? { keywords: sp.keywords } : {}),
+              ...(isProfilePosts ? { targetUrls: sp.target_urls } : {}),
+            },
+          } as unknown as ToolInput,
+          modelUsed: "chat-brain", providerUsed: "openai",
         });
       }
 
