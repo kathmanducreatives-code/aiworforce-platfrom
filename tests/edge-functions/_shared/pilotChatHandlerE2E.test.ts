@@ -163,3 +163,55 @@ Deno.test("11. the read persists what it displayed, so a follow-up can point at 
   assert(read.includes("PRESENTED_REFERENTS_KEY"),
     "and persisted on the message that displayed them");
 });
+
+// ══ 7. THE MODEL CAN SEE THE TURN IT IS POINTING BACK AT ═══════════════════
+
+Deno.test("12. understanding is given the prior turns", () => {
+  // LIVE, 2026-08-28: "What leads do I currently have?" answered with 32 named
+  // leads and persisted them as referents; "Which of those look strongest?"
+  // one turn later logged `bound_referents: 0`, routed to `converse`, and said
+  // the workspace was empty.
+  //
+  // `ChatBrainContext.conversation` was declared and rendered into the prompt,
+  // and no caller passed it. Chat Brain saw every message as the first in the
+  // conversation, and its own prompt forbids a `prior_result` reference when
+  // there is no earlier turn — so `requestHasBackReference` could never be
+  // true, and the whole of Phase E was unreachable in production.
+  const call = BLOCK.indexOf("await understandRequest(message, {");
+  assert(call > 0, "the handler must understand the message");
+  const args = BLOCK.slice(call, BLOCK.indexOf("});", call));
+  assert(/\bconversation:/.test(args),
+    "understandRequest must be given the prior turns, or no reference can point back");
+
+  const load = BLOCK.indexOf("const priorTurns =");
+  assert(load > 0 && load < call, "the turns must be loaded before understanding");
+});
+
+Deno.test("13. the current message is not shown back as its own history", () => {
+  const load = BLOCK.indexOf("const priorTurns =");
+  const decl = BLOCK.slice(load, load + 400);
+  assert(decl.includes("insertedUserMessage"),
+    "the row just inserted for this turn must be excluded from the history");
+});
+
+Deno.test("14. converse answers with the conversation in front of it", () => {
+  // LIVE: `converse` was called with `messages: [{ role: "user", content:
+  // message }]` and nothing else, so every conversational turn restarted the
+  // conversation — and the reply contradicted the turn immediately above it.
+  const i = BLOCK.indexOf('brainRoute.kind === "converse"');
+  assert(i > 0);
+  const surface = BLOCK.slice(i, i + 2000);
+  assert(surface.includes("...priorTurns"),
+    "the conversational answer must see the turns understanding saw");
+});
+
+Deno.test("15. converse is not handed conversation counts as workspace state", () => {
+  // LIVE: `Leads saved in this conversation: 0.` under a heading that read
+  // `workspace_facts` became "I don't have any leads or prospects in the
+  // workspace yet. We're starting from zero." — one turn after 32 were shown.
+  const i = BLOCK.indexOf('brainRoute.kind === "converse"');
+  const facts = BLOCK.slice(BLOCK.indexOf("const facts = [", i),
+    BLOCK.indexOf("];", BLOCK.indexOf("const facts = [", i)));
+  assert(/NOT the number of leads saved in the workspace/.test(facts),
+    "a conversation-scoped count must say it is not a workspace count");
+});

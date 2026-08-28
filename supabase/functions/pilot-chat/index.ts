@@ -65,6 +65,7 @@ import {
   PRESENTED_REFERENTS_KEY,
 } from "../_shared/referentPersistence.ts";
 import { loadLatestReferents, type ReferentDb } from "../_shared/referentLookup.ts";
+import { toBrainTurns, TURN_LOOKBACK } from "../_shared/conversationTurns.ts";
 import {
   pendingClarification, clarificationOwnedBy,
 } from "../_shared/clarificationContract.ts";
@@ -1416,14 +1417,22 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // So the fix is both halves: send a value the column accepts, and refuse to
   // continue quietly when the turn was not recorded. A conversation missing its
   // user turn cannot be classified, cannot be resumed, and cannot be audited.
-  const { error: userMessageError } = await admin.from("messages").insert({
-    conversation_id: conversationId,
-    role: "user",
-    content: message,
-    metadata: actionSource
-      ? { action_source: actionSource, ...(actionMetadata ?? {}) }
-      : {},
-  });
+  const { data: insertedUserMessage, error: userMessageError } = await admin
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      role: "user",
+      content: message,
+      metadata: actionSource
+        ? { action_source: actionSource, ...(actionMetadata ?? {}) }
+        : {},
+    })
+    // THE ID IS READ, NOT DECORATION. The prior turns are loaded below to give
+    // Chat Brain something to point back at, and this row IS the current
+    // message — including it would show the model its own utterance twice, once
+    // as history and once as the thing to understand.
+    .select("id")
+    .single();
   if (userMessageError) {
     console.error("[pilot-chat] user message insert failed", {
       conversation_id: conversationId,
@@ -1750,8 +1759,25 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // UNCONDITIONAL. There is no flag and no alternative path: understanding is
   // the only way in.
   {
+    // ── THE TURNS BEFORE THIS ONE ──────────────────────────────────────
+    //
+    // Without these, every message arrives as the first message in the
+    // conversation and "which of those" cannot be a back-reference — the
+    // prompt says so explicitly, and Chat Brain obeyed it. Loaded once, used
+    // twice: understanding, and the conversational answer below.
+    const { data: priorRows } = await admin
+      .from("messages")
+      .select("id, role, content")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(TURN_LOOKBACK + 1);
+    const priorTurns = toBrainTurns(
+      (priorRows ?? []).filter((r) => r.id !== insertedUserMessage?.id),
+    ).slice(-TURN_LOOKBACK);
+
     const understood = await understandRequest(message, {
       workspaceContext: workspaceContextBlock,
+      conversation: priorTurns,
       log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
     }, { readEnv: readEnvSafe });
 
@@ -2149,9 +2175,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // counts this turn already has in hand — no new queries, and nothing that
       // could be mistaken for having looked something up.
       if (brainRoute.kind === "converse") {
+        // ── SCOPED, BECAUSE THE MODEL READ THEM AS WORKSPACE-WIDE ──────
+        //
+        // These are counts of what THIS CONVERSATION produced, and they were
+        // handed over under a heading that said `workspace_facts`. Live, one
+        // turn after being told the workspace holds 32 leads, converse said
+        // "I don't have any leads or prospects in the workspace yet. We're
+        // starting from zero." The numbers were right; the scope was invented.
         const facts = [
-          `Leads saved in this conversation: ${memory.lead_candidates.length}.`,
-          `Outreach drafts in this conversation: ${memory.outreach_drafts.length}.`,
+          `Leads this conversation has produced so far: ${memory.lead_candidates.length} (this is NOT the number of leads saved in the workspace, which you have not been told).`,
+          `Outreach drafts this conversation has produced so far: ${memory.outreach_drafts.length}.`,
           `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
         ];
         const ai = await generateText({
@@ -2159,7 +2192,13 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
           }),
-          messages: [{ role: "user", content: message }],
+          messages: [
+            // THE SAME TURNS UNDERSTANDING SAW. A conversational answer that
+            // cannot see the previous turn restarts the conversation on every
+            // message, which is how "hello" mid-thread read as a first hello.
+            ...priorTurns,
+            { role: "user", content: message },
+          ],
           temperature: 0.5,
           maxTokens: 420,
           functionName: "pilot-chat-converse",

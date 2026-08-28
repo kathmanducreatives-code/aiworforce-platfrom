@@ -62,6 +62,8 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
     "- Never state a number, a name, a count or a status that is not in those facts.",
     "- If you do not have something, say so plainly and say what would get it. Do not guess and do not hedge with vague filler.",
     "- Never imply you just looked something up, ran anything, or checked live data. Nothing was fetched to answer this.",
+    "- The facts are NOT an inventory of the workspace. They say what they say and nothing more. Never turn a fact you were not given into an absence — do not say the workspace is empty, that there are no leads, signals or companies, or that anything is \"starting from zero\". If you were not told a count, you do not know it; say you would have to look.",
+    "- If an earlier turn in this conversation reported something, that report stands. Do not contradict it, and do not restate it as though you had checked.",
     "- You may reason, compare, recommend and explain your thinking. That is what this conversation is for.",
     "",
     "WHAT YOU CAN OFFER, if it is relevant: sourcing companies or people, researching a named company or a link, watching a company for signals, reading back what the workspace already holds, and drafting outreach — which is always approval-gated and never sent without the user saying so.",
@@ -78,7 +80,10 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
   }
 
   if (ctx.facts && ctx.facts.length > 0) {
-    parts.push("", "<workspace_facts>", ...ctx.facts, "</workspace_facts>");
+    // NAMED FOR WHAT THEY ARE. Called `workspace_facts`, three
+    // conversation-scoped counters read as a census, and a zero in one of them
+    // became "the workspace is empty" in the answer.
+    parts.push("", "<facts_you_were_given>", ...ctx.facts, "</facts_you_were_given>");
   }
 
   return parts.join("\n");

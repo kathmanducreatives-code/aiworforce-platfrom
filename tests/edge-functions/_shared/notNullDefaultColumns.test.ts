@@ -47,11 +47,24 @@ const NOT_NULL_WITH_DEFAULT: ReadonlyArray<readonly [string, string]> = [
   ["messages", "metadata"],
 ];
 
+// THE INSERT THAT RECORDS THE USER'S TURN.
+//
+// Located by what it DOES, not by one line's formatting. This was anchored on
+// the literal `admin.from("messages").insert({`, and adding a `.select("id")`
+// to the same call — which changed nothing these tests are about — split the
+// chain across lines and made both of them fail.
+const USER_INSERT = (() => {
+  const re = /admin\s*\.?\s*(?:\n\s*)?\.?from\("messages"\)\s*\.?\s*(?:\n\s*)?\.insert\(\{/g;
+  for (let m = re.exec(PILOT_CHAT); m; m = re.exec(PILOT_CHAT)) {
+    const block = PILOT_CHAT.slice(m.index, m.index + 700);
+    if (/role:\s*"user"/.test(block)) return { at: m.index, block };
+  }
+  return null;
+})();
+
 Deno.test("1. THE REGRESSION: the user-message insert never sends a null metadata", () => {
-  // The insert block, from `.from("messages").insert({` to its closing `});`.
-  const at = PILOT_CHAT.indexOf('admin.from("messages").insert({');
-  assert(at > 0, "the user-message insert still exists");
-  const block = PILOT_CHAT.slice(at, at + 500);
+  assert(USER_INSERT, "the user-message insert still exists");
+  const block = USER_INSERT.block.slice(0, 500);
   assertFalse(
     /metadata:[^,}]*\bnull\b/.test(block),
     "metadata must never be sent as an explicit null — the column is NOT NULL " +
@@ -64,10 +77,11 @@ Deno.test("1. THE REGRESSION: the user-message insert never sends a null metadat
 });
 
 Deno.test("2. AND THE SILENCE IS GONE: the insert's error is read and reported", () => {
-  const at = PILOT_CHAT.indexOf('admin.from("messages").insert({');
-  const around = PILOT_CHAT.slice(Math.max(0, at - 200), at + 900);
+  assert(USER_INSERT, "the user-message insert still exists");
+  const around = PILOT_CHAT.slice(
+    Math.max(0, USER_INSERT.at - 200), USER_INSERT.at + 1100);
   assert(
-    /const\s*\{\s*error:\s*\w+\s*\}\s*=\s*await\s+admin\.from\("messages"\)\.insert/.test(around),
+    /const\s*\{[^}]*\berror:\s*\w+[^}]*\}\s*=\s*await\s+admin/.test(around),
     "the insert result is destructured — a bare `await insert()` cannot fail loudly",
   );
   assert(
