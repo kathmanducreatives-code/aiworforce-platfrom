@@ -22,6 +22,7 @@ import {
   isLeadMissionV1, parseLeadMissionDeterministic,
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
+import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
@@ -75,7 +76,16 @@ type Step = {
   success_criteria: string;
   requires_approval: boolean;
   needs_approval: boolean; // alias
-  planner_source: "ai" | "fallback" | "expansion";
+  /**
+   * Who wrote this step.
+   *
+   * `capability_graph` means NO planner was consulted: the step was derived
+   * from `buildCapabilityGraph(mission)` — the same graph Stage 1 previewed
+   * and the engine executes. It is the only source that cannot disagree with
+   * the mission, and reading it on a persisted plan is how you tell an
+   * approved run from a re-planned one.
+   */
+  planner_source: "ai" | "fallback" | "expansion" | "capability_graph";
   tool_status?: "ready" | "connector_required";
   connector_required?: string;
 };
@@ -689,7 +699,91 @@ Deno.serve(async (req) => {
     // ---------- Staged plan from tool_input (short-circuits AI planner) ----------
 
     let parsed: { plan_summary: string; steps: Step[] } | null = null;
-    let plannerSource: "ai" | "fallback" | "staged" = "fallback";
+    let plannerSource: "ai" | "fallback" | "staged" | "capability_graph" = "fallback";
+
+    // ══ A COMPILED MISSION IS ITS OWN PLAN ═════════════════════════════════
+    //
+    // ── THE RUN THIS EXISTS TO END ────────────────────────────────────────
+    //
+    // Task bf13ff42, 2026-08-28 15:53. The user approved a workflow card built
+    // from a compiled `LeadMissionV1` — 3 recruiting/staffing companies with a
+    // hiring signal, six capability steps, ~7 credits — pressed Start, and the
+    // mission arrived here intact. It was then handed to the AI planner, which
+    // wrote its own four-step plan from the raw sentence:
+    //
+    //   Scout will source recruiting/staffing companies hiring sales roles,
+    //   Aria will rank and screen companies against icp, Hawk will enrich top
+    //   company with website intel, Penn will draft outreach.
+    //
+    // `planner_source: "ai"`, `tool_needed: "source_with_apify"` — none of it
+    // from the mission, none of it from the capability graph. Those steps carry
+    // no `metadata.tool_input`, so the mission was DROPPED at plan
+    // persistence: only the deterministic fallback builder attaches it. The
+    // task reached run-agent with an instruction string and nothing else, the
+    // paid preflight refused it — `missing_mission: no LeadMissionV1 on this
+    // task; paid execution is refused because nothing states what is being
+    // bought` — and the row was written `failed`.
+    //
+    // Nothing ran. Nothing was charged. But the user was told four agents were
+    // working, shown a plan for work that could never execute, and then shown a
+    // failure — for a request that had been understood, compiled, assessed and
+    // approved correctly at every prior step.
+    //
+    // ── SO THE PLANNER IS NOT CONSULTED ───────────────────────────────────
+    //
+    // `buildCapabilityGraph` is the SAME function Stage 1 previewed from and
+    // the same one run-agent executes. Deriving the plan from it means the card
+    // the user approved, the plan persisted here, and the graph the engine runs
+    // are one object with one hash. There is no second reading of the sentence
+    // to disagree with the first, and no model call on this path at all.
+    //
+    // ONE STEP, deliberately. The capability engine executes the whole graph
+    // inside a single run-agent invocation — it owns ordering, resume, cost
+    // accounting and the provider boundary. Splitting the graph into one task
+    // per capability would create rows nothing drives, and a plan whose step
+    // count disagreed with what actually runs is how the four-step narration
+    // came to sit above a one-step execution card.
+    const approvedMission = isLeadMissionV1(lead_mission) ? lead_mission : null;
+    if (approvedMission) {
+      const graph: CapabilityPlan = buildCapabilityGraph(approvedMission);
+      const missionStep = mkStep(
+        0,
+        "scout",
+        "Execute the approved mission",
+        // THE USER'S OWN WORDS, which the mission already carries. Not a
+        // rewrite: `original_user_query` is what the compiler read.
+        approvedMission.original_user_query || user_instruction,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Qualified results from the approved mission's capability graph.",
+          success_criteria: "The capability plan completes, or reports the exact capability that could not.",
+          planner_source: "capability_graph",
+        },
+      );
+      (missionStep as Step & { metadata?: Record<string, unknown> }).metadata = {
+        // THE MISSION TRAVELS ON THE STEP. This is the field
+        // `readPersistedLeadMission` reads in run-agent, and its absence is
+        // exactly what the preflight refused.
+        tool_input: {
+          ...(tool_input ?? {}),
+          lead_mission: approvedMission,
+          ...(bindingsCarrier ?? {}),
+        },
+      };
+      parsed = {
+        plan_summary: `${graph.steps.length} capabilities: ${
+          graph.steps.map((x) => x.capability.replace(/_/g, " ")).join(" → ")}`,
+        steps: [missionStep],
+      };
+      plannerSource = "capability_graph";
+      console.log("[orchestrate][capability-graph-plan]", {
+        workspace_id,
+        entry_capability: graph.entry_capability,
+        capabilities: graph.steps.map((x) => x.capability),
+        allowed_providers: graph.allowed_providers,
+        planner_consulted: false,
+      });
+    }
 
     // Phase 7 — Founder Content + Engagement Loop. Deterministic staged plan:
     // Scribe (founder post / ideas, Claude-preferred) → Scout (LinkedIn search)
@@ -1248,7 +1342,15 @@ Return ONLY valid JSON, no prose, no markdown:
     // validated. TIGHTLY GATED: only a qualified-Lead route, only when the
     // existing Claude-first flag AND the workspace allow-list both pass. Every
     // other workflow reaches the unchanged insert below.
-    const qlPlan = await planQualifiedLeadBeforePersistence({
+    //
+    // ── AND NOT FOR A MISSION THAT WAS ALREADY APPROVED ───────────────────
+    //
+    // This is the Claude lead planner. It is a second planning model, and for
+    // an approved mission there is nothing left to plan: the capability graph
+    // above IS the plan, and it is the one the preview showed and the engine
+    // executes. Running this would let a model re-decide the steps AFTER the
+    // user pressed Start on a different set of them.
+    const qlPlan = plannerSource === "capability_graph" ? null : await planQualifiedLeadBeforePersistence({
       // The Supabase client's generic type is deeper than the brain loader's
       // structural contract; the loader only ever reads one table.
       admin: admin as never, workspaceId: workspace_id, userInstruction: user_instruction ?? "",

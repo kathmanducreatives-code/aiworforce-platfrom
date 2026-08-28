@@ -629,10 +629,61 @@ Deno.serve(async (req) => {
   // deadline stop and a clean completion all leave terminal rows. It READS the
   // current row first and never overwrites a status the handler already wrote,
   // so the forty existing exit paths keep their own, more specific outcomes.
-  const terminalGuard = createRunTerminalGuard(supabaseTerminalGuardDb(supabase as never), {
+  //
+  // ── AND IT SPEAKS, WHEN IT REFUSES ──────────────────────────────────────
+  //
+  // A blocked run wrote its codes into `tasks.result` and said nothing in the
+  // conversation. Task bf13ff42 ended with the user reading "I created a
+  // 4-step plan: Scout will source…" and then never hearing another word: the
+  // refusal, and the one line naming what was missing, lived only in JSON.
+  //
+  // The plan id is the link back to the chat — the same lookup the completion
+  // message already uses — and it is only known partway through the handler,
+  // so the guard is given a writer that resolves it at announcement time.
+  let guardPlanId: string | null = null;
+  const guardDb = supabaseTerminalGuardDb(supabase as never);
+  const terminalGuard = createRunTerminalGuard({
+    ...guardDb,
+    announceBlocked: async (message, record) => {
+      if (!guardPlanId) return;
+      const { data: planMsg } = await supabase.from("messages")
+        .select("conversation_id")
+        .filter("metadata->>plan_id", "eq", guardPlanId)
+        .limit(1).maybeSingle();
+      const conversationId =
+        (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+      if (!conversationId) return;
+      await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: message,
+        agent_slug: "pilot",
+        metadata: {
+          plan_id: guardPlanId,
+          terminal_status: record.reason,
+          // THE STRUCTURED REASON TRAVELS WITH THE SENTENCE, so the UI can
+          // render the codes and a reader can tell a refusal from a crash.
+          blocked_by: record.blocked_by ?? [],
+          outcome: {
+            version: "outcome-v1", state: "UNSUPPORTED",
+            category: "unsupported_capability",
+            reason: record.reason,
+            gaps: (record.blocked_by ?? []).map((b) => ({
+              code: b.code, detail: b.message,
+            })),
+          },
+        },
+      });
+    },
+  }, {
     log: (m, meta) => console.log("[run-agent][terminal-guard]", m, meta),
     onWriteError: (e) => console.error("[run-agent][terminal-guard][write-error]", String(e)),
   });
+  const bindGuard = terminalGuard.bind;
+  terminalGuard.bind = (ids) => {
+    if (ids.planId) guardPlanId = ids.planId;
+    bindGuard(ids);
+  };
 
   // EVERYTHING BELOW RUNS INSIDE THE GUARD.
   //

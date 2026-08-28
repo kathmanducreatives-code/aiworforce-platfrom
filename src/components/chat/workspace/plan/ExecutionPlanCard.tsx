@@ -168,7 +168,19 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const rawExecutionMode = meta?.execution_mode ?? (plan as any)?.payload?.execution_mode ?? null;
   const executionMode = executionModeBadge(workflowKind, rawExecutionMode);
   const productStages = isQualifiedLead ? executionStages(workflowKind) : [];
-  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => slugForTask(t) === 'penn');
+  // ── APPROVAL IS A PROPERTY OF A STEP, NOT OF WHO APPEARS IN THE PLAN ────
+  //
+  // This was true whenever Penn appeared anywhere. A fabricated four-step plan
+  // that named Penn therefore claimed "approval required" on a run that had
+  // already been refused before execution — so one preflight refusal rendered
+  // as "failed", "Blocked" and "approval required" at the same time, and none
+  // of the three was the recorded reason.
+  //
+  // `requires_approval` is what the planner and the capability graph actually
+  // set, and a pending approval row is the other real signal.
+  // AN APPROVAL ROW IS THE PROOF. Anything else is an inference about what a
+  // plan might do later, and the badge states it as a present fact.
+  const pennInvolved = pendingApprovals;
 
   if (loading && !plan) {
     return (

@@ -137,9 +137,13 @@ Deno.test("9. a blocked run is finalised as refused, with its codes", async () =
     ] },
   });
   const r = decideTerminalRecord(null, { elapsedMs: 300, error: err });
-  assertEquals(r.status, "failed", "it did terminate, and says so");
+  // BLOCKED, NOT FAILED. Live, this returned `failed`, and the row rendered as
+  // a red "failed" pill beside a task row labelled "Blocked" and an "approval
+  // required" badge — three words for one preflight refusal. `blocked` is
+  // terminal and says nothing went wrong.
+  assertEquals(r.status, "blocked", "a guard declining to spend is not a failure");
   assertEquals(r.reason, "refused_before_execution",
-    "but nothing crashed — a guard declined to spend");
+    "and nothing crashed — the reason says exactly what happened");
   assertEquals(r.blocked_by?.map((b) => b.code),
     ["missing_mission", "incompatible_planner_contract"],
     "and the codes that say what to fix survive onto the record");

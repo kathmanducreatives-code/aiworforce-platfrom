@@ -31,6 +31,8 @@ export interface ModelReply {
 
 export interface FakeNet {
   tables: Tables;
+  /** Every edge function this handler invoked, with the body it sent. */
+  functionCalls: Array<{ fn: string; body: unknown }>;
   /** Every model call made, in order, with the prompt it was given. */
   modelCalls: Array<{ system: string; user: string; reply: unknown }>;
   /** Every PostgREST path requested, in order. */
@@ -94,10 +96,18 @@ export function installFakeNetwork(opts: {
   tables: Tables;
   modelReplies: ModelReply[];
   userId?: string;
+  /**
+   * Canned responses for edge functions this handler may invoke, by name.
+   *
+   * Absent means "this turn must not delegate", which is what almost every
+   * conversational test asserts.
+   */
+  functionReplies?: Record<string, unknown>;
 }): FakeNet {
   const real = globalThis.fetch;
   const state: FakeNet = {
     tables: opts.tables,
+    functionCalls: [],
     modelCalls: [],
     requests: [],
     restore: () => { globalThis.fetch = real; },
@@ -168,11 +178,21 @@ export function installFakeNetwork(opts: {
       return ok({ id: opts.userId ?? "user-1", aud: "authenticated" });
     }
 
-    // ── EDGE FUNCTIONS: never reached by a passing test ───────────────────
+    // ── EDGE FUNCTIONS ───────────────────────────────────────────────────
+    //
+    // A DELEGATION IS A TEST FAILURE UNLESS THE TEST ASKED FOR ONE. Every
+    // conversational turn under audit must answer without starting work — so
+    // the default still throws, and a test that is exercising Start opts in
+    // and gets the request body to assert on.
     if (url.pathname.startsWith("/functions/v1/")) {
-      // A DELEGATION IS A TEST FAILURE UNLESS THE TEST ASKED FOR ONE. Every
-      // conversational turn under audit must answer without starting work.
-      throw new Error(`fakeNetwork: handler called ${url.pathname} — this turn delegated`);
+      const fn = url.pathname.replace("/functions/v1/", "");
+      const reply = opts.functionReplies?.[fn];
+      if (!reply) {
+        throw new Error(`fakeNetwork: handler called ${url.pathname} — this turn delegated`);
+      }
+      const body = rawBody ? JSON.parse(String(rawBody)) : null;
+      state.functionCalls.push({ fn, body });
+      return ok(reply);
     }
 
     // ── POSTGREST ────────────────────────────────────────────────────────

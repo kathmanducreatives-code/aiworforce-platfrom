@@ -8,6 +8,9 @@ const STATUS_TONE: Record<string, string> = {
   complete: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   partial: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   failed: 'bg-rose-500/10 text-rose-300 border-rose-500/20',
+  // AMBER LIKE APPROVAL, NOT RED LIKE FAILURE. A blocked run is waiting on
+  // something nameable, not broken.
+  blocked: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
   stale: 'bg-zinc-500/10 text-zinc-300 border-zinc-500/25',
 };
 

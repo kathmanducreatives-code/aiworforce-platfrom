@@ -44,17 +44,22 @@ export const TERMINAL_GUARD_VERSION = "run-agent-terminal-guard-v1" as const;
 
 /** Row statuses that mean the task is finished and must not be rewritten. */
 export const TERMINAL_TASK_STATUSES: readonly string[] = [
-  "complete", "completed", "failed", "skipped", "done", "ready",
+  "complete", "completed", "failed", "skipped", "done", "ready", "blocked",
 ];
 
 /** Plan statuses that mean the plan is finished and must not be rewritten. */
 export const TERMINAL_PLAN_STATUSES: readonly string[] = [
-  "complete", "completed", "failed", "partial", "done",
+  "complete", "completed", "failed", "partial", "done", "blocked",
 ];
 
 export interface TerminalRowWrite {
-  task_status: "complete" | "failed" | "ready";
-  plan_status: "complete" | "failed" | "partial";
+  /**
+   * `blocked` is terminal but not a failure — a guard declined before any
+   * paid work. The UI renders it from `error_message` plus
+   * `result.terminal_record.blocked_by`, which name what is missing.
+   */
+  task_status: "complete" | "failed" | "ready" | "blocked";
+  plan_status: "complete" | "failed" | "partial" | "blocked";
   /** Merged into `tasks.result`. Never replaces it. */
   result_patch: Record<string, unknown>;
   error_message: string | null;
@@ -79,6 +84,21 @@ export function mapTerminalRecordToRows(record: TerminalRecord): TerminalRowWrit
     last_completed_capability: record.last_completed_capability,
     elapsed_ms: record.elapsed_ms,
   };
+
+  // ── A REFUSAL IS ITS OWN ROW STATE ──────────────────────────────────────
+  //
+  // `blocked` reaches the task and the plan intact, and `error_message` keeps
+  // the structured reason (`refused_before_execution`) so the UI can render
+  // WHY rather than inferring a failure from a red pill. The blocking codes
+  // stay on `result.terminal_record.blocked_by`.
+  if (record.status === "blocked") {
+    return {
+      task_status: "blocked",
+      plan_status: "blocked",
+      result_patch: { ...base, task_status: "blocked" },
+      error_message: record.reason,
+    };
+  }
 
   if (record.status === "failed") {
     return {
@@ -164,7 +184,60 @@ export interface TerminalGuardDb {
     patch: { status: string; error_message: string | null; result: Record<string, unknown> },
   ) => Promise<void>;
   writePlan: (planId: string, patch: { status: string }) => Promise<void>;
+  /**
+   * SAY IT IN THE CONVERSATION, when a run was refused before it began.
+   *
+   * Task bf13ff42 wrote `failed` on the row and said nothing in the chat. The
+   * last thing the user saw was "I created a 4-step plan: Scout will source…",
+   * and the next thing was silence — the refusal, and the block codes naming
+   * exactly what was missing, existed only in a JSON column.
+   *
+   * Optional so every existing caller behaves as before; a caller that omits
+   * it simply does not announce.
+   */
+  announceBlocked?: (
+    message: string, record: TerminalRecord,
+  ) => Promise<void>;
 }
+
+/**
+ * What to tell the user when a guard declined to run their request.
+ *
+ * ── THE SHAPE IS PRESCRIBED ────────────────────────────────────────────────
+ *
+ * "I can't execute this yet because X" — the missing capability or contract
+ * named, in the user's terms, from the structured block codes. Never a generic
+ * failure, never an apology with no content, and never a claim that something
+ * was attempted.
+ */
+export function blockedExplanation(record: TerminalRecord): string {
+  const reasons = (record.blocked_by ?? [])
+    .map((b) => BLOCK_EXPLANATIONS[b.code] ?? b.code.replace(/_/g, " "))
+    // Distinct: two blocks with the same cause read as one problem, which is
+    // what they are.
+    .filter((v, i, all) => all.indexOf(v) === i);
+  const why = reasons.length > 0 ? reasons.join("; ") : "a required contract was missing";
+  return `I can't execute this yet because ${why}. Nothing was started and nothing was charged.`;
+}
+
+/**
+ * Block codes in the user's terms.
+ *
+ * A code not listed here degrades to its own name with underscores removed —
+ * worse prose, still the truth, and never a made-up explanation.
+ */
+const BLOCK_EXPLANATIONS: Readonly<Record<string, string>> = Object.freeze({
+  missing_mission:
+    "the run reached the engine without the mission you approved, so nothing stated what to buy",
+  empty_capability_plan:
+    "the approved mission produced no executable capability steps",
+  entry_capability_mismatch:
+    "the execution graph's first step disagreed with its declared entry point",
+  incompatible_planner_contract:
+    "the mission was compiled by an older build whose contract this executor cannot verify",
+  provider_not_allowed:
+    "the provider this step needs is not permitted for this mission",
+});
 
 export interface RunTerminalGuard {
   /** The budget every provider call must be checked against. */
@@ -278,6 +351,15 @@ export function createRunTerminalGuard(
             } else {
               await db.writePlan(planId, { status: rows.plan_status });
             }
+          }
+
+          // ── AND TELL THE USER, IN WORDS, WHY NOTHING RAN ────────────────
+          //
+          // The rows above are for the system. A refusal that only ever
+          // appears in a JSON column leaves the conversation ending on "I
+          // created a 4-step plan" and then nothing at all.
+          if (rec.status === "blocked" && db.announceBlocked) {
+            await db.announceBlocked(blockedExplanation(rec), rec);
           }
         } catch (writeErr) {
           // A FAILED WRITE MUST NOT MASK THE RUN'S OUTCOME. It is reported and

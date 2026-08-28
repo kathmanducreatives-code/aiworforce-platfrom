@@ -164,7 +164,10 @@ export interface DBPlan {
    * real work and still owes the user leads. It was missing from this union
    * while production was already writing it.
    */
-  status: 'planning' | 'executing' | 'awaiting_approval' | 'complete' | 'failed' | 'partial';
+  // `blocked` is terminal but not a failure: a guard declined before any paid
+  // work, and `error_message` plus `result.terminal_record.blocked_by` say
+  // exactly what was missing.
+  status: 'planning' | 'executing' | 'awaiting_approval' | 'complete' | 'failed' | 'partial' | 'blocked';
   created_by: string | null;
   created_at: string;
   completed_at: string | null;

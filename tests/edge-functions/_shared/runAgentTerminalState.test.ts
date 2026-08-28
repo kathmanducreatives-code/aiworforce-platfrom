@@ -268,8 +268,14 @@ Deno.test("6. every finalizer status maps to a row status the UI understands", (
 Deno.test("7. run-agent actually installs the guard around its whole body", async () => {
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(src.includes("createRunTerminalGuard(supabaseTerminalGuardDb("),
+  // Built from the real client, now with the blocked-run announcer spread
+  // alongside it: a refusal must reach the conversation, not only `tasks.result`.
+  assert(src.includes("supabaseTerminalGuardDb(supabase as never)"),
     "the guard must be built from the real supabase client");
+  assert(src.includes("createRunTerminalGuard({"),
+    "and given a db that can also announce a refusal");
+  assert(src.includes("announceBlocked: async (message, record)"),
+    "a blocked run must say, in the conversation, why nothing ran");
   assert(src.includes("await terminalGuard.run(async () => {"),
     "the handler body must run INSIDE the guard, not beside it");
   assert(src.includes("terminalGuard.bind({ taskId: task.id"),

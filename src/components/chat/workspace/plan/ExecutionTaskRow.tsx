@@ -3,12 +3,13 @@ import type { DBTask, DBToolCall, DBApproval } from '@/lib/orchestration';
 import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
-import { CheckCircle2, ChevronRight, Circle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Circle, Loader2, ShieldAlert, XCircle } from 'lucide-react';
 import { resolveAgent, inferAgentFromContent } from '@/lib/agentResolver';
 
 /** Tiny per-agent outcome chip rendered next to the agent badge. */
 function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBTask; toolCall?: DBToolCall | null }) {
-  if (task.status !== 'complete' && task.status !== 'skipped' && task.status !== 'failed') return null;
+  if (task.status !== 'complete' && task.status !== 'skipped'
+      && task.status !== 'failed' && task.status !== 'blocked') return null;
   const profile = resolveAgent(slug);
   const accent = profile.accentHex ?? '#7D8590';
   const out = (task.output ?? {}) as Record<string, any>;
@@ -17,7 +18,12 @@ function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBT
 
   let label: string | null = null;
   if (task.status === 'skipped') label = 'Skipped';
-  else if (task.status === 'failed') label = 'Blocked';
+  // A REFUSAL AND A FAILURE ARE DIFFERENT EVENTS, and they were labelled the
+  // same. `failed` here read "Blocked" while the plan pill read "failed" and a
+  // fabricated Penn step added "approval required" — three words for one
+  // preflight refusal, none of which said what to supply.
+  else if (task.status === 'blocked') label = 'Blocked';
+  else if (task.status === 'failed') label = 'Failed';
   else {
     switch (profile.id) {
       case 'scout':  label = total != null ? `${total} qualified` : 'Sourced'; break;
@@ -61,6 +67,9 @@ function StatusIcon({ status }: { status: DBTask['status'] }) {
   if (status === 'complete') return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
   if (status === 'running')  return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400 shrink-0" />;
   if (status === 'failed')   return <XCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />;
+  // AMBER, NOT RED. Nothing went wrong — a guard declined, and the reason is
+  // rendered beside it.
+  if (status === 'blocked')  return <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
   if (status === 'skipped')  return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
   return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
 }
@@ -88,11 +97,24 @@ export default function ExecutionTaskRow({
     ?? null;
 
   const canOpenOutput =
-    !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
+    !!onOpenOutput && (task.status === 'complete' || task.status === 'failed'
+      || task.status === 'blocked' || !!latestToolCall);
 
   const connectorMissing = connectorMissingFor(toolNeeded);
   const showToolBadge = (task.status === 'failed' || connectorMissing) && (toolNeeded || latestToolCall);
-  const errorText = task.status === 'failed'
+  // ── THE REASON THE BACKEND RECORDED, NOT A GUESS ───────────────────────
+  //
+  // A blocked run carries `blocked_by` codes naming exactly what was missing
+  // ("no LeadMissionV1 on this task"). The row showed a red X and a tool badge
+  // instead, so the one piece of information that said what to fix was the one
+  // thing never rendered.
+  const blockedBy = task.status === 'blocked'
+    ? (((task.result as any)?.terminal_record?.blocked_by ?? []) as Array<{ code?: string; message?: string }>)
+    : [];
+  const errorText = task.status === 'blocked'
+    ? (blockedBy.map((b) => b.message || b.code).filter(Boolean).join(' · ')
+      || String((task as any).error_message ?? 'refused before execution'))
+    : task.status === 'failed'
     ? ((latestToolCall?.error ?? (task.output as any)?.error ?? '') as string)
     : '';
 

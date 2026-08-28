@@ -26,7 +26,23 @@
 export const FINALIZER_VERSION = "lead-execution-finalizer-v1" as const;
 
 /** How a run ended. Ordered from best to worst outcome. */
-export type TerminalStatus = "completed" | "partial" | "pending_external_run" | "failed";
+/**
+ * How a run ended.
+ *
+ * ── WHY `blocked` IS NOT `failed` ──────────────────────────────────────────
+ *
+ * A guard declining to spend is a DESIGNED outcome. Task bf13ff42 was refused
+ * by the paid preflight — `missing_mission`, nothing bought, nothing broken —
+ * and written `failed`. The plan pill said "failed", the task row labelled the
+ * same event "Blocked", and a fabricated Penn step added "approval required":
+ * three labels for one refusal, none of which said what to do about it.
+ *
+ * `failed` now means what it says: something went wrong, and a provider
+ * failure is the archetype. `blocked` means the system correctly declined and
+ * the structured reason names what is missing.
+ */
+export type TerminalStatus =
+  | "completed" | "partial" | "pending_external_run" | "blocked" | "failed";
 
 export type TerminalReason =
   | "capability_plan_complete"
@@ -526,7 +542,11 @@ export function decideTerminalRecord(
           };
         });
       return {
-        ...base, status: "failed", reason: "refused_before_execution",
+        // BLOCKED, NOT FAILED. Nothing went wrong: a guard did its job before
+        // any money moved, and `blocked_by` carries the codes that say what to
+        // supply. Recording it as a failure sent every reader looking for a
+        // defect that was not there.
+        ...base, status: "blocked", reason: "refused_before_execution",
         detail: String(ctx.error).slice(0, 500), blocked_by,
         // NOT RESUMABLE, and for a reason worth stating: retrying changes
         // nothing until whatever the block names is supplied.

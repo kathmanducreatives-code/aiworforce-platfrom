@@ -35,6 +35,11 @@ export interface TurnResult {
 
 export async function sendTurn(
   message: string, tables: Record<string, Array<Record<string, unknown>>>,
+  /**
+   * What the Start button sends: `action_source` and `metadata.confirmed`,
+   * plus the mission the card carried. Omitted for an ordinary typed message.
+   */
+  action?: { action_source: string; metadata: Record<string, unknown> },
 ): Promise<TurnResult> {
   const before = (tables.messages ?? []).length;
   const res = await handlePilotChat(
@@ -43,6 +48,9 @@ export async function sendTurn(
       headers: { Authorization: "Bearer test-jwt", "content-type": "application/json" },
       body: JSON.stringify({
         message, workspace_id: WORKSPACE, conversation_id: CONVERSATION,
+        ...(action
+          ? { action_source: action.action_source, metadata: action.metadata }
+          : {}),
       }),
     }),
     {},
