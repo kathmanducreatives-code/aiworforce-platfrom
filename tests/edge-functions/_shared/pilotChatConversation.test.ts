@@ -338,6 +338,22 @@ Deno.test("turn 6: sourcing compiles a mission and stops at the Start", async ()
   assertEquals(outcome.state, "REQUIRES_UNLOCK");
   assertEquals(outcome.reason, "awaiting_start");
 
+  // ── THE PREVIEW DESCRIBES THE GRAPH THAT WOULD RUN ──────────────────────
+  //
+  // Not a second model's idea of the plan. `generateWorkflowConfirmation`
+  // makes its own call and compiles its own mission, and a narration from
+  // there can describe work the executor was never going to perform.
+  const preview = t6.metadata.mission_preview as Record<string, unknown>;
+  assertEquals(preview.feasible, true);
+  assert((preview.steps as unknown[]).length > 0,
+    "the narration must come from real capability steps");
+  // AND IT NAMES NO AGENT. Promising "Scout will…" is a claim about who does
+  // the work, which the graph does not make and the user cannot check.
+  for (const persona of ["Scout", "Mira", "Penn", "Scribe", "Ivy"]) {
+    assertFalse(t6.content.includes(persona),
+      `the preview must not promise ${persona} specifically`);
+  }
+
   // NOTHING RAN. A delegation would have thrown in the fake network.
   assertEquals(tables.tasks.length, 0);
   assertEquals(tables.approvals.length, 0);
