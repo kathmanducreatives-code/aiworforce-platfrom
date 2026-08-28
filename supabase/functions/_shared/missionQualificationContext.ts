@@ -43,7 +43,9 @@
 // PURE. No network, no provider, no model, no database.
 
 import type { LeadMissionV1 } from "./leadMission.ts";
-import { roleFamilyAliases, type RoleFamily } from "./roleFamilies.ts";
+import {
+  classifyRoleFamily, roleFamilyAliases, type RoleFamily,
+} from "./roleFamilies.ts";
 
 export const QUALIFICATION_CONTEXT_VERSION = "mission-qualification-context-v1" as const;
 
@@ -231,7 +233,54 @@ export function buildQualificationContext(mission: LeadMissionV1): Qualification
       const canonical = MISSION_FAMILY_TO_CANONICAL[fam];
       return canonical ? roleFamilyAliases(canonical) : [];
     });
-  const fromTerms = strs((mission as unknown as Record<string, unknown>).required_signal_terms);
+  // ── A TERM THAT NAMES A CATEGORY IS EXPANDED LIKE A FAMILY ───────────────
+  //
+  // "Terms are already phrases" was true of the phrases this was built for —
+  // "founding account executive", "head of sales" — and false of the one the
+  // user actually wrote. Task 5c461aa3: the mission carried
+  // `required_signal_terms: ["sales roles"]`, taken verbatim as a job-title
+  // keyword, and no job title on earth contains the phrase "sales roles".
+  //
+  // The paid search returned real openings — "Sales/Account Executive
+  // (Remote)" among them — and `assessHiring` scored them against a vocabulary
+  // of exactly one impossible string: `commercial: 0`, verdict `watch`, "4 open
+  // role(s) present, none matching the mission's compiled vocabulary (sales
+  // roles)". Eleven companies sat at `verifying` and nothing qualified, from a
+  // request that had been read, compiled, previewed and executed correctly.
+  //
+  // `classifyRoleFamily` already resolves "sales roles" to `gtm_sales`, whose
+  // aliases are Account Executive, SDR, Head of Sales, Salesperson — the
+  // titles that came back. This is that expansion, applied to terms as well as
+  // to families.
+  //
+  // IT DOES NOT WIDEN A NARROW ASK. `classifyRoleFamily("sales operations")`
+  // is `sales_operations`, whose aliases are the ops titles alone — the
+  // boundary `roleFamilies.ts` exists to hold, that a Sales Operations request
+  // must never become SDR/BDR/AE. The term itself is always kept, so a term
+  // that IS a title still matches literally.
+  //
+  // ── AND ONLY A CATEGORY. A TITLE STAYS A TITLE ───────────────────────────
+  //
+  // `classifyRoleFamily` resolves both "sales roles" and "software engineer" —
+  // one because it names the family, the other because it is a MEMBER of it.
+  // Expanding both would widen a precise ask into its whole discipline:
+  // "software engineer" would start matching backend, frontend, ML and staff
+  // engineer, which is a false positive traded for the false negative this
+  // fixes.
+  //
+  // The test is the family's own alias list. A term that already appears in it
+  // is a title and is left exactly as it is; a term that resolves to a family
+  // WITHOUT being one of its titles is the category name, and only that is
+  // expanded.
+  const rawTerms = strs((mission as unknown as Record<string, unknown>).required_signal_terms);
+  const fromTerms = rawTerms.flatMap((term) => {
+    const fam = classifyRoleFamily(term);
+    if (!fam || fam === "custom") return [term];
+    const aliases = roleFamilyAliases(fam);
+    const key = normalizeRoleTerm(term);
+    const namesAMember = aliases.some((a) => normalizeRoleTerm(a) === key);
+    return namesAMember ? [term] : [term, ...aliases];
+  });
   const required_titles = [...new Set(
     [...fromFamilies, ...fromTerms].map(normalizeRoleTerm).filter((t): t is string => !!t),
   )];
