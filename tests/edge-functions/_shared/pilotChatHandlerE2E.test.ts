@@ -228,3 +228,37 @@ Deno.test("15. converse is not handed conversation counts as workspace state", (
   assert(/facts\?:\s*readonly GroundedFact\[\]/.test(surface),
     "the converse surface must accept scoped facts, never bare strings");
 });
+
+// ══ 8. THE START HAS SOMETHING TO PRESS, AND RUNS WHAT IT SHOWED ═══════════
+
+Deno.test("16. the preview carries the payload the card renders from", () => {
+  // LIVE, 2026-08-28 15:37: the reply set `type: "workflow_confirmation"` and
+  // put the preview under `mission_preview`. `ChatView` renders the card only
+  // when the type AND a `workflow_confirmation` payload are both present, so
+  // every sourcing request produced a narration and no Start button —
+  // REQUIRES_UNLOCK with nothing to unlock it with.
+  const gate = BLOCK.indexOf("brainRoute.requires_confirmation && !isPreConfirmed");
+  assert(gate > 0, "the confirmation gate must exist");
+  const reply = BLOCK.slice(gate, BLOCK.indexOf("});", gate));
+  assert(reply.includes("workflow_confirmation: buildMissionConfirmation("),
+    "the card payload must be built from the mission and the assessed graph");
+  assert(reply.includes("lead_mission: mission"),
+    "and the mission must travel with it so Start returns what was shown");
+});
+
+Deno.test("17. an approved Start runs the mission that was approved", () => {
+  // The card threads the previewed mission back in `metadata.lead_mission`;
+  // nothing read it, so a Start re-understood the sentence and executed the
+  // output of a SECOND model call. `compileLeadMission` is deterministic, but
+  // the proposal it compiles is not.
+  const i = BLOCK.indexOf("const missionToRun");
+  assert(i > 0, "the approved mission must be preferred on a confirmed start");
+  const decide = BLOCK.slice(i, i + 320);
+  assert(decide.includes("isLeadMissionV1(approved)"),
+    "and it must be validated with the same guard every other reader uses");
+  assert(decide.includes(": mission"),
+    "an unreadable approved mission falls back to the compiled one");
+
+  const delegate = BLOCK.indexOf("leadMission: missionToRun");
+  assert(delegate > i, "delegation must send the chosen mission, not the recompiled one");
+});

@@ -184,11 +184,34 @@ function selectEntities(
     }
   }
 
-  // A NAME MATCHES EXACTLY OR NOT AT ALL. Nearest-name is how a follow-up ends
-  // up investigating a company the user never mentioned; a miss must clarify.
-  const norm = (s: string) => s.trim().toLowerCase();
-  const named = entities.filter((e) =>
-    norm(e.label) === norm(value) || norm(e.name ?? "") === norm(value));
+  // ── A NAME MATCHES EXACTLY, ON A FORM WE CONTROL ────────────────────────
+  //
+  // Still equality, never nearest-name: resolving "Acme" to "Acme Corp"
+  // because it is the closest string is how a follow-up ends up investigating
+  // a company the user never mentioned.
+  //
+  // But equality on the RAW label was equality against our own rendering.
+  // Chat Brain resolved "the second one" to the name it saw in the transcript,
+  // "Andy AI", and the entity we had persisted was labelled "Andy AI (W24)" —
+  // because the batch tag is part of the name in the leads table. The strings
+  // differ, so the reference failed, fell through to the bare-pronoun rule,
+  // found thirty-one candidates and asked which company "Andy AI" meant. The
+  // answer was on screen, in the message directly above.
+  //
+  // So the comparison strips what our own display adds — parenthesised
+  // suffixes, punctuation, doubled spacing — and then demands an exact,
+  // UNIQUE match within the presented set. Two entities that normalise the
+  // same are ambiguous and still ask.
+  const norm = (raw: string) =>
+    raw.toLowerCase()
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const target = norm(value);
+  const named = target
+    ? entities.filter((e) =>
+      norm(e.label) === target || norm(e.name ?? "") === target)
+    : [];
   if (named.length === 1) return { entities: [named[0]], reason: null };
   if (named.length > 1) return { entities: [], reason: "ambiguous_referent" };
 

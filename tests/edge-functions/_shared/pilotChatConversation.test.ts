@@ -304,6 +304,35 @@ Deno.test("turn 4: 'the second one' reads held records and buys nothing", async 
 
 // ══ TURN 5 — THE PRONOUN KEEPS THE BINDING ════════════════════════════════
 
+Deno.test("turn 4b: an ordinal the model resolved to a name still binds", async () => {
+  // LIVE, 15:37:23: Chat Brain read "the second one" against the transcript and
+  // returned the name it saw there — "Andy AI". The persisted entity is
+  // labelled "Andy AI (W24)", because the batch tag is part of the name in the
+  // leads table. Equality on the raw label failed, the reference fell through
+  // to the bare-pronoun rule, found thirty-one candidates, and asked which
+  // company "Andy AI" meant — with the answer on screen directly above.
+  const { out } = await conversation([
+    {
+      say: "What leads do I currently have?",
+      brain: modelRequest([{ objective: "read", entity: "company" }]),
+    },
+    {
+      say: "Tell me more about the second one.",
+      brain: modelRequest([{
+        objective: "research", entity: "company", shape: "answer",
+        references: [{ kind: "prior_result", value: "Andy AI", cardinality: "one" }],
+      }], 0.99),
+    },
+  ]);
+  const t4 = out[1];
+
+  assertFalse(/I'm not sure which company/.test(t4.content),
+    "a name our own renderer decorated must still match the entity it names");
+  const brain = t4.metadata.chat_brain as Record<string, unknown>;
+  assertEquals(brain.scoped_to, "domain:with-andy.com");
+  assertEquals(brain.served_from, "held_records");
+});
+
 Deno.test("turn 5: 'them' after a drill-down still means that company", async () => {
   const { out } = await conversation([
     {
@@ -367,6 +396,30 @@ Deno.test("turn 6: sourcing compiles a mission and stops at the Start", async ()
   assertEquals((mission.required_signals as unknown[]).length, 1);
 
   assertEquals(t6.metadata.type, "workflow_confirmation");
+  // ── THE CARD THE FRONTEND ACTUALLY RENDERS ──────────────────────────────
+  //
+  // LIVE, 15:37:41: the reply carried `type: "workflow_confirmation"` and put
+  // everything under `mission_preview`. `ChatView` requires BOTH the type and
+  // a `workflow_confirmation` payload, so every sourcing request produced the
+  // narration and no Start button — REQUIRES_UNLOCK with nothing to unlock it
+  // with. Asserting the outcome state was not enough: the state was right and
+  // the user still could not run anything.
+  const card = t6.metadata.workflow_confirmation as Record<string, unknown>;
+  assert(card, "the reply must carry the payload the card renders from");
+  assertEquals((card.lead_mission as Record<string, unknown>).version,
+    "lead-mission-v1", "Start must return the mission that was previewed");
+  assertEquals(card.blocked, false);
+  assertEquals(card.original_instruction,
+    "Find 3 recruiting or staffing companies that fit my ICP and are actively hiring sales roles.",
+    "Start sends the user's own words, not a reconstructed command");
+  assertEquals((card.inputs as Record<string, unknown>).count, 3);
+  assertEquals(card.estimated_credits,
+    (t6.metadata.mission_preview as Record<string, unknown>).estimated_cost_units,
+    "the card quotes the graph's cost, not a second estimate");
+  // AND IT NAMES NO AGENTS — the card renders a team only when this is
+  // non-empty, and the graph does not say which persona runs a capability.
+  assertEquals((card.agent_team as string[]).length, 0);
+
   const outcome = t6.metadata.outcome as Record<string, unknown>;
   assertEquals(outcome.state, "REQUIRES_UNLOCK");
   assertEquals(outcome.reason, "awaiting_start");

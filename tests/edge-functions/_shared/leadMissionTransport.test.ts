@@ -229,8 +229,13 @@ Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail
   // `compileLeadMission` and delegates the result. It is counted here for the
   // same reason as the other four: a lead-capable delegate that carries no
   // mission is refused at the chokepoint, so every one of them must supply one.
-  assert(supplied.includes("mission"),
-    "the Chat Brain request route supplies a compiled mission");
+  //
+  // `missionToRun`, not `mission`: on a confirmed Start the route executes the
+  // mission the CARD carried rather than re-compiling from a second reading of
+  // the sentence, and falls back to the compiled one when that payload is
+  // unreadable. Either way a mission is supplied, which is what this asserts.
+  assert(supplied.includes("missionToRun"),
+    "the Chat Brain request route supplies a compiled or approved mission");
   assertEquals(new Set(supplied).size, 3,
     "three lead paths remain, and each supplies a mission");
 

@@ -45,6 +45,8 @@ import {
   failureMetadata, OUTCOME_CONTRACT_VERSION,
 } from "../_shared/outcomeContract.ts";
 import { buildMissionPreview } from "../_shared/missionPreview.ts";
+import { buildMissionConfirmation } from "../_shared/missionConfirmationCard.ts";
+import { isLeadMissionV1 } from "../_shared/leadMission.ts";
 import { assessRequestFeasibility } from "../_shared/requestFeasibility.ts";
 import {
   asksForUnsafeAction, UNSAFE_REQUEST_REPLY,
@@ -2701,6 +2703,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               reason: "awaiting_start",
             },
             type: "workflow_confirmation",
+            // ── THE KEY THAT UNLOCKS IT ────────────────────────────────
+            //
+            // `ChatView` renders the Start card only when `type` AND
+            // `workflow_confirmation` are both present. This wrote the type and
+            // put everything under `mission_preview`, so every sourcing request
+            // produced the narration and no card — REQUIRES_UNLOCK with nothing
+            // to unlock it with. Derived from the compiled mission and the
+            // assessed graph, so the card and the run cannot disagree.
+            workflow_confirmation: buildMissionConfirmation(
+              mission as never, preview, message),
             mission_preview: preview,
             // The mission the Start will execute, so confirming runs exactly
             // what was previewed rather than re-reading the sentence.
@@ -2709,15 +2721,41 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           });
         }
 
+        // ── START RUNS THE MISSION THAT WAS APPROVED ─────────────────────
+        //
+        // The card threads the previewed mission back in `metadata.lead_mission`
+        // for exactly this reason, and nothing read it: a Start re-understood
+        // the sentence and re-compiled, so the object executed was the output
+        // of a SECOND model call. `compileLeadMission` is deterministic, but
+        // the proposal it compiles is not — Chat Brain could read the same
+        // sentence differently on the second pass, and "the card said 3
+        // recruiting companies, the run sourced something else" would be
+        // unprovable after the fact.
+        //
+        // Validated, never trusted: `isLeadMissionV1` is the same guard every
+        // other reader of a mission uses, and an unrecognisable payload falls
+        // back to the freshly compiled one rather than executing a shape
+        // nothing checked.
+        const approved = actionMetadata?.lead_mission;
+        const missionToRun = isPreConfirmed && isLeadMissionV1(approved)
+          ? approved
+          : mission;
+        if (isPreConfirmed && approved && !isLeadMissionV1(approved)) {
+          console.warn("[pilot-chat][lead] approved mission unreadable, recompiled",
+            { conversation_id: conversationId });
+        }
+
         return await delegateToOrchestrate({
           admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
           conversationId, workspaceId,
           // THE USER'S OWN WORDS. Not a rewrite — the compiler already read
           // them, and every downstream reader expects the original.
           instruction: message,
-          leadMission: mission,
+          leadMission: missionToRun,
           leadBindings: resolvedBindings,
-          missionOrigin: "chat_brain_request_v1",
+          missionOrigin: isPreConfirmed && missionToRun === approved
+            ? "chat_brain_request_v1_confirmed"
+            : "chat_brain_request_v1",
           modelUsed: "chat-brain",
           providerUsed: "openai",
         });
