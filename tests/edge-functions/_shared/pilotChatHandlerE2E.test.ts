@@ -109,12 +109,33 @@ Deno.test("6. an unread request fails honestly instead of delegating", () => {
   // LIVE: "I started building a plan but the orchestrator failed:
   // mission_not_compiled" — an internal contract name shown to a user for what
   // was a model outage, because the fall-through delegated with no mission.
+  //
+  // ── AND THIS TEST'S OWN FIRST VERSION CAUSED THE SECOND OCCURRENCE ──────
+  //
+  // It asserted `!actionSource && !isPreConfirmed`: card actions exempt from
+  // the honest refusal, because they "carry their own metadata and are executed
+  // deterministically below". True when it was written. The Chat Brain lead
+  // route later became the ONLY path that executes a mission, so there was
+  // nothing below any more — and on 2026-08-28 16:14 a confirmed Start hit an
+  // unreadable model, took the exemption, reached the generic tail and produced
+  // the identical message the test exists to prevent.
+  //
+  // The exemption now names the handlers that actually exist, and an approved
+  // Start does not depend on the model at all.
   const i = SRC.indexOf("unreadable — no fallback interpreter");
   assert(i > 0);
-  const branch = SRC.slice(i, i + 1600);
+  const branch = SRC.slice(i, i + 2200);
   assert(branch.includes('category: "model_failure"'));
-  assert(branch.includes("!actionSource && !isPreConfirmed"),
-    "card actions carry their own metadata and must still work during an outage");
+  assert(branch.includes("HAS_DETERMINISTIC_HANDLER"),
+    "the exemption must be a list of handlers that exist, not a blanket flag");
+  assertFalse(branch.includes("!actionSource && !isPreConfirmed"),
+    "a confirmed card must not be blanket-exempt from the honest refusal");
+
+  // A confirmed Start never reaches this branch: it executes above, from the
+  // mission the user approved, without consulting the model.
+  const approved = SRC.indexOf("const approvedOnStart = actionMetadata?.lead_mission");
+  assert(approved > 0 && approved < BLOCK_START,
+    "the approved Start must run before the Chat Brain block");
 });
 
 Deno.test("7. the catch preserves the category on the row", () => {

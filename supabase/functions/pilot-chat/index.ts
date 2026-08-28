@@ -1757,6 +1757,67 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     });
   }
 
+  // ══ AN APPROVED START DOES NOT ASK THE MODEL ANYTHING ═════════════════════
+  //
+  // ── THE RUN THIS EXISTS TO END ────────────────────────────────────────────
+  //
+  // Conversation 8ab3bbfa, 2026-08-28 16:14. The card was previewed correctly,
+  // the user pressed Start, the approved mission travelled back in
+  // `metadata.lead_mission` — valid, stamped, `lead-mission-v1` — and the reply
+  // was "I started building a plan but the orchestrator failed:
+  // mission_not_compiled". No `request_understanding_log` row was written for
+  // that turn at all.
+  //
+  // Chat Brain could not read the message. Sixteen seconds, two attempts, no
+  // reading. The unreadable path then exempts card actions from its honest
+  // refusal — `if (!actionSource && !isPreConfirmed)` — on the reasoning that a
+  // card "carries its own structured metadata and is executed deterministically
+  // below". For a submitted lead brief that is true. For a confirmed workflow
+  // card it stopped being true the moment the Chat Brain lead route became the
+  // only path that executes a mission: there is nothing below any more, so the
+  // fall-through reached the generic tail, delegated with NO mission, and
+  // orchestrate refused with an internal contract name.
+  //
+  // ── AND WHY RE-UNDERSTANDING WAS ALWAYS WRONG HERE ────────────────────────
+  //
+  // The deeper defect is that Start went through understanding at all. The user
+  // approved a specific compiled mission; asking a model to re-read the
+  // sentence that produced it can only (a) agree, which is a wasted call and a
+  // wasted second, (b) disagree, which would execute something they did not
+  // approve, or (c) fail, which is what happened. None of those is better than
+  // reading the object they approved.
+  //
+  // So a confirmed Start with a valid mission goes straight to execution.
+  // `isLeadMissionV1` is the same guard every other reader uses; a card whose
+  // mission does not validate falls through and is refused honestly rather than
+  // delegating without one.
+  {
+    const approvedOnStart = actionMetadata?.lead_mission;
+    if (isPreConfirmed && isLeadMissionV1(approvedOnStart)) {
+      console.log("[pilot-chat][approved-start]", {
+        conversation_id: conversationId,
+        workspace_id: workspaceId,
+        action_source: actionSource,
+        mission_type: approvedOnStart.mission_type,
+        requested_count: approvedOnStart.requested_count,
+        contract: approvedOnStart.lead_intelligence_contract_version ?? null,
+        understanding_consulted: false,
+      });
+      return await delegateToOrchestrate({
+        admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+        conversationId, workspaceId,
+        // THE USER'S OWN WORDS, from the mission itself — the sentence the
+        // compiler actually read, not the card's restatement of it.
+        instruction: approvedOnStart.original_user_query || message,
+        leadMission: approvedOnStart,
+        leadBindings: [],
+        missionOrigin: "approved_workflow_card",
+        modelUsed: "none",
+        providerUsed: "none",
+      });
+    }
+  }
+
   // ══ START OF THE CHAT BRAIN BLOCK ═════════════════════════════════════════
   //
   // A stable landmark, paired with the end marker below. Tests slice this
@@ -2788,11 +2849,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       //
       // Both traces are in the production audit and both start here.
       //
-      // A CARD ACTION IS EXEMPT. "Run workflow: …" and a submitted lead brief
-      // carry their own structured metadata and are executed deterministically
-      // below; they never needed the model to read a sentence, so a model
-      // outage must not block them.
-      if (!actionSource && !isPreConfirmed) {
+      // A SUBMITTED LEAD BRIEF IS EXEMPT, and only that. It carries its own
+      // structured metadata and IS executed deterministically below, so a model
+      // outage must not block it.
+      //
+      // `isPreConfirmed` used to be exempt too, and that was the bug: a
+      // confirmed card with a valid mission now never reaches this block at all
+      // (it executed above, without a model call), and one whose mission does
+      // NOT validate has nothing deterministic waiting for it — exempting it
+      // sent it to the generic tail, which delegated with no mission and
+      // produced "mission_not_compiled" in the user's chat.
+      const HAS_DETERMINISTIC_HANDLER = new Set([
+        "lead_source_card", "lead_source_brief",
+      ]);
+      if (!actionSource || !HAS_DETERMINISTIC_HANDLER.has(actionSource)) {
         return await replyAndReturn(
           "I couldn't read that request just now — that's my understanding layer, not your data. Nothing was started and nothing was charged. Try again, or say it a different way.",
           {

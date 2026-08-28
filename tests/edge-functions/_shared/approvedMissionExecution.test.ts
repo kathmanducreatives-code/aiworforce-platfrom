@@ -98,13 +98,24 @@ Deno.test("the approved mission reaches orchestrate unchanged, by hash", async (
     assertEquals(net.functionCalls.length, 0, "a preview must not start work");
 
     // ── 2. THE START, EXACTLY AS THE CARD DISPATCHES IT ───────────────────
+    const modelCallsBeforeStart = net.modelCalls.length;
     const started = await sendTurn(SOURCING, tables, {
       action_source: "lead_intake_card",
       metadata: { confirmed: true, lead_mission: previewedMission },
     });
     assertEquals(started.status, 200);
 
-    // ── 3. WHAT WAS DELEGATED ─────────────────────────────────────────────
+    // ── 3. AND IT COST NO MODEL CALL ──────────────────────────────────────
+    //
+    // The user approved a specific compiled mission. Asking a model to re-read
+    // the sentence that produced it can only agree (a wasted call), disagree
+    // (execute something they did not approve), or fail — which is what
+    // happened live at 16:14: sixteen seconds, no understanding, and the
+    // fall-through delegated with no mission at all.
+    assertEquals(modelCallsBeforeStart, net.modelCalls.length,
+      "an approved Start must not consult the understanding model");
+
+    // ── 4. WHAT WAS DELEGATED ─────────────────────────────────────────────
     const call = net.functionCalls.find((c) => c.fn === "orchestrate");
     assert(call, "Start must delegate to orchestrate");
     const sent = (call.body ?? {}) as Record<string, unknown>;
@@ -247,4 +258,83 @@ Deno.test("the runtime stamp does not change the question being asked", async ()
   const withoutStamp = await missionHash(stripped as any);
   assertEquals(withStamp, withoutStamp,
     "the build that compiled a mission is not part of what it asks for");
+});
+
+Deno.test("an approved Start survives the understanding model being down", async () => {
+  // LIVE, conversation 8ab3bbfa: Chat Brain could not read the Start message.
+  // The unreadable path exempted card actions from its honest refusal — on the
+  // reasoning that a card "is executed deterministically below" — but the only
+  // path that executes a mission IS the Chat Brain lead route, so the exemption
+  // sent it to the generic tail, which delegated with no mission. The user was
+  // shown "the orchestrator failed: mission_not_compiled" for a mission that
+  // was valid, stamped, and sitting in the request metadata.
+  const tables = seed();
+
+  // The preview needs a working model; the Start must not need one at all.
+  let allowBrain = true;
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables,
+    modelReplies: [
+      {
+        when: (_u, s) => {
+          if (isBrain(s) && !allowBrain) {
+            throw new Error("understanding model is down");
+          }
+          return isBrain(s);
+        },
+        content: brainReply,
+      },
+      { when: (_u, s) => !isBrain(s), content: "prose" },
+    ],
+    functionReplies: {
+      orchestrate: {
+        task_plan_id: "plan-1", plan_summary: "6 capabilities", total_steps: 1,
+        agents: ["scout"], plan: { steps: [] },
+      },
+    },
+  });
+
+  try {
+    const preview = await sendTurn(SOURCING, tables);
+    const mission = (preview.metadata.workflow_confirmation as Record<string, unknown>)
+      .lead_mission;
+    assert(isLeadMissionV1(mission));
+
+    // FROM HERE THE MODEL IS UNAVAILABLE.
+    allowBrain = false;
+    const started = await sendTurn(SOURCING, tables, {
+      action_source: "lead_intake_card",
+      metadata: { confirmed: true, lead_mission: mission },
+    });
+    assertEquals(started.status, 200);
+
+    const call = net.functionCalls.find((c) => c.fn === "orchestrate");
+    assert(call, "the approved mission must execute without the model");
+    const sent = (call.body as Record<string, unknown>).lead_mission;
+    assert(isLeadMissionV1(sent));
+    assertEquals(await missionHash(sent), await missionHash(mission));
+  } finally {
+    net.restore();
+  }
+});
+
+Deno.test("a confirmed card with no valid mission is refused, never delegated", async () => {
+  // The other half of removing the exemption. A card action whose mission does
+  // not validate has nothing deterministic waiting for it, and delegating
+  // without one is what produced `mission_not_compiled` in the chat.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
+  const i = src.indexOf("HAS_DETERMINISTIC_HANDLER");
+  assert(i > 0, "the exemption must name the handlers that actually exist");
+  const block = src.slice(i, i + 400);
+  assert(block.includes("lead_source_card") && block.includes("lead_source_brief"),
+    "only a submitted lead brief has a deterministic path below");
+  assertFalse(/!isPreConfirmed/.test(block),
+    "a confirmed card must no longer be blanket-exempt from the honest refusal");
+
+  // And the approved Start runs BEFORE understanding is attempted.
+  const start = src.indexOf("const approvedOnStart = actionMetadata?.lead_mission");
+  const brain = src.indexOf("await understandRequest(message, {");
+  assert(start > 0 && start < brain,
+    "an approved Start must execute before the model is consulted");
 });

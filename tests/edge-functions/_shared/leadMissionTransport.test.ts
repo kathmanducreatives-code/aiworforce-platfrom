@@ -236,8 +236,18 @@ Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail
   // unreadable. Either way a mission is supplied, which is what this asserts.
   assert(supplied.includes("missionToRun"),
     "the Chat Brain request route supplies a compiled or approved mission");
-  assertEquals(new Set(supplied).size, 3,
-    "three lead paths remain, and each supplies a mission");
+  //
+  // ── AND THE FOURTH: THE APPROVED START ────────────────────────────────
+  //
+  // A confirmed workflow card executes the mission it carried, before the
+  // model is consulted at all. It is counted here for the same reason as the
+  // others: it reaches orchestrate, so it must supply a mission — and the run
+  // that added it reached orchestrate with none, which is exactly what the
+  // chokepoint then refused as `mission_not_compiled`.
+  assert(supplied.includes("approvedOnStart"),
+    "the approved-card Start supplies the mission the user approved");
+  assertEquals(new Set(supplied).size, 4,
+    "four lead paths remain, and each supplies a mission");
 
   // ANY OTHER BRANCH THAT REACHES ORCHESTRATE WITH LEAD INTENT IS STILL SAFE,
   // because orchestrate is the chokepoint: under new_architecture a request
