@@ -2735,7 +2735,99 @@ Deno.serve(async (req) => {
                         }
                         : {}),
                     },
+                    // ── THE ROW STATUS TRAVELS WITH THE CHECKPOINT ──────────
+                    //
+                    // This wrote `result` alone and left `tasks.status` at
+                    // `running`. The terminal guard was supposed to correct it
+                    // on the way out — and it cannot, because its `finally`
+                    // does not run when the platform hard-kills the isolate.
+                    //
+                    // Task 5c461aa3: discovery and enrichment succeeded, the
+                    // checkpoint was written at the stage boundary, the hiring
+                    // search then ran 116 seconds and the isolate was killed
+                    // at the wall clock. The Actor SUCCEEDED with 74 job items;
+                    // the task row said `running` indefinitely and the
+                    // execution card never moved.
+                    //
+                    // A checkpoint is the durable record of an interrupted
+                    // run, so it has to be COMPLETE on its own — status
+                    // included — rather than depending on any later code
+                    // getting a chance to execute. `projectStatus` owns the
+                    // mapping so this cannot drift from every other writer.
+                    status: projectStatus("continuation_required").rowStatus,
                   }).eq("id", task.id);
+
+                  // AND THE PLAN STOPS SAYING "EXECUTING". It is the row the
+                  // execution card reads for its own pill; leaving it
+                  // `executing` beside a resumable task is the same stuck
+                  // state one level up.
+                  if (plan_id) {
+                    await supabase.from("task_plans")
+                      .update({ status: "partial" })
+                      .eq("id", plan_id)
+                      .eq("status", "executing");
+                  }
+
+                  // ── AND THE USER IS TOLD THE RUN PAUSED ──────────────────
+                  //
+                  // Task 5c461aa3 said "I created a 1-step plan" and then
+                  // nothing, for five minutes, while 30 companies had been
+                  // discovered and 10 shortlisted. Silence beside a spinner is
+                  // indistinguishable from a crash, and the work that HAD been
+                  // paid for was invisible.
+                  //
+                  // One message per checkpoint: the insert is guarded on the
+                  // same `plan_id` + kind the results panel uses, so a second
+                  // checkpoint in the same plan does not repeat it.
+                  try {
+                    const { data: planMsg } = await supabase.from("messages")
+                      .select("conversation_id")
+                      .filter("metadata->>plan_id", "eq", plan_id ?? "")
+                      .limit(1).maybeSingle();
+                    const convId =
+                      (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+                    if (convId) {
+                      const { data: already } = await supabase.from("messages")
+                        .select("id")
+                        .eq("conversation_id", convId)
+                        .filter("metadata->>plan_id", "eq", plan_id ?? "")
+                        .filter("metadata->>kind", "eq", "run_checkpoint")
+                        .limit(1).maybeSingle();
+                      if (!already) {
+                        const p = snap.state.progress ?? {};
+                        const found = (p as { accounts_found?: number }).accounts_found ?? 0;
+                        const short = (p as { shortlisted?: number }).shortlisted ?? 0;
+                        await supabase.from("messages").insert({
+                          conversation_id: convId,
+                          role: "assistant",
+                          content:
+                            `This run hit its time limit partway through, so I've saved where it got to` +
+                            `${found > 0 ? ` — ${found} companies found, ${short} shortlisted` : ""}. ` +
+                            `Nothing is lost and nothing extra was charged; say "continue" and I'll pick it up from here.`,
+                          agent_slug: "pilot",
+                          metadata: {
+                            plan_id: plan_id ?? null,
+                            task_id: task.id,
+                            agent_id: "pilot",
+                            kind: "run_checkpoint",
+                            terminal_status: "continuation_required",
+                            outcome: {
+                              version: "outcome-v1", state: "PARTIALLY_SATISFIED",
+                              reason: "execution_deadline_checkpoint",
+                              gaps: [{
+                                code: "run_incomplete",
+                                detail: "the run paused at its time limit before finishing every step",
+                              }],
+                            },
+                          },
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    // BEST EFFORT. A message that fails must never turn a saved
+                    // checkpoint into a failed run.
+                    console.log("[run-agent][checkpoint] notice failed", String(e));
+                  }
                 } catch (e) {
                   console.log("[run-agent][checkpoint] write failed", String(e));
                 }

@@ -3,7 +3,7 @@ import type { DBTask, DBToolCall, DBApproval } from '@/lib/orchestration';
 import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
-import { CheckCircle2, ChevronRight, Circle, Loader2, ShieldAlert, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Circle, Loader2, PauseCircle, ShieldAlert, XCircle } from 'lucide-react';
 import { resolveAgent, inferAgentFromContent } from '@/lib/agentResolver';
 
 /** Tiny per-agent outcome chip rendered next to the agent badge. */
@@ -70,6 +70,8 @@ function StatusIcon({ status }: { status: DBTask['status'] }) {
   // AMBER, NOT RED. Nothing went wrong — a guard declined, and the reason is
   // rendered beside it.
   if (status === 'blocked')  return <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
+  // PAUSED WITH WORK SAVED — not spinning, not finished, not broken.
+  if (status === 'ready')    return <PauseCircle className="h-3.5 w-3.5 text-sky-400 shrink-0" />;
   if (status === 'skipped')  return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
   return <Circle className="h-3.5 w-3.5 text-[#484F58] shrink-0" />;
 }

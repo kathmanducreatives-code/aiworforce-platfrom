@@ -135,6 +135,14 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const anyFailed = tasks.some((t) => t.status === 'failed');
   const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
   const allComplete = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
+  // ── A CHECKPOINTED RUN IS PAUSED, NOT RUNNING ──────────────────────────
+  //
+  // `ready` is the row status a run takes when it saved a checkpoint and owes
+  // more rounds. Nothing here knew the word, so it fell through to `rawStatus`
+  // — and while the task row was still stuck at `running`, the card showed a
+  // live spinner for a run that had already stopped. Task 5c461aa3 sat that way
+  // with 30 companies discovered and 10 shortlisted behind it.
+  const anyCheckpointed = tasks.some((t) => t.status === 'ready');
   const normalizedStatus: string =
     uiState === 'stale' ? 'stale' :
     uiState === 'partial' ? 'partial' :
@@ -145,6 +153,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     rawStatus === 'failed' ? 'failed' :
     pendingApprovals ? 'awaiting_approval' :
     anyRunning ? 'running' :
+    anyCheckpointed ? 'partial' :
     allComplete && anyFailed ? 'partial' :
     allComplete ? 'complete' :
     rawStatus;
