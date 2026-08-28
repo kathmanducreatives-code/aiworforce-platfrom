@@ -246,5 +246,11 @@ Deno.test("pilot-chat checks held evidence only for a NAMED investigation", asyn
   assert(block.includes('brainRoute.reason === "named_entity_investigation"'),
     "a discovery run must not be skipped because one company has evidence");
   assert(block.includes("held.sufficient"), "and only sufficient evidence short-circuits");
-  assert(block.includes("return json("), "a served-from-evidence answer stops there");
+  // It returns through `replyAndReturn`, which writes the message and returns
+  // `json(...)`. The invariant is unchanged: the turn ENDS here and nothing is
+  // delegated.
+  assert(/return await replyAndReturn\(renderHeldEvidence/.test(block),
+    "a served-from-evidence answer stops there");
+  assert(block.includes('state: "SATISFIED"'),
+    "and it is a real answer, not a partial one — the evidence was sufficient");
 });

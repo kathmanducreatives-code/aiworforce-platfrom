@@ -397,8 +397,20 @@ export async function executeRead(
       //
       // `count: "exact"` asks Postgres. The page is still bounded, so the list
       // stays a preview and only the TOTAL is claimed.
+      // ── THE LEADS ARE NAMED, SO A FOLLOW-UP CAN POINT AT THEM ─────────
+      //
+      // This selected ids and scores and no company name, so the answer could
+      // only ever be a count — and "Which of those look strongest?" had nothing
+      // to resolve against, because a referent set is built from what was
+      // DISPLAYED and nothing was.
+      //
+      // The embed carries the identity `resolveCompanyIdentity` needs: name,
+      // domain and LinkedIn URL. Naming them makes the answer better and makes
+      // the next turn answerable.
       let lq = db.from("lead_candidates")
-        .select("id, status, fit_score, priority, reason, created_at",
+        .select(
+          "id, status, fit_score, priority, reason, created_at, " +
+          "accounts(name, domain, linkedin_url)",
           { count: "exact" })
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
@@ -516,16 +528,43 @@ export const READ_DISPLAY_LIMIT = 5;
  */
 export function presentedCompanies(
   result: ReadResult | null,
-): Array<{ display: string; label: string | null; identifier: string | null }> {
+): Array<{
+  display: string; label: string | null; identifier: string | null;
+  domain: string | null; linkedin_url: string | null;
+}> {
   if (!result || result.target !== "companies") return [];
-  return result.items
+  const acct = (i: Record<string, unknown>) =>
+    (i.accounts ?? {}) as Record<string, unknown>;
+
+  // ORDER IS THE ANSWER'S ORDER. Leads first, then watched, each capped — the
+  // same walk the renderer performs, so "the second company" indexes what was
+  // actually on screen.
+  const leads = result.items
+    .filter((i) => i.kind === "lead" && typeof acct(i).name === "string")
+    .slice(0, READ_DISPLAY_LIMIT)
+    .map((i) => {
+      const a = acct(i);
+      return {
+        display: String(a.name),
+        label: String(a.name),
+        identifier: typeof a.domain === "string" ? a.domain : null,
+        domain: typeof a.domain === "string" ? a.domain : null,
+        linkedin_url: typeof a.linkedin_url === "string" ? a.linkedin_url : null,
+      };
+    });
+
+  const watched = result.items
     .filter((i) => i.kind === "watched")
     .slice(0, READ_DISPLAY_LIMIT)
     .map((i) => ({
       display: String(i.label ?? i.identifier),
       label: typeof i.label === "string" ? i.label : null,
       identifier: typeof i.identifier === "string" ? i.identifier : null,
+      domain: null as string | null,
+      linkedin_url: null as string | null,
     }));
+
+  return [...leads, ...watched];
 }
 
 /**
@@ -674,10 +713,13 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     // RENDERED FROM THE SAME LIST THAT IS PERSISTED AS REFERENTS. Two walks of
     // `result.items` with the same filter and the same slice would be two
     // orderings that can drift, and "the second company" indexes this one.
-    const names = presentedCompanies(result)
-      .map((e) => `• ${e.display}`).join("\n");
+    const shown = presentedCompanies(result);
+    const names = shown.map((e) => `• ${e.display}`).join("\n");
+    const more = leads > shown.filter((e) => e.domain !== null || e.linkedin_url !== null).length;
     return withGaps(
-      `${bits.join(" and ")}${window}.${names ? `\n\nWatching:\n${names}` : ""}`,
+      `${bits.join(" and ")}${window}.`
+      + (names ? `\n\n${names}` : "")
+      + (more && names ? `\n\n(showing the most recent — ask for more if you need the full list)` : ""),
       result);
   }
 

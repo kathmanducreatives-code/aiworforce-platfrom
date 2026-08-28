@@ -31,13 +31,31 @@
 -- A name-by-name list is the mechanism. Nothing failed; a table was simply never
 -- added when the Pilot chat was built.
 --
--- ── WHY REPLICA IDENTITY IS LEFT ALONE ──────────────────────────────────────
+-- ── REPLICA IDENTITY: THE FIRST ANSWER HERE WAS WRONG ───────────────────────
 --
--- Deliberately not `FULL`. An INSERT and an UPDATE both publish the complete new
--- row, which is everything the subscriber renders. The only payload the default
--- identity narrows is DELETE's `old`, and the one field read there is the
--- primary key, which the default already carries. `FULL` would add WAL volume on
--- every message write to widen a payload nothing reads.
+-- This originally argued for leaving the default, on the reasoning that INSERT
+-- and UPDATE publish the complete new row and the only field read on DELETE is
+-- the primary key. Measured after the publication landed, with a filtered and an
+-- unfiltered channel side by side:
+--
+--   INSERT   delivered on both channels
+--   UPDATE   delivered on NEITHER
+--   DELETE   delivered on the unfiltered channel only, old = { id }
+--
+-- Two things the argument missed. Under RLS, Realtime must evaluate the policy
+-- against the OLD row for UPDATE and DELETE, and the default identity gives it
+-- only the primary key — so it cannot authorise the event and drops it. And the
+-- subscription FILTER has the same problem: `conversation_id=eq.<id>` cannot
+-- match an old record that does not carry `conversation_id`.
+--
+-- `messages` is overwhelmingly insert-only — an UPDATE happens when a
+-- clarification is marked resolved, a DELETE when a conversation is removed — so
+-- the WAL cost of `FULL` is small and paid rarely. Without it, any future flow
+-- that patches a message in place goes stale in the UI: precisely the bug this
+-- migration exists to fix, reintroduced one event type over.
+
+-- The old row must carry enough for RLS and for the conversation filter.
+alter table public.messages replica identity full;
 
 do $$
 begin

@@ -44,6 +44,8 @@ import { shouldGateObjective } from "../_shared/companyBrainGate.ts";
 import {
   failureMetadata, OUTCOME_CONTRACT_VERSION,
 } from "../_shared/outcomeContract.ts";
+import { buildMissionPreview } from "../_shared/missionPreview.ts";
+import { assessRequestFeasibility } from "../_shared/requestFeasibility.ts";
 import {
   asksForUnsafeAction, UNSAFE_REQUEST_REPLY,
 } from "../_shared/unsafeRequestGuard.ts";
@@ -1969,9 +1971,19 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               }
               : shown.length > 0
               ? {
+                // A LEAD CARRIES ITS OWN IDENTITY. The account embed supplies
+                // name, domain and LinkedIn URL directly, so there is nothing
+                // to classify from a bare identifier string; a watched subject
+                // still has only `identifier`, and falls back to it.
                 [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
-                  shown.map((e) => presentedFromIdentifier(e.label, e.identifier)),
-                  "watched_companies",
+                  shown.map((e) =>
+                    (e.domain || e.linkedin_url)
+                      ? {
+                        label: e.label, name: e.label,
+                        domain: e.domain, linkedin_url: e.linkedin_url,
+                      }
+                      : presentedFromIdentifier(e.label, e.identifier)),
+                  "lead_results",
                 ),
               }
               : {}),
@@ -2003,40 +2015,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }).select("*").single();
         return json({ type: "reply", conversation_id: conversationId, message: saved });
       }
-
-      // ── RESEARCH: REUSE FRESH EVIDENCE BEFORE BUYING ANY ──────────────
-      //
-      // `research` asks a fresh question about a company the user named. When
-      // `signal_events` already holds a current answer, paying a provider to
-      // re-establish it is spending to learn what we know. The gate owns no
-      // freshness policy of its own — `signalFreshness` decides what "current"
-      // means, per signal type — and it fails TOWARD spending, so an unreadable
-      // table produces a real run rather than a false silence.
-      if (brainBinding.kind === "category" && brainRoute.kind === "lead_mission" &&
-          brainRoute.reason === "named_entity_investigation") {
-        const known = brainRoute.lead?.proposal.known_companies ?? [];
-        const needed = [...new Set(understood.request.parts
-          .flatMap((x) => (x.requirements ?? []).map((q) => String(q.event))))];
-        if (known.length > 0 && needed.length > 0) {
-          const held = await heldEvidenceFor(
-            admin as unknown as EvidenceDb, workspaceId, known, needed);
-          if (held.sufficient) {
-            const { data: saved } = await admin.from("messages").insert({
-              conversation_id: conversationId, role: "assistant",
-              content: renderHeldEvidence(known.join(", "), held),
-              agent_slug: "pilot",
-              metadata: {
-                chat_brain: { route: "research", served_from: "held_evidence",
-                  fresh: held.fresh.length, stale: held.stale, spent: false },
-              },
-            }).select("*").single();
-            return json({ type: "reply", conversation_id: conversationId, message: saved });
-          }
-          console.log("[pilot-chat][research] held evidence insufficient, running", {
-            known, needed, missing: held.missing, stale: held.stale,
-          });
-        }
-      }
+      // The held-evidence reuse moved INTO the lead route, below — see there.
 
       // ══ SOURCE / RESEARCH: THE UNDERSTANDING BECOMES THE MISSION ═══════
       //
@@ -2485,6 +2464,99 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           unrepresented: unrepresentedRequirements(brainRoute.lead),
           bound_referents: resolvedBindings.length,
         });
+
+        // ── DO NOT BUY WHAT IS ALREADY HELD ───────────────────────────────
+        //
+        // `research` asks a fresh question about a company the user named. When
+        // `signal_events` already holds a current answer, paying a provider to
+        // re-establish it is spending to learn what we know. `signalFreshness`
+        // owns what "current" means, and this fails TOWARD spending — an
+        // unreadable table produces a real run rather than a false silence.
+        //
+        // THIS WAS SILENTLY DISABLED. It was guarded on
+        // `brainBinding.kind === "category"`, and once the lead route became
+        // typed `bindRoute` returned `lead_route` instead — so the condition
+        // could never be true and every research request went straight to a
+        // paid run. A spend regression with no symptom: the answer was still
+        // correct, it was just bought twice.
+        //
+        // It also belongs here rather than before the surfaces: it is a
+        // decision about executing THIS mission, and it now runs after the
+        // safety refusal and the Company Brain gate.
+        if (brainRoute.reason === "named_entity_investigation") {
+          const known = brainRoute.lead.proposal.known_companies ?? [];
+          const needed = [...new Set(understood.request.parts
+            .flatMap((x) => (x.requirements ?? []).map((q) => String(q.event))))];
+          if (known.length > 0 && needed.length > 0) {
+            const held = await heldEvidenceFor(
+              admin as unknown as EvidenceDb, workspaceId, known, needed);
+            if (held.sufficient) {
+              return await replyAndReturn(renderHeldEvidence(known.join(", "), held), {
+                outcome: {
+                  version: OUTCOME_CONTRACT_VERSION, state: "SATISFIED",
+                  gaps: [], reason: "served_from_held_evidence",
+                },
+                chat_brain: { route: "research", served_from: "held_evidence",
+                  fresh: held.fresh.length, stale: held.stale, spent: false },
+              });
+            }
+            console.log("[pilot-chat][research] held evidence insufficient, running", {
+              known, needed, missing: held.missing, stale: held.stale,
+            });
+          }
+        }
+
+        // ── STAGE 0 AND STAGE 1, BEFORE ANYTHING IS BOUGHT ────────────────
+        //
+        // The graph the ENGINE will execute, assessed by the same feasibility
+        // check the engine uses, and described from that graph and nothing
+        // else. `generateWorkflowConfirmation` makes its own model call and
+        // compiles its own mission — a second interpretation whose narration
+        // could describe a run the executor was never going to perform. This
+        // path does not use it.
+        const previewPlan = buildCapabilityGraph(mission as never);
+        const feasibility = assessRequestFeasibility(mission, previewPlan);
+        const preview = buildMissionPreview(
+          mission, previewPlan, feasibility, brainRoute.lead);
+
+        // ── AN INFEASIBLE MISSION IS NOT PREVIEWED, IT IS REFUSED ─────────
+        if (!preview.feasible) {
+          return await replyAndReturn(
+            preview.gaps.length > 0
+              ? `I understood that, but I can't run it as asked. ${preview.gaps.map((g) => g.detail).join("; ")}.`
+              : "I understood that, but I couldn't turn it into a run I can execute.",
+            {
+              outcome: {
+                version: OUTCOME_CONTRACT_VERSION, state: "UNSUPPORTED",
+                category: "not_feasible", gaps: preview.gaps,
+                reason: "stage0_refused",
+              },
+              chat_brain: { route: "lead_mission", previewed: false },
+            },
+          );
+        }
+
+        // ── AND NOTHING SPENDS WITHOUT AN EXPLICIT START ──────────────────
+        //
+        // THIS WAS MISSING. Deleting the category-list confirmation gate
+        // removed the only thing standing between a sourcing request and a paid
+        // run, and this route delegated straight to orchestrate. The route has
+        // carried `requires_confirmation: true` the whole time; nothing read it.
+        if (brainRoute.requires_confirmation && !isPreConfirmed) {
+          return await replyAndReturn(preview.narration, {
+            outcome: {
+              version: OUTCOME_CONTRACT_VERSION, state: "REQUIRES_UNLOCK",
+              category: "requires_approval", gaps: preview.gaps,
+              reason: "awaiting_start",
+            },
+            type: "workflow_confirmation",
+            mission_preview: preview,
+            // The mission the Start will execute, so confirming runs exactly
+            // what was previewed rather than re-reading the sentence.
+            lead_mission: mission,
+            chat_brain: { route: "lead_mission", previewed: true },
+          });
+        }
 
         return await delegateToOrchestrate({
           admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
