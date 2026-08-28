@@ -644,7 +644,10 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
   }
 
   if (result.target === "signals") {
-    const { total, ...byType } = result.counts;
+    // `shown` is bookkeeping, not a signal type. Destructuring it into the
+    // breakdown rendered "10 signals (of the 10 I looked at: 10 shown, 6 market
+    // problem discussion…)" — a count presented as a kind of evidence.
+    const { total, shown: _shown, ...byType } = result.counts;
     const kinds = Object.entries(byType)
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
