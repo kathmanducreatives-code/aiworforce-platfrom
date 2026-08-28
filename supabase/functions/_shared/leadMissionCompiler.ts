@@ -51,6 +51,9 @@
 
 import { readSignalPhrase } from "./missionSignalDescriptor.ts";
 import {
+  runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
+} from "./leadRuntimeIdentity.ts";
+import {
   LEAD_MISSION_VERSION, mergeCompanyBrainIntoMission,
   parseLeadMissionDeterministic, validateLeadMission,
   EXECUTION_PREFERENCES,
@@ -1028,6 +1031,34 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+
+  // ── STAMPED WHERE MISSIONS ARE MADE, NOT WHERE THEY ARE USED ─────────────
+  //
+  // The executor refuses to spend on a mission carrying no contract version:
+  // "compiled by a build that predates this guard; it cannot be assumed
+  // compatible". That guard is right, and it fired on a mission this very
+  // function had just produced.
+  //
+  // The stamp lived at ONE call site — `buildMissionForPrompt` in pilot-chat,
+  // which spreads it on after compiling. The Chat Brain lead route takes
+  // `compiled.result.final_mission` directly, so it inherited nothing, and
+  // task 364c8594 was blocked by `incompatible_planner_contract` on a mission
+  // compiled seconds earlier by the current build.
+  //
+  // Two producers, one of which remembered. Stamping here makes it a property
+  // of COMPILING a mission: every producer inherits it, and a future one
+  // cannot forget. A caller that stamps again with its own function name
+  // overwrites this with an equally true value — the contract version is the
+  // same constant either way.
+  //
+  // NOT IN `missionHash`, deliberately, and the hash's field list is the proof:
+  // redeploying the planner does not change the question being asked, so a
+  // mission approved before a deploy still matches itself after one.
+  mission = {
+    ...mission,
+    planner_runtime: runtimeIdentity("planner", "lead-mission-compiler") as unknown as Record<string, unknown>,
+    lead_intelligence_contract_version: LEAD_INTELLIGENCE_CONTRACT_VERSION,
+  };
 
   const offers = offersFrom(approvedCaps);
   return {

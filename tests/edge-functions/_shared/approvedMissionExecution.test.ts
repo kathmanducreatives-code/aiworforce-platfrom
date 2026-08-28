@@ -180,3 +180,71 @@ Deno.test("the plan a mission produces is derived, not planned", async () => {
   assert(src.includes('const qlPlan = plannerSource === "capability_graph" ? null : await planQualifiedLeadBeforePersistence'),
     "the Claude lead planner must not re-decide an approved mission's steps");
 });
+
+Deno.test("every compiled mission carries the contract the executor demands", async () => {
+  // LIVE, task 364c8594: the mission reached run-agent — `missing_mission` was
+  // gone — and was blocked by `incompatible_planner_contract`: "the mission
+  // carries no contract version, so it was compiled by a build that predates
+  // this guard". It had been compiled seconds earlier by that same build.
+  //
+  // The stamp lived at ONE call site. `buildMissionForPrompt` spread it on
+  // after compiling; the Chat Brain lead route takes `final_mission` directly
+  // and inherited nothing. Two producers, one of which remembered.
+  const tables = seed();
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables,
+    modelReplies: [
+      { when: (_u, s) => isBrain(s), content: brainReply },
+      { when: (_u, s) => !isBrain(s), content: "prose" },
+    ],
+  });
+  let mission: Record<string, unknown>;
+  try {
+    const preview = await sendTurn(SOURCING, tables);
+    mission = (preview.metadata.workflow_confirmation as Record<string, unknown>)
+      .lead_mission as Record<string, unknown>;
+  } finally {
+    net.restore();
+  }
+
+  const { checkContractCompatibility } = await import(
+    "../../../supabase/functions/_shared/leadRuntimeIdentity.ts");
+  const check = checkContractCompatibility(
+    mission.lead_intelligence_contract_version as string | null,
+    (mission.planner_runtime as { git_sha?: string } | undefined)?.git_sha ?? null);
+  assertEquals(check.ok, true,
+    `the executor must accept a mission this build just compiled: ${
+      check.ok ? "" : check.detail}`);
+});
+
+Deno.test("the runtime stamp does not change the question being asked", async () => {
+  // The stamp is not in `missionHash` on purpose: redeploying the planner does
+  // not change what the user asked for, and a mission approved before a deploy
+  // must still match itself after one. If this ever fails, every card approved
+  // across a deploy would execute as a different mission.
+  const tables = seed();
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables,
+    modelReplies: [
+      { when: (_u, s) => isBrain(s), content: brainReply },
+      { when: (_u, s) => !isBrain(s), content: "prose" },
+    ],
+  });
+  let mission: Record<string, unknown>;
+  try {
+    const preview = await sendTurn(SOURCING, tables);
+    mission = (preview.metadata.workflow_confirmation as Record<string, unknown>)
+      .lead_mission as Record<string, unknown>;
+  } finally {
+    net.restore();
+  }
+  assert(isLeadMissionV1(mission));
+  const withStamp = await missionHash(mission);
+  const stripped = { ...mission } as Record<string, unknown>;
+  delete stripped.planner_runtime;
+  delete stripped.lead_intelligence_contract_version;
+  // deno-lint-ignore no-explicit-any
+  const withoutStamp = await missionHash(stripped as any);
+  assertEquals(withStamp, withoutStamp,
+    "the build that compiled a mission is not part of what it asks for");
+});
