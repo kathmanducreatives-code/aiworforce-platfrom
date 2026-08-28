@@ -550,12 +550,40 @@ export async function executeRead(
         // workspace carries `fit_score: null`; the column exists and no scorer
         // populates it. Saying so here is what stops a superlative being
         // answered with whatever the sort happened to return.
-        gaps: l.length > 0 && l.every((x) => x.fit_score == null)
-          ? [{
-            code: "leads_unscored",
-            detail: "none of these leads carry a fit score yet, so they can't be ranked reliably",
-          }]
-          : [],
+        gaps: [
+          ...(l.length > 0 && l.every((x) => x.fit_score == null)
+            ? [{
+              code: "leads_unscored",
+              detail: "none of these leads carry a fit score yet, so they can't be ranked reliably",
+            }]
+            : []),
+          // ── A LEAD WITH NO COMPANY RECORD CANNOT BE NAMED ─────────────
+          //
+          // Production holds 32 leads and 31 accounts. The answer listed 31,
+          // called it "31 most recent of 32", and offered the full list again
+          // — an offer that repeats after being taken up.
+          //
+          // DECLARED BY THE QUERY THAT NOTICED IT, and only when the page
+          // covered everything: on a bounded page the shortfall is paging, and
+          // reporting it as missing data would be a different lie. Here the
+          // page is the whole set, so the difference is real.
+          ...((() => {
+            const total = typeof leadCount === "number" ? leadCount : l.length;
+            const nameable = l.filter((x) => {
+              const a = (x.accounts ?? {}) as Record<string, unknown>;
+              return typeof a.name === "string" && a.name.length > 0;
+            }).length;
+            const covered = !scoped && l.length >= total;
+            const missing = total - nameable;
+            return covered && missing > 0
+              ? [{
+                code: "leads_without_company",
+                detail: `${missing} of them ${missing === 1 ? "has" : "have"} no company record yet, so ${
+                  missing === 1 ? "it isn't" : "they aren't"} named above`,
+              }]
+              : [];
+          })()),
+        ],
         items: [...l.map((x) => ({ kind: "lead", ...x })),
                 ...w.map((x) => ({ kind: "watched", ...x }))],
         empty: l.length === 0 && w.length === 0,
@@ -784,7 +812,11 @@ function withGaps(body: string, result: ReadResult | null): string {
   // answer honestly when something is missing.
   const gaps = result?.gaps ?? [];
   if (gaps.length === 0) return body;
-  return `${body}\n\n${gaps.map((g) => g.detail).join(" ")}`;
+  // SEPARATE SENTENCES. Joined with a space, two declared gaps ran together as
+  // "…can't be ranked reliably 1 of them has no company record yet", which
+  // reads as one broken sentence rather than two true statements.
+  return `${body}\n\n${
+    gaps.map((g) => g.detail.replace(/\.$/, "")).join(". ")}.`;
 }
 
 export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): string {
@@ -878,32 +910,43 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
 
   if (result.target === "companies") {
     const { leads = 0, watched = 0 } = result.counts;
-    // RENDERED FROM THE SAME LIST THAT IS PERSISTED AS REFERENTS. Two walks of
-    // `result.items` with the same filter and the same slice would be two
-    // orderings that can drift, and "the second company" indexes this one.
-    const shown = presentedCompanies(result, displayLimitFor(plan));
-    const names = shown.map((e) => `• ${e.display}`).join("\n");
 
     // ── A SCOPED LIST IS ABOUT THOSE COMPANIES, AND SAYS SO ───────────────
     //
-    // "Which of those look strongest?" reaches here with the five companies
-    // the previous turn displayed. Reporting the workspace total instead would
+    // "Which of those look strongest?" reaches here with the companies the
+    // previous turn displayed. Reporting the workspace total instead would
     // answer a question about the whole workspace, and the user could not tell
     // which of the two they had been given.
     if (plan.subjects.length > 0) {
-      const n = shown.length;
-      if (n === 0) {
+      // EVERY BOUND COMPANY IS LISTED. The set is already bounded by the
+      // reference the user made, so the sample size has no business narrowing
+      // it further. It did: "which of those look strongest?" over 31 bound
+      // companies matched all 31 rows, sliced the display to 5, and then
+      // computed the shortfall from the SLICE — printing "26 of the 31 you
+      // pointed at aren't in your saved leads" about 26 companies that were
+      // sitting in the table it had just read. A display limit became a claim
+      // about the user's data.
+      const scopedNames = presentedCompanies(result, plan.subjects.length);
+      const matched = scopedNames.length;
+      if (matched === 0) {
         return withGaps(
           `I couldn't find those companies among your saved leads — they may have been listed from somewhere else.`,
           result);
       }
       const asked = plan.subjects.length;
-      const missing = asked > n
-        ? ` (${asked - n} of the ${asked} you pointed at aren't in your saved leads)`
+      const missing = asked > matched
+        ? ` (${asked - matched} of the ${asked} you pointed at aren't in your saved leads)`
         : "";
       return withGaps(
-        `Those ${n === 1 ? "one" : n}${missing}:\n\n${names}`, result);
+        `Those ${matched === 1 ? "one" : matched}${missing}:\n\n${
+          scopedNames.map((e) => `• ${e.display}`).join("\n")}`, result);
     }
+
+    // RENDERED FROM THE SAME LIST THAT IS PERSISTED AS REFERENTS. Two walks of
+    // `result.items` with the same filter and the same slice would be two
+    // orderings that can drift, and "the second company" indexes this one.
+    const shown = presentedCompanies(result, displayLimitFor(plan));
+    const names = shown.map((e) => `• ${e.display}`).join("\n");
 
     const bits: string[] = [];
     if (leads) bits.push(`${leads} lead${leads === 1 ? "" : "s"} saved`);
@@ -914,16 +957,25 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     // This ended with "(showing the most recent — ask for more if you need the
     // full list)". The user said "yes show the full list" and received a
     // byte-identical reply, because nothing downstream could represent the
-    // request — the offer was an affordance the surface did not have. The
-    // count is now stated plainly, and the offer is made only up to the
-    // ceiling a read will actually honour.
+    // request. Representing it was only half the fix: the answer then listed
+    // 31 of 32 and offered the full list AGAIN, because the 32nd lead has no
+    // account row and can never be named. An offer that repeats after being
+    // taken up is the same broken affordance in a new place.
+    //
+    // So the offer is made only when there are more rows this surface could
+    // actually reach: not after an explicit request for everything, and not
+    // when the shortfall is rows it cannot name.
     const listed = shown.length;
-    const remaining = Math.max(0, leads - listed);
-    const trailer = remaining > 0
-      ? listed >= MAX_READ_ROWS
-        ? `\n\n(showing the ${listed} most recent of ${leads} — ask for a specific set if you need further back)`
-        : `\n\n(showing the ${listed} most recent of ${leads} — say "show the full list" for the rest)`
-      : "";
+    const fetched = result.items.filter((i) => i.kind === "lead").length;
+    const beyondPage = Math.max(0, leads - fetched);
+    const trailer = plan.explicit_limit || beyondPage === 0
+      ? ""
+      : `\n\n(showing the ${listed} most recent of ${leads} — say "show the full list" for the rest)`;
+    // THE GAP IS THE QUERY'S, NOT THE RENDERER'S. `executeRead` declares
+    // `leads_without_company` because it is the only layer that can tell a
+    // missing account from a bounded page, and a gap invented here would be
+    // invisible to `readOutcome` — the answer would say it and the outcome
+    // would not.
     return withGaps(
       `${bits.join(" and ")}${window}.`
       + (names ? `\n\n${names}` : "")

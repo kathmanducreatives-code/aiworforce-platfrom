@@ -69,12 +69,25 @@ function seed(): Record<string, Row[]> {
       offer: { summary: "AI workforce for lean GTM teams" },
       buyers: { roles: ["Head of Talent"] },
     }],
-    lead_candidates: LEADS.map(([name, domain, li], i) => ({
-      id: `lead-${i + 1}`, workspace_id: WORKSPACE, status: "new",
-      fit_score: null, priority: null, reason: null,
-      created_at: `2026-08-${String(28 - i).padStart(2, "0")}T00:00:00Z`,
-      accounts: { name, domain, linkedin_url: li },
-    })),
+    lead_candidates: [
+      ...LEADS.map(([name, domain, li], i) => ({
+        id: `lead-${i + 1}`, workspace_id: WORKSPACE, status: "new",
+        fit_score: null, priority: null, reason: null,
+        created_at: `2026-08-${String(28 - i).padStart(2, "0")}T00:00:00Z`,
+        accounts: { name, domain, linkedin_url: li },
+      })),
+      // ── THE LEAD WITH NO COMPANY RECORD ────────────────────────────────
+      //
+      // Production holds 32 leads and 31 accounts. That one row is why "show
+      // the full list" answered "showing the 31 most recent of 32 — say 'show
+      // the full list' for the rest": it is counted and cannot be named, so
+      // the offer repeated after the user had already taken it up.
+      {
+        id: "lead-orphan", workspace_id: WORKSPACE, status: "new",
+        fit_score: null, priority: null, reason: null,
+        created_at: "2026-08-01T00:00:00Z", accounts: null,
+      },
+    ],
     accounts: [],
     contacts: [],
     outreach_drafts: [],
@@ -140,7 +153,7 @@ Deno.test("turn 1: the workspace's real leads, named, with the ranking gap", asy
   }]);
   const [t1] = out;
 
-  assertStringIncludes(t1.content, "14 leads saved");
+  assertStringIncludes(t1.content, "15 leads saved");
   assertStringIncludes(t1.content, "NOSO LABS(YC S25)");
   assertStringIncludes(t1.content, "Arini");
   // THE GAP IS DECLARED, NOT INFERRED FROM THE WORDING. This question does not
@@ -247,10 +260,19 @@ Deno.test("turn 4: 'the second one' reads held records and buys nothing", async 
     },
     {
       say: "Tell me more about the second one.",
+      // ── THE SHAPE PRODUCTION ACTUALLY RETURNED ────────────────────────
+      //
+      // `shape: "answer"`, because "tell me more about X" asks for prose. The
+      // first version of this test hard-coded `records` — the helper's default
+      // — and passed while production failed, because `leadParts` requires
+      // `records` and the whole held-records answer lived inside the lead
+      // route. The turn died at
+      // `lead_projection_refused:objective_not_servable` with "I understood
+      // the request, but I can't turn it into a run yet."
       brain: modelRequest([{
-        objective: "research", entity: "company",
+        objective: "research", entity: "company", shape: "answer",
         references: [{ kind: "prior_result", value: "the second one", cardinality: "one" }],
-      }], 0.98),
+      }], 0.99),
     },
   ]);
   const t4 = out[1];
@@ -291,16 +313,27 @@ Deno.test("turn 5: 'them' after a drill-down still means that company", async ()
     {
       say: "Tell me more about the second one.",
       brain: modelRequest([{
-        objective: "research", entity: "company",
+        objective: "research", entity: "company", shape: "answer",
         references: [{ kind: "prior_result", value: "the second one", cardinality: "one" }],
-      }], 0.98),
+      }], 0.99),
     },
     {
       say: "What do we already know about them?",
+      // ── AND THE CARDINALITY PRODUCTION ACTUALLY RETURNED ──────────────
+      //
+      // `one`, at confidence 0.78 — the model read a plural pronoun as
+      // selecting a single company. The test asserted `all`, which is the
+      // judgement we would like it to make rather than the one it makes.
+      //
+      // This must work anyway, and it does WITHOUT trusting the label: the
+      // previous turn narrowed the presented set to the single company it was
+      // about, so there is exactly one candidate and nothing to be ambiguous
+      // between. Live, that turn had persisted nothing, so "them" resolved
+      // against the thirty-one from two turns back and clarified.
       brain: modelRequest([{
-        objective: "read", entity: "signal",
-        references: [{ kind: "prior_result", value: "them", cardinality: "all" }],
-      }]),
+        objective: "read", entity: "signal", shape: "answer",
+        references: [{ kind: "prior_result", value: "them", cardinality: "one" }],
+      }], 0.78),
     },
   ]);
   const t5 = out[2];
@@ -395,6 +428,69 @@ Deno.test("turn 7: 'hello' answers as Pilot without inventing workspace state", 
 });
 
 // ══ THE FULL LIST ═════════════════════════════════════════════════════════
+
+Deno.test("a lead with no company record is declared, not silently dropped", async () => {
+  // LIVE: 32 leads, 31 accounts. The answer listed 31, called it "31 most
+  // recent of 32", and offered the full list again — an offer that repeats
+  // after being taken up is the same broken affordance in a new place.
+  const { out } = await conversation([
+    {
+      say: "What leads do I currently have?",
+      brain: modelRequest([{ objective: "read", entity: "company" }]),
+    },
+    {
+      say: "yes show the full list",
+      brain: modelRequest([{
+        objective: "read", entity: "company", completeness: "all",
+      }], 1),
+    },
+  ]);
+  const full = out[1];
+
+  assertFalse(/say "show the full list" for the rest/.test(full.content),
+    "the offer must not repeat once it has been taken up");
+  assertStringIncludes(full.content, "no company record yet");
+  const gaps = (full.metadata.outcome as Record<string, unknown>)
+    .gaps as Array<Record<string, unknown>>;
+  assert(gaps.some((g) => g.code === "leads_without_company"),
+    "the difference between the count and the list must be declared");
+});
+
+Deno.test("a plural reference over the full list lists all of it", async () => {
+  // LIVE, 11:41:39: `bound_referents: 31` — every company bound — and the
+  // answer was "Those 5 (26 of the 31 you pointed at aren't in your saved
+  // leads)". All 26 were sitting in the table it had just read. The display
+  // sample narrowed the list and the shortfall was then computed from the
+  // SLICE, turning a rendering limit into a false claim about the user's data.
+  const { out } = await conversation([
+    {
+      say: "What leads do I currently have?",
+      brain: modelRequest([{ objective: "read", entity: "company" }]),
+    },
+    {
+      say: "yes show the full list",
+      brain: modelRequest([{
+        objective: "read", entity: "company", completeness: "all",
+      }], 1),
+    },
+    {
+      say: "Which of those look strongest?",
+      brain: modelRequest([{
+        objective: "read", entity: "company",
+        references: [{ kind: "prior_result", value: "those", cardinality: "all" }],
+      }]),
+    },
+  ]);
+  const scoped = out[2];
+
+  assertFalse(/aren't in your saved leads/.test(scoped.content),
+    "every bound company came from the leads table and must not be reported missing");
+  assertStringIncludes(scoped.content, "Those 14");
+  // ALL OF THEM, not a sample of five.
+  for (const [name] of LEADS) assertStringIncludes(scoped.content, name);
+  // AND RANKING IS STILL REFUSED.
+  assertStringIncludes(scoped.content, "can't be ranked reliably");
+});
 
 Deno.test("'show the full list' is honoured, not repeated back", async () => {
   // LIVE: the read offered "ask for more if you need the full list", the user

@@ -210,9 +210,30 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
   // The grounded conversational surface already receives the Company Brain and
   // is required to answer only from what it was given, so it can answer this
   // truthfully or say it does not hold it. That is the right home for it.
+  //
+  // ── UNLESS A REFERENT FIXED WHICH THING IT IS ABOUT ─────────────────────
+  //
+  // "What do we already know about them?", one turn after a single company was
+  // read out by name, is prose about a SPECIFIC company — and it went to the
+  // conversational surface, which holds no evidence about any company and
+  // answered `grounded: false` from nothing at all. The shape said prose and
+  // the router had no reason to look further.
+  //
+  // A binding is that reason. It means the resolver fixed a real entity from
+  // records this system wrote, and the read surface can produce exactly that
+  // company's stored evidence — as prose, which is what `company_detail`
+  // renders. Shape decides FORMAT; a binding decides WHAT THE ANSWER IS ABOUT,
+  // and the second outranks the first.
+  //
+  // The same mistake in a different place refused the turn before it: the lead
+  // projection required `output.shape === "records"`, so "tell me more about
+  // the second one" — bound, identified, sitting in the workspace's own leads
+  // — was refused as `objective_not_servable` for asking in prose.
+  const boundParts = new Set((opts.bindings ?? []).map((b) => b.part_id));
   const proseRead = request.parts.length > 0 && request.parts.every((p) =>
     p.objective === "read" && p.output.shape === "answer"
-    && p.subject.entity !== "conversation");
+    && p.subject.entity !== "conversation"
+    && !boundParts.has(p.id));
   if (proseRead) {
     return {
       ...base, kind: "converse", may_spend: false, requires_confirmation: false,

@@ -1898,6 +1898,94 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         },
       });
 
+      if (asksForUnsafeAction(message)) {
+        return await replyAndReturn(UNSAFE_REQUEST_REPLY, {
+          unsafe: true,
+          chat_brain: { route: brainRoute.kind, refused: "unsafe_request" },
+        });
+      }
+
+      // ══ A DRILL-DOWN INTO SOMETHING WE SHOWED IS A READ ════════════════
+      //
+      // ── WHY THIS IS HERE AND NOT IN THE LEAD ROUTE ────────────────────
+      //
+      // It WAS in the lead route, and that made answering from our own records
+      // conditional on the request being projectable as a MISSION. Live, on
+      // 2026-08-28 11:42, "Tell me more about the second one." bound its
+      // ordinal perfectly — `bound_referents: 1` — and then died at
+      // `lead_projection_refused:objective_not_servable`, answering "I
+      // understood the request, but I can't turn it into a run yet."
+      //
+      // The reason is exact and was invisible from inside the lead route:
+      // `leadParts` requires `output.shape === "records"`, and the model
+      // returned `answer` — because "tell me more about X" asks for PROSE.
+      // A question about a company we are already holding was refused for
+      // failing a test about whether it could be turned into a purchase.
+      //
+      // So the decision moved to where it belongs: before the router, on the
+      // BINDING rather than on the projection. A resolved `prior_result`
+      // binding means this company is one WE put on screen from OUR OWN
+      // records. Reading it back costs nothing, cannot be wrong about
+      // identity, and does not care what shape the answer was asked for.
+      //
+      // NARROW ON PURPOSE. `read` already reaches the read surface with the
+      // same bindings and renders a list properly; `source`, `compose` and
+      // `monitor` are not questions about held state. Only `research` — go and
+      // find out about this specific thing — is intercepted, and only when the
+      // thing is one we displayed.
+      //
+      // A RESOLVED `prior_result` BINDING is the whole test: this company is
+      // one WE put on screen from OUR OWN records.
+      const answerableFromRecords = resolvedBindings.some((b) =>
+        b.source.kind === "prior_result");
+      if (understood.request.objective === "research" && answerableFromRecords) {
+        const detailPlan = planRead(understood.request, resolvedBindings);
+        const detail = detailPlan.target
+          ? await executeRead(admin as unknown as ReadDb, detailPlan, workspaceId)
+          : null;
+        const who = resolvedBindings.map((b) => b.label).join(", ");
+        const body = renderReadAnswer(detailPlan, detail);
+
+        // WHAT WAS READ, AND WHAT READING CANNOT ESTABLISH. The offer to go
+        // further is a sentence, not a card: starting paid work is a separate
+        // decision and the user makes it in a separate turn.
+        const gaps = [
+          ...(detail?.gaps ?? []),
+          {
+            code: "no_fresh_research",
+            detail: `this is what's stored about ${who} — I haven't checked anything live`,
+          },
+        ];
+        return await replyAndReturn(
+          `${body}\n\nThat's everything held. Say "research ${who}" and I'll go and check it properly — that one uses credits.`,
+          {
+            outcome: {
+              version: OUTCOME_CONTRACT_VERSION, state: "PARTIALLY_SATISFIED",
+              gaps, reason: "answered_from_held_records",
+            },
+            chat_brain: {
+              route: "read", target: detailPlan.target,
+              scoped_to: detailPlan.subject?.entity_key ?? null,
+              scoped_set: detailPlan.subjects.map((x) => x.entity_key),
+              served_from: "held_records", spent: false,
+              counts: detail?.counts ?? null,
+            },
+            // THE SET STAYS POINTABLE. After this answer "them" means these
+            // companies, not the wider list two turns back — which is what
+            // makes the next pronoun resolve against ONE candidate instead of
+            // clarifying against thirty-one.
+            [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+              resolvedBindings.map((b) => ({
+                label: b.label, name: b.label,
+                domain: b.identity.canonicalDomain,
+                linkedin_url: b.identity.linkedinUrl,
+              })),
+              "lead_results",
+            ),
+          },
+        );
+      }
+
       // A BLOCKED OR UNSERVABLE REQUEST ANSWERS NOW AND STOPS. Nothing is
       // executed and nothing is bought.
       if (brainBinding.kind === "reply") {
@@ -2119,12 +2207,6 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // adds is an ANSWER — "DM everyone on this list automatically" gets a
       // refusal that explains the alternatives, instead of a silent pile of
       // drafts that technically complies.
-      if (asksForUnsafeAction(message)) {
-        return await replyAndReturn(UNSAFE_REQUEST_REPLY, {
-          unsafe: true,
-          chat_brain: { route: brainRoute.kind, refused: "unsafe_request" },
-        });
-      }
 
       // ── COMPANY BRAIN GATE, ON THE OBJECTIVE ──────────────────────────
       //
@@ -2138,17 +2220,11 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // I have?" until onboarding is finished would hide the workspace from its
       // owner.
       //
-      // AND A DRILL-DOWN INTO SOMETHING WE ALREADY SHOWED IS A READ. It is
-      // typed `research`, so the gate caught it — but the branch below answers
-      // it from stored records without reaching a provider or an ICP, and
-      // refusing that is the same "hide the workspace from its owner" failure
-      // the paragraph above rules out. The exemption is exactly as narrow as
-      // the branch it protects: a resolved `prior_result` binding, meaning a
-      // company WE put on screen from OUR OWN records.
-      const answerableFromRecords = resolvedBindings.some((b) =>
-        b.source.kind === "prior_result");
-      if (!answerableFromRecords
-          && shouldGateObjective(understood.request.objective,
+      // A drill-down into something we already showed never reaches this gate:
+      // it is answered from held records above, before the router's refusal
+      // and before this. So nothing here needs an exemption for it, and adding
+      // one would be dead code pretending to be a safeguard.
+      if (shouldGateObjective(understood.request.objective,
             { onboarding_completed: brainOnboardedForGate })) {
         return await replyAndReturn(ONBOARDING_GATE_REPLY, {
           gated: "missing_brain",
@@ -2156,6 +2232,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           chat_brain: { route: brainRoute.kind, objective: understood.request.objective },
         });
       }
+
 
       // ── WRITE IT, THEN GO AND FIND ENGAGEMENT ON IT ───────────────────
       //
@@ -2557,73 +2634,6 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // It also belongs here rather than before the surfaces: it is a
         // decision about executing THIS mission, and it now runs after the
         // safety refusal and the Company Brain gate.
-        // ── A DRILL-DOWN INTO SOMETHING WE ALREADY SHOWED IS A READ ──────
-        //
-        // "Tell me more about the second one", one turn after five saved leads
-        // were listed, produced a PAID research-mission preview: "resolve
-        // supplied companies, then resolve company identity, then enrich
-        // company, then qualify against company brain. This one uses credits."
-        // The ordinal had resolved perfectly — `bound_referents: 1`,
-        // `known_companies: ["Andy AI (W24)"]` — and the answer was still an
-        // offer to go and buy what the workspace already holds.
-        //
-        // The old gate could not catch it. It required
-        // `needed.length > 0` — signal events the request explicitly demanded
-        // — so it only ever fired for "is X hiring?" and never for the
-        // open-ended "what do we know about X?", which is the more common
-        // question and the one whose answer is most likely already stored.
-        //
-        // THE TEST IS STRUCTURAL, NOT LEXICAL. A resolved `prior_result`
-        // binding means this company is one WE put on screen from OUR OWN
-        // records. Reading it back costs nothing and cannot be wrong about
-        // identity. A `named` reference to a company we have never seen still
-        // previews a real mission, because there is nothing to read.
-        if (brainRoute.reason === "named_entity_investigation" && answerableFromRecords) {
-          const detailPlan = planRead(understood.request, resolvedBindings);
-          const detail = detailPlan.target
-            ? await executeRead(admin as unknown as ReadDb, detailPlan, workspaceId)
-            : null;
-          const who = resolvedBindings.map((b) => b.label).join(", ");
-          const body = renderReadAnswer(detailPlan, detail);
-
-          // WHAT WAS READ, AND WHAT READING CANNOT ESTABLISH. The offer to go
-          // further is a sentence, not a card: starting paid work is a
-          // separate decision and the user makes it in a separate turn.
-          const gaps = [
-            ...(detail?.gaps ?? []),
-            {
-              code: "no_fresh_research",
-              detail: `this is what's stored about ${who} — I haven't checked anything live`,
-            },
-          ];
-          return await replyAndReturn(
-            `${body}\n\nThat's everything held. Say "research ${who}" and I'll go and check it properly — that one uses credits.`,
-            {
-              outcome: {
-                version: OUTCOME_CONTRACT_VERSION, state: "PARTIALLY_SATISFIED",
-                gaps, reason: "answered_from_held_records",
-              },
-              chat_brain: {
-                route: "read", target: detailPlan.target,
-                scoped_to: detailPlan.subject?.entity_key ?? null,
-                scoped_set: detailPlan.subjects.map((x) => x.entity_key),
-                served_from: "held_records", spent: false,
-                counts: detail?.counts ?? null,
-              },
-              // THE SET STAYS POINTABLE. After this answer "them" means these
-              // companies, not the wider list two turns back.
-              [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
-                resolvedBindings.map((b) => ({
-                  label: b.label, name: b.label,
-                  domain: b.identity.canonicalDomain,
-                  linkedin_url: b.identity.linkedinUrl,
-                })),
-                "lead_results",
-              ),
-            },
-          );
-        }
-
         if (brainRoute.reason === "named_entity_investigation") {
           const known = brainRoute.lead.proposal.known_companies ?? [];
           const needed = [...new Set(understood.request.parts
