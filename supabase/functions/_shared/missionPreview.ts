@@ -30,7 +30,7 @@
 // Pure. No network, no database, no model — which is the point: a preview that
 // needed a model call would be a second interpretation of the request.
 
-import type { CapabilityPlan } from "./leadCapabilityGraph.ts";
+import { CAPABILITY_REGISTRY, type CapabilityPlan } from "./leadCapabilityGraph.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { FeasibilityReport } from "./requestFeasibility.ts";
 import type { LeadProjection } from "./projectToLeadMission.ts";
@@ -68,25 +68,25 @@ export interface MissionPreview {
 /**
  * How each capability reads to a person.
  *
- * A CLOSED TABLE, deliberately. An unknown capability falls back to its own id
- * rather than to a friendly guess: a step described in words nobody chose is
- * how "Hawk will verify top 3 companies" got said about work that did not
- * exist. Seeing a raw id in a preview is a prompt to add it here.
+ * ── THE LABEL COMES FROM THE CAPABILITY, NOT FROM HERE ─────────────────────
+ *
+ * This was a hand-written table in this file, and it immediately drifted: a
+ * live preview printed "then company brain qualification, then persistence"
+ * because two capabilities in the graph had no entry. A second vocabulary for
+ * naming the same things is a second thing to keep in sync, and the first live
+ * run found the gap.
+ *
+ * `CAPABILITY_REGISTRY` already carries `label`, documented as "Human label for
+ * the preview card". Reading it means a capability added to the graph arrives
+ * in the preview already named, by whoever defined it.
  */
-const DESCRIBES: Readonly<Record<string, string>> = Object.freeze({
-  known_company_resolution: "start from the companies you named",
-  general_company_discovery: "search for companies matching your brief",
-  startup_company_discovery: "search early-stage companies matching your brief",
-  company_identity_resolution: "confirm exactly which company each result is",
-  company_enrichment: "fill in company details",
-  hiring_verification: "check which of them are actually hiring",
-  job_discovery: "find the open roles behind the hiring signal",
-  decision_maker_discovery: "find decision-makers at the qualified companies",
-  contact_enrichment: "find contact details for those people",
-});
-
-const describe = (capability: string): string =>
-  DESCRIBES[capability] ?? capability.replace(/_/g, " ");
+const describe = (capability: string): string => {
+  const spec = (CAPABILITY_REGISTRY as Record<string, { label?: string }>)[capability];
+  const label = spec?.label;
+  // A capability with no label prints its own id rather than a friendly guess.
+  // Seeing one in a preview is a prompt to name it where it is defined.
+  return typeof label === "string" && label ? label.toLowerCase() : capability.replace(/_/g, " ");
+};
 
 /**
  * Build the preview.
