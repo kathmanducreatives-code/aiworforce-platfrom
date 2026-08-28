@@ -95,6 +95,16 @@ prior_result  Something YOU showed them earlier IN THIS CONVERSATION, referred t
 The difference matters: prior_result is resolved against what was displayed in this chat, and nothing else. If you mark a durable workspace collection as prior_result, the request is refused with a question about which company was meant. When the user is talking about their own saved data rather than something you just showed them, it is saved_set.
 A message with no earlier turn to point back to cannot contain a prior_result.
 
+CARDINALITY — how many of them the words point at. Set this on every reference.
+one   The words select a single member: an ordinal ("the second one", "the third"), a name, or a singular demonstrative ("that company", "it", "this one").
+all   The words mean the group as a whole: "those", "them", "these leads", "both of them", "the companies you just showed me", "all of them".
+A superlative over a group is still all — "which of those look strongest?" points at every company shown and asks a question ABOUT them. It does not select one; selecting is the answer, not the reference.
+Getting this wrong is expensive in one direction only: marking a group as one forces a pointless "which one did you mean?" at a user who was perfectly clear.
+
+COMPLETENESS — set output.completeness on every part.
+sample  The ordinary case. A page of results is a fine answer.
+all     The user explicitly asked for everything: "the full list", "all of them", "show me all 32", "everything you have". Also use it when they are answering an offer of more with a yes.
+
 REQUIREMENTS are evidence that must hold. Use ONLY these events: ${SIGNAL_EVENTS.join(", ")}.
 Subjects: ${SIGNAL_SUBJECTS.join(", ")}.
 Put the user's own words for a role in qualifier.role_terms, verbatim - not a normalised form. Their words decide what counts as evidence.
@@ -155,10 +165,11 @@ const RESPONSE_SCHEMA = {
                   type: "array",
                   items: {
                     type: "object", additionalProperties: false,
-                    required: ["kind", "value"],
+                    required: ["kind", "value", "cardinality"],
                     properties: {
                       kind: { type: "string", enum: ["named", "saved_set", "prior_result"] },
                       value: { type: "string" },
+                      cardinality: { type: "string", enum: ["one", "all"] },
                     },
                   },
                 },
@@ -216,10 +227,11 @@ const RESPONSE_SCHEMA = {
             },
             output: {
               type: "object", additionalProperties: false,
-              required: ["shape", "count"],
+              required: ["shape", "count", "completeness"],
               properties: {
                 shape: { type: "string", enum: ["records", "events", "answer", "artifact"] },
                 count: { type: ["number", "null"] },
+                completeness: { type: "string", enum: ["sample", "all"] },
               },
             },
             depends_on: strList,

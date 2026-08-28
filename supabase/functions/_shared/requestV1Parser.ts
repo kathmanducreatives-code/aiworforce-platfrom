@@ -114,9 +114,14 @@ function readReferences(v: unknown, repairs: string[]): RequestReference[] {
     const value = str(r?.value);
     if (!value) { repairs.push("dropped_reference_without_value"); continue; }
     const kind = str(r?.kind);
+    // ABSENT MEANS `one`. Every reference written before cardinality existed
+    // selected a single entity, and a missing field must keep meaning that —
+    // defaulting to `all` would turn an unreadable answer into a bulk action.
+    const cardinality = str(r?.cardinality) === "all" ? "all" as const : "one" as const;
     out.push({
       kind: kind === "saved_set" || kind === "prior_result" ? kind : "named",
       value,
+      cardinality,
       resolved_key: typeof r?.resolved_key === "string" ? r.resolved_key : null,
     });
   }
@@ -156,7 +161,13 @@ function readOutput(
   if (!o) { violations.push("malformed_output"); return null; }
   const shape = str(o.shape);
   if (!OUTPUT_SHAPES.has(shape)) { violations.push("malformed_output"); return null; }
-  return { shape: shape as RequestOutput["shape"], count: numOrNull(o.count) };
+  return {
+    shape: shape as RequestOutput["shape"],
+    count: numOrNull(o.count),
+    // ABSENT MEANS `sample` — the bounded page every read returned before this
+    // field existed. Only an explicit "all" widens anything.
+    completeness: str(o.completeness) === "all" ? "all" : "sample",
+  };
 }
 
 function readPart(

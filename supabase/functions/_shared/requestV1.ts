@@ -172,6 +172,38 @@ export interface RequestReference {
   kind: "named" | "saved_set" | "prior_result";
   /** The user's words, or a stable key when one is resolved. */
   value: string;
+  /**
+   * HOW MANY OF THE REFERENTS THE LANGUAGE POINTS AT.
+   *
+   * ── WHY THIS IS NOT OPTIONAL SUGAR ─────────────────────────────────────
+   *
+   * The resolver used to answer one question — WHICH ONE — and a reference
+   * that pointed at a group had no way to say so. "Which of those look
+   * strongest?", one turn after five leads were listed by name, resolved
+   * against five candidates, found nothing selecting between them, and
+   * returned `ambiguous_referent`: "I'm not sure which company \"those
+   * leads\" refers to. Which one?" The user had not asked about one company.
+   * They had asked about the five they were just shown.
+   *
+   * The failure was not the wording of the question and could not be fixed by
+   * rewording it. `selectEntity` returned `PriorResultEntity | null` — the
+   * TYPE could not express a set — so every plural follow-up was a
+   * disambiguation prompt, forever, for every phrasing.
+   *
+   *   one   the language selects a single member: an ordinal ("the second
+   *         one"), a name, or a singular demonstrative ("that company").
+   *   all   the language refers to the group as a whole: "those", "them",
+   *         "these leads", "the companies you just showed me".
+   *
+   * This is a judgement about LANGUAGE, which is why the model makes it. It
+   * still never decides which records those are: `resolveReferents` binds
+   * every member of the presented set deterministically, from what this
+   * system persisted.
+   *
+   * Absent means `one` — every reference written before this field existed
+   * selected a single entity, and that is what they continue to mean.
+   */
+  cardinality?: "one" | "all";
   /** Set once a referent is resolved to a real record. */
   resolved_key?: string | null;
 }
@@ -226,6 +258,21 @@ export interface RequestRequirement {
 export interface RequestOutput {
   shape: "records" | "events" | "answer" | "artifact";
   count: number | null;
+  /**
+   * WHETHER A SAMPLE WILL DO, OR THE USER ASKED FOR EVERYTHING.
+   *
+   * `count: null` conflated two different asks — "just show me my leads" and
+   * "show me the full list" — and both got the same default page. Live, the
+   * read answered "32 leads saved" with five names and the trailer "(showing
+   * the most recent — ask for more if you need the full list)"; the user said
+   * "yes show the full list" and received a byte-identical reply. The surface
+   * had advertised an expansion it had no way to represent, let alone perform.
+   *
+   * Only the read surface consumes this. The lead projection reads `count`
+   * and is untouched — a sourcing mission asks for a number of results, not
+   * for a page of held rows.
+   */
+  completeness?: "sample" | "all";
 }
 
 /**

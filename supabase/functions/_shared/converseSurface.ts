@@ -32,13 +32,23 @@
 //
 // Pure prompt construction. The model call is the caller's.
 
+import { type GroundedFact, renderFacts } from "./groundedFacts.ts";
+
 export const CONVERSE_SURFACE_VERSION = "converse-surface-v1" as const;
 
 export interface ConverseContext {
   /** The rendered Company Brain block, or null when onboarding is incomplete. */
   workspaceContext: string | null;
-  /** Short factual lines about what the workspace currently holds. */
-  facts?: string[];
+  /**
+   * What this answer may state, each fact carrying the scope it is true in.
+   *
+   * Strings were not enough. Three conversation-scoped counters under a
+   * heading reading `workspace_facts` produced "I don't have any leads or
+   * prospects in the workspace yet" one turn after 32 were named — the numbers
+   * were right and the scope was invented. `GroundedFact` makes the scope part
+   * of the fact, so a surface cannot hand one over without it.
+   */
+  facts?: readonly GroundedFact[];
 }
 
 /**
@@ -62,7 +72,8 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
     "- Never state a number, a name, a count or a status that is not in those facts.",
     "- If you do not have something, say so plainly and say what would get it. Do not guess and do not hedge with vague filler.",
     "- Never imply you just looked something up, ran anything, or checked live data. Nothing was fetched to answer this.",
-    "- The facts are NOT an inventory of the workspace. They say what they say and nothing more. Never turn a fact you were not given into an absence — do not say the workspace is empty, that there are no leads, signals or companies, or that anything is \"starting from zero\". If you were not told a count, you do not know it; say you would have to look.",
+    "- The facts below are NOT an inventory of the workspace, and they carry the scope each one is true in. Respect it: a count of what this conversation produced says nothing about what the workspace holds.",
+    "- If you were not told a count, you do not know it; say you would have to look. Never turn a fact you were not given into an absence.",
     "- If an earlier turn in this conversation reported something, that report stands. Do not contradict it, and do not restate it as though you had checked.",
     "- You may reason, compare, recommend and explain your thinking. That is what this conversation is for.",
     "",
@@ -79,12 +90,10 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
     );
   }
 
-  if (ctx.facts && ctx.facts.length > 0) {
-    // NAMED FOR WHAT THEY ARE. Called `workspace_facts`, three
-    // conversation-scoped counters read as a census, and a zero in one of them
-    // became "the workspace is empty" in the answer.
-    parts.push("", "<facts_you_were_given>", ...ctx.facts, "</facts_you_were_given>");
-  }
+  // ALWAYS RENDERED, EVEN WHEN EMPTY. "No facts" is itself something the model
+  // must be told, because the alternative reading — silence means nothing is
+  // there — is the exact error this block exists to prevent.
+  parts.push("", renderFacts(ctx.facts ?? []));
 
   return parts.join("\n");
 }

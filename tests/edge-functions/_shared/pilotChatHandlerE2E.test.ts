@@ -158,8 +158,8 @@ Deno.test("11. the read persists what it displayed, so a follow-up can point at 
   const i = BLOCK.indexOf('brainBinding.kind === "read"');
   assert(i > 0);
   const read = BLOCK.slice(i, BLOCK.indexOf("brainBinding.kind === \"monitor\"", i));
-  assert(read.includes("presentedCompanies(result)"),
-    "referents must be built from the renderer's own list");
+  assert(read.includes("presentedCompanies(result, displayLimitFor(plan))"),
+    "referents must be built from the renderer's own list, at its own width");
   assert(read.includes("PRESENTED_REFERENTS_KEY"),
     "and persisted on the message that displayed them");
 });
@@ -209,9 +209,22 @@ Deno.test("15. converse is not handed conversation counts as workspace state", (
   // LIVE: `Leads saved in this conversation: 0.` under a heading that read
   // `workspace_facts` became "I don't have any leads or prospects in the
   // workspace yet. We're starting from zero." — one turn after 32 were shown.
+  //
+  // A disclaimer glued onto the string would have fixed this one sentence. The
+  // scope is now part of the fact's TYPE, so no surface can hand one over
+  // without saying where it is true.
   const i = BLOCK.indexOf('brainRoute.kind === "converse"');
   const facts = BLOCK.slice(BLOCK.indexOf("const facts = [", i),
     BLOCK.indexOf("];", BLOCK.indexOf("const facts = [", i)));
-  assert(/NOT the number of leads saved in the workspace/.test(facts),
-    "a conversation-scoped count must say it is not a workspace count");
+  assert(facts.includes("conversationFact("),
+    "counts of what this conversation produced must be conversation-scoped");
+  assert(facts.includes("workspaceFact("),
+    "and a workspace-wide fact must be marked as one");
+
+  // AND A BARE STRING IS NOT CONSTRUCTIBLE. The type is the guarantee — a
+  // disclaimer inside the sentence would have fixed only this sentence.
+  const surface = Deno.readTextFileSync(new URL(
+    "../../../supabase/functions/_shared/converseSurface.ts", import.meta.url));
+  assert(/facts\?:\s*readonly GroundedFact\[\]/.test(surface),
+    "the converse surface must accept scoped facts, never bare strings");
 });

@@ -52,10 +52,14 @@ import {
 import {
   converseSystemPrompt, CONVERSE_UNAVAILABLE,
 } from "../_shared/converseSurface.ts";
+import {
+  conversationFact, workspaceFact,
+} from "../_shared/groundedFacts.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import { bindRoute, type BindingOutcome } from "../_shared/chatBrainBinding.ts";
 import {
   planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
+  displayLimitFor, readOutcome,
 } from "../_shared/readSurface.ts";
 import {
   resolveReferents, type ResolvedReferentBinding,
@@ -1695,6 +1699,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
    * subject, which is most of them.
    */
   let resolvedBindings: ResolvedReferentBinding[] = [];
+  /** Members of a set reference that carried no strong identifier. */
+  let partialReferents: string[] = [];
   /**
    * WHAT EVERY ASSISTANT MESSAGE CARRIES.
    *
@@ -1804,6 +1810,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // read by anything on this path.
       const resolution = resolveReferents(understood.request, referents?.source ?? null);
       resolvedBindings = resolution.bindings;
+      // A SET THAT ONLY PARTLY IDENTIFIED IS A GAP, NOT A FAILURE. Four of the
+      // five companies bound; the answer covers four and says so. Declared
+      // here so every surface downstream reports it the same way.
+      partialReferents = resolution.partial.flatMap((x) => x.labels);
 
       if (resolution.failures.length > 0) {
         // ── ASK, NEVER GUESS ─────────────────────────────────────────────
@@ -1966,7 +1976,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // of the rows that could filter or slice differently. A read answer
         // lists only the watched half and only the first few of those; "the
         // second company" indexes that list, not the query behind it.
-        const shown = presentedCompanies(result);
+        const shown = presentedCompanies(result, displayLimitFor(plan));
         // ── A SCOPED ANSWER IS ITSELF A REFERENT ─────────────────────────
         //
         // After "what about the second company?" the thing on screen is ONE
@@ -1975,6 +1985,12 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // the follow-up would ask which of three the user meant — having just
         // been told about exactly one. The narrower, more recent set is the
         // honest answer to what "them" now refers to.
+        //
+        // A SCOPED SET IS ALSO A REFERENT, AND KEEPS ITS ORDER. "Which of
+        // those look strongest?" narrows the conversation to those five; "the
+        // second one" after it must still mean the second of those five, so
+        // the set is re-presented in the order it was just displayed rather
+        // than left pointing at the previous, wider list.
         const scoped = plan.target === "company_detail" && plan.subject
           ? [{
             label: plan.subject.label,
@@ -1989,7 +2005,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           metadata: {
             chat_brain: { route: "read", target: plan.target,
               scoped_to: plan.subject?.entity_key ?? null,
+              scoped_set: plan.subjects.map((x) => x.entity_key),
               counts: result?.counts ?? null, reason: brainRoute.reason },
+            outcome: readOutcome(plan, result, partialReferents),
             ...(scoped.length > 0
               ? {
                 [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
@@ -2119,7 +2137,18 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // `read`, `converse` and `monitor` stay ungated: refusing "what leads do
       // I have?" until onboarding is finished would hide the workspace from its
       // owner.
-      if (shouldGateObjective(understood.request.objective,
+      //
+      // AND A DRILL-DOWN INTO SOMETHING WE ALREADY SHOWED IS A READ. It is
+      // typed `research`, so the gate caught it — but the branch below answers
+      // it from stored records without reaching a provider or an ICP, and
+      // refusing that is the same "hide the workspace from its owner" failure
+      // the paragraph above rules out. The exemption is exactly as narrow as
+      // the branch it protects: a resolved `prior_result` binding, meaning a
+      // company WE put on screen from OUR OWN records.
+      const answerableFromRecords = resolvedBindings.some((b) =>
+        b.source.kind === "prior_result");
+      if (!answerableFromRecords
+          && shouldGateObjective(understood.request.objective,
             { onboarding_completed: brainOnboardedForGate })) {
         return await replyAndReturn(ONBOARDING_GATE_REPLY, {
           gated: "missing_brain",
@@ -2175,17 +2204,23 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // counts this turn already has in hand — no new queries, and nothing that
       // could be mistaken for having looked something up.
       if (brainRoute.kind === "converse") {
-        // ── SCOPED, BECAUSE THE MODEL READ THEM AS WORKSPACE-WIDE ──────
+        // ── EVERY FACT CARRIES THE SCOPE IT IS TRUE IN ─────────────────
         //
-        // These are counts of what THIS CONVERSATION produced, and they were
-        // handed over under a heading that said `workspace_facts`. Live, one
-        // turn after being told the workspace holds 32 leads, converse said
-        // "I don't have any leads or prospects in the workspace yet. We're
-        // starting from zero." The numbers were right; the scope was invented.
+        // Two of these count what THIS CONVERSATION produced and one is
+        // workspace-wide. Handed over as bare strings under a heading reading
+        // `workspace_facts`, the zero in the first became "I don't have any
+        // leads or prospects in the workspace yet. We're starting from zero."
+        // — one turn after the read surface named 32 of them.
         const facts = [
-          `Leads this conversation has produced so far: ${memory.lead_candidates.length} (this is NOT the number of leads saved in the workspace, which you have not been told).`,
-          `Outreach drafts this conversation has produced so far: ${memory.outreach_drafts.length}.`,
-          `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
+          conversationFact(
+            `Leads this conversation has produced so far: ${memory.lead_candidates.length}.`,
+            "conversation_memory.lead_candidates"),
+          conversationFact(
+            `Outreach drafts this conversation has produced so far: ${memory.outreach_drafts.length}.`,
+            "conversation_memory.outreach_drafts"),
+          workspaceFact(
+            `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
+            "company_brain.onboarded"),
         ];
         const ai = await generateText({
           taskType: "pilot_chat",
@@ -2522,6 +2557,73 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // It also belongs here rather than before the surfaces: it is a
         // decision about executing THIS mission, and it now runs after the
         // safety refusal and the Company Brain gate.
+        // ── A DRILL-DOWN INTO SOMETHING WE ALREADY SHOWED IS A READ ──────
+        //
+        // "Tell me more about the second one", one turn after five saved leads
+        // were listed, produced a PAID research-mission preview: "resolve
+        // supplied companies, then resolve company identity, then enrich
+        // company, then qualify against company brain. This one uses credits."
+        // The ordinal had resolved perfectly — `bound_referents: 1`,
+        // `known_companies: ["Andy AI (W24)"]` — and the answer was still an
+        // offer to go and buy what the workspace already holds.
+        //
+        // The old gate could not catch it. It required
+        // `needed.length > 0` — signal events the request explicitly demanded
+        // — so it only ever fired for "is X hiring?" and never for the
+        // open-ended "what do we know about X?", which is the more common
+        // question and the one whose answer is most likely already stored.
+        //
+        // THE TEST IS STRUCTURAL, NOT LEXICAL. A resolved `prior_result`
+        // binding means this company is one WE put on screen from OUR OWN
+        // records. Reading it back costs nothing and cannot be wrong about
+        // identity. A `named` reference to a company we have never seen still
+        // previews a real mission, because there is nothing to read.
+        if (brainRoute.reason === "named_entity_investigation" && answerableFromRecords) {
+          const detailPlan = planRead(understood.request, resolvedBindings);
+          const detail = detailPlan.target
+            ? await executeRead(admin as unknown as ReadDb, detailPlan, workspaceId)
+            : null;
+          const who = resolvedBindings.map((b) => b.label).join(", ");
+          const body = renderReadAnswer(detailPlan, detail);
+
+          // WHAT WAS READ, AND WHAT READING CANNOT ESTABLISH. The offer to go
+          // further is a sentence, not a card: starting paid work is a
+          // separate decision and the user makes it in a separate turn.
+          const gaps = [
+            ...(detail?.gaps ?? []),
+            {
+              code: "no_fresh_research",
+              detail: `this is what's stored about ${who} — I haven't checked anything live`,
+            },
+          ];
+          return await replyAndReturn(
+            `${body}\n\nThat's everything held. Say "research ${who}" and I'll go and check it properly — that one uses credits.`,
+            {
+              outcome: {
+                version: OUTCOME_CONTRACT_VERSION, state: "PARTIALLY_SATISFIED",
+                gaps, reason: "answered_from_held_records",
+              },
+              chat_brain: {
+                route: "read", target: detailPlan.target,
+                scoped_to: detailPlan.subject?.entity_key ?? null,
+                scoped_set: detailPlan.subjects.map((x) => x.entity_key),
+                served_from: "held_records", spent: false,
+                counts: detail?.counts ?? null,
+              },
+              // THE SET STAYS POINTABLE. After this answer "them" means these
+              // companies, not the wider list two turns back.
+              [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(
+                resolvedBindings.map((b) => ({
+                  label: b.label, name: b.label,
+                  domain: b.identity.canonicalDomain,
+                  linkedin_url: b.identity.linkedinUrl,
+                })),
+                "lead_results",
+              ),
+            },
+          );
+        }
+
         if (brainRoute.reason === "named_entity_investigation") {
           const known = brainRoute.lead.proposal.known_companies ?? [];
           const needed = [...new Set(understood.request.parts
@@ -3605,7 +3707,32 @@ function failureMessageFor(e: unknown): string {
     "nothing was charged. Please try again.";
 }
 
-Deno.serve(async (req) => {
+/**
+ * The whole turn, as a function of a request.
+ *
+ * ── WHY THIS IS EXPORTED ───────────────────────────────────────────────────
+ *
+ * Everything that reached production broken was a property of THIS function
+ * and not of any module it calls: a `const` declared below the block that
+ * closed over it, a confirmation gate deleted from the route, a held-evidence
+ * check guarded on a condition that could never be true, and an argument the
+ * type checker was happy to see omitted. Source-shape tests caught the shapes
+ * they were told to look for and nothing else.
+ *
+ * So the handler is importable, and `tests/edge-functions/_shared/
+ * pilotChatConversation.test.ts` drives real multi-turn conversations through
+ * it with the NETWORK stubbed and nothing else — the resolver, the router, the
+ * read surface, the renderer and the persistence all execute.
+ */
+export { handlePilotChat };
+
+// ── THE SERVER STARTS UNLESS A TEST IS IMPORTING THIS MODULE ───────────────
+//
+// `import.meta.main` would be the idiomatic guard and is not used on purpose:
+// if the edge runtime ever loaded this file as a dependency rather than an
+// entry point, pilot-chat would silently serve nothing. An explicit opt-out
+// variable that production never sets cannot fail that way.
+if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve(async (req) => {
   const fail: FailureContext = {};
   try {
     return await handlePilotChat(req, fail);

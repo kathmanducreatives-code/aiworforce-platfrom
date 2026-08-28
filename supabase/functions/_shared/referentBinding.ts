@@ -104,6 +104,15 @@ export interface ResolvedRequest {
   bindings: ResolvedReferentBinding[];
   /** Why a referent could not be bound. Empty when every one resolved. */
   failures: Array<{ part_id: string; reason: ResolutionFailure; question: string }>;
+  /**
+   * MEMBERS OF A SET REFERENCE THAT COULD NOT BE IDENTIFIED.
+   *
+   * Not a failure — the request is answerable for the rest — but not nothing
+   * either. A read over "those five" that could only identify four has told
+   * the user about four, and saying so is the difference between a partial
+   * answer and a quietly wrong one. The caller declares it as a gap.
+   */
+  partial: Array<{ part_id: string; labels: string[] }>;
 }
 
 const ORDINALS: Readonly<Record<string, number>> = Object.freeze({
@@ -135,21 +144,43 @@ const ORDINALS: Readonly<Record<string, number>> = Object.freeze({
  */
 const pointsBack = (kind: string) => kind === "prior_result";
 
-/** Pick the entity an ordinal or a name selects, or say why none could be. */
-function selectEntity(
-  value: string, entities: readonly PriorResultEntity[],
-): { entity: PriorResultEntity | null; reason: ResolutionFailure | null } {
-  if (entities.length === 0) return { entity: null, reason: "no_prior_results" };
+/**
+ * Which entities a reference selects, or why none could be.
+ *
+ * ── WHY THIS RETURNS A LIST ────────────────────────────────────────────────
+ *
+ * It returned `PriorResultEntity | null`, and that type is the bug. "Which of
+ * those look strongest?", one turn after five leads were named on screen,
+ * arrived here with five candidates, found no ordinal and no name, fell to the
+ * last line — more than one, so ambiguous — and asked the user which single
+ * company they meant. They had not asked about one company. The shape of the
+ * return value made the correct answer unrepresentable, so no amount of
+ * matching on the sentence could have produced it.
+ *
+ * `cardinality` says which question is being asked. `one` is everything this
+ * function did before, unchanged. `all` selects the whole presented set, in
+ * the order it was presented.
+ */
+function selectEntities(
+  ref: { value: string; cardinality?: "one" | "all" },
+  entities: readonly PriorResultEntity[],
+): { entities: PriorResultEntity[]; reason: ResolutionFailure | null } {
+  if (entities.length === 0) return { entities: [], reason: "no_prior_results" };
+  const value = ref.value;
 
-  // AN ORDINAL IS EXACT. "the second company" is a position in what the user
-  // was shown, and getting it wrong acts on a company they did not point at.
+  // ── AN ORDINAL IS EXACT, AND IT OUTRANKS CARDINALITY ────────────────────
+  //
+  // "the second one" is a position in what the user was shown, and getting it
+  // wrong acts on a company they did not point at. It is checked first so that
+  // a reference the model mislabelled `all` still resolves to the one entity
+  // its own words name — the words are more specific than the label.
   const words = value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   for (const w of words) {
     const n = ORDINALS[w];
     if (n) {
       return n <= entities.length
-        ? { entity: entities[n - 1], reason: null }
-        : { entity: null, reason: "ordinal_out_of_range" };
+        ? { entities: [entities[n - 1]], reason: null }
+        : { entities: [], reason: "ordinal_out_of_range" };
     }
   }
 
@@ -158,13 +189,20 @@ function selectEntity(
   const norm = (s: string) => s.trim().toLowerCase();
   const named = entities.filter((e) =>
     norm(e.label) === norm(value) || norm(e.name ?? "") === norm(value));
-  if (named.length === 1) return { entity: named[0], reason: null };
-  if (named.length > 1) return { entity: null, reason: "ambiguous_referent" };
+  if (named.length === 1) return { entities: [named[0]], reason: null };
+  if (named.length > 1) return { entities: [], reason: "ambiguous_referent" };
 
-  // A BARE PRONOUN. One prior result is unambiguous; more than one is not, and
-  // guessing which would spend against the wrong company.
-  if (entities.length === 1) return { entity: entities[0], reason: null };
-  return { entity: null, reason: "ambiguous_referent" };
+  // ── THE GROUP, WHEN THE GROUP IS WHAT WAS MEANT ─────────────────────────
+  //
+  // Every entity presented, in presentation order. Position is preserved by
+  // the caller, so "those" and "the second of those" agree about which is
+  // second.
+  if (ref.cardinality === "all") return { entities: [...entities], reason: null };
+
+  // A BARE SINGULAR PRONOUN. One prior result is unambiguous; more than one is
+  // not, and guessing which would spend against the wrong company.
+  if (entities.length === 1) return { entities: [entities[0]], reason: null };
+  return { entities: [], reason: "ambiguous_referent" };
 }
 
 /**
@@ -178,14 +216,16 @@ export function resolveReferents(
 ): ResolvedRequest {
   const bindings: ResolvedReferentBinding[] = [];
   const failures: ResolvedRequest["failures"] = [];
+  const unresolvable: ResolvedRequest["partial"] = [];
   const entities = source?.entities ?? [];
 
   for (const part of request.parts as RequestPart[]) {
     for (const ref of part.subject.references ?? []) {
       if (!pointsBack(ref.kind)) continue;
 
-      const { entity, reason } = selectEntity(ref.value, entities);
-      if (!entity) {
+      const selected = selectEntities(ref, entities);
+      if (selected.entities.length === 0) {
+        const reason = selected.reason;
         failures.push({
           part_id: part.id,
           reason: reason ?? "unknown_referent",
@@ -198,51 +238,84 @@ export function resolveReferents(
         continue;
       }
 
-      const identity = resolveCompanyIdentity({
-        name: entity.name ?? entity.label,
-        domain: entity.domain ?? null,
-        website_url: entity.website_url ?? null,
-        linkedin_url: entity.linkedin_url ?? null,
-        location: entity.location ?? null,
-      });
+      // ── ONE BINDING PER ENTITY, ALL UNDER THE SAME PART ─────────────────
+      //
+      // A set reference produces a set of bindings rather than a new plural
+      // binding type. Everything downstream that reads ONE binding for a part
+      // keeps working on the single-entity case unchanged, and a surface that
+      // can act on a set reads them all — which is what a read of "those five
+      // companies" needs and what a mission must never silently receive.
+      //
+      // A WEAK ENTITY DOES NOT SINK THE WHOLE SET. When "those" covers five
+      // companies and one of them has no strong identifier, refusing all five
+      // answers nothing; the set binds the four it can identify and the gap is
+      // declared. A `one` reference still fails, because there the
+      // unidentifiable entity IS the request.
+      const identified: ResolvedReferentBinding[] = [];
+      const unidentifiable: PriorResultEntity[] = [];
+      for (const entity of selected.entities) {
+        const identity = resolveCompanyIdentity({
+          name: entity.name ?? entity.label,
+          domain: entity.domain ?? null,
+          website_url: entity.website_url ?? null,
+          linkedin_url: entity.linkedin_url ?? null,
+          location: entity.location ?? null,
+        });
 
-      // AN ENTITY WITH NO STRONG IDENTIFIER IS NOT ACTIONABLE. `name_location`
-      // and `none` are the weak kinds: acting on them is acting on a name, and
-      // a name is what `known_company_resolution` would have had to resolve
-      // anyway. Binding one would claim a certainty we do not have.
-      const WEAK: ReadonlySet<CompanyIdentity["dedupeKeyKind"]> =
-        new Set(["none", "name_location"]);
-      if (!identity.dedupeKey || WEAK.has(identity.dedupeKeyKind)) {
+        // AN ENTITY WITH NO STRONG IDENTIFIER IS NOT ACTIONABLE.
+        // `name_location` and `none` are the weak kinds: acting on them is
+        // acting on a name, and a name is what `known_company_resolution`
+        // would have had to resolve anyway. Binding one would claim a
+        // certainty we do not have.
+        const WEAK: ReadonlySet<CompanyIdentity["dedupeKeyKind"]> =
+          new Set(["none", "name_location"]);
+        if (!identity.dedupeKey || WEAK.has(identity.dedupeKeyKind)) {
+          unidentifiable.push(entity);
+          continue;
+        }
+
+        identified.push({
+          version: REFERENT_BINDING_VERSION,
+          part_id: part.id,
+          entity_type: "company",
+          entity_key: identity.dedupeKey,
+          label: entity.label,
+          identity,
+          source: {
+            message_id: source?.message_id ?? null,
+            // POSITION IN WHAT WAS SHOWN, not position in the selection. "the
+            // second of those" and "those" must agree about which is second.
+            result_index: entities.indexOf(entity),
+            // Only `prior_result` reaches here now; a saved set is never bound
+            // from chat referents. The union keeps `saved_set` for a future
+            // surface-side binding, which would carry a different provenance.
+            kind: "prior_result",
+          },
+          // A weak dedupe kind never reaches here, so anything bound is a
+          // match on domain, LinkedIn id or LinkedIn URL.
+          status: "verified_match",
+        });
+      }
+
+      if (identified.length === 0) {
+        const first = unidentifiable[0];
         failures.push({
           part_id: part.id, reason: "unidentifiable_entity",
-          question: `I don't have enough to identify ${entity.label} exactly — can you give me its website or LinkedIn?`,
+          question: `I don't have enough to identify ${first.label} exactly — can you give me its website or LinkedIn?`,
         });
         continue;
       }
-
-      bindings.push({
-        version: REFERENT_BINDING_VERSION,
-        part_id: part.id,
-        entity_type: "company",
-        entity_key: identity.dedupeKey,
-        label: entity.label,
-        identity,
-        source: {
-          message_id: source?.message_id ?? null,
-          result_index: entities.indexOf(entity),
-          // Only `prior_result` reaches here now; a saved set is never bound
-          // from chat referents. The union keeps `saved_set` for a future
-          // surface-side binding, which would carry a different provenance.
-          kind: "prior_result",
-        },
-        // A weak dedupe kind never reaches here, so anything bound is a match
-        // on domain, LinkedIn id or LinkedIn URL.
-        status: "verified_match",
-      });
+      bindings.push(...identified);
+      if (unidentifiable.length > 0) {
+        unresolvable.push({
+          part_id: part.id,
+          labels: unidentifiable.map((e) => e.label),
+        });
+      }
     }
   }
 
-  return { request, bindings, failures };
+  return { request, bindings, failures, partial: unresolvable };
 }
 
 /**

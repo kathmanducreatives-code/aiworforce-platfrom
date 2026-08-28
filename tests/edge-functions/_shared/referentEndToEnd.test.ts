@@ -612,8 +612,11 @@ Deno.test("29. both surfaces that display a company list persist referents", asy
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
   assert(pilot.includes("PRESENTED_REFERENTS_KEY"));
   // The read answer persists exactly what the RENDERER listed.
-  assert(pilot.includes("presentedCompanies(result)"),
-    "persistence must read the renderer's own list, not re-derive one");
+  // The read answer persists exactly what the RENDERER listed — the same call
+  // with the same display limit, so a widened list ("show the full list") is
+  // persisted at the width it was shown rather than at the old fixed five.
+  assert(pilot.includes("presentedCompanies(result, displayLimitFor(plan))"),
+    "persistence must read the renderer's own list, at the renderer's own width");
 });
 
 // ══ 9. THE PERSON PATH, ON A COMPANY BINDING ═══════════════════════════════

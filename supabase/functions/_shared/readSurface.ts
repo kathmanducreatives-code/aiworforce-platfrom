@@ -31,6 +31,9 @@
 
 import type { RequestV1, RequestPart } from "./requestV1.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
+import {
+  type Outcome, satisfied, partiallySatisfied, unsupported, failed,
+} from "./outcomeContract.ts";
 import { canonicalLinkedinCompanyUrl } from "./companyIdentity.ts";
 import { canonicalSubjectKey } from "./signalSubject.ts";
 import type { DeclaredGap } from "./outcomeContract.ts";
@@ -100,6 +103,27 @@ export interface ReadPlan {
    * the identical queries it reached before this field existed.
    */
   subject: ReadSubject | null;
+  /**
+   * EVERY COMPANY THIS READ IS SCOPED TO.
+   *
+   * `subject` is the single-company case and is exactly `subjects[0]` when
+   * there is one and `null` otherwise — both are derived here, in one place,
+   * so they cannot disagree. A read scoped to several companies ("which of
+   * those look strongest?" after five were listed) is a different query from a
+   * read scoped to one, and pretending it was the first of them would answer a
+   * question the user did not ask.
+   */
+  subjects: ReadSubject[];
+  /**
+   * Did the REQUEST set this limit, or is it the default page?
+   *
+   * The renderer needs the difference. A default page shows a short sample
+   * because a chat answer listing ten companies is worse than one listing
+   * five; a limit the user asked for must be shown in full, or asking was
+   * pointless. Deriving it from `limit !== DEFAULT_LIMIT` would be wrong the
+   * moment someone asks for exactly ten.
+   */
+  explicit_limit: boolean;
   /** Why no target could be chosen. Null when one was. */
   unsupported: string | null;
 }
@@ -138,6 +162,14 @@ export function readSubjectFor(
 const DEFAULT_LIMIT = 10;
 
 /**
+ * The most rows any single read returns.
+ *
+ * Named because the renderer needs it too: an answer that has hit the ceiling
+ * must not offer to show more, and an answer that has not must offer honestly.
+ */
+export const MAX_READ_ROWS = 50;
+
+/**
  * What would this request read?
  *
  * Pure and total: an entity with no read surface yields `target: null` and a
@@ -160,6 +192,8 @@ export function planRead(
     version: READ_SURFACE_VERSION, limit: DEFAULT_LIMIT,
     since_days: null as number | null, unsupported: null as string | null,
     subject: null as ReadSubject | null,
+    subjects: [] as ReadSubject[],
+    explicit_limit: false,
   };
   if (!part) return { ...base, target: null, unsupported: "no_part" };
 
@@ -173,16 +207,41 @@ export function planRead(
   //
   // This changes what is READ, never what may be spent. There is still no
   // provider on this path to reach.
-  const subject = readSubjectFor(
-    bindings.find((b) => b.part_id === part.id && b.entity_type === "company"));
+  //
+  // EVERY binding for this part, not the first one. `bindings.find(...)` read
+  // exactly one company, so a set reference that resolved to five would have
+  // silently answered about whichever happened to be first — the same class of
+  // error as answering a scoped question with a workspace-wide count, and
+  // harder to notice because the answer looks right.
+  const subjects = bindings
+    .filter((b) => b.part_id === part.id && b.entity_type === "company")
+    .map((b) => readSubjectFor(b))
+    .filter((x): x is ReadSubject => x !== null);
+  // `subject` means ONE company and keeps meaning that. Derived here so the
+  // two fields cannot drift.
+  const subject = subjects.length === 1 ? subjects[0] : null;
+  const scoped = subjects.length > 0;
 
   // A stated recency is the only filter a read honours today. Everything else
   // the request carries is reported by the caller rather than silently ignored.
   const recency = (part.requirements ?? [])
     .map((r) => r.recency_days).find((d) => typeof d === "number" && d > 0) ?? null;
 
+  // ── A STATED NUMBER, THEN "ALL", THEN THE DEFAULT PAGE ──────────────────
+  //
+  // `completeness: "all"` is the user asking for the whole list, and the read
+  // now honours it up to the same 50-row ceiling a stated count is capped at.
+  // Before this, "show me the full list" was indistinguishable from the
+  // question that preceded it and returned the identical page — the surface
+  // offered more and then had no way to give it.
+  const askedFor = (part.output.count && part.output.count > 0)
+    || part.output.completeness === "all";
   const limit = part.output.count && part.output.count > 0
-    ? Math.min(part.output.count, 50) : DEFAULT_LIMIT;
+    ? Math.min(part.output.count, MAX_READ_ROWS)
+    : part.output.completeness === "all"
+    ? MAX_READ_ROWS
+    : DEFAULT_LIMIT;
+  base.explicit_limit = askedFor;
 
   // ── A READ THAT ASKS FOR PROSE IS A BRIEF ────────────────────────────────
   //
@@ -208,22 +267,31 @@ export function planRead(
   // the session and the workspace as a whole; every other entity is a question
   // about a specific thing, and the router sends those to the grounded
   // conversational surface instead.
-  if (part.output.shape === "answer" && !subject
+  if (part.output.shape === "answer" && !scoped
       && part.subject.entity === "conversation") {
     return { ...base, target: "brief", limit, since_days: recency };
   }
 
+  // ONE COMPANY IS A DETAIL VIEW; SEVERAL ARE A LIST. Both are scoped, and the
+  // difference is not cosmetic: a detail view reads one company's evidence,
+  // and a scoped list reads the members the user pointed at.
   switch (part.subject.entity) {
     case "signal":
-      // A scoped signal question is still about this company's evidence.
-      return subject
-        ? { ...base, target: "company_detail", limit, since_days: recency, subject }
+      // A scoped signal question is still about those companies' evidence.
+      if (subject) {
+        return { ...base, target: "company_detail", limit, since_days: recency,
+          subject, subjects };
+      }
+      return scoped
+        ? { ...base, target: "companies", limit, since_days: recency, subjects }
         : { ...base, target: "signals", limit, since_days: recency };
     case "company":
     case "person":
-      return subject
-        ? { ...base, target: "company_detail", limit, since_days: recency, subject }
-        : { ...base, target: "companies", limit, since_days: recency };
+      if (subject) {
+        return { ...base, target: "company_detail", limit, since_days: recency,
+          subject, subjects };
+      }
+      return { ...base, target: "companies", limit, since_days: recency, subjects };
     case "conversation":
       return { ...base, target: "runs", limit, since_days: recency };
     case "approval":
@@ -407,6 +475,25 @@ export async function executeRead(
       // The embed carries the identity `resolveCompanyIdentity` needs: name,
       // domain and LinkedIn URL. Naming them makes the answer better and makes
       // the next turn answerable.
+      // ── SCOPED TO WHAT THE USER POINTED AT, WHEN THEY POINTED ────────
+      //
+      // "Which of those look strongest?" is a question about the five
+      // companies that were just listed, not about all 32. The scope comes
+      // from the BINDINGS, so it is exactly the set that was displayed and
+      // nothing the model could widen.
+      //
+      // Filtering happens in memory rather than in the query on purpose: the
+      // rows are matched on `accounts.domain` and `accounts.linkedin_url`
+      // through an embed, which PostgREST cannot filter with an `or` across
+      // two embedded columns without changing the join semantics. The page is
+      // bounded either way.
+      const scopeKeys = new Set(
+        plan.subjects.flatMap((sub) => [
+          sub.domain ? canonicalSubjectKey(sub.domain) : null,
+          sub.linkedin_url ? canonicalSubjectKey(sub.linkedin_url) : null,
+        ]).filter((k): k is string => !!k));
+      const scoped = scopeKeys.size > 0;
+
       let lq = db.from("lead_candidates")
         .select(
           "id, status, fit_score, priority, reason, created_at, " +
@@ -414,24 +501,50 @@ export async function executeRead(
           { count: "exact" })
         .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
-        .limit(plan.limit);
+        // A SCOPED READ MUST SEE FAR ENOUGH BACK TO FIND ITS MEMBERS. The
+        // companies pointed at are not necessarily the newest rows, so the
+        // page is widened before the in-memory filter narrows it.
+        .limit(scoped ? 200 : plan.limit);
       if (sinceIso) lq = lq.gte("created_at", sinceIso);
       const { data: leads, count: leadCount } = await lq;
       const { data: watched, count: watchedCount } = await db
         .from("monitoring_subjects")
         .select("label, identifier, signals, enabled, last_run_at", { count: "exact" })
         .eq("workspace_id", workspaceId).eq("enabled", true).limit(plan.limit);
-      const l = (leads ?? []) as Array<Record<string, unknown>>;
-      const w = (watched ?? []) as Array<Record<string, unknown>>;
+      let l = (leads ?? []) as Array<Record<string, unknown>>;
+      let w = (watched ?? []) as Array<Record<string, unknown>>;
+      if (scoped) {
+        const keyOf = (row: Record<string, unknown>) => {
+          const a = (row.accounts ?? {}) as Record<string, unknown>;
+          return [a.domain, a.linkedin_url]
+            .map((v) => (typeof v === "string" ? canonicalSubjectKey(v) : null))
+            .filter((k): k is string => !!k);
+        };
+        l = l.filter((row) => keyOf(row).some((k) => scopeKeys.has(k)));
+        w = w.filter((row) => {
+          const id = row.identifier;
+          const k = typeof id === "string" ? canonicalSubjectKey(id) : null;
+          return !!k && scopeKeys.has(k);
+        });
+      }
       return {
         target: "companies",
         // THE TOTAL WHERE POSTGRES GAVE ONE, the page length only as a
         // fallback — a null count means the driver did not return one, and
         // under-reporting is better than inventing a bigger number.
+        //
+        // A SCOPED READ COUNTS ITS OWN SET. Reporting the workspace total
+        // beside five companies the user pointed at would answer "how many
+        // leads do I have" to someone who asked about those five.
         counts: {
-          leads: typeof leadCount === "number" ? leadCount : l.length,
-          watched: typeof watchedCount === "number" ? watchedCount : w.length,
+          leads: scoped
+            ? l.length
+            : typeof leadCount === "number" ? leadCount : l.length,
+          watched: scoped
+            ? w.length
+            : typeof watchedCount === "number" ? watchedCount : w.length,
           shown: l.length,
+          ...(scoped ? { scoped: plan.subjects.length } : {}),
         },
         // NOTHING IS SCORED, SO NOTHING CAN BE RANKED. Every lead in this
         // workspace carries `fit_score: null`; the column exists and no scorer
@@ -515,6 +628,22 @@ export async function executeRead(
 export const READ_DISPLAY_LIMIT = 5;
 
 /**
+ * How many this answer lists, given the plan.
+ *
+ * `READ_DISPLAY_LIMIT` is the SAMPLE size, not a ceiling. A read that asked
+ * for everything, or for a specific number, must be allowed to show it — the
+ * cap was applied unconditionally, so "show me the full list" produced the
+ * same five names as the question before it, under a line offering more.
+ */
+export function displayLimitFor(
+  plan: Pick<ReadPlan, "limit" | "explicit_limit">,
+): number {
+  return plan.explicit_limit
+    ? Math.max(READ_DISPLAY_LIMIT, plan.limit)
+    : READ_DISPLAY_LIMIT;
+}
+
+/**
  * The companies this answer PUTS ON SCREEN, in the order it puts them there.
  *
  * ── WHY THIS IS AN EXPORT AND NOT AN INLINE MAP ────────────────────────────
@@ -528,6 +657,8 @@ export const READ_DISPLAY_LIMIT = 5;
  */
 export function presentedCompanies(
   result: ReadResult | null,
+  /** How many to list. Defaults to the sample size every caller used before. */
+  displayLimit: number = READ_DISPLAY_LIMIT,
 ): Array<{
   display: string; label: string | null; identifier: string | null;
   domain: string | null; linkedin_url: string | null;
@@ -541,7 +672,7 @@ export function presentedCompanies(
   // actually on screen.
   const leads = result.items
     .filter((i) => i.kind === "lead" && typeof acct(i).name === "string")
-    .slice(0, READ_DISPLAY_LIMIT)
+    .slice(0, displayLimit)
     .map((i) => {
       const a = acct(i);
       return {
@@ -555,7 +686,7 @@ export function presentedCompanies(
 
   const watched = result.items
     .filter((i) => i.kind === "watched")
-    .slice(0, READ_DISPLAY_LIMIT)
+    .slice(0, displayLimit)
     .map((i) => ({
       display: String(i.label ?? i.identifier),
       label: typeof i.label === "string" ? i.label : null,
@@ -565,6 +696,46 @@ export function presentedCompanies(
     }));
 
   return [...leads, ...watched];
+}
+
+/**
+ * THE READ'S OWN CAPABILITY VERDICT.
+ *
+ * ── WHY THE SURFACE DECIDES AND NOT THE CALLER ─────────────────────────────
+ *
+ * The read already knows more than anyone downstream: whether a target
+ * existed, whether the query reached the database, and which gaps its own rows
+ * declared. A caller inferring the verdict from the rendered sentence would be
+ * reading English to decide whether a capability was satisfied — which is the
+ * failure the outcome contract exists to prevent.
+ *
+ * There is no SATISFIED-with-gaps state on purpose. A read that could not rank
+ * what it listed did not fully answer "which look strongest", and the honest
+ * report of that is PARTIALLY_SATISFIED with the reason attached.
+ */
+export function readOutcome(
+  plan: ReadPlan, result: ReadResult | null,
+  /** Labels from a set reference that carried no strong identifier. */
+  unidentified: readonly string[] = [],
+): Outcome {
+  if (!plan.target) {
+    return unsupported(plan.unsupported ?? "no_read_surface");
+  }
+  const gaps: DeclaredGap[] = [
+    ...(result?.gaps ?? []),
+    ...(unidentified.length > 0
+      ? [{
+        code: "referents_unidentified",
+        detail: `I couldn't pin down ${unidentified.join(", ")} exactly, so ${
+          unidentified.length === 1 ? "it isn't" : "they aren't"} included`,
+      }]
+      : []),
+  ];
+  if (gaps.some((g) => g.code === "read_failed")) {
+    return failed("read_failed", "provider_failure");
+  }
+  if (gaps.length > 0) return partiallySatisfied(`read:${plan.target}`, gaps);
+  return satisfied(`read:${plan.target}`);
 }
 
 /**
@@ -707,19 +878,56 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
 
   if (result.target === "companies") {
     const { leads = 0, watched = 0 } = result.counts;
-    const bits: string[] = [];
-    if (leads) bits.push(`${leads} lead${leads === 1 ? "" : "s"} saved`);
-    if (watched) bits.push(`${watched} compan${watched === 1 ? "y" : "ies"} being watched`);
     // RENDERED FROM THE SAME LIST THAT IS PERSISTED AS REFERENTS. Two walks of
     // `result.items` with the same filter and the same slice would be two
     // orderings that can drift, and "the second company" indexes this one.
-    const shown = presentedCompanies(result);
+    const shown = presentedCompanies(result, displayLimitFor(plan));
     const names = shown.map((e) => `• ${e.display}`).join("\n");
-    const more = leads > shown.filter((e) => e.domain !== null || e.linkedin_url !== null).length;
+
+    // ── A SCOPED LIST IS ABOUT THOSE COMPANIES, AND SAYS SO ───────────────
+    //
+    // "Which of those look strongest?" reaches here with the five companies
+    // the previous turn displayed. Reporting the workspace total instead would
+    // answer a question about the whole workspace, and the user could not tell
+    // which of the two they had been given.
+    if (plan.subjects.length > 0) {
+      const n = shown.length;
+      if (n === 0) {
+        return withGaps(
+          `I couldn't find those companies among your saved leads — they may have been listed from somewhere else.`,
+          result);
+      }
+      const asked = plan.subjects.length;
+      const missing = asked > n
+        ? ` (${asked - n} of the ${asked} you pointed at aren't in your saved leads)`
+        : "";
+      return withGaps(
+        `Those ${n === 1 ? "one" : n}${missing}:\n\n${names}`, result);
+    }
+
+    const bits: string[] = [];
+    if (leads) bits.push(`${leads} lead${leads === 1 ? "" : "s"} saved`);
+    if (watched) bits.push(`${watched} compan${watched === 1 ? "y" : "ies"} being watched`);
+
+    // ── SAY WHAT WAS SHOWN. PROMISE NOTHING THAT CANNOT BE DELIVERED ──────
+    //
+    // This ended with "(showing the most recent — ask for more if you need the
+    // full list)". The user said "yes show the full list" and received a
+    // byte-identical reply, because nothing downstream could represent the
+    // request — the offer was an affordance the surface did not have. The
+    // count is now stated plainly, and the offer is made only up to the
+    // ceiling a read will actually honour.
+    const listed = shown.length;
+    const remaining = Math.max(0, leads - listed);
+    const trailer = remaining > 0
+      ? listed >= MAX_READ_ROWS
+        ? `\n\n(showing the ${listed} most recent of ${leads} — ask for a specific set if you need further back)`
+        : `\n\n(showing the ${listed} most recent of ${leads} — say "show the full list" for the rest)`
+      : "";
     return withGaps(
       `${bits.join(" and ")}${window}.`
       + (names ? `\n\n${names}` : "")
-      + (more && names ? `\n\n(showing the most recent — ask for more if you need the full list)` : ""),
+      + (names ? trailer : ""),
       result);
   }
 
