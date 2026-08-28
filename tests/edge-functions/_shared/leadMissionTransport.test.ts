@@ -78,9 +78,14 @@ Deno.test("A. the delegate payload carries the canonical mission", async () => {
     "delegateToOrchestrate must put the mission on the HTTP body");
   assert(/leadMission\?:\s*LeadMissionV1\s*\|\s*null/.test(src),
     "DelegateArgs must carry a typed mission, not `unknown`");
-  // And the primary qualified-lead branch supplies one.
-  assert(src.includes("leadMission: compiledLeadMission"),
-    "the qualified-lead delegate must pass the compiled mission");
+  // And the primary lead path supplies one. That used to be the classifier's
+  // `company_hiring_sourcing` branch (`leadMission: compiledLeadMission`); it is
+  // now the Chat Brain route, which compiles `route.lead` through the same
+  // `compileLeadMission` and delegates the result.
+  assert(src.includes("leadMission: mission"),
+    "the Chat Brain lead route must pass the compiled mission");
+  assert(src.includes("compileRequestMission("),
+    "and must compile it from the projection rather than re-reading the sentence");
 });
 
 Deno.test("B. the mission is compiled exactly once per request path", async () => {
@@ -212,14 +217,12 @@ Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail
 
   // The four lead-sourcing branches each supply one.
   const supplied = [...src.matchAll(/leadMission:\s*(\w+)/g)].map((m) => m[1]);
-  assert(supplied.includes("compiledLeadMission"), "qualified-lead branch supplies a mission");
   assert(supplied.includes("briefMission"), "submitted lead brief supplies a mission");
   assert(supplied.includes("intakeMission"), "lead intake supplies a mission");
-  // `people_sourcing` used to delegate with NO mission and with the workflow
-  // classifier's reading of the sentence as the run's semantics — so for a
-  // people request the regex-first classifier WAS the interpreter, and under
-  // new_architecture orchestrate refused the task outright.
-  assert(supplied.includes("peopleMission"), "people sourcing supplies a mission");
+  // `people_sourcing` and `company_hiring_sourcing` used to supply their own
+  // (`peopleMission`, `compiledLeadMission`). Both branches are deleted: a
+  // people or company sourcing request is now the same lead route as any other,
+  // compiled once from what Chat Brain understood.
   // ── AND THE FIFTH: THE ONE THE OTHERS EXIST TO BE REPLACED BY ──────────
   //
   // The Chat Brain route compiles `RequestV1` -> `projectToLeadMission` ->
@@ -228,7 +231,8 @@ Deno.test("F-H. every lead-capable delegate carries a mission, and the rest fail
   // mission is refused at the chokepoint, so every one of them must supply one.
   assert(supplied.includes("mission"),
     "the Chat Brain request route supplies a compiled mission");
-  assertEquals(new Set(supplied).size, 5, "exactly five lead paths supply a mission");
+  assertEquals(new Set(supplied).size, 3,
+    "three lead paths remain, and each supplies a mission");
 
   // ANY OTHER BRANCH THAT REACHES ORCHESTRATE WITH LEAD INTENT IS STILL SAFE,
   // because orchestrate is the chokepoint: under new_architecture a request

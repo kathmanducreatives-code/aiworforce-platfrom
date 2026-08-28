@@ -9,7 +9,7 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  bindRoute, chatBrainEnabled, CHAT_BRAIN_FLAG,
+  bindRoute,
 } from "../../../supabase/functions/_shared/chatBrainBinding.ts";
 import type { Route } from "../../../supabase/functions/_shared/objectiveRouter.ts";
 
@@ -19,25 +19,29 @@ const route = (over: Partial<Route>): Route => ({
   message: null, reason: "r", ...over,
 });
 
-// ══ 1. THE ROLLBACK FLAG ═══════════════════════════════════════════════════
+// ══ 1. THERE IS NO ROLLBACK FLAG ═══════════════════════════════════════════
 
-Deno.test("Chat Brain is authoritative by DEFAULT", () => {
-  assertEquals(chatBrainEnabled(() => undefined), true);
-  assertEquals(chatBrainEnabled(() => ""), true);
-});
+Deno.test("the rollback switch is gone, and nothing can reinstate it", async () => {
+  // `CHAT_BRAIN_ENABLED=false` restored `workflowClassifier`, `leadIntent`,
+  // `leadIntentModel` and `classifyIntent` as authoritative in one variable.
+  // That was the right safety valve while those existed. They are deleted, and
+  // a flag that switches to nothing is worse than no flag: it reads as an
+  // escape hatch, and the first person to reach for it in an incident would
+  // find the request path doing nothing at all.
+  const binding = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/chatBrainBinding.ts", import.meta.url));
+  const code = binding.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(code.includes("CHAT_BRAIN_ENABLED"),
+    "no flag may gate the only understanding path");
+  assertFalse(/export function chatBrainEnabled/.test(code));
 
-Deno.test("one variable restores the old classifiers, with no deploy", () => {
-  assertEquals(chatBrainEnabled(() => "false"), false);
-  assertEquals(chatBrainEnabled(() => "FALSE"), false);
-  assertEquals(CHAT_BRAIN_FLAG, "CHAT_BRAIN_ENABLED");
-});
-
-Deno.test("any other value keeps the new path on", () => {
-  // Fail-forward on a typo: a misspelled rollback must not silently disable
-  // the path that is now carrying production.
-  for (const v of ["true", "1", "yes", "off", "nonsense"]) {
-    assertEquals(chatBrainEnabled(() => v), true, v);
-  }
+  const pilot = await Deno.readTextFile(
+    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
+  const pilotCode = pilot.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(/chatBrainEnabled\(/.test(pilotCode),
+    "understanding must run unconditionally");
 });
 
 // ══ 2. WHAT EACH ROUTE MEANS ═══════════════════════════════════════════════
@@ -123,54 +127,25 @@ Deno.test("the binding cannot grant spend", async () => {
     "the binding names no provider and no credit path");
 });
 
-Deno.test("pilot-chat overrides the classifier only for a bound category", async () => {
+Deno.test("pilot-chat routes; it no longer translates into a category", async () => {
+  // This asserted first that a bound category replaced the classifier's verdict,
+  // then that `simple_chat` was the one surviving translation. Both are gone:
+  // `converse` has its own grounded surface, so nothing is expressed as a
+  // legacy category at all, and there is no classifier verdict left to replace.
   const SRC = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const i = SRC.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  assert(i > 0, "Chat Brain must be wired");
-  // ── BOUNDED BY A LANDMARK, NOT BY A BYTE COUNT ─────────────────────────
-  //
-  // This was `i + 8000`, then `i + 12000`, and each time code was added to the
-  // wiring block the assertions fell out of the window and the test failed for
-  // a reason that had nothing to do with what it checks. A fixed length encodes
-  // how long the block happened to be on the day it was written.
-  //
-  // The block genuinely ends at the Phase 0 baseline, so the slice says that.
-  // It now grows with the code it is describing and still cannot reach past the
-  // wiring into unrelated paths.
-  const end = SRC.indexOf("── PHASE 0 BASELINE", i);
-  assert(end > i, "the Phase 0 baseline must follow the Chat Brain block");
-  const block = SRC.slice(i, end);
-  // ── A LEAD ROUTE COMPILES A MISSION; IT DOES NOT SET A CATEGORY ────────
-  //
-  // This asserted the opposite — that the route's only effect was
-  // `decision.workflow_category = ...` — and that assignment was the defect.
-  // The value written was "qualified_lead_sourcing", which is not a member of
-  // `WorkflowCategory`, so no branch matched it, the request fell through to a
-  // deep fallback and delegated with no mission. Orchestrate then refused it as
-  // `mission_not_compiled`. Understanding the request correctly was what broke
-  // it.
-  //
-  // The route now carries its own payload to its own surface.
-  assert(block.includes('brainRoute.kind === "lead_mission"'),
-    "a lead route must be handled as a route, not laundered into a category");
-  assert(block.includes("compileRequestMission("),
-    "the projection Chat Brain produced must be compiled into the mission");
-  assert(block.includes("delegateToOrchestrate("),
-    "and delegated directly, carrying that mission");
-  // Comments stripped: the prose in this region NAMES the removed assignment in
-  // order to explain it, and scanning that as code matches its own explanation.
-  const blockCode = block.split("\n")
+  const i = SRC.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const end = SRC.indexOf("══ END OF THE CHAT BRAIN BLOCK", i);
+  assert(i > 0 && end > i);
+  const code = SRC.slice(i, end).split("\n")
     .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
-  const assigns = [...blockCode.matchAll(/decision\.workflow_category\s*=\s*([^;]+);/g)]
-    .map((m) => m[1].trim());
-  assertEquals(assigns, ["brainBinding.category"],
-    "the only surviving translation is the typed BoundCategory for converse");
-  // A model failure must never become a spending objective.
-  assert(block.includes("deferring to classifier"),
-    "an unreadable model leaves the old verdict standing");
-  // Spend authority is not read from the request anywhere in the wiring.
-  assertEquals(/understood\.request\.authority/.test(block), false);
+
+  assertFalse(/decision\.workflow_category\s*=[^=]/.test(code),
+    "no route may be written back as a category");
+  assert(code.includes('brainRoute.kind === "converse"'),
+    "conversation is answered by its own surface");
+  assert(code.includes("deferring to classifier") === false,
+    "and there is no classifier left to defer to");
 });
 
 Deno.test("a blocked or unservable request returns before anything executes", async () => {

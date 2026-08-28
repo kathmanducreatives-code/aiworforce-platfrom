@@ -97,8 +97,8 @@ Deno.test("5. no route is laundered through an invalid legacy category", async (
 
 Deno.test("6. a lead route compiles a mission and delegates it", async () => {
   const pilot = await read("pilot-chat/index.ts");
-  const i = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  const end = pilot.indexOf("── PHASE 0 BASELINE", i);
+  const i = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const end = pilot.indexOf("══ END OF THE CHAT BRAIN BLOCK", i);
   assert(i > 0 && end > i, "the Chat Brain block must be locatable");
   const block = pilot.slice(i, end);
   assert(block.includes("compileRequestMission("),
@@ -155,7 +155,7 @@ Deno.test("10. no regex decides meaning before understandRequest", async () => {
   // Brain unless something NON-semantic stops it: auth, membership, a malformed
   // body, or a failure to record the turn.
   const pilot = await read("pilot-chat/index.ts");
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
   assert(brainAt > 0, "Chat Brain must be wired");
 
   // Only the request handler, not the helpers declared above it.
@@ -176,7 +176,7 @@ Deno.test("11. the pre-brain returns are non-semantic, or owner-scoped", async (
   // message on the strength of what it appears to say.
   const pilot = await read("pilot-chat/index.ts");
   const handlerAt = pilot.indexOf("async function handlePilotChat");
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
   const before = pilot.slice(handlerAt, brainAt);
 
   // The one non-infrastructure gate left is the lead source selector, and it is
@@ -185,4 +185,78 @@ Deno.test("11. the pre-brain returns are non-semantic, or owner-scoped", async (
   assert(clarificationReturns > 0, "the selector still resolves its own menu");
   assert(before.includes('clarificationOwnedBy(meta, "lead_source_selector")'),
     "and may only do so for clarifications it owns");
+});
+
+// ══ 6. THE CLASSIFIER STACK IS DELETED, NOT DORMANT ════════════════════════
+
+Deno.test("12. no classifier module exists to be imported", async () => {
+  // Deleted files, not disconnected ones. A dormant copy one import away from
+  // the live path is how this architecture came back the first time.
+  for (const f of [
+    "_shared/workflowClassifier.ts",
+    "_shared/capabilityValidator.ts",
+    "_shared/intentRouter.ts",
+  ]) {
+    let exists = true;
+    try { await Deno.stat(F(f)); } catch { exists = false; }
+    assertFalse(exists, `${f} must not exist`);
+  }
+});
+
+Deno.test("13. nothing in production names a deleted symbol", async () => {
+  const files = [
+    "pilot-chat/index.ts", "orchestrate/index.ts", "run-agent/index.ts",
+    "_shared/toolInputPlanner.ts", "_shared/leadIntent.ts",
+    "_shared/leadIntentModel.ts", "_shared/companyBrainGate.ts",
+  ];
+  const dead = [
+    "classifyWorkflow", "classifyIntent", "validateAgainstCapabilities",
+    "planToolInput", "extractLeadIntent", "separateIntent", "routeSource",
+    "WorkflowDecision", "chatBrainEnabled",
+  ];
+  for (const f of files) {
+    const src = code(await read(f));
+    for (const sym of dead) {
+      assertFalse(new RegExp(`\\b${sym}\\b`).test(src), `${f} still names ${sym}`);
+    }
+  }
+});
+
+Deno.test("14. pilot-chat holds no workflow_category decision at all", async () => {
+  const src = code(await read("pilot-chat/index.ts"));
+  assertFalse(/decision\.workflow_category/.test(src),
+    "the category object is gone; routes carry their own payloads");
+  assertFalse(/workflow_category\s*===/.test(src),
+    "and nothing branches on a category string");
+});
+
+Deno.test("15. a model failure does not reach a second interpreter", async () => {
+  // The one rule that makes the deletion permanent: if Chat Brain cannot read a
+  // message, the answer is a stated failure and a conversational reply. A
+  // fallback interpreter reached only when the primary fails is the same
+  // architecture, hidden better.
+  const src = await read("pilot-chat/index.ts");
+  const i = src.indexOf("unreadable — no fallback interpreter");
+  assert(i > 0, "the unreadable branch must say what it does");
+  const after = code(src.slice(i, i + 1200));
+  assertFalse(/classify|Classifier|parseIntent|fallbackParse/.test(after),
+    "nothing may re-read the sentence after understanding failed");
+});
+
+Deno.test("16. the safety refusal survived the deletion, and runs first", async () => {
+  // The one regex over a user's sentence that remains. It answers a yes/no about
+  // PERMISSION and never selects a surface — and the approval gates downstream
+  // are what actually hold, so this is defence in depth plus an honest answer.
+  const guard = code(await read("_shared/unsafeRequestGuard.ts"));
+  assert(guard.includes("asksForUnsafeAction"));
+  assertFalse(/objective|route|surface|category/i.test(
+    guard.replace(/UNSAFE_REQUEST_REPLY[\s\S]*/, "")),
+    "the guard must not decide what a request IS");
+
+  const pilot = await read("pilot-chat/index.ts");
+  const start = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const guardAt = pilot.indexOf("asksForUnsafeAction(message)", start);
+  const firstSurface = pilot.indexOf('brainRoute.kind === "signal_sourcing"', start);
+  assert(guardAt > start && firstSurface > guardAt,
+    "the refusal must run before any surface can be reached");
 });

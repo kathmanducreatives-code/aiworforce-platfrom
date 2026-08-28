@@ -51,7 +51,13 @@ Deno.test("every compiler call site states the count as null", () => {
   // sentence, not to be told it by another reader of the same sentence.
   const sites = [...CODE.matchAll(/compileCanonicalLeadMission\(\{[\s\S]{0,400}?\}\)/g)]
     .map((m) => m[0]);
-  assert(sites.length >= 3, `expected the three lead paths, found ${sites.length}`);
+  // TWO CALL SITES REMAIN. `people_sourcing` and `company_hiring_sourcing` were
+  // deleted with the classifier chain; the Chat Brain lead route replaces them
+  // and compiles through `compileRequestMission`, which forwards
+  // `projection.requestedCount` — the count the MODEL read out of the sentence,
+  // carried through, not a second reader's guess. The invariant is unchanged:
+  // no regex may hand the compiler a count.
+  assert(sites.length >= 2, `expected the remaining lead paths, found ${sites.length}`);
   for (const site of sites) {
     assert(
       /requestedCount:\s*null/.test(site),
@@ -123,4 +129,20 @@ Deno.test("the count the model states survives compilation untouched", () => {
   assertEquals(
     compileLeadMission({ originalUserQuery: "Find SaaS companies", proposal: mk(null) })
       .final_mission.requested_count, null, "and an unstated count stays unstated");
+});
+
+Deno.test("the Chat Brain route forwards the model's count, and reads none itself", async () => {
+  // `compileRequestMission` is the third compiler entry, and it does not call
+  // `compileCanonicalLeadMission` — it hands `compileLeadMission` the projection
+  // directly. The count it supplies is `projection.requestedCount`, which comes
+  // from `part.output.count`: what the model read, forwarded once. The rule this
+  // file defends is that no SECOND reader of the sentence supplies a count, and
+  // forwarding the first reader's answer is not that.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/_shared/requestToMission.ts", import.meta.url));
+  const code = src.split("\n").filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assert(/requestedCount:\s*projection\.requestedCount/.test(code),
+    "the count must be the projection's, carried from the model's own reading");
+  assertEquals(/match\(|RegExp|\\d\{1,3\}/.test(code), false,
+    "and nothing here may re-read a number out of the sentence");
 });

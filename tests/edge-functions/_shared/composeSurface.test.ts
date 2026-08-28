@@ -122,8 +122,8 @@ Deno.test("8. outreach with nobody to write to asks who, and says nothing is sen
 Deno.test("9. pilot-chat serves both halves, and gates only the one with a recipient", async () => {
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  const baselineAt = pilot.indexOf("── PHASE 0 BASELINE", brainAt);
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const baselineAt = pilot.indexOf("══ END OF THE CHAT BRAIN BLOCK", brainAt);
   const block = pilot.slice(brainAt, baselineAt);
 
   assert(block.includes('brainRoute.kind === "compose"'));
@@ -157,7 +157,7 @@ Deno.test("11. conversation memory is readable before the request is routed", as
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
   const load = pilot.indexOf("await loadConversationMemory({");
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
   assert(load > 0 && brainAt > 0);
   assert(load < brainAt, "memory must be loaded before understanding routes the request");
   assertEquals([...pilot.matchAll(/await loadConversationMemory\(\{/g)].length, 1,

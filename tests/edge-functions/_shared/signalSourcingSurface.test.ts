@@ -147,8 +147,8 @@ Deno.test("10. nothing here grants permission to send", () => {
 Deno.test("11. each kind keeps the actor it always had", async () => {
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  const baselineAt = pilot.indexOf("── PHASE 0 BASELINE", brainAt);
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const baselineAt = pilot.indexOf("══ END OF THE CHAT BRAIN BLOCK", brainAt);
   const block = pilot.slice(brainAt, baselineAt);
 
   assert(block.includes('"apify_linkedin_post_comments"'), "commenters");

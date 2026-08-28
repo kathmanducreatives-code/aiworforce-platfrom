@@ -10,7 +10,7 @@
 //
 // Pure. No network, no database.
 
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildUnderstandingRow, recordUnderstanding, redactUtterance, utteranceHash,
   REQUEST_UNDERSTANDING_TABLE, type UnderstandingWriter,
@@ -159,31 +159,30 @@ Deno.test("absent fields are null, never undefined", async () => {
 
 // ══ 5. THE CALL SITE ═══════════════════════════════════════════════════════
 
-Deno.test("pilot-chat records the classifier's verdict and branches on nothing", async () => {
+Deno.test("pilot-chat records Chat Brain's verdict, and branches on nothing", async () => {
   const SRC = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
   );
-  // LOCATED BY ITS SOURCE, not by being first. Chat Brain now logs from the
-  // same function, so "the first call" is no longer the classifier's — a
-  // locator that assumed order broke the moment a second writer appeared.
-  const i = SRC.indexOf('source: "workflow_classifier"');
-  assert(i > 0, "the classifier baseline must still be recorded");
-  const block = SRC.slice(Math.max(0, i - 400), i + 400);
-  assert(block.includes("recordUnderstanding("));
-  assert(block.includes("category: decision.workflow_category"));
+  // ── THE BASELINE IS RETIRED WITH ITS SUBJECT ─────────────────────────────
+  //
+  // This asserted a `source: "workflow_classifier"` row was written on every
+  // message, so the new path's equivalence could be measured against the old
+  // one. The old one is deleted, so there is nothing to compare against and a
+  // row sourced from a removed component would be a fiction.
+  assertFalse(SRC.includes('source: "workflow_classifier"'),
+    "no row may name a component that no longer exists");
 
-  // AND THE NEW PATH LOGS BESIDE IT, so agreement is measurable by joining on
-  // utterance_hash rather than by re-running anything.
-  assert(SRC.includes('source: "chat_brain_shadow"'),
-    "Chat Brain's own verdict must be recorded too");
-  // NOTHING MAY DEPEND ON IT. An assignment or a conditional here would make
-  // observation load-bearing, which is the one thing Phase 0 must not become.
-  assertEquals(
-    /(const|let|var)\s+\w+\s*=\s*await recordUnderstanding/.test(SRC), false,
-    "the logger's result must never be captured",
-  );
-  assertEquals(
-    /if\s*\(\s*await recordUnderstanding/.test(SRC), false,
-    "and never branched on",
-  );
+  const i = SRC.indexOf('source: "chat_brain_shadow"');
+  assert(i > 0, "Chat Brain's own verdict is now the whole record");
+  const block = SRC.slice(Math.max(0, i - 600), i + 900);
+  assert(block.includes("recordUnderstanding("));
+
+  // NOTHING MAY DEPEND ON IT. An assignment or a conditional keyed on the
+  // logger's result would make observation load-bearing, which is the one thing
+  // this table must never become.
+  const code = block.split("\n")
+    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  assertFalse(/if\s*\(\s*await recordUnderstanding|=\s*await recordUnderstanding/.test(code),
+    "the log must return nothing anyone branches on");
 });
+

@@ -141,8 +141,8 @@ Deno.test("7. the URL comes from the reference, never from the message", async (
 Deno.test("8. pilot-chat reaches Firecrawl only through the route", async () => {
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  const baselineAt = pilot.indexOf("── PHASE 0 BASELINE", brainAt);
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const baselineAt = pilot.indexOf("══ END OF THE CHAT BRAIN BLOCK", brainAt);
   const block = pilot.slice(brainAt, baselineAt);
   assert(block.includes('brainRoute.kind === "url_analysis"'),
     "the page route must be handled inside the understood path");

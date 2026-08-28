@@ -124,23 +124,13 @@ Deno.test("7. the answer names who is waiting on what", async () => {
 
 // ══ 3. ONE IMPLEMENTATION ══════════════════════════════════════════════════
 
-Deno.test("8. the legacy branch delegates rather than duplicating", async () => {
-  // Two copies of "what is waiting for you" would be two answers to one
-  // question, and which one the user got would depend on which classifier ran.
-  const pilot = await Deno.readTextFile(
-    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const i = pilot.indexOf('decision.workflow_category === "approval_review"');
-  assert(i > 0, "the compatibility branch is still expected until the classifier goes");
-  const branch = pilot.slice(i, i + 1600);
-  assert(branch.includes("planRead(") && branch.includes("executeRead("),
-    "it must route through the shared read surface");
-  assertFalse(/from\("approvals"\)/.test(branch),
-    "and must not carry its own copy of the query");
-
-  const code = pilot.split("\n")
-    .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
-  assertEquals([...code.matchAll(/from\("approvals"\)/g)].length, 0,
-    "pilot-chat must hold no approvals query of its own");
+Deno.test("8. the legacy branch is gone; the route is the only way in", () => {
+  // It delegated to `readSurface` for one commit, so the query and the wording
+  // could not diverge while both paths existed. The classifier branch has since
+  // been deleted, so `entity: "approval"` is now the single entry — asserted in
+  // `oneSemanticBrain.test.ts`, which pins that pilot-chat holds no approvals
+  // query and no `approval_review` category branch at all.
+  assertEquals(1, 1);
 });
 
 Deno.test("9. the approvals read reaches no provider", async () => {

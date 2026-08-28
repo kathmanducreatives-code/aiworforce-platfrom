@@ -94,15 +94,9 @@ Deno.test("6. availability is read from the deployment, not from a null field", 
 });
 
 Deno.test("7. one definition of the rule, and one sentence explaining it", async () => {
-  // The validator kept its own copy while pilot-chat inferred the answer from
-  // whether the validator had cleared a field.
-  const validator = await Deno.readTextFile(
-    new URL("../../../supabase/functions/_shared/capabilityValidator.ts", import.meta.url));
-  assert(validator.includes("webSearchAvailable"),
-    "the validator must consume the shared rule");
-  assertFalse(/ENABLE_SEARCH_WEB.*\|\|.*SEARCH_WEB_API_KEY/s.test(
-    validator.split("\n").filter((l) => !/^\s*(\*|\/\/)/.test(l)).join("\n")),
-    "and must not keep a second copy of it");
+  // `capabilityValidator` kept a second copy of the rule while pilot-chat
+  // inferred the answer from whether that validator had cleared a field. Both
+  // are deleted; `marketResearchSurface` is the only definition left.
 
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
@@ -112,16 +106,17 @@ Deno.test("7. one definition of the rule, and one sentence explaining it", async
     "and is reached from both the route and the legacy branch");
 });
 
-Deno.test("8. the legacy branch no longer infers degradation from a cleared field", async () => {
+Deno.test("8. no branch infers degradation from a cleared field any more", async () => {
+  // It tested `!decision.selected_actor_key` — a field the classifier leaves
+  // unset so the validator can fill or clear it, so three components had to
+  // agree on one null before the user was told the truth. That branch is
+  // deleted; the route asks `webSearchAvailable` directly.
   const pilot = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  const i = pilot.indexOf('decision.workflow_category === "market_research"');
-  assert(i > 0, "the compatibility branch is expected until the classifier goes");
-  const branch = pilot.slice(i, i + 400);
-  assert(branch.includes("webSearchAvailable("),
-    "it must ask the capability directly");
-  assertFalse(branch.includes("!decision.selected_actor_key"),
-    "not infer it from a field another component clears");
+  assertFalse(pilot.includes('workflow_category === "market_research"'),
+    "the classifier branch must be gone");
+  assert(pilot.includes("webSearchAvailable("),
+    "and the capability asked directly");
 });
 
 Deno.test("9. an unconfigured deployment refuses honestly and offers what works", () => {

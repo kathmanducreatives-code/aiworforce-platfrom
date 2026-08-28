@@ -118,8 +118,8 @@ Deno.test("7. the brief is served only from the understood read route", async ()
   const calls = [...pilot.matchAll(/functions\/v1\/daily-brief/g)];
   assertEquals(calls.length, 1, "one implementation, one call site");
 
-  const brainAt = pilot.indexOf("if (chatBrainEnabled(readEnvSafe))");
-  const baselineAt = pilot.indexOf("── PHASE 0 BASELINE", brainAt);
+  const brainAt = pilot.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  const baselineAt = pilot.indexOf("══ END OF THE CHAT BRAIN BLOCK", brainAt);
   const callAt = calls[0].index!;
   assert(brainAt > 0 && callAt > brainAt && callAt < baselineAt,
     "the brief must be reached only after the request has been understood");

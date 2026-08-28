@@ -1,20 +1,25 @@
-// THE WORKFLOW CLASSIFIER ROUTES; IT DOES NOT INTERPRET.
+// THE CLASSIFIER NO LONGER ROUTES ANYTHING.
 //
-// `classifyWorkflow` is regex-first with a Gemini fallback, and it is the right
-// tool for the one question it owns: WHICH branch is this request on? That
-// question runs upstream of mission compilation — it is what decides whether a
-// Mission is compiled at all — so it cannot be replaced by the thing it gates.
+// ── WHAT THIS FILE USED TO DEFEND ──────────────────────────────────────────
 //
-// What it may not do is supply the run's MEANING. On the `people_sourcing`
-// branch it did exactly that: pilot-chat delegated with no mission at all and
-// with `decision.query`, `decision.role_keywords`, `decision.location` and
-// `decision.max_results` as the run's semantics. So for a people request the
-// regex-first classifier WAS the interpreter — and under `new_architecture`
-// orchestrate then refused the task outright (422 `mission_not_compiled`),
-// because the one object it requires never arrived.
+// A split: `classifyWorkflow` owned WHICH branch a request was on, and the
+// compiled Mission owned what the run MEANT. That split was the right fix for
+// the defect of its day — `people_sourcing` delegated with no mission at all and
+// with `decision.query`, `decision.role_keywords` and `decision.location` as the
+// run's semantics, so a regex-first classifier WAS the interpreter and
+// orchestrate refused the task as `mission_not_compiled`.
 //
-// These tests pin the split: the classifier keeps the branch decision, the
-// Mission supplies the semantics, and non-lead workflows are untouched.
+// It is not the right shape any more. The premise "the classifier still owns the
+// branch decision" is exactly what the cleanup removes: Chat Brain owns it, the
+// routes carry their own payloads, and the `people_sourcing` and
+// `company_hiring_sourcing` branches this file tested no longer exist.
+//
+// The claims that outlived them are asserted where they now live:
+//   which layer decides            -> oneSemanticBrain.test.ts
+//   a lead route compiles a mission -> leadMissionTransport.test.ts
+//   a social request is not a lead  -> signalSourcingSurface.test.ts
+//
+// What remains below is the one assertion that was never about the classifier.
 //
 // No network, no provider, no model call.
 
@@ -33,73 +38,6 @@ function branch(category: string): string {
   const end = rest.indexOf("\n  }\n");
   return rest.slice(0, end > 0 ? end + 5 : rest.length);
 }
-
-Deno.test("the classifier still owns the branch decision", () => {
-  assert(
-    /const wf = await classifyWorkflow\(message\)/.test(PILOT),
-    "classifyWorkflow answers WHICH branch this is, upstream of any mission",
-  );
-});
-
-Deno.test("the people-sourcing branch compiles and carries a Mission", () => {
-  const b = branch("people_sourcing");
-  assert(
-    /compileCanonicalLeadMission\(\{/.test(b),
-    "a lead path must compile the canonical Mission",
-  );
-  assert(/leadMission: peopleMission/.test(b), "…and thread it to orchestrate");
-  assert(
-    /requestedCount: null/.test(b),
-    "with no regex count hint, like every other compiler call site",
-  );
-});
-
-Deno.test("the people-sourcing branch takes its semantics from the Mission", () => {
-  const b = branch("people_sourcing");
-  // WHO to look for.
-  assert(
-    /role_keywords: peopleIntent\?\.target_buyer\?\.length/.test(b),
-    "the persona must be the Mission's decision makers, not the classifier's keywords",
-  );
-  // WHERE.
-  assert(
-    /location: peopleIntent\?\.target_geography\?\.\[0\]/.test(b),
-    "the geography must be the Mission's",
-  );
-  // HOW MANY.
-  assert(
-    /effectiveRequestedCount\(peopleMission\)/.test(b),
-    "the count must be the Mission's, through the one runtime default",
-  );
-  // The classifier's own values survive only as the no-mission fallback.
-  for (const legacy of ["decision.role_keywords ?? []", "decision.location ?? null", "decision.max_results ?? 5"]) {
-    assert(
-      b.includes(legacy),
-      `the classifier's ${legacy} must remain as the missionless fallback, not be deleted`,
-    );
-  }
-});
-
-Deno.test("non-lead workflows keep the classifier untouched", () => {
-  // `signal_sourcing` is LinkedIn engagement/post sourcing — it executes through
-  // orchestrate's staged social plan and has no Mission provider yet. It must
-  // keep reading the classifier, and must NOT be given a lead card that previews
-  // a run that does not exist.
-  assert(
-    /decision.workflow_category === "signal_sourcing"/.test(PILOT),
-    "the social branch still routes on the classifier",
-  );
-  const leadCategories = PILOT.slice(
-    PILOT.indexOf("const LEAD_CONFIRMATION_CATEGORIES"),
-  ).slice(0, 200);
-  assert(
-    !leadCategories.includes("signal_sourcing"),
-    "a social-signal request must not be previewed as a lead mission",
-  );
-  for (const c of ["company_hiring_sourcing", "people_sourcing"]) {
-    assert(leadCategories.includes(c), `${c} is a lead card category`);
-  }
-});
 
 Deno.test("the lead card title no longer asserts a hiring signal the Mission did not state", () => {
   const card = PILOT.slice(PILOT.indexOf("function buildHiringConfirmation"));

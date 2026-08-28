@@ -81,7 +81,13 @@ Deno.test("the rewrite still executes as the step instruction", () => {
 
 Deno.test("every compiler call site still supplies a null count", () => {
   const sites = [...PILOT.matchAll(/compileCanonicalLeadMission\(\{[\s\S]{0,400}?\}\)/g)].map((m) => m[0]);
-  assert(sites.length >= 4, `expected the four lead paths, found ${sites.length}`);
+  // TWO CALL SITES REMAIN. `people_sourcing` and `company_hiring_sourcing` were
+  // deleted with the classifier chain; the Chat Brain lead route replaces them
+  // and compiles through `compileRequestMission`, which forwards
+  // `projection.requestedCount` — the count the MODEL read out of the sentence,
+  // carried through, not a second reader's guess. The invariant is unchanged:
+  // no regex may hand the compiler a count.
+  assert(sites.length >= 2, `expected the remaining lead paths, found ${sites.length}`);
   for (const s of sites) {
     assert(/requestedCount: null/.test(s), `a compiler call site supplies a count:\n${s}`);
   }

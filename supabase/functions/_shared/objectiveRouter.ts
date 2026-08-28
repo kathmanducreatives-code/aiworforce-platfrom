@@ -73,7 +73,15 @@ export type RouteKind =
   /** Write something. `compose.kind` says whether it has a recipient. */
   | "compose"
   /** Source public activity, rivals, or the people who engaged with a post. */
-  | "signal_sourcing";
+  | "signal_sourcing"
+  /**
+   * Write something AND go looking for engagement on that subject.
+   *
+   * Two asks in one message, which `RequestV1` represents as two parts. The
+   * classifier expressed it as an `execution_mode` on a single category because
+   * it had no way to say "this message contains two things".
+   */
+  | "content_engagement_loop";
 
 export interface Route {
   version: typeof OBJECTIVE_ROUTER_VERSION;
@@ -211,13 +219,32 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
     };
   }
 
+  // ── WRITE SOMETHING AND FIND ENGAGEMENT ON IT ────────────────────────────
+  //
+  // Checked before either half, because either half alone would claim it and
+  // silently drop the other: routing to `compose` writes the post and never
+  // looks for engagement; routing to `signal_sourcing` searches and never
+  // writes. The compound shape is two parts in one message, and it is only this
+  // when BOTH are present.
+  const composeForLoop = planCompose(request);
+  const signalsForLoop = planSignalSourcing(request);
+  if (composeForLoop?.kind === "content" && signalsForLoop?.kind === "engagement") {
+    return {
+      ...base, kind: "content_engagement_loop",
+      compose: composeForLoop, signals: signalsForLoop,
+      part_ids: [composeForLoop.part_id, signalsForLoop.part_id],
+      may_spend: opts.spendAllowed,
+      reason: "content_and_engagement",
+    };
+  }
+
   // ── SOURCING ACTIVITY IS NOT SOURCING COMPANIES ──────────────────────────
   //
   // Before the lead projection, and `person` is why the order matters: pulling
   // the commenters off a post has `entity: person`, which IS a lead entity, so
   // without this the request would compile into a mission to go and find people
   // matching a description — buying a discovery run instead of reading one post.
-  const signalPlan = planSignalSourcing(request);
+  const signalPlan = signalsForLoop;
   if (signalPlan) {
     return {
       ...base, kind: "signal_sourcing", signals: signalPlan,
@@ -232,7 +259,7 @@ export function routeRequest(request: RequestV1, opts: RouteOptions): Route {
   // Before the lead projection: a request to write is not a request to find,
   // and projecting it would read the description of what to write as a
   // description of companies to source.
-  const composePlan = planCompose(request);
+  const composePlan = composeForLoop;
   if (composePlan) {
     return {
       ...base, kind: "compose", compose: composePlan,

@@ -157,8 +157,14 @@ Deno.test("10. the context is handed over as soon as it exists, not at the end",
   const adminAt = PILOT.indexOf("fail.admin = admin;");
   const convAt = PILOT.indexOf("fail.conversationId = conversation_id;");
   assert(adminAt !== -1 && convAt !== -1);
-  assert(adminAt < PILOT.indexOf("workflow_confirmation_gate"),
-    "the admin client is handed over long before the compiler can refuse");
-  assert(convAt < PILOT.indexOf("workflow_confirmation_gate"),
+  // The landmark was `workflow_confirmation_gate`, a category-list gate that has
+  // since been deleted. The point of the assertion is unchanged: both must be
+  // handed over before ANY path that can refuse or spend, and the earliest of
+  // those is now the Chat Brain block itself.
+  const brainAt = PILOT.indexOf("══ START OF THE CHAT BRAIN BLOCK");
+  assert(brainAt > 0, "the understanding layer must be locatable");
+  assert(adminAt < brainAt,
+    "the admin client is handed over before anything can refuse");
+  assert(convAt < brainAt,
     "and so is the conversation");
 });

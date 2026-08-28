@@ -23,11 +23,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
  */
 type UntypedClient = SupabaseClient<any, any, any>;
 import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
-import { classifyIntent } from "../_shared/intentRouter.ts";
-import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
+import type { ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
-import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflowClassifier.ts";
 import {
   recordUnderstanding, type UnderstandingWriter,
 } from "../_shared/requestUnderstandingLog.ts";
@@ -36,14 +34,21 @@ import { REQUEST_V1_VERSION } from "../_shared/requestV1.ts";
 import {
   webSearchAvailable, SEARCH_WEB_UNAVAILABLE,
 } from "../_shared/marketResearchSurface.ts";
-import { OUTREACH_WITHOUT_LEADS } from "../_shared/composeSurface.ts";
+import {
+  planCompose, OUTREACH_WITHOUT_LEADS,
+} from "../_shared/composeSurface.ts";
 import {
   COMPETITORS_NEED_CONTEXT, PROFILE_POSTS_NEED_URLS,
 } from "../_shared/signalSourcingSurface.ts";
-import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
+import { shouldGateObjective } from "../_shared/companyBrainGate.ts";
 import {
-  bindRoute, chatBrainEnabled, type BindingOutcome,
-} from "../_shared/chatBrainBinding.ts";
+  asksForUnsafeAction, UNSAFE_REQUEST_REPLY,
+} from "../_shared/unsafeRequestGuard.ts";
+import {
+  converseSystemPrompt, CONVERSE_UNAVAILABLE,
+} from "../_shared/converseSurface.ts";
+import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
+import { bindRoute, type BindingOutcome } from "../_shared/chatBrainBinding.ts";
 import {
   planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
 } from "../_shared/readSurface.ts";
@@ -67,7 +72,6 @@ import {
 import {
   heldEvidenceFor, renderHeldEvidence, type EvidenceDb,
 } from "../_shared/researchEvidenceGate.ts";
-import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
 import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, modeFromLabel, type LeadRequest, type LeadMode, type LeadSourceType, type ToolAvailability } from "../_shared/leadIntake.ts";
@@ -1583,9 +1587,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // and degraded paths; falls through to the legacy planner for sourcing,
   // url_analysis, and outreach categories so the existing pending-clarification
   // persistence keeps working unchanged.
-  const wf = await classifyWorkflow(message);
-  const validated = validateAgainstCapabilities(wf);
-  const decision = validated.decision;
+  // ── 5c REMOVED: THE WORKFLOW CLASSIFIER ─────────────────────────────────
+  //
+  // `classifyWorkflow` ran here on every message — regex-first with a Gemini
+  // fallback — and `validateAgainstCapabilities` then filled or cleared the
+  // fields it produced. Between them they owned WHICH of twelve categories a
+  // request was, and thirty fields of what it meant.
+  //
+  // Nothing reads either any more. Every branch that switched on
+  // `decision.workflow_category` has been replaced by a route that carries its
+  // own payload, and the last field-level reads — the onboarding gate, the
+  // outreach follow-up, the search-web capability — now ask the request or the
+  // deployment directly.
+  //
+  // A message is understood once.
 
   // ══ CHAT BRAIN — THE AUTHORITATIVE UNDERSTANDING PATH ══════════════════
   //
@@ -1614,6 +1629,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // workspace profile under its own precedence rules, and fetching it twice
   // would let the two layers disagree about what the workspace says.
   let brainProfileForMission: Record<string, unknown> | null = null;
+  let brainOnboardedForGate = false;
+  /**
+   * What the request asked to WRITE, if anything — read once, above, and reused
+   * by the memory follow-up section so it does not have to ask again.
+   */
+  let composeIntentForFollowUp: "outreach" | "content" | null = null;
+  /** The model's own confidence in its reading, for message provenance. */
+  let brainConfidence: number | null = null;
   const workspaceContextBlock: string | null = await (async () => {
     try {
       const { data } = await admin.from("company_brain")
@@ -1621,6 +1644,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         .eq("workspace_id", workspaceId).maybeSingle();
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
+      brainOnboardedForGate = data?.onboarding_completed === true;
       if (!profile || !hasUsableBrain(profile, data?.onboarding_completed === true)) {
         return null;
       }
@@ -1657,7 +1681,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
    * subject, which is most of them.
    */
   let resolvedBindings: ResolvedReferentBinding[] = [];
-  if (chatBrainEnabled(readEnvSafe)) {
+  // ══ START OF THE CHAT BRAIN BLOCK ═════════════════════════════════════════
+  //
+  // A stable landmark, paired with the end marker below. Tests slice this
+  // function between the two to assert what may and may not appear inside the
+  // understood path; they used to key on `if (chatBrainEnabled(readEnvSafe))`,
+  // which was a feature flag rather than a boundary and vanished with it.
+  //
+  // UNCONDITIONAL. There is no flag and no alternative path: understanding is
+  // the only way in.
+  {
     const understood = await understandRequest(message, {
       workspaceContext: workspaceContextBlock,
       log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
@@ -1736,6 +1769,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         });
       }
 
+      composeIntentForFollowUp = planCompose(understood.request)?.kind ?? null;
+      brainConfidence = understood.request.confidence;
+
       brainRoute = routeRequest(understood.request, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
@@ -1764,9 +1800,6 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           may_spend: brainRoute.may_spend,
           parts: understood.request.parts.map((x) => x.objective),
           repaired: understood.repaired,
-          old_category: decision.workflow_category ?? null,
-          agreed: brainBinding.kind === "category"
-            ? brainBinding.category === decision.workflow_category : null,
         },
       });
 
@@ -1959,15 +1992,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // a value absent from `WorkflowCategory`, which matched no branch, fell
       // through to a deep fallback and delegated with no mission at all. That
       // is the whole of `mission_not_compiled`.
-      // ── THE LAST REMAINING TRANSLATION, AND IT IS ONE VALUE WIDE ───────
-      //
-      // `converse` has no surface of its own yet, so it enters the existing
-      // conversational branch. `BoundCategory` is typed `"simple_chat"` and
-      // nothing else, so this cannot silently widen back into the category
-      // laundering that produced `mission_not_compiled`.
-      if (brainBinding.kind === "category") {
-        decision.workflow_category = brainBinding.category;
-      }
+      // The last translation is gone with the categories it translated into:
+      // `converse` has its own surface now, handled below.
 
       // ── A PAGE THE USER NAMED: ONE FIRECRAWL FETCH, NO SEARCH ─────────
       //
@@ -2004,6 +2030,112 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           modelUsed: "chat-brain",
           providerUsed: "openai",
         });
+      }
+
+      // ── THE SAFETY REFUSAL, AHEAD OF EVERY SURFACE ────────────────────
+      //
+      // Defence in depth, not the enforcement: Penn writes drafts, `approvals`
+      // gates them, and nothing can dispatch without an approval row. What this
+      // adds is an ANSWER — "DM everyone on this list automatically" gets a
+      // refusal that explains the alternatives, instead of a silent pile of
+      // drafts that technically complies.
+      if (asksForUnsafeAction(message)) {
+        return await replyAndReturn(UNSAFE_REQUEST_REPLY, {
+          unsafe: true,
+          chat_brain: { route: brainRoute.kind, refused: "unsafe_request" },
+        });
+      }
+
+      // ── COMPANY BRAIN GATE, ON THE OBJECTIVE ──────────────────────────
+      //
+      // Work that GOES AND DOES SOMETHING for this business is generic without
+      // knowing the business. It used to be gated on `classifyIntent`'s
+      // vocabulary — a second classifier's reading of the same sentence, and
+      // one of the last things keeping that classifier alive. The objective
+      // carries the distinction directly.
+      //
+      // `read`, `converse` and `monitor` stay ungated: refusing "what leads do
+      // I have?" until onboarding is finished would hide the workspace from its
+      // owner.
+      if (shouldGateObjective(understood.request.objective,
+            { onboarding_completed: brainOnboardedForGate })) {
+        return await replyAndReturn(ONBOARDING_GATE_REPLY, {
+          gated: "missing_brain",
+          clarification: true,
+          chat_brain: { route: brainRoute.kind, objective: understood.request.objective },
+        });
+      }
+
+      // ── WRITE IT, THEN GO AND FIND ENGAGEMENT ON IT ───────────────────
+      //
+      // One delegation carrying both halves; orchestrate stages Scribe then
+      // Scout. The classifier expressed this as an `execution_mode` on a single
+      // category, because it had no way to say a message contained two asks.
+      if (brainRoute.kind === "content_engagement_loop" && brainRoute.signals) {
+        const sp = brainRoute.signals;
+        return await delegateToOrchestrate({
+          admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+          conversationId, workspaceId, instruction: message,
+          missionOrigin: "chat_brain_content_engagement_loop",
+          toolInput: {
+            intent: "content_engagement_loop",
+            tool_name: "source_with_apify",
+            selected_actor_key: "apify_linkedin_posts",
+            source_type: "linkedin_engagement",
+            query: sp.keywords.join(", ") || message,
+            role_keywords: [], location: sp.location,
+            max_results: Math.max(1, Math.min(10, sp.count ?? 5)),
+            needs_enrichment: false,
+            needs_outreach: sp.wants_drafts,
+            execution_mode: "content_engagement_loop",
+            confidence: understood.request.confidence,
+            missing_fields: [],
+            reason: "chat brain: content plus engagement search",
+            signal_type: sp.competitors.length > 0
+              ? "competitor_engagement" : "linkedin_engagement",
+            needs_content: true,
+            needs_engagement_search: true,
+            competitor_related: sp.competitors.length > 0,
+          } as unknown as ToolInput,
+          modelUsed: "chat-brain", providerUsed: "openai",
+        });
+      }
+
+      // ── CONVERSATION: A GROUNDED ANSWER, NOT A GREETING ───────────────
+      //
+      // `converse` used to bind to the category `simple_chat`, whose handler
+      // returned a hardcoded "Hi — I'm Pilot for your workspace. What would you
+      // like to work on?" — no model call, no context, the message unread. So
+      // "what should I focus on first?" and "hello" got the same sentence, and
+      // the objective that most needs the model was the one wired to a constant.
+      //
+      // The facts below are the ONLY state the answer may use, and they are
+      // counts this turn already has in hand — no new queries, and nothing that
+      // could be mistaken for having looked something up.
+      if (brainRoute.kind === "converse") {
+        const facts = [
+          `Leads saved in this conversation: ${memory.lead_candidates.length}.`,
+          `Outreach drafts in this conversation: ${memory.outreach_drafts.length}.`,
+          `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
+        ];
+        const ai = await generateText({
+          taskType: "pilot_chat",
+          systemPrompt: converseSystemPrompt({
+            workspaceContext: workspaceContextBlock, facts,
+          }),
+          messages: [{ role: "user", content: message }],
+          temperature: 0.5,
+          maxTokens: 420,
+          functionName: "pilot-chat-converse",
+          workspaceId,
+        });
+        return await replyAndReturn(
+          ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
+          {
+            chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
+              answered: ai.ok },
+          },
+        );
       }
 
       // ── SOURCING ACTIVITY: THREE KINDS, ONE ROUTE ─────────────────────
@@ -2311,37 +2443,40 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         });
       }
     } else {
-      // A MALFORMED OR UNAVAILABLE MODEL NEVER BECOMES source OR research. The
-      // old classifier decides, exactly as it did before this path existed.
-      console.warn("[pilot-chat][chat-brain] unreadable, deferring to classifier",
+      // ── A MODEL FAILURE DOES NOT RESURRECT A SECOND BRAIN ───────────────
+      //
+      // This deferred to the old classifier, which was the right answer while
+      // one existed: a malformed reading must never become `source` or
+      // `research` on its own. There is no classifier now, and reintroducing
+      // one for the failure case would rebuild exactly what this cleanup
+      // removed — a quieter second interpreter, reached only when nobody is
+      // watching.
+      //
+      // So the request is UNREAD, and says so. It falls through to the
+      // conversational tail, which answers without deciding any work: no
+      // objective, no surface, no spend. An honest "I did not follow that"
+      // costs a retry; a guess costs a run.
+      console.warn("[pilot-chat][chat-brain] unreadable — no fallback interpreter",
         { reason: understood.reason, violations: understood.violations });
     }
   }
 
-  // ── PHASE 0 BASELINE ────────────────────────────────────────────────────
+  // ══ END OF THE CHAT BRAIN BLOCK ═══════════════════════════════════════════
   //
-  // Record what the CURRENT path decided. Chat Brain's whole safety argument
-  // is equivalence with this, and equivalence needs a baseline that does not
-  // exist anywhere today — none of the three classifiers leaves a durable
-  // trace of its verdict.
+  // A stable landmark. Several tests slice this function between the Chat Brain
+  // entry and here to assert what may and may not appear inside the understood
+  // path; they used to key on the Phase 0 baseline header, which was content
+  // rather than a boundary and moved when that content was retired.
   //
-  // Observation only. `recordUnderstanding` never throws and returns nothing
-  // to branch on, so no decision below can be altered by it. Awaited rather
-  // than fired-and-forgotten because an edge isolate can be torn down before
-  // an unawaited insert settles — the same rule the execution ledger follows.
-  await recordUnderstanding(admin as unknown as UnderstandingWriter, {
-    workspaceId,
-    conversationId,
-    source: "workflow_classifier",
-    utterance: message,
-    category: decision.workflow_category ?? null,
-    confidence: typeof wf.confidence === "number" ? wf.confidence : null,
-    metadata: {
-      source_type: decision.source_type ?? null,
-      validated: validated.ok ?? null,
-      pre_confirmed: isPreConfirmed,
-    },
-  });
+  // ── THE PHASE 0 BASELINE IS RETIRED WITH ITS SUBJECT ────────────────────
+  //
+  // This wrote one `request_understanding_log` row per message recording what
+  // `workflowClassifier` decided, so the new path's equivalence could be
+  // measured against the old one. The old one no longer exists, so there is
+  // nothing left to compare against and a row sourced from a deleted component
+  // would be a fiction.
+  //
+  // Chat Brain still logs its own verdict above, which is now the whole record.
 
   // Lead Intelligence Engine — confirmed-Start honor. When the user clicks Start
   // on a workflow-confirmation card, the card threads back the ORIGINAL
@@ -2352,22 +2487,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     ? actionMetadata.lead_intent as Record<string, unknown>
     : null;
   if (confirmedLeadIntent && typeof confirmedLeadIntent.workflow_type === "string") {
-    decision.workflow_category = confirmedLeadIntent.workflow_type as typeof decision.workflow_category;
-    if (typeof confirmedLeadIntent.source_type === "string") decision.source_type = confirmedLeadIntent.source_type;
-    if (confirmedLeadIntent.workflow_type === "company_hiring_sourcing") decision.selected_actor_key = "apify_jobs";
-    decision.needs_clarification = false;
-    console.log("[pilot-chat] confirmed lead_intent honored:", { category: decision.workflow_category, source_type: decision.source_type, role_family: confirmedLeadIntent.role_family });
+    // IT USED TO OVERWRITE THE CLASSIFIER'S VERDICT so a "Run workflow: …"
+    // Start command was not re-read as a fresh request. There is no verdict to
+    // overwrite now — the card threads the original instruction and Chat Brain
+    // reads that — so this is kept as provenance only.
+    console.log("[pilot-chat] confirmed lead_intent:", {
+      workflow_type: confirmedLeadIntent.workflow_type,
+      source_type: confirmedLeadIntent.source_type ?? null,
+      role_family: confirmedLeadIntent.role_family ?? null,
+    });
   }
-
-  console.log("[pilot-chat] workflow_classifier:", {
-    category: decision.workflow_category,
-    confidence: decision.confidence,
-    needs_clarification: decision.needs_clarification,
-    selected_actor_key: decision.selected_actor_key,
-    execution_mode: decision.execution_mode,
-    validator_ok: validated.ok,
-    validator_reason: validated.reason,
-  });
 
   // Loaded ABOVE the Chat Brain block — see the hoist there.
   console.log("[pilot-chat] memory:", {
@@ -2378,16 +2507,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     last_plan_id: memory.last_plan_id,
   });
 
+  // WHAT EVERY ASSISTANT MESSAGE CARRIES. It used to be the classifier's
+  // verdict — its category, its confidence, the actor it picked. None of those
+  // exist any more, and recording them would have meant recording a component's
+  // opinion after deleting the component. This states what is actually known:
+  // which layer decided, and how sure it was.
   const baseMeta = {
-    workflow_category: decision.workflow_category,
-    business_goal: decision.business_goal,
-    intent: decision.intent,
-    confidence: decision.confidence,
-    execution_mode: decision.execution_mode,
-    selected_actor_key: decision.selected_actor_key,
-    selected_tool: decision.selected_tool,
-    requires_approval: decision.requires_approval,
-    classifier_source: decision.source,
+    classifier_source: "chat_brain",
+    objective: brainRoute?.objective ?? null,
+    route: brainRoute?.kind ?? null,
+    confidence: brainConfidence,
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   };
 
@@ -2407,7 +2536,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     return json({
       type: "reply",
       conversation_id: conversationId,
-      workflow_category: decision.workflow_category,
+      // The route that produced this reply. It was the classifier's category —
+      // a field the frontend reads for telemetry only, and one that named a
+      // component that no longer exists.
+      route: brainRoute?.kind ?? null,
       message: saved,
     });
   }
@@ -2451,12 +2583,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // Safety FIRST — an unsafe/auto-send ask wins over memory follow-ups and lead
   // intake (e.g. "these leads, automatically DM them" must refuse, not ask for
   // leads). Draft-only/approval-gated alternatives offered; nothing is sent.
-  if (decision.workflow_category === "unsafe_or_unsupported") {
-    return await replyAndReturn(
-      "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?",
-      { unsafe: true },
-    );
-  }
+  // REMOVED: unsafe_or_unsupported -> `asksForUnsafeAction`, run ahead of every surface.
 
   // Submitted Lead Search Brief detection (computed early so no intermediate
   // handler — validator clarification, etc. — can intercept it). When present,
@@ -2562,14 +2689,23 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // outreach"). isFollowUpReference matches "draft outreach", so we exclude
   // messages the classifier routed to a sourcing category — those must run the
   // sourcing pipeline (which will draft outreach as a downstream step).
-  const SOURCING_CATEGORIES = ["company_hiring_sourcing", "people_sourcing", "signal_sourcing"];
-  const isSourcingFollowup = SOURCING_CATEGORIES.includes(decision.workflow_category);
+  // FROM THE ROUTE, NOT A CATEGORY LIST. "Find companies hiring GTM roles and
+  // draft outreach" reads as a follow-up because it says "draft outreach", but
+  // it is a sourcing run whose drafts are a downstream step. The route already
+  // decided that; it does not need re-deriving from a list of category names.
+  const isSourcingFollowup = brainRoute?.kind === "lead_mission"
+    || brainRoute?.kind === "signal_sourcing"
+    || brainRoute?.kind === "content_engagement_loop";
 
   if (followUpRef && !isSourcingFollowup) {
     if (!memory.has_any_memory) {
       // Honest fallback — no prior results to act on. For outreach we surface
       // the specific guard reason so the UI/metadata can distinguish it.
-      const isOutreach = decision.workflow_category === "outreach" || draftOutreachRe.test(message);
+      // The last read of a classifier category, replaced by the understanding
+      // that already happened: an outreach ask is a `compose` part aimed at
+      // people, which `planCompose` decided from the request above.
+      const isOutreach = composeIntentForFollowUp === "outreach"
+        || draftOutreachRe.test(message);
       const noMemoryReply = isOutreach
         ? "I need leads or a saved result set first. Run a sourcing workflow, choose leads from Workbench, or paste the leads you want me to draft outreach for."
         : "I don't have any leads or results saved in this conversation yet. Tell me what to source first — for example: \"find 20 companies hiring growth marketers in the US\" or \"find 10 React developer profiles in London\" — and I'll keep the results in memory so you can filter, enrich, or draft outreach against them next.";
@@ -2703,12 +2839,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // unknown actor) → surface its clarification and stop. Skipped for a submitted
   // Lead Search Brief — that flows to the deterministic handler below (which has
   // its own honest people-actor fallback) so it never reopens the selector.
-  if (!validated.ok && validated.clarification && !hasSubmittedBrief) {
-    return await replyAndReturn(validated.clarification, {
-      clarification: true,
-      validator_reason: validated.reason ?? null,
-    });
-  }
+  // ── 5c.i REMOVED: THE CAPABILITY VALIDATOR ──────────────────────────────
+  //
+  // `validateAgainstCapabilities` existed to check the actor the CLASSIFIER had
+  // chosen: unknown key, disabled actor, missing Firecrawl. No classifier
+  // chooses an actor any more — each route names the one it needs, and those are
+  // registered and enabled by construction.
+  //
+  // Admissibility is still enforced, and in the place that can actually stop a
+  // call: `buildCapabilityGraph` decides which providers a mission may reach,
+  // and `assertProviderAllowed` refuses the rest at the invocation boundary.
+  // Validating a guess earlier was never what made a run safe.
 
   // 5c.ii — the unsafe/unsupported reply used to be repeated here.
   //
@@ -3026,146 +3167,26 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
   // 5c.iii Capabilities / agent_management / approval_review / simple_chat
   // → direct conversational reply.
-  if (decision.workflow_category === "simple_chat") {
-    const greeting = brainReady
-      ? `Hi — I'm Pilot for your workspace. What would you like to work on?`
-      : "Hi — I'm Pilot. What would you like to work on?";
-    return await replyAndReturn(greeting);
-  }
+  // REMOVED: simple_chat -> the converse route, which reads the message instead of greeting.
 
   const CAPABILITIES_GENERIC =
     "Agentory is an AI workforce OS for founders and small teams. I coordinate a five-agent team: Scout (sourcing/signals), Aria (ranking/scoring), Hawk (research/URL analysis), Penn (outreach drafts — approval-gated), Scribe (content/reports). Tools include Apify for structured sourcing, Firecrawl for URL/website analysis, Gemini/Claude for reasoning and writing, and approval-gated email. Tell me what you'd like to do — find leads, analyze a careers page, write a post, draft outreach, or get a daily brief.";
-  if (decision.workflow_category === "capabilities") {
-    if (brainReady) {
-      return await personalizedReply(
-        `The user asked what Agentory can do. Briefly name the five agents (Scout sourcing/signals, Aria ranking, Hawk research/URLs, Penn approval-gated outreach, Scribe content) and the tools (Apify, Firecrawl, Gemini/Claude, approval-gated email). THEN recommend the 2–3 most useful workflows for THIS company given its ICP and goals. User message: "${message}"`,
-        CAPABILITIES_GENERIC,
-        { capabilities: true },
-      );
-    }
-    return await replyAndReturn(CAPABILITIES_GENERIC);
-  }
+  // REMOVED: capabilities -> the converse route.
 
   const AGENT_MGMT_GENERIC =
     "Your AI workforce: Scout (sources companies hiring + candidate profiles), Aria (ranks and scores leads), Hawk (researches URLs and competitors with Firecrawl), Penn (drafts outreach — never sends without your approval), Scribe (writes posts, briefs, reports). Pilot (me) routes the work. Ask me to do something concrete and I'll assign the right agent.";
-  if (decision.workflow_category === "agent_management") {
-    if (brainReady) {
-      return await personalizedReply(
-        `The user is asking about the AI team/agents. Describe the five agents (Scout, Aria, Hawk, Penn — approval-gated — and Scribe) and, given this company's goals, note which agents are most relevant to them right now. Keep it tight. User message: "${message}"`,
-        AGENT_MGMT_GENERIC,
-        { agent_management: true },
-      );
-    }
-    return await replyAndReturn(AGENT_MGMT_GENERIC);
-  }
+  // REMOVED: agent_management -> the converse route.
 
-  if (decision.workflow_category === "approval_review") {
-    // ── ONE IMPLEMENTATION, REACHED FROM TWO PLACES ─────────────────────────
-    //
-    // The query and the wording moved to `readSurface` as the `approvals`
-    // target, where Chat Brain reaches them through the ordinary read route
-    // (`entity: "approval"`). This branch stays only until `workflowClassifier`
-    // is deleted, and it now DELEGATES rather than duplicating: two copies of
-    // "what is waiting for you" would be two answers to one question, and the
-    // one the user got would depend on which classifier ran.
-    const plan = planRead({
-      version: REQUEST_V1_VERSION,
-      utterance: message,
-      objective: "read",
-      parts: [{
-        id: "approval_review",
-        objective: "read",
-        subject: { entity: "approval", references: [] },
-        output: { shape: "records", count: null },
-      }],
-      ambiguity: [],
-      authority: { may_spend: false, max_cost_units: null, requires_confirmation: true },
-      provenance: {},
-      confidence: 1,
-    });
-    const result = await executeRead(admin as unknown as ReadDb, plan, workspaceId);
-    return await replyAndReturn(renderReadAnswer(plan, result), {
-      approval_source: result?.items[0]?.source ?? "approvals",
-      pending_count: result?.counts.total ?? 0,
-    });
-  }
+  // REMOVED: approval_review -> the read route, entity `approval`.
 
   // 5c.iii-b Phase 7 — Founder Content + Engagement Loop. content_creation +
   // engagement search. Deterministic staged plan in orchestrate: Scribe (post,
   // Claude-preferred) → Scout (LinkedIn search) → Aria (rank) → [Scribe comments]
   // → [Penn DMs]. Must precede the Scribe-only content_creation branch.
-  if (decision.execution_mode === "content_engagement_loop") {
-    return await delegateToOrchestrate({
-      admin,
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      authHeader,
-      conversationId,
-      workspaceId,
-      instruction: message,
-      toolInput: {
-        intent: "content_engagement_loop",
-        tool_name: "source_with_apify",
-        selected_actor_key: "apify_linkedin_posts",
-        source_type: "linkedin_engagement",
-        query: decision.query ?? message,
-        role_keywords: [],
-        location: null,
-        max_results: Math.max(1, Math.min(10, decision.max_results ?? 5)),
-        needs_enrichment: false,
-        needs_outreach: !!decision.needs_dm_drafts,
-        execution_mode: "content_engagement_loop",
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: decision.reason,
-        signal_type: decision.signal_type ?? "linkedin_engagement",
-        needs_content: true,
-        needs_engagement_search: true,
-        needs_comment_drafts: !!decision.needs_comment_drafts,
-        needs_dm_drafts: !!decision.needs_dm_drafts,
-        competitor_related: !!decision.competitor_related,
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-    });
-  }
+  // REMOVED: content_engagement_loop -> the compound route, which reads it as the two parts it is.
 
   // 5c.iv content_creation → Scribe-only delegation. No Apify/Firecrawl.
-  if (decision.workflow_category === "content_creation") {
-    return await delegateToOrchestrate({
-      admin,
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      authHeader,
-      conversationId,
-      workspaceId,
-      instruction: message,
-      // ToolInput drives the legacy orchestrator's mode; content mode tells it
-      // to skip sourcing tools and go straight to Scribe. NOTE: orchestrate's
-      // Scribe-only staged template keys off intent === "content_creation".
-      toolInput: {
-        intent: "content_creation",
-        tool_name: null,
-        selected_actor_key: null,
-        source_type: null,
-        query: message,
-        role_keywords: [],
-        location: null,
-        max_results: 1,
-        needs_enrichment: false,
-        needs_outreach: false,
-        // execution_mode "content" is supported by the legacy ToolInput type
-        // ("fast"|"deep"|"outreach"), so we coerce to "fast" and pass content
-        // intent — orchestrate keys off intent=create_content for Scribe-only.
-        execution_mode: "fast",
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: decision.reason,
-      } as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-    });
-  }
+  // REMOVED: content_creation -> the compose route, kind `content`.
 
   // 5c.v market_research → honest reply when live search is not configured.
   //
@@ -3175,186 +3196,27 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // about one null. The sentence and the rule both live in
   // `marketResearchSurface` now, reached identically from here and from the
   // route above.
-  if (decision.workflow_category === "market_research" && !webSearchAvailable(readEnvSafe)) {
-    return await replyAndReturn(SEARCH_WEB_UNAVAILABLE, { degraded: "search_web_unavailable" });
-  }
+  // REMOVED: market_research -> the market_research route, which asks the capability directly.
 
   // 5c.v-0 Phase 4.2 — extract commenters from a specific post (opt-in actor;
   // validator already returned the honest fallback above if it's disabled).
-  if (decision.extract_commenters) {
-    const urls = (decision.post_urls ?? []).filter((u) => /linkedin\.com/i.test(u));
-    if (urls.length === 0) {
-      return await replyAndReturn(
-        "Which LinkedIn post should I pull commenters from? Paste the post URL.",
-        { clarification: true, clarification_type: "commenters_need_post_url" },
-      );
-    }
-    return await delegateToOrchestrate({
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
-      conversationId, workspaceId, instruction: message,
-      toolInput: {
-        intent: "extract_commenters",
-        tool_name: "source_with_apify",
-        selected_actor_key: "apify_linkedin_post_comments",
-        source_type: "linkedin_comments",
-        query: message,
-        role_keywords: [],
-        location: null,
-        max_results: Math.max(1, Math.min(50, decision.max_results ?? 20)),
-        needs_enrichment: false,
-        needs_outreach: false,
-        execution_mode: "fast",
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: "extract_commenters",
-        extract_commenters: true,
-        user_input: { postUrls: urls },
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-    });
-  }
+  // REMOVED: extract_commenters -> the signal_sourcing route, kind `post_commenters`.
 
   // 5c.v-a Phase 4 (dynamic) — Competitor DISCOVERY. Resolve business context
   // from inline (decision) + company_brain; if none, ask for it. Otherwise
   // delegate to orchestrate's discovery plan (website → Firecrawl-first).
-  if (decision.competitor_discovery) {
-    let website = decision.business_website ?? null;
-    let description = decision.business_description ?? null;
-    // Always load the company brain so we can seed KNOWN competitors (source
-    // order steps 1-2: user-provided + company_brain.competitors.known) and fall
-    // back to the saved profile for website/description.
-    const { data: cbRow } = await admin
-      .from("company_brain").select("profile").eq("workspace_id", workspaceId).maybeSingle();
-    const profile = (cbRow?.profile ?? {}) as Record<string, unknown>;
-    if (!website && !description) {
-      const what = [profile.what_we_do, profile.who_we_sell_to].filter((x) => typeof x === "string" && x).join(". ");
-      if (typeof profile.website === "string" && profile.website) website = profile.website as string;
-      else if (what) description = what;
-    }
-    // Known competitors: user-provided (matched by classifier) ∪ brain. These let
-    // Scout search real names even if Hawk infers nothing — and never require Perplexity.
-    const knownCompetitors = Array.from(new Set([
-      ...((decision.competitors ?? []) as string[]),
-      ...brainCompetitors(profile),
-    ].map((c) => String(c).trim()).filter(Boolean)));
-    const mode = website ? "website" : (description ? "description" : (knownCompetitors.length > 0 ? "description" : "needs_context"));
-    if (mode === "needs_context") {
-      return await replyAndReturn(
-        "To find your competitors, share your website, LinkedIn company page, or a one-line description of what you sell — or set up your company profile and I'll use that.",
-        { clarification: true, clarification_type: "competitor_discovery_needs_context" },
-      );
-    }
-    return await delegateToOrchestrate({
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
-      conversationId, workspaceId, instruction: message,
-      toolInput: {
-        intent: "competitor_discovery",
-        tool_name: "source_with_apify",
-        selected_actor_key: "apify_linkedin_posts",
-        source_type: "linkedin_engagement",
-        query: description ?? website ?? message,
-        role_keywords: [],
-        location: null,
-        max_results: Math.max(1, Math.min(20, decision.max_results ?? 5)),
-        needs_enrichment: false,
-        needs_outreach: !!decision.needs_dm_drafts,
-        execution_mode: decision.execution_mode,
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: `competitor_discovery (${mode})`,
-        signal_type: "competitor_engagement",
-        competitor_discovery: true,
-        discovery_mode: mode,
-        business_website: website,
-        business_description: description,
-        // Known competitors flow to Scout (and the inference→search threading) so
-        // the LinkedIn search uses real names/categories, never the raw description.
-        competitors: knownCompetitors,
-        needs_comment_drafts: !!decision.needs_comment_drafts,
-        needs_dm_drafts: !!decision.needs_dm_drafts,
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-    });
-  }
+  // REMOVED: competitor_discovery -> the signal_sourcing route, kind `competitor_discovery`.
 
   // 5c.v-b Phase 3 — LinkedIn engagement signal sourcing. The actor is enabled
   // (validator passed above; if it were disabled we'd have returned the honest
   // fallback already). Delegate to orchestrate's staged LinkedIn plan.
-  if (decision.workflow_category === "signal_sourcing" &&
-      (decision.selected_actor_key === "apify_linkedin_posts" || decision.selected_actor_key === "apify_linkedin_profile_posts")) {
-    const isProfilePosts = decision.selected_actor_key === "apify_linkedin_profile_posts";
-    // Profile-posts needs target URLs; extract LinkedIn URLs from the message.
-    const targetUrls = isProfilePosts
-      ? (message.match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|company|school|showcase)\/[A-Za-z0-9_\-%.]+/ig) ?? [])
-      : [];
-    if (isProfilePosts && targetUrls.length === 0) {
-      return await replyAndReturn(
-        "Which LinkedIn profile or company page should I pull recent posts from? Paste one or more LinkedIn URLs.",
-        { clarification: true, clarification_type: "linkedin_profile_posts_needs_urls" },
-      );
-    }
-    return await delegateToOrchestrate({
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
-      conversationId, workspaceId, instruction: message,
-      toolInput: {
-        intent: "signal_sourcing",
-        tool_name: "source_with_apify",
-        selected_actor_key: decision.selected_actor_key,
-        source_type: "linkedin_engagement",
-        query: decision.query ?? message,
-        role_keywords: [],
-        location: decision.location ?? null,
-        max_results: Math.max(1, Math.min(20, decision.max_results ?? 5)),
-        needs_enrichment: false,
-        needs_outreach: !!decision.needs_dm_drafts,
-        execution_mode: decision.execution_mode,
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: (decision.signal_type === "competitor_engagement" ? "competitor_engagement" : "linkedin_engagement") + " signal sourcing",
-        signal_type: decision.signal_type ?? "linkedin_engagement",
-        competitors: decision.competitors ?? [],
-        keywords: decision.keywords ?? [],
-        needs_comment_drafts: !!decision.needs_comment_drafts,
-        needs_dm_drafts: !!decision.needs_dm_drafts,
-        // Pass expanded search queries + (profile mode) target URLs to the actor adapter.
-        user_input: {
-          ...(decision.keywords && decision.keywords.length > 0 ? { keywords: decision.keywords } : {}),
-          ...(isProfilePosts ? { targetUrls } : {}),
-        },
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-    });
-  }
+  // REMOVED: signal_sourcing (engagement) -> the signal_sourcing route, kind `engagement`.
 
   // 5c.vi signal_sourcing (vague) → brain-aware recommendation, or gate.
-  if (decision.workflow_category === "signal_sourcing" && decision.needs_clarification) {
-    // Business-specific prompt with NO usable brain → ask for Company Brain.
-    // Never scrape random leads, never fall back to a generic signal menu.
-    if (!brainReady) {
-      return await replyAndReturn(ONBOARDING_GATE_REPLY, {
-        gated: "missing_brain",
-        clarification: true,
-      });
-    }
-    // Brain ready → recommend contextual lead strategies grounded in the brain.
-    return await personalizedReply(
-      `The user asked to find leads/prospects but didn't specify a buying signal. Using the Company Brain, recommend a contextual lead strategy — do NOT ask a generic "which signal" menu. Reference their ICP, goals, and competitors naturally. Prefer this order: (1) LinkedIn engagement signals tied to their ICP/category, (2) competitor engagement if competitors are known, (3) companies hiring relevant (GTM/eng) roles, (4) website/company research. End by offering to start with 5 signals saved to the Signal Feed — no outreach, nothing sent without approval. User message: "${message}"`,
-      decision.clarification_question ??
-        "Tell me a bit more about the buying signal you want to target and I'll start sourcing.",
-      { clarification: true, possible_actions: decision.possible_actions },
-    );
-  }
+  // REMOVED: vague signal sourcing -> the converse route, which already reasons over the Brain.
 
   // 5c.vii unclear → targeted clarification menu. No plan, no tool.
-  if (decision.workflow_category === "unclear") {
-    return await replyAndReturn(
-      decision.clarification_question ?? SHORT_VAGUE_CLARIFICATION,
-      { clarification: true, clarification_type: "unclear" },
-    );
-  }
+  // REMOVED: unclear -> the converse route answers, grounded, instead of a canned menu.
 
   // Phase 4 (consolidation) — workflowClassifier is the PRIMARY decision layer.
   // company_hiring_sourcing and people_sourcing are resolved deterministically
@@ -3364,224 +3226,21 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // validator (5c.i) and lead intake (5c.ii-b) above, so reaching here means the
   // selected actor is available.
 
-  // Phase 5 — Workflow Confirmation Gate.
-  // When a user types a workflow request in chat (not from Dashboard, Workflows,
-  // or an already-confirmed card action), show a structured confirmation card
-  // instead of immediately running. Pre-confirmed sources bypass this.
-  const CONFIRMABLE_CATEGORIES = ["company_hiring_sourcing", "people_sourcing", "signal_sourcing", "outreach", "content_creation", "url_analysis", "market_research"];
-  const needsConfirmation = !isPreConfirmed && CONFIRMABLE_CATEGORIES.includes(decision.workflow_category);
+  // ── PHASE 5 REMOVED: THE CATEGORY-LIST CONFIRMATION GATE ────────────────
+  //
+  // It showed a confirmation card when `decision.workflow_category` was one of
+  // seven names. Reaching this point now means Chat Brain did NOT route the
+  // request — every route returns above — so there is no category here to check
+  // and nothing generic left to confirm.
+  //
+  // Confirmation itself is unchanged and is owned by the paths that spend: the
+  // compose route gates outreach through `showWorkflowConfirmation`, the lead
+  // brief and intake paths gate themselves, and `Route.requires_confirmation`
+  // states the rule for anything new.
 
-  if (needsConfirmation) {
-    console.log("[pilot-chat] workflow_confirmation_gate: showing card", { category: decision.workflow_category, actionSource });
-    const confirmation = await generateWorkflowConfirmation(
-      message, workspaceId, admin, decision.workflow_category);
-    const confirmContent = buildWorkflowHandoffMessage(confirmation);
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: confirmContent,
-        agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
-        metadata: {
-          ...baseMeta,
-          type: "workflow_confirmation",
-          workflow_confirmation: confirmation,
-          prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
-        },
-      })
-      .select("*")
-      .single();
-    return json({
-      type: "reply",
-      conversation_id: conversationId,
-      workflow_category: decision.workflow_category,
-      workflow_confirmation: true,
-      message: saved,
-    });
-  }
+  // REMOVED: company_hiring_sourcing -> the lead_mission route compiles and delegates a mission.
 
-  if (decision.workflow_category === "company_hiring_sourcing") {
-    // ── COMPILE THE CANONICAL MISSION FOR THE RUN THAT IS ABOUT TO HAPPEN ──
-    //
-    // Once, here, on the Start request. The confirmation card compiled one for
-    // the PREVIEW, but that was a different HTTP request and its result was
-    // never carried forward — which is why execution had been running on
-    // `planToolInput()` output alone.
-    //
-    // It is compiled FIRST because everything below is now derived from it.
-    const compiledLeadMission = canonicalMissionForTransport(
-      await compileCanonicalLeadMission({
-        prompt: message,
-        workspaceId,
-        brain: brainProfile,
-        requestedCount: null,
-        ledger: missionLedger,
-      }));
-
-    // Lead Intelligence Engine: prefer the lead_intent the confirmation card
-    // threaded back on Start (the ORIGINAL request's role family + aliases +
-    // excludes); otherwise project it from the Mission just compiled. It used to
-    // be re-derived with `extractLeadIntent(message)` — a regex reading of the
-    // same sentence, deciding the run's role family beside the Mission.
-    const leadIntent = confirmedLeadIntent ?? leadIntentForToolInput(compiledLeadMission, brainProfile);
-    const li = leadIntent as Record<string, unknown> | null;
-    const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
-    const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
-
-    // ROUTING PRECEDENCE — the Mission's qualified-Lead decision wins over the
-    // legacy jobs-actor pin. When the Mission says the user asked for people to
-    // contact (e.g. "find 5 founders of SaaS startups hiring Sales Operations"),
-    // we MUST NOT hardcode `selected_actor_key: "apify_jobs"` / `source_type:
-    // "jobs"` here: doing so pins the request to the legacy fast/account_first
-    // branch in run-agent (index.ts:638 gate `!raw_source_type &&
-    // !planned_actor_key`) and the whole company-first sourcing stack (Company
-    // Brain gate → founder/CEO search → CONTACT-only quota) becomes
-    // unreachable. Instead we leave both fields unset so run-agent's entity
-    // router picks the actor from the Mission's decided entity, and we flip
-    // execution_mode to "company_first" so orchestrate + run-agent both
-    // recognise the contract. Non-qualified account/job-only requests keep the
-    // previous deterministic apify_jobs behavior.
-    //
-    // This used to be `routeQualifiedLead(message)`, a phrase table re-reading
-    // the sentence the Mission had just been compiled from.
-    const qlRoute = compiledLeadMission
-      ? qualifiedLeadRouteFromMission(compiledLeadMission)
-      : routeQualifiedLead(message);
-    const isQualifiedLead = qlRoute.workflowKind === "qualified_lead_sourcing";
-
-    // THE QUOTA IS THE MISSION'S. It used to be
-    // `extractRequestedLeadCount(message) ?? clamp(decision.max_results ?? 5)`:
-    // a regex reading of the same sentence the Mission had just been compiled
-    // from, followed by the CLASSIFIER's number — two more answers to a question
-    // already answered. `effectiveRequestedCount` applies the one default.
-    const requestedLeadCount = isQualifiedLead
-      ? (compiledLeadMission
-        ? effectiveRequestedCount(compiledLeadMission)
-        : DEFAULT_REQUESTED_COUNT)
-      : undefined;
-    console.log("[pilot-chat][canonical-mission]", {
-      workspace_id: workspaceId,
-      qualified_lead: isQualifiedLead,
-      compiled: compiledLeadMission != null,
-      has_directives: compiledLeadMission?.directives != null,
-      contract: compiledLeadMission?.lead_intelligence_contract_version ?? null,
-      signals: compiledLeadMission?.required_signals?.map((s) => s.type) ?? [],
-    });
-
-    return await delegateToOrchestrate({
-      leadMission: compiledLeadMission,
-      // The sidecar follows the mission on every branch that can reach a paid
-      // run, so a bound company is never re-resolved by name downstream.
-      leadBindings: resolvedBindings,
-    missionOrigin: "confirmed_card",
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
-      instruction: message,
-      toolInput: {
-        intent: isQualifiedLead ? "source_qualified_leads" : "source_companies_hiring",
-        tool_name: "source_with_apify",
-        // Only pin the actor/source when this is NOT a qualified-Lead mission.
-        // See comment above.
-        ...(isQualifiedLead ? {} : { selected_actor_key: "apify_jobs", source_type: "jobs" }),
-        query: liQuery,
-        role_keywords: liRoleKeywords,
-        location: decision.location ?? null,
-        max_results: Math.max(1, Math.min(50, decision.max_results ?? 5)),
-        needs_enrichment: false,
-        needs_outreach: !!decision.needs_outreach,
-        execution_mode: isQualifiedLead
-          ? "company_first"
-          : (decision.needs_outreach ? "outreach" : "fast"),
-        // Qualified-Lead contract fields. Orchestrate ALSO calls
-        // routeQualifiedLead and stamps these on the top-level body, but we
-        // thread them here as well so the tool_input carries provenance
-        // downstream (run-agent inspects tool_input for requested_lead_count).
-        ...(isQualifiedLead ? {
-          workflow_kind: "qualified_lead_sourcing",
-          quota_policy: "contact_only",
-          count_entity: "contact_ready_lead",
-          requested_lead_count: requestedLeadCount,
-        } : {}),
-        confidence: decision.confidence,
-        missing_fields: [],
-        lead_intent: leadIntent,
-        reason: isQualifiedLead
-          ? `classifier: company_hiring_sourcing → qualified_lead_sourcing (routeQualifiedLead reasons: ${qlRoute.reasonCodes.join(",")})`
-          : "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
-      workflowInputs: actionWorkflowInputs,
-    });
-  }
-
-  if (decision.workflow_category === "people_sourcing") {
-    // ── A LEAD PATH, SO IT CARRIES THE CANONICAL MISSION ────────────────────
-    //
-    // This branch delegated with NO mission at all, and with the CLASSIFIER's
-    // reading of the sentence — `decision.query`, `decision.role_keywords`,
-    // `decision.location`, `decision.max_results` — as the run's semantics. So
-    // for a people request the regex-first workflow classifier WAS the
-    // interpreter, and under `new_architecture` orchestrate then refused the
-    // task outright (422 `mission_not_compiled`) because no mission arrived.
-    //
-    // The classifier still answers the question it owns — WHICH branch this is —
-    // and its fields survive only as the fallback for a workspace with no
-    // compiler enabled.
-    const peopleMission = canonicalMissionForTransport(
-      await compileCanonicalLeadMission({
-        prompt: message, workspaceId, brain: brainProfile, requestedCount: null,
-        ledger: missionLedger,
-      }));
-    const peopleBrain = brainProfile as any;
-    const peopleIntent = peopleMission
-      ? leadIntentFromMission(peopleMission, {
-        icp: peopleBrain?.icp, company: peopleBrain?.company,
-        competitors: peopleBrain?.competitors, positioning: peopleBrain?.positioning,
-      })
-      : null;
-    console.log("[pilot-chat][canonical-mission]", {
-      workspace_id: workspaceId,
-      branch: "people_sourcing",
-      compiled: peopleMission != null,
-      has_directives: peopleMission?.directives != null,
-    });
-
-    return await delegateToOrchestrate({
-      leadMission: peopleMission,
-      // The sidecar follows the mission on every branch that can reach a paid
-      // run, so a bound company is never re-resolved by name downstream.
-      leadBindings: resolvedBindings,
-    missionOrigin: "people_sourcing",
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
-      instruction: message,
-      toolInput: {
-        intent: "source_people",
-        tool_name: "source_with_apify",
-        selected_actor_key: decision.selected_actor_key ?? "apify_people_search",
-        source_type: "people_profiles",
-        query: decision.query ?? message,
-        // WHO to look for is the Mission's decision-maker set; the classifier's
-        // keyword list is what it fell back to before a mission existed.
-        role_keywords: peopleIntent?.target_buyer?.length
-          ? peopleIntent.target_buyer
-          : (decision.role_keywords ?? []),
-        location: peopleIntent?.target_geography?.[0] ?? decision.location ?? null,
-        // The Mission's count, through the one runtime default; still clamped to
-        // this branch's provider ceiling.
-        max_results: Math.max(1, Math.min(25,
-          peopleMission ? effectiveRequestedCount(peopleMission) : (decision.max_results ?? 5))),
-        needs_enrichment: false,
-        needs_outreach: !!decision.needs_outreach,
-        execution_mode: decision.needs_outreach ? "outreach" : "fast",
-        confidence: decision.confidence,
-        missing_fields: [],
-        reason: "classifier: people_sourcing → people search (mission-carried)",
-      } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
-      workflowInputs: actionWorkflowInputs,
-    });
-  }
+  // REMOVED: people_sourcing -> the lead_mission route compiles and delegates a mission.
 
   // For url_analysis / outreach (and any residual) we fall through to the legacy
   // classifyIntent + planToolInput pipeline as a DEEP FALLBACK only. It still
@@ -3617,131 +3276,23 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     availableTools: ["apify", "firecrawl", "resend"],
   }) + "\n\n" + PILOT_SYSTEM_PROMPT + "\n\n" + renderMemoryForPrompt(memory);
 
-  // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
-  const intentResult = await classifyIntent(message);
-  console.log("[pilot-chat] intent:", intentResult);
-
-  // 6c.0 Onboarding gate — if Company Brain is incomplete and the user asked
-  // for content/GTM work, ask them to complete onboarding instead of running
-  // expensive workflows that would produce generic output.
-  if (shouldGateForOnboarding(intentResult.intent, {
-    onboarding_completed: brainRow?.onboarding_completed === true,
-    profile: brain as Record<string, unknown>,
-  })) {
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: ONBOARDING_GATE_REPLY,
-        agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
-        metadata: {
-          intent: intentResult.intent,
-          onboarding_gate: true,
-          open_onboarding: true,
-        },
-      })
-      .select("*")
-      .single();
-    return json({
-      type: "reply",
-      conversation_id: conversationId,
-      intent: intentResult.intent,
-      onboarding_gate: true,
-      open_onboarding: true,
-      message: saved,
-    });
-  }
-
-  // 6c.i Unclear → ask one clarification, no orchestration.
-  if (intentResult.intent === "unclear") {
-    const clarification = "I'm not sure what you'd like me to do. Could you add a bit more detail — for example, the role/company type and a location, or a specific URL?";
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: clarification,
-        agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
-        metadata: { intent: "unclear", clarification: true },
-      })
-      .select("*")
-      .single();
-    return json({ type: "reply", conversation_id: conversationId, intent: "unclear", message: saved });
-  }
-
-  // 6c.ii Source-style intent → run tool input planner; may ask clarification.
-  let toolInput: ToolInput | null = null;
-  if (
-    intentResult.intent === "source_signals" ||
-    intentResult.intent === "analyze_url" ||
-    intentResult.intent === "enrich_existing_leads" ||
-    intentResult.intent === "draft_outreach" ||
-    intentResult.intent === "send_requires_approval" ||
-    intentResult.intent === "rank_existing_leads"
-  ) {
-    toolInput = await planToolInput(message, intentResult.intent, brain);
-    console.log("[pilot-chat] tool_input:", toolInput);
-
-    if (toolInput.ask_clarification) {
-      const q = toolInput.clarification ?? "Could you share a bit more — role/company type and location would help.";
-      const { data: saved } = await admin
-        .from("messages")
-        .insert({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: q,
-          agent_slug: "pilot",
-          model_used: "google/gemini-3-flash-preview",
-          metadata: {
-            intent: intentResult.intent,
-            clarification: true,
-            missing_fields: toolInput.missing_fields,
-            // OWNED, so only the resolver that offers these actions may read
-            // the reply. Written only when there is actually something to
-            // choose between — a menu with no options is not a question.
-            ...((toolInput.people_action || toolInput.companies_action || toolInput.agency_action)
-              ? pendingClarification("lead_source_selector",
-                String(toolInput.clarification_type ?? "generic"),
-                { required_fields: ["entity_kind"] })
-              : {}),
-            original_request: message,
-            people_action: toolInput.people_action ?? null,
-            companies_action: toolInput.companies_action ?? null,
-            agency_action: toolInput.agency_action ?? null,
-            prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
-          },
-        })
-        .select("*")
-        .single();
-      return json({
-        type: "reply",
-        conversation_id: conversationId,
-        intent: intentResult.intent,
-        clarification: true,
-        message: saved,
-      });
-    }
-  }
-
-  // 6c.iii When we have a confident tool_input, skip the Pilot AI decision and delegate directly.
-  if (toolInput && toolInput.tool_name) {
-    return await delegateToOrchestrate({
-      admin,
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      authHeader,
-      conversationId,
-      workspaceId,
-      instruction: message,
-      toolInput,
-      modelUsed: "google/gemini-3-flash-preview",
-      providerUsed: "lovable-ai",
-      workflowInputs: actionWorkflowInputs,
-    });
-  }
+  // ── 6c REMOVED: THE SECOND SEMANTIC CLASSIFIER ──────────────────────────
+  //
+  // `classifyIntent(message)` ran here — a THIRD reader of the user's sentence,
+  // after `workflowClassifier` and after Chat Brain. It fed `planToolInput`,
+  // which read the sentence again to pick an actor. So a message that Chat Brain
+  // had already understood could be reinterpreted twice more, and the last
+  // reading won.
+  //
+  // It is also where `mission_not_compiled` came from. A correctly understood
+  // sourcing request fell past every category branch into this fallback, which
+  // delegated on `tool_input` alone with no mission, and orchestrate refused it.
+  //
+  // WHAT REPLACES IT: nothing. That is the point. A request is understood once;
+  // if Chat Brain cannot read it, the honest outcome is a conversational reply
+  // or a stated failure, never a second brain quietly having another go. The
+  // onboarding gate that lived at 6c.0 moved to the objective, where it no
+  // longer needs a classifier vocabulary to express itself.
 
   // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({

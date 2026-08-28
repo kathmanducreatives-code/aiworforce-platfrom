@@ -33,19 +33,21 @@ import type { Route } from "./objectiveRouter.ts";
 
 export const CHAT_BRAIN_BINDING_VERSION = "chat-brain-binding-v1" as const;
 
-/** The rollback switch. Chat Brain is authoritative unless this says otherwise. */
-export const CHAT_BRAIN_FLAG = "CHAT_BRAIN_ENABLED" as const;
-
-/**
- * Is the new understanding path authoritative?
- *
- * DEFAULT ON. Set `CHAT_BRAIN_ENABLED=false` to fall back to the old
- * classifiers wholesale — one variable, no deploy, and the old stack is still
- * present and still running.
- */
-export function chatBrainEnabled(readEnv: (k: string) => string | undefined): boolean {
-  return String(readEnv(CHAT_BRAIN_FLAG) ?? "true").toLowerCase() !== "false";
-}
+// ── THE ROLLBACK SWITCH IS GONE, BECAUSE THERE IS NOWHERE TO ROLL BACK TO ──
+//
+// `CHAT_BRAIN_ENABLED=false` restored `workflowClassifier`, `leadIntent`,
+// `leadIntentModel` and `classifyIntent` as authoritative in one variable with
+// no deploy. That was the right safety valve while those existed and were still
+// running beside the new path.
+//
+// They are deleted. A flag that switches to nothing is worse than no flag: it
+// reads as an escape hatch, and the first person to reach for it in an incident
+// would find the request path silently doing nothing at all.
+//
+// If the model is unavailable the honest outcome is a stated failure and a
+// conversational reply — which is what the unreadable branch in `pilot-chat`
+// now does. A second interpreter is not a fallback; it is the thing this
+// architecture exists to remove.
 
 /**
  * The ONLY legacy category a route may still be expressed as.
@@ -71,6 +73,8 @@ export type BindingOutcome =
   | { kind: "compose"; reason: string }
   /** Source activity, rivals, or post commenters. */
   | { kind: "signal_sourcing"; reason: string }
+  /** Write something and search for engagement on it. */
+  | { kind: "content_engagement_loop"; reason: string }
   /** Reply now and stop. Nothing is executed, nothing is bought. */
   | { kind: "reply"; message: string; reason: string }
   /** Answer from held evidence. No provider is reachable from this path. */
@@ -146,6 +150,10 @@ export function bindRoute(route: Route): BindingOutcome {
       // Three kinds behind one route — post commenters, competitor discovery,
       // public engagement. The caller reads `route.signals.kind`.
       return { kind: "signal_sourcing", reason: route.reason };
+
+    case "content_engagement_loop":
+      // Both halves in one delegation — orchestrate stages Scribe then Scout.
+      return { kind: "content_engagement_loop", reason: route.reason };
 
     case "read":
       // ANSWERED FROM HELD EVIDENCE, reaching no provider. `readSurface`
