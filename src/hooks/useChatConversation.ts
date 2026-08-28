@@ -3,6 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthReady } from './useAuthReady';
 import type { ChatMessageRow } from '@/lib/pilotChat';
 import type { ConversationLoadState } from '@/lib/chat/state';
+import {
+  mergeMessages, applyRealtimeEvent, type RealtimeEventType,
+} from '@/lib/chat/messageMerge';
 
 /**
  * Loads messages for a conversation with an auth-ready gate, in-place
@@ -31,9 +34,18 @@ export function useChatConversation(conversationId: string | null) {
     let cancelled = false;
     const myTick = ++inflightRef.current;
 
-    const load = async () => {
-      setState((s) => (s === 'ready' ? s : 'loading'));
-      setError(null);
+    /**
+     * Fetch the conversation.
+     *
+     * `reconcile` is the recovery read: it merges rather than replacing, and it
+     * never shows a loading state. A socket that dropped and came back must not
+     * blank the transcript the user is reading.
+     */
+    const load = async (reconcile = false) => {
+      if (!reconcile) {
+        setState((s) => (s === 'ready' ? s : 'loading'));
+        setError(null);
+      }
       const { data, error: err } = await supabase
         .from('messages' as any)
         .select('*')
@@ -46,6 +58,15 @@ export function useChatConversation(conversationId: string | null) {
         return;
       }
       const rows = (data ?? []) as unknown as ChatMessageRow[];
+      if (reconcile) {
+        // MERGE BY ID. The fetch is the source of truth for anything missed
+        // while disconnected, but realtime may have already delivered rows the
+        // query raced past — union them and keep the server's ordering.
+        setMessages((prev) => mergeMessages(prev, rows));
+        setState((prevState) => (prevState === 'ready' ? prevState
+          : rows.length === 0 ? 'empty' : 'ready'));
+        return;
+      }
       setMessages(rows);
       setState(rows.length === 0 ? 'empty' : 'ready');
     };
@@ -61,23 +82,57 @@ export function useChatConversation(conversationId: string | null) {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
       (payload) => {
-        const evt = payload.eventType;
+        const evt = payload.eventType as RealtimeEventType;
         const row = (payload.new ?? payload.old) as ChatMessageRow | undefined;
         if (!row) return;
-        setMessages((prev) => {
-          if (evt === 'DELETE') return prev.filter((m) => m.id !== row.id);
-          if (prev.some((m) => m.id === row.id)) {
-            return prev.map((m) => (m.id === row.id ? { ...m, ...row } : m));
-          }
-          return [...prev, row];
-        });
+        setMessages((prev) => applyRealtimeEvent(prev, evt, row));
         setState('ready');
       },
     );
-    channel.subscribe();
+    // ── A SUBSCRIPTION THAT FAILS MUST NOT FAIL SILENTLY ──────────────────
+    //
+    // `subscribe()` was called with no callback, so a channel that never
+    // reached SUBSCRIBED looked exactly like a channel that was working and
+    // simply had nothing to deliver. That is how a missing publication went
+    // unnoticed: the socket was healthy, the status was never read, and the
+    // absence of events is indistinguishable from a quiet conversation.
+    //
+    // Reconciling on SUBSCRIBED also covers the re-subscribe after a dropped
+    // socket, which is the case where messages were genuinely written while
+    // nobody was listening.
+    channel.subscribe((status) => {
+      if (cancelled) return;
+      if (status === 'SUBSCRIBED') {
+        void load(true);
+        return;
+      }
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        // Realtime is not going to deliver. Say so in the console — the UI
+        // still works, because the read below is what actually recovers it.
+        console.warn('[chat] realtime unavailable, falling back to refetch', {
+          conversationId, status,
+        });
+        void load(true);
+      }
+    });
+
+    // ── AND A RECONCILE WHEN THE TAB COMES BACK ───────────────────────────
+    //
+    // A backgrounded tab can have its socket closed by the browser without a
+    // status change the client sees. Anything written while it was away is
+    // recovered by one read on return; realtime stays the fast path, the
+    // database stays the truth.
+    const onWake = () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'visible') void load(true);
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('online', onWake);
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('online', onWake);
       supabase.removeChannel(channel);
     };
   }, [conversationId, isReady, userId, reloadTick]);
