@@ -460,12 +460,48 @@ export function compileHarvestCompanySearchInput(
   //
   // Now it is an ERROR, checked before anything is spent, and it validates what
   // actually matters: is this a name, or is it a URL/domain/sentence?
+  //
+  // ── AN EMPTY STRING IS AN ABSENT QUERY, NOT AN INVALID ONE ────────────────
+  //
+  // The gate below is `!== undefined` on purpose: this actor searches on
+  // `industryIds` + `companySize` alone, and an industry-only pool is a
+  // legitimate — often the correct — discovery shape. The strategy model asked
+  // for exactly that on 2026-08-28 16:23, and expressed "no name filter" as
+  // `searchQuery: ""` rather than by omitting the field. The empty string is
+  // defined, so the gate opened, `invalidCompanyNameQueryReason` returned
+  // "empty query", and the run was refused at the provider boundary:
+  //
+  //   provider_input_validation_failed: apify_linkedin_company_search:
+  //   invalid_company_name_search_query: empty query (searchQuery: "")
+  //
+  // Zero companies discovered, zero spent — and the user was told "0 of 3",
+  // as though a search had run and the market were empty.
+  //
+  // FILLING IT WOULD BE WORSE. This field is a NAME index; the comment below
+  // records what a concept phrase returns. "recruiting staffing" is not a
+  // company name, so deriving a query from the mission's verticals would buy a
+  // search already known to return garbage. Dropping the empty value is the
+  // only change that matches both the schema and the strategy's own stated
+  // intent.
+  const normalized: HarvestCompanySearchInput = { ...i };
+  if (typeof normalized.searchQuery === "string" && normalized.searchQuery.trim() === "") {
+    delete normalized.searchQuery;
+    w.push("searchQuery was empty and has been dropped — this is an industry/size search, not a name search");
+  }
+  i = normalized;
+
   const q = (i.searchQuery ?? "").trim();
   if (i.searchQuery !== undefined) {
     const reason = invalidCompanyNameQueryReason(q);
     if (reason) {
       e.push(`invalid_company_name_search_query: ${reason} (searchQuery: ${JSON.stringify(i.searchQuery)})`);
     }
+  }
+  // AND AN INDUSTRY-ONLY SEARCH STILL NEEDS SOMETHING TO SEARCH ON. With no
+  // name, no industry and no location this actor would enumerate LinkedIn.
+  if (i.searchQuery === undefined
+      && !(i.industryIds?.length) && !(i.locations?.length)) {
+    e.push("no searchQuery, industryIds or locations — this would be an unbounded search");
   }
   // FAIL BEFORE THE ACTOR STARTS. A malformed name query is not a preference,
   // it is a call that cannot succeed — and six of them were paid for.

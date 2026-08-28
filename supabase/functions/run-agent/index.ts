@@ -467,6 +467,23 @@ async function persistLeadResultsPanel(
       qualified: number;
       contact_ready: number;
     } | null;
+    /**
+     * WHAT EACH CAPABILITY ACTUALLY DID.
+     *
+     * Needed to tell "we searched and the market is empty" from "the search
+     * never ran". On task b1abea89 the discovery step was refused at the
+     * provider boundary — `provider_input_validation_failed:
+     * apify_linkedin_company_search: invalid_company_name_search_query: empty
+     * query` — and the user was told "I discovered 0 companies and evaluated 0
+     * embedded open roles across them", which describes a search that happened.
+     */
+    capabilityOutcomes?: Array<{
+      capability: string;
+      status: string;
+      rows?: number;
+      reason?: string | null;
+      providers_used?: string[];
+    }> | null;
   },
 ): Promise<void> {
   if (!planId) return;
@@ -489,6 +506,48 @@ async function persistLeadResultsPanel(
     // COUNTS STAY SEPARATE. Raw jobs are sourcing evidence; the quota is
     // CONTACT-ready people. Collapsing them is what produced "25 results" for a
     // run that delivered nothing.
+    // ══ A SEARCH THAT NEVER RAN IS NOT AN EMPTY MARKET ═══════════════════
+    //
+    // The sentence below reports a funnel: discovered, evaluated, shortlisted,
+    // qualified. Every one of those numbers is honest ONLY if the stages ran.
+    // When the first capability was refused before its provider, all of them
+    // are zero for a reason that has nothing to do with the user's data, and
+    // reporting them as findings is a claim with no proof path behind it.
+    const outcomes = summary.capabilityOutcomes ?? [];
+    const refusedEarly = outcomes.length > 0
+      && outcomes.every((o) => (o.rows ?? 0) === 0)
+      && outcomes.some((o) => o.status !== "complete" && !!o.reason);
+    if (refusedEarly) {
+      const blocking = outcomes.find((o) => o.status !== "complete" && !!o.reason)!;
+      const provider = (blocking.providers_used ?? [])[0] ?? "the provider";
+      await db.from("messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content:
+          `I couldn't run the search, so I have nothing to report about your market. ` +
+          `The ${blocking.capability.replace(/_/g, " ")} step was refused before ${provider} was called: ` +
+          `${blocking.reason}. Nothing was charged.`,
+        agent_slug: "pilot",
+        metadata: {
+          ui_panel: uiPanel,
+          plan_id: planId,
+          task_id: summary.taskId ?? null,
+          agent_id: "pilot",
+          terminal_status: summary.terminalStatus,
+          outcome: {
+            version: "outcome-v1", state: "FAILED",
+            category: "provider_failure",
+            reason: "provider_input_validation_failed",
+            gaps: outcomes
+              .filter((o) => o.status !== "complete" && !!o.reason)
+              .map((o) => ({ code: o.capability, detail: o.reason! })),
+          },
+          capability_outcomes: outcomes,
+        },
+      });
+      return;
+    }
+
     const delivered = `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
     const m = summary.mission ?? null;
     // THE COUNTS COME FROM THE PATH THAT ACTUALLY RAN.
@@ -4742,6 +4801,9 @@ Deno.serve(async (req) => {
               contact_ready: capabilityRun.state.contact_identities.length,
             }
             : null,
+          // WHAT EACH CAPABILITY DID, so a refusal before the provider is
+          // reported as a refusal and not as an empty market.
+          capabilityOutcomes: capabilityRun?.capability_outcomes ?? null,
         });
 
         // Conclusively SKIP the ordinary people-first branch for this request.

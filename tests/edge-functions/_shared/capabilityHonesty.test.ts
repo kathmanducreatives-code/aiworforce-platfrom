@@ -149,3 +149,38 @@ Deno.test("9. a blocked run is finalised as refused, with its codes", async () =
     "and the codes that say what to fix survive onto the record");
   assertEquals(r.resumable, false, "retrying changes nothing until the block is cleared");
 });
+
+// ══ 10. A SEARCH THAT NEVER RAN IS NOT AN EMPTY MARKET ═════════════════════
+
+Deno.test("10. a run refused at the provider boundary does not report a funnel", async () => {
+  // LIVE, task b1abea89: discovery was refused before Apify was called —
+  // `invalid_company_name_search_query: empty query` — and the user was told
+  // "I opened the results in Workbench — 0 of 3 CONTACT-ready leads. I
+  // discovered 0 companies and evaluated 0 embedded open roles across them.
+  // 0 showed strong commercial expansion signals and 0 were shortlisted."
+  //
+  // Every number was zero for a reason that had nothing to do with the user's
+  // market, and the sentence describes a search that happened.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+
+  const i = src.indexOf("const refusedEarly = outcomes.length > 0");
+  assert(i > 0, "the panel must be able to tell a refusal from an empty market");
+  const branch = src.slice(i, i + 1800);
+  assert(branch.includes("I couldn't run the search"),
+    "it must say the search did not run, not report findings");
+  assert(branch.includes("Nothing was charged."),
+    "and say plainly that it cost nothing");
+  assert(branch.includes('category: "provider_failure"'),
+    "the outcome category must name the boundary that refused");
+
+  // The funnel sentence must come AFTER, and be unreachable when refused.
+  const funnel = src.indexOf("CONTACT-ready ${summary.requested === 1");
+  assert(funnel > i, "the funnel report must not precede the refusal check");
+  assert(branch.includes("return;"),
+    "and the refusal must return rather than fall through to it");
+
+  // The outcomes have to actually reach the panel, or the check is dead.
+  assert(src.includes("capabilityOutcomes: capabilityRun?.capability_outcomes"),
+    "the capability outcomes must be passed in");
+});
