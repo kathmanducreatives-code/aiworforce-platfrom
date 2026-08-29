@@ -301,8 +301,12 @@ Deno.test("the deadline is checked per batch, not per company", () => {
   const ENGINE = Deno.readTextFileSync(
     new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url),
   );
-  const i = ENGINE.indexOf("for (let i = 0; i < needsPaid.length; i += BATCH)");
-  assert(i > 0);
+  // ANCHORED ON THE LOOP, whatever it iterates. It ran over `needsPaid` in
+  // fixed strides until in-flight batches began being re-formed first, so it
+  // now walks a prepared `batches` list — the guard inside is the invariant,
+  // not the loop header.
+  const i = ENGINE.indexOf("for (let i = 0; i < batches.length; i++)");
+  assert(i > 0, "the hiring stage must still batch its calls");
   const block = ENGINE.slice(i, i + 1400);
   assert(
     block.includes("deps.deadline?.expiredForDurableStart()"),

@@ -635,6 +635,37 @@ export interface CapabilityExecutionState {
      * attribute one question's answer to another.
      */
     input_fingerprint?: string;
+    /**
+     * The companies this run was asked about, in the order it was asked.
+     *
+     * ── A FINGERPRINT CANNOT BE RE-DERIVED, A BATCH CAN BE RE-FORMED ────────
+     *
+     * Adoption matches on `input_fingerprint`, which covers the WHOLE batch.
+     * Batch composition changes between slices: a continuation that resolves
+     * one more identity puts a different company first, the group is different,
+     * the hash is different, and a finished paid run is left unread while its
+     * question is bought again.
+     *
+     * `hiringOperationKey` already solved the same problem the other way round
+     * and says so: it is "deliberately fingerprinted on the SINGLE-company
+     * input rather than the batch it happened to travel in", because "a key
+     * derived from it would differ every time". Adoption never got the same
+     * treatment.
+     *
+     * Task 40800420 → 084fb495: `4LfrXM2viPf7imV8O` was pending for
+     * [pursuit-sales-solutions]; the continuation batched
+     * [pursuit, hirefeedd, talentoma] and started a second run. Earlier,
+     * `1CPaI8ikFskPx4Fam` held 101 rows for [storm4, pursuit, careerxperts] and
+     * was passed over for a batch beginning [hirefeedd, …].
+     *
+     * Recorded here so the next slice can re-form the batch EXACTLY as asked —
+     * same companies, same order — which makes the fingerprint match by
+     * construction rather than by luck.
+     *
+     * Optional: an entry from before this field existed has none and simply is
+     * not re-formed, which is the behaviour that already exists.
+     */
+    company_keys?: string[];
   }>;
   /**
    * The FREE decision about who was worth paying to identify.
@@ -2680,6 +2711,15 @@ export async function runCapabilityPlan(
   const callProvider = async (
     capability: CapabilityId, provider: string, compiled: CompileResult<unknown>,
     company?: EngineCompany,
+    /**
+     * The companies a BATCHED call asks about, in the order it asks.
+     *
+     * Recorded on the pending entry so a later slice can re-form the identical
+     * batch and adopt the run instead of buying its question again. See
+     * `pending_runs[].company_keys`. Ignored for single-company calls, which
+     * already carry `company`.
+     */
+    group?: readonly string[],
   ): Promise<Record<string, unknown>[]> => {
     // CLEARED PER CALL. A stale block from an earlier batch would mark a
     // perfectly answered one as deferred.
@@ -2950,6 +2990,8 @@ export async function runCapabilityPlan(
             // What this run was asked. Only a call asking the same thing may
             // adopt it.
             ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
+            // WHO it was asked about, so the batch can be re-formed exactly.
+            ...(group && group.length > 0 ? { company_keys: [...group] } : {}),
           });
         }
         // NOBODY WAS ANSWERED. The deadline and credit paths both set this,
@@ -5031,83 +5073,17 @@ export async function runCapabilityPlan(
         needsPaid.push({ c, url, opKey });
       }
 
-      for (let i = 0; i < needsPaid.length; i += BATCH) {
-        // THE CLOCK IS CHECKED PER BATCH, not per company. A batch costs one
-        // call, so one batch's worth of budget is what has to be available.
-        //
-        // AND THE QUESTION IS "CAN WE START IT", NOT "CAN WE FINISH IT". At
-        // ~80s per company this call is longer than a slice at ANY batch size
-        // (see `HIRING_MS_PER_COMPANY`), so `expired("apify_linkedin_job_search")`
-        // asks something that can never be true late in a slice and would defer
-        // hiring verification for ever. The run id is persisted before the poll,
-        // so a slice killed while waiting loses nothing and the next one adopts
-        // the run for free — which makes starting safe and finishing optional.
-        if (deps.deadline?.expiredForDurableStart()) {
-          log("hiring_batch_deferred_for_deadline",
-            { remaining: needsPaid.length - i });
-          break;
-        }
-        const group = needsPaid.slice(i, i + BATCH);
-        const compiled = compileHarvestJobSearchInput({
-          company: group.map((g) => g.url),
-          jobTitles: searchTitles,
-          maxItems: HIRING_JOBS_PER_BATCH_COMPANY * group.length,
-          ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
-        });
-        const rows = await callProvider(cap, "apify_linkedin_job_search", compiled);
-        paidCalls++;
+      /** Companies whose verdict has been written on this pass. */
+      const assessed = new Set<string>();
 
-        // ROUTED BACK BY IDENTITY. `normalizeLinkedInJob` carries the row's own
-        // `company_linkedin_url`, so a row can only ever reach the company it
-        // names. A row naming a company outside this batch is dropped rather
-        // than attributed to whoever happens to be nearby.
-        const byUrl = new Map<string, EngineCompany>();
-        for (const g of group) {
-          const k = normalizeCompanyLinkedInUrl(g.url);
-          if (k) byUrl.set(k, g.c);
-        }
-        for (const raw of rows) {
-          const j = normalizeLinkedInJob(raw);
-          const owner = j.company_linkedin_url ? byUrl.get(j.company_linkedin_url) : undefined;
-          if (!owner) continue;
-          const list = batchedJobs.get(owner.key) ?? [];
-          list.push(j);
-          batchedJobs.set(owner.key, list);
-        }
-
-        // ── A BATCH STILL IN FLIGHT ANSWERED NOBODY ──────────────────────
-        //
-        // `lastCallBlock === "deferred"` means the call did not complete: the
-        // run was started and is pending, or the clock or credit stopped it.
-        // Marking the group `asked` here would record "we asked and there are
-        // none" for companies the provider has not answered — and, worse, push
-        // the operation key into `completed_operations`, so the resume that
-        // adopts the run would skip them as already bought.
-        //
-        // They are DEFERRED: no verdict, still on the frontier, and the run id
-        // is already durable for the slice that comes back for it.
-        if (lastCallBlock === "deferred") {
-          for (const g of group) {
-            g.c.stage_block = { capability: cap, reason: "deferred" };
-          }
-          log("hiring_batch_pending_group_deferred", { companies: group.length });
-          continue;
-        }
-
-        // ASKED IS RECORDED FOR EVERY COMPANY IN THE BATCH, including the ones
-        // that came back with nothing. A company the provider answered "no
-        // openings" about has been investigated; leaving it unmarked is the
-        // no-one-asked/nothing-there collapse in its other direction, and it
-        // would make the next slice pay to ask again.
-        for (const g of group) {
-          asked.add(g.c.key);
-          if (g.opKey && !g.c.completed_operations.includes(g.opKey)) {
-            g.c.completed_operations.push(g.opKey);
-          }
-        }
-      }
-
-      for (const c of targets) {
+      /**
+       * Decide ONE company, from whatever evidence it now holds.
+       *
+       * Extracted so it can run the moment a batch is answered rather than only
+       * after every batch. See the checkpoint below the batch loop.
+       */
+      const assessOne = (c: EngineCompany): void => {
+        if (assessed.has(c.key)) return;
         // ── A COMPANY WHOSE PAID CHECK IS STILL IN FLIGHT HAS NO VERDICT ──
         //
         // Its batch went pending, so the provider has not answered. Writing
@@ -5120,7 +5096,7 @@ export async function runCapabilityPlan(
         // Leaving the assessment unset is what keeps the company on the
         // frontier with the run still adoptable.
         if (c.stage_block?.capability === cap && c.stage_block.reason === "deferred") {
-          continue;
+          return;
         }
         let assessment = freeHiringAssessment(c);
         /** Rows the paid search returned, kept so the verdict can cite them. */
@@ -5175,6 +5151,154 @@ export async function runCapabilityPlan(
             asked.has(c.key) ? "job_search_returned_no_matching_role" : "no_matching_open_role");
           c.record.stage_reason = assessment.reason;
         }
+              assessed.add(c.key);
+      };
+
+      // ── A RUN ALREADY IN FLIGHT DECIDES ITS OWN BATCH ────────────────────
+      //
+      // Adoption matches on the fingerprint of the WHOLE compiled input, so a
+      // pending run is only adopted by a call that asks about the same
+      // companies in the same order. Batch composition is not stable across
+      // slices — resolve one more identity and every group shifts — so a
+      // finished, paid run gets passed over and its question is bought again.
+      //
+      // Task 40800420 → 084fb495: `4LfrXM2viPf7imV8O` was pending for
+      // [pursuit-sales-solutions] and the continuation batched
+      // [pursuit, hirefeedd, talentoma]. `1CPaI8ikFskPx4Fam` held 101 rows for
+      // [storm4, pursuit, careerxperts] and was passed over for a batch
+      // starting [hirefeedd, …].
+      //
+      // So the in-flight batches are re-formed FIRST, exactly as recorded, and
+      // everything else is batched around them. `hiringOperationKey` already
+      // reasons this way from the other side — it is keyed per company
+      // precisely because "batch composition changes between slices".
+      const inFlightGroups: Array<typeof needsPaid> = [];
+      const claimed = new Set<string>();
+      for (const r of opts.state?.pending_runs ?? []) {
+        if (r.provider !== "apify_linkedin_job_search") continue;
+        const keys = r.company_keys ?? [];
+        if (keys.length === 0) continue;
+        // EVERY company must still be waiting, or this is a different question.
+        // MATCHED LOOSELY ON PURPOSE. An entry written by the engine holds
+        // `c.key`; one rebuilt by `recoverPendingRuns` holds the URL the Actor
+        // was sent. They are the same company and usually the same string, but
+        // case and a trailing slash are not worth losing a paid run over.
+        const sameCompany = (a: string, b: string) =>
+          a === b || normalizeCompanyLinkedInUrl(a) === normalizeCompanyLinkedInUrl(b);
+        const reformed = keys.map((k) => needsPaid.find(
+          (n) => sameCompany(n.c.key, k) && !claimed.has(n.c.key)));
+        if (reformed.some((x) => !x)) continue;
+        const group = reformed as typeof needsPaid;
+        for (const g of group) claimed.add(g.c.key);
+        inFlightGroups.push(group);
+        log("hiring_batch_reformed_for_adoption",
+          { run_id: r.run_id, companies: keys.length });
+      }
+      const batches: Array<typeof needsPaid> = [...inFlightGroups];
+      const rest = needsPaid.filter((n) => !claimed.has(n.c.key));
+      for (let i = 0; i < rest.length; i += BATCH) batches.push(rest.slice(i, i + BATCH));
+
+      for (let i = 0; i < batches.length; i++) {
+        // THE CLOCK IS CHECKED PER BATCH, not per company. A batch costs one
+        // call, so one batch's worth of budget is what has to be available.
+        //
+        // AND THE QUESTION IS "CAN WE START IT", NOT "CAN WE FINISH IT". At
+        // ~80s per company this call is longer than a slice at ANY batch size
+        // (see `HIRING_MS_PER_COMPANY`), so `expired("apify_linkedin_job_search")`
+        // asks something that can never be true late in a slice and would defer
+        // hiring verification for ever. The run id is persisted before the poll,
+        // so a slice killed while waiting loses nothing and the next one adopts
+        // the run for free — which makes starting safe and finishing optional.
+        if (deps.deadline?.expiredForDurableStart()) {
+          log("hiring_batch_deferred_for_deadline",
+            { remaining: batches.slice(i).reduce((n, b) => n + b.length, 0) });
+          break;
+        }
+        const group = batches[i];
+        const compiled = compileHarvestJobSearchInput({
+          company: group.map((g) => g.url),
+          jobTitles: searchTitles,
+          maxItems: HIRING_JOBS_PER_BATCH_COMPANY * group.length,
+          ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
+        });
+        const rows = await callProvider(cap, "apify_linkedin_job_search", compiled,
+          undefined, group.map((g) => g.c.key));
+        paidCalls++;
+
+        // ROUTED BACK BY IDENTITY. `normalizeLinkedInJob` carries the row's own
+        // `company_linkedin_url`, so a row can only ever reach the company it
+        // names. A row naming a company outside this batch is dropped rather
+        // than attributed to whoever happens to be nearby.
+        const byUrl = new Map<string, EngineCompany>();
+        for (const g of group) {
+          const k = normalizeCompanyLinkedInUrl(g.url);
+          if (k) byUrl.set(k, g.c);
+        }
+        for (const raw of rows) {
+          const j = normalizeLinkedInJob(raw);
+          const owner = j.company_linkedin_url ? byUrl.get(j.company_linkedin_url) : undefined;
+          if (!owner) continue;
+          const list = batchedJobs.get(owner.key) ?? [];
+          list.push(j);
+          batchedJobs.set(owner.key, list);
+        }
+
+        // ── A BATCH STILL IN FLIGHT ANSWERED NOBODY ──────────────────────
+        //
+        // `lastCallBlock === "deferred"` means the call did not complete: the
+        // run was started and is pending, or the clock or credit stopped it.
+        // Marking the group `asked` here would record "we asked and there are
+        // none" for companies the provider has not answered — and, worse, push
+        // the operation key into `completed_operations`, so the resume that
+        // adopts the run would skip them as already bought.
+        //
+        // They are DEFERRED: no verdict, still on the frontier, and the run id
+        // is already durable for the slice that comes back for it.
+        if (lastCallBlock === "deferred") {
+          for (const g of group) {
+            g.c.stage_block = { capability: cap, reason: "deferred" };
+          }
+          log("hiring_batch_pending_group_deferred", { companies: group.length });
+          continue;
+        }
+
+        // ASKED IS RECORDED FOR EVERY COMPANY IN THE BATCH, including the ones
+        // that came back with nothing. A company the provider answered "no
+        // openings" about has been investigated; leaving it unmarked is the
+        // no-one-asked/nothing-there collapse in its other direction, and it
+        // would make the next slice pay to ask again.
+        for (const g of group) {
+          asked.add(g.c.key);
+          if (g.opKey && !g.c.completed_operations.includes(g.opKey)) {
+            g.c.completed_operations.push(g.opKey);
+          }
+        }
+
+        // ── AN ANSWER IS NOT OWNED UNTIL IT IS WRITTEN DOWN ──────────────
+        //
+        // The verdicts and the purchase ledger used to be produced AFTER every
+        // batch, and published once at the end of the stage. A slice killed
+        // between the two lost both.
+        //
+        // Task 40800420, live: the checkpoint was written at 10:32:38, the job
+        // search for [storm4, intelletec-ltd, odiin] SUCCEEDED at 10:33:14 for
+        // $0.018, and the isolate died while the next batch was in flight. The
+        // continuation sixty-six seconds later found `completed_operations`
+        // empty for all three — because nothing had written them — and bought
+        // the identical batch again for $0.021. The rows of the first purchase
+        // were never read by anything.
+        //
+        // `expiredForDurableStart` already applies this rule to the POST: the
+        // run id is persisted before the poll, so a slice killed while waiting
+        // loses nothing. It had no counterpart for the RESPONSE. This is it —
+        // decide the companies this batch answered, then checkpoint, so both
+        // the verdict and the operation key survive the next kill.
+        for (const g of group) assessOne(g.c);
+        await publish("hiring_verified");
+      }
+
+      for (const c of targets) {
+        assessOne(c);
       }
       // EVIDENCE IS SATISFIED WHEN A DECISION WAS REACHED, not only when a
       // company passed. A run that correctly finds three watch-list companies

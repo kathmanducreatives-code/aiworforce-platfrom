@@ -134,6 +134,17 @@ export function recoverPendingRuns(
       actor_build_id: null,
       started_at: r.started_at ?? r.created_at ?? new Date(0).toISOString(),
       input_fingerprint: inputFingerprint(actorInput),
+      // WHO THE RUN WAS ASKED ABOUT, straight out of the input it was started
+      // with. Adoption matches the whole compiled input, so a later slice can
+      // only adopt this run by asking about the same companies in the same
+      // order — and it can only do that if it knows which they were. See
+      // `pending_runs[].company_keys`.
+      ...(Array.isArray((actorInput as { company?: unknown }).company)
+        ? {
+          company_keys: ((actorInput as { company: unknown[] }).company)
+            .filter((c): c is string => typeof c === "string" && !!c),
+        }
+        : {}),
       recovered_from_ledger: true,
     });
   }
