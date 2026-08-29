@@ -16,8 +16,17 @@ import {
 // deno-lint-ignore no-explicit-any
 const row = (o: Record<string, unknown>): any => o;
 // deno-lint-ignore no-explicit-any
+/**
+ * A row shaped like the ones the backend actually writes.
+ *
+ * It used to set `evaluated: true` — a field `EvaluationRow` does not have.
+ * `ruledOutCompanies` filtered on it, so these tests passed against a shape
+ * production never produces while the real function returned an empty list for
+ * every run. A fixture may only carry fields the contract declares.
+ */
 const company = (o: Record<string, unknown>): any =>
-  ({ resumable: false, evaluated: true, status: "evaluated", ...o });
+  ({ resumable: false, status: "evaluated", shortlist_exclusion: null,
+     exclusion: null, decided: false, decision_source: "not_evaluated", ...o });
 
 // ═══ 1. QUALIFIED READS AN EXPLICIT VERDICT ════════════════════════════════
 
@@ -62,13 +71,15 @@ Deno.test("4. `not reached` reads `resumable`, never a status guess", () => {
     company({ resumable: false, status: "not_qualified" }),
   ];
   assertEquals(notReachedCompanies(rows).length, 2);
+  // `not_qualified` is a stated rejection, so it is ruled out — and now that
+  // `ruledOutCompanies` reads the real partition, this asserts something.
   assertEquals(ruledOutCompanies(rows).length, 1);
 });
 
 Deno.test("5. and the two sets never overlap", () => {
   const rows = [
+    company({ resumable: true }), company({ resumable: false, status: "not_qualified" }),
     company({ resumable: true }), company({ resumable: false }),
-    company({ resumable: true }), company({ resumable: false, evaluated: false }),
   ];
   const reached = new Set(notReachedCompanies(rows));
   assert(ruledOutCompanies(rows).every((r) => !reached.has(r)),

@@ -34,6 +34,7 @@ import { EMPTY_WORKBENCH_MESSAGE } from '@/lib/workbench/workbenchSession';
 import { buildRunSummary } from '@/lib/workbench/runSummary';
 import {
   LEAD_TAB_EMPTY, type LeadTabId, notReachedCompanies, partitionLeads, tabsFor,
+  partitionAllRows, bucketReasonFor,
 } from '@/lib/workbench/leadTabs';
 import type { PortfolioView } from '@/lib/workbench/portfolioView';
 import type { WorkbenchProgress } from '@/lib/workbench/workbenchProgress';
@@ -159,12 +160,21 @@ export default function LeadResultsView({
     [items],
   );
   const notReached = useMemo(() => notReachedCompanies(evaluationRows), [evaluationRows]);
+  // ── EVERY REVIEWED COMPANY, IN EXACTLY ONE BUCKET ─────────────────────────
+  //
+  // The screen showed "30 companies reviewed · Qualified 0 · In review 0 · Not
+  // reached 1" and twenty-nine companies were on no tab at all — eighteen of
+  // them carrying a stated headcount rejection nothing was reading.
+  const allBuckets = useMemo(
+    () => partitionAllRows(evaluationRows as never), [evaluationRows]);
+  const ruledOut = allBuckets.rejected;
   const tabs = useMemo(() => tabsFor({
     qualified: partition.qualified.length,
     inReview: partition.inReview.length,
+    rejected: ruledOut.length,
     notReached: notReached.length,
     hasInsights: !!insightsSlot,
-  }), [partition, notReached, insightsSlot]);
+  }), [partition, ruledOut.length, notReached, insightsSlot]);
 
   // OPEN ON WHERE THE RESULTS ACTUALLY ARE.
   //
@@ -548,6 +558,36 @@ export default function LeadResultsView({
                 <span className="text-[13.5px] text-[#C9D1D9] truncate">{c.company_name}</span>
                 <span className="text-[12px] text-[#6e7681] shrink-0 truncate max-w-[45%]">
                   {c.strongest_signal ?? 'Not checked yet'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : tab === 'rejected' ? (
+        <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
+          <p className="text-[13px] text-[#8b949e] leading-relaxed mb-4 max-w-xl">
+            The run checked these {ruledOut.length} companies against what you asked
+            for and they did not match. Nothing was bought for them beyond the
+            search that found them.
+          </p>
+          <ul className="space-y-px">
+            {ruledOut.map((c) => (
+              <li
+                key={c.company_key}
+                className="flex items-baseline justify-between gap-4 py-2.5 border-b border-white/[0.04]"
+              >
+                <span className="text-[13.5px] text-[#C9D1D9] truncate">
+                  {c.company_name}
+                  {c.employee_count != null && (
+                    <span className="text-[11.5px] text-[#6e7681] ml-2 tabular-nums">
+                      {c.employee_count} employees
+                    </span>
+                  )}
+                </span>
+                {/* WHY, not just THAT. A bucket with no reason is the same
+                    silence in a smaller place. */}
+                <span className="text-[12px] text-[#6e7681] shrink-0 truncate max-w-[55%]">
+                  {bucketReasonFor(c)}
                 </span>
               </li>
             ))}

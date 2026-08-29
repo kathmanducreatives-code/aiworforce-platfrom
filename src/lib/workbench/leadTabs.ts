@@ -42,7 +42,8 @@ import type { EvaluationRow } from './evaluationRows.ts';
 
 export const LEAD_TABS_VERSION = 'workbench-lead-tabs-v1' as const;
 
-export type LeadTabId = 'qualified' | 'in_review' | 'not_reached' | 'insights' | 'activity';
+export type LeadTabId =
+  | 'qualified' | 'in_review' | 'rejected' | 'not_reached' | 'insights' | 'activity';
 
 /**
  * The words on the tab.
@@ -56,6 +57,7 @@ export type LeadTabId = 'qualified' | 'in_review' | 'not_reached' | 'insights' |
 export const LEAD_TAB_LABEL: Readonly<Record<LeadTabId, string>> = Object.freeze({
   qualified: 'Qualified',
   in_review: 'In review',
+  rejected: 'Ruled out',
   not_reached: 'Not reached',
   insights: 'Insights',
   activity: 'Activity',
@@ -65,6 +67,7 @@ export const LEAD_TAB_LABEL: Readonly<Record<LeadTabId, string>> = Object.freeze
 export const LEAD_TAB_EMPTY: Readonly<Record<LeadTabId, string>> = Object.freeze({
   qualified: 'Nothing has qualified yet. Companies appear here once they match everything you asked for.',
   in_review: 'Nothing is waiting. Companies land here when we have found them but still need one more thing — usually a contact.',
+  rejected: 'Nothing was ruled out. Companies land here when the run checked them against what you asked for and they did not match.',
   not_reached: 'Every company was checked. Nothing was left behind when the run finished.',
   insights: 'No qualification details were recorded for this run.',
   activity: 'No activity recorded yet.',
@@ -111,9 +114,25 @@ export function notReachedCompanies(rows: readonly EvaluationRow[]): EvaluationR
   return rows.filter((r) => r.resumable);
 }
 
-/** Reviewed and ruled out. Shown in Run details, never as a tab. */
-export function ruledOutCompanies(rows: readonly EvaluationRow[]): EvaluationRow[] {
-  return rows.filter((r) => !r.resumable && r.evaluated);
+/**
+ * Reviewed and ruled out.
+ *
+ * ── IT READ A FIELD THAT DOES NOT EXIST ────────────────────────────────────
+ *
+ * This was `rows.filter((r) => !r.resumable && r.evaluated)`. `EvaluationRow`
+ * has no `evaluated` property — the tests passed because their synthetic helper
+ * invented one, and against real rows the expression was always
+ * `!resumable && undefined`, so this returned an empty list for every run ever
+ * made. Task 5c461aa3's eighteen headcount rejections were not even in Run
+ * details, and this is why.
+ *
+ * It now reads the same partition the tabs do, so "ruled out" means one thing
+ * in one place.
+ */
+export function ruledOutCompanies(
+  rows: ReadonlyArray<EvaluationRow & QualificationRecord>,
+): Array<EvaluationRow & QualificationRecord> {
+  return rows.filter((r) => bucketFor(r) === 'rejected');
 }
 
 export interface TabCount {
@@ -134,12 +153,26 @@ export function tabsFor(i: {
   qualified: number;
   inReview: number;
   notReached: number;
+  /**
+   * Companies the run checked and ruled out.
+   *
+   * Optional so existing callers keep their shape; absent behaves exactly as
+   * before. Present and non-zero, it becomes a tab — because a stated rejection
+   * is a result, and eighteen of them once had nowhere to appear.
+   */
+  rejected?: number;
   hasInsights: boolean;
 }): TabCount[] {
   const tabs: TabCount[] = [
     { id: 'qualified', label: LEAD_TAB_LABEL.qualified, count: i.qualified },
     { id: 'in_review', label: LEAD_TAB_LABEL.in_review, count: i.inReview },
   ];
+  // Ruled out sits with the other results, not in a details drawer: it is the
+  // answer to "what happened to the rest?" and on a run that qualifies nothing
+  // it is the only answer there is.
+  if ((i.rejected ?? 0) > 0) {
+    tabs.push({ id: 'rejected', label: LEAD_TAB_LABEL.rejected, count: i.rejected! });
+  }
   // `not_reached` appears only when there is something to resume. On a run that
   // finished cleanly the tab would always read zero and would say nothing.
   if (i.notReached > 0) {
@@ -150,4 +183,94 @@ export function tabsFor(i: {
   }
   tabs.push({ id: 'activity', label: LEAD_TAB_LABEL.activity, count: null });
   return tabs;
+}
+
+// ══ EVERY REVIEWED COMPANY LANDS SOMEWHERE ═════════════════════════════════
+//
+// ── THE SCREEN THIS EXISTS TO MAKE IMPOSSIBLE ──────────────────────────────
+//
+// Task 5c461aa3 showed: "30 companies reviewed · Qualified 0 · In review 0 ·
+// Not reached 1". Twenty-nine companies were on no tab at all.
+//
+// Each selector above was individually correct. They all key on DECISION
+// fields — `counts_as_qualified`, `decision_source`, `resumable` — and that run
+// never decided anything: it stopped at hiring assessment with
+// `decision_source: not_evaluated` on all thirty rows. Eighteen of them carried
+// a real, stated rejection in `shortlist_exclusion`
+// (`mission_constraint:employee_size`, every one of them over the Company
+// Brain's 150-employee ceiling) and eleven sat at `verifying`. None of that was
+// part of the vocabulary any bucket could see, so `ruledOutCompanies` did not
+// catch them either — not even Run details showed them.
+//
+// The fix is not another selector. It is that the buckets are now a PARTITION:
+// every row lands in exactly one, `unclassified` is the bucket for anything the
+// model did not anticipate, and a test asserts it is empty against the real
+// thirty rows. A future status nobody mapped shows up as a failing test rather
+// than as a company that quietly vanishes.
+
+export type LeadBucket =
+  | 'qualified' | 'in_review' | 'rejected' | 'not_reached' | 'unclassified';
+
+/** Statuses that mean the company got somewhere but nobody concluded anything. */
+const IN_REVIEW_STATUS: ReadonlySet<string> = new Set([
+  'shortlisted', 'identity_unresolved', 'verifying', 'held_for_evidence', 'evaluated',
+]);
+
+/**
+ * The one bucket this row belongs in.
+ *
+ * Order is the whole design: an acceptance outranks a rejection, a stated
+ * rejection outranks "we never got to it", and only a row that reached no
+ * modelled state at all falls through to `unclassified`.
+ */
+export function bucketFor(row: EvaluationRow & QualificationRecord): LeadBucket {
+  if (resolveQualification(row).qualified) return 'qualified';
+  // A STATED REJECTION IS A DECISION, wherever it was recorded. Eighteen
+  // companies were ruled out on headcount before anyone looked further; that is
+  // a result the user is entitled to see, not an absence.
+  if (row.status === 'not_qualified') return 'rejected';
+  if (row.shortlist_exclusion || row.exclusion) return 'rejected';
+  // The engine's own answer to "would resuming continue this company?".
+  if (row.resumable) return 'not_reached';
+  if (row.status === 'not_investigated' || row.status === 'deferred') return 'not_reached';
+  if (IN_REVIEW_STATUS.has(row.status)) return 'in_review';
+  return 'unclassified';
+}
+
+export type LeadBuckets = Record<LeadBucket, Array<EvaluationRow & QualificationRecord>>;
+
+/**
+ * Split every reviewed company into exactly one bucket.
+ *
+ * Total by construction — the returned counts always sum to `rows.length`,
+ * which is the invariant the Workbench failed.
+ */
+export function partitionAllRows(
+  rows: ReadonlyArray<EvaluationRow & QualificationRecord>,
+): LeadBuckets {
+  const out: LeadBuckets = {
+    qualified: [], in_review: [], rejected: [], not_reached: [], unclassified: [],
+  };
+  for (const r of rows) out[bucketFor(r)].push(r);
+  return out;
+}
+
+/**
+ * Why this company is where it is, in the user's terms.
+ *
+ * Prefers the explanation a human can read over the code that produced it, and
+ * returns the code only when there is nothing better — a bucket with no reason
+ * is the same silence in a smaller place.
+ */
+export function bucketReasonFor(row: EvaluationRow & QualificationRecord): string {
+  const bucket = bucketFor(row);
+  if (bucket === 'rejected') {
+    return row.shortlist_exclusion_explanation
+      ?? row.mission_reasoning
+      ?? row.explanation
+      ?? row.shortlist_exclusion
+      ?? row.exclusion
+      ?? 'Ruled out.';
+  }
+  return row.explanation || row.mission_reasoning || 'No reason was recorded.';
 }
