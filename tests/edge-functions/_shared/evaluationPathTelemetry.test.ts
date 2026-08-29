@@ -206,12 +206,22 @@ Deno.test("4. an empty eligible set is reported as such, not as 'nobody passed'"
   assert(outcome, "the qualification capability must report an outcome");
   const reason = String(outcome!.reason ?? "");
 
-  assert(reason.includes("eligible set was empty"),
-    `the reason must name the empty eligible set, got: "${reason}"`);
+  assert(reason.includes("no company reached the Company Brain"),
+    `the reason must say nobody was OFFERED, got: "${reason}"`);
   assert(reason.includes("nothing was evaluated, nothing was rejected"),
     `the reason must distinguish unevaluated from rejected, got: "${reason}"`);
   assertFalse(reason.includes("no company passed the Company Brain"),
     "an empty eligible set must NOT be reported as a failed qualification");
+  // AND IT MUST COUNT WHAT IT CLAIMS. Nobody here has an identity, so nobody is
+  // assessed — and the sentence has to say that rather than print the pool size
+  // beside the word "no". See `emptyEligibleSetReason`: this string used to
+  // report the whole pool as unassessed whether or not any company carried an
+  // assessment, which is how a real "we looked and they are not hiring" finding
+  // read as "the stage never ran".
+  assert(reason.includes("carried a hiring assessment"),
+    `the reason must say what was missing, got: "${reason}"`);
+  assertFalse(/\d+ compan(y|ies) carried no hiring assessment/.test(reason),
+    "the uncounted whole-pool claim must not come back");
 });
 
 Deno.test("5. NO EVALUATOR IS NOT A REJECTION — the company is held, and says so", async () => {

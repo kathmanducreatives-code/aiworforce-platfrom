@@ -6276,9 +6276,7 @@ export async function runCapabilityPlan(
         : passed > 0
         ? null
         : eligible.length === 0
-        ? `no company reached the Company Brain: the eligible set was empty ` +
-          `(${companies.length} compan${companies.length === 1 ? "y" : "ies"} ` +
-          `carried no hiring assessment) — nothing was evaluated, nothing was rejected`
+        ? emptyEligibleSetReason(companies)
         : `no company passed the Company Brain; ${unknown} held as unknown pending evidence`;
       finish(
         cap,
@@ -6807,6 +6805,44 @@ export function checkpointSnapshot(
     coherent: true,
     incoherence: null,
   };
+}
+
+/**
+ * Why nobody reached the Company Brain — counted, not assumed.
+ *
+ * ── THE NUMBER IN THIS SENTENCE WAS NEVER MEASURED ─────────────────────────
+ *
+ * It read `${companies.length} companies carried no hiring assessment`, which
+ * is the size of the WHOLE POOL, printed whether or not a single company
+ * carried one. Run 07e973f1 reported "29 companies carried no hiring
+ * assessment" with eleven enriched; task 9da530ae reported "50 companies
+ * carried no hiring assessment" while ELEVEN carried one — all eleven
+ * `hiring_not_verified`, which is a real finding and the opposite of an
+ * absence.
+ *
+ * The distinction is the one the comment at the call site already insists on —
+ * "nobody passed" and "nobody was offered" are different facts — applied one
+ * level deeper. A pool nobody looked at and a pool that was looked at and found
+ * not to be hiring are different facts too, and this sentence is the only place
+ * a run says which one happened. It said the wrong one for both, and reading it
+ * as evidence sent two separate investigations down the wrong path.
+ */
+export function emptyEligibleSetReason(
+  companies: readonly EngineCompany[],
+): string {
+  const assessed = companies.filter((c) => c.hiring_assessment !== null).length;
+  const unassessed = companies.length - assessed;
+  const co = (n: number) => `${n} compan${n === 1 ? "y" : "ies"}`;
+  const tail = " — nothing was evaluated, nothing was rejected";
+  if (assessed === 0) {
+    return `no company reached the Company Brain: none of the ${co(companies.length)} ` +
+      `carried a hiring assessment` + tail;
+  }
+  return `no company reached the Company Brain: ${co(assessed)} ` +
+    `${assessed === 1 ? "was" : "were"} assessed and none showed a qualifying opening` +
+    (unassessed > 0
+      ? `, and ${co(unassessed)} ${unassessed === 1 ? "was" : "were"} never assessed`
+      : "") + tail;
 }
 
 /**
