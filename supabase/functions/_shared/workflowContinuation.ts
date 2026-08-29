@@ -192,6 +192,18 @@ export interface CheckpointResumeAssessment {
  */
 export function assessCheckpointResume(
   result: Record<string, unknown> | null | undefined,
+  /**
+   * The records directly, for a caller that HOLDS them rather than a stored
+   * `tasks.result` to read them out of.
+   *
+   * `run-agent` asks this question about a checkpoint it is about to write, so
+   * it has `snap.resume_records` in hand and no result row yet. It first
+   * synthesised one — and omitted `version`, which `readCheckpointCompanies`
+   * requires, so fifty restorable companies read back as zero and the notice
+   * told the user their run could not be continued while the gate was happily
+   * continuing it. Passing the records removes the shape-matching entirely.
+   */
+  records?: readonly unknown[],
 ): CheckpointResumeAssessment {
   const empty: CheckpointResumeAssessment = {
     resumable: false, refusal: "no_capability_state",
@@ -214,8 +226,8 @@ export function assessCheckpointResume(
   // rows and restore as nothing. Counting them would let this promise a resume
   // that comes back holding an empty pool, which is the failure
   // `checkpointSnapshot` refuses to write and this must refuse to trust.
-  const records = readCheckpointCompanies(result);
-  const restorable = records.filter((r) => {
+  const known = records ?? readCheckpointCompanies(result);
+  const restorable = known.filter((r) => {
     const snap = (r as unknown as { snapshot?: { company?: unknown } }).snapshot;
     return !!snap && !!snap.company;
   });

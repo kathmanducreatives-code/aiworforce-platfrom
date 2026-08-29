@@ -191,6 +191,41 @@ Deno.test("10. discovery is not charged again — nothing is adopted and nothing
   assertEquals((d.spec.capability_execution_state as Record<string, unknown>).pending_runs, []);
 });
 
+// ── 10b. the caller that holds the records rather than a stored row ────────
+
+Deno.test("10b. the notice asks the question the way run-agent has to ask it", () => {
+  // `run-agent` decides the wording for a checkpoint it is ABOUT TO WRITE, so
+  // it holds `snap.resume_records` and has no `tasks.result` to read.
+  //
+  // Its first version synthesised one and omitted `version`, which
+  // `readCheckpointCompanies` requires — so 50 restorable companies read back
+  // as ZERO and the notice said "the companies it found were not saved with it"
+  // while `continue-workflow` was successfully continuing the very same run.
+  // Live, 09:40, three times.
+  const viaRecords = assessCheckpointResume(
+    { capability_execution_state: RUN_43355471_STATE }, RUN_43355471_COMPANIES);
+  assertEquals(viaRecords.resumable, true,
+    "a caller holding the records must get the same verdict as one reading them");
+  assertEquals(viaRecords.restorable_companies, 50);
+  assertEquals(viaRecords.restorable_shortlisted, 10);
+
+  // And it agrees with the stored-row route, which is the whole point of one
+  // function serving both callers.
+  const viaResult = assessCheckpointResume(RUN_43355471_RESULT);
+  assertEquals(viaRecords.resumable, viaResult.resumable);
+  assertEquals(viaRecords.restorable_companies, viaResult.restorable_companies);
+  assertEquals(viaRecords.next_capability, viaResult.next_capability);
+
+  // THE TRAP ITSELF, pinned: a result whose checkpoint carries no `version` is
+  // unreadable, so a caller must never hand-build one.
+  const versionless = {
+    capability_execution_state: RUN_43355471_STATE,
+    lead_resume_checkpoint: { companies: RUN_43355471_COMPANIES },
+  };
+  assertEquals(assessCheckpointResume(versionless).restorable_companies, 0,
+    "which is exactly why the records are passed directly instead");
+});
+
 // ── 11. the refusals that remain, and what they say ────────────────────────
 
 Deno.test("11. a run with no checkpoint at all still gets the old refusal", () => {

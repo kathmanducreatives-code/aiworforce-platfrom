@@ -2842,14 +2842,18 @@ Deno.serve(async (req) => {
                         // The SAME function the gate uses decides the wording,
                         // against the checkpoint about to be written — so the
                         // sentence can only make a promise the gate will keep.
-                        const resume = assessCheckpointResume({
-                          capability_execution_state:
-                            snap.state as unknown as Record<string, unknown>,
-                          lead_resume_checkpoint: {
-                            companies: snap.resume_records as unknown as Record<
-                              string, unknown>[],
-                          },
-                        });
+                        // THE RECORDS THEMSELVES, not a synthesised result row.
+                        // A hand-built `lead_resume_checkpoint` has to carry a
+                        // `version` for `readCheckpointCompanies` to accept it,
+                        // and the first version of this did not — so fifty
+                        // restorable companies read back as zero and this
+                        // notice told the user the run could not be continued
+                        // while `continue-workflow` was continuing it.
+                        const resume = assessCheckpointResume(
+                          { capability_execution_state:
+                              snap.state as unknown as Record<string, unknown> },
+                          snap.resume_records,
+                        );
                         const foundLine = found > 0
                           ? ` — ${found} companies found, ${short} shortlisted` : "";
                         // WHAT WENT WRONG, IN THE USER'S TERMS. Each branch names
