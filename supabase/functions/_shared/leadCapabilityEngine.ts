@@ -12,6 +12,9 @@
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
+import {
+  completionIsProvisional, repairPrematureCompletions,
+} from "./capabilityCompletion.ts";
 // COMPOSES them one capability at a time, which is what buys genuine resume
 // granularity: a run that stopped after enrichment resumes at hiring
 // verification rather than re-paying for discovery.
@@ -1819,6 +1822,29 @@ export async function runCapabilityPlan(
       ? { ...opts.state!, provider_attempts: [...opts.state!.provider_attempts] }
       : newExecutionState(opts.plan, hash, bindingPrint);
 
+  // ── REPAIR A CHECKPOINT AN OLDER BUILD POISONED ──────────────────────────
+  //
+  // The rule in `finish` stops this state being created. This undoes the ones
+  // already written: checkpoints exist in production now carrying `persistence`
+  // as completed with nothing saved and hiring still pending, and without this
+  // they would resume, qualify companies, and skip the write forever.
+  //
+  // Only capabilities with no provider attempt behind them are reopened, so the
+  // repair can never cause a second purchase. See `repairPrematureCompletions`.
+  {
+    const repaired = repairPrematureCompletions(
+      state, opts.plan.steps.map((s) => s.capability), state.provider_attempts);
+    if (repaired.reopened.length > 0) {
+      state.completed_capabilities = repaired.state.completed_capabilities;
+      state.pending_capabilities = repaired.state.pending_capabilities;
+      log("capability_completion_repaired", {
+        reopened: repaired.reopened,
+        completed_now: [...state.completed_capabilities],
+        pending_now: [...state.pending_capabilities],
+      });
+    }
+  }
+
   // ── WHOSE QUESTION THIS RUN ANSWERS, DECIDED ONCE ────────────────────────
   //
   // Built here and threaded down, so every stage qualifies against the SAME
@@ -3000,8 +3026,32 @@ export async function runCapabilityPlan(
     // refusing. Marking it complete on a zero result is what let task
     // e8abeb8f-…-cfcbc6a416d4 treat a schema-rejected memo23 call as "no
     // candidates" and walk on to a job board.
-    const genuinelyComplete =
-      (status === "complete" && evidence === true) || status === "skipped_resumed";
+    //
+    // ── AND NOTHING CLOSES ON NOTHING WHILE ITS INPUTS ARE STILL COMING ────
+    //
+    // The clause above asks whether the capability succeeded. It cannot ask
+    // whether success was possible YET. On task 5c461aa3 `persistence` — the
+    // last node — closed having saved nothing while identity resolution,
+    // hiring verification and qualification were all still pending, and the
+    // engine skips a completed capability forever after. Six companies with
+    // real sales openings could never have been written down.
+    //
+    // `completionIsProvisional` reads the answer off the plan: a node that
+    // produced zero rows stays pending while anything ordered before it is
+    // unfinished. A node that produced something keeps its completion — see
+    // the module header for why reopening paid work would be worse.
+    const provisional = completionIsProvisional({
+      capability, rows,
+      planOrder: opts.plan.steps.map((s) => s.capability),
+      pendingCapabilities: state.pending_capabilities,
+    });
+    if (provisional) {
+      log("capability_completion_provisional", {
+        capability, rows, still_pending: [...state.pending_capabilities],
+      });
+    }
+    const genuinelyComplete = !provisional &&
+      ((status === "complete" && evidence === true) || status === "skipped_resumed");
     if (genuinelyComplete && !state.completed_capabilities.includes(capability)) {
       state.completed_capabilities.push(capability);
     }
@@ -6396,8 +6446,22 @@ export async function runCapabilityPlan(
     }
 
     // ── PERSISTENCE ──────────────────────────────────────────────────────────
+    //
+    // ── ROWS MEANS WHAT THIS RUN HAS TO WRITE ─────────────────────────────
+    //
+    // It reported `contact_identities.length` for every mission. On a
+    // `qualified_companies` mission that number is structurally zero — the run
+    // produces COMPANIES, and no contact is ever resolved — so persistence
+    // reported nothing done even on a run that had six companies to save.
+    //
+    // The count now follows what the mission asked for, which is also what the
+    // completion rule reads: a persistence step with real rows closes, and one
+    // with none stays open while anything upstream is still pending.
+    const persistable = opts.mission.requested_output === "qualified_companies"
+      ? state.qualified_company_keys.length
+      : state.contact_identities.length;
     if (cap === "persistence") {
-      finish(cap, "complete", state.contact_identities.length, [], true, null);
+      finish(cap, "complete", persistable, [], true, null);
       continue;
     }
 
