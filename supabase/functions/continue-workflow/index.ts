@@ -139,7 +139,8 @@ Deno.serve(async (req) => {
   // The whole continuation rests on discovery ADOPTING the stored run. If the
   // state would cause a new Actor start, nothing is created and nothing is
   // spent.
-  if (wouldStartNewDiscoveryRun(spec.capability_execution_state)) {
+  if (wouldStartNewDiscoveryRun(spec.capability_execution_state,
+    { restorableCompanies: spec.lead_resume_records.length })) {
     console.error("[continue-workflow][refused] state would start a new discovery run");
     return json({ error: "would_start_new_actor",
       message: "Refused: continuing would start a new discovery run instead of reusing the stored one." }, 409);

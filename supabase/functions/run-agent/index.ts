@@ -115,6 +115,9 @@ import {
 import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
+import {
+  assessCheckpointResume,
+} from "../_shared/workflowContinuation.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
 import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
@@ -2828,6 +2831,40 @@ Deno.serve(async (req) => {
                         const p = snap.state.progress ?? {};
                         const found = (p as { accounts_found?: number }).accounts_found ?? 0;
                         const short = (p as { shortlisted?: number }).shortlisted ?? 0;
+                        // ── DO NOT PROMISE A RESUME THAT HAS NOT BEEN PROVEN ──
+                        //
+                        // This message said "Nothing is lost and nothing extra
+                        // was charged. Use Continue below" unconditionally, and
+                        // the button beside it answered "That run has no stored
+                        // company dataset to continue from." Two components,
+                        // two opinions, and the user is the one who finds out.
+                        //
+                        // The SAME function the gate uses decides the wording,
+                        // against the checkpoint about to be written — so the
+                        // sentence can only make a promise the gate will keep.
+                        const resume = assessCheckpointResume({
+                          capability_execution_state:
+                            snap.state as unknown as Record<string, unknown>,
+                          lead_resume_checkpoint: {
+                            companies: snap.resume_records as unknown as Record<
+                              string, unknown>[],
+                          },
+                        });
+                        const foundLine = found > 0
+                          ? ` — ${found} companies found, ${short} shortlisted` : "";
+                        // WHAT WENT WRONG, IN THE USER'S TERMS. Each branch names
+                        // the thing that is actually missing rather than offering
+                        // a button that will refuse.
+                        const cannotResume =
+                          resume.refusal === "no_restorable_companies"
+                            ? "the companies it found were not saved with it, so picking up " +
+                              "would mean searching again"
+                          : resume.refusal === "discovery_not_complete"
+                            ? "the search itself had not finished, so there is no company " +
+                              "set to carry forward"
+                          : resume.refusal === "nothing_left_to_do"
+                            ? "every step it was asked to do is already accounted for"
+                            : "the saved state is not complete enough to carry forward";
                         await supabase.from("messages").insert({
                           conversation_id: convId,
                           role: "assistant",
@@ -2848,17 +2885,27 @@ Deno.serve(async (req) => {
                           // sentence to be interpreted. The message carries
                           // those ids and the chat renders a Continue button
                           // that calls `continue-workflow` with them.
-                          content:
-                            `This run hit its time limit partway through, so I've saved where it got to` +
-                            `${found > 0 ? ` — ${found} companies found, ${short} shortlisted` : ""}. ` +
-                            `Nothing is lost and nothing extra was charged. Use Continue below to pick it up ` +
-                            `from here — it reuses the work already paid for instead of searching again.`,
+                          content: resume.resumable
+                            ? `This run hit its time limit partway through, so I've saved where it ` +
+                              `got to${foundLine}. Nothing is lost and nothing extra was charged. ` +
+                              `Use Continue below to pick it up from here — it reuses the work ` +
+                              `already paid for instead of searching again.`
+                            : `This run hit its time limit partway through${foundLine}. ` +
+                              `I can't pick this one up where it left off: ${cannotResume}. ` +
+                              `Nothing more was charged for the part that did run.`,
                           agent_slug: "pilot",
                           metadata: {
                             plan_id: plan_id ?? null,
                             task_id: task.id,
                             agent_id: "pilot",
                             kind: "run_checkpoint",
+                            // WHETHER THE BUTTON SHOULD EXIST AT ALL. The same
+                            // verdict the sentence above was written from, so a
+                            // renderer never offers Continue on a checkpoint the
+                            // gate will refuse.
+                            resumable: resume.resumable,
+                            resume_refusal: resume.refusal,
+                            restorable_companies: resume.restorable_companies,
                             // WHAT THE BUTTON NEEDS. `continue-workflow` takes
                             // exactly these two ids and derives everything else
                             // from records the caller is proven to own.

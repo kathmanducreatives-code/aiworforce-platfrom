@@ -65,6 +65,14 @@ const LEAD_INTELLIGENCE_MODULES = [
   // old copy — the exact failure the header describes, one layer down.
   "providerResponseContract", "capabilityExecution",
   "toolRegistry", "apifyJobsNormalizer",
+  // ── THE RESUME CONTRACT ─────────────────────────────────────────────────
+  //
+  // `workflowContinuation` decides whether a checkpoint may be continued, and
+  // `run-agent` now reads the SAME verdict before promising the user that
+  // Continue will reuse the work. Two functions, one contract — deployed apart,
+  // the promise and the gate disagree, which is exactly the state task 43355471
+  // was in. `leadResumeState` carries the record shape both of them read.
+  "workflowContinuation", "leadResumeState",
 ];
 
 /** NEVER deployed by this script, whatever it imports. */

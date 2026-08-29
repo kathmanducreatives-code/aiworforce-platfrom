@@ -54,13 +54,36 @@ Deno.test("4. the checkpoint says so in the conversation", () => {
   // minutes of nothing while 30 companies sat saved behind a spinner.
   const i = SRC.indexOf('kind: "run_checkpoint"');
   assert(i > 0, "a checkpoint must announce itself");
-  const notice = SRC.slice(Math.max(0, i - 2200), i);
+  const notice = SRC.slice(Math.max(0, i - 4200), i);
   assert(notice.includes("hit its time limit"),
     "it must say the run paused, not that it failed");
   assert(notice.includes("Nothing is lost and nothing extra was charged"),
     "and be explicit about cost, because the user has already been charged twice");
-  assert(SRC.slice(i - 3000, i).includes('filter("metadata->>kind", "eq", "run_checkpoint")'),
+  // ANCHORED ON THE BLOCK, NOT ON A BYTE DISTANCE. This used to slice a fixed
+  // window backwards from the metadata, so any comment added between the guard
+  // and the insert failed it — a test that measures the length of prose rather
+  // than the property it is about.
+  const guard = SRC.lastIndexOf("if (!already)", i);
+  assert(guard > 0, "the insert must be guarded");
+  assert(SRC.slice(0, guard).includes('filter("metadata->>kind", "eq", "run_checkpoint")'),
     "one notice per plan, not one per checkpoint");
+});
+
+Deno.test("4b. and it only PROMISES a resume the gate will honour", () => {
+  // Task 43355471: this notice said "Nothing is lost and nothing extra was
+  // charged. Use Continue below" beside a button that answered "That run has no
+  // stored company dataset to continue from." The sentence and the gate must be
+  // decided by the same function.
+  const i = SRC.indexOf('kind: "run_checkpoint"');
+  const notice = SRC.slice(Math.max(0, i - 4200), i);
+  assert(notice.includes("assessCheckpointResume("),
+    "the wording must be derived from the same verdict `continue-workflow` uses");
+  assert(notice.includes("resume.resumable"),
+    "and branch on it rather than promising unconditionally");
+  assert(notice.includes("I can't pick this one up where it left off"),
+    "an unresumable checkpoint must say so plainly");
+  assert(SRC.includes('assessCheckpointResume,\n} from "../_shared/workflowContinuation.ts"'),
+    "imported from the gate's own module, not reimplemented");
 });
 
 Deno.test("5. a killed run's provider run is still recoverable from the ledger", () => {
@@ -114,7 +137,8 @@ Deno.test("6. the checkpoint carries the ids a resume needs, and no typing instr
   // THE SENTENCE ITSELF, not the comment explaining why it changed — that
   // comment quotes the old wording on purpose, and matching the whole region
   // would make the history of the fix look like the fix being absent.
-  const from = SRC.indexOf("content:\n", Math.max(0, i - 3000));
+  const from = SRC.indexOf("content: resume.resumable", Math.max(0, i - 4200));
+  assert(from > 0, "the notice's wording must depend on whether a resume is possible");
   const sentence = SRC.slice(from, SRC.indexOf("agent_slug:", from));
   assertEquals(/say "continue"/.test(sentence), false,
     "the notice must not instruct the user to type a word nothing interprets");
@@ -122,6 +146,8 @@ Deno.test("6. the checkpoint carries the ids a resume needs, and no typing instr
     "it must point at an affordance that exists");
   assert(sentence.includes("instead of searching again"),
     "and say what continuing avoids paying for");
+  assert(sentence.includes("Nothing more was charged for the part that did run"),
+    "and the unresumable branch must still be honest about cost");
   assert(notice.includes("task_id: task.id") && notice.includes("plan_id"),
     "and carry the two ids `continue-workflow` takes");
   assert(notice.includes("checkpoint_summary"),

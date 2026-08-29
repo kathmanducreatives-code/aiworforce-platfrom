@@ -52,6 +52,7 @@ export type ContinuationRefusal =
   | "conversation_workspace_mismatch"
   | "task_not_terminal"
   | "no_resumable_provider_run"
+  | "checkpoint_not_resumable"
   | "already_continued";
 
 export const REFUSAL_STATUS: Readonly<Record<ContinuationRefusal, number>> = Object.freeze({
@@ -63,6 +64,7 @@ export const REFUSAL_STATUS: Readonly<Record<ContinuationRefusal, number>> = Obj
   conversation_workspace_mismatch: 403,
   task_not_terminal: 409,
   no_resumable_provider_run: 409,
+  checkpoint_not_resumable: 409,
   already_continued: 200,
 });
 
@@ -75,6 +77,9 @@ export const REFUSAL_MESSAGE: Readonly<Record<ContinuationRefusal, string>> = Ob
   conversation_workspace_mismatch: "That conversation belongs to a different workspace.",
   task_not_terminal: "That workflow is still running — there is nothing to continue yet.",
   no_resumable_provider_run: "That run has no stored company dataset to continue from.",
+  checkpoint_not_resumable:
+    "That run saved a checkpoint, but it cannot be continued — the companies it " +
+    "found were not stored with it, so continuing would have to search again.",
   already_continued: "This workflow has already been continued.",
 });
 
@@ -115,6 +120,127 @@ export interface StoredProviderRun {
   provider: string;
   capability: string;
   started_at: string | null;
+}
+
+// ------------------------------------------- is the checkpoint enough on its own ----
+
+/** Capabilities that fill the working set. Either name means "discovery ran". */
+const DISCOVERY_CAPABILITIES: ReadonlySet<string> = new Set([
+  "general_company_discovery",
+  "startup_company_discovery",
+]);
+
+/**
+ * The verdict on ONE checkpoint: can the run be continued from what was saved?
+ *
+ * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
+ *
+ * Continuation was built for a run that had a paid DATASET and nothing else.
+ * Task 41342269 finished terminal holding a memo23 run whose 50 companies had
+ * never been read, so "continue" meant one thing: re-enter discovery and adopt
+ * that run instead of buying a second one. Everything in this module follows
+ * from that — `selectResumableRun`, `buildResumeState` with an empty
+ * `completed_capabilities`, `wouldStartNewDiscoveryRun`.
+ *
+ * The engine has since grown a real checkpoint. It writes fifty
+ * `CompanyResumeRecord`s, each carrying the company, its triage verdict, its
+ * shortlist flag, its resolved identity and its enrichment; `restoreWorkingSet`
+ * rebuilds the pool from them; and `completed_capabilities` tells the engine to
+ * skip discovery entirely. A run in that state needs NO provider run adopted,
+ * because it is not going to call a provider for discovery at all.
+ *
+ * Nothing taught the continuation gate that. Task 43355471 saved a coherent
+ * checkpoint — 50 companies with snapshots, 10 shortlisted, discovery complete,
+ * `pending_runs: []`, next capability `company_identity_resolution` — and
+ * Continue refused it `no_resumable_provider_run`: "That run has no stored
+ * company dataset to continue from." It had one. It was in `tasks.result`.
+ *
+ * ── WHAT A PROVIDER RUN IS ACTUALLY FOR ────────────────────────────────────
+ *
+ * Adopting one is how a continuation avoids RE-BUYING a call that is already
+ * in flight or already answered. That is a question about the NEXT unfinished
+ * capability, not a precondition on continuing at all. A checkpoint whose
+ * pending stage has no in-flight call has nothing to adopt and needs nothing
+ * adopted — the parent's own `pending_runs` already carries any that exist, and
+ * `shouldSkipProviderCall` covers the rest.
+ */
+export interface CheckpointResumeAssessment {
+  /** May a continuation be built from the checkpoint alone? */
+  resumable: boolean;
+  /** Why not. Null when it is resumable. */
+  refusal: "no_capability_state" | "discovery_not_complete" | "no_restorable_companies"
+    | "nothing_left_to_do" | null;
+  /** Companies the checkpoint can actually restore — snapshot present. */
+  restorable_companies: number;
+  /** Of those, how many the parent shortlisted for investigation. */
+  restorable_shortlisted: number;
+  /** The capability a continuation would start at. */
+  next_capability: string | null;
+  /** Provider runs the parent left in flight, which the child will adopt. */
+  pending_runs: number;
+}
+
+/**
+ * Read the checkpoint and say, in one place, whether it can be continued.
+ *
+ * ONE FUNCTION, TWO CALLERS, AND THAT IS THE POINT. `continue-workflow` asks it
+ * to decide, and `run-agent` asks it BEFORE promising the user that Continue
+ * will reuse the work — so the promise and the gate cannot disagree. They did:
+ * the checkpoint notice said "Nothing is lost and nothing extra was charged.
+ * Use Continue below" beside a button that answered "That run has no stored
+ * company dataset to continue from."
+ */
+export function assessCheckpointResume(
+  result: Record<string, unknown> | null | undefined,
+): CheckpointResumeAssessment {
+  const empty: CheckpointResumeAssessment = {
+    resumable: false, refusal: "no_capability_state",
+    restorable_companies: 0, restorable_shortlisted: 0,
+    next_capability: null, pending_runs: 0,
+  };
+  if (!result || typeof result !== "object") return empty;
+
+  const state = result.capability_execution_state as Record<string, unknown> | undefined;
+  if (!state || typeof state !== "object") return empty;
+
+  const completed = Array.isArray(state.completed_capabilities)
+    ? state.completed_capabilities.filter((c): c is string => typeof c === "string") : [];
+  const pending = Array.isArray(state.pending_capabilities)
+    ? state.pending_capabilities.filter((c): c is string => typeof c === "string") : [];
+  const pendingRuns = Array.isArray(state.pending_runs) ? state.pending_runs.length : 0;
+
+  // RESTORABLE, NOT MERELY PRESENT. `restoreWorkingSet` skips a record with no
+  // `snapshot.company` — checkpoints written before the field existed look like
+  // rows and restore as nothing. Counting them would let this promise a resume
+  // that comes back holding an empty pool, which is the failure
+  // `checkpointSnapshot` refuses to write and this must refuse to trust.
+  const records = readCheckpointCompanies(result);
+  const restorable = records.filter((r) => {
+    const snap = (r as unknown as { snapshot?: { company?: unknown } }).snapshot;
+    return !!snap && !!snap.company;
+  });
+  const shortlisted = restorable.filter(
+    (r) => (r as unknown as { snapshot?: { shortlisted?: unknown } }).snapshot?.shortlisted === true);
+
+  const next = pending.find((c) => !completed.includes(c)) ?? null;
+
+  const base = {
+    restorable_companies: restorable.length,
+    restorable_shortlisted: shortlisted.length,
+    next_capability: next,
+    pending_runs: pendingRuns,
+  };
+
+  if (!completed.some((c) => DISCOVERY_CAPABILITIES.has(c))) {
+    return { resumable: false, refusal: "discovery_not_complete", ...base };
+  }
+  if (restorable.length === 0) {
+    return { resumable: false, refusal: "no_restorable_companies", ...base };
+  }
+  if (!next) {
+    return { resumable: false, refusal: "nothing_left_to_do", ...base };
+  }
+  return { resumable: true, refusal: null, ...base };
 }
 
 /** Only these providers may be adopted — a company DISCOVERY run, nothing else. */
@@ -300,10 +426,78 @@ export function decideContinuation(i: ContinuationInputs): ContinuationDecision 
   // IDEMPOTENT: an existing continuation is RETURNED, never duplicated.
   if (i.existing) return { ok: true, created: false, existing: i.existing };
 
-  const run = selectResumableRun(i.toolCalls);
-  if (!run) return { ok: false, refusal: "no_resumable_provider_run" };
-
+  // ── THE CHECKPOINT FIRST, THE PROVIDER RUN ONLY AS A FALLBACK ────────────
+  //
+  // A run that saved a coherent checkpoint carries its own answer: discovery is
+  // complete, the pool is restorable, and the next capability is named. It does
+  // not need a provider run adopted, because it is not going to call a provider
+  // for discovery. Requiring one refused task 43355471 — 50 companies with
+  // snapshots, 10 shortlisted, `pending_runs: []` — with "That run has no
+  // stored company dataset to continue from."
+  //
+  // The legacy path below stays for the case it was written for: a terminal run
+  // holding a paid dataset it never read, with no checkpoint at all.
+  const checkpoint = assessCheckpointResume(i.task.result);
   const query = readOriginalQuery(i.task.result) ?? i.plan.user_instruction ?? null;
+
+  if (checkpoint.resumable) {
+    const state = (i.task.result?.capability_execution_state ?? {}) as Record<string, unknown>;
+    // ANY IN-FLIGHT RUN THE PARENT LEFT, CARRIED FOR THE LINEAGE RECORD. It is
+    // not a precondition; it is a fact about the parent, and the engine adopts
+    // it through the state it already travels in.
+    const inFlight = Array.isArray(state.pending_runs)
+      ? (state.pending_runs[0] ?? null) as { run_id?: unknown; dataset_id?: unknown;
+        provider?: unknown } | null
+      : null;
+    return {
+      ok: true,
+      created: true,
+      spec: {
+        idempotency_key: continuationKey(workspaceId, r.original_task_id, r.continuation_reason),
+        workspace_id: workspaceId,
+        user_id: i.plan.user_id ?? null,
+        conversation_id: r.conversation_id,
+        lineage: {
+          version: CONTINUATION_VERSION,
+          continuation_of_task_id: r.original_task_id,
+          continuation_of_plan_id: r.original_plan_id,
+          parent_task_id: r.original_task_id,
+          parent_plan_id: r.original_plan_id,
+          conversation_id: r.conversation_id,
+          // "" rather than a fabricated id: this continuation adopts nothing,
+          // and saying so is the honest record.
+          apify_run_id: typeof inFlight?.run_id === "string" ? inFlight.run_id : "",
+          apify_dataset_id: typeof inFlight?.dataset_id === "string" ? inFlight.dataset_id : null,
+          provider: typeof inFlight?.provider === "string" ? inFlight.provider : "checkpoint",
+          original_user_query: query,
+          continuation_reason: r.continuation_reason,
+        },
+        // THE PARENT'S OWN STATE, UNCHANGED. Its `mission_hash` is what lets
+        // `stateMatchesMission` adopt it; its `completed_capabilities` is what
+        // makes the engine SKIP discovery instead of re-running it; its
+        // `pending_runs` is what makes any in-flight call a GET. Rebuilding it
+        // here — as `buildResumeState` does for the legacy path — would throw
+        // all three away.
+        capability_execution_state: state,
+        lead_resume_records: readCheckpointCompanies(i.task.result),
+        lineage_root_task_id: lineageRootTaskId(i.task.id, i.task.result),
+        steps: i.plan.steps,
+        user_instruction: i.plan.user_instruction,
+      },
+    };
+  }
+
+  const run = selectResumableRun(i.toolCalls);
+  if (!run) {
+    // WHICH "NO" THIS IS. A run that saved a checkpoint and a run that saved
+    // nothing are different situations and the user is owed the difference:
+    // one has data that cannot be used, the other has no data at all.
+    return {
+      ok: false,
+      refusal: checkpoint.refusal === "no_capability_state"
+        ? "no_resumable_provider_run" : "checkpoint_not_resumable",
+    };
+  }
 
   return {
     ok: true,
@@ -388,13 +582,39 @@ export function buildResumeState(run: StoredProviderRun): Record<string, unknown
  * test can assert it and the runtime can fail closed on it rather than
  * discovering the answer on the invoice.
  */
-export function wouldStartNewDiscoveryRun(state: Record<string, unknown>): boolean {
+export function wouldStartNewDiscoveryRun(
+  state: Record<string, unknown>,
+  /**
+   * How many companies the continuation can RESTORE from the checkpoint.
+   *
+   * ── WHY THIS ARGUMENT EXISTS ─────────────────────────────────────────────
+   *
+   * "Discovery complete" used to mean the continuation would run with an empty
+   * pool, because nothing rebuilt the working set — so this function treated it
+   * as unsafe, correctly, at the time. `restoreWorkingSet` changed that: a
+   * checkpoint carrying per-company snapshots restores the pool, and skipping
+   * discovery is then the CHEAP outcome rather than the broken one.
+   *
+   * Omitted, every judgement below is exactly what it was, which is what keeps
+   * the legacy adopt-a-run path unchanged.
+   */
+  opts: { restorableCompanies?: number } = {},
+): boolean {
+  const completed = state?.completed_capabilities;
+  const discoveryComplete = Array.isArray(completed) &&
+    completed.some((c) => typeof c === "string" && DISCOVERY_CAPABILITIES.has(c));
+
+  // DISCOVERY IS COMPLETE AND THE POOL COMES BACK WITH IT. The engine skips a
+  // completed capability, so no Actor is started — and `restoreWorkingSet`
+  // gives it the companies to work on. Nothing to adopt, nothing to buy.
+  if (discoveryComplete && (opts.restorableCompanies ?? 0) > 0) return false;
+
   const pending = state?.pending_runs;
   if (!Array.isArray(pending) || pending.length === 0) return true;
-  const completed = state?.completed_capabilities;
-  // A discovery already marked complete never runs, and never resumes either —
-  // the continuation would silently proceed with zero companies.
-  if (Array.isArray(completed) && completed.includes("startup_company_discovery")) return true;
+  // A discovery marked complete with NOTHING to restore never runs and never
+  // resumes either — the continuation would silently proceed with zero
+  // companies. That is the case this guard was written for.
+  if (discoveryComplete) return true;
   return !pending.some((r) =>
     r && typeof r === "object" &&
     (r as { capability?: string }).capability === "startup_company_discovery" &&

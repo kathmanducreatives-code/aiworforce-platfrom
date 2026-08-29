@@ -213,7 +213,12 @@ Deno.test("9/10. the continuation GETs the stored run and never POSTs a new one"
   return Deno.readTextFile(
     new URL("../../../supabase/functions/continue-workflow/index.ts", import.meta.url))
     .then((src) => {
-      assert(src.includes("wouldStartNewDiscoveryRun(spec.capability_execution_state)"));
+      assert(src.includes("wouldStartNewDiscoveryRun(spec.capability_execution_state,"));
+      // AND IT TELLS THE GUARD WHAT CAN BE RESTORED. Without this the guard
+      // reads "discovery complete" as "the continuation will hold nobody" and
+      // refuses a checkpoint that carries its whole working set — the refusal
+      // task 43355471 hit. See `checkpointContinuation.test.ts`.
+      assert(src.includes("restorableCompanies: spec.lead_resume_records.length"));
       assert(src.includes("would_start_new_actor"));
     });
 });
