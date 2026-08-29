@@ -2,7 +2,7 @@
 // Do not hand-edit. Regenerate by deploying.
 
 export const BUILD_INFO = {
-  git_sha: "058d1f38b686357b55cf7cf52ee9f12d01e316f3",
-  build_timestamp: "2026-08-29T07:05:28.174Z",
+  git_sha: "cfbf0d950ca7123fea7c34b9551b82c42b674e5b",
+  build_timestamp: "2026-08-29T07:16:10.271Z",
   dirty: false,
 } as const;
