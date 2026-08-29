@@ -49,6 +49,144 @@ const json = (b: unknown, status = 200) =>
 /** How many stalled tasks one tick may nudge. A ceiling on fan-out, not on work. */
 const MAX_PER_TICK = 5;
 
+/**
+ * End a run that will never proceed, and say so where the user will see it.
+ *
+ * ── WHY THE SWEEPER IS ALLOWED TO DO THIS ──────────────────────────────────
+ *
+ * It is not asserting an outcome it did not observe. Every `terminate` verdict
+ * is drawn from the row's own persisted counters — barren slices, continuations
+ * used, cost units used, the restorability of its own checkpoint — so this
+ * writes down a conclusion the row already contained and nobody had read.
+ *
+ * `already_terminal` is deliberately NOT a terminate verdict: something else
+ * gave that row its status, and overwriting it would be exactly the
+ * overreach this comment exists to rule out.
+ *
+ * THE SAVED STATE IS KEPT. Terminating means "this will not resume itself",
+ * never "this is deleted". The checkpoint stays in `result`, the lineage row
+ * keeps its `current_state`, and a person may still pick it up deliberately.
+ *
+ * Best-effort throughout: a sweeper that can fail a tick because a message
+ * insert failed is worse than one that occasionally reports less.
+ */
+type Maybe = Promise<{ data: unknown; error: { code?: string } | null }>;
+
+/**
+ * Only what `endLineage` uses.
+ *
+ * Structural rather than `ReturnType<typeof createClient>`, which resolves its
+ * schema generics to `never` without a generated Database type and rejects every
+ * literal passed to `update` or `insert`. Same shape of cast the lease read
+ * already uses in this file.
+ */
+interface SweeperDb {
+  from(table: string): {
+    select(cols: string): {
+      // Chainable: the guarded read narrows on id AND status, so the row cannot
+      // be ended after something else has already moved it out of `ready`.
+      eq(c: string, v: string): {
+        maybeSingle(): Maybe;
+        eq(c2: string, v2: string): { maybeSingle(): Maybe };
+      };
+      filter(c: string, op: string, v: string): {
+        order(c: string, o: { ascending: boolean }): {
+          limit(n: number): { maybeSingle(): Maybe };
+        };
+      };
+    };
+    update(values: Record<string, unknown>): {
+      eq(c: string, v: string): { eq(c2: string, v2: string): Maybe };
+    };
+    insert(values: Record<string, unknown>): Maybe;
+  };
+}
+
+async function endLineage(
+  admin: SweeperDb,
+  row: StalledTaskRow,
+  verdict: { reason: string; detail?: string },
+): Promise<string> {
+  const { data: current } = await admin.from("tasks")
+    .select("result").eq("id", row.id).eq("status", "ready").maybeSingle();
+  if (!current) return "not_ready_anymore";
+  const prior = ((current as { result?: Record<string, unknown> }).result ?? {});
+
+  const { error } = await admin.from("tasks").update({
+    // `complete` plus a terminal status that is no longer `continuation_required`
+    // — the pair `taskStatusContract` calls contradictory, and which three rows
+    // in production hold today.
+    status: "complete",
+    finished_at: new Date().toISOString(),
+    result: {
+      ...prior,
+      terminal_status: verdict.reason,
+      terminated_by: {
+        version: "stalled-lead-resume-v1",
+        actor: "resume-stalled-leads",
+        reason: verdict.reason,
+        detail: verdict.detail ?? null,
+        at: new Date().toISOString(),
+      },
+    },
+  }).eq("id", row.id).eq("status", "ready");
+  if (error) return `update_failed:${error.code ?? "unknown"}`;
+
+  // ── AND TELL THE PERSON WHO ASKED ────────────────────────────────────────
+  //
+  // The conversation is reachable from the plan the run belongs to; nothing on
+  // the task row carries it directly. No conversation is not a failure — an
+  // internally triggered run may have none — it just means there is nobody to
+  // tell.
+  if (row.plan_id) {
+    const { data: anchorMsg } = await admin.from("messages")
+      .select("conversation_id").filter("metadata->>plan_id", "eq", row.plan_id)
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
+    const conversationId = (anchorMsg as { conversation_id?: string } | null)?.conversation_id;
+    if (conversationId) {
+      await admin.from("messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        agent_slug: "pilot",
+        content: STOP_NOTICE[verdict.reason] ??
+          "This run has stopped and will not continue on its own. " +
+          "What it found is saved.",
+        metadata: {
+          plan_id: row.plan_id, task_id: row.id, agent_id: "pilot",
+          kind: "run_stopped", terminal_status: verdict.reason,
+          detail: verdict.detail ?? null,
+        },
+      });
+    }
+  }
+  return verdict.reason;
+}
+
+/**
+ * What a stopped run says.
+ *
+ * No claim about spend or about what was evaluated — this function has read
+ * neither ledger, and the audit's standing finding is that summaries asserting
+ * either without reading them is how the product came to tell users "No credits
+ * charged" while credits were being charged. These sentences describe the
+ * SCHEDULING outcome only, which is the one thing the sweeper does know.
+ */
+const STOP_NOTICE: Readonly<Record<string, string>> = Object.freeze({
+  no_progress:
+    "I stopped this run: the last few passes examined nobody new, so continuing " +
+    "would spend without finding anything. What it found is saved.",
+  continuation_ceiling:
+    "This run reached its continuation limit and has stopped. What it found is saved.",
+  cost_ceiling:
+    "This run reached its spending limit for this request and has stopped. " +
+    "What it found is saved.",
+  abandoned:
+    "This run has been idle too long to pick itself up again, so I've stopped it. " +
+    "Nothing was lost — what it found is saved.",
+  nothing_to_resume:
+    "This run has nothing left to pick up, so I've closed it. What it found is saved.",
+});
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -75,11 +213,25 @@ Deno.serve(async (req) => {
   // THE COARSE FILTER IS SQL; THE DECISION IS `eligibleForAutoResume`. Keeping
   // the rules in one pure function is what makes them testable — the query
   // only narrows, it never decides.
+  // ── THE SCAN NARROWS. IT NO LONGER HIDES. ─────────────────────────────────
+  //
+  // This filtered on `created_at >= now - MAX_RESUMABLE_AGE_MS`, so a task that
+  // was not picked up within two hours of being CREATED became invisible to the
+  // sweeper for ever. Task 43355471 was scanned every three minutes for two
+  // hours, refused `nothing_to_resume` each time, and then vanished from the
+  // query holding 50 restorable companies and $0.153 of paid discovery. The log
+  // went from `scanned: 1` to `scanned: 0` and nothing ever said why.
+  //
+  // A row the sweeper cannot SEE is a row it cannot END. The age rule belongs to
+  // `eligibleForAutoResume`, which now abandons a task by terminating it rather
+  // than by falling silent; the bound here exists only to keep the query
+  // sensible and is deliberately far wider than any decision horizon.
+  const SCAN_HORIZON_MS = 30 * 24 * 60 * 60_000;
   let q = admin.from("tasks")
     .select("id, workspace_id, user_id, plan_id, agent_slug, step_index, status, " +
       "updated_at, created_at, continuation_claim_expires_at, result")
     .eq("status", "ready")
-    .gte("created_at", new Date(now - MAX_RESUMABLE_AGE_MS).toISOString())
+    .gte("created_at", new Date(now - SCAN_HORIZON_MS).toISOString())
     .lte("updated_at", new Date(now - STALE_AFTER_MS).toISOString())
     .order("updated_at", { ascending: true })
     .limit(50);
@@ -113,6 +265,20 @@ Deno.serve(async (req) => {
       has_started_provider_run: hasStartedProviderRun,
     };
 
+    // ── A DECISION, NOT A SHRUG ───────────────────────────────────────────
+    //
+    // `terminate` means this row will never proceed: its ceilings are spent, it
+    // has gone barren, it has been silent past the horizon, or there is nothing
+    // left to pick up. Leaving it `ready` is what produced nine permanently
+    // stranded tasks, four of which the sweeper had personally refused dozens of
+    // times.
+    if (verdict.disposition === "terminate") {
+      entry.terminated = dryRun
+        ? "dry_run"
+        : await endLineage(admin as unknown as SweeperDb, row, verdict);
+      considered.push(entry);
+      continue;
+    }
     if (!verdict.eligible) { considered.push(entry); continue; }
 
     const request = resumeRequestFor(row);
@@ -163,11 +329,12 @@ Deno.serve(async (req) => {
     if (outcome.dispatched) dispatched++;
   }
 
+  const terminated = considered.filter((c) => c.terminated && c.terminated !== "dry_run").length;
   console.log("[resume-stalled-leads] tick", {
-    scanned: rows.length, dispatched, dry_run: dryRun,
+    scanned: rows.length, dispatched, terminated, dry_run: dryRun,
   });
   return json({
     version: "resume-stalled-leads-v1",
-    scanned: rows.length, dispatched, dry_run: dryRun, considered,
+    scanned: rows.length, dispatched, terminated, dry_run: dryRun, considered,
   });
 });

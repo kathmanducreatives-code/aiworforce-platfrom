@@ -47,8 +47,10 @@
 
 import {
   DEFAULT_MAX_CONTINUATIONS, DEFAULT_MAX_LINEAGE_COST_UNITS, LINEAGE_PROGRESS_KEY,
+  MAX_BARREN_SLICES,
 } from "./leadAutoContinuation.ts";
 import { RESUMABLE_ROW_STATUS } from "./taskStatusContract.ts";
+import { assessCheckpointResume } from "./workflowContinuation.ts";
 
 export const STALLED_LEAD_RESUME_VERSION = "stalled-lead-resume-v1" as const;
 
@@ -64,12 +66,27 @@ export const STALLED_LEAD_RESUME_VERSION = "stalled-lead-resume-v1" as const;
 export const STALE_AFTER_MS = 5 * 60_000;
 
 /**
- * After this, a stalled task is abandoned rather than resumed.
+ * After this much SILENCE, a stalled task is abandoned rather than resumed.
  *
  * A checkpoint does not rot, but the user's attention does: nobody is watching
- * a Workbench for a request they made three hours ago, and silently spending
- * their credits on it is worse than leaving it. It also hard-bounds the resume
- * loop independently of any counter.
+ * a Workbench for a request that has not moved in three hours, and silently
+ * spending their credits on it is worse than leaving it.
+ *
+ * ── MEASURED FROM THE LAST ACTIVITY, NOT FROM CREATION ────────────────────
+ *
+ * It was `created_at`, and that is wrong in both directions. A healthy lineage
+ * that continues on the SAME row keeps its original `created_at` for ever, so a
+ * long, productive run would be abandoned mid-flight at the two-hour mark. And
+ * a dead one was judged by when it started rather than when it stopped.
+ *
+ * `updated_at` answers the question actually being asked: has anything happened
+ * here recently. Task 43355471 is the case — created 08:42, untouched since,
+ * and by 15:00 it had been silently ignored for six hours.
+ *
+ * ABANDONING IS NOW AN OUTCOME, NOT A SHRUG. It carries `disposition:
+ * "terminate"`, so the sweeper writes a terminal status and tells the user,
+ * instead of refusing the same row every three minutes until it ages out of the
+ * scan and disappears.
  */
 export const MAX_RESUMABLE_AGE_MS = 2 * 60 * 60_000;
 
@@ -79,7 +96,39 @@ export const CLAIMABLE_TERMINAL_STATUS = "continuation_required";
 export type IneligibleReason =
   | "not_ready" | "already_terminal" | "no_checkpoint" | "claim_held"
   | "too_fresh" | "abandoned" | "continuation_ceiling" | "cost_ceiling"
-  | "nothing_to_resume" | "no_mission";
+  | "nothing_to_resume" | "no_mission"
+  /** Consecutive slices that qualified and investigated nobody. */
+  | "no_progress";
+
+/**
+ * What the sweeper should DO about this row.
+ *
+ * ── WHY THREE ANSWERS AND NOT TWO ─────────────────────────────────────────
+ *
+ * The old shape was eligible / not-eligible, and "not eligible" meant "look
+ * again in three minutes". Both live failures came out of that single bucket.
+ *
+ * Lineage 9da530ae reached `barren_slices: 9` and `continuations_used: 10` —
+ * the in-process controller had already stopped it with `continuation_ceiling`
+ * — and the sweeper re-dispatched it anyway, at 09:09, 09:18 and 09:27, each
+ * time producing a slice that made zero provider calls and changed nothing.
+ *
+ * Task 43355471 was scanned every three minutes for two hours, refused
+ * `nothing_to_resume` every time, and then aged out of the scan window and was
+ * never looked at again — holding 50 restorable companies and $0.153 of paid
+ * discovery.
+ *
+ * One of those needed to STOP and one needed to CONTINUE, and the shape could
+ * express neither. `skip` is the only transient answer; the other two are
+ * decisions.
+ */
+export type ResumeDisposition =
+  /** Dispatch it. */
+  | "resume"
+  /** Not now, not ours, or not yet — ask again next tick. */
+  | "skip"
+  /** It will never proceed. Write a terminal status and tell the user. */
+  | "terminate";
 
 export interface StalledTaskRow {
   id: string;
@@ -96,10 +145,14 @@ export interface StalledTaskRow {
 }
 
 export interface Eligibility {
+  /** Retained: exactly `disposition === "resume"`. */
   eligible: boolean;
   reason: IneligibleReason | "resumable";
   /** Why it is resumable, for the log. */
-  evidence?: "pending_provider_run" | "continuation_intended";
+  evidence?: "pending_provider_run" | "continuation_intended" | "restorable_checkpoint";
+  disposition: ResumeDisposition;
+  /** A sentence for the terminal record. Set only when terminating. */
+  detail?: string;
 }
 
 const ms = (iso: string | null | undefined): number | null => {
@@ -132,7 +185,15 @@ export function eligibleForAutoResume(
     maxAgeMs?: number;
   } = {},
 ): Eligibility {
-  const no = (reason: IneligibleReason): Eligibility => ({ eligible: false, reason });
+  // SKIP is the transient answer: not ours, not yet, or somebody else's turn.
+  const no = (reason: IneligibleReason): Eligibility =>
+    ({ eligible: false, reason, disposition: "skip" });
+  // STOP is a decision. It ends the row rather than deferring it, and it owes
+  // the user a sentence explaining why.
+  const stop = (reason: IneligibleReason, detail: string): Eligibility =>
+    ({ eligible: false, reason, disposition: "terminate", detail });
+  const go = (evidence: NonNullable<Eligibility["evidence"]>): Eligibility =>
+    ({ eligible: true, reason: "resumable", evidence, disposition: "resume" });
 
   if (row.status !== RESUMABLE_ROW_STATUS) return no("not_ready");
 
@@ -141,18 +202,25 @@ export function eligibleForAutoResume(
   // that is not this string, so a task carrying anything else cannot be
   // resumed no matter how much we would like to — nudging it would produce a
   // 409 on every tick for ever.
-  if (result.terminal_status !== CLAIMABLE_TERMINAL_STATUS) return no("already_terminal");
+  // ── "ALREADY TERMINAL" MEANS SOMETHING ELSE FINISHED IT ─────────────────
+  //
+  // A row whose terminal status is ABSENT has not been finished by anybody —
+  // it is a run that stopped without ever writing an outcome. Calling that
+  // `already_terminal` was a mislabel with a cost: eight rows, silent for
+  // between 71 and 294 hours, were skipped under a reason that said they had
+  // been dealt with. They had not; nothing had ever looked at them again.
+  //
+  // Absent falls through, and is judged below on silence, ceilings and whether
+  // its checkpoint restores. `claim_sourcing_continuation` agrees: it refuses a
+  // terminal status that is present and unclaimable, and accepts a null one.
+  const terminalStatus = typeof result.terminal_status === "string"
+    ? result.terminal_status : null;
+  if (terminalStatus !== null && terminalStatus !== CLAIMABLE_TERMINAL_STATUS) {
+    return no("already_terminal");
+  }
 
   // The claim requires `company_first_state`; without it the RPC answers
   // `no_checkpoint` and refuses, so there is nothing to gain by asking.
-  if (result.company_first_state === undefined || result.company_first_state === null) {
-    return no("no_checkpoint");
-  }
-  // `run-agent` reads the mission from the REQUEST, not the checkpoint, and
-  // refuses a continuation that arrives without one. A dispatch we cannot build
-  // a mission for would be rejected 400 on every tick.
-  if (!result.lead_mission) return no("no_mission");
-
   const held = ms(row.continuation_claim_expires_at);
   if (held !== null && held > now) return no("claim_held");
 
@@ -161,29 +229,94 @@ export function eligibleForAutoResume(
     return no("too_fresh");
   }
 
-  const born = ms(row.created_at);
-  if (born !== null && now - born > (opts.maxAgeMs ?? MAX_RESUMABLE_AGE_MS)) {
-    return no("abandoned");
+  // ── SILENCE IS JUDGED BEFORE SHAPE ──────────────────────────────────────
+  //
+  // Deliberately ahead of the structural checks below. After hours of silence
+  // it no longer matters WHY a row cannot be resumed — a missing checkpoint, a
+  // missing mission, an unrecognisable state — it matters that nothing will
+  // ever pick it up, and that saying so is better than refusing it every three
+  // minutes for ever. Every one of the eight stranded rows failed a structural
+  // check and was therefore skipped rather than ended.
+  const lastActivity = touched ?? ms(row.created_at);
+  const quietMs = lastActivity === null ? 0 : now - lastActivity;
+  if (quietMs > (opts.maxAgeMs ?? MAX_RESUMABLE_AGE_MS)) {
+    return stop("abandoned",
+      `nothing has happened here for ${Math.round(quietMs / 60_000)} minutes; ` +
+      `the saved state is kept but the run will not resume itself`);
   }
 
-  const progress = obj(result[LINEAGE_PROGRESS_KEY]);
-  if (int(progress.continuations_used) >= (opts.maxContinuations ?? DEFAULT_MAX_CONTINUATIONS)) {
-    return no("continuation_ceiling");
+  if (result.company_first_state === undefined || result.company_first_state === null) {
+    return no("no_checkpoint");
   }
-  if (int(progress.cost_units_used) >= (opts.maxCostUnits ?? DEFAULT_MAX_LINEAGE_COST_UNITS)) {
-    return no("cost_ceiling");
+  // `run-agent` reads the mission from the REQUEST, not the checkpoint, and
+  // refuses a continuation that arrives without one. A dispatch we cannot build
+  // a mission for would be rejected 400 on every tick.
+  if (!result.lead_mission) return no("no_mission");
+
+  const progress = obj(result[LINEAGE_PROGRESS_KEY]);
+  const continuationsUsed = int(progress.continuations_used);
+  const costUnitsUsed = int(progress.cost_units_used);
+  const maxContinuations = opts.maxContinuations ?? DEFAULT_MAX_CONTINUATIONS;
+  const maxCostUnits = opts.maxCostUnits ?? DEFAULT_MAX_LINEAGE_COST_UNITS;
+
+  // ── A CEILING IS REACHED ONCE, NOT EVERY THREE MINUTES ──────────────────
+  //
+  // These were `skip`, so a lineage that had spent its budget was re-examined
+  // and re-refused for ever. Reaching a ceiling is final by definition — the
+  // counters only go up.
+  if (continuationsUsed >= maxContinuations) {
+    return stop("continuation_ceiling",
+      `${continuationsUsed} of ${maxContinuations} continuations were used`);
+  }
+  if (costUnitsUsed >= maxCostUnits) {
+    return stop("cost_ceiling",
+      `${costUnitsUsed} of ${maxCostUnits} cost units were used`);
+  }
+
+  // ── NOTHING TWICE RUNNING IS EVIDENCE ───────────────────────────────────
+  //
+  // The SAME rule `decideAutoContinuation` already stops on, read from the SAME
+  // folded counter. The in-process controller honoured it and the sweeper did
+  // not, which is how lineage 9da530ae was re-dispatched three times at
+  // `barren_slices: 9` — each successor making zero provider calls and changing
+  // nothing. A second opinion that ignores the first is not a safety net.
+  const barren = int(progress.barren_slices);
+  if (barren >= MAX_BARREN_SLICES) {
+    return stop("no_progress",
+      `${barren} consecutive slices qualified and investigated nobody`);
   }
 
   // ── IS THERE ANYTHING TO COME BACK FOR? ──────────────────────────────────
   const state = obj(result.capability_execution_state);
   const checkpointedPending = Array.isArray(state.pending_runs) && state.pending_runs.length > 0;
-  if (checkpointedPending || opts.hasStartedProviderRun) {
-    return { eligible: true, reason: "resumable", evidence: "pending_provider_run" };
-  }
-  if (obj(result.auto_continuation).continuing === true) {
-    return { eligible: true, reason: "resumable", evidence: "continuation_intended" };
-  }
-  return no("nothing_to_resume");
+  if (checkpointedPending || opts.hasStartedProviderRun) return go("pending_provider_run");
+  if (obj(result.auto_continuation).continuing === true) return go("continuation_intended");
+
+  // ── A COHERENT CHECKPOINT IS ITSELF A REASON TO COME BACK ───────────────
+  //
+  // The two answers above ask "is a provider mid-sentence?" and "did the last
+  // slice INTEND to continue?". Neither asks the obvious third question: is
+  // there work left that we already paid to discover.
+  //
+  // `continue-workflow` learned this and this path did not. Its comment names
+  // the very task the sweeper then went on refusing:
+  //
+  //   "A run that saved a coherent checkpoint carries its own answer…
+  //    Requiring one refused task 43355471 — 50 companies with snapshots,
+  //    10 shortlisted, `pending_runs: []`"
+  //
+  // Same function, so the two resume paths cannot drift again: a checkpoint
+  // either restores or it does not, and both callers get the same verdict.
+  const checkpoint = assessCheckpointResume(result);
+  if (checkpoint.resumable) return go("restorable_checkpoint");
+
+  // NOTHING LEFT, AND SAYING SO IS THE POINT. This was `skip`, which meant the
+  // row was re-examined every three minutes until it aged out of the scan and
+  // vanished — 43355471 was refused roughly forty times and then forgotten.
+  return stop("nothing_to_resume",
+    checkpoint.refusal === "nothing_left_to_do"
+      ? "every step it was asked to do is accounted for"
+      : `there is no work left to pick up (${checkpoint.refusal ?? "no checkpoint"})`);
 }
 
 /**

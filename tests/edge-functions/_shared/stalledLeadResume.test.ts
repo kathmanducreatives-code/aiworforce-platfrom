@@ -21,7 +21,11 @@ import {
 } from "../../../supabase/functions/_shared/stalledLeadResume.ts";
 import {
   DEFAULT_MAX_CONTINUATIONS, DEFAULT_MAX_LINEAGE_COST_UNITS, LINEAGE_PROGRESS_KEY,
+  MAX_BARREN_SLICES,
 } from "../../../supabase/functions/_shared/leadAutoContinuation.ts";
+import {
+  assessCheckpointResume,
+} from "../../../supabase/functions/_shared/workflowContinuation.ts";
 import {
   mapTerminalRecordToRows,
 } from "../../../supabase/functions/_shared/leadRunTerminalGuard.ts";
@@ -80,8 +84,11 @@ Deno.test("a TERMINAL task is never restarted", () => {
     "execution_deadline_reached"]) {
     const row = STALLED();
     row.result!.terminal_status = t;
+    // `skip`, not `terminate`: this row is not the sweeper's to end. Something
+    // else already gave it a terminal status, and overwriting that would be the
+    // sweeper asserting an outcome it did not observe.
     assertEquals(eligibleForAutoResume(row, NOW, { hasStartedProviderRun: true }),
-      { eligible: false, reason: "already_terminal" }, t);
+      { eligible: false, reason: "already_terminal", disposition: "skip" }, t);
   }
 });
 
@@ -113,13 +120,36 @@ Deno.test("a task touched moments ago may still have a live successor", () => {
     true);
 });
 
-Deno.test("an old stalled task is abandoned, not resumed", () => {
-  // Nobody is watching a Workbench for a request made three hours ago, and
-  // spending their credits on it unasked is worse than leaving it. It also
-  // hard-bounds the resume loop independently of any counter.
-  const old = STALLED({ created_at: ago(MAX_RESUMABLE_AGE_MS + 60_000) });
-  assertEquals(eligibleForAutoResume(old, NOW, { hasStartedProviderRun: true }).reason,
-    "abandoned");
+Deno.test("a task that has been SILENT too long is abandoned, and ENDED", () => {
+  // Nobody is watching a Workbench for a request that has not moved in three
+  // hours, and spending their credits on it unasked is worse than leaving it.
+  //
+  // MEASURED FROM THE LAST ACTIVITY, NOT FROM CREATION. This test used to set
+  // only `created_at` and leave `updated_at` nine minutes old, which asserted
+  // that a task touched nine minutes ago should be abandoned because it STARTED
+  // long ago. That is wrong in both directions: a healthy lineage continuing on
+  // the same row keeps its original `created_at` for ever and would be killed
+  // mid-flight, while a dead one was judged by when it began.
+  const silent = STALLED({
+    created_at: ago(MAX_RESUMABLE_AGE_MS + 60_000),
+    updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000),
+  });
+  const verdict = eligibleForAutoResume(silent, NOW, { hasStartedProviderRun: true });
+  assertEquals(verdict.reason, "abandoned");
+  // AND IT IS ENDED, not deferred. Refusing it every three minutes until it
+  // aged out of the scan is how task 43355471 was forgotten.
+  assertEquals(verdict.disposition, "terminate");
+  assert(verdict.detail && verdict.detail.length > 0, "abandoning owes the user a reason");
+});
+
+Deno.test("a LONG-RUNNING but recently active task is NOT abandoned", () => {
+  // The other half. A same-row continuation that has been working for hours
+  // keeps its original `created_at`; only silence may end it.
+  const busy = STALLED({
+    created_at: ago(MAX_RESUMABLE_AGE_MS * 3),
+    updated_at: ago(6 * 60_000),
+  });
+  assertEquals(eligibleForAutoResume(busy, NOW, { hasStartedProviderRun: true }).eligible, true);
 });
 
 Deno.test("the EXISTING ceilings bound the resume loop", () => {
@@ -247,4 +277,237 @@ Deno.test("the sweeper dispatches through run-agent, and claims nothing itself",
   assertEquals(/runCapabilityPlan|callProvider|apify/i.test(FN), false,
     "a scheduler entry point owns no engine and no provider");
   assert(FN.includes("token !== SERVICE_KEY"), "the scheduler is the only caller");
+});
+
+// ── PHASE 8: THE TWO LIVE FAILURES ──────────────────────────────────────────
+//
+// Both came out of a decision shape that had one answer for "no" — look again
+// in three minutes — when one lineage needed to STOP and another needed to
+// CONTINUE.
+
+/**
+ * Task 43355471, verbatim in the parts that decide.
+ *
+ * `pending_runs: []`, no `auto_continuation`, and 50 companies with snapshots
+ * behind $0.153 of paid discovery. The old rule answered `nothing_to_resume`
+ * and did so every three minutes for two hours, after which the row aged out of
+ * the scan window and was never looked at again.
+ */
+const CHECKPOINTED = (over: Partial<StalledTaskRow> = {}): StalledTaskRow => {
+  const companies = Array.from({ length: 50 }, (_, i) => ({
+    company_key: `https://www.linkedin.com/company/c${i}`,
+    company_name: `Company ${i}`,
+    identity: i < 11 ? "resolved" : "deferred",
+    enrichment: i < 11 ? "completed" : "not_required",
+    hiring: "not_started", brain: "not_started", founder: "not_eligible",
+    completed_operations: [],
+    snapshot: { company: { company_name: `Company ${i}` }, shortlisted: i < 21 },
+  }));
+  return {
+    id: "43355471-f0ca-4e12-aec4-f3dcf586ef90",
+    workspace_id: "ws-1", user_id: "user-1", plan_id: "plan-1",
+    agent_slug: "pilot", step_index: 0, status: "ready",
+    updated_at: ago(9 * 60_000), created_at: ago(11 * 60_000),
+    continuation_claim_expires_at: null,
+    result: {
+      terminal_status: "continuation_required",
+      company_first_state: { next_action: "start_round" },
+      lead_mission: { original_user_query: "Find 5 recruiting or staffing companies…" },
+      capability_execution_state: {
+        pending_runs: [],
+        completed_capabilities: ["general_company_discovery"],
+        pending_capabilities: ["company_identity_resolution", "persistence"],
+      },
+      lead_resume_checkpoint: { version: "lead-resume-state-v1", companies },
+      [LINEAGE_PROGRESS_KEY]: { continuations_used: 0, cost_units_used: 3, barren_slices: 0 },
+    },
+    ...over,
+  };
+};
+
+Deno.test("43355471 IS RESUMABLE — a coherent checkpoint is its own reason", () => {
+  // No pending provider run, no declared intent, 50 restorable companies. The
+  // question the old rule never asked: is there work left we already paid to
+  // discover.
+  const v = eligibleForAutoResume(CHECKPOINTED(), NOW, { hasStartedProviderRun: false });
+  assertEquals(v.eligible, true);
+  assertEquals(v.disposition, "resume");
+  assertEquals(v.evidence, "restorable_checkpoint");
+});
+
+Deno.test("…and the SAME assessment `continue-workflow` uses answers it", () => {
+  // The fix already existed in the sibling path, which names this exact task in
+  // its comment. Two resume paths deciding resumability differently is how one
+  // of them stayed broken; this pins that they share the function.
+  assertEquals(
+    assessCheckpointResume(CHECKPOINTED().result as Record<string, unknown>).resumable,
+    true,
+  );
+});
+
+Deno.test("a checkpoint whose companies cannot be RESTORED is not resumable", () => {
+  // "Present" is not "restorable": `restoreWorkingSet` skips a record with no
+  // `snapshot.company`, so counting those would promise a resume that comes
+  // back holding nothing.
+  const hollow = CHECKPOINTED();
+  const cp = (hollow.result!.lead_resume_checkpoint as { companies: Array<Record<string, unknown>> });
+  for (const c of cp.companies) c.snapshot = { shortlisted: true };
+  const v = eligibleForAutoResume(hollow, NOW, { hasStartedProviderRun: false });
+  assertEquals(v.eligible, false);
+  assertEquals(v.disposition, "terminate");
+  assertEquals(v.reason, "nothing_to_resume");
+});
+
+Deno.test("9da530ae IS STOPPED — barren slices end the lineage", () => {
+  // Production: barren_slices 8→9 while the in-process controller had already
+  // said `continuation_ceiling`. The sweeper re-dispatched at 09:09, 09:18 and
+  // 09:27, each successor making zero provider calls.
+  const barren = CHECKPOINTED();
+  (barren.result![LINEAGE_PROGRESS_KEY] as Record<string, unknown>).barren_slices = 9;
+  const v = eligibleForAutoResume(barren, NOW, { hasStartedProviderRun: true });
+  assertEquals(v.eligible, false);
+  assertEquals(v.reason, "no_progress");
+  assertEquals(v.disposition, "terminate");
+  assert(v.detail?.includes("9"), "the terminal record names the streak");
+});
+
+Deno.test("the barren rule is the SAME number the in-process controller stops on", () => {
+  // Not a second opinion with its own threshold — the same constant, so the two
+  // deciders cannot disagree about what a stalled lineage looks like.
+  const atLimit = CHECKPOINTED();
+  (atLimit.result![LINEAGE_PROGRESS_KEY] as Record<string, unknown>).barren_slices =
+    MAX_BARREN_SLICES;
+  assertEquals(eligibleForAutoResume(atLimit, NOW, {}).reason, "no_progress");
+
+  const below = CHECKPOINTED();
+  (below.result![LINEAGE_PROGRESS_KEY] as Record<string, unknown>).barren_slices =
+    MAX_BARREN_SLICES - 1;
+  assertEquals(eligibleForAutoResume(below, NOW, {}).eligible, true,
+    "one barren slice is ordinary and must not end a run");
+});
+
+Deno.test("a ceiling ENDS the lineage rather than being re-refused for ever", () => {
+  // Counters only go up, so reaching a ceiling is final by definition. These
+  // were `skip`, which meant the row was re-examined every three minutes.
+  for (const [field, value] of [
+    ["continuations_used", DEFAULT_MAX_CONTINUATIONS],
+    ["cost_units_used", DEFAULT_MAX_LINEAGE_COST_UNITS],
+  ] as const) {
+    const row = CHECKPOINTED();
+    (row.result![LINEAGE_PROGRESS_KEY] as Record<string, unknown>)[field] = value;
+    const v = eligibleForAutoResume(row, NOW, { hasStartedProviderRun: true });
+    assertEquals(v.disposition, "terminate", field);
+    assert(v.detail?.includes(String(value)), "the record names the number it hit");
+  }
+});
+
+Deno.test("EVERY refusal is either transient or final — none is silent", () => {
+  // The property the old shape could not express. A `skip` must be something
+  // that can genuinely change on the next tick; anything else owes the user an
+  // outcome.
+  const cases: Array<[string, StalledTaskRow, Record<string, unknown>]> = [
+    ["too_fresh", CHECKPOINTED({ updated_at: ago(30_000) }), {}],
+    ["claim_held", CHECKPOINTED({
+      continuation_claim_expires_at: new Date(NOW + 60_000).toISOString() }), {}],
+    ["not_ready", CHECKPOINTED({ status: "running" }), {}],
+  ];
+  for (const [name, row, opts] of cases) {
+    const v = eligibleForAutoResume(row, NOW, opts);
+    assertEquals(v.disposition, "skip", `${name} must be transient`);
+  }
+  for (const v of [
+    eligibleForAutoResume(CHECKPOINTED({
+      updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000) }), NOW, {}),
+  ]) {
+    assertEquals(v.disposition, "terminate");
+    assert(v.detail, "a terminal disposition always carries a reason");
+  }
+});
+
+// ── THE SWEEPER ACTS ON THE VERDICT ─────────────────────────────────────────
+
+const SWEEPER = Deno.readTextFileSync(
+  new URL("../../../supabase/functions/resume-stalled-leads/index.ts", import.meta.url));
+
+Deno.test("the scan no longer hides rows it could have ended", () => {
+  // `created_at >= now - MAX_RESUMABLE_AGE_MS` is what made task 43355471
+  // disappear: the log went from `scanned: 1` to `scanned: 0` and nothing said
+  // why. A row the sweeper cannot see is a row it cannot end.
+  assert(
+    !/gte\("created_at",\s*new Date\(now - MAX_RESUMABLE_AGE_MS\)/.test(SWEEPER),
+    "the decision horizon must not double as a visibility filter",
+  );
+  assert(SWEEPER.includes("SCAN_HORIZON_MS"), "the scan bound is named and far wider");
+});
+
+Deno.test("a `terminate` verdict ends the row instead of deferring it", () => {
+  assert(/verdict\.disposition === "terminate"/.test(SWEEPER),
+    "the sweeper must branch on the disposition");
+  assert(SWEEPER.includes("endLineage("), "and act on it");
+});
+
+Deno.test("ending a row is guarded on it still being `ready`", () => {
+  // Between the scan and the write, `run-agent` may have claimed it. The update
+  // narrows on status so the sweeper cannot end a run that has restarted.
+  assert(/\.eq\("id", row\.id\)\.eq\("status", "ready"\)/.test(SWEEPER),
+    "the terminal write must be conditional on the status it observed");
+});
+
+Deno.test("the stop notice claims nothing about spend or evaluation", () => {
+  // The audit's standing finding: summaries that assert spend without reading
+  // the ledger are how the product told users "No credits charged" while
+  // credits were being charged. The sweeper has read neither ledger.
+  const notices = SWEEPER.slice(SWEEPER.indexOf("const STOP_NOTICE"));
+  const block = notices.slice(0, notices.indexOf("});") + 3);
+  for (const claim of ["credits charged", "No credits", "evaluated", "qualified",
+                       "none passed", "nothing was charged"]) {
+    assert(!block.toLowerCase().includes(claim.toLowerCase()),
+      `a scheduling notice must not claim "${claim}"`);
+  }
+  assert(block.includes("saved"), "it should say the work is kept");
+});
+
+Deno.test("a row with NO terminal status is not 'already terminal'", () => {
+  // The eight stranded rows, verbatim in the part that decides: `status: ready`,
+  // `terminal_status` absent, silent for between 71 and 294 hours. They were
+  // skipped as `already_terminal` — a reason asserting somebody had finished
+  // them, when nothing ever had.
+  const never = CHECKPOINTED({
+    updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000),
+    created_at: ago(MAX_RESUMABLE_AGE_MS + 120_000),
+  });
+  delete never.result!.terminal_status;
+  const v = eligibleForAutoResume(never, NOW, {});
+  assert(v.reason !== "already_terminal", "absent is not the same as finished");
+  assertEquals(v.reason, "abandoned");
+  assertEquals(v.disposition, "terminate");
+});
+
+Deno.test("a row somebody ELSE finished is still left alone", () => {
+  // The other side of that line. A real terminal status belongs to whoever
+  // wrote it, and the sweeper must not overwrite an outcome it did not observe.
+  const finished = CHECKPOINTED({ updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000) });
+  finished.result!.terminal_status = "round_limit_reached";
+  const v = eligibleForAutoResume(finished, NOW, {});
+  assertEquals(v.reason, "already_terminal");
+  assertEquals(v.disposition, "skip");
+});
+
+Deno.test("SILENCE IS JUDGED BEFORE SHAPE", () => {
+  // After hours of quiet it no longer matters why a row cannot resume — a
+  // missing checkpoint, a missing mission — only that nothing will pick it up.
+  // Every stranded row failed a structural check and was skipped rather than
+  // ended, which is how each of them survived for weeks.
+  for (const missing of ["company_first_state", "lead_mission"]) {
+    const row = CHECKPOINTED({ updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000) });
+    delete row.result![missing];
+    assertEquals(eligibleForAutoResume(row, NOW, {}).disposition, "terminate", missing);
+  }
+  // But a FRESH row missing the same things is still merely refused: it may
+  // simply not have finished being written.
+  for (const missing of ["company_first_state", "lead_mission"]) {
+    const row = CHECKPOINTED({ updated_at: ago(9 * 60_000) });
+    delete row.result![missing];
+    assertEquals(eligibleForAutoResume(row, NOW, {}).disposition, "skip", missing);
+  }
 });
