@@ -6796,12 +6796,79 @@ export function checkpointSnapshot(
         " — a resume would skip discovery and have nobody to investigate",
     };
   }
+  const records = companies.map(toResumeRecord);
+  const rule = checkpointCoherence(projected.completed_capabilities, records);
+  if (!rule.coherent) {
+    return { state: projected, resume_records: records, ...rule };
+  }
   return {
     state: projected,
-    resume_records: companies.map(toResumeRecord),
+    resume_records: records,
     coherent: true,
     incoherence: null,
   };
+}
+
+/**
+ * THE INVARIANT, AS A FUNCTION.
+ *
+ *   A capability may be marked completed only if every piece of state the
+ *   capabilities after it require is durably in this checkpoint.
+ *
+ * `checkpointSnapshot` checked ONE instance of it — discovery must have
+ * produced companies — and that is how the next instance shipped.
+ * `hiring_verification` completed with four externally verified companies whose
+ * assessments were not in the snapshot, and the resume that read that
+ * checkpoint reported "the eligible set was empty (50 companies carried no
+ * hiring assessment)". The stage label survived; the verdict it labelled did
+ * not.
+ *
+ * A TABLE, so a capability added later is a row here rather than an incident.
+ * Exported so the rule can be tested against a record that lies, which is the
+ * only shape that can prove it bites — through `toResumeRecord` alone it is
+ * unreachable, and an unreachable guard is a comment.
+ *
+ * Capabilities absent from the table require nothing: qualification and
+ * persistence may both legitimately complete having produced nothing.
+ */
+export function checkpointCoherence(
+  completed: readonly string[],
+  records: readonly CompanyResumeRecord[],
+): { coherent: boolean; incoherence: string | null } {
+  const rules: Array<{
+    capability: CapabilityId;
+    claims: (r: CompanyResumeRecord) => boolean;
+    present: (r: CompanyResumeRecord) => boolean;
+    what: string;
+  }> = [
+    {
+      capability: "company_identity_resolution",
+      claims: (r) => r.identity === "resolved",
+      present: (r) => !!r.snapshot?.identity,
+      what: "the resolved identity object",
+    },
+    {
+      capability: "hiring_verification",
+      claims: (r) => r.hiring === "verified_externally" ||
+        r.hiring === "verified_from_existing_evidence",
+      present: (r) => !!r.snapshot?.hiring_assessment,
+      what: "the hiring assessment it verified",
+    },
+  ];
+  for (const rule of rules) {
+    if (!completed.includes(rule.capability)) continue;
+    const lost = records.filter((r) => rule.claims(r) && !rule.present(r));
+    if (lost.length > 0) {
+      return {
+        coherent: false,
+        incoherence:
+          `${rule.capability} marked complete, but ${lost.length} company(ies) ` +
+          `claim a result whose ${rule.what} is not in the checkpoint` +
+          ` — a resume would read them as never having been done`,
+      };
+    }
+  }
+  return { coherent: true, incoherence: null };
 }
 
 export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
@@ -6891,6 +6958,29 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // resolution was `skipped_resumed: completed in an earlier run`, so
       // nothing rebuilt the object it had produced.
       identity: (c.identity ?? null) as unknown as Record<string, unknown> | null,
+      // ── AND THE HIRING VERDICT, FOR EXACTLY THE SAME REASON ─────────────
+      //
+      // `hiring: "verified_externally"` on the record above is a LABEL. The
+      // Company Brain's eligibility filter reads the OBJECT — a company with
+      // `hiring_assessment === null` "carried no hiring assessment" however
+      // emphatic the label is.
+      //
+      // Task 02ea3aed: four companies verified from 148 paid job rows, resumed,
+      // and the Brain reported "the eligible set was empty (50 companies
+      // carried no hiring assessment)". `hiring_verification` was already
+      // `completed`, so nothing recomputed them — and nothing could, because
+      // their `completed_operations` forbids re-buying the search. A verdict
+      // the run paid for, destroyed by the resume built to preserve it.
+      //
+      // `hiring_jobs` travels with it: the verdict cites those rows, and a
+      // citation whose evidence is gone is not a citation.
+      hiring_assessment: (c.hiring_assessment ?? null) as unknown as
+        Record<string, unknown> | null,
+      // GUARDED, like `yc_open_jobs` is not — because a caller can hand this a
+      // partially-built company (a restored record, a fixture) and a checkpoint
+      // writer must never be the thing that throws.
+      hiring_jobs: (Array.isArray(c.hiring_jobs) ? c.hiring_jobs : [])
+        .slice(0, MAX_SNAPSHOT_JOBS) as unknown as Record<string, unknown>[],
     },
     updated_at: new Date().toISOString(),
   };
@@ -6944,6 +7034,29 @@ export function restoreWorkingSet(
       ? s.investigation_rank
       : Number.MAX_SAFE_INTEGER;
     c.triage = (s.triage ?? null) as unknown as TriageVerdict | null;
+    // ── THE EVIDENCE, NOT JUST THE COMPANY ────────────────────────────────
+    //
+    // `toResumeRecord` has written `snapshot.identity` since the fix whose
+    // comment says why: "Every paid stage after identity selects on the OBJECT
+    // — `hiring_verification` filters `c.identity && identityIsActionable(...)`
+    // — so a restored company without it is invisible to them."
+    //
+    // Nothing read it back. Half a fix: the object was persisted on every
+    // checkpoint and dropped on every restore, so the failure that comment
+    // describes kept happening. Task 02ea3aed, live: 50 companies restored, 21
+    // shortlisted, and `company_identity_resolution` reported "0 resolved, 10
+    // deferred" while eleven resolved identities sat in the checkpoint it had
+    // just read. `hiring_verification` then found `targets: 0`, and the Brain
+    // reported the eligible set empty.
+    //
+    // NARROWED THE SAME WAY AS EVERY OTHER FIELD HERE: a checkpoint is
+    // untrusted input, and an absent value degrades to the pre-restore
+    // behaviour rather than throwing.
+    c.identity = (s.identity ?? null) as unknown as EngineCompany["identity"];
+    c.hiring_assessment = (s.hiring_assessment ?? null) as unknown as
+      EngineCompany["hiring_assessment"];
+    c.hiring_jobs = Array.isArray(s.hiring_jobs)
+      ? (s.hiring_jobs as unknown as NormalizedHiringJob[]) : [];
     // A company already carried to a terminal outcome must not re-enter the
     // frontier; `shortlisted` stays the derived view of that.
     c.shortlisted = wasInvestigated(c.investigation_state);

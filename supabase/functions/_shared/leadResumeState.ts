@@ -271,6 +271,34 @@ export interface CompanyWorkingSetSnapshot {
    * engine simply leaves `c.identity` null rather than failing to restore.
    */
   identity?: Record<string, unknown> | null;
+  /**
+   * WHAT HIRING VERIFICATION PRODUCED, not merely that it ran.
+   *
+   * The same distinction as `identity` directly above, one stage later, and it
+   * failed the same way. `CompanyResumeRecord.hiring` is a STAGE
+   * ("verified_externally"); the Company Brain's eligibility filter reads the
+   * OBJECT, and a company whose `hiring_assessment` is null "carried no hiring
+   * assessment" however emphatic the stage label is.
+   *
+   * Task 02ea3aed: four companies verified from 148 paid job rows, resumed, and
+   * the Brain reported "the eligible set was empty (50 companies carried no
+   * hiring assessment)". `hiring_verification` was already `completed`, so
+   * nothing recomputed the verdicts — and nothing could, because
+   * `completed_operations` correctly forbids re-buying the search. Evidence the
+   * run had paid for, destroyed by the resume built to preserve it.
+   *
+   * Optional, for the same reason as every field above: an older checkpoint has
+   * none and the engine leaves the assessment null rather than failing.
+   */
+  hiring_assessment?: Record<string, unknown> | null;
+  /**
+   * The job rows the verdict CITES. BOUNDED — see `MAX_SNAPSHOT_JOBS`.
+   *
+   * Carried with the assessment because a citation whose evidence is gone is
+   * not a citation: `hiringJobsFor` picked these rows, the Workbench renders
+   * them, and the evaluator quotes them.
+   */
+  hiring_jobs?: Record<string, unknown>[];
 }
 
 /**
