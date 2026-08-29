@@ -703,6 +703,11 @@ export interface ShortlistCandidate {
    * `insufficient_commercial` are judgements, and they belong to GPT.
    */
   hard_exclusion?: string | null;
+  /**
+   * Which authority set the constraint — `mission`, `brain_hard`,
+   * `brain_advisory` or `none`. Absent, the reason reads as it always did.
+   */
+  hard_exclusion_source?: string | null;
   /** GPT triage verdict, when Mission Intelligence ran. */
   relevance?: "relevant" | "uncertain" | "irrelevant" | null;
   confidence?: number | null;
@@ -787,9 +792,23 @@ export function buildSmartShortlist(
     // company verifiably has 350, no semantic verdict makes it in range.
     if (c.hard_exclusion) {
       counts.hard_excluded++;
+      // ── NAME WHOSE RULE THIS IS ──────────────────────────────────────
+      //
+      // This always said `mission_constraint:`. On task 5c461aa3 eighteen
+      // companies were rejected as `mission_constraint:employee_size` for a
+      // mission that declared no employee range at all — the 1–150 bound came
+      // from the Company Brain's effective policy. The user was told they had
+      // asked for something they never asked for, eighteen times.
+      //
+      // `resolveEmployeeBounds` has always known the answer; it just never
+      // reached the label. Absent, the wording is unchanged.
+      const owner = c.hard_exclusion_source === "brain_hard"
+          || c.hard_exclusion_source === "brain_advisory"
+        ? "icp_constraint"
+        : "mission_constraint";
       excluded.push({
         company_key: c.company_key,
-        reason: `mission_constraint:${c.hard_exclusion}`,
+        reason: `${owner}:${c.hard_exclusion}`,
       });
       return false;
     }

@@ -2405,21 +2405,35 @@ export async function runCapabilityPlan(
       investigationBudget: budget.budget,
       read: opts.readEnv,
     });
+    // ── WHOSE RULE IS ABOUT TO REJECT PEOPLE ────────────────────────────
+    //
+    // `resolveEmployeeBounds` already answers this — `mission`, `brain_hard`,
+    // `brain_advisory` or `none` — and the answer never reached the label. Task
+    // 5c461aa3 rejected eighteen companies as `mission_constraint:employee_size`
+    // when the mission declared NO employee range at all: the 1–150 bound came
+    // from the Company Brain's effective policy. Every one of those rejections
+    // told the user they had asked for something they never asked for.
+    const shortlistBoundSource = resolveEmployeeBounds(qualificationCtx, {
+      employee_min: opts.brain?.employee_min ?? null,
+      employee_max: opts.brain?.employee_max ?? null,
+      hard_constraints: opts.brain?.hard_constraints ?? null,
+    }).source;
+
     const decision = buildSmartShortlist(
       companies.map((c) => ({
         company_key: c.key,
         eligible: c.prequalified?.eligible ?? true,
-        // THE MISSION'S OWN CONSTRAINT, AND ONLY THAT.
+        // A VERIFIED, ENFORCEABLE SIZE CONSTRAINT — whoever set it.
         //
         // `prequalified.exclusion` carries three values. `employee_size` fires
-        // only when the MISSION set a range and the size is known to be
-        // outside it — a verified fact about a constraint the user expressed.
-        // `technical_only` and `insufficient_commercial` come from the role
-        // vocabulary and are judgements, so they rank (via `eligible`) and no
-        // longer remove anyone from the pool.
+        // only when an enforceable range is set and the size is known to be
+        // outside it. `technical_only` and `insufficient_commercial` come from
+        // the role vocabulary and are judgements, so they rank (via `eligible`)
+        // and no longer remove anyone from the pool.
         hard_exclusion: c.prequalified?.exclusion === "employee_size"
           ? "employee_size"
           : null,
+        hard_exclusion_source: shortlistBoundSource,
         relevance: c.triage?.relevance ?? null,
         confidence: c.triage?.confidence ?? null,
         signal_strength: c.triage?.signal_strength ?? null,

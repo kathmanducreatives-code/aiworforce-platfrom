@@ -246,10 +246,23 @@ Deno.test("run-agent settles only a genuinely open row, and only its own", async
   );
   const i = RUN.indexOf("onRunAdopted: async (info) =>");
   assert(i > 0, "the settle must be wired");
-  const block = RUN.slice(i, i + 1400);
-  assert(block.includes('status: "succeeded"'), "the row stops saying started");
+  const block = RUN.slice(i, i + 3200);
+  // ── `reused`, NOT `succeeded` ──────────────────────────────────────────
+  //
+  // This asserted `succeeded`, and that is what shipped: the one row in task
+  // 5c461aa3 that cost nothing extra was recorded identically to the three that
+  // were charged. The ledger has a distinct status for a run read back without
+  // a second charge, and `outcomeFromToolResult` says why — "recording it as a
+  // plain success would make the ledger overstate what was spent".
+  assert(block.includes('status: "reused"'), "the row stops saying started");
+  assertEquals(/status: "succeeded"/.test(block), false,
+    "an adopted run is not a purchase");
   assert(block.includes('reason: "resumed_run"'), "and says how it finished");
   assert(block.includes("raw_count: info.rows"));
+  // AND WHY IT CARRIES NO COST OR DURATION, rather than leaving the started-row
+  // defaults to read as missing data.
+  assert(block.includes('cost_source: "reused_no_charge"'));
+  assert(block.includes("duration_unknown_reason"));
   // SCOPE. A settle that could touch another workspace's row, another task's
   // row, or an already-settled row would be worse than the stale status.
   assert(block.includes('.eq("provider_run_id", info.run_id)'));

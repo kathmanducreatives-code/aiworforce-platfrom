@@ -33,6 +33,16 @@ import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
 import { normalizeApifyJobRow } from "./apifyJobsNormalizer.ts";
 
+/**
+ * How deep a paid jobs dataset is read.
+ *
+ * Bounds memory, never evidence: the dataset is already bought, so stopping
+ * short of it discards rows this run paid for. Every hiring dataset this system
+ * has produced fits well inside it, and one that does not is reported by the
+ * response's count ledger rather than silently shortened.
+ */
+export const JOBS_POOL_READ_CEILING = 200;
+
 export interface ToolContext {
   admin: SupabaseClient;
   /**
@@ -1207,6 +1217,8 @@ async function execSourceWithApify(
   // defaulted to. The 25-row cap below is a LinkedIn-Jobs pre-rank pool; applied
   // to a company scraper it silently discarded half of a paid 50-row dataset.
   const isJobsSource = /jobs/i.test(source_type) && !isCompanyDetails && !isStructuredCompanies;
+  // Bounds memory, not evidence. Every hiring dataset this system has produced
+  // fits inside it; a run that does not will say so in its count ledger.
   // THE COMPILED INPUT ALREADY SAYS HOW MANY ROWS WERE ASKED FOR.
   //
   // `max_results` is an ENVELOPE field, and the capability engine does not send
@@ -1223,8 +1235,25 @@ async function execSourceWithApify(
     return typeof v === "number" && Number.isInteger(v) && v > 0 && v <= 1000 ? v : null;
   })();
   const structuredLimit = compiledMaxItems ?? max_results;
+  //
+  // ── THE JOBS POOL WAS A CAP, NOT A POOL ─────────────────────────────────
+  //
+  // This was `Math.min(25, Math.max(max_results, 10))`, described above as a
+  // pre-rank POOL — a number chosen to be LARGER than the handful of rows a
+  // caller wanted, so ranking had something to rank. It stopped being larger.
+  //
+  // Task 5c461aa3's four paid hiring searches produced datasets of 74, 98, 59
+  // and 3 rows. We downloaded 25, 25, 25 and 3. **156 of 234 rows this run paid
+  // for were never read**, and the assessment that found no sales roles was
+  // scoring a truncated third of the evidence.
+  //
+  // The comment's own reasoning is the fix: the dataset already exists and
+  // reading further into it costs nothing. The ceiling is explicit and bounds
+  // memory rather than evidence, and `buildCountLedger` below reports any row
+  // that still does not make it back — the exact loss, made visible, being what
+  // the structured path already learned to do after the identical 50→25 bug.
   const fetchLimit = isJobsSource
-    ? Math.min(25, Math.max(max_results, 10))
+    ? Math.max(JOBS_POOL_READ_CEILING, compiledMaxItems ?? 0, max_results)
     : (isStructuredCompanies || isCompanyDetails ? structuredLimit : max_results);
   const itemsRes = await apifyFetch(
     `/datasets/${resolvedDatasetId}/items?clean=true&limit=${fetchLimit}&token=${APIFY_API_TOKEN}`,
@@ -1382,6 +1411,18 @@ async function execSourceWithApify(
       },
       items,
       total: items.length,
+      // ── WHAT WAS BOUGHT vs WHAT CAME BACK ───────────────────────────────
+      //
+      // The structured path has reported this since the 50→25 loss; the jobs
+      // path never did, and that is why 156 of 234 paid rows disappeared
+      // without a trace on task 5c461aa3. `buildCountLedger` also flags the
+      // quieter case — a read shallower than the `maxItems` the Actor was paid
+      // for — so an under-read can never again look like a small dataset.
+      count_ledger: buildCountLedger(
+        fetchLimit, rawItems.length, items.length,
+        items.length < rawItems.length ? "fetch_limit_cap" : null,
+        compiledMaxItems,
+      ),
       // Success with zero items is `no_results`, not a failure (rule 10).
       no_results: items.length === 0,
       summary: items.length === 0
@@ -1906,7 +1947,24 @@ function outcomeFromToolResult(
       status: resumed ? "reused" : "succeeded",
       provider_run_id: runId,
       dataset_id: datasetId,
-      counts: { raw: items ? items.length : null },
+      // EVERY STAGE THE ROWS PASSED THROUGH, not just the last one. These were
+      // all NULL on every provider_call row in production, so "the provider
+      // returned nothing" and "we read a third of it and dropped the rest" were
+      // the same picture in the ledger.
+      counts: (() => {
+        const cl = (d.count_ledger ?? null) as
+          { downloaded?: number; returned?: number } | null;
+        const returned = items ? items.length : null;
+        return {
+          raw: cl?.downloaded ?? returned,
+          normalized: returned,
+          unique: returned,
+          accepted: returned,
+          rejected: cl && typeof cl.downloaded === "number" && typeof cl.returned === "number"
+            ? Math.max(0, cl.downloaded - cl.returned)
+            : null,
+        };
+      })(),
       // PRICED FROM WHAT THIS RUN ACTUALLY DID: its own row count, its own
       // input (short and full company rows are a 2x difference), and the
       // provider's usage figures when it sends any. `started: !resumed` keeps a

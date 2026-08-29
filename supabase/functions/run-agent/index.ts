@@ -2611,10 +2611,38 @@ Deno.serve(async (req) => {
                   const { error } = await (supabase as any)
                     .from(LEAD_EXECUTION_CALLS_TABLE)
                     .update({
-                      status: "succeeded",
+                      // ── "reused", NEVER "succeeded" ────────────────────
+                      //
+                      // The ledger has a distinct status for a run read back
+                      // without a second charge, and `outcomeFromToolResult`
+                      // says why: "recording it as a plain success would make
+                      // the ledger overstate what was spent". This settle path
+                      // wrote `succeeded`, so the one row in task 5c461aa3 that
+                      // cost nothing extra was indistinguishable from the three
+                      // that did.
+                      status: "reused",
                       reason: "resumed_run",
                       raw_count: info.rows,
                       finished_at: new Date().toISOString(),
+                      // AND IT SAYS WHY IT CARRIES NO COST OR DURATION.
+                      //
+                      // This row kept `cost_source: "unknown"` and
+                      // `duration_ms: null` — the started-row defaults — because
+                      // it never passed through `buildFinalPatch`. Both are
+                      // genuinely unknown here: the invocation that polled this
+                      // run died, so nobody saw the provider's usage figures or
+                      // its real runtime. Wall-clock from the POST would be the
+                      // gap between two invocations, not the Actor's runtime,
+                      // and writing it would be inventing a measurement.
+                      cost_source: "reused_no_charge",
+                      next_decision: "adopted_without_second_charge",
+                      metadata: {
+                        adopted_by_task: task.id,
+                        adopted_at: new Date().toISOString(),
+                        rows_read: info.rows,
+                        duration_unknown_reason:
+                          "the invocation that started this run was terminated before it could observe the provider's runtime or usage",
+                      },
                     })
                     .eq("provider_run_id", info.run_id)
                     .eq("task_id", task.id)
