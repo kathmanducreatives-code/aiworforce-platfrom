@@ -39,7 +39,7 @@
 // callables it is given. Everything it returns is testable with stubs.
 
 import {
-  readProviderResultItems, resolveResponseKind,
+  jobRowsLookIntact, readProviderResultItems, resolveResponseKind,
 } from "./providerResponseContract.ts";
 
 export const CAPABILITY_EXECUTION_VERSION = "capability-execution-v1" as const;
@@ -160,13 +160,29 @@ export function buildInvoker(ctx: CapabilityExecutionContext) {
       sourceType: (rr.data as { normalized_source_type?: string })
         .normalized_source_type ?? null,
     });
-    const items = readProviderResultItems(rr.data as Record<string, unknown>, kind);
+    // THE PROVIDER'S OWN ROWS, because this caller owns a normalizer per Actor.
+    // `hiringActorNormalizers` is written against the output contracts in
+    // `hiringActorCatalog`; the legacy flat projection under `items` is written
+    // against a different Actor entirely. See `readProviderResultItems`.
+    const items = readProviderResultItems(
+      rr.data as Record<string, unknown>, kind, { providerRows: true });
 
     // A STRUCTURED RESPONSE THAT ARRIVED JOB-NORMALIZED IS A TRANSPORT BUG, not
     // an empty result. Reported rather than swallowed — this is what would have
     // caught task 41342269 in the log instead of six hours later in a CSV diff.
     if (kind === "structured_companies") {
       const shape = structuredRowsLookIntact(items);
+      if (!shape.intact) {
+        (ctx.log ?? (() => {}))("provider_response_shape_violation", {
+          actor_id: call.actorId, reason: shape.reason,
+        });
+      }
+    }
+    // AND THE SAME QUESTION OF A JOBS RESPONSE. `readProviderResultItems` falls
+    // back to `items` when `job_items` is absent, and that fallback is silent —
+    // which is exactly how task a76c7b4c lost 84 paid rows without a log line.
+    if (kind === "jobs") {
+      const shape = jobRowsLookIntact(items);
       if (!shape.intact) {
         (ctx.log ?? (() => {}))("provider_response_shape_violation", {
           actor_id: call.actorId, reason: shape.reason,

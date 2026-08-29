@@ -7,6 +7,27 @@
 // "proof_incomplete" Workbench rows. This pure module preserves the source data
 // into clean normalized fields + a structured raw object + real source proof.
 //
+// ── AND MORE THAN ONE ACTOR REACHES IT ──────────────────────────────────────
+//
+// Everything above describes ONE provider's dialect: flat keys, `companyName`,
+// `companyLinkedinUrl`, `link`. `harvestapi/linkedin-job-search` — the Actor
+// every hiring verification in the lead pipeline actually runs — nests the same
+// facts:
+//
+//     { id, title, linkedinUrl, postedDate,
+//       location: { linkedinText, parsed: { text } },
+//       company:  { id, name, linkedinUrl, website, employeeCount, industries } }
+//
+// `firstStr` rejects non-strings, so `firstStr(r.companyName, r.company, …)`
+// returned NULL for every harvestapi row: no company name, no company LinkedIn
+// URL, no website, no location, no job URL. Only the title survived. Task
+// a76c7b4c is what that cost — 84 paid rows, five real companies, and a hiring
+// stage that reported nobody was hiring.
+//
+// So the alias lists now read the nested sub-objects alongside the flat keys.
+// A provider that sends neither still normalizes to null, exactly as before;
+// no field is invented, and no flat reading changes.
+//
 // Pure / import-free so it is fully unit-testable. Never fabricates URLs or proof.
 
 export interface SourceProofItem {
@@ -131,11 +152,27 @@ export function buildSignalSummary(n: { jobTitle: string | null; company: string
 export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
 
-  const company = firstStr(r.companyName, r.company, r.company_name, r.organization, r.employer);
+  /**
+   * The company sub-object, when the provider nests it.
+   *
+   * Empty for a flat provider, which makes every `co.*` read below inert and
+   * leaves the flat aliases behaving exactly as they always have.
+   */
+  const co = (r.company && typeof r.company === "object" && !Array.isArray(r.company)
+    ? r.company : {}) as Record<string, unknown>;
+  /** The location sub-object, same rule. harvestapi: `{ linkedinText, parsed }`. */
+  const loc = (r.location && typeof r.location === "object" && !Array.isArray(r.location)
+    ? r.location : {}) as Record<string, unknown>;
+  const locParsed = (loc.parsed && typeof loc.parsed === "object"
+    ? loc.parsed : {}) as Record<string, unknown>;
+
+  const company = firstStr(
+    r.companyName, co.name, r.company, r.company_name, r.organization, r.employer);
   const jobTitle = firstStr(r.title, r.jobTitle, r.positionName, r.position, r.name);
   // A shortener URL is never a real company website — drop it (the job/source URL
   // is preserved separately); company identity is weaker without a real site.
-  const rawWebsite = firstStr(r.companyWebsite, r.company_website, r.website, r.companyUrl, r.companyLink);
+  const rawWebsite = firstStr(
+    r.companyWebsite, co.website, r.company_website, r.website, r.companyUrl, r.companyLink);
   const websiteIsShortener = isShortenerUrl(rawWebsite);
   const website = websiteIsShortener ? null : rawWebsite;
   // `companyUrl` is crawlworks/linkedin-jobs-scraper's company LinkedIn URL
@@ -143,16 +180,37 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   // provider payload of production task 15c31f55. It is accepted LAST and only
   // when it is actually a linkedin.com/company URL, so a non-LinkedIn `companyUrl`
   // from another actor cannot be mistaken for a LinkedIn company identity.
-  const companyUrlIsLinkedIn = /^https?:\/\/([a-z]{2}\.)?linkedin\.com\/company\//i
-    .test(String(r.companyUrl ?? "").trim());
+  // `([a-z0-9-]+\.)?` — ANY subdomain, not a two-letter one. This read
+  // `([a-z]{2}\.)?`, which matches `ca.linkedin.com` (the example it was written
+  // from) and NOT `www.linkedin.com`, the form LinkedIn actually returns.
+  const LINKEDIN_COMPANY_URL = /^https?:\/\/([a-z0-9-]+\.)?linkedin\.com\/company\//i;
+  const LINKEDIN_JOB_URL = /^https?:\/\/([a-z0-9-]+\.)?linkedin\.com\/jobs\//i;
+  const companyUrlIsLinkedIn = LINKEDIN_COMPANY_URL.test(String(r.companyUrl ?? "").trim());
   const linkedinUrl = firstStr(
-    r.companyLinkedinUrl, r.company_linkedin_url, r.companyLinkedin, r.companyPageUrl,
-    companyUrlIsLinkedIn ? r.companyUrl : null,
+    r.companyLinkedinUrl, co.linkedinUrl, r.company_linkedin_url, r.companyLinkedin,
+    r.companyPageUrl, companyUrlIsLinkedIn ? r.companyUrl : null,
   );
-  const jobUrl = firstStr(r.link, r.jobUrl, r.url, r.applyUrl, r.jobPostingUrl);
+  // harvestapi puts the JOB posting's own URL at the top level under
+  // `linkedinUrl` — the same key the flat dialect uses for the COMPANY page. It
+  // is accepted only when the path says `/jobs/`, so the two can never be
+  // confused: a company URL arriving there is ignored here and read above.
+  const topLevelIsJobUrl = LINKEDIN_JOB_URL.test(String(r.linkedinUrl ?? "").trim());
+  const jobUrl = firstStr(
+    r.link, r.jobUrl, r.url, topLevelIsJobUrl ? r.linkedinUrl : null,
+    r.applyUrl, r.jobPostingUrl);
   const jobDescription = firstStr(r.descriptionText, r.description, r.jobDescription, r.snippet);
-  const companyDescription = firstStr(r.companyDescription, r.company_description, r.aboutCompany);
-  const industries = toArray(r.industries ?? r.industry ?? r.companyIndustry);
+  const companyDescription = firstStr(
+    r.companyDescription, co.description, r.company_description, r.aboutCompany);
+  // harvestapi sends `[{ id, name, title, hierarchy }]`; the flat dialect sends
+  // strings. `toArray` handles strings, so the objects are mapped to their name
+  // first — never to a stringified object.
+  const industriesRaw = r.industries ?? co.industries ?? r.industry ?? r.companyIndustry;
+  const industries = toArray(
+    Array.isArray(industriesRaw)
+      ? industriesRaw.map((x) =>
+        x && typeof x === "object" ? (x as Record<string, unknown>).name : x)
+      : industriesRaw,
+  );
   // `companyEmployeeCount` (SINGULAR "Employee") is what
   // crawlworks/linkedin-jobs-scraper emits — verified against the stored provider
   // payload of production task 15c31f55. This list previously held only
@@ -164,12 +222,14 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   // Same transposition class as the `postedDate`/`datePosted` gap fixed in #125.
   const employeeCount = toInt(
     r.companyEmployeeCount ?? r.companyEmployeesCount ?? r.employeeCount ??
-      r.companySize ?? r.employees,
+      co.employeeCount ?? r.companySize ?? r.employees,
   );
-  const location = firstStr(r.location, r.formattedLocation, r.jobLocation, r.city, r.address, r.companyLocation);
+  const location = firstStr(
+    r.location, loc.linkedinText, locParsed.text, r.formattedLocation, r.jobLocation,
+    r.city, r.address, r.companyLocation);
   const applyUrl = firstStr(r.applyUrl, r.apply_url, r.applicationUrl);
-  const companyLogo = firstStr(r.companyLogo, r.company_logo, r.logo);
-  const companySlogan = firstStr(r.companySlogan, r.company_slogan, r.tagline);
+  const companyLogo = firstStr(r.companyLogo, co.logo, r.company_logo, r.logo);
+  const companySlogan = firstStr(r.companySlogan, co.tagline, r.company_slogan, r.tagline);
   const employmentType = firstStr(r.employmentType, r.employment_type, r.jobType);
   const seniorityLevel = firstStr(r.seniorityLevel, r.seniority_level, r.seniority);
   const jobFunction = firstStr(r.jobFunction, r.job_function, r.function);
@@ -189,7 +249,8 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   //   postedTime   — localized human text ("Vor 2 Tagen"), not parseable
   //   validThrough — application deadline, not a posting date; using it would
   //                  fabricate freshness for an expired listing.
-  const postedAt = firstStr(r.postedAt, r.posted_at, r.datePosted, r.postedDate, r.listedAt);
+  const postedAt = firstStr(
+    r.postedAt, r.posted_at, r.datePosted, r.postedDate, r.listedAt, r.publishedAt);
   const applicantsCount = toInt(r.applicantsCount ?? r.applicants ?? r.numApplicants);
   const posterContactHint: PosterContactHint = {
     name: firstStr(r.jobPosterName, r.posterName, r.hiringManagerName),
@@ -201,10 +262,18 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   // companyAddress arrives nested ({ addressCountry, ... }) from the Apify API, or
   // flattened ("companyAddress/addressCountry") from a CSV round-trip — accept both.
   const addr = (r.companyAddress && typeof r.companyAddress === "object" ? r.companyAddress : {}) as Record<string, unknown>;
+  // harvestapi carries the company's addresses as `company.locations[]`, with the
+  // headquarters flagged. Same three facts, different names.
+  const coLocs = Array.isArray(co.locations) ? co.locations as Record<string, unknown>[] : [];
+  const hq = (coLocs.find((l) => l && l.headquarter === true) ?? coLocs[0] ?? {}) as
+    Record<string, unknown>;
   const companyAddress: CompanyAddress = {
-    country: firstStr(addr.addressCountry, r["companyAddress/addressCountry"], r.addressCountry),
-    region: firstStr(addr.addressRegion, r["companyAddress/addressRegion"], r.addressRegion),
-    locality: firstStr(addr.addressLocality, r["companyAddress/addressLocality"], r.addressLocality),
+    country: firstStr(addr.addressCountry, r["companyAddress/addressCountry"], r.addressCountry,
+      hq.country),
+    region: firstStr(addr.addressRegion, r["companyAddress/addressRegion"], r.addressRegion,
+      hq.geographicArea),
+    locality: firstStr(addr.addressLocality, r["companyAddress/addressLocality"], r.addressLocality,
+      hq.city),
     street: firstStr(addr.streetAddress, r["companyAddress/streetAddress"], r.streetAddress),
   };
 

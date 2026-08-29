@@ -210,6 +210,13 @@ export function buildCountLedger(
 export interface ProviderResultEnvelope {
   items?: unknown;
   company_items?: unknown;
+  /**
+   * The jobs dataset rows, UNTOUCHED — the provider's own shape.
+   *
+   * The exact counterpart of `company_items`, and it exists for the exact same
+   * reason. See `readProviderResultItems`.
+   */
+  job_items?: unknown;
   [k: string]: unknown;
 }
 
@@ -228,6 +235,34 @@ export interface ProviderResultEnvelope {
 export function readProviderResultItems(
   result: ProviderResultEnvelope | null | undefined,
   kind: ProviderResponseKind,
+  /**
+   * ── WHO IS ASKING, AND WHAT SHAPE THEY OWN A NORMALIZER FOR ─────────────
+   *
+   * `items` on a JOBS response is not the dataset. It is the dataset projected
+   * through `normalizeApifyJobRow`, a flat shape the legacy company-first path
+   * and the Workbench read — and one that no longer resembles what the Actor
+   * emitted.
+   *
+   * The capability engine owns its OWN normalizers, one per Actor, written
+   * against the output contracts in `hiringActorCatalog`. Handing it the legacy
+   * projection means normalizing twice, through two normalizers that disagree
+   * about where a company's identity lives.
+   *
+   * Task a76c7b4c: two paid `harvestapi/linkedin-job-search` calls returned 84
+   * rows naming five companies. `normalizeApifyJobRow` reads `r.companyName`
+   * and `r.companyLinkedinUrl` — `curious_coder/linkedin-jobs-scraper`'s flat
+   * field names — while harvestapi nests both under `company{...}`. Every row
+   * reached the engine with `company: null` and `company_linkedin_url: null`,
+   * the engine's own `normalizeLinkedInJob` could not name a company for any of
+   * them, all 84 were dropped as belonging to nobody, and the stage reported
+   * "no company had a relevant commercial role" about three companies hiring
+   * Account Executives.
+   *
+   * So a caller that owns a per-Actor normalizer asks for `providerRows`, and
+   * gets the dataset. This is not a new idea: `company_items` has carried the
+   * untouched structured rows since the 50→25 loss, for the same reason.
+   */
+  opts: { providerRows?: boolean } = {},
 ): Record<string, unknown>[] {
   if (!result || typeof result !== "object") return [];
   const pick = (v: unknown) => Array.isArray(v) ? v as Record<string, unknown>[] : null;
@@ -236,7 +271,38 @@ export function readProviderResultItems(
     // is the field the structured branch has always been authoritative on.
     return pick(result.company_items) ?? pick(result.items) ?? [];
   }
+  if (kind === "jobs" && opts.providerRows) {
+    return pick(result.job_items) ?? pick(result.items) ?? [];
+  }
   return pick(result.items) ?? [];
+}
+
+/**
+ * Did a JOBS response reach a per-Actor normalizer already flattened?
+ *
+ * The jobs counterpart of `structuredRowsLookIntact`, and the reason it exists
+ * is the same: the fallback in `readProviderResultItems` is silent, so a
+ * response produced by a deployment without `job_items` would quietly hand the
+ * engine the legacy projection again and every row would be dropped as
+ * belonging to no company.
+ *
+ * `normalizeApifyJobRow`'s output is unmistakable: it stamps `source: "apify"`
+ * and a `signal_type`, neither of which any Actor emits.
+ */
+export function jobRowsLookIntact(
+  rows: readonly Record<string, unknown>[],
+): { intact: boolean; reason: string | null } {
+  if (rows.length === 0) return { intact: true, reason: null };
+  const flattened = rows.filter(
+    (r) => r.source === "apify" && typeof r.signal_type === "string").length;
+  if (flattened > 0) {
+    return {
+      intact: false,
+      reason: `${flattened}/${rows.length} rows were projected through ` +
+        `normalizeApifyJobRow before reaching a per-Actor normalizer`,
+    };
+  }
+  return { intact: true, reason: null };
 }
 
 /**

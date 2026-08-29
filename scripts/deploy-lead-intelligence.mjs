@@ -53,6 +53,18 @@ const LEAD_INTELLIGENCE_MODULES = [
   "requestV1", "requestV1Parser", "objectiveRouter", "projectToLeadMission",
   "chatBrain", "chatBrainBinding", "readSurface", "monitorSurface",
   "referentBinding", "referentPersistence", "referentLookup",
+  // ── THE PROVIDER TRANSPORT ──────────────────────────────────────────────
+  //
+  // The seam between a paid Actor run and the engine that reads it. Task
+  // a76c7b4c: `readProviderResultItems` handed the capability engine the LEGACY
+  // flat jobs projection instead of the dataset, `normalizeApifyJobRow` did not
+  // understand the nested shape `harvestapi/linkedin-job-search` emits, and 84
+  // paid rows naming five real companies were dropped as belonging to nobody.
+  //
+  // Unseeded, these four changed while every function bundling them kept the
+  // old copy — the exact failure the header describes, one layer down.
+  "providerResponseContract", "capabilityExecution",
+  "toolRegistry", "apifyJobsNormalizer",
 ];
 
 /** NEVER deployed by this script, whatever it imports. */

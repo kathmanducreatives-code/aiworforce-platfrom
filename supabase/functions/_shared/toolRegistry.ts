@@ -644,7 +644,7 @@ function truncObj(v: unknown, max = 4000): unknown {
   }
 }
 
-function normalizeApifyItem(raw: any, source_type: string) {
+export function normalizeApifyItem(raw: any, source_type: string) {
   const r = raw && typeof raw === "object" ? raw : {};
   // Jobs sources: promote the LinkedIn-Jobs scraper's rich company/job fields to
   // clean top-level names so downstream (memoryWriter / Workbench / CSV / Aria)
@@ -1410,6 +1410,22 @@ async function execSourceWithApify(
         stats: finalRun?.stats ? { computeUnits: finalRun.stats.computeUnits ?? null } : null,
       },
       items,
+      // ── THE DATASET, UNTOUCHED, BESIDE THE PROJECTION ───────────────────
+      //
+      // `items` above is the LEGACY shape: every row flattened by
+      // `normalizeApifyJobRow`, which the company-first path, the Workbench,
+      // the CSV export and memory all read. It is not the dataset.
+      //
+      // The capability engine owns a normalizer per Actor, written against the
+      // output contracts in `hiringActorCatalog`, and normalizing twice is what
+      // silently emptied task a76c7b4c's hiring stage — see
+      // `readProviderResultItems`. So the rows travel BOTH ways out of here,
+      // exactly as `company_items` and `items` already do on the structured
+      // branch, and each consumer reads the one it owns a normalizer for.
+      //
+      // Same slice, same ledger: the two can differ in SHAPE and never in
+      // which rows they carry.
+      job_items: isJobsSource ? rawItems.slice(0, fetchLimit) : undefined,
       total: items.length,
       // ── WHAT WAS BOUGHT vs WHAT CAME BACK ───────────────────────────────
       //
