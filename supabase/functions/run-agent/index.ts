@@ -15,6 +15,9 @@ import {
   buildPresentedReferents, PRESENTED_REFERENTS_KEY,
 } from "../_shared/referentPersistence.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
+import {
+  writeTaskResult, type TaskResultDb,
+} from "../_shared/taskResultMerge.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -3046,10 +3049,11 @@ Deno.serve(async (req) => {
                 task_id: task.id,
                 violations: e.violations.map((v) => v.code),
               });
-              await supabase.from("tasks").update({
-                status: "failed",
-                error_message: e.userMessage,
-                result: {
+              // MERGED — see `taskResultMerge.ts`. A refusal adds its verdict
+              // to the record; it does not replace what the run already proved.
+              await writeTaskResult(
+                supabase as unknown as TaskResultDb, task.id,
+                {
                   discovery_refusal: {
                     version: "discovery-refusal-v1",
                     // NO SPEND. Asserted by the tests, and the reason a refusal
@@ -3061,8 +3065,13 @@ Deno.serve(async (req) => {
                     user_message: e.userMessage,
                   },
                 },
-                finished_at: new Date().toISOString(),
-              }).eq("id", task.id);
+                {
+                  status: "failed",
+                  error_message: e.userMessage,
+                  finished_at: new Date().toISOString(),
+                },
+                { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
+              );
               throw e;
             }
 
@@ -5106,10 +5115,10 @@ Deno.serve(async (req) => {
           company_first: routingEntityIntent ? isCompanyFirstRequest(routingEntityIntent) : null,
           routing_conflict: !!routingConflict,
         });
-        await supabase.from("tasks").update({
-          status: "failed",
-          error_message: "sourcing_requires_mission_architecture",
-          result: {
+        // MERGED — see `taskResultMerge.ts`.
+        await writeTaskResult(
+          supabase as unknown as TaskResultDb, task.id,
+          {
             blocked: true,
             reason: "sourcing_requires_mission_architecture",
             message:
@@ -5122,7 +5131,9 @@ Deno.serve(async (req) => {
             company_first: routingEntityIntent ? isCompanyFirstRequest(routingEntityIntent) : null,
             routing_conflict: routingConflict ?? null,
           },
-        }).eq("id", task.id);
+          { status: "failed", error_message: "sourcing_requires_mission_architecture" },
+          { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
+        );
         return json({
           success: false,
           task_id: task.id,
@@ -5233,9 +5244,11 @@ Deno.serve(async (req) => {
     // status enum and records result_status + counts in the result JSON (no
     // migration). Aria/Penn are not invoked; nothing persists.
     const noResults = buildNoResults(provenanceRejections.count);
-    await supabase.from("tasks").update({
-      status: "complete",
-      result: {
+    // MERGED — see `taskResultMerge.ts`. "Nothing qualified" is a verdict about
+    // the run, not a reason to delete the run's own record of why.
+    await writeTaskResult(
+      supabase as unknown as TaskResultDb, task.id,
+      {
         output: scoutMsg,
         no_qualified_matches: true,
         result_status: routingConflict ? "routing_conflict" : "no_results",
@@ -5253,7 +5266,9 @@ Deno.serve(async (req) => {
         company_enrichment_observability: companyEnrichmentObservability,
         signal_enrichment_observability: signalEnrichmentObservability,
       },
-    }).eq("id", task.id);
+      { status: "complete" },
+      { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
+    );
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
     if (ariaFollows && nextStepSlug === "aria") {
@@ -5377,11 +5392,14 @@ Deno.serve(async (req) => {
 
   if (apiError) {
     console.error("[run-agent] api failure:", apiError);
-    await supabase.from("tasks").update({
-      status: "failed",
-      error_message: apiError,
-      result: { error: apiError },
-    }).eq("id", task.id);
+    // MERGED, for the same reason as the success tail below: a failed generic
+    // step must not delete a capability run's evidence on its way out.
+    await writeTaskResult(
+      supabase as unknown as TaskResultDb, task.id,
+      { error: apiError },
+      { status: "failed", error_message: apiError },
+      { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
+    );
     await supabase.from("activity_feed").insert({
       workspace_id,
       plan_id,
@@ -5396,10 +5414,36 @@ Deno.serve(async (req) => {
   }
 
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
-  await supabase.from("tasks").update({
-    status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source, execution_mode: routingActorPlan.execution_mode, company_first: routingActorPlan.company_first, company_gate_required: routingEntityIntent?.company_gate_required } : undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
-  }).eq("id", task.id);
+  // ── MERGED. THIS TAIL ONCE ERASED A WHOLE CAPABILITY RUN ─────────────────
+  //
+  // Task ca3d047d: the engine discovered 30 companies, resolved 5 identities
+  // and reached the Company Brain; a second invocation took this generic path
+  // one second before the first finished, and this line — a bare object literal
+  // — deleted `capability_execution_state`, `workbench_evaluation_rows`,
+  // `mission_funnel`, `lead_resume_checkpoint` and `lead_mission`, including the
+  // record of what that continuation had decided.
+  await writeTaskResult(
+    supabase as unknown as TaskResultDb, task.id,
+    {
+      output: apiText, tokens_in: tokensIn, tokens_out: tokensOut,
+      lead_entity_intent: routingEntityIntent ?? undefined,
+      routing: routingActorPlan
+        ? {
+          target_entity: routingActorPlan.target_entity,
+          output_type: routingEntityIntent?.output_type,
+          primary_actor: routingActorPlan.primary_identity_actor,
+          routing_source: routingActorPlan.routing_source,
+          execution_mode: routingActorPlan.execution_mode,
+          company_first: routingActorPlan.company_first,
+          company_gate_required: routingEntityIntent?.company_gate_required,
+        }
+        : undefined,
+      company_enrichment_observability: companyEnrichmentObservability,
+      signal_enrichment_observability: signalEnrichmentObservability,
+    },
+    { status: finalStatus },
+    { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
+  );
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
   if (agent_slug === "aria" || agent_slug === "penn" || agent_slug === "scribe") {
