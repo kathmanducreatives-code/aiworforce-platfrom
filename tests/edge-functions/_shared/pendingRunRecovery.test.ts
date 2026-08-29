@@ -19,7 +19,28 @@ import {
   mergePendingRuns, recoverPendingRuns, redactionIsIdentityFor,
 } from "../../../supabase/functions/_shared/pendingRunRecovery.ts";
 import { inputFingerprint } from "../../../supabase/functions/_shared/leadResumeState.ts";
-import { HIRING_JOB_TITLES } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+
+/**
+ * The twenty titles those runs were ACTUALLY started with, frozen.
+ *
+ * This file reconstructs historical provider inputs in order to recompute
+ * fingerprints a live checkpoint persisted. It used to build them from the
+ * `HIRING_JOB_TITLES` constant, which coupled a test about fingerprint
+ * STABILITY to the current value of the vocabulary — so changing which titles
+ * a search asks for broke a test that has nothing to do with that.
+ *
+ * A historical input is a fixture. This is the list production sent, copied
+ * from `lead_execution_calls.request_input.input.jobTitles`.
+ */
+const LEGACY_HIRING_JOB_TITLES: readonly string[] = [
+  "sales operations", "revenue operations", "gtm operations",
+  "sales strategy and operations", "revenue strategy and operations",
+  "sales strategy & operations", "revenue strategy & operations",
+  "founding account executive", "founding sales representative",
+  "founding sdr", "founding bdr", "first sales hire",
+  "head of sales", "vp of sales", "vp sales", "vice president of sales",
+  "gtm lead", "gtm engineer", "go-to-market lead", "deal desk",
+];
 
 /** The exact input run ub2qunSMAKTNf5AKv was started with. */
 const LIVE_INPUT = {
@@ -29,7 +50,7 @@ const LIVE_INPUT = {
     "https://www.linkedin.com/company/stealth-startup-community",
   ],
   maxItems: 30,
-  jobTitles: HIRING_JOB_TITLES,
+  jobTitles: LEGACY_HIRING_JOB_TITLES,
 };
 
 /** The row the ledger actually held while the checkpoint held nothing. */
@@ -75,7 +96,7 @@ Deno.test("the recomputed fingerprint matches one a checkpoint really persisted"
       "https://www.linkedin.com/company/microsoft",
     ],
     maxItems: 100,
-    jobTitles: HIRING_JOB_TITLES,
+    jobTitles: LEGACY_HIRING_JOB_TITLES,
   };
   const [r] = recoverPendingRuns([{
     ...LIVE_ROW, provider_run_id: "Zs5bYFGlnua1hJWYg",

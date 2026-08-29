@@ -15,6 +15,9 @@ import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import {
   completionIsProvisional, repairPrematureCompletions,
 } from "./capabilityCompletion.ts";
+import {
+  hiringSearchTitles, HIRING_SEARCH_TITLE_LIMIT,
+} from "./hiringSearchVocabulary.ts";
 // COMPOSES them one capability at a time, which is what buys genuine resume
 // granularity: a run that stopped after enrichment resumes at hiring
 // verification rather than re-paying for discovery.
@@ -995,16 +998,28 @@ export const HIRING_VERIFICATION_BATCH_SIZE = Math.max(
 export const HIRING_JOBS_PER_BATCH_COMPANY = 10;
 
 /**
- * THE ROLE VOCABULARY, UNCHANGED.
+ * THE DEFAULT ROLE VOCABULARY — for a mission that named no roles.
  *
- * Named rather than inlined so the batched call and the operation key that
- * decides whether to make it read the SAME list — a fingerprint computed over a
- * different vocabulary than the call uses would skip work that was never done.
- * Still `[...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20)`: same titles, same
- * order, same evidence standard.
+ * ── IT USED TO DELETE A WHOLE TIER ────────────────────────────────────────
+ *
+ * This was `[...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20)`, under a comment
+ * promising "same titles, same order, same evidence standard". TIER_A holds 21
+ * entries, so the slice kept twenty of TIER_A and NONE of TIER_B — every title
+ * the returned data was actually full of (`account executive`, `sdr`, `bdr`,
+ * `sales development representative`, `sales director`) was silently dropped by
+ * an off-by-one nobody re-checked when TIER_A grew.
+ *
+ * `hiringSearchTitles` interleaves the tiers instead, so the cap can shorten a
+ * list but can never erase one.
+ *
+ * ── AND IT IS NO LONGER WHAT A REAL RUN SENDS ─────────────────────────────
+ *
+ * A run derives its titles from the MISSION, once, and hands the same list to
+ * both the provider call and the operation key that decides whether to make it.
+ * This constant is the fallback for a mission that named no roles, and is kept
+ * exported because tests and older callers read it.
  */
-export const HIRING_JOB_TITLES: string[] =
-  [...TIER_A_TITLES, ...TIER_B_TITLES].slice(0, 20);
+export const HIRING_JOB_TITLES: string[] = hiringSearchTitles(null);
 
 export function identitySearchLocations(mission: LeadMissionV1): string[] {
   if (!mission?.geography_is_hard) return [];
@@ -4893,6 +4908,20 @@ export async function runCapabilityPlan(
       // company's opening can never earn another company's verdict.
       const BATCH = HIRING_VERIFICATION_BATCH_SIZE;
 
+      // ── THE TITLES THIS MISSION IS ACTUALLY LOOKING FOR ─────────────────
+      //
+      // Derived ONCE, from the same vocabulary the assessment scores against,
+      // and read by both the provider call and the operation key that decides
+      // whether to make it. Those two must never disagree: a key fingerprinted
+      // over a different list than the call uses would skip work that was
+      // never done.
+      const searchTitles = hiringSearchTitles(qualificationCtx.role_vocabulary);
+      log("hiring_search_vocabulary", {
+        source: qualificationCtx.role_vocabulary.source,
+        titles: searchTitles.length,
+        leading: searchTitles.slice(0, 6),
+      });
+
       /** The paid rows that belong to each company, keyed by company key. */
       const batchedJobs = new Map<string, NormalizedHiringJob[]>();
       /** Companies the provider was actually asked about on this pass. */
@@ -4916,7 +4945,7 @@ export async function runCapabilityPlan(
             company_key: c.key,
             capability: cap, provider: "apify_linkedin_job_search",
             input_fingerprint: inputFingerprint({
-              company: [url], jobTitles: HIRING_JOB_TITLES,
+              company: [url], jobTitles: searchTitles,
               ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
             }),
           })
@@ -4984,7 +5013,7 @@ export async function runCapabilityPlan(
         const group = needsPaid.slice(i, i + BATCH);
         const compiled = compileHarvestJobSearchInput({
           company: group.map((g) => g.url),
-          jobTitles: HIRING_JOB_TITLES,
+          jobTitles: searchTitles,
           maxItems: HIRING_JOBS_PER_BATCH_COMPANY * group.length,
           ...(opts.postedLimit ? { postedLimit: opts.postedLimit } : {}),
         });
