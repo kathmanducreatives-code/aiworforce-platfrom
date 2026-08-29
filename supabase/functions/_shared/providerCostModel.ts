@@ -137,6 +137,29 @@ export interface PriceProviderCallInput {
  * "we do not know" are different answers and only one of them is honest here.
  */
 export function priceProviderCall(i: PriceProviderCallInput): ExecutionCost {
+  // ── 0. AN ADOPTED RUN COSTS THIS CALL NOTHING ───────────────────────────
+  //
+  // FIRST, and that ordering is the whole point. This test used to sit below the
+  // provider-reported branch, where it could never be reached for the actors
+  // that matter: adopting a run is `GET /actor-runs/{id}`, and Apify answers
+  // with the full run document INCLUDING its usage. So the branch below read a
+  // real `usageTotalUsd` — what the ORIGINAL run cost — and recorded it as the
+  // cost of the re-read.
+  //
+  // Live on 2026-08-29: task 0ed83116 adopted run G9ppGtOL11gNZr9Af, reported
+  // `status: "reused"` exactly as designed, and still wrote
+  // `actual_cost_usd: 0.000100` — the price of a purchase another row had
+  // already recorded. The lineage's spend was overstated by every adoption it
+  // made, which is precisely the opposite of what adoption is for.
+  //
+  // "What did the run cost" and "what did THIS CALL cost" are different
+  // questions. The run was bought once, by the row that started it; re-reading
+  // its dataset is free. Zero is not a rounding of a small number here — it is
+  // the correct answer.
+  if (i.started === false) {
+    return { actual_usd: null, estimated_usd: 0, source: "event_priced" };
+  }
+
   // ── 1. DID THE PROVIDER SAY? ────────────────────────────────────────────
   //
   // Checked first and read from two shapes, because a provider that reports a
@@ -151,15 +174,6 @@ export function priceProviderCall(i: PriceProviderCallInput): ExecutionCost {
 
   const card = hiringActorCard(i.actorKey);
   if (!card) return { actual_usd: null, estimated_usd: null, source: "unknown" };
-
-  // ── 2. A RUN THAT NEVER STARTED COSTS NOTHING ───────────────────────────
-  //
-  // A resumed run is adopted, not bought again — the start charge already
-  // happened on the run being adopted, and charging it twice would make the
-  // idempotency guard look like it costs money to use.
-  if (i.started === false) {
-    return { actual_usd: null, estimated_usd: 0, source: "event_priced" };
-  }
 
   const cost = card.cost_model;
   const rows = Math.max(0, Math.trunc(Number(i.itemCount ?? 0)) || 0);

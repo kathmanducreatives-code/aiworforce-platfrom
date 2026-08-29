@@ -1272,6 +1272,10 @@ Deno.serve(async (req) => {
       agent_name: agent.name,
       plan_id,
       task_id: task.id,
+      // THE SCOPE THE MONEY IS KEYED ON. Already resolved above for the lease,
+      // and reused here so the two cannot disagree about which chain this call
+      // belongs to.
+      lineage_root: lineageRootId,
       // Resolved attribution, not the raw body value: the orchestrated path is
       // reachable from a browser too, so it must honour the same trust boundary.
       user_id: taskUserId,

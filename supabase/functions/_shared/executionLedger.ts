@@ -1035,11 +1035,54 @@ function toDbRow<T extends { version?: unknown }>(row: T): Omit<T, "version"> {
   return rest;
 }
 
+/**
+ * Postgres 23505. Also matched by message, because PostgREST does not always
+ * surface the SQLSTATE on a constraint violation.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  const e = (error ?? {}) as { code?: string; message?: string; details?: string };
+  if (String(e.code ?? "") === "23505") return true;
+  return /duplicate key value|unique constraint/i.test(
+    `${e.message ?? ""} ${e.details ?? ""}`);
+}
+
 export function createLedgerWriter(db: LedgerDb): LedgerWriter {
   return {
     async insert(row) {
-      const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE).insert(toDbRow(row));
-      if (error) console.error("[execution-ledger] insert error", describeDbError(error));
+      // ── A COLLISION IS A LATER ATTEMPT, NOT A DUPLICATE ─────────────────
+      //
+      // `lead_execution_calls_attempt_uniq` is `(workspace_id,
+      // logical_call_key, attempt_number)`. Now that the key spans a LINEAGE
+      // rather than one task, a legitimate re-attempt in a later generation —
+      // the first call failed, the frontier still holds the company — computes
+      // the same key at `attempt_number: 1` and collides with the row the
+      // earlier generation wrote.
+      //
+      // Dropping it would trade one defect for another: no duplicate charge,
+      // but no record that the second attempt happened at all. So a unique
+      // violation escalates the attempt number and tries again. The index
+      // arbitrates, which makes this correct even without the lineage lease
+      // holding two generations apart.
+      //
+      // MONEY IS NOT AT STAKE HERE. Charging is gated by `credits_reserve` on
+      // the same key, which replays rather than reserving again; this loop only
+      // decides whether the ATTEMPT is written down.
+      const MAX_ATTEMPT_ESCALATION = 20;
+      let attempt = row.attempt_number ?? 1;
+      for (let i = 0; i < MAX_ATTEMPT_ESCALATION; i++) {
+        const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE)
+          .insert(toDbRow({ ...row, attempt_number: attempt }));
+        if (!error) return;
+        if (!isUniqueViolation(error)) {
+          console.error("[execution-ledger] insert error", describeDbError(error));
+          return;
+        }
+        attempt += 1;
+      }
+      console.error("[execution-ledger] insert error", {
+        reason: "attempt_escalation_exhausted",
+        logical_call_key: row.logical_call_key, tried_up_to: attempt - 1,
+      });
     },
     async finalize(id, patch) {
       const { error } = await db.from(LEAD_EXECUTION_CALLS_TABLE)
@@ -1070,21 +1113,56 @@ export function inferStage(
 }
 
 /**
- * A stable identity for the logical call.
+ * A stable identity for one SEMANTIC provider purchase.
  *
- * Same workspace, task, capability and input hash ⇒ same key, so a genuine retry
- * of one question shares it and a different question does not. Falls back to the
- * stage when no input hash is available, which is weaker but never collides
- * across stages.
+ * Same lineage, capability and input hash ⇒ same key, so the same question asked
+ * twice shares it and a different question does not.
+ *
+ * ── IT WAS KEYED ON THE TASK, AND THAT IS WHAT PAID TWICE ─────────────────
+ *
+ * The old doc said "same workspace, task, capability and input hash… so a
+ * genuine retry of one question shares it". The premise is wrong in the one case
+ * that matters: A CONTINUATION IS A DIFFERENT TASK ASKING THE SAME QUESTION.
+ *
+ * `providerOperationKey` has always known this — it is built from the lineage
+ * root and its comment says so explicitly: "It excludes the task id and any
+ * timestamp, because a continuation is a different task asking the same question
+ * — and if the key changed per task, every resume would re-buy everything."
+ *
+ * Two keys for one idea, and the weaker one gated the money. On 2026-08-29,
+ * lineage 06d3544a: identical input fingerprints, two generations, two paid runs
+ * and two charges each —
+ *
+ *   298dc1a0  237717dd → FcGResJtI7CJGdOEa   0ed83116 → 8NnjlNJgwRcbdUH2M
+ *   929a1a74  237717dd → QdMbpZGaNym2bzjZI   0ed83116 → EimrTjnSzy7TgIldA
+ *   2df88a5a  237717dd → kCcPbdENXxrueROWZ   0ed83116 → EnRFGYQzHPSrwVQ5X
+ *
+ * — and an adoption that correctly reported `status: "reused"` was charged a
+ * credit anyway, because its key differed from the one that bought the run.
+ *
+ * ── NOTHING ELSE HAD TO CHANGE ────────────────────────────────────────────
+ *
+ * The enforcement was already right, at both layers, and already race-safe:
+ * `credit_transactions_idempotent UNIQUE (workspace_id, idempotency_key)` with
+ * `credits_reserve` handling `unique_violation` by refunding and returning the
+ * prior transaction; and `lead_execution_calls_attempt_uniq UNIQUE
+ * (workspace_id, logical_call_key, attempt_number)`. Only the value written into
+ * the key was wrong.
+ *
+ * `task_id` remains the fallback so a caller with no lineage — a one-off lead
+ * action, a monitoring scan — behaves exactly as it does today. Such a task IS
+ * its own lineage, which is the same rule `lineageRootOf` applies.
  */
 export function logicalCallKey(args: {
+  /** The lineage this call belongs to. Preferred over `task_id`. */
+  lineage_root?: string | null;
   task_id?: string | null;
   capability?: string | null;
   stage: ExecutionStage;
   input_hash?: string | null;
 }): string {
   return [
-    args.task_id ?? "no-task",
+    args.lineage_root ?? args.task_id ?? "no-task",
     args.capability ?? args.stage,
     args.input_hash ?? "no-hash",
   ].join(":");

@@ -61,6 +61,15 @@ export interface ToolContext {
   agent_name?: string;
   plan_id?: string | null;
   task_id?: string | null;
+  /**
+   * The lineage this call belongs to — the root task of the continuation chain.
+   *
+   * THE IDEMPOTENCY SCOPE FOR MONEY. `logical_call_key` is built from this, so
+   * the same question asked by a later generation replays the reservation
+   * instead of making a second one. Absent, the key falls back to `task_id`,
+   * which is correct for a caller with no chain: such a task is its own lineage.
+   */
+  lineage_root?: string | null;
   user_id?: string | null;
 }
 
@@ -1706,6 +1715,7 @@ export async function runTool(
       actor_id: (auditInput.actor_id as string | undefined) ?? null,
       request_input: auditInput,
       logical_call_key: logicalCallKey({
+        lineage_root: ctx.lineage_root ?? null,
         task_id: ctx.task_id ?? null,
         capability: (auditInput.capability_key as string | undefined) ?? null,
         stage: inferStage(

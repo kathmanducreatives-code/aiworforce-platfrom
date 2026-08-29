@@ -169,7 +169,13 @@ Deno.serve(async (req) => {
   const toolCtx = {
     admin: supabase, workspace_id, agent_slug: agent.slug ?? agent_slug,
     agent_id: agent.id, agent_name: agent.name, plan_id: null,
-    task_id: task.id, user_id: taskUserId,
+    task_id: task.id,
+    // A LEAD ACTION IS ITS OWN LINEAGE. There is no continuation chain here —
+    // the user pressed a button on one row — so the task and the lineage are the
+    // same thing, and saying so explicitly is better than relying on the
+    // fallback inside `logicalCallKey`.
+    lineage_root: task.id,
+    user_id: taskUserId,
   };
 
   try {
