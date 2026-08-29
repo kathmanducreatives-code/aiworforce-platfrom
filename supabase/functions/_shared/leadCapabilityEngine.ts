@@ -4965,6 +4965,9 @@ export async function runCapabilityPlan(
       }
       const targets = companies.filter((c) => c.identity && identityIsActionable(c.identity));
       let verified = 0, review = 0, watch = 0, notVerified = 0, paidCalls = 0;
+      // Companies this pass could not find out about. Counted separately from
+      // `notVerified` because they are not a verdict — they are the frontier.
+      let unavailable = 0;
 
       // ── ONE QUESTION, ASKED FOR TEN COMPANIES AT A TIME ─────────────────
       //
@@ -5124,6 +5127,33 @@ export async function runCapabilityPlan(
           }
         }
 
+        // ── EVIDENCE IS MONOTONIC ─────────────────────────────────────
+        //
+        // A company already verified WITH CITATIONS may not be talked out of it
+        // by a pass that inspected nothing. This is the shape of the 2026-08-29
+        // loss reduced to one company: Blue Signal Search held a
+        // `hiring_verified` assessment citing 13 job rows, a later pass ran the
+        // free assessor over a working set that no longer carried them, and the
+        // result — "No open roles at all", `evidence_source: "none"` — replaced
+        // it.
+        //
+        // Narrow on purpose. Only a verdict backed by cited rows is protected,
+        // and only from an assessment that cites nothing; a pass that DID
+        // inspect evidence may still change the answer, because that is a real
+        // second opinion rather than an absence.
+        const priorWasCited = c.hiring_assessment?.verdict === "hiring_verified" &&
+          (c.hiring_assessment?.evidence_source ?? "none") !== "none" &&
+          c.hiring_jobs.length > 0;
+        if (priorWasCited && assessment.evidence_source === "none") {
+          log("hiring_verdict_downgrade_refused", {
+            company_key: c.key,
+            kept: c.hiring_assessment?.verdict,
+            cited_rows: c.hiring_jobs.length,
+          });
+          assessed.add(c.key);
+          return;
+        }
+
         c.hiring_assessment = assessment;
         // The pool that actually earned the verdict — see `hiringJobsFor`.
         c.hiring_jobs = verdictFromExternal
@@ -5141,7 +5171,7 @@ export async function runCapabilityPlan(
         } else if (assessment.verdict === "watch") {
           watch++;
           c.record.stage_reason = `hiring_watch:${assessment.reason}`;
-        } else {
+        } else if (hiringEvidenceWasInspected(c) || asked.has(c.key)) {
           notVerified++;
           // A COMPANY THE PROVIDER ANSWERED ABOUT IS INVESTIGATED, EVEN AT ZERO.
           // "We asked and there are no matching roles" is a finding; leaving it
@@ -5150,6 +5180,23 @@ export async function runCapabilityPlan(
           c.record = advance(c.record, "hiring_not_verified",
             asked.has(c.key) ? "job_search_returned_no_matching_role" : "no_matching_open_role");
           c.record.stage_reason = assessment.reason;
+        } else {
+          // ── NOBODY LOOKED, SO NOBODY MAY CONCLUDE ────────────────────
+          //
+          // The distinction this branch exists for was already present one line
+          // above, in the REASON — `job_search_returned_no_matching_role` when
+          // asked, `no_matching_open_role` when not — and both advanced the
+          // record to the same terminal stage anyway. The reason was honest and
+          // the state was not.
+          //
+          // `hiring_not_verified` is in `TERMINAL_STAGES`, so writing it here
+          // ended companies whose evidence had been bought and never read: 83
+          // rows for Blue Signal Search, 90 for Pursuit and Coda Search. The
+          // record is left where it is, which keeps the company on the frontier
+          // for the slice that comes back for those datasets.
+          unavailable++;
+          c.record.stage_reason =
+            `hiring_evidence_unavailable:${assessment.reason}`;
         }
               assessed.add(c.key);
       };
@@ -5309,6 +5356,10 @@ export async function runCapabilityPlan(
         decided === 0 ? "no company had a relevant commercial role" : null);
       log("hiring_verification_complete", {
         targets: targets.length, verified, review, watch, notVerified,
+        // NOT A VERDICT — the frontier. Distinguishing this from `notVerified`
+        // in the log is how "we found nothing" stops looking like "there is
+        // nothing", which is the confusion this whole phase removes.
+        evidence_unavailable: unavailable,
         paid_job_searches: paidCalls,
       });
       await publish("hiring_verified");
@@ -7031,6 +7082,34 @@ export function checkpointCoherence(
   return { coherent: true, incoherence: null };
 }
 
+/**
+ * Did anybody actually find out about this company's hiring?
+ *
+ * Two ways to have found out, and both are durable across a restore:
+ *
+ *   * the assessment cites a source — `yc_open_jobs` or `external_job_search`,
+ *     meaning rows were inspected for this company; or
+ *   * a hiring operation is recorded in `completed_operations`, meaning a paid
+ *     call SETTLED with this company in its batch. It may have returned nothing
+ *     naming this company, and that is still an answer.
+ *
+ * Neither holds when a call was killed mid-poll, timed out, was never made, or
+ * when a restore lost the rows it produced — and those are the cases that must
+ * stay on the frontier rather than becoming a verdict.
+ *
+ * `completed_operations` is written immediately after a batch completes and
+ * before any verdict is assessed, and it travels in the checkpoint, so this is
+ * answerable in a later generation that holds none of the original rows.
+ */
+export function hiringEvidenceWasInspected(c: {
+  hiring_assessment?: { evidence_source?: string | null } | null;
+  completed_operations?: readonly string[];
+}): boolean {
+  const source = c.hiring_assessment?.evidence_source ?? "none";
+  if (source !== "none") return true;
+  return (c.completed_operations ?? []).some((op) => op.includes("hiring_verification"));
+}
+
 export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
   const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url ?? null;
   return {
@@ -7064,13 +7143,26 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       : c.enrichment_outcome === "provider_error" ? "provider_error"
       : c.enrichment_outcome === "empty" ? "empty"
       : c.identity && identityIsActionable(c.identity) ? "not_started" : "not_required",
+    // ── THE ONE LINE THAT MADE THE LOSS TERMINAL ──────────────────────────
+    //
+    // The final branch was `: "not_verified"`, which collapsed two different
+    // facts into one finished state: "a settled call covered this company and
+    // found nothing matching" and "we never found out". `nextStageFor` treats
+    // `not_verified` as final, so both became companies nothing would revisit.
+    //
+    // The discriminator is NOT "did the assessment see rows" — a company can be
+    // legitimately negative with zero rows of its own, when the batch it was in
+    // completed and named somebody else. It is WHETHER A SETTLED PROVIDER CALL
+    // COVERED THIS COMPANY, which `completed_operations` records durably and
+    // which therefore survives a restore.
     hiring: !c.hiring_assessment ? "not_started"
       : c.hiring_assessment.verdict === "hiring_verified"
         ? (c.hiring_assessment.evidence_source === "external_job_search"
           ? "verified_externally" : "verified_from_existing_evidence")
       : c.hiring_assessment.verdict === "hiring_verification_needed" ? "verification_needed"
       : c.hiring_assessment.verdict === "watch" ? "verification_needed"
-      : "not_verified",
+      : hiringEvidenceWasInspected(c) ? "not_verified"
+      : "evidence_unavailable",
     brain: !c.brain ? "not_started"
       : c.brain.outcome === "QUALIFIED" ? "qualified"
       : c.brain.outcome === "REVIEW" ? "review" : "rejected",

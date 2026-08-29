@@ -187,7 +187,37 @@ export const ENRICHMENT_RESUMABLE: ReadonlySet<EnrichmentStage> =
   new Set<EnrichmentStage>(["not_started", "deferred", "provider_error"]);
 export type HiringStage =
   | "not_started" | "verified_from_existing_evidence" | "verified_externally"
-  | "verification_needed" | "not_verified" | "failed";
+  | "verification_needed"
+  /**
+   * A SETTLED CALL COVERED THIS COMPANY AND FOUND NOTHING MATCHING.
+   *
+   * A finding, and terminal. `intelletec-ltd` on 2026-08-29 is the honest
+   * example: the batch it was in completed, returned five rows, and none of
+   * them named it.
+   */
+  | "not_verified"
+  /**
+   * WE DID NOT FIND OUT.
+   *
+   * No paid call covered this company, or one was started and its dataset was
+   * never read, or a restore lost the rows it had. Non-terminal: the company
+   * stays on the frontier and the next slice asks again.
+   *
+   * ── WHY THIS STATE HAD TO EXIST ────────────────────────────────────────
+   *
+   * `not_verified` meant both things. On 2026-08-29 every company in lineage
+   * 06d3544a ended with `evidence_source: "none"` and the reason "No open roles
+   * at all" — including Storm4, whose dataset held an Inside Sales
+   * Representative opening, and Blue Signal Search, whose 83-row dataset was
+   * bought, charged, and never read. `nextStageFor` treats `not_verified` as
+   * final, so all of them were finished companies that nothing would revisit.
+   *
+   * A replay of the real rows through the real assessor produces
+   * `hiring_verified` for Storm4 and `watch` for Atlas Search, so the verdicts
+   * production recorded were not reachable from the evidence it paid for.
+   */
+  | "evidence_unavailable"
+  | "failed";
 export type BrainStage = "not_started" | "qualified" | "review" | "rejected" | "failed";
 export type FounderStage =
   | "not_started" | "completed" | "unresolved" | "failed" | "not_eligible";
@@ -365,6 +395,16 @@ export function nextStageFor(r: CompanyResumeRecord):
   if (r.enrichment === "failed") return null;
   if (r.hiring === "not_started") return "hiring";
   if (r.hiring === "verification_needed") return "hiring";
+  // ── ABSENCE OF EVIDENCE IS NOT EVIDENCE OF ABSENCE ──────────────────────
+  //
+  // `evidence_unavailable` means the question was never answered FOR THIS
+  // COMPANY: no paid call covered it, or one was started and its dataset was
+  // never read, or a restore lost the rows. It resumes exactly like
+  // `not_started`, because that is what it is.
+  //
+  // `not_verified` keeps its meaning and its finality — a settled call covered
+  // this company and returned nothing matching. That is a finding.
+  if (r.hiring === "evidence_unavailable") return "hiring";
   if (r.hiring === "not_verified" || r.hiring === "failed") return null;
   if (r.brain === "not_started") return "brain";
   if (r.brain === "rejected" || r.brain === "review" || r.brain === "failed") return null;
@@ -620,7 +660,8 @@ export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecor
           "empty", "deferred", "provider_error"] as const, "not_started"),
       hiring: asStage(c.hiring,
         ["not_started", "verified_from_existing_evidence", "verified_externally",
-          "verification_needed", "not_verified", "failed"] as const, "not_started"),
+          "verification_needed", "not_verified", "evidence_unavailable",
+          "failed"] as const, "not_started"),
       brain: asStage(c.brain,
         ["not_started", "qualified", "review", "rejected", "failed"] as const, "not_started"),
       founder: asStage(c.founder,
