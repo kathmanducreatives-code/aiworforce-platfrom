@@ -32,6 +32,9 @@ import {
   CLAIMABLE_TERMINAL_STATUS, type StalledTaskRow,
 } from "../_shared/stalledLeadResume.ts";
 import { dispatchContinuation } from "../_shared/leadContinuationDispatch.ts";
+import {
+  lineageLeaseEnforced, lineageRootOf, readLineageLease, type SelectDb,
+} from "../_shared/lineageLease.ts";
 import { LEAD_EXECUTION_CALLS_TABLE } from "../_shared/executionLedger.ts";
 
 const cors = {
@@ -118,6 +121,29 @@ Deno.serve(async (req) => {
       continue;
     }
     entry.continuation_index = request.continuationIndex;
+
+    // ── IS A GENERATION OF THIS LINEAGE ALREADY RUNNING? ──────────────────
+    //
+    // `eligibleForAutoResume` asks whether the TASK looks resumable. It cannot
+    // ask whether the LINEAGE is busy, because until now nothing tracked that —
+    // and a sweeper that dispatches into a live lineage is a third way to
+    // produce the concurrent generations of 2026-08-29, alongside the two in
+    // `continue-workflow`.
+    //
+    // Advisory, like the check in `continue-workflow`: run-agent's own acquire
+    // is the authority. Reads as "not leased" when the table is absent, so this
+    // is inert until the migration lands.
+    const lineageId = lineageRootOf(row.id, row.result ?? null);
+    const lineage = await readLineageLease(admin as unknown as SelectDb, lineageId, now);
+    if (lineage.leased) {
+      const enforced = lineageLeaseEnforced();
+      considered.push({
+        ...entry, eligible: !enforced, lineage_id: lineageId,
+        reason: enforced ? "lineage_busy" : verdict.reason,
+        lineage_lease: { held_by: lineage.heldBy, held_until: lineage.heldUntil, enforced },
+      });
+      if (enforced) continue;
+    }
 
     if (dryRun) { considered.push({ ...entry, dispatched: "dry_run" }); continue; }
     if (dispatched >= MAX_PER_TICK) {

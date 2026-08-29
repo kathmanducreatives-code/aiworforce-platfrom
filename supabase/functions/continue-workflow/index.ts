@@ -19,6 +19,10 @@ import {
   CONTINUATION_VERSION, REFUSAL_MESSAGE, REFUSAL_STATUS, decideContinuation,
   parseContinuationRequest, wouldStartNewDiscoveryRun,
 } from "../_shared/workflowContinuation.ts";
+import {
+  LEASE_REFUSAL_MESSAGE, lineageLeaseEnforced, lineageRootOf, readLineageLease,
+  type SelectDb,
+} from "../_shared/lineageLease.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -135,6 +139,43 @@ Deno.serve(async (req) => {
 
   const spec = decision.spec;
 
+  // ── 4b. IS A GENERATION OF THIS LINEAGE ALREADY RUNNING? ────────────────────
+  //
+  // `decideContinuation` already refuses a parent that is not terminal. That
+  // guard is correct and it was not enough: on 2026-08-29 task 06d3544a wrote a
+  // terminal status at 11:13:03 and went on executing — and buying — until
+  // 11:14:22. The status was true about intent and false about liveness, so a
+  // child forked at 11:13:10 and a grandchild at 11:13:19, and all three ran
+  // concurrently.
+  //
+  // ADVISORY, NOT AUTHORITATIVE. The authority is `acquire_lineage_lease` in
+  // run-agent plus the `tasks_one_live_generation_per_lineage` index; two callers
+  // could still both read "free" here. This exists so the common case refuses
+  // early with a sentence a person can act on, instead of creating a plan, a
+  // task and a message that the executor then rejects.
+  //
+  // Absent table or any error reads as "not leased", so this is inert until the
+  // migration lands and cannot itself break a continuation.
+  const lineageId = lineageRootOf(
+    request.original_task_id,
+    (task as { result?: Record<string, unknown> } | null)?.result ?? null,
+  );
+  const lineage = await readLineageLease(admin as unknown as SelectDb, lineageId);
+  if (lineage.leased) {
+    const enforced = lineageLeaseEnforced();
+    console.log("[continue-workflow][lineage-lease]", {
+      lineage_id: lineageId, held_by: lineage.heldBy, held_until: lineage.heldUntil,
+      enforced, outcome: enforced ? "refused" : "shadowed",
+    });
+    if (enforced) {
+      return json({
+        error: "lineage_busy", reason: "already_leased",
+        message: LEASE_REFUSAL_MESSAGE.already_leased,
+        held_until: lineage.heldUntil,
+      }, 409);
+    }
+  }
+
   // ── 5. FAIL CLOSED BEFORE SPENDING ──────────────────────────────────────────
   // The whole continuation rests on discovery ADOPTING the stored run. If the
   // state would cause a new Actor start, nothing is created and nothing is
@@ -160,9 +201,48 @@ Deno.serve(async (req) => {
     status: "executing",
     current_step: 0,
     plan: { continuation: spec.lineage, idempotency_key: spec.idempotency_key },
+    // ── THE KEY MOVES OUT OF THE JSONB AND INTO THE COLUMN ────────────────
+    //
+    // `continuationKey` has always been computed, and its comment has always
+    // said why it carries no nonce: "two clicks a second apart must collide,
+    // which is the entire point." It then went into `plan` — a jsonb field no
+    // index covers — and the collision it was designed to cause was checked by a
+    // SELECT followed by an INSERT instead. That is a time-of-check/time-of-use
+    // race, and section 4 above is where it lives.
+    //
+    // `task_plans_idempotency_uniq` is a unique index over exactly this column,
+    // so from here the database causes the collision rather than a query that
+    // hopes to see it.
+    idempotency_key: spec.idempotency_key,
   }).select("id").single();
 
   if (planErr || !newPlan) {
+    // ── A COLLISION IS THE MECHANISM WORKING, NOT A FAILURE ───────────────
+    //
+    // 23505 means another request created this exact continuation between our
+    // check and our insert — the race the index exists to close. The honest
+    // answer is the one the idempotent path above already gives: return the
+    // continuation that exists, rather than an error about a duplicate the
+    // caller never asked to create.
+    if ((planErr as { code?: string } | null)?.code === "23505") {
+      const { data: raced } = await admin.from("task_plans")
+        .select("id").eq("workspace_id", spec.workspace_id)
+        .eq("idempotency_key", spec.idempotency_key).maybeSingle();
+      const racedPlanId = (raced as { id: string } | null)?.id ?? null;
+      if (racedPlanId) {
+        const { data: racedTask } = await admin.from("tasks")
+          .select("id").eq("plan_id", racedPlanId)
+          .order("created_at", { ascending: true }).limit(1).maybeSingle();
+        console.log("[continue-workflow] duplicate continuation collapsed", {
+          lineage_id: lineageId, plan_id: racedPlanId,
+        });
+        return json({
+          ok: true, created: false, plan_id: racedPlanId,
+          task_id: (racedTask as { id: string } | null)?.id ?? "",
+          conversation_id: request.conversation_id,
+        });
+      }
+    }
     return json({ error: "continuation_create_failed", details: planErr?.message }, 500);
   }
   const continuationPlanId = (newPlan as { id: string }).id;

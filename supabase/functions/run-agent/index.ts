@@ -335,6 +335,11 @@ import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import {
+  LINEAGE_LEASE_VERSION, LEASE_REFUSAL_MESSAGE,
+  acquireLineageLease, decideLeaseGate, lineageLeaseEnforced, lineageRootOf,
+  releaseLineageLease, type RpcDb as LeaseRpcDb,
+} from "../_shared/lineageLease.ts";
+import {
   decideAutoContinuation, foldSlice, readLineageProgress,
   resolveMaxContinuations, resolveMaxLineageCostUnits,
   AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
@@ -1048,6 +1053,79 @@ Deno.serve(async (req) => {
   // leaves a terminal task and plan rather than the pair that hung on
   // task c8a6e53d.
   terminalGuard.bind({ taskId: task.id, planId: plan_id ?? null });
+
+  // ══ ONE GENERATION OF A LINEAGE AT A TIME ═══════════════════════════════════
+  //
+  // Taken here, at the first point a task id exists and BEFORE any paid
+  // boundary. On 2026-08-29 three generations of one request executed
+  // concurrently — 06d3544a bought a $0.062 job search at 11:13:15 while its own
+  // continuation 237717dd was already running and its grandchild 0ed83116 was
+  // about to start. The parent then verified three companies at 11:14:07,
+  // evidence no descendant ever read.
+  //
+  // The per-task `claim_sourcing_continuation` above cannot see any of that: it
+  // is keyed on ONE TASK, and a continuation that creates a NEW task contends
+  // with nothing.
+  //
+  // SHADOW BY DEFAULT. `decideLeaseGate` proceeds unless `LINEAGE_LEASE_ENFORCED`
+  // is exactly "true", so this observes real traffic before it is allowed to
+  // refuse anybody. A missing migration also proceeds — deploying this before the
+  // table exists must change nothing.
+  const lineageRootId = await (async (): Promise<string> => {
+    // A same-row continuation carries its lineage in the row it is resuming.
+    if (resume_task_id) return lineageRootOf(task.id, resumedTaskResult);
+    // A child task carries its parent's id; the root is whatever THAT row says,
+    // so a grandchild resolves to the same root as its grandparent rather than
+    // starting a lineage of its own.
+    if (leadResumeParentTaskId) {
+      const { data: parent } = await supabase.from("tasks")
+        .select("result").eq("id", leadResumeParentTaskId).maybeSingle();
+      return lineageRootOf(
+        leadResumeParentTaskId,
+        ((parent as { result?: Record<string, unknown> } | null)?.result ?? null),
+      );
+    }
+    // A first generation IS its own root.
+    return task.id;
+  })();
+
+  const leaseOutcome = await acquireLineageLease({
+    db: supabase as unknown as LeaseRpcDb,
+    lineageId: lineageRootId, workspaceId: workspace_id, holderTaskId: task.id,
+  });
+  const leaseGate = decideLeaseGate(leaseOutcome, lineageLeaseEnforced());
+  console.log("[run-agent][lineage-lease]", {
+    task_id: task.id, lineage_id: lineageRootId, ...leaseGate.observation,
+  });
+  // THE VERSION THIS GENERATION READ. Its write must quote it back, or the
+  // compare-and-swap cannot tell a fresh write from a stale one.
+  const leaseVersion = leaseOutcome.acquired ? leaseOutcome.stateVersion : null;
+  const holdsLease = leaseOutcome.acquired;
+
+  if (!leaseGate.proceed) {
+    // REFUSED BEFORE ANY PAID BOUNDARY. Nothing has been bought and the task row
+    // exists only as a record of the attempt; the generation that holds the
+    // lease owns this lineage until it finishes.
+    return json({
+      success: false, error: "lineage_busy", reason: leaseGate.refusal,
+      message: LEASE_REFUSAL_MESSAGE[leaseGate.refusal!],
+      lineage_id: lineageRootId,
+    }, 409);
+  }
+
+  // THE ROW SAYS WHICH LINEAGE IT BELONGS TO. `tasks_one_live_generation_per_lineage`
+  // is a unique index over exactly this column, so it is also the database's own
+  // backstop against a second live generation — independent of the lease.
+  // Best-effort: a failure here costs the backstop, never the run.
+  if (leaseOutcome.acquired) {
+    const { error: linkErr } = await supabase.from("tasks")
+      .update({ lineage_id: lineageRootId }).eq("id", task.id);
+    if (linkErr) {
+      console.error("[run-agent][lineage-lease] link failed", {
+        task_id: task.id, lineage_id: lineageRootId, detail: linkErr.message,
+      });
+    }
+  }
 
   await supabase.from("activity_feed").insert({
     workspace_id,
@@ -4744,6 +4822,69 @@ Deno.serve(async (req) => {
             console.error("[run-agent][company-first] claim release failed", {
               task_id: task.id, claim_path: "rpc",
               claim_error_category: released.category, claim_error_code: released.code,
+            });
+          }
+        }
+
+        // ══ AND RELEASE THE LINEAGE ═══════════════════════════════════════
+        //
+        // HERE, AND NOWHERE EARLIER. This line is the completion barrier: while
+        // it has not run, this generation is still live and no successor may
+        // start. The terminal status was composed further up, but composing a
+        // status is not finishing — on 2026-08-29 task 06d3544a advertised
+        // itself terminal at 11:13:03 and went on buying until 11:14:22, which
+        // is the entire reason its continuation forked.
+        //
+        // Deliberately placed beside the per-task claim release and BEFORE the
+        // dispatch below, for the reason the next comment block already gives:
+        // the successor must find a durable checkpoint and an unheld lineage.
+        //
+        // `current_state` is written but nothing reads it yet. That is Phase 5's
+        // job; writing it now costs nothing, exercises the compare-and-swap
+        // against real traffic, and accumulates the state that migration will be
+        // validated against.
+        if (holdsLease && leaseVersion !== null) {
+          // PROGRESS IS WHAT THIS GENERATION ADDED, not what the lineage holds.
+          // A slice that investigated nobody and verified nobody has not
+          // advanced anything, and Phase 8 will use exactly this to stop a
+          // lineage re-dispatching itself for ever — lineage 9da530ae ran five
+          // generations, four of which made zero provider calls.
+          const madeProgress = (progress?.unique_companies_investigated ?? 0) > 0 ||
+            cf.counts.verifiedCompanies > 0 || cf.quota.eligible_leads > 0;
+          // READ BACK WHAT WAS ACTUALLY WRITTEN, rather than reassembling it from
+          // locals. The row above is the authority on this generation's outcome,
+          // and a `current_state` that disagrees with it would be a second
+          // version of the truth — which is the defect this whole phase exists
+          // to remove.
+          const { data: committed } = await supabase.from("tasks")
+            .select("result").eq("id", task.id).maybeSingle();
+          const committedResult =
+            ((committed as { result?: Record<string, unknown> } | null)?.result ?? {});
+          const leaseReleased = await releaseLineageLease({
+            db: supabase as unknown as LeaseRpcDb,
+            lineageId: lineageRootId, workspaceId: workspace_id,
+            holderTaskId: task.id, expectedVersion: leaseVersion,
+            nextState: {
+              version: LINEAGE_LEASE_VERSION,
+              written_by_task: task.id,
+              written_at: new Date().toISOString(),
+              terminal_status: statuses.terminalStatus,
+              capability_execution_state:
+                committedResult.capability_execution_state ?? null,
+              [CHECKPOINT_RESULT_KEY]: committedResult[CHECKPOINT_RESULT_KEY] ?? null,
+            },
+            madeProgress,
+          });
+          if (!leaseReleased.released) {
+            // A `version_conflict` here means something else advanced this
+            // lineage while this generation ran — which is exactly what the
+            // shadow rollout exists to detect. Logged, never thrown: the task
+            // result is already committed and bookkeeping must not fail a run it
+            // is only describing.
+            console.error("[run-agent][lineage-lease] release refused", {
+              task_id: task.id, lineage_id: lineageRootId,
+              expected_version: leaseVersion,
+              reason: "reason" in leaseReleased ? leaseReleased.reason : null,
             });
           }
         }
