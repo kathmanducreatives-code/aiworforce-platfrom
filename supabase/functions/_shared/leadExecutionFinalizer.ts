@@ -111,11 +111,68 @@ export const DEFAULT_BUDGET_MS = EDGE_WALL_CLOCK_MS - SAFETY_MARGIN_MS;
 /**
  * WHICH OPERATION IS BEING SCHEDULED.
  *
- * A free-form key — in practice the provider name, because that is the unit
- * whose latency actually varies. Callers that do not know or care pass nothing
- * and get the global estimate, which is the behaviour that existed before.
+ * A free-form key — usually the provider name, because that is the unit whose
+ * latency actually varies. Callers that do not know or care pass nothing and
+ * get the global estimate, which is the behaviour that existed before.
+ *
+ * USUALLY, not always: see `deadlineOperationFor`.
  */
 export type DeadlineOperation = string;
+
+/**
+ * Actors that serve MORE THAN ONE STAGE, at materially different call sizes.
+ *
+ * ── THE PROVIDER IS NOT ALWAYS THE UNIT OF LATENCY ──────────────────────────
+ *
+ * `apify_linkedin_company_search` runs twice in a lead run and means two
+ * different things. Discovery asks it for a whole pool — fifty companies, one
+ * call, twenty-odd seconds. Identity resolution asks it about ONE company, and
+ * measured identity searches take eight or nine.
+ *
+ * Keyed on the provider alone, the pool call teaches the estimator that a
+ * single-company lookup costs what a fifty-company search costs. Task 43355471:
+ *
+ *     discovery took   21.5s  →  identity estimate 23,513ms  →  capacity 3
+ *                                → 2 of 10 companies resolved, 8 deferred
+ *
+ * The same mission an hour earlier, with a 15.2s discovery, priced identity at
+ * 16,375ms and resolved 5. Nothing about identity resolution changed between
+ * them; the number it was being charged did. And the eight deferred included
+ * every company that run had already proven was hiring.
+ *
+ * ── THIS IS THE LAST HALF OF A FIX ALREADY MADE TWICE ───────────────────────
+ *
+ * `estimateFor` was introduced because ONE global maximum let a 51s memo23
+ * start price out a 9s identity search. The identity stage then scoped its own
+ * guards to `expired(provider)` for the same reason, in the same words. Both
+ * stopped one level short: the provider key is still shared, so the pool call
+ * and the single-company call remain the same question.
+ *
+ * DECLARED, ONE ACTOR AT A TIME — like `ASSUMED_MS_BY_OP` and
+ * `CAPPED_ESTIMATE_OPS` above, and for the same reason. An Actor used by one
+ * stage needs no split, and inferring the rule would silently fragment the
+ * table the moment a capability was renamed.
+ */
+export const STAGE_SCOPED_PROVIDERS: readonly string[] = [
+  "apify_linkedin_company_search",
+];
+
+/**
+ * The latency key for one capability's use of one provider.
+ *
+ * The provider name for everything not in `STAGE_SCOPED_PROVIDERS`, which is
+ * every Actor but one — so this is inert for them, and their learned estimates
+ * are exactly what they were.
+ *
+ * BOTH SIDES MUST AGREE. `observeCall` and `estimateFor` are only talking about
+ * the same work if they compute the key the same way, which is why there is one
+ * function rather than two conventions.
+ */
+export function deadlineOperationFor(
+  capability: string, provider: string,
+): DeadlineOperation {
+  return STAGE_SCOPED_PROVIDERS.includes(provider) ? `${capability}:${provider}` : provider;
+}
 
 // ── WHAT EACH STAGE IS ASSUMED TO COST ──────────────────────────────────────
 

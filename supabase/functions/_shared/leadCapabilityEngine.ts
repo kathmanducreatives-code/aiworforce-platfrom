@@ -101,7 +101,8 @@ import {
 } from "./leadMissionFunnel.ts";
 import {
   BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
-  QUALIFICATION_PREGROUNDED_OP, withDeadlineBudget, type ExecutionDeadline,
+  QUALIFICATION_PREGROUNDED_OP, deadlineOperationFor, withDeadlineBudget,
+  type ExecutionDeadline,
 } from "./leadExecutionFinalizer.ts";
 import {
   TIER_A_TITLES, TIER_B_TITLES, assessHiring, needsPaidJobVerification,
@@ -874,6 +875,17 @@ export function stateMatchesMission(
  * name-matching candidate at all, these pages are not reachable by name and the
  * answer is a different resolution strategy.
  */
+/**
+ * The latency key for ONE company's identity search.
+ *
+ * Named once and read everywhere, because `observeCall` and `estimateFor` are
+ * only discussing the same work if they agree on the key. The Actor behind it
+ * also runs discovery, at fifty companies a call — see `STAGE_SCOPED_PROVIDERS`
+ * for what sharing one number between the two cost.
+ */
+export const IDENTITY_SEARCH_OP = deadlineOperationFor(
+  "company_identity_resolution", "apify_linkedin_company_search");
+
 export const IDENTITY_SEARCH_MAX_ITEMS = 15;
 
 /**
@@ -2390,7 +2402,7 @@ export async function runCapabilityPlan(
         concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
         enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
         read: opts.readEnv,
-        observedIdentityMs: deps.deadline.estimateFor("apify_linkedin_company_search"),
+        observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
       })
       : null;
     // THE CLOCK DOES NOT SHRINK THE SHORTLIST — see `downstreamReserveMs`.
@@ -2893,7 +2905,8 @@ export async function runCapabilityPlan(
       // SCOPED TO THE PROVIDER, so what discovery costs is not charged against
       // what an identity search costs. One monotonic maximum across every
       // provider is what stranded nine candidates behind a 51s memo23 start.
-      deps.deadline?.observeCall(Date.now() - startedAt, provider);
+      deps.deadline?.observeCall(
+        Date.now() - startedAt, deadlineOperationFor(capability, provider));
       deps.onCallComplete?.(call.batchIdentity);
       record(rows.length > 0 ? "ok" : "empty", rows.length, null);
       // THE LEDGER OF WHAT WAS BOUGHT, written only after the answer arrived.
@@ -2906,7 +2919,8 @@ export async function runCapabilityPlan(
       }
       return rows;
     } catch (e) {
-      deps.deadline?.observeCall(Date.now() - startedAt, provider);
+      deps.deadline?.observeCall(
+        Date.now() - startedAt, deadlineOperationFor(capability, provider));
       // A CONTAINMENT error is an engine bug, not a provider failure. Letting it
       // become "try the next provider" is exactly how a guard turns into a
       // suggestion, so it propagates.
@@ -4409,7 +4423,7 @@ export async function runCapabilityPlan(
           concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
           enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
           read: opts.readEnv,
-          observedIdentityMs: deps.deadline.estimateFor(provider),
+          observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
         })
         : null;
       if (timeCapacity) state.investigation_capacity = timeCapacity;
@@ -4569,12 +4583,14 @@ export async function runCapabilityPlan(
 
       // ── IDENTITY MAY NOT SPEND THE WINDOW THE LATER STAGES NEED ───────────
       //
-      // SCOPED TO THIS PROVIDER. An unscoped `expired()` compares the time left
-      // against the slowest call ANY stage has made — so a 51s discovery start
-      // made a 9s identity search look unaffordable and ended the stage with a
-      // third of the budget unspent.
+      // SCOPED TO THIS STAGE'S USE OF THIS PROVIDER. An unscoped `expired()`
+      // compares the time left against the slowest call ANY stage has made — so
+      // a 51s discovery start made a 9s identity search look unaffordable and
+      // ended the stage with a third of the budget unspent. Scoping to the
+      // provider fixed that for every Actor but the one this stage shares with
+      // discovery; `IDENTITY_SEARCH_OP` finishes it.
       //
-      // AND SCOPED TO THE WHOLE PIPELINE. `expired(provider)` alone asks only
+      // AND SCOPED TO THE WHOLE PIPELINE. A per-call estimate alone asks only
       // "is there room for one more search?", which on run ea2d02f2 was true
       // 12 times in a row until 114 of 125 seconds were gone — leaving 10.8s
       // against an 18s checkpoint reserve, so enrichment never ran, the five
@@ -4593,13 +4609,20 @@ export async function runCapabilityPlan(
             (c) => c.identity && identityIsActionable(c.identity)).length,
           capacity: timeCapacity,
           checkpointReserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
-          perCallEstimateMs: deps.deadline?.estimateFor(provider) ?? 0,
+          perCallEstimateMs: deps.deadline?.estimateFor(IDENTITY_SEARCH_OP) ?? 0,
         });
       };
       const bounded = await runBounded(targets, LINKEDIN_RESOLUTION_CONCURRENCY, resolveOne,
         () => {
           if (!deps.deadline) return false;
-          if (deps.deadline.expired(provider)) return true;
+          // ── SCOPED TO THIS STAGE'S USE OF THE ACTOR, NOT THE ACTOR ────────
+          //
+          // `expired(provider)` was the previous fix and it stopped one level
+          // short: discovery runs the SAME Actor over a whole pool, so its
+          // twenty-second call was still the number a one-company lookup was
+          // measured against. On task 43355471 that ended this stage after two
+          // of ten companies with sixty seconds still on the clock.
+          if (deps.deadline.expired(IDENTITY_SEARCH_OP)) return true;
           return deps.deadline.remainingMs() <= stopThreshold();
         });
 
@@ -6284,7 +6307,7 @@ export async function runCapabilityPlan(
           concurrency: LINKEDIN_RESOLUTION_CONCURRENCY,
           enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
           read: opts.readEnv,
-          observedIdentityMs: deps.deadline.estimateFor("apify_linkedin_company_search"),
+          observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
         }).capacity
         // No deadline (offline callers) ⇒ the clock cannot bind.
         : Number.MAX_SAFE_INTEGER;
