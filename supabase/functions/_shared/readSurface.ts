@@ -30,6 +30,9 @@
 // have", and it is never wrong in the way a guess would be.
 
 import type { RequestV1, RequestPart } from "./requestV1.ts";
+import {
+  readPersistedRunOutcome, renderRunHeadline,
+} from "./runOutcome.ts";
 import type { ResolvedReferentBinding } from "./referentBinding.ts";
 import {
   type Outcome, satisfied, partiallySatisfied, unsupported, failed,
@@ -625,8 +628,17 @@ export async function executeRead(
     }
 
     // runs
+    //
+    // ── THE OUTCOME COMES FROM THE ROW, NOT FROM `status` ──────────────────
+    //
+    // This used to select `status` alone, so the Pilot could say "complete" about
+    // a run that saved nothing, charged ten credits and left eleven companies
+    // mid-investigation. `run_outcome` is the record the run wrote about itself.
+    //
+    // Selected by JSON PATH rather than as the whole `result` column: these rows
+    // are half a megabyte each and the answer needs one object from each.
     let rq = db.from("tasks")
-      .select("id, status, created_at, updated_at")
+      .select("id, status, created_at, updated_at, run_outcome:result->run_outcome")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(plan.limit);
@@ -985,7 +997,16 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
 
   const total = result.counts.total ?? 0;
   const rows = result.items.slice(0, 5)
-    .map((r) => `• ${String(r.status ?? "?")} — ${String(r.created_at ?? "").slice(0, 16).replace("T", " ")}`)
+    .map((r) => {
+      const when = String(r.created_at ?? "").slice(0, 16).replace("T", " ");
+      // ONE AUTHORITATIVE RECORD, READ — never re-derived here. A run that wrote
+      // no outcome says so; it is not described from `status`, which is what let
+      // "complete" stand for a run that delivered nothing.
+      const o = readPersistedRunOutcome({ run_outcome: r.run_outcome });
+      return o
+        ? `• ${when} — ${renderRunHeadline(o)}`
+        : `• ${when} — ${String(r.status ?? "?")} (no outcome recorded)`;
+    })
     .join("\n");
   return `${total} run${total === 1 ? "" : "s"}${window}.\n\n${rows}`;
 }

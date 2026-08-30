@@ -21,13 +21,16 @@ import {
 
 const facts = (over: Partial<RunFacts> = {}): RunFacts => ({
   requested: 5,
-  spend: { credits_charged: 0, provider_calls: 0, usd_reported: null, unsettled_operations: 0 },
+  spend: { credits_charged: 0, provider_calls: 0, usd_reported: null,
+           unsettled_operations: 0, reused_operations: 0 },
   funnel: {
     discovered: 50, shortlisted: 21, deferred: 10, identity_resolved: 11,
     enriched: 11, hiring_verified: 0, hiring_refuted: 0,
-    hiring_evidence_unavailable: 0, excluded: [{ reason: "employee_size", count: 29 }],
+    hiring_evidence_unavailable: 0, cited_rows: 0,
+    excluded: [{ reason: "employee_size", count: 29 }],
   },
-  qualification: { eligible: 0, evaluated: 0, qualified: 0, rejected: 0, not_reached_reason: null },
+  qualification: { eligible: 0, evaluated: 0, qualified: 0, rejected: 0,
+                   not_reached: 0, not_reached_reason: null },
   persistence: { leads_written: 0, signals_written: 0 },
   continuation: { required: true, resumable: true, reason: "execution_deadline_checkpoint" },
   completed_capabilities: [],
@@ -42,7 +45,7 @@ Deno.test('THE RUN NEVER EVALUATED THEM, AND NOW SAYS SO', () => {
   const o = buildRunOutcome(facts({
     qualification: {
       eligible: 3, evaluated: 0, qualified: 0, rejected: 0,
-      not_reached_reason: "execution_deadline_checkpoint",
+      not_reached: 3, not_reached_reason: "execution_deadline_checkpoint",
     },
   }));
   const said = renderQualificationClause(o);
@@ -56,7 +59,7 @@ Deno.test('THE RUN NEVER EVALUATED THEM, AND NOW SAYS SO', () => {
 Deno.test("a company that WAS evaluated and rejected is reported as rejected", () => {
   // The fix must not make the system unable to report a real rejection.
   const o = buildRunOutcome(facts({
-    qualification: { eligible: 3, evaluated: 3, qualified: 0, rejected: 3, not_reached_reason: null },
+    qualification: { eligible: 3, evaluated: 3, qualified: 0, rejected: 3, not_reached: 0, not_reached_reason: null},
   }));
   const said = renderQualificationClause(o);
   assert(said.includes("3 companies were evaluated"), said);
@@ -65,7 +68,7 @@ Deno.test("a company that WAS evaluated and rejected is reported as rejected", (
 
 Deno.test("and a pass is reported as a pass", () => {
   const o = buildRunOutcome(facts({
-    qualification: { eligible: 3, evaluated: 3, qualified: 2, rejected: 1, not_reached_reason: null },
+    qualification: { eligible: 3, evaluated: 3, qualified: 2, rejected: 1, not_reached: 0, not_reached_reason: null},
   }));
   assertEquals(renderQualificationClause(o), "3 evaluated, 2 qualified.");
 });
@@ -79,7 +82,7 @@ Deno.test("nobody eligible is its own sentence, not a verdict", () => {
 
 Deno.test('THE LINEAGE HAD CHARGED TEN CREDITS, AND NOW SAYS SO', () => {
   const o = buildRunOutcome(facts({
-    spend: { credits_charged: 10, provider_calls: 10, usd_reported: 0.1191, unsettled_operations: 2 },
+    spend: { credits_charged: 10, provider_calls: 10, usd_reported: 0.1191, unsettled_operations: 2, reused_operations: 0 },
   }));
   const said = renderSpendClause(o);
   assert(said.includes("10 credits"), said);
@@ -94,7 +97,7 @@ Deno.test("'No credits were used' requires the ledger to say zero", () => {
   assertEquals(renderSpendClause(free), "No credits were used.");
   // And one single charge is enough to make that sentence unreachable.
   const spent = buildRunOutcome(facts({
-    spend: { credits_charged: 1, provider_calls: 1, usd_reported: null, unsettled_operations: 0 },
+    spend: { credits_charged: 1, provider_calls: 1, usd_reported: null, unsettled_operations: 0, reused_operations: 0 },
   }));
   assert(!/no credits/i.test(renderSpendClause(spent)));
   assertEquals(renderSpendClause(spent), "1 credit across 1 provider call.");
@@ -102,7 +105,7 @@ Deno.test("'No credits were used' requires the ledger to say zero", () => {
 
 Deno.test("THE CHECKPOINT CARD NO LONGER PROMISES ANYTHING ABOUT MONEY IT HAS NOT READ", () => {
   const o = buildRunOutcome(facts({
-    spend: { credits_charged: 3, provider_calls: 3, usd_reported: 0.06, unsettled_operations: 0 },
+    spend: { credits_charged: 3, provider_calls: 3, usd_reported: 0.06, unsettled_operations: 0, reused_operations: 0 },
   }));
   const card = renderCheckpointNotice(o, true);
   assert(!/nothing extra was charged/i.test(card), card);
@@ -185,7 +188,7 @@ Deno.test("THE AUDITED RUN, RE-RENDERED FROM ITS OWN PERSISTED STATE", () => {
   };
   const o = buildRunOutcome({
     ...readFactsFromResult(persisted, 5),
-    spend: { credits_charged: 10, provider_calls: 10, usd_reported: 0.1191, unsettled_operations: 2 },
+    spend: { credits_charged: 10, provider_calls: 10, usd_reported: 0.1191, unsettled_operations: 2, reused_operations: 0 },
   });
 
   assertEquals(o.funnel.discovered, 50);

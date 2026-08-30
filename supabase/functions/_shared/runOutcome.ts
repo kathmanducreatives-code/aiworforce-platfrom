@@ -63,6 +63,16 @@ export interface SpendFacts {
   usd_reported: number | null;
   /** Calls still `started` or `timed_out`: bought, and not yet read. */
   unsettled_operations: number;
+  /**
+   * Calls a later generation ADOPTED instead of re-buying.
+   *
+   * `status = 'reused'`. Reported because it is the difference between a
+   * continuation that cost money and one that did not, and because it is the
+   * only visible proof that the lineage-scoped idempotency key is working. A
+   * user looking at two slices and one charge is owed the sentence that explains
+   * why.
+   */
+  reused_operations: number;
 }
 
 /** The funnel, from the engine's own persisted state. */
@@ -76,6 +86,14 @@ export interface FunnelFacts {
   hiring_refuted: number;
   /** Companies whose evidence was never obtained. NOT a verdict. */
   hiring_evidence_unavailable: number;
+  /**
+   * Job rows the hiring verdicts actually CITE, summed.
+   *
+   * The count that separates a verdict from an assertion. A run reporting three
+   * verified companies and zero cited rows has three claims and no evidence,
+   * which is exactly the state lineage 862e81be was left in on 2026-08-30.
+   */
+  cited_rows: number;
   excluded: ReadonlyArray<{ reason: string; count: number }>;
 }
 
@@ -92,6 +110,14 @@ export interface QualificationFacts {
   evaluated: number;
   qualified: number;
   rejected: number;
+  /**
+   * Eligible companies the evaluator never got to.
+   *
+   * Carried rather than left to subtraction: a reader that has to compute
+   * `eligible - evaluated` to discover that nobody was judged is a reader that
+   * will not compute it, and will say "none qualified" instead.
+   */
+  not_reached: number;
   /** Why nothing was evaluated, when nothing was. */
   not_reached_reason: string | null;
 }
@@ -160,15 +186,32 @@ export function buildRunOutcome(facts: RunFacts): RunOutcomeV1 {
  */
 export function renderSpendClause(o: RunOutcomeV1): string {
   const { credits_charged: credits, provider_calls: calls, unsettled_operations: unsettled } = o.spend;
-  if (credits === 0 && calls === 0) return "No credits were used.";
+  if (credits === 0 && calls === 0) {
+    return o.spend.reused_operations > 0
+      // Free, but not because nothing happened — because an earlier slice paid.
+      ? `No new credits were used; ${o.spend.reused_operations} ` +
+        `${o.spend.reused_operations === 1 ? "result was" : "results were"} ` +
+        `reused from work already paid for.`
+      : "No credits were used.";
+  }
   const creditWord = credits === 1 ? "credit" : "credits";
   const callWord = calls === 1 ? "provider call" : "provider calls";
-  const base = `${credits} ${creditWord} across ${calls} ${callWord}.`;
+  const parts = [`${credits} ${creditWord} across ${calls} ${callWord}.`];
+  // WORK ADOPTED RATHER THAN RE-BOUGHT. Said out loud because a user comparing
+  // two slices against one charge is otherwise looking at an unexplained
+  // discrepancy, and because it is the only place the lineage-scoped
+  // idempotency key becomes visible to the person paying for it.
+  const reused = o.spend.reused_operations;
+  if (reused > 0) {
+    parts.push(`${reused} ${reused === 1 ? "result was" : "results were"} ` +
+      `reused from work already paid for.`);
+  }
   // A bought answer nobody has read yet is part of what was spent, and the user
   // is the person paying for it.
-  return unsettled > 0
-    ? `${base} ${unsettled} ${unsettled === 1 ? "result is" : "results are"} still being collected.`
-    : base;
+  if (unsettled > 0) {
+    parts.push(`${unsettled} ${unsettled === 1 ? "result is" : "results are"} still being collected.`);
+  }
+  return parts.join(" ");
 }
 
 /**
@@ -248,6 +291,108 @@ export function renderCheckpointNotice(o: RunOutcomeV1, resumable: boolean): str
       `I can't pick this one up where it left off.`;
 }
 
+// ──────────────────────────────────────────────────── the durable record ───
+//
+// THE OUTCOME IS PERSISTED, NOT RECOMPUTED PER SURFACE.
+//
+// Every surface that describes a run used to derive its own answer from
+// whatever it happened to have: the Pilot from `tasks.status`, the Workbench
+// from company rows, the completion message from `produced`, the checkpoint card
+// from nothing at all. Four derivations, four vocabularies, and no way to tell
+// which one was right — the 2026-08-29 run was described three different ways in
+// ninety seconds and all three were wrong.
+//
+// `run-agent` computes this ONCE, at completion, from the ledger and the engine's
+// own state, and writes it to `tasks.result.run_outcome`. Everything downstream
+// reads that field. A run can then be judged from the row alone, without a log
+// line or a join.
+
+export const RUN_OUTCOME_RESULT_KEY = "run_outcome" as const;
+
+/**
+ * Read the outcome a run recorded about itself.
+ *
+ * Returns null when the row predates this contract — deliberately, and not an
+ * empty outcome: "this run did not record an outcome" and "this run recorded a
+ * zero outcome" are different facts, and a caller handed zeros would state them
+ * as though the run had reported them. Callers fall back to
+ * `readFactsFromResult` explicitly, so the degraded path is visible at the call
+ * site rather than hidden here.
+ */
+export function readPersistedRunOutcome(result: unknown): RunOutcomeV1 | null {
+  const stored = rec(rec(result)[RUN_OUTCOME_RESULT_KEY]);
+  if (stored.version !== RUN_OUTCOME_VERSION) return null;
+  const s = rec(stored.spend), f = rec(stored.funnel);
+  const q = rec(stored.qualification), pr = rec(stored.persistence);
+  const c = rec(stored.continuation);
+  return {
+    version: RUN_OUTCOME_VERSION,
+    state: (typeof stored.state === "string" ? stored.state : "PARTIALLY_SATISFIED") as RunState,
+    requested: num(stored.requested),
+    spend: {
+      credits_charged: num(s.credits_charged), provider_calls: num(s.provider_calls),
+      // Preserved as null. Rounding an unknown cost to zero is the whole bug.
+      usd_reported: typeof s.usd_reported === "number" ? s.usd_reported : null,
+      unsettled_operations: num(s.unsettled_operations),
+      reused_operations: num(s.reused_operations),
+    },
+    funnel: {
+      discovered: num(f.discovered), shortlisted: num(f.shortlisted),
+      deferred: num(f.deferred), identity_resolved: num(f.identity_resolved),
+      enriched: num(f.enriched), hiring_verified: num(f.hiring_verified),
+      hiring_refuted: num(f.hiring_refuted),
+      hiring_evidence_unavailable: num(f.hiring_evidence_unavailable),
+      cited_rows: num(f.cited_rows),
+      excluded: Array.isArray(f.excluded)
+        ? (f.excluded as Array<Record<string, unknown>>).map((e) => ({
+            reason: String(e.reason ?? "unknown"), count: num(e.count) }))
+        : [],
+    },
+    qualification: {
+      eligible: num(q.eligible), evaluated: num(q.evaluated),
+      qualified: num(q.qualified), rejected: num(q.rejected),
+      not_reached: num(q.not_reached),
+      not_reached_reason: typeof q.not_reached_reason === "string"
+        ? q.not_reached_reason : null,
+    },
+    persistence: {
+      leads_written: num(pr.leads_written), signals_written: num(pr.signals_written),
+    },
+    continuation: {
+      required: c.required === true, resumable: c.resumable === true,
+      reason: typeof c.reason === "string" ? c.reason : null,
+    },
+    completed_capabilities: Array.isArray(stored.completed_capabilities)
+      ? (stored.completed_capabilities as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
+    gaps: Array.isArray(stored.gaps)
+      ? (stored.gaps as Array<Record<string, unknown>>).map((g) => ({
+          code: String(g.code ?? "unknown"), detail: String(g.detail ?? "") }))
+      : [],
+  };
+}
+
+/**
+ * A one-line verdict for a list, from the same record.
+ *
+ * The Pilot lists runs; a list cannot carry four clauses per row. This is the
+ * shortest true thing, and it is still read from the outcome rather than from
+ * `tasks.status` — which is what let "complete" stand for a run that saved
+ * nothing and left eleven companies mid-investigation.
+ */
+export function renderRunHeadline(o: RunOutcomeV1): string {
+  const led = o.persistence.leads_written;
+  const money = o.spend.credits_charged > 0
+    ? `${o.spend.credits_charged} ${o.spend.credits_charged === 1 ? "credit" : "credits"}`
+    : "no credits";
+  const tail = o.continuation.required && o.continuation.resumable
+    ? ", can be continued"
+    : o.qualification.not_reached > 0
+    ? `, ${o.qualification.not_reached} not yet evaluated`
+    : "";
+  return `${led} of ${o.requested} saved · ${money}${tail}`;
+}
+
 // ────────────────────────────────────────────────────────────── the reader ───
 //
 // Separated from the contract on purpose: the rules above are testable without a
@@ -291,7 +436,8 @@ export async function readSpendFacts(
   db: OutcomeDb, workspaceId: string, taskIds: readonly string[],
 ): Promise<SpendFacts> {
   const empty: SpendFacts = {
-    credits_charged: 0, provider_calls: 0, usd_reported: null, unsettled_operations: 0,
+    credits_charged: 0, provider_calls: 0, usd_reported: null,
+    unsettled_operations: 0, reused_operations: 0,
   };
   if (taskIds.length === 0) return empty;
   try {
@@ -322,6 +468,7 @@ export async function readSpendFacts(
         : Math.round(priced.reduce((n, r) => n + num(r.actual_cost_usd), 0) * 10_000) / 10_000,
       unsettled_operations: provider.filter(
         (r) => r.status === "started" || r.status === "timed_out").length,
+      reused_operations: provider.filter((r) => r.status === "reused").length,
     };
   } catch {
     return empty;
@@ -359,7 +506,10 @@ export function readFactsFromResult(result: unknown, requested: number): RunFact
 
   return {
     requested,
-    spend: { credits_charged: 0, provider_calls: 0, usd_reported: null, unsettled_operations: 0 },
+    spend: {
+      credits_charged: 0, provider_calls: 0, usd_reported: null,
+      unsettled_operations: 0, reused_operations: 0,
+    },
     funnel: {
       discovered: num(progress.accounts_found),
       shortlisted: num(progress.shortlisted),
@@ -370,6 +520,13 @@ export function readFactsFromResult(result: unknown, requested: number): RunFact
         countHiring("verified_from_existing_evidence"),
       hiring_refuted: countHiring("not_verified"),
       hiring_evidence_unavailable: countHiring("evidence_unavailable"),
+      // Counted from the rows themselves, never from the number of verdicts.
+      cited_rows: companies.reduce((n, c) => {
+        const snap = rec(c.snapshot);
+        const src = rec(snap.hiring_assessment).evidence_source;
+        const cited = typeof src === "string" && src.length > 0 && src !== "none";
+        return n + (cited && Array.isArray(snap.hiring_jobs) ? snap.hiring_jobs.length : 0);
+      }, 0),
       excluded: Object.entries(rec(progress.exclusion_reasons))
         .map(([reason, count]) => ({ reason, count: num(count) })),
     },
@@ -377,6 +534,7 @@ export function readFactsFromResult(result: unknown, requested: number): RunFact
       eligible, evaluated,
       qualified: num(progress.qualified_companies),
       rejected: Math.max(0, evaluated - num(progress.qualified_companies)),
+      not_reached: Math.max(0, eligible - evaluated),
       // THE SENTENCE THAT DID NOT EXIST. Only set when nothing was evaluated,
       // because that is the only case a verdict may not be reported for.
       not_reached_reason: eligible > 0 && evaluated === 0

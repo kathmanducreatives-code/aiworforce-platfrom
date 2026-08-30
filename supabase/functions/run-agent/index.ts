@@ -338,7 +338,8 @@ import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import {
-  buildRunOutcome, readFactsFromResult, readSpendFacts, renderQualificationClause,
+  buildRunOutcome, readFactsFromResult, readPersistedRunOutcome, readSpendFacts,
+  renderQualificationClause, RUN_OUTCOME_RESULT_KEY,
   renderSpendClause, type OutcomeDb, type SpendFacts,
 } from "../_shared/runOutcome.ts";
 import {
@@ -583,10 +584,20 @@ async function persistLeadResultsPanel(
     // task's own persisted state plus the lineage's ledger, so a sentence about
     // qualification or spend cannot be chosen from a count the renderer happens
     // to be holding.
-    const summaryOutcome = buildRunOutcome({
+    //
+    // ── ONE RECORD, READ. RECOMPUTED ONLY AS A VISIBLE FALLBACK ────────────
+    //
+    // The run writes `run_outcome` to its own row at completion. The Workbench
+    // reads that, so the panel and the completion message and the Pilot cannot
+    // give three answers about one run. Recomputing here is kept ONLY for rows
+    // written before this contract existed, and it is a branch rather than the
+    // default so the degraded path is visible.
+    const persistedOutcome = readPersistedRunOutcome(summary.taskResult ?? null);
+    const summaryOutcome = persistedOutcome ?? buildRunOutcome({
       ...readFactsFromResult(summary.taskResult ?? null, summary.requested),
       spend: summary.spend ?? {
-        credits_charged: 0, provider_calls: 0, usd_reported: null, unsettled_operations: 0,
+        credits_charged: 0, provider_calls: 0, usd_reported: null,
+        unsettled_operations: 0, reused_operations: 0,
       },
     });
     // THE COUNTS COME FROM THE PATH THAT ACTUALLY RAN.
@@ -4991,6 +5002,10 @@ Deno.serve(async (req) => {
             capability_execution_state:
               committedResult.capability_execution_state ?? null,
             [CHECKPOINT_RESULT_KEY]: committedResult[CHECKPOINT_RESULT_KEY] ?? null,
+            // THE LINEAGE CARRIES THE LATEST OUTCOME TOO. A continuation asked
+            // "how did this request go so far" must not have to find and read
+            // the right generation's task row to answer.
+            [RUN_OUTCOME_RESULT_KEY]: committedResult[RUN_OUTCOME_RESULT_KEY] ?? null,
           });
           if (merged.merge.refused.length > 0) {
             // A REFUSED REGRESSION IS THE INTERESTING EVENT IN THIS FUNCTION.
@@ -5310,6 +5325,50 @@ Deno.serve(async (req) => {
           // Before the lease has linked a row, a task is its own lineage.
           : [task.id];
 
+        // ══ THE ONE AUTHORITATIVE OUTCOME, COMPUTED ONCE AND PERSISTED ═════
+        //
+        // Every surface that describes this run reads THIS record: the Pilot,
+        // the Workbench, the completion message and the checkpoint card. They
+        // used to derive four separate answers from whatever each happened to
+        // hold — `tasks.status`, company rows, `produced`, and in the card's
+        // case nothing at all — which is how one run was described three
+        // different ways in ninety seconds and all three were wrong.
+        //
+        // Written to the row so the run can be judged from persisted facts
+        // alone, with no log line and no join.
+        const lineageSpend = await readSpendFacts(
+          supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds);
+        const runOutcome = buildRunOutcome({
+          ...readFactsFromResult(panelResult, cf.quota.requested_leads),
+          spend: lineageSpend,
+        });
+        {
+          const { error: outcomeErr } = await supabase.from("tasks")
+            .update({ result: { ...panelResult, [RUN_OUTCOME_RESULT_KEY]: runOutcome } })
+            .eq("id", task.id);
+          if (outcomeErr) {
+            // BEST EFFORT, AND SAID SO. The outcome describes a run that has
+            // already happened; failing the run because its description could
+            // not be filed would be the tail wagging the dog. Downstream
+            // surfaces fall back to recomputing, visibly.
+            console.error("[run-agent][run-outcome] persist failed", {
+              task_id: task.id, detail: outcomeErr.message,
+            });
+          } else {
+            console.log("[run-agent][run-outcome]", {
+              task_id: task.id, lineage_id: lineageRootId, state: runOutcome.state,
+              leads: runOutcome.persistence.leads_written,
+              credits: runOutcome.spend.credits_charged,
+              reused: runOutcome.spend.reused_operations,
+              unsettled: runOutcome.spend.unsettled_operations,
+              eligible: runOutcome.qualification.eligible,
+              evaluated: runOutcome.qualification.evaluated,
+              not_reached: runOutcome.qualification.not_reached,
+              cited_rows: runOutcome.funnel.cited_rows,
+            });
+          }
+        }
+
         await persistLeadResultsPanel(supabase, plan_id, uiPanel, {
           eligible: cf.quota.eligible_leads,
           requested: cf.quota.requested_leads,
@@ -5320,8 +5379,9 @@ Deno.serve(async (req) => {
           // panel's sentences are derived from what is stored rather than from
           // the counters this call site happens to be holding.
           taskResult: panelResult,
-          spend: await readSpendFacts(
-            supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds),
+          // THE SAME facts the persisted outcome was built from — read once
+          // above, so the panel and the durable record cannot disagree.
+          spend: lineageSpend,
           // Present only when the capability engine ran. `capabilityRun` is null
           // for legacy tasks, and the legacy counter is then still correct.
           mission: capabilityRun
