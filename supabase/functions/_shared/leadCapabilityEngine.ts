@@ -4465,6 +4465,15 @@ export async function runCapabilityPlan(
       // `shortlisted` is the derived view of the investigation slice, and
       // `ensureMissionIntelligence` guarantees it has been computed.
       const targets = companies.filter((c) => c.shortlisted);
+      // ── WHAT THIS SLICE INHERITED, AS OPPOSED TO WHAT IT WILL PRODUCE ────
+      //
+      // Captured before a single call is made, so `resolvedSoFar` below can mean
+      // "resolved BY THIS SLICE" rather than "resolved ever". See the reserve's
+      // comment at the threshold for why the difference decides whether a
+      // continuation can do anything at all.
+      const inheritedIdentityKeys = new Set(
+        targets.filter((c) => c.identity && identityIsActionable(c.identity))
+          .map((c) => c.key));
       let resolved = 0;
       let unresolved = 0;
 
@@ -4665,36 +4674,40 @@ export async function runCapabilityPlan(
       const stopThreshold = () => {
         if (!timeCapacity) return 0;
         return identityStopThreshold({
-          // ── WHAT IS STILL OWED, NOT WHAT WAS EVER DONE ──────────────────
+          // ── THE RESERVE IS FOR THIS SLICE'S OWN WORK ────────────────────
           //
           // `downstreamReserveMs` is right to grow with held work: the stage
-          // must stop while it can still afford to enrich and qualify what it
-          // has resolved. But it was handed EVERY actionable identity, and on a
-          // continuation most of those were resolved, enriched and qualified in
-          // an earlier generation. Their downstream work is done and will not
-          // be repeated, so reserving for it charges this slice for the past.
+          // must stop while it can still afford to enrich and qualify what IT
+          // resolved. The question was always which work that is.
           //
-          // It ratchets: the further a lineage gets, the less it can ever do.
-          // Lineage 862e81be, generation 11 — 7 identities restored, all 7 long
-          // enriched, 3 already qualified:
+          // It was handed every actionable identity, which on a continuation
+          // means the whole accumulated backlog — companies a previous
+          // generation resolved and this one was never going to finish. That
+          // assumes the entire backlog must clear inside one slice, and for a
+          // pool larger than a slice it never can, so the reserve ratchets up
+          // with cumulative progress until it exceeds any window:
           //
-          //   reserve   1x12,000 + 7x12,000 + 18,000 = 114,000 ms
-          //   threshold                                126,000 ms
-          //   usable                                   105,597 ms
+          //   gen 12   backlog 7   threshold 126,000 ms   usable 105,597 ms
+          //   gen 16   backlog 6   threshold 114,000 ms   usable 105,000 ms
           //
-          // so `runBounded` stopped before its first call: `targets: 21,
-          // attempted: 0, unattempted: 21`, with 105 seconds on the clock and a
-          // credit spent re-qualifying the same three companies. The run was
-          // capped at 3 of 5 leads by arithmetic about work already finished.
+          // Both stopped before their first call — `targets: 21, attempted: 0`
+          // — while fourteen companies had never had a paid lookup, and each
+          // spent a credit re-qualifying companies it already held. The further
+          // lineage 862e81be got, the less it could do.
           //
-          // Counting only resolved companies that still owe enrichment or
-          // qualification gives 4, a 78,000 ms threshold, and a slice that
-          // proceeds. Conservative on purpose: a company owing only
-          // qualification is still charged an enrichment slot, because the
-          // reserve's job is to be affordable, not exact.
+          // A resolved-but-unenriched company is NOT stranded: the checkpoint
+          // carries it and the next generation picks it up. That is what a
+          // checkpoint is for, and the downstream stages have their own
+          // deadline gates. So the backlog is explicitly the next slice's
+          // problem, and this reserve covers only what this slice creates.
+          //
+          // IDENTICAL ON A FRESH RUN, where everything resolved IS new — so the
+          // self-limiting property that run ea2d02f2 was missing is untouched:
+          // ten fresh identities still reserve 162,000 ms and still stop the
+          // stage. The two contracts differ only on a continuation.
           resolvedSoFar: targets.filter((c) =>
             c.identity && identityIsActionable(c.identity) &&
-            (c.enriched === null || c.brain === null)).length,
+            !inheritedIdentityKeys.has(c.key)).length,
           capacity: timeCapacity,
           checkpointReserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
           perCallEstimateMs: deps.deadline?.estimateFor(IDENTITY_SEARCH_OP) ?? 0,
