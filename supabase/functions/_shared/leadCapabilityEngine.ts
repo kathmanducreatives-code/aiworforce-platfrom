@@ -4657,8 +4657,36 @@ export async function runCapabilityPlan(
       const stopThreshold = () => {
         if (!timeCapacity) return 0;
         return identityStopThreshold({
-          resolvedSoFar: targets.filter(
-            (c) => c.identity && identityIsActionable(c.identity)).length,
+          // ── WHAT IS STILL OWED, NOT WHAT WAS EVER DONE ──────────────────
+          //
+          // `downstreamReserveMs` is right to grow with held work: the stage
+          // must stop while it can still afford to enrich and qualify what it
+          // has resolved. But it was handed EVERY actionable identity, and on a
+          // continuation most of those were resolved, enriched and qualified in
+          // an earlier generation. Their downstream work is done and will not
+          // be repeated, so reserving for it charges this slice for the past.
+          //
+          // It ratchets: the further a lineage gets, the less it can ever do.
+          // Lineage 862e81be, generation 11 — 7 identities restored, all 7 long
+          // enriched, 3 already qualified:
+          //
+          //   reserve   1x12,000 + 7x12,000 + 18,000 = 114,000 ms
+          //   threshold                                126,000 ms
+          //   usable                                   105,597 ms
+          //
+          // so `runBounded` stopped before its first call: `targets: 21,
+          // attempted: 0, unattempted: 21`, with 105 seconds on the clock and a
+          // credit spent re-qualifying the same three companies. The run was
+          // capped at 3 of 5 leads by arithmetic about work already finished.
+          //
+          // Counting only resolved companies that still owe enrichment or
+          // qualification gives 4, a 78,000 ms threshold, and a slice that
+          // proceeds. Conservative on purpose: a company owing only
+          // qualification is still charged an enrichment slot, because the
+          // reserve's job is to be affordable, not exact.
+          resolvedSoFar: targets.filter((c) =>
+            c.identity && identityIsActionable(c.identity) &&
+            (c.enriched === null || c.brain === null)).length,
           capacity: timeCapacity,
           checkpointReserveMs: deps.checkpointReserveMs ?? CHECKPOINT_RESERVE_MS,
           perCallEstimateMs: deps.deadline?.estimateFor(IDENTITY_SEARCH_OP) ?? 0,
