@@ -426,6 +426,59 @@ export function newCompanyRecord(
  * earlier. A company whose identity is `unresolved` or `mismatch` is FINISHED —
  * retrying it is what the caps exist to prevent.
  */
+/**
+ * Which resume STAGE a capability is responsible for.
+ *
+ * `nextStageFor` answers "what does this company still owe"; this answers "which
+ * capability owes it". Only the per-company stages appear: discovery fills the
+ * working set and has no per-company frontier, so it is deliberately absent and
+ * a completed discovery stays skipped — re-running it re-pays for the Actor.
+ */
+export const CAPABILITY_STAGE: Readonly<Record<string, ResumeStageName>> =
+  Object.freeze({
+    company_identity_resolution: "identity",
+    company_enrichment: "enrichment",
+    hiring_verification: "hiring",
+    company_brain_qualification: "brain",
+    founder_discovery: "founder",
+  });
+
+export type ResumeStageName =
+  "identity" | "enrichment" | "hiring" | "brain" | "founder";
+
+/**
+ * Does any company still owe this capability?
+ *
+ * ── WHY A COMPLETED CAPABILITY IS NOT A FINISHED ONE ──────────────────────
+ *
+ * `completed_capabilities` records that a stage RAN and reached its own end. It
+ * does not record that every company reached a terminal state, and those are
+ * different facts — which is the same conflation `not_verified` carried before
+ * Phase 3 split it.
+ *
+ * Lineage 862e81be, generation 21: every capability reported
+ * `skipped_resumed / "completed in an earlier run"`, `evidence_satisfied: true`,
+ * `pending: []` — while ELEVEN of twenty-one resolved companies sat at
+ * `hiring: evidence_unavailable`, the state Phase 3 created precisely so they
+ * would be asked again. `nextStageFor` routed every one of them to "hiring" and
+ * the stage was skipped before it could look, so the run declared itself
+ * finished at 4 of 5 leads with its only remaining candidates unexamined.
+ *
+ * SAFE AGAINST RE-BUYING, and that is not an assumption: `shouldSkipProviderCall`
+ * is per company and per operation key, keyed on `completed_operations`, so a
+ * search already paid for is refused at the call. The stage-level skip is a
+ * second, coarser guard layered on top of one that already works — and being
+ * coarser is exactly how it strands companies the finer guard would have let
+ * through.
+ */
+export function capabilityStillOwed(
+  capability: string, records: readonly CompanyResumeRecord[],
+): boolean {
+  const stage = CAPABILITY_STAGE[capability];
+  if (!stage) return false;
+  return records.some((r) => nextStageFor(r) === stage);
+}
+
 export function nextStageFor(r: CompanyResumeRecord):
   "identity" | "enrichment" | "hiring" | "brain" | "founder" | null {
   // DEFERRED AND PROVIDER_ERROR RESUME HERE, exactly like `not_started`. The

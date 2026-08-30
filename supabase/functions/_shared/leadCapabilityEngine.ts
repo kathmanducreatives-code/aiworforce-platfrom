@@ -141,6 +141,7 @@ import {
   providerOperationKey,
   shouldCheckpoint, shouldSkipProviderCall, shouldStartWork,
   type CompanyResumeRecord,
+  capabilityStillOwed, CAPABILITY_STAGE, nextStageFor,
 } from "./leadResumeState.ts";
 import {
   buildMissionTriageInput, parseMissionTriageStrict, summariseTriage, TRIAGE_BATCH_SIZE,
@@ -3334,8 +3335,38 @@ export async function runCapabilityPlan(
     const step = opts.plan.steps[stepIndex];
     const cap = step.capability;
 
+    // ── A COMPLETED CAPABILITY IS NOT NECESSARILY A FINISHED ONE ─────────
+    //
+    // `completed_capabilities` records that a stage RAN and reached its own end.
+    // It does not record that every company reached a terminal state. Lineage
+    // 862e81be, generation 21: every capability reported
+    // `skipped_resumed / "completed in an earlier run"` with `pending: []`,
+    // while ELEVEN of twenty-one resolved companies sat at
+    // `hiring: evidence_unavailable` — the state Phase 3 created so they would
+    // be asked again. `nextStageFor` routed all eleven to "hiring" and the stage
+    // was skipped before it could look, so the run declared itself finished at
+    // 4 of 5 leads with its only remaining candidates unexamined.
+    //
+    // Re-entering cannot re-buy: `shouldSkipProviderCall` is per company and per
+    // operation key, so a search already paid for is refused at the call. This
+    // stage-level skip was a coarser guard on top of a finer one that already
+    // works, and being coarser is exactly how it stranded them.
+    //
+    // Discovery is deliberately not in `CAPABILITY_STAGE`, so it stays skipped:
+    // it has no per-company frontier and re-running it re-pays for the Actor.
+    const owedByCompanies = state.completed_capabilities.includes(cap) &&
+      capabilityStillOwed(cap, companies.map(toResumeRecord));
+    if (owedByCompanies) {
+      log("capability_reopened_for_outstanding_companies", {
+        capability: cap,
+        outstanding: companies.map(toResumeRecord)
+          .filter((r) => nextStageFor(r) === CAPABILITY_STAGE[cap]).length,
+        note: "completed_capabilities said done; the working set disagrees",
+      });
+    }
+
     // RESUME. A capability already completed is not re-paid for.
-    if (state.completed_capabilities.includes(cap)) {
+    if (state.completed_capabilities.includes(cap) && !owedByCompanies) {
       outcomes.push({
         capability: cap, status: "skipped_resumed", rows: 0, providers_used: [],
         evidence_satisfied: true, reason: "completed in an earlier run",
