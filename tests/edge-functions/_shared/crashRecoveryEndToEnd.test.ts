@@ -332,7 +332,11 @@ Deno.test("10. run-agent honours the deferral", async () => {
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
   assert(SRC.includes('autoDecision.dispatch_mode === "deferred"'));
-  assert(SRC.includes("if (autoDecision.continue && !deferToSweeper) {"),
+  // ASSERTS THE INTENT, NOT THE WHOLE CONDITION. The guard gained a second term
+  // (`!singleGeneration`, the acceptance-run flag that defaults off); pinning the
+  // literal made this fail on a change that cannot affect what it protects.
+  // What must hold is that `deferToSweeper` still gates the dispatch.
+  assert(/if \(autoDecision\.continue && !deferToSweeper(?: && !\w+)*\) \{/.test(SRC),
     "a deferred decision must not self-dispatch");
 });
 

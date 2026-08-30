@@ -81,6 +81,7 @@ import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.t
 import {
   mergeCompanyResumeRecords, mergeLineageState,
 } from "../_shared/lineageStateMerge.ts";
+import { resolveIndustryExclusions } from "../_shared/industryPrecedence.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
@@ -1791,6 +1792,40 @@ Deno.serve(async (req) => {
         // `brain`/`brainRow` are loaded at the top of the handler, so nothing in
         // this block depends on the code it moved above.
         const brainIcpCtx = compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> });
+
+        // ── EXPLICIT INTENT OUTRANKS A GENERIC DEFAULT ─────────────────────
+        //
+        // On 2026-08-30 this workspace both TARGETED and EXCLUDED staffing: its
+        // ICP lists "Recruiting / Talent Acquisition / Staffing Agencies" AND
+        // "B2B SaaS", and the SaaS half folded SOFTWARE_ICP_DISQUALIFIERS —
+        // "staffing", "recruiting agency" — into the exclusion list
+        // unconditionally. Storm4, Talentoma and Storm3 were rejected
+        // `excluded_industry` before the Company Brain ran.
+        //
+        // Resolved ONCE, here, at the single point every downstream consumer
+        // reads from, so no caller can see a different exclusion list than
+        // another. Explicit workspace exclusions pass through untouched.
+        const industryExclusions = resolveIndustryExclusions({
+          // VERTICALS ONLY, never the raw query — "recruiting" is also how a
+          // request names the signal it wants, and "SaaS companies recruiting
+          // engineers" must not disable a workspace's industry constraints.
+          mission_verticals:
+            readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission)
+              ?.company_profile?.verticals ?? [],
+          workspace_target_industries: brainIcpCtx.icp.industries,
+          workspace_explicit_exclusions: brainIcpCtx.disqualifiers.industries_explicit,
+          generic_exclusions: brainIcpCtx.disqualifiers.industries_generic,
+        });
+        if (industryExclusions.suppressed.length > 0) {
+          // Suspending an exclusion is a decision an operator must be able to
+          // see, for the same reason `aggregator_gate_suspended_for_mission` is
+          // logged: a run that returns staffing firms should read as intent.
+          console.log("[run-agent][industry-precedence] generic exclusions suppressed", {
+            task_id: task.id,
+            suppressed: industryExclusions.suppressed,
+            explicit_kept: industryExclusions.explicit_kept,
+          });
+        }
         const effectivePolicy = await compileEffectiveCompanyPolicy({
           industries: brainIcpCtx.icp.industries,
           categories: brainIcpCtx.icp.categories,
@@ -1799,7 +1834,7 @@ Deno.serve(async (req) => {
           company_size_max: brainIcpCtx.icp.company_size_max ?? null,
           maturity_stage: brainIcpCtx.icp.maturity_stage,
           target_customer_segments: brainIcpCtx.icp.target_customer_segments,
-          disqualifier_industries: brainIcpCtx.disqualifiers?.industries ?? [],
+          disqualifier_industries: industryExclusions.exclusions,
           disqualifier_company_types: brainIcpCtx.disqualifiers?.company_types ?? [],
           disqualifier_keywords: brainIcpCtx.disqualifiers?.keywords ?? [],
           brainVersion: (brainRow as { updated_at?: string } | null)?.updated_at ?? null,
@@ -4994,6 +5029,54 @@ Deno.serve(async (req) => {
           // companies were finished and the evidence they were bought with was
           // stranded. The CAS did not stop it and could not: that generation's
           // version was current. Order is not monotonicity.
+          // ══ THE OUTCOME IS COMPUTED BEFORE THE LEASE IS RELEASED ═══════
+          //
+          // It used to be written to the task AFTER this block, and the release
+          // copied `committedResult[RUN_OUTCOME_RESULT_KEY]` — which was still
+          // absent. Production proved it: task `752d68e9` carried a correct
+          // `run_outcome` while `lead_lineages.current_state.run_outcome` was
+          // null on every generation. The lineage, which is the authority a
+          // continuation reads, never had the record at all.
+          //
+          // Computed once here, written to the row, and handed to the release by
+          // value — so the two copies cannot differ by construction.
+          const { data: lineageTaskRows } = await supabase.from("tasks")
+            .select("id").eq("lineage_id", lineageRootId);
+          const lineageTaskIds = Array.isArray(lineageTaskRows) && lineageTaskRows.length > 0
+            ? (lineageTaskRows as Array<{ id: string }>).map((r) => r.id)
+            : [task.id];
+          const lineageSpend = await readSpendFacts(
+            supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds);
+          const runOutcome = buildRunOutcome({
+            ...readFactsFromResult(committedResult, cf.quota.requested_leads),
+            spend: lineageSpend,
+          });
+          {
+            const { error: outcomeErr } = await supabase.from("tasks")
+              .update({ result: { ...committedResult, [RUN_OUTCOME_RESULT_KEY]: runOutcome } })
+              .eq("id", task.id);
+            if (outcomeErr) {
+              // BEST EFFORT, AND SAID SO. The outcome describes a run that has
+              // already happened; failing the run because its description could
+              // not be filed would be the tail wagging the dog.
+              console.error("[run-agent][run-outcome] persist failed", {
+                task_id: task.id, detail: outcomeErr.message,
+              });
+            } else {
+              console.log("[run-agent][run-outcome]", {
+                task_id: task.id, lineage_id: lineageRootId, state: runOutcome.state,
+                leads: runOutcome.persistence.leads_written,
+                credits: runOutcome.spend.credits_charged,
+                reused: runOutcome.spend.reused_operations,
+                unsettled: runOutcome.spend.unsettled_operations,
+                eligible: runOutcome.qualification.eligible,
+                evaluated: runOutcome.qualification.evaluated,
+                not_reached: runOutcome.qualification.not_reached,
+                cited_rows: runOutcome.funnel.cited_rows,
+              });
+            }
+          }
+
           const merged = mergeLineageState(leaseState, {
             version: LINEAGE_LEASE_VERSION,
             written_by_task: task.id,
@@ -5005,7 +5088,9 @@ Deno.serve(async (req) => {
             // THE LINEAGE CARRIES THE LATEST OUTCOME TOO. A continuation asked
             // "how did this request go so far" must not have to find and read
             // the right generation's task row to answer.
-            [RUN_OUTCOME_RESULT_KEY]: committedResult[RUN_OUTCOME_RESULT_KEY] ?? null,
+            // BY VALUE. Re-reading `committedResult` here is exactly the bug:
+            // that snapshot predates the write above.
+            [RUN_OUTCOME_RESULT_KEY]: runOutcome,
           });
           if (merged.merge.refused.length > 0) {
             // A REFUSED REGRESSION IS THE INTERESTING EVENT IN THIS FUNCTION.
@@ -5067,6 +5152,35 @@ Deno.serve(async (req) => {
         // The checkpoint is already durable and the lease already released at
         // this point, so `resume-stalled-leads` will claim it on its next tick.
         // That cadence IS the backoff; no timer, no new executor.
+        // ── SINGLE-GENERATION MODE, FOR CONTROLLED ACCEPTANCE RUNS ────────
+        //
+        // The 2026-08-30 acceptance run was asked to execute EXACTLY ONE
+        // generation. One deliberate trigger produced generation 8, which
+        // self-dispatched generation 9 unattended — correct product behaviour,
+        // and no way to observe a single slice in isolation.
+        //
+        // DEFAULTS TO CURRENT PRODUCTION BEHAVIOUR in every respect: absent, the
+        // flag is false and nothing below changes. Honoured ONLY for a verified
+        // service-role caller, so a browser cannot switch off the mechanism that
+        // makes a request finish itself — `bearerIsServiceRole` is derived from
+        // the bearer, never from the body.
+        const singleGenerationRequested =
+          (body as Record<string, unknown>).single_generation === true;
+        const singleGeneration = singleGenerationRequested && bearerIsServiceRole;
+        if (singleGenerationRequested && !bearerIsServiceRole) {
+          console.warn("[run-agent][auto-continuation] single_generation ignored", {
+            task_id: task.id, reason: "not a service-role caller",
+          });
+        }
+        if (singleGeneration) {
+          console.log("[run-agent][auto-continuation] single_generation", {
+            task_id: task.id,
+            would_have_continued: autoDecision.continue,
+            reason: autoDecision.reason,
+            note: "checkpoint is durable; the sweeper may still adopt this task",
+          });
+        }
+
         const deferToSweeper = autoDecision.continue &&
           autoDecision.dispatch_mode === "deferred";
         if (deferToSweeper) {
@@ -5075,7 +5189,7 @@ Deno.serve(async (req) => {
             detail: autoDecision.detail,
           });
         }
-        if (autoDecision.continue && !deferToSweeper) {
+        if (autoDecision.continue && !deferToSweeper && !singleGeneration) {
           dispatchOutcome = await dispatchContinuation({
             resumeTaskId: task.id,
             workspaceId: workspace_id,
@@ -5325,49 +5439,10 @@ Deno.serve(async (req) => {
           // Before the lease has linked a row, a task is its own lineage.
           : [task.id];
 
-        // ══ THE ONE AUTHORITATIVE OUTCOME, COMPUTED ONCE AND PERSISTED ═════
-        //
-        // Every surface that describes this run reads THIS record: the Pilot,
-        // the Workbench, the completion message and the checkpoint card. They
-        // used to derive four separate answers from whatever each happened to
-        // hold — `tasks.status`, company rows, `produced`, and in the card's
-        // case nothing at all — which is how one run was described three
-        // different ways in ninety seconds and all three were wrong.
-        //
-        // Written to the row so the run can be judged from persisted facts
-        // alone, with no log line and no join.
-        const lineageSpend = await readSpendFacts(
-          supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds);
-        const runOutcome = buildRunOutcome({
-          ...readFactsFromResult(panelResult, cf.quota.requested_leads),
-          spend: lineageSpend,
-        });
-        {
-          const { error: outcomeErr } = await supabase.from("tasks")
-            .update({ result: { ...panelResult, [RUN_OUTCOME_RESULT_KEY]: runOutcome } })
-            .eq("id", task.id);
-          if (outcomeErr) {
-            // BEST EFFORT, AND SAID SO. The outcome describes a run that has
-            // already happened; failing the run because its description could
-            // not be filed would be the tail wagging the dog. Downstream
-            // surfaces fall back to recomputing, visibly.
-            console.error("[run-agent][run-outcome] persist failed", {
-              task_id: task.id, detail: outcomeErr.message,
-            });
-          } else {
-            console.log("[run-agent][run-outcome]", {
-              task_id: task.id, lineage_id: lineageRootId, state: runOutcome.state,
-              leads: runOutcome.persistence.leads_written,
-              credits: runOutcome.spend.credits_charged,
-              reused: runOutcome.spend.reused_operations,
-              unsettled: runOutcome.spend.unsettled_operations,
-              eligible: runOutcome.qualification.eligible,
-              evaluated: runOutcome.qualification.evaluated,
-              not_reached: runOutcome.qualification.not_reached,
-              cited_rows: runOutcome.funnel.cited_rows,
-            });
-          }
-        }
+        // THE OUTCOME WAS ALREADY COMPUTED AND PERSISTED, before the lease was
+        // released, so the panel reads the same record the lineage holds rather
+        // than deriving a second answer. `panelResult` is re-read from the row
+        // below, so it carries it.
 
         await persistLeadResultsPanel(supabase, plan_id, uiPanel, {
           eligible: cf.quota.eligible_leads,
@@ -5379,9 +5454,14 @@ Deno.serve(async (req) => {
           // panel's sentences are derived from what is stored rather than from
           // the counters this call site happens to be holding.
           taskResult: panelResult,
-          // THE SAME facts the persisted outcome was built from — read once
-          // above, so the panel and the durable record cannot disagree.
-          spend: lineageSpend,
+          // READ FROM THE RECORD THE RUN ALREADY WROTE, not re-derived. Two
+          // reads of the ledger a second apart are two answers; the persisted
+          // outcome is the one the lineage holds, so the panel quotes it.
+          // Falls back to a direct read only for rows written before the
+          // contract existed.
+          spend: readPersistedRunOutcome(panelResult)?.spend ??
+            await readSpendFacts(
+              supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds),
           // Present only when the capability engine ran. `capabilityRun` is null
           // for legacy tasks, and the legacy counter is then still correct.
           mission: capabilityRun

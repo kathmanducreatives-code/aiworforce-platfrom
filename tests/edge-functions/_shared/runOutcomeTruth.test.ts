@@ -63,7 +63,9 @@ Deno.test("a company that WAS evaluated and rejected is reported as rejected", (
   }));
   const said = renderQualificationClause(o);
   assert(said.includes("3 companies were evaluated"), said);
-  assert(said.includes("not match"), said);
+  // Intent, not spelling: the sentence must report a real verdict. The wording
+  // moved from "none not match" (a double negative) to "none matched".
+  assert(/matched/.test(said), said);
 });
 
 Deno.test("and a pass is reported as a pass", () => {

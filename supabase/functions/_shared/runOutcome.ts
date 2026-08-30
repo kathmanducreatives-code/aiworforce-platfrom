@@ -234,8 +234,14 @@ export function renderQualificationClause(o: RunOutcomeV1): string {
         q.eligible === 1 ? "it was" : "they were"} evaluated${why}.`;
   }
   if (q.qualified === 0) {
-    return `${q.evaluated} ${q.evaluated === 1 ? "company was" : "companies were"} ` +
-      `evaluated and ${q.evaluated === 1 ? "did" : "none"} not match this workspace's profile.`;
+    // GRAMMAR ONLY. The plural branch read "3 companies were evaluated and none
+    // not match this workspace's profile" — the negation was applied twice, once
+    // by "none" and once by "not". Semantics are unchanged: this sentence still
+    // fires only when companies WERE evaluated and none qualified, which is a
+    // real verdict and must stay distinguishable from "nobody was evaluated".
+    return q.evaluated === 1
+      ? "1 company was evaluated and did not match this workspace's profile."
+      : `${q.evaluated} companies were evaluated and none matched this workspace's profile.`;
   }
   return `${q.evaluated} evaluated, ${q.qualified} qualified.`;
 }

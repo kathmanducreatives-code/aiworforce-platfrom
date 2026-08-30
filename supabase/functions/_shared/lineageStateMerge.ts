@@ -137,6 +137,27 @@ function mergeOne(
     let keepStored = false;
     let why: MergeDecision["why"] | null = null;
 
+    // 0. A DELIBERATELY INVALIDATED VERDICT IS NOT A SETTLED ONE.
+    //
+    // The merge cannot otherwise tell "this generation has not got there yet"
+    // from "somebody established that this verdict was wrong". On 2026-08-30
+    // that difference routed zero companies to the Company Brain: `862e81be`
+    // held `brain: not_started` after the three stale rejections were cleared,
+    // task `66ef37b7` still said `brain: rejected`, and clause 1 restored the
+    // rejection from the older row.
+    //
+    // Only clause 1 is affected. `hiring` cannot appear here at all — see
+    // `INVALIDATABLE_STAGES` — so cited evidence keeps the absolute protection
+    // clause 2 gives it.
+    const invalidatedAt = incoming.invalidated_stages?.[stage];
+    const storedIsKnownInvalid = !!invalidatedAt &&
+      Date.parse(stored.updated_at) <= Date.parse(invalidatedAt);
+    if (storedIsKnownInvalid) {
+      // Incoming wins for this stage. Say nothing to `refused` — nothing was
+      // refused; a stale verdict was correctly not resurrected.
+      continue;
+    }
+
     // 1. SETTLED BEATS UNSETTLED.
     if (!storedOwes && incomingOwes) {
       keepStored = true;
@@ -172,6 +193,15 @@ function mergeOne(
   out.completed_operations = [...new Set([
     ...(stored.completed_operations ?? []), ...(incoming.completed_operations ?? []),
   ])];
+
+  // THE INVALIDATION TRAVELS WITH THE RECORD, or the next generation resurrects
+  // the same stale verdict from the same old row. Union of both sides, newest
+  // timestamp per stage.
+  const inv: Record<string, string> = { ...(stored.invalidated_stages ?? {}) };
+  for (const [k, v] of Object.entries(incoming.invalidated_stages ?? {})) {
+    if (!inv[k] || Date.parse(v) > Date.parse(inv[k])) inv[k] = v;
+  }
+  out.invalidated_stages = Object.keys(inv).length > 0 ? inv : null;
 
   // A resolved URL is a fact; losing it costs a paid lookup.
   out.linkedin_company_url = incoming.linkedin_company_url ?? stored.linkedin_company_url ?? null;

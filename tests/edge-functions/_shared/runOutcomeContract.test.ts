@@ -83,8 +83,11 @@ Deno.test("3. EVALUATED ZERO IS NOT QUALIFIED ZERO", () => {
   }));
   assertEquals(neverJudged.qualification.qualified, judgedAndFailed.qualification.qualified);
   assert(renderQualificationClause(neverJudged) !== renderQualificationClause(judgedAndFailed));
-  assert(renderQualificationClause(judgedAndFailed).includes("not match"));
-  assert(!/not match/.test(renderQualificationClause(neverJudged)));
+  // Asserts the INTENT, not one spelling: the judged case reports a verdict
+  // ("none matched"), the unjudged case reports that nobody was judged.
+  assert(/matched/.test(renderQualificationClause(judgedAndFailed)));
+  assert(!/matched/.test(renderQualificationClause(neverJudged)));
+  assert(/stopped before/.test(renderQualificationClause(neverJudged)));
   // `not_reached` is CARRIED, not left to subtraction — a reader that must
   // compute it will not, and will say "none qualified" instead.
   assertEquals(neverJudged.qualification.not_reached, 3);
@@ -148,6 +151,34 @@ Deno.test("unsettled work is spend the user has already paid for", () => {
   }));
   assert(renderSpendClause(o).includes("2 results are still being collected"));
   assertEquals(o.spend.usd_reported, null, "unknown cost is null, never zero");
+});
+
+Deno.test("THE REJECTION SENTENCE IS GRAMMATICAL, and still means the same thing", () => {
+  // Production, generation 8: "3 companies were evaluated and none not match
+  // this workspace's profile." The negation was applied twice.
+  const many = buildRunOutcome(facts({
+    qualification: { eligible: 3, evaluated: 3, qualified: 0, rejected: 3,
+                     not_reached: 0, not_reached_reason: null },
+  }));
+  const said = renderQualificationClause(many);
+  assertEquals(said, "3 companies were evaluated and none matched this workspace's profile.");
+  assert(!/none not match/.test(said), said);
+
+  const one = buildRunOutcome(facts({
+    qualification: { eligible: 1, evaluated: 1, qualified: 0, rejected: 1,
+                     not_reached: 0, not_reached_reason: null },
+  }));
+  assertEquals(renderQualificationClause(one),
+    "1 company was evaluated and did not match this workspace's profile.");
+
+  // SEMANTICS UNCHANGED: this sentence still fires only when companies WERE
+  // evaluated, and stays distinct from the never-evaluated one.
+  const none = buildRunOutcome(facts({
+    qualification: { eligible: 3, evaluated: 0, qualified: 0, rejected: 0,
+                     not_reached: 3, not_reached_reason: "execution_deadline_checkpoint" },
+  }));
+  assert(renderQualificationClause(none).includes("stopped before"));
+  assert(!/matched/.test(renderQualificationClause(none)));
 });
 
 // ══ THE DURABLE RECORD ════════════════════════════════════════════════════
@@ -317,6 +348,11 @@ Deno.test("THE PILOT READS THE RECORD, not `tasks.status`", () => {
 });
 
 Deno.test("THE LINEAGE CARRIES THE LATEST OUTCOME", () => {
-  assert(new RegExp(`\\[RUN_OUTCOME_RESULT_KEY\\]: committedResult\\[RUN_OUTCOME_RESULT_KEY\\]`)
-    .test(RUN_AGENT), "the released lineage state must carry it");
+  // This used to pin `committedResult[RUN_OUTCOME_RESULT_KEY]` — which is the
+  // bug production found: that row snapshot predates the outcome write, so the
+  // lineage copy was null on every generation. The fix hands it over by value.
+  assert(new RegExp(`\\[RUN_OUTCOME_RESULT_KEY\\]: runOutcome,`).test(RUN_AGENT),
+    "the released lineage state must carry the computed outcome by value");
+  assert(!new RegExp(`\\[RUN_OUTCOME_RESULT_KEY\\]: committedResult\\[`).test(RUN_AGENT),
+    "and must not re-read the pre-write snapshot");
 });

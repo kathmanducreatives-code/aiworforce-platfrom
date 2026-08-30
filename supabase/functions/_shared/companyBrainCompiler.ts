@@ -63,7 +63,12 @@ export interface CompanyBrainContext {
   };
 
   disqualifiers: {
+    /** The merged list. Unchanged, so existing consumers are unaffected. */
     industries: string[];
+    /** Stated by the workspace. Never suppressed by a mission. */
+    industries_explicit: string[];
+    /** Folded in by inference (SaaS context / high-risk defaults). Suppressible. */
+    industries_generic: string[];
     company_types: string[];
     titles: string[];
     keywords: string[];
@@ -370,6 +375,19 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
     },
     disqualifiers: {
       industries: disqIndustries,
+      // ── THE SPLIT THE PRECEDENCE CONTRACT NEEDS ────────────────────────
+      //
+      // `industries` above is the merged list and stays exactly as it was, so
+      // every existing consumer is unaffected. These two say WHERE each term
+      // came from, which is the distinction `resolveIndustryExclusions` turns
+      // on: a workspace that states an exclusion means it, and a default folded
+      // in because the ICP mentions SaaS is an inference that an explicit
+      // target must be able to overrule.
+      industries_explicit: brainDisqualifiers,
+      industries_generic: uniq([
+        ...(usedDefaultDisq ? DEFAULT_DISQUALIFIERS : []),
+        ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS : []),
+      ]),
       company_types: uniq([...v2.target_customer.disqualifiers.company_types, ...arr(icpRaw["disqualified_company_types"])]),
       titles: uniq([...v2.target_customer.disqualifiers.titles, ...negativeTitleKeywords]),
       keywords: uniq([...v2.target_customer.disqualifiers.keywords, ...arr(prefs["negative_keywords"])]),

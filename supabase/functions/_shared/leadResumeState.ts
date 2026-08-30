@@ -354,6 +354,29 @@ export interface CompanyResumeRecord {
   /** Completed provider operations, by stable key. */
   completed_operations: string[];
   /**
+   * STAGES WHOSE PRIOR VERDICT IS KNOWN TO BE INVALID, and when that was decided.
+   *
+   * ── WHY A SETTLED STAGE NEEDED A WAY TO BE UN-SETTLED ──────────────────
+   *
+   * The monotonic merge refuses to move a stage from settled back to unsettled,
+   * which is what stops a stale generation destroying a finished verdict. It
+   * cannot, on its own, tell that apart from a verdict somebody deliberately
+   * invalidated — and on 2026-08-30 that difference mattered: `862e81be`'s three
+   * companies were reset to `brain: not_started` because the gate that rejected
+   * them was itself defective, and resuming from task `66ef37b7` — whose row
+   * still said `brain: rejected` — restored the rejection and routed ZERO
+   * companies to the Brain.
+   *
+   * An ISO timestamp per stage. A stored value is treated as known-invalid when
+   * it was last written BEFORE the invalidation. Absent, everything behaves
+   * exactly as it did.
+   *
+   * It can only ever un-settle clause 1 of the merge (settled beats unsettled).
+   * Cited hiring evidence is governed by clause 2 and is NOT overridable here —
+   * evidence monotonicity is not weakened by this field.
+   */
+  invalidated_stages?: Record<string, string> | null;
+  /**
    * Enough of the company to rebuild the working set on a continuation.
    *
    * Absent on checkpoints written before this field existed, and absent is
@@ -660,6 +683,29 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
  * company it does not describe. Everything else falls back to the "not started"
  * value, which can only ever cause work to be REDONE, never wrongly skipped.
  */
+/** Stage names a deliberate invalidation may name. */
+export const INVALIDATABLE_STAGES: readonly string[] =
+  ["identity", "enrichment", "brain", "founder"];
+
+/**
+ * Parse `invalidated_stages`.
+ *
+ * `hiring` is DELIBERATELY ABSENT from `INVALIDATABLE_STAGES`. Hiring evidence is
+ * the one thing this repo has repeatedly lost, and a field that could un-settle
+ * it would be a way to destroy a paid citation through a checkpoint edit.
+ */
+function readInvalidatedStages(raw: unknown): Record<string, string> | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const out: Record<string, string> = {};
+  for (const [stage, at] of Object.entries(r)) {
+    if (!INVALIDATABLE_STAGES.includes(stage)) continue;
+    if (typeof at !== "string" || Number.isNaN(Date.parse(at))) continue;
+    out[stage] = at;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecord[] {
   const result = asRecord(taskResult);
   const checkpoint = asRecord(result?.[CHECKPOINT_RESULT_KEY]);
@@ -694,6 +740,9 @@ export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecor
         ? c.completed_operations.filter((o): o is string => typeof o === "string" && !!o)
         : [],
       updated_at: typeof c.updated_at === "string" ? c.updated_at : base.updated_at,
+      // Validated, like everything else that crosses this boundary: only known
+      // stage names, only ISO-shaped values.
+      invalidated_stages: readInvalidatedStages(c.invalidated_stages),
       // WITHOUT THIS LINE THE LEDGER IS UNREACHABLE. See
       // `readWorkingSetSnapshot` — it was written on every checkpoint and read
       // on none, which is what made every continuation restore zero companies.
