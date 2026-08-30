@@ -202,12 +202,28 @@ Deno.test("D2. the classifier is not a competing final authority", async () => {
   assertFalse(src.includes("semantic_classification_fail"),
     "and it must not be able to reject one either");
 
-  // Exactly one place still advances a company to `qualified_company`, and it
-  // is the evaluator's branch.
-  const advances = src.match(/advance\(c\.record, "qualified_company", "([^"]+)"\)/g) ?? [];
-  assertEquals(advances.length, 1, "one qualification authority, one call site");
-  assert(advances[0].includes("mission_evaluation_pass"),
-    "and it is the Mission evaluator that qualifies");
+  // ONE AUTHORITY, AND ONLY ITS VERDICTS — FRESH OR REPLAYED.
+  //
+  // This asserted a single call site, which was the right invariant expressed
+  // through a count. A second site now exists: `restored_qualification` replays
+  // a decision the Mission evaluator made in an EARLIER GENERATION of the same
+  // lineage, because `c.brain` did not survive a resume and every continuation
+  // re-decided companies it had already qualified — holding the identity
+  // stage's reserve so high that lineage 862e81be attempted no identity work at
+  // all across two generations.
+  //
+  // Replaying the evaluator is not a competing authority; deciding without it
+  // would be. So the assertion is now on the REASONS, which name the authority,
+  // rather than on how many places quote it — and the list is exhaustive, so a
+  // third reason fails here exactly as a second one used to.
+  const advances = (src.match(/advance\(c\.record, "qualified_company", "([^"]+)"\)/g) ?? [])
+    .map((m) => m.match(/"qualified_company", "([^"]+)"/)![1]).sort();
+  assertEquals(advances, ["mission_evaluation_pass", "restored_qualification"],
+    "only the Mission evaluator qualifies — freshly, or replayed from its own " +
+    "earlier verdict; nothing else may reach `qualified_company`");
+  // And the replay may only fire for a decision that is already held.
+  assert(/if \(c\.brain !== null && restoredBrainKeys\.has\(c\.key\)\)/.test(src),
+    "the replay is gated on an existing decision, never on a fresh judgement");
 });
 
 // ═══════════════════════════════ E. failure is held, never a fabricated pass ══

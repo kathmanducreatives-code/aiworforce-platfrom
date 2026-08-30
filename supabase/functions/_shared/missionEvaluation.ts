@@ -87,6 +87,8 @@ export type EvaluationDecision =
  */
 export type DecisionSource =
   | "gpt_evaluation"
+  /** Carried from an earlier generation of this lineage, not re-decided. */
+  | "restored_decision"
   | "hard_constraint_rejection"
   | "identity_failure"
   | "insufficient_evidence"

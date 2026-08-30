@@ -1237,6 +1237,14 @@ export function reusableStoredPlan(
  */
 export type EvaluationPath =
   | "not_reached"
+  /**
+   * DECIDED BY AN EARLIER GENERATION AND CARRIED, not evaluated again.
+   *
+   * Distinct from `model_evaluated` on purpose: this run made no model call for
+   * this company, and a telemetry that said otherwise would inflate every
+   * continuation's evaluation count with work it did not do.
+   */
+  | "restored_decision"
   | "fabricated_pass"
   | "fabricated_reject"
   | "model_evaluated"
@@ -5440,7 +5448,7 @@ export async function runCapabilityPlan(
 
     // ── COMPANY BRAIN QUALIFICATION ──────────────────────────────────────────
     if (cap === "company_brain_qualification") {
-      let passed = 0, unknown = 0;
+      let passed = 0, unknown = 0, restoredDecisions = 0;
       // Did this plan actually buy enrichment? A plan that never included the
       // step cannot be held to its absence.
       const enrichmentPlanned = opts.plan.steps.some(
@@ -5896,8 +5904,50 @@ export async function runCapabilityPlan(
           throw e;
         }
       };
+      // CAPTURED BEFORE THE LOOP RUNS. Anything already carrying a decision at
+      // this point was decided by an earlier generation or an earlier pass —
+      // `decideCompanyBrain` is called nowhere else — so the set cannot include
+      // a verdict this loop is about to make.
+      const restoredBrainKeys = new Set(
+        eligibleOrdered.filter((c) => c.brain !== null).map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
+
+        // ── A DECISION THIS LINEAGE ALREADY MADE IS NOT REMADE ─────────────
+        //
+        // Restoring `c.brain` is only half the fix: this loop evaluated every
+        // eligible company unconditionally, so a continuation re-decided
+        // companies it had already qualified — a model call each, and worse, the
+        // downstream reserve charged the identity stage for qualifying them
+        // again. Lineage 862e81be held that reserve at seven companies' worth
+        // (114,000 ms) against a 105,597 ms window, so identity attempted
+        // nothing at all across two generations while fourteen companies had
+        // never had a paid lookup.
+        //
+        // ONLY A RESTORED DECISION SKIPS. `c.brain` is null for anything this
+        // slice has not decided, and `decideCompanyBrain` still owns every
+        // fresh verdict. A re-run that would legitimately change its mind — new
+        // hiring evidence, a changed policy — arrives with `c.brain` null
+        // because the checkpoint that carried the old decision is the same one
+        // that carried the old evidence.
+        if (c.brain !== null && restoredBrainKeys.has(c.key)) {
+          c.evaluation_path = "restored_decision";
+          c.decision_source = "restored_decision";
+          if (c.brain.outcome === "QUALIFIED") {
+            c.verdict = "pass";
+            c.record = advance(c.record, "qualified_company", "restored_qualification");
+            passed++;
+          } else if (c.brain.outcome === "REJECT") {
+            c.verdict = "reject";
+            c.record = advance(c.record, "company_fit_reject", c.brain.reason);
+          } else {
+            c.verdict = "unknown";
+            unknown++;
+          }
+          restoredDecisions++;
+          continue;
+        }
+
         const qualificationOp = opFor(c);
         if (deps.deadline && !shouldStartWork({
           elapsedMs: () => deps.deadline!.elapsedMs(),
@@ -6681,6 +6731,11 @@ export async function runCapabilityPlan(
         companies: undefined,
         eligible: eligible.length,
         passed, unknown,
+        // Carried rather than re-decided. Reported because a continuation whose
+        // evaluation count is lower than its qualified count is otherwise
+        // unreadable — and because it is the number that frees the identity
+        // stage's reserve.
+        restored_decisions: restoredDecisions,
       });
       await publish("qualified");
       continue;
@@ -7329,6 +7384,13 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // writer must never be the thing that throws.
       hiring_jobs: (Array.isArray(c.hiring_jobs) ? c.hiring_jobs : [])
         .slice(0, MAX_SNAPSHOT_JOBS) as unknown as Record<string, unknown>[],
+      // ── AND THE BRAIN'S OWN DECISION, THE THIRD IN THIS SERIES ──────────
+      //
+      // `brain: "qualified"` on the record is a LABEL. `c.brain` is the
+      // DECISION, and `decideCompanyBrain` is the only thing that ever set it —
+      // so every continuation started with none and re-decided companies it had
+      // already qualified, paying the identity reserve for all of them.
+      brain: (c.brain ?? null) as unknown as Record<string, unknown> | null,
     },
     updated_at: new Date().toISOString(),
   };
@@ -7405,6 +7467,7 @@ export function restoreWorkingSet(
       EngineCompany["hiring_assessment"];
     c.hiring_jobs = Array.isArray(s.hiring_jobs)
       ? (s.hiring_jobs as unknown as NormalizedHiringJob[]) : [];
+    c.brain = (s.brain ?? null) as unknown as EngineCompany["brain"];
     // A company already carried to a terminal outcome must not re-enter the
     // frontier; `shortlisted` stays the derived view of that.
     c.shortlisted = wasInvestigated(c.investigation_state);
@@ -8126,7 +8189,7 @@ export function summariseEvaluationPaths(
 ): EvaluationPathSummary {
   const counts: Record<EvaluationPath, number> = {
     not_reached: 0, fabricated_pass: 0, fabricated_reject: 0,
-    model_evaluated: 0, model_unavailable: 0,
+    model_evaluated: 0, model_unavailable: 0, restored_decision: 0,
   };
   for (const c of companies) counts[c.evaluation_path]++;
   return {

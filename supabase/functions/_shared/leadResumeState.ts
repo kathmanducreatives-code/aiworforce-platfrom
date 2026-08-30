@@ -329,6 +329,26 @@ export interface CompanyWorkingSetSnapshot {
    * them, and the evaluator quotes them.
    */
   hiring_jobs?: Record<string, unknown>[];
+  /**
+   * WHAT THE COMPANY BRAIN DECIDED, not merely that a stage label says so.
+   *
+   * The third field in this series, and it failed exactly like the first two.
+   * `CompanyResumeRecord.brain` is a STAGE ("qualified"); the engine's
+   * `c.brain` is the DECISION OBJECT, and it is set only by `decideCompanyBrain`
+   * — never restored. So every continuation began with `c.brain === null` for
+   * every company, re-evaluated companies it had already qualified, and paid the
+   * downstream reserve for all of them.
+   *
+   * Lineage 862e81be: generations 11 and 12 each re-evaluated the same three
+   * qualified companies, holding the identity reserve at 7 companies' worth
+   * (114,000 ms) against a 105,597 ms window — so identity resolution attempted
+   * NOTHING, twice, and the run stayed capped at 3 of 5 leads while 14 companies
+   * had never had a paid lookup.
+   *
+   * Optional, like every field here: a checkpoint written before this existed
+   * has none, and the engine behaves exactly as it did.
+   */
+  brain?: Record<string, unknown> | null;
 }
 
 /**
@@ -670,6 +690,9 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     hiring_jobs: (Array.isArray(s.hiring_jobs) ? s.hiring_jobs : [])
       .map(asRecord).filter((j): j is Record<string, unknown> => j !== null)
       .slice(0, MAX_SNAPSHOT_JOBS),
+    // Written, declared, and — until now — never read back. The same omission
+    // that cost `hiring_assessment` a whole incident.
+    brain: asObjectOrNull(s.brain),
   };
 }
 
