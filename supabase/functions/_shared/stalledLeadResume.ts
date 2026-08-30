@@ -98,7 +98,9 @@ export type IneligibleReason =
   | "too_fresh" | "abandoned" | "continuation_ceiling" | "cost_ceiling"
   | "nothing_to_resume" | "no_mission"
   /** Consecutive slices that qualified and investigated nobody. */
-  | "no_progress";
+  | "no_progress"
+  /** A generation asked, durably, not to be auto-continued. */
+  | "auto_resume_suppressed";
 
 /**
  * What the sweeper should DO about this row.
@@ -174,6 +176,50 @@ const int = (v: unknown): number => {
  * `lead_execution_calls` — a row still `started` with a `provider_run_id` is
  * paid work waiting to be adopted, and it is the strongest reason to resume.
  */
+/**
+ * The key a generation writes to say "do not auto-continue me".
+ *
+ * ── WHY A DURABLE MARKER AND NOT A TIMER ──────────────────────────────────
+ *
+ * `single_generation` suppresses `run-agent`'s own self-dispatch, and that is
+ * only half of what continues a lineage. `resume-stalled-leads` selects on
+ * `status = 'ready'` and adopts anything silent for `STALE_AFTER_MS`, so on
+ * 2026-08-30 a run triggered once produced generation 8 and then generation 9
+ * unattended, and the acceptance run had to be stopped by marking the live task
+ * terminal after the fact — which destroys resumability to buy quiet.
+ *
+ * The marker lives on `tasks.result`, so it survives a restart, a redeploy and
+ * every sweeper tick. It is NOT an expiry: an acceptance run is inspected on
+ * human time, and a marker that lapsed halfway through would be worse than none.
+ *
+ * IT SUPPRESSES ONLY AUTOMATIC RESUMPTION. `continue-workflow` has its own
+ * `decideContinuation` and never consults this function, so a person clicking
+ * Continue is unaffected — which is the correct shape: the run is parked, not
+ * finished, and its checkpoint stays valid.
+ */
+export const AUTO_RESUME_SUPPRESSED_KEY = "auto_resume_suppressed" as const;
+
+export interface AutoResumeSuppression {
+  at: string;
+  by: string;
+  reason: string;
+}
+
+/** Read the marker, or null. Validated — this crosses a trust boundary. */
+export function readAutoResumeSuppression(
+  result: Record<string, unknown> | null | undefined,
+): AutoResumeSuppression | null {
+  const raw = obj(result)[AUTO_RESUME_SUPPRESSED_KEY];
+  const m = obj(raw);
+  const at = m.at, by = m.by, reason = m.reason;
+  if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return null;
+  return {
+    at,
+    by: typeof by === "string" && by ? by : "unknown",
+    reason: typeof reason === "string" && reason ? reason : "unspecified",
+  };
+}
+
 export function eligibleForAutoResume(
   row: StalledTaskRow,
   now: number,
@@ -196,6 +242,18 @@ export function eligibleForAutoResume(
     ({ eligible: true, reason: "resumable", evidence, disposition: "resume" });
 
   if (row.status !== RESUMABLE_ROW_STATUS) return no("not_ready");
+
+  // ── A GENERATION MAY DECLINE TO BE AUTO-CONTINUED ───────────────────────
+  //
+  // Checked FIRST, ahead of silence, ceilings and checkpoint shape, because it
+  // is an instruction rather than a judgement — none of those questions is worth
+  // asking about a row somebody has parked on purpose.
+  //
+  // SKIP, never TERMINATE. The checkpoint is valid and the work is real; this
+  // says "not automatically", not "never again". An explicit Continue still
+  // works, because `continue-workflow` does not consult this function.
+  const suppressed = readAutoResumeSuppression(row.result);
+  if (suppressed) return no("auto_resume_suppressed");
 
   const result = obj(row.result);
   // THE CLAIM'S OWN VOCABULARY. `claim_sourcing_continuation` refuses anything

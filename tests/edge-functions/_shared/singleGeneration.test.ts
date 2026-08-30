@@ -55,10 +55,21 @@ Deno.test("the suppression is logged with what WOULD have happened", () => {
   }
 });
 
-Deno.test("the checkpoint stays adoptable — this is not a kill switch", () => {
+Deno.test("the work is PARKED, not finished — this is not a kill switch", () => {
+  // This used to assert the log said "the sweeper may still adopt this task",
+  // which was true and was the defect: `single_generation` stopped run-agent's
+  // own dispatch and nothing else, so the sweeper continued the lineage ~5
+  // minutes later anyway. The durable marker closes that, and the property to
+  // assert is now that parking does not END the run.
   const block = code.slice(code.indexOf('"[run-agent][auto-continuation] single_generation"'));
-  assert(block.slice(0, 500).includes("sweeper may still adopt"),
+  assert(block.slice(0, 500).includes("an explicit Continue still works"),
     "suppressing the dispatch must not pretend the work is finished");
+  // The row is never given a terminal status here — that is what the 2026-08-30
+  // acceptance run had to do by hand, and it destroys resumability.
+  const branch = code.slice(code.indexOf("if (singleGeneration) {"));
+  const body = branch.slice(0, branch.indexOf("const deferToSweeper"));
+  assert(!/status:\s*"complete"|finished_at/.test(body),
+    "parking a run must not terminate its task");
 });
 
 Deno.test("normal auto-continuation is otherwise intact", () => {

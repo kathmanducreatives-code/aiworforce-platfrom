@@ -16,6 +16,7 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  AUTO_RESUME_SUPPRESSED_KEY, readAutoResumeSuppression,
   eligibleForAutoResume, resumeRequestFor, STALE_AFTER_MS, MAX_RESUMABLE_AGE_MS,
   type StalledTaskRow,
 } from "../../../supabase/functions/_shared/stalledLeadResume.ts";
@@ -510,4 +511,127 @@ Deno.test("SILENCE IS JUDGED BEFORE SHAPE", () => {
     delete row.result![missing];
     assertEquals(eligibleForAutoResume(row, NOW, {}).disposition, "skip", missing);
   }
+});
+
+// ══ THE DURABLE SKIP MARKER ═══════════════════════════════════════════════
+//
+// `single_generation` suppresses run-agent's OWN self-dispatch and nothing else.
+// The sweeper selects on `status = 'ready'` and adopts anything quiet for
+// STALE_AFTER_MS, so on 2026-08-30 a run triggered exactly once produced
+// generation 8 and then generation 9 unattended, and the acceptance run had to
+// be stopped by marking its task terminal — which buys quiet by destroying
+// resumability.
+
+const suppressed = (at: string) => ({
+  [AUTO_RESUME_SUPPRESSED_KEY]: {
+    at, by: "run-agent:single_generation",
+    reason: "single_generation requested by a service-role caller",
+  },
+});
+
+Deno.test("A PARKED ROW IS SKIPPED, and the SAME row without the marker is not", () => {
+  // The negative control is the point: it proves the marker is what changes the
+  // answer, not some unrelated property of the fixture.
+  const plain = CHECKPOINTED();
+  assertEquals(eligibleForAutoResume(plain, NOW, { hasStartedProviderRun: true }).eligible,
+    true, "the control row must genuinely be resumable");
+
+  const parked = CHECKPOINTED();
+  Object.assign(parked.result!, suppressed(ago(60_000)));
+  assertEquals(eligibleForAutoResume(parked, NOW, { hasStartedProviderRun: true }),
+    { eligible: false, reason: "auto_resume_suppressed", disposition: "skip" });
+});
+
+Deno.test("SKIP, NEVER TERMINATE — the work is parked, not finished", () => {
+  // Terminating is what the acceptance run had to do by hand, and it ends the
+  // lineage. This must not do that at any age.
+  for (const age of [60_000, STALE_AFTER_MS + 60_000, MAX_RESUMABLE_AGE_MS + 60_000]) {
+    const row = CHECKPOINTED({ updated_at: ago(age) });
+    Object.assign(row.result!, suppressed(ago(age + 1_000)));
+    const v = eligibleForAutoResume(row, NOW, { hasStartedProviderRun: true });
+    assertEquals(v.disposition, "skip", `age ${age}`);
+    assertEquals(v.reason, "auto_resume_suppressed", `age ${age}`);
+  }
+});
+
+Deno.test("it is checked BEFORE silence, ceilings and shape", () => {
+  // A row that would otherwise be abandoned, ceiling-stopped or terminated must
+  // still report the marker — the answer is an instruction, not a judgement, and
+  // an operator reading "abandoned" would not know the row had been parked.
+  const abandoned = CHECKPOINTED({ updated_at: ago(MAX_RESUMABLE_AGE_MS + 60_000) });
+  delete abandoned.result!.company_first_state;
+  assertEquals(eligibleForAutoResume(abandoned, NOW, {}).disposition, "terminate",
+    "control: this row is otherwise terminated");
+  Object.assign(abandoned.result!, suppressed(ago(60_000)));
+  assertEquals(eligibleForAutoResume(abandoned, NOW, {}).reason, "auto_resume_suppressed");
+});
+
+Deno.test("a row that is not `ready` is still reported as not_ready", () => {
+  // Status is the sweeper's own precondition and outranks the marker; reporting
+  // a complete row as "parked" would be a second wrong answer.
+  const done = CHECKPOINTED({ status: "complete" });
+  Object.assign(done.result!, suppressed(ago(60_000)));
+  assertEquals(eligibleForAutoResume(done, NOW, {}).reason, "not_ready");
+});
+
+Deno.test("A MALFORMED MARKER IS IGNORED, never trusted", () => {
+  // `tasks.result` is JSON a previous deploy or a hand edit may have written.
+  // A marker that cannot be read must not park a row by accident.
+  for (const bad of [null, {}, "yes", { at: "whenever" }, { by: "x" }, []]) {
+    const row = CHECKPOINTED();
+    (row.result as Record<string, unknown>)[AUTO_RESUME_SUPPRESSED_KEY] = bad;
+    assertEquals(eligibleForAutoResume(row, NOW, { hasStartedProviderRun: true }).eligible,
+      true, `"${JSON.stringify(bad)}" must not park the row`);
+    assertEquals(readAutoResumeSuppression(row.result), null);
+  }
+});
+
+Deno.test("a well-formed marker reads back with its provenance", () => {
+  const at = ago(60_000);
+  const m = readAutoResumeSuppression(suppressed(at))!;
+  assertEquals(m.at, at);
+  assertEquals(m.by, "run-agent:single_generation");
+  assert(m.reason.includes("single_generation"));
+  // Missing optional fields degrade to a label, never to null — the marker's
+  // presence is the instruction; who wrote it is documentation.
+  const bare = readAutoResumeSuppression({ [AUTO_RESUME_SUPPRESSED_KEY]: { at } })!;
+  assertEquals(bare.by, "unknown");
+  assertEquals(bare.reason, "unspecified");
+});
+
+// ── THE WIRING ─────────────────────────────────────────────────────────────
+
+const RUN_AGENT_SRC = Deno.readTextFileSync(new URL(
+  "../../../supabase/functions/run-agent/index.ts", import.meta.url));
+const runAgentCode = RUN_AGENT_SRC.split("\n").filter((l) => {
+  const t = l.trim();
+  return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+}).join("\n");
+
+Deno.test("RUN-AGENT WRITES THE MARKER when single_generation is honoured", () => {
+  assert(new RegExp(`\\[AUTO_RESUME_SUPPRESSED_KEY\\]: \\{`).test(runAgentCode),
+    "the marker must be written to the row");
+  const block = runAgentCode.slice(runAgentCode.indexOf("if (singleGeneration) {"));
+  assert(block.slice(0, 1400).includes("AUTO_RESUME_SUPPRESSED_KEY"),
+    "and written inside the single_generation branch, nowhere else");
+});
+
+Deno.test("a FAILED marker is reported as loudly as it deserves", () => {
+  // A silently failed marker means the sweeper WILL continue the lineage — the
+  // exact opposite of what the caller asked for.
+  assert(runAgentCode.includes("single_generation marker FAILED"));
+  assert(runAgentCode.includes("the sweeper may adopt this task"));
+  assert(/auto_resume_suppressed: !markErr/.test(runAgentCode),
+    "and the success log must state whether it actually landed");
+});
+
+Deno.test("the marker is never written on a normal run", () => {
+  // Defaults matter more than the feature: production behaviour is unchanged.
+  // Counts the WRITE, not every mention — the import is a reference.
+  const writes = runAgentCode.split(/\[AUTO_RESUME_SUPPRESSED_KEY\]: \{/).length - 1;
+  assertEquals(writes, 1, "exactly one place may write the marker");
+  const before = runAgentCode.indexOf("const singleGenerationRequested");
+  const writeAt = runAgentCode.search(/\[AUTO_RESUME_SUPPRESSED_KEY\]: \{/);
+  assert(writeAt > before,
+    "the only write must sit inside the single_generation branch, after the flag");
 });

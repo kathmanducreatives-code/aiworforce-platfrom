@@ -82,6 +82,7 @@ import {
   mergeCompanyResumeRecords, mergeLineageState,
 } from "../_shared/lineageStateMerge.ts";
 import { resolveIndustryExclusions } from "../_shared/industryPrecedence.ts";
+import { AUTO_RESUME_SUPPRESSED_KEY } from "../_shared/stalledLeadResume.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
@@ -5173,11 +5174,48 @@ Deno.serve(async (req) => {
           });
         }
         if (singleGeneration) {
+          // ── AND THE SWEEPER MUST HONOUR IT TOO ────────────────────────────
+          //
+          // Suppressing this function's own dispatch is only half of what
+          // continues a lineage. `resume-stalled-leads` selects on
+          // `status = 'ready'` and adopts anything quiet for STALE_AFTER_MS, so
+          // without a durable marker the run is continued ~5 minutes later
+          // anyway — which is exactly what happened on 2026-08-30 and forced the
+          // acceptance run to be stopped by marking its task terminal.
+          //
+          // Written to `tasks.result`, so it survives restarts and every tick.
+          // It parks the row; it does not finish it. The checkpoint stays valid
+          // and `continue-workflow` is unaffected, so an explicit Continue still
+          // works.
+          const { data: cur } = await supabase.from("tasks")
+            .select("result").eq("id", task.id).maybeSingle();
+          const prior = ((cur as { result?: Record<string, unknown> } | null)?.result ?? {});
+          const { error: markErr } = await supabase.from("tasks").update({
+            result: {
+              ...prior,
+              [AUTO_RESUME_SUPPRESSED_KEY]: {
+                at: new Date().toISOString(),
+                by: "run-agent:single_generation",
+                reason: "single_generation requested by a service-role caller",
+              },
+            },
+          }).eq("id", task.id);
+          if (markErr) {
+            // SAY SO LOUDLY. A failed marker means the sweeper WILL continue
+            // this lineage, which is the opposite of what the caller asked for,
+            // and an acceptance run must not discover that from a second
+            // generation appearing.
+            console.error("[run-agent][auto-continuation] single_generation marker FAILED", {
+              task_id: task.id, detail: markErr.message,
+              consequence: "the sweeper may adopt this task",
+            });
+          }
           console.log("[run-agent][auto-continuation] single_generation", {
             task_id: task.id,
             would_have_continued: autoDecision.continue,
             reason: autoDecision.reason,
-            note: "checkpoint is durable; the sweeper may still adopt this task",
+            auto_resume_suppressed: !markErr,
+            note: "checkpoint stays valid; an explicit Continue still works",
           });
         }
 
