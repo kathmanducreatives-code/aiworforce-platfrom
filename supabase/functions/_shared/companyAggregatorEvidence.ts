@@ -154,16 +154,10 @@ export function extractAggregatorEvidence(input: AggregatorInput): AggregatorEvi
     refs.push("company:website");
   }
 
-  const strong = signals.filter((x) => x.strength === "strong").length;
-  const status: AggregatorStatus = strong >= 1
-    ? "supported"
-    : signals.length >= 2
-      ? "supported"          // two independent weak signals agree
-      : signals.length === 1
-        ? "possible"
-        : "absent";
-
-  return { status, signals, source_refs: [...new Set(refs)] };
+  // One strong signal concludes; two independent weak ones agree; one weak one
+  // is only `possible`. Shared with `attributionOnlyStatus` so a subset can
+  // never be scored by a different rule than the whole.
+  return { status: statusOf(signals), signals, source_refs: [...new Set(refs)] };
 }
 
 /**
@@ -201,6 +195,100 @@ function nameDomainMismatch(name: string | null | undefined, domain: string | nu
   if (!nm || !dm || nm.length < 4 || dm.length < 4) return null;
   if (nm.includes(dm) || dm.includes(nm)) return null;
   return `company name "${name}" does not correspond to its domain "${domain}"`;
+}
+
+// ── TWO QUESTIONS, ONE STATUS ───────────────────────────────────────────────
+//
+// The signals above answer two different questions, and collapsing them into a
+// single `status` is what let a mission be refused its own subject matter.
+//
+//   IDENTITY      "this company IS an intermediary"
+//   ATTRIBUTION   "these postings belong to somebody else"
+//
+// For a mission sourcing SaaS buyers both are disqualifying, so the difference
+// never showed. For a mission whose ICP *is* recruiting and staffing firms they
+// diverge completely: being a staffing firm is the thing that was asked for,
+// while a posting that describes an unnamed client is still not proof that this
+// company is hiring. The first must not reject; the second still must.
+//
+// Splitting them here — beside the signals themselves — is what keeps the
+// detector and the exemption from drifting apart.
+
+/** Signals about WHAT THIS COMPANY IS. */
+export const IDENTITY_SIGNAL_CODES: readonly string[] = [
+  "enriched_industry_staffing", "provider_industry_staffing",
+  "description_intermediary", "name_domain_mismatch",
+];
+
+/** Signals about WHOSE HIRING THESE POSTINGS ARE. */
+export const ATTRIBUTION_SIGNAL_CODES: readonly string[] = [
+  "anonymised_third_party_postings", "multiple_unrelated_employers",
+];
+
+/** The same thresholds as `extractAggregatorEvidence`, over a subset. */
+function statusOf(signals: AggregatorSignal[]): AggregatorStatus {
+  const strong = signals.filter((x) => x.strength === "strong").length;
+  if (strong >= 1) return "supported";
+  if (signals.length >= 2) return "supported";
+  return signals.length === 1 ? "possible" : "absent";
+}
+
+/**
+ * The status ignoring what the company IS.
+ *
+ * Used when the mission asked for intermediaries: the identity signals then
+ * describe a match rather than a disqualification, and only misattributed
+ * postings remain a finding.
+ */
+export function attributionOnlyStatus(e: AggregatorEvidence): AggregatorStatus {
+  return statusOf(e.signals.filter((s) => ATTRIBUTION_SIGNAL_CODES.includes(s.code)));
+}
+
+/**
+ * Vertical wording that names the intermediary category itself.
+ *
+ * Deliberately the mission's OWN vocabulary rather than the LinkedIn industry
+ * names above: a compiled mission says "recruiting" and "staffing", not
+ * "Staffing and Recruiting", and matching one against the other is why the
+ * category could be both the target and the exclusion at the same time.
+ */
+const INTERMEDIARY_VERTICAL_TERMS: readonly string[] = [
+  "staffing", "recruiting", "recruitment", "recruiter", "talent acquisition",
+  "headhunting", "executive search", "human resources", "hr services",
+  "employment agency", "job board", "talent marketplace",
+];
+
+/**
+ * Did the request ask for the very category this module detects?
+ *
+ * ── WHY THE USER'S RAW WORDS ARE NOT CONSULTED ────────────────────────────
+ *
+ * Everywhere else in this codebase the user's own words outrank the compiled
+ * mission. Not here, and for a reason specific to this question: "recruiting"
+ * and "hiring" are also how a sourcing request names the SIGNAL it is looking
+ * for. "SaaS companies that are recruiting engineers" contains "recruiting" and
+ * targets no intermediary at all, so a substring test against the query would
+ * exempt the gate for missions it must still protect.
+ *
+ * `company_profile.verticals` is the compiler's structured reading of WHO the
+ * ICP is, separate from the signal it must exhibit, so it is the only field
+ * that can answer this without conflating the two.
+ */
+export function missionTargetsIntermediaries(i: {
+  mission_verticals?: readonly string[] | null;
+}): { targets: boolean; matched: string[] } {
+  const verticals = (i.mission_verticals ?? [])
+    .map((v) => lower(v).trim()).filter(Boolean);
+  const matched = INTERMEDIARY_VERTICAL_TERMS.filter((t) =>
+    verticals.some((v) =>
+      // "recruiting agencies" names "recruiting".
+      v.includes(t) ||
+      // A truncated vertical still names the term — but only when it is long
+      // enough to mean something. Without the length floor a vertical of "it"
+      // matches "recruiting", which is how a bound meant to widen one mission
+      // silently widens every other one.
+      (v.length >= 4 && t.includes(v))));
+  return { targets: matched.length > 0, matched };
 }
 
 /**

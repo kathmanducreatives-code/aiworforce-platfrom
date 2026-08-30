@@ -11,7 +11,10 @@
 //
 // Pure. No I/O.
 
-import { extractAggregatorEvidence, type AggregatorEvidence } from "./companyAggregatorEvidence.ts";
+import {
+  attributionOnlyStatus, extractAggregatorEvidence,
+  type AggregatorEvidence, type AggregatorStatus,
+} from "./companyAggregatorEvidence.ts";
 
 export type CompanyStage =
   | "candidate_discovered"
@@ -120,6 +123,15 @@ export interface CompanyFitInput {
   provider_industry?: string | null;
   canonical_domain?: string | null;
   postings?: Array<{ job_id?: string | null; title?: string | null; description?: string | null }>;
+  /**
+   * Does the MISSION ask for intermediaries?
+   *
+   * Changes exactly one thing: being a staffing or recruiting business stops
+   * being a rejection, because it is then the thing that was requested. Postings
+   * that belong to somebody else still reject — see `attributionOnlyStatus`.
+   * Omitted, behaviour is exactly as before.
+   */
+  mission_targets_intermediaries?: boolean;
 }
 
 export interface CompanyFitResult {
@@ -162,12 +174,30 @@ export function evaluateCompanyFit(i: CompanyFitInput): CompanyFitResult {
 
   if (!i.enrichment_complete) missing.push("enrichment_incomplete");
 
-  // STAFFING / AGGREGATOR. Supported evidence is a real exclusion.
-  if (aggregator.status === "supported") {
+  // ── STAFFING / AGGREGATOR ──────────────────────────────────────────────
+  //
+  // THE MISSION DECIDES WHICH HALF OF THIS EVIDENCE IS A FINDING.
+  //
+  // On 2026-08-30 a live run for "5 recruiting or staffing companies … hiring
+  // sales roles" verified hiring at Storm4, Talentoma and Storm3 and then
+  // rejected all three here, `staffing_or_aggregator`, before the Company Brain
+  // ran — because this gate could not see that staffing firms were the ICP. The
+  // request and the exclusion named the same category, so the mission could not
+  // return a single lead no matter what else worked.
+  //
+  // When the mission targets intermediaries, "is an intermediary" is a match,
+  // not a fault. What survives is the other question the evidence answers:
+  // whether these postings are this company's own hiring. A staffing firm
+  // advertising a client's role is still not evidence that IT is hiring, and
+  // that half rejects for every mission alike.
+  const aggregatorFinding: AggregatorStatus = i.mission_targets_intermediaries
+    ? attributionOnlyStatus(aggregator)
+    : aggregator.status;
+  if (aggregatorFinding === "supported") {
     failed.push("staffing_or_aggregator");
     return { stage: "company_fit_reject", reason: "staffing_or_aggregator", failed_gates: failed, missing_evidence: missing, aggregator };
   }
-  if (aggregator.status === "possible") missing.push("aggregator_evidence_inconclusive");
+  if (aggregatorFinding === "possible") missing.push("aggregator_evidence_inconclusive");
 
   // SIZE — exact count only.
   if (i.employee_min != null || i.employee_max != null) {

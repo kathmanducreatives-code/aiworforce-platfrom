@@ -172,6 +172,7 @@ import {
   advance, evaluateCompanyFit, newCompanyRecord, projectFunnel,
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
+import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
 import {
   identityIsActionable, resolveIdentityAgainstLookups, type IdentityResolution,
 } from "./companyIdentityResolution.ts";
@@ -5712,6 +5713,25 @@ export async function runCapabilityPlan(
         employee_max: opts.brain?.employee_max ?? null,
       });
 
+      // ── IS THE EXCLUDED CATEGORY THE REQUESTED ONE? ───────────────────────
+      //
+      // Resolved once for the whole eligible set, like the bounds above, and for
+      // the same reason: it is a property of the MISSION, not of a company, and
+      // computing it per company would invite two answers in one run.
+      const targetsIntermediaries = missionTargetsIntermediaries({
+        mission_verticals: opts.mission.company_profile?.verticals ?? [],
+      });
+      if (targetsIntermediaries.targets) {
+        // Worth a line of its own: it suspends a hard gate, and an operator
+        // reading a run that returned staffing firms must be able to see that
+        // this was the mission's doing rather than a regression.
+        log("aggregator_gate_suspended_for_mission", {
+          matched_terms: targetsIntermediaries.matched,
+          mission_verticals: opts.mission.company_profile?.verticals ?? [],
+          still_rejecting: "postings attributed to another employer",
+        });
+      }
+
       // ── THE QUALIFICATION LOOP IS DEADLINE-BOUND TOO ───────────────────────
       //
       // It was not, and that is what hung task 6e218eeb for an hour. This loop
@@ -5880,6 +5900,7 @@ export async function runCapabilityPlan(
         const qualificationStartedAt = deps.deadline?.elapsedMs() ?? 0;
         const src = c.enriched ?? c.company;
         c.fit = evaluateCompanyFit({
+          mission_targets_intermediaries: targetsIntermediaries.targets,
           company_key: c.key,
           company_name: src.company_name ?? null,
           identity_status: c.identity?.status ?? "unresolved",
