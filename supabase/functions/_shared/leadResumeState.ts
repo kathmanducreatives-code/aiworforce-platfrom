@@ -626,6 +626,27 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     // Carried across the JSON boundary like everything else here. A field
     // written but not read back is a field that does not survive a resume.
     identity: asObjectOrNull(s.identity),
+    // ── AND THE SAME, ONE STAGE LATER ──────────────────────────────────────
+    //
+    // These two were written by `buildCheckpoint` and declared on the interface
+    // — with a doc comment describing precisely this failure — and then never
+    // read back here. So every restore silently dropped them, and the field
+    // added to stop the Brain reporting "50 companies carried no hiring
+    // assessment" could not do it: the assessment was persisted and then thrown
+    // away on the way back in.
+    //
+    // Verified on the 2026-08-30 run: `tasks.result` for 66ef37b7 holds
+    // `evidence_source: external_job_search` for Storm4, Talentoma and Storm3,
+    // and `readCheckpointCompanies` returned all three with no assessment at
+    // all. A continuation could not qualify a company whose hiring another
+    // generation had already paid to verify.
+    hiring_assessment: asObjectOrNull(s.hiring_assessment),
+    // Bounded on read exactly like `yc_open_jobs`: a citation whose rows are
+    // gone is not a citation, and an unbounded restore is how a working set
+    // grows without limit.
+    hiring_jobs: (Array.isArray(s.hiring_jobs) ? s.hiring_jobs : [])
+      .map(asRecord).filter((j): j is Record<string, unknown> => j !== null)
+      .slice(0, MAX_SNAPSHOT_JOBS),
   };
 }
 

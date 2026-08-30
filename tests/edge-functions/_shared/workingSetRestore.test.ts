@@ -41,8 +41,9 @@ import {
   checkpointCoherence, checkpointSnapshot, restoreWorkingSet, toResumeRecord,
   type CapabilityExecutionState,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
-import type {
-  CompanyResumeRecord,
+import {
+  readCheckpointCompanies, RESUME_STATE_VERSION,
+  type CompanyResumeRecord,
 } from "../../../supabase/functions/_shared/leadResumeState.ts";
 import {
   assessCheckpointResume,
@@ -108,7 +109,23 @@ Deno.test("4. a hiring verdict survives write → read → write", () => {
   assertEquals(rec.snapshot!.hiring_jobs?.length, 1,
     "with the rows it cites, or the citation has no evidence");
 
-  const back = restoreWorkingSet(records([rec]))[0];
+  // ── THROUGH THE REAL PARSER, NOT PAST IT ─────────────────────────────────
+  //
+  // This step used to be `restoreWorkingSet(records([rec]))`, and `records` is a
+  // CAST. It asserted that the writer and the restorer agree while stepping over
+  // `readCheckpointCompanies`, which is the only thing that actually stands
+  // between them in production — and which dropped `hiring_assessment` and
+  // `hiring_jobs` from every snapshot it parsed. The test passed for the whole
+  // time the behaviour it describes was broken.
+  //
+  // Serialising to JSON first is the rest of the point: this state crosses a
+  // `jsonb` column, not a function call.
+  const parsed = readCheckpointCompanies(JSON.parse(JSON.stringify({
+    lead_resume_checkpoint: { version: RESUME_STATE_VERSION, companies: [rec] },
+  })));
+  assert(parsed[0].snapshot?.hiring_assessment,
+    "the verdict must survive the checkpoint parser, not merely the writer");
+  const back = restoreWorkingSet(parsed)[0];
   assertEquals(back.hiring_assessment?.verdict, "hiring_verified");
   assertEquals(back.hiring_jobs.length, 1);
 });

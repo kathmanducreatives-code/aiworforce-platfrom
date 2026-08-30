@@ -78,6 +78,9 @@ import {
   routeDrift, validateHiringRoute,
 } from "../_shared/hiringRouteContract.ts";
 import { executeCompanyFirstRoute } from "../_shared/companyFirstRouteExecutor.ts";
+import {
+  mergeCompanyResumeRecords, mergeLineageState,
+} from "../_shared/lineageStateMerge.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
@@ -1135,6 +1138,11 @@ Deno.serve(async (req) => {
   // THE VERSION THIS GENERATION READ. Its write must quote it back, or the
   // compare-and-swap cannot tell a fresh write from a stale one.
   const leaseVersion = leaseOutcome.acquired ? leaseOutcome.stateVersion : null;
+  // WHAT THE LINEAGE KNEW WHEN THIS GENERATION TOOK IT. Read once, here, because
+  // from this point until the release no other generation may write it — and it
+  // is both the basis of the merge at release and the authority for the working
+  // set this generation resumes from.
+  const leaseState = leaseOutcome.acquired ? leaseOutcome.currentState : null;
   const holdsLease = leaseOutcome.acquired;
 
   if (!leaseGate.proceed) {
@@ -2298,7 +2306,37 @@ Deno.serve(async (req) => {
         // what that run found.
         const resumeLoad = await loadLeadResumeRecords(
           supabase as never, leadResumeParentTaskId, workspace_id);
-        const leadResumeRecords = resumeLoad.records;
+        // ── THE LINEAGE IS THE AUTHORITY, NOT THE PARENT TASK ROW ─────────
+        //
+        // `loadLeadResumeRecords` reads ONE generation's checkpoint. That is the
+        // read that made the 2026-08-30 regression possible: the sweeper resumed
+        // an orphaned generation-1 task, loaded its own row — written before any
+        // hiring evidence existed — and worked from a view of the lineage that
+        // was three paid calls out of date. Everything it concluded from there
+        // was honest and wrong, and it then wrote that view back over the truth.
+        //
+        // `leaseState` is the lineage's accumulated state, held under the lease
+        // this generation owns. It LEADS the merge; the parent row is merged
+        // beneath it so nothing it uniquely carries is lost — a generation that
+        // was killed before it could release still has its work on its own row,
+        // and the merge only ever refuses to move a stage backwards.
+        const lineageRecords = readCheckpointCompanies(leaseState);
+        const restoredFromLineage = lineageRecords.length > 0
+          ? mergeCompanyResumeRecords(resumeLoad.records, lineageRecords)
+          : null;
+        const leadResumeRecords = restoredFromLineage
+          ? restoredFromLineage.records
+          : resumeLoad.records;
+        if (restoredFromLineage) {
+          console.log("[run-agent][lineage-restore]", {
+            task_id: task.id, lineage_id: lineageRootId,
+            from_parent_row: resumeLoad.records.length,
+            from_lineage: lineageRecords.length,
+            restored: leadResumeRecords.length,
+            ...restoredFromLineage.summary,
+          });
+        }
+
 
         // ── PAID RUNS THE LEDGER REMEMBERS AND THE CHECKPOINT FORGOT ────────
         //
@@ -2345,6 +2383,7 @@ Deno.serve(async (req) => {
             runs: recoveredPendingRuns.map((r) => `${r.provider}:${r.run_id}`),
           });
         }
+
 
         // ══ A CONTINUATION THAT RESTORED NOTHING MUST NOT PROCEED ═══════════
         //
@@ -4930,19 +4969,45 @@ Deno.serve(async (req) => {
             .select("result").eq("id", task.id).maybeSingle();
           const committedResult =
             ((committed as { result?: Record<string, unknown> } | null)?.result ?? {});
+          // ── THE WRITE IS A MERGE, NOT A REPLACEMENT ──────────────────────
+          //
+          // `leaseState` is what the lineage held when THIS generation took the
+          // lease, and only this generation has held it since — so it is a safe
+          // basis to merge onto, and the compare-and-swap below still catches
+          // the case where an expired lease let somebody else in.
+          //
+          // Without this the release is last-writer-wins. On 2026-08-30 that
+          // let a stale generation, resumed by the sweeper long after it was
+          // killed, replace three cited `verified_externally` verdicts with
+          // `not_verified / evidence_source: none` — a terminal state, so the
+          // companies were finished and the evidence they were bought with was
+          // stranded. The CAS did not stop it and could not: that generation's
+          // version was current. Order is not monotonicity.
+          const merged = mergeLineageState(leaseState, {
+            version: LINEAGE_LEASE_VERSION,
+            written_by_task: task.id,
+            written_at: new Date().toISOString(),
+            terminal_status: statuses.terminalStatus,
+            capability_execution_state:
+              committedResult.capability_execution_state ?? null,
+            [CHECKPOINT_RESULT_KEY]: committedResult[CHECKPOINT_RESULT_KEY] ?? null,
+          });
+          if (merged.merge.refused.length > 0) {
+            // A REFUSED REGRESSION IS THE INTERESTING EVENT IN THIS FUNCTION.
+            // It means this generation would have destroyed something the
+            // lineage already knew, and an operator must be able to see which
+            // company and which verdict without reconstructing it.
+            console.log("[run-agent][lineage-merge] regressions refused", {
+              task_id: task.id, lineage_id: lineageRootId,
+              ...merged.merge.summary,
+              refused: merged.merge.refused.slice(0, 12),
+            });
+          }
           const leaseReleased = await releaseLineageLease({
             db: supabase as unknown as LeaseRpcDb,
             lineageId: lineageRootId, workspaceId: workspace_id,
             holderTaskId: task.id, expectedVersion: leaseVersion,
-            nextState: {
-              version: LINEAGE_LEASE_VERSION,
-              written_by_task: task.id,
-              written_at: new Date().toISOString(),
-              terminal_status: statuses.terminalStatus,
-              capability_execution_state:
-                committedResult.capability_execution_state ?? null,
-              [CHECKPOINT_RESULT_KEY]: committedResult[CHECKPOINT_RESULT_KEY] ?? null,
-            },
+            nextState: merged.state,
             madeProgress,
           });
           if (!leaseReleased.released) {
