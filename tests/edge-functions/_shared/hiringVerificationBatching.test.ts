@@ -307,7 +307,12 @@ Deno.test("the deadline is checked per batch, not per company", () => {
   // not the loop header.
   const i = ENGINE.indexOf("for (let i = 0; i < batches.length; i++)");
   assert(i > 0, "the hiring stage must still batch its calls");
-  const block = ENGINE.slice(i, i + 1400);
+  // WIDE ENOUGH FOR THE WHOLE GATE. The loop now also asks what the batch will
+  // OWE — `canStartHiringBatch` reserves the qualification budget of companies
+  // already verified — and that pushed the durable-start check past a 1400-char
+  // window. The invariant below is unchanged; only the block that has to
+  // contain it grew.
+  const block = ENGINE.slice(i, i + 3000);
   assert(
     block.includes("deps.deadline?.expiredForDurableStart()"),
     "a batch costs one call, so one start's budget is what must be available",

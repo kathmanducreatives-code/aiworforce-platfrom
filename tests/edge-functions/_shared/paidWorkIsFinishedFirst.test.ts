@@ -132,9 +132,32 @@ Deno.test("6. admission quotes the price that matches the work", () => {
     /estimateFor\(qualificationOp\)/.test(engineSource),
     "admission is decided on that company's own price, not a constant",
   );
+  // ── SCOPED TO ADMISSION, WHICH IS WHERE THE RULE LIVES ─────────────────
+  //
+  // This forbade `estimateFor(QUALIFICATION_OP)` ANYWHERE, which reads as the
+  // stronger statement and is actually a different one. The rule is that
+  // ADMITTING a company must quote that company's price: a pre-grounded company
+  // needs one evaluator call, and pricing it as two threw away three
+  // verifications on run df00b2cd.
+  //
+  // PLANNING is not admission. The hiring stage reserves clock for the
+  // companies it has verified before starting another batch, and at that point
+  // `groundedByKey` has not been built — the qualification capability has not
+  // run — so no company is pre-grounded and the two-call price is both correct
+  // and conservative. Forbidding the constant outright would force that site to
+  // invent a cheaper number it cannot justify.
+  // Bounded by the loop header and the next PLANNING site — the frontier-carry
+  // `resolveTimeCapacity`, which is demonstrably outside the loop. Bounding on
+  // the end of the whole capability block would swallow that planning call and
+  // fail for the very reason this test now distinguishes.
+  const loopStart = engineSource.indexOf(
+    "for (let qIndex = 0; qIndex < eligibleOrdered.length");
+  const admissionLoop = engineSource.slice(
+    loopStart, engineSource.indexOf("resolveTimeCapacity({", loopStart));
+  assert(admissionLoop.length > 0, "the admission loop must still be findable");
   assert(
-    !/estimateFor\(QUALIFICATION_OP\)/.test(engineSource),
-    "no site still hardcodes the two-call price for every company",
+    !/estimateFor\(QUALIFICATION_OP\)/.test(admissionLoop),
+    "admission must not hardcode the two-call price for every company",
   );
 });
 

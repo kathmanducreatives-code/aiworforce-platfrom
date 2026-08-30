@@ -255,6 +255,9 @@ export interface TimeCapacity {
   per_company_ms: number;
   identity_call_ms: number;
   enrichment_call_ms: number;
+  /** Per company, before amortising over the batch. Zero when not supplied. */
+  hiring_call_ms: number;
+  hiring_batch_size: number;
   qualification_ms: number;
   concurrency: number;
   enrichment_batch_size: number;
@@ -270,6 +273,75 @@ export interface TimeCapacity {
  * deferral cannot be recorded and the companies are stranded rather than
  * resumable.
  */
+/**
+ * May a hiring batch start, given what it will owe afterwards?
+ *
+ * ── THE QUESTION THE OLD GATE DID NOT ASK ──────────────────────────────────
+ *
+ * The batch loop asked only `expiredForDurableStart()` — "is there time to
+ * record that I started a call". That is the right question about the CALL: a
+ * job search takes ~80s per company, longer than a slice at any batch size, and
+ * the run id is persisted before the poll, so starting one is safe and
+ * finishing it is optional.
+ *
+ * It is the wrong question about the SLICE. Hiring kept starting batches until
+ * the clock was gone, and the companies it had already verified were left with
+ * nothing to be qualified with. On 2026-08-29:
+ *
+ *   11:14:08  qualification_deadline_stop  eligible 3, evaluated 0, remaining 2,187 ms
+ *   11:15:40  qualification_deadline_stop  eligible 2, evaluated 0, remaining     0 ms
+ *
+ * Three companies verified with cited evidence, and no clock left to ask the
+ * Brain about any of them.
+ *
+ * ── THE RULE ───────────────────────────────────────────────────────────────
+ *
+ * Hiring is greedy until it produces something, then it yields. A batch may
+ * start while nothing is owed qualification, because there is nothing to
+ * starve. Once companies ARE waiting, the batch must leave their qualification
+ * budget behind it.
+ *
+ * Deliberately NOT "can this batch finish". Requiring that would defer hiring
+ * for ever, for the reason the batch loop already documents.
+ *
+ * Pure. No clock of its own.
+ */
+export function canStartHiringBatch(i: {
+  remainingMs: number;
+  /**
+   * What the companies already awaiting the Brain will cost, summed.
+   *
+   * A TOTAL, not a count times an average. A pre-grounded company needs one
+   * evaluator call and a fresh one needs two, so the caller prices each company
+   * on its OWN operation — the same rule admission follows one stage later.
+   * Quoting a single blended figure here would refuse a batch on behalf of
+   * companies that are cheaper than it assumed.
+   */
+  qualificationDebtMs: number;
+  /** Held back so the checkpoint and the response still fit. */
+  reserveMs: number;
+  /** Below this a call cannot even be recorded durably. */
+  durableStartMs: number;
+}): { start: boolean; reason: "ok" | "no_durable_start" | "would_starve_qualification";
+      required_ms: number; remaining_ms: number } {
+  const remaining = Math.max(0, Math.trunc(i.remainingMs));
+  const owed = Math.max(0, Math.trunc(i.qualificationDebtMs));
+  const reserve = Math.max(0, Math.trunc(i.reserveMs));
+
+  // A call that cannot be durably recorded must not be made at all: it would be
+  // a charge with no row naming the run.
+  if (remaining <= Math.max(0, Math.trunc(i.durableStartMs))) {
+    return { start: false, reason: "no_durable_start", required_ms: i.durableStartMs, remaining_ms: remaining };
+  }
+  // NOTHING OWED, NOTHING TO PROTECT.
+  if (owed === 0) return { start: true, reason: "ok", required_ms: 0, remaining_ms: remaining };
+
+  const required = owed + reserve;
+  return required <= remaining
+    ? { start: true, reason: "ok", required_ms: required, remaining_ms: remaining }
+    : { start: false, reason: "would_starve_qualification", required_ms: required, remaining_ms: remaining };
+}
+
 export function resolveTimeCapacity(i: {
   remainingMs: number;
   reserveMs: number;
@@ -278,6 +350,32 @@ export function resolveTimeCapacity(i: {
   read?: EnvReader;
   /** Observed identity latency, when the deadline has measured one. */
   observedIdentityMs?: number | null;
+  /**
+   * THE DOMINANT COST, AND IT WAS NOT IN THIS MODEL AT ALL.
+   *
+   * `per_company_ms` was identity/concurrency + enrichment/batch +
+   * qualification = 11,200 ms, while a company-scoped job search is measured at
+   * ~80,000 ms — fitted at 80.5s per company across two real runs of one
+   * mission (see `ASSUMED_MS_BY_OP`). The model priced a company at an eighth
+   * of what it costs, so a 105s slice reported `capacity: 9` and hiring
+   * consumed the whole clock.
+   *
+   * Amortised over the batch, because a batch is one call: three companies in
+   * one job search cost one job search.
+   */
+  hiringMsPerCompany?: number | null;
+  hiringBatchSize?: number | null;
+  /**
+   * What ONE company's qualification actually costs, from the deadline.
+   *
+   * Passed in rather than read from `LEAD_QUALIFICATION_PER_COMPANY_MS`,
+   * because two independent numbers for one stage is how they came to
+   * disagree: this model assumed 7,000 ms while `ExecutionDeadline` gated the
+   * work at 12,000 ms. On 2026-08-29 at 11:22:44 that gap refused three
+   * eligible companies with 23,375 ms remaining — enough for the cost this
+   * model believed in, and not for the one the gate applied.
+   */
+  qualificationMs?: number | null;
 }): TimeCapacity {
   const get: EnvReader = i.read ?? ((k) => {
     try { return Deno.env.get(k); } catch { return undefined; }
@@ -294,15 +392,23 @@ export function resolveTimeCapacity(i: {
   const configuredIdentity = envNum(IDENTITY_CALL_MS_ENV, DEFAULT_IDENTITY_CALL_MS);
   const identity = Math.max(configuredIdentity, Math.trunc(i.observedIdentityMs ?? 0));
   const enrichment = DEFAULT_ENRICHMENT_CALL_MS;
-  const qualification = envNum(
-    QUALIFICATION_PER_COMPANY_MS_ENV, DEFAULT_QUALIFICATION_PER_COMPANY_MS);
+  // THE GATE'S OWN NUMBER WHEN IT HAS ONE. The env override still wins for a
+  // deployment that has measured something better, and the old default remains
+  // the floor for a caller that supplies nothing.
+  const qualification = Math.max(
+    envNum(QUALIFICATION_PER_COMPANY_MS_ENV, DEFAULT_QUALIFICATION_PER_COMPANY_MS),
+    Math.trunc(i.qualificationMs ?? 0),
+  );
 
   const concurrency = Math.max(1, Math.trunc(i.concurrency));
   const batch = Math.max(1, Math.trunc(i.enrichmentBatchSize));
+  const hiringBatch = Math.max(1, Math.trunc(i.hiringBatchSize ?? 1));
+  const hiring = Math.max(0, Math.trunc(i.hiringMsPerCompany ?? 0));
 
   const perCompany =
     identity / concurrency +   // parallel across lanes
     enrichment / batch +       // amortised over the batched call
+    hiring / hiringBatch +     // one job search answers a whole batch
     qualification;             // strictly serial, two model calls
 
   const reserve = Math.max(0, Math.trunc(i.reserveMs));
@@ -317,6 +423,8 @@ export function resolveTimeCapacity(i: {
     per_company_ms: Math.round(perCompany),
     identity_call_ms: identity,
     enrichment_call_ms: enrichment,
+    hiring_call_ms: hiring,
+    hiring_batch_size: hiringBatch,
     qualification_ms: qualification,
     concurrency,
     enrichment_batch_size: batch,

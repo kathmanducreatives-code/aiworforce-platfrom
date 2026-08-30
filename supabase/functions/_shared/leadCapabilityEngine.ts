@@ -100,7 +100,7 @@ import {
   buildMissionFunnel, type FunnelCompany, type MissionFunnel,
 } from "./leadMissionFunnel.ts";
 import {
-  BATCH_EVALUATION_OP, DeadlineBudgetExceeded, QUALIFICATION_OP,
+  BATCH_EVALUATION_OP, DURABLE_START_MS, DeadlineBudgetExceeded, QUALIFICATION_OP,
   QUALIFICATION_PREGROUNDED_OP, deadlineOperationFor, withDeadlineBudget,
   type ExecutionDeadline,
 } from "./leadExecutionFinalizer.ts";
@@ -148,7 +148,8 @@ import {
   type MissionTriageInput, type TriageCompanyInput, type TriageVerdict,
 } from "./missionTriage.ts";
 import {
-  asInvestigationState, buildSmartShortlist, identityStopThreshold,
+  asInvestigationState, buildSmartShortlist, canStartHiringBatch,
+  identityStopThreshold,
   resolveMaxPasses,
   isFrontier, resolveGptBudget, resolveInvestigationBudget, resolveTimeCapacity,
   resolveTriageConcurrency, resolveUntriagedPolicy, selectInvestigationSlice,
@@ -2434,6 +2435,10 @@ export async function runCapabilityPlan(
         enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
         read: opts.readEnv,
         observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
+        // THE DOMINANT COST, AND THE GATE'S OWN NUMBER FOR THE ONE AFTER IT.
+        hiringMsPerCompany: HIRING_MS_PER_COMPANY,
+        hiringBatchSize: HIRING_VERIFICATION_BATCH_SIZE,
+        qualificationMs: deps.deadline.estimateFor(QUALIFICATION_OP),
       })
       : null;
     // THE CLOCK DOES NOT SHRINK THE SHORTLIST — see `downstreamReserveMs`.
@@ -4466,6 +4471,10 @@ export async function runCapabilityPlan(
           enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
           read: opts.readEnv,
           observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
+          // THE DOMINANT COST, AND THE GATE'S OWN NUMBER FOR THE ONE AFTER IT.
+          hiringMsPerCompany: HIRING_MS_PER_COMPANY,
+          hiringBatchSize: HIRING_VERIFICATION_BATCH_SIZE,
+          qualificationMs: deps.deadline.estimateFor(QUALIFICATION_OP),
         })
         : null;
       if (timeCapacity) state.investigation_capacity = timeCapacity;
@@ -5256,9 +5265,43 @@ export async function runCapabilityPlan(
         // hiring verification for ever. The run id is persisted before the poll,
         // so a slice killed while waiting loses nothing and the next one adopts
         // the run for free — which makes starting safe and finishing optional.
-        if (deps.deadline?.expiredForDurableStart()) {
-          log("hiring_batch_deferred_for_deadline",
-            { remaining: batches.slice(i).reduce((n, b) => n + b.length, 0) });
+        // ── AND WHAT THIS BATCH WILL OWE AFTERWARDS ──────────────────────
+        //
+        // `expiredForDurableStart` asks only whether the CALL can be recorded.
+        // It cannot see that this slice already holds verified companies with
+        // nobody to qualify them. Hiring is greedy until it produces something,
+        // then it yields — see `canStartHiringBatch`.
+        const awaitingQualification = companies.filter((c) =>
+          c.hiring_assessment !== null && reachesCompanyBrain(c.hiring_assessment) &&
+          c.brain === null).length;
+        // ── THE TWO-CALL PRICE, AND IT IS THE RIGHT ONE HERE ────────────────
+        //
+        // Admission prices each company on its OWN operation, because a company
+        // the Stage-2 batch already grounded needs one evaluator call rather
+        // than two. That distinction cannot be made at this point in the slice:
+        // `groundedByKey` is built INSIDE the qualification capability, which
+        // has not run yet, so no company awaiting the Brain is pre-grounded and
+        // every one of them will be admitted under `QUALIFICATION_OP`.
+        //
+        // This is planning, not admission — how much clock to leave behind for
+        // N companies — and quoting the two-call price is both accurate here and
+        // the safe direction if grounding later makes one of them cheaper.
+        const qualificationDebtMs =
+          awaitingQualification * (deps.deadline?.estimateFor(QUALIFICATION_OP) ?? 0);
+        const batchGate = canStartHiringBatch({
+          remainingMs: deps.deadline?.remainingMs() ?? Number.MAX_SAFE_INTEGER,
+          qualificationDebtMs,
+          reserveMs: deps.checkpointReserveMs ?? QUALIFICATION_RESERVE_MS,
+          durableStartMs: DURABLE_START_MS,
+        });
+        if (deps.deadline?.expiredForDurableStart() || !batchGate.start) {
+          log("hiring_batch_deferred_for_deadline", {
+            remaining: batches.slice(i).reduce((n, b) => n + b.length, 0),
+            reason: batchGate.start ? "no_durable_start" : batchGate.reason,
+            awaiting_qualification: awaitingQualification,
+            required_ms: batchGate.required_ms,
+            remaining_ms: batchGate.remaining_ms,
+          });
           break;
         }
         const group = batches[i];
@@ -6481,6 +6524,10 @@ export async function runCapabilityPlan(
           enrichmentBatchSize: COMPANY_DETAILS_BATCH_SIZE,
           read: opts.readEnv,
           observedIdentityMs: deps.deadline.estimateFor(IDENTITY_SEARCH_OP),
+          // THE DOMINANT COST, AND THE GATE'S OWN NUMBER FOR THE ONE AFTER IT.
+          hiringMsPerCompany: HIRING_MS_PER_COMPANY,
+          hiringBatchSize: HIRING_VERIFICATION_BATCH_SIZE,
+          qualificationMs: deps.deadline.estimateFor(QUALIFICATION_OP),
         }).capacity
         // No deadline (offline callers) ⇒ the clock cannot bind.
         : Number.MAX_SAFE_INTEGER;
