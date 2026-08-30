@@ -54,11 +54,24 @@ Deno.test("4. the checkpoint says so in the conversation", () => {
   // minutes of nothing while 30 companies sat saved behind a spinner.
   const i = SRC.indexOf('kind: "run_checkpoint"');
   assert(i > 0, "a checkpoint must announce itself");
-  const notice = SRC.slice(Math.max(0, i - 4200), i);
+  // Same widening as 4b, for the same reason: the ledger read sits between the
+  // guard and the insert now.
+  const notice = SRC.slice(Math.max(0, i - 6000), i);
   assert(notice.includes("hit its time limit"),
     "it must say the run paused, not that it failed");
-  assert(notice.includes("Nothing is lost and nothing extra was charged"),
-    "and be explicit about cost, because the user has already been charged twice");
+  // ── EXPLICIT ABOUT COST — FROM THE LEDGER, NOT FROM A CONSTANT ─────────
+  //
+  // This used to require the literal "Nothing is lost and nothing extra was
+  // charged", which is the right INTENT expressed as the wrong implementation.
+  // The sentence was unconditional and false every time a slice had bought
+  // anything: at 11:13:03 on 2026-08-29 it was written while ten charged credit
+  // rows existed on that lineage, two of them seconds old. The user this test
+  // was written to protect — "because the user has already been charged twice"
+  // — was being told the opposite of what the ledger said.
+  assert(notice.includes("checkpointSpend"),
+    "the card must state cost from a rendered figure, not a fixed phrase");
+  assert(notice.includes("readSpendFacts("),
+    "and that figure must be read from the ledger");
   // ANCHORED ON THE BLOCK, NOT ON A BYTE DISTANCE. This used to slice a fixed
   // window backwards from the metadata, so any comment added between the guard
   // and the insert failed it — a test that measures the length of prose rather
@@ -75,7 +88,10 @@ Deno.test("4b. and it only PROMISES a resume the gate will honour", () => {
   // stored company dataset to continue from." The sentence and the gate must be
   // decided by the same function.
   const i = SRC.indexOf('kind: "run_checkpoint"');
-  const notice = SRC.slice(Math.max(0, i - 4200), i);
+  // WIDENED. The card now reads the ledger before composing itself, and that
+  // pushed `assessCheckpointResume` out of a 4200-character window. The
+  // property is unchanged; the block containing it grew.
+  const notice = SRC.slice(Math.max(0, i - 6000), i);
   assert(notice.includes("assessCheckpointResume("),
     "the wording must be derived from the same verdict `continue-workflow` uses");
   assert(notice.includes("resume.resumable"),
@@ -146,8 +162,12 @@ Deno.test("6. the checkpoint carries the ids a resume needs, and no typing instr
     "it must point at an affordance that exists");
   assert(sentence.includes("instead of searching again"),
     "and say what continuing avoids paying for");
-  assert(sentence.includes("Nothing more was charged for the part that did run"),
-    "and the unresumable branch must still be honest about cost");
+  // The comment at the top of this test says it exactly: "Two credits,
+  // immediately after a message saying nothing extra would be charged." The
+  // unresumable branch must still be honest about cost — which is why it now
+  // renders the ledger's figure rather than asserting a comforting constant.
+  assert(sentence.includes("checkpointSpend"),
+    "the unresumable branch must state what was actually charged");
   assert(notice.includes("task_id: task.id") && notice.includes("plan_id"),
     "and carry the two ids `continue-workflow` takes");
   assert(notice.includes("checkpoint_summary"),

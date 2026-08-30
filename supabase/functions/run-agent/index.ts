@@ -335,6 +335,10 @@ import { decideResume, RESUME_REFUSAL_MESSAGE, type ResumableTaskRow } from "../
 import { buildQualifiedLeadRunContext } from "../_shared/qualifiedLeadRunContext.ts";
 import { decideClaimAttempt, claimContinuation, claimContinuationViaRpc, releaseContinuationViaRpc, newClaim, releaseClaim, CLAIM_KEY, CLAIM_REFUSAL_MESSAGE, type ContinuationClaim, type ClaimDb, type RpcDb } from "../_shared/continuationClaim.ts";
 import {
+  buildRunOutcome, readFactsFromResult, readSpendFacts, renderQualificationClause,
+  renderSpendClause, type OutcomeDb, type SpendFacts,
+} from "../_shared/runOutcome.ts";
+import {
   LINEAGE_LEASE_VERSION, LEASE_REFUSAL_MESSAGE,
   acquireLineageLease, decideLeaseGate, lineageLeaseEnforced, lineageRootOf,
   releaseLineageLease, type RpcDb as LeaseRpcDb,
@@ -459,6 +463,17 @@ async function persistLeadResultsPanel(
      */
     taskId?: string | null;
     /**
+     * The task's persisted result, so the panel can read the run's own state
+     * rather than being told about it.
+     *
+     * Every sentence this function emits about qualification is derived from
+     * here through `readFactsFromResult`. Passing the counts alone is what let
+     * "none passed the Company Brain" be chosen from `qualified === 0`.
+     */
+    taskResult?: Record<string, unknown> | null;
+    /** The LINEAGE's spend, from the ledger. Never inferred from results. */
+    spend?: SpendFacts | null;
+    /**
      * Capability-engine counts. Present ONLY for LeadMissionV1 runs.
      *
      * The legacy `rawJobs` counter belongs to `companyFirstQuotaController`,
@@ -561,6 +576,16 @@ async function persistLeadResultsPanel(
 
     const delivered = `${summary.eligible} of ${summary.requested} CONTACT-ready ${summary.requested === 1 ? "lead" : "leads"}`;
     const m = summary.mission ?? null;
+    // EVERY CLAIM BELOW THAT IS ABOUT THE WORLD READS THE WORLD. Built from the
+    // task's own persisted state plus the lineage's ledger, so a sentence about
+    // qualification or spend cannot be chosen from a count the renderer happens
+    // to be holding.
+    const summaryOutcome = buildRunOutcome({
+      ...readFactsFromResult(summary.taskResult ?? null, summary.requested),
+      spend: summary.spend ?? {
+        credits_charged: 0, provider_calls: 0, usd_reported: null, unsettled_operations: 0,
+      },
+    });
     // THE COUNTS COME FROM THE PATH THAT ACTUALLY RAN.
     //
     // A capability-engine run never touches the legacy quota controller, so its
@@ -571,12 +596,22 @@ async function persistLeadResultsPanel(
     // "0 qualified" on its own makes the user do the diagnosis. On task 42e39fb1
     // the honest sentence was available and unsaid: six companies had strong
     // signals and their LinkedIn identities could not be resolved.
+    // ── THE BRANCH THAT DID NOT EXIST ──────────────────────────────────
+    //
+    // The last arm used to read "N identities resolved but none passed the
+    // Company Brain", reachable whenever `qualified === 0 && shortlisted > 0`
+    // with NO check that qualification had evaluated anybody. On 2026-08-29 it
+    // was said three times about a stage that reported `eligible: 3,
+    // reached_evaluation: 0` — nothing passed because nothing was asked.
+    //
+    // `renderQualificationClause` reads the evaluation telemetry the engine has
+    // always written, and has a sentence for the case that had none.
     const stalled = m && m.qualified === 0 && m.shortlisted > 0
       ? m.identities_unresolved === m.shortlisted
         ? ` Their LinkedIn company identities could not be resolved, so none reached final qualification.`
         : m.identities_resolved === 0
         ? ` None of them reached an actionable company identity, so verification could not run.`
-        : ` ${m.identities_resolved} identities resolved but none passed the Company Brain.`
+        : ` ${renderQualificationClause(summaryOutcome)}`
       : "";
     const evidence = m
       ? `I discovered ${m.companies_discovered} ${m.companies_discovered === 1 ? "company" : "companies"} and ` +
@@ -2954,6 +2989,22 @@ Deno.serve(async (req) => {
                       );
                       const foundLine = found > 0
                         ? ` — ${found} companies found, ${short} shortlisted` : "";
+                      // ── WHAT THIS SLICE ACTUALLY SPENT ─────────────────
+                      //
+                      // The card used to assert "nothing extra was charged"
+                      // unconditionally. Read from the ledger instead, and read
+                      // for the LINEAGE, because the sentence is about the
+                      // user's request rather than about this generation of it.
+                      const { data: spendRows } = await supabase.from("tasks")
+                        .select("id").eq("lineage_id", lineageRootId);
+                      const checkpointSpend = renderSpendClause(buildRunOutcome({
+                        ...readFactsFromResult(null, 0),
+                        spend: await readSpendFacts(
+                          supabase as unknown as OutcomeDb, workspace_id,
+                          Array.isArray(spendRows) && spendRows.length > 0
+                            ? (spendRows as Array<{ id: string }>).map((r) => r.id)
+                            : [task.id]),
+                      }));
                       // WHAT WENT WRONG, IN THE USER'S TERMS. Each branch names
                       // the thing that is actually missing rather than offering
                       // a button that will refuse.
@@ -2988,14 +3039,24 @@ Deno.serve(async (req) => {
                           // sentence to be interpreted. The message carries
                           // those ids and the chat renders a Continue button
                           // that calls `continue-workflow` with them.
+                          // ── IT USED TO SAY "NOTHING EXTRA WAS CHARGED" ──
+                          //
+                          // Unconditional, and false every time a slice had
+                          // bought anything. At 11:13:03 on 2026-08-29 it was
+                          // written while ten charged credit rows existed on
+                          // this lineage, two of them seconds old.
+                          //
+                          // What is true and worth saying is that the work is
+                          // kept and that continuing reuses it. What was spent
+                          // comes from the ledger.
                           content: resume.resumable
                             ? `This run hit its time limit partway through, so I've saved where it ` +
-                              `got to${foundLine}. Nothing is lost and nothing extra was charged. ` +
+                              `got to${foundLine}. ${checkpointSpend} ` +
                               `Use Continue below to pick it up from here — it reuses the work ` +
                               `already paid for instead of searching again.`
                             : `This run hit its time limit partway through${foundLine}. ` +
                               `I can't pick this one up where it left off: ${cannotResume}. ` +
-                              `Nothing more was charged for the part that did run.`,
+                              `${checkpointSpend}`,
                           agent_slug: "pilot",
                           metadata: {
                             plan_id: plan_id ?? null,
@@ -3030,14 +3091,19 @@ Deno.serve(async (req) => {
                         // THE VERDICT MOVED. Correct the standing notice rather
                         // than leaving a stale one or adding a second.
                         await supabase.from("messages").update({
+                          // THE SAME CARD, CORRECTED IN PLACE — and it carried
+                          // the same two false promises. A stale notice being
+                          // rewritten is exactly when the numbers have moved, so
+                          // this is the last place that should be quoting a
+                          // constant about money.
                           content: resume.resumable
                             ? `This run hit its time limit partway through, so I've saved ` +
-                              `where it got to${foundLine}. Nothing is lost and nothing extra ` +
-                              `was charged. Use Continue below to pick it up from here — it ` +
+                              `where it got to${foundLine}. ${checkpointSpend} ` +
+                              `Use Continue below to pick it up from here — it ` +
                               `reuses the work already paid for instead of searching again.`
                             : `This run hit its time limit partway through${foundLine}. ` +
                               `I can't pick this one up where it left off: ${cannotResume}. ` +
-                              `Nothing more was charged for the part that did run.`,
+                              `${checkpointSpend}`,
                           metadata: {
                             ...((already as { metadata?: Record<string, unknown> })
                               .metadata ?? {}),
@@ -5162,12 +5228,35 @@ Deno.serve(async (req) => {
         // Opens for completed, partial, continuation-required and zero-lead
         // outcomes alike — a run that found nothing still owes the user the
         // honest empty table, the bottleneck and the Continue action.
+        // ── THE FACTS THIS PANEL IS ALLOWED TO SPEAK FROM ────────────────
+        //
+        // The row as committed, and the whole LINEAGE's spend. Scoped to the
+        // lineage because a continuation is the same request: reporting one
+        // generation's spend as the request's is how "nothing extra was
+        // charged" could be almost true and still wrong.
+        const { data: panelRow } = await supabase.from("tasks")
+          .select("result").eq("id", task.id).maybeSingle();
+        const panelResult =
+          ((panelRow as { result?: Record<string, unknown> } | null)?.result ?? {});
+        const { data: lineageRows } = await supabase.from("tasks")
+          .select("id").eq("lineage_id", lineageRootId);
+        const lineageTaskIds = Array.isArray(lineageRows) && lineageRows.length > 0
+          ? (lineageRows as Array<{ id: string }>).map((r) => r.id)
+          // Before the lease has linked a row, a task is its own lineage.
+          : [task.id];
+
         await persistLeadResultsPanel(supabase, plan_id, uiPanel, {
           eligible: cf.quota.eligible_leads,
           requested: cf.quota.requested_leads,
           rawJobs: cf.counts.rawJobs,
           terminalStatus: cf.status,
           taskId: task.id,
+          // THE ROW AS COMMITTED, and the LINEAGE's ledger. Read here so the
+          // panel's sentences are derived from what is stored rather than from
+          // the counters this call site happens to be holding.
+          taskResult: panelResult,
+          spend: await readSpendFacts(
+            supabase as unknown as OutcomeDb, workspace_id, lineageTaskIds),
           // Present only when the capability engine ran. `capabilityRun` is null
           // for legacy tasks, and the legacy counter is then still correct.
           mission: capabilityRun
@@ -5968,7 +6057,22 @@ Deno.serve(async (req) => {
         const failActions = ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
         const reviewedCount = sourceQuality?.raw_result_count ?? "the";
         const scoutLine = `I reviewed ${reviewedCount} raw result${sourceQuality?.raw_result_count === 1 ? "" : "s"}, but none matched closely enough. I didn't save any leads.`;
-        const pilotLine = "Try broadening your criteria or changing the source. No credits charged, nothing sent.";
+        // ── THIS WAS A CONSTANT ────────────────────────────────────────────
+        //
+        // "No credits charged, nothing sent." — emitted whenever
+        // `produced === 0`, which is a statement about RESULTS and was being
+        // made about MONEY. It was shown at 11:14:36 on 2026-08-29, after ten
+        // credits had been charged on that lineage.
+        //
+        // The ledger is read here, and "nothing sent" stays because it is the
+        // one half that was always true: this path sends nothing.
+        const noMatchSpend = renderSpendClause(buildRunOutcome({
+          ...readFactsFromResult(scoutResult ?? null, requested),
+          spend: await readSpendFacts(
+            supabase as unknown as OutcomeDb, workspace_id, [task.id]),
+        }));
+        const pilotLine =
+          `Try broadening your criteria or changing the source. ${noMatchSpend} Nothing sent.`;
         const card = {
           kind: "lead_sourcing_error",
           title: "No qualified matches",
