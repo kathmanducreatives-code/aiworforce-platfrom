@@ -16,6 +16,7 @@ import {
   type QualifiedLeadContract,
 } from '@/lib/qualifiedLead/contract';
 import { executionStages, COMPOUND_STAGE_NOTE } from '@/lib/qualifiedLead/planCopy';
+import { requestImpliesQualifiedLead } from '@/lib/qualifiedLead/routingExpectation';
 
 interface WorkflowConfirmationPayload {
   workflow_id: string;
@@ -121,16 +122,16 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
 
   // DEV-ONLY ROUTING-MISMATCH GUARD.
   //
-  // If the user's original request implies qualified-lead sourcing — person-target
-  // verbs (founder/CEO/owner/decision-maker) OR an explicit "N qualified leads"
-  // quota — but the returned preview is account-shaped (isQualifiedLeadPayload
-  // returned false), we surface the mismatch instead of silently running the
-  // legacy account-signal workflow. Gated on DEV so it never blocks end users.
+  // If a correctly-routed backend would have returned a qualified-lead contract
+  // and did not, surface the mismatch instead of silently running the legacy
+  // account-signal workflow. Gated on DEV so it never blocks end users.
+  //
+  // The decision moved into `requestImpliesQualifiedLead`, which reads the
+  // MISSION rather than scanning the sentence. Scanning matched "Executives" out
+  // of "actively hiring … Account Executives" and disabled Start on a company
+  // request the Pilot had routed perfectly.
   const originalRequest = String(payload.original_instruction ?? payload.goal ?? '');
-  const impliesQualifiedLead =
-    /\b(founders?|co-?founders?|owners?|ceos?|presidents?|decision[-\s]?makers?|people to contact|contacts?|executives?)\b/i.test(originalRequest)
-    || /\b(qualified leads?|contact[-\s]?ready|verified contacts?)\b/i.test(originalRequest)
-    || /\b\d{1,3}\s+(?:qualified|contact[-\s]?ready|verified)?\s*leads?\b/i.test(originalRequest);
+  const impliesQualifiedLead = requestImpliesQualifiedLead({ mission, originalRequest });
   const routingMismatch = import.meta.env.DEV && impliesQualifiedLead && !qualifiedLead;
 
   const handleStart = () => {
