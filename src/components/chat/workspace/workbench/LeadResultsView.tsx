@@ -6,7 +6,16 @@ import LeadSpreadsheet from './leadTable/LeadSpreadsheet';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, isRecommendationDispatchable, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
-import { Loader2, Filter, X, CheckCircle2, AlertTriangle } from 'lucide-react';
+import LeadFilterBar from './LeadFilterBar';
+import {
+  EMPTY_WORKBENCH_FILTERS, applyWorkbenchFilters, filterOptionsFrom,
+  activeFilterCount, type WorkbenchFilters,
+} from '@/lib/workbench/leadFilters';
+import {
+  workbenchRowsToCsv, rowsForScope, exportFilename, qualificationOf,
+  type ExportScope, type ExportableLead,
+} from '@/lib/workbench/leadExport';
+import { Loader2, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -92,8 +101,10 @@ export default function LeadResultsView({
   // completed stages still exist.
   const [accountViews, setAccountViews] = useState<Record<string, WorkbenchAccountView>>({});
   const [actionOutcome, setActionOutcome] = useState<{ kind: LeadActionKind; success: boolean; error?: string; summary?: string } | null>(null);
-  const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
-  const [minFit, setMinFit] = useState(0);
+  // ONE FILTER OBJECT, not a variable per axis. `Has website` and the Fit chips
+  // were the only two the Workbench ever had (unchanged since `ada8c9dc`); they
+  // are `hasWebsite` and `minFit` here and behave exactly as before.
+  const [filters, setFilters] = useState<WorkbenchFilters>({ ...EMPTY_WORKBENCH_FILTERS });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerRow, setDrawerRow] = useState<LeadTableRow | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ action: LeadResultPanelAction; ids: string[]; credits: number } | null>(null);
@@ -209,11 +220,23 @@ export default function LeadResultsView({
 
   const tabRows = tab === 'in_review' ? partition.inReview : partition.qualified;
 
-  const filtered = useMemo(() => tabRows.filter((r) => {
-    if (onlyWithWebsite && !r.website) return false;
-    if (minFit > 0 && (r.fit_score ?? 0) < minFit) return false;
-    return true;
-  }), [tabRows, onlyWithWebsite, minFit]);
+  // FILTERS COMPOSE WITH THE TAB, they do not replace it: the tab decides which
+  // rows exist, the filters narrow that set. Qualified + UK + 20-200 is the tab's
+  // rows, then the location, then the band — never a filter that reaches back
+  // across a tab boundary.
+  const filtered = useMemo(
+    () => applyWorkbenchFilters(tabRows, filters),
+    [tabRows, filters],
+  );
+  // Options come from the TAB's rows, so a menu never offers a value that can
+  // only ever return nothing here.
+  const filterOptions = useMemo(() => filterOptionsFrom(tabRows), [tabRows]);
+  const activeFilters = activeFilterCount(filters);
+  // The second export scope's size — the whole run, not this tab.
+  const qualifiedTotal = useMemo(
+    () => items.filter((r) => qualificationOf(r as ExportableLead).qualified).length,
+    [items],
+  );
 
   const selectedRows = useMemo(
     () => filtered.filter((r) => selected.has(r.id)),
@@ -382,6 +405,30 @@ export default function LeadResultsView({
     await refresh();
   }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 
+  // ── EXPORT ─────────────────────────────────────────────────────────────
+  //
+  // Two named scopes instead of one control whose meaning depended on whether a
+  // checkbox happened to be ticked. `current_view` takes the rows the table is
+  // showing — already narrowed by the tab and the filters, and not re-decided
+  // here, because an export that recomputes its own rows is an export that can
+  // disagree with the screen. `qualified` reads the run's full row set.
+  const runExport = useCallback((scope: ExportScope) => {
+    const rows = rowsForScope(scope, {
+      visible: filtered as ExportableLead[],
+      all: items as ExportableLead[],
+    });
+    downloadCsv(exportFilename(scope, meta.plan_id), workbenchRowsToCsv(rows));
+  }, [filtered, items, meta.plan_id]);
+
+  // The ~110-column audit export, unchanged. Same rows as the current view, so
+  // the two files describe the same set at different depths.
+  const runDiagnosticExport = useCallback(() => {
+    downloadCsv(
+      `run-diagnostics-${meta.plan_id.slice(0, 8)}.csv`,
+      rowsToCsv(filtered, meta.qualified_lead_run ?? null),
+    );
+  }, [filtered, meta.plan_id, meta.qualified_lead_run]);
+
   const runAction = useCallback((action: LeadResultPanelAction, rows: LeadTableRow[]) => {
     if (action === 'export_csv') {
       // The run context travels with the export so every row can be traced back
@@ -499,33 +546,25 @@ export default function LeadResultsView({
         })}
       </div>
 
-      {/* Filters apply to the two lead tabs only — there is nothing to filter
-          on a list of companies the run never reached, and offering a control
-          that changes nothing is worse than not offering it. */}
+      {/* Filters and export apply to the two lead tabs only — there is nothing
+          to filter on a list of companies the run never reached, and offering a
+          control that changes nothing is worse than not offering it.
+
+          EXPORT LIVES HERE, not in the selection toolbar. It was in the
+          always-rendered action bar until `2ba36cfc` folded that bar into a
+          selection-gated one; the button survived, the way to reach it without
+          ticking a checkbox did not. */}
       {(tab === 'qualified' || tab === 'in_review') && (
-      <div className="px-7 py-2 flex items-center gap-1.5 text-[12.5px] shrink-0">
-        <Filter className="h-3.5 w-3.5 text-[#6e7681]" />
-        <button
-          onClick={() => setOnlyWithWebsite((v) => !v)}
-          className={`px-2.5 py-1 rounded-md border transition-colors ${onlyWithWebsite ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.08] bg-white/[0.02] text-[#8b949e] hover:text-[#C9D1D9]'}`}
-        >
-          Has website
-        </button>
-        {[60, 75, 90].map((v) => (
-          <button
-            key={v}
-            onClick={() => setMinFit(minFit === v ? 0 : v)}
-            className={`px-2.5 py-1 rounded-md border transition-colors ${minFit === v ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/[0.08] bg-white/[0.02] text-[#8b949e] hover:text-[#C9D1D9]'}`}
-          >
-            Fit {v}+
-          </button>
-        ))}
-        {(onlyWithWebsite || minFit > 0) && (
-          <span className="ml-auto text-[12.5px] text-[#6e7681] tabular-nums">
-            {filtered.length} of {tabRows.length}
-          </span>
-        )}
-      </div>
+        <LeadFilterBar
+          filters={filters}
+          onFilters={setFilters}
+          options={filterOptions}
+          shown={filtered.length}
+          total={tabRows.length}
+          qualifiedTotal={qualifiedTotal}
+          onExport={runExport}
+          onExportDiagnostic={runDiagnosticExport}
+        />
       )}
 
       {/* RecommendationBanner removed: the recommendation IS the hero CTA
@@ -627,10 +666,20 @@ export default function LeadResultsView({
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center px-8">
-          <p className="text-[13px] text-[#8b949e] text-center">
-            No {tab === 'qualified' ? 'qualified leads' : 'companies'} match these filters.
+        // THE TAB HAS ROWS AND THE FILTERS HID THEM ALL. Says which filters, and
+        // offers the one action that helps — an empty state that only reports
+        // emptiness leaves the reader hunting for what they set three tabs ago.
+        <div className="flex-1 flex flex-col items-center justify-center px-8 gap-3">
+          <p className="text-[13px] text-[#8b949e] text-center max-w-sm leading-relaxed">
+            None of the {tabRows.length} {tab === 'qualified' ? 'qualified leads' : 'companies'} on
+            this tab match {activeFilters === 1 ? 'this filter' : `these ${activeFilters} filters`}.
           </p>
+          <button
+            onClick={() => setFilters({ ...EMPTY_WORKBENCH_FILTERS })}
+            className="px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[12.5px] text-[#8b949e] hover:text-[#C9D1D9] transition-colors"
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
         // ── THE RESEARCH SPREADSHEET ─────────────────────────────────────
@@ -696,8 +745,15 @@ export default function LeadResultsView({
             title="Drafts always need your approval — nothing is sent automatically"
             busyLabel={LEAD_ACTION_LOADING.generate_outreach}
           />
+          {/* Selection-scoped export. `rowsForExport` still encodes the old
+              intent — selection if there is one, otherwise the visible rows —
+              and this bar only renders WITH a selection, so it is the selection
+              every time. The business columns, matching the Export menu. */}
           <ActionButton
-            onClick={() => runAction('export_csv', rowsForExport(selectedRows, filtered))}
+            onClick={() => downloadCsv(
+              exportFilename('current_view', meta.plan_id),
+              workbenchRowsToCsv(rowsForExport(selectedRows, filtered) as ExportableLead[]),
+            )}
             label={`Export CSV (${selectedRows.length})`}
           />
           <button

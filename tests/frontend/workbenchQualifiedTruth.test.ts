@@ -203,8 +203,23 @@ Deno.test("13. nothing above or below the list has a fixed or percentage height"
 
 Deno.test("14. every remaining sibling is explicitly shrink-0", () => {
   // A sibling that can GROW competes with the list for the same pixels.
+  //
+  // The filter row used to be inline here and was pinned by its exact class
+  // string. It is now `LeadFilterBar` — same row, same position, same job — so
+  // the invariant is checked where the element actually lives. Pinning the old
+  // literal would only have asserted that nobody ever extracted a component.
   const src = code(VIEW);
-  for (const marker of ["py-2 flex items-center gap-1.5 text-[12.5px] shrink-0", "shrink-0 px-7 py-3 border-t"]) {
-    assert(src.includes(marker), `missing shrink-0 on: ${marker}`);
-  }
+  assert(src.includes("shrink-0 px-7 py-3 border-t"),
+    "the selection action bar must not grow");
+  const bar = code(read(
+    "../../src/components/chat/workspace/workbench/LeadFilterBar.tsx"));
+  const root = bar.match(/return \(\s*<div className="([^"]+)"/);
+  assert(root, "LeadFilterBar must have a single root div with a class list");
+  assert(root![1].includes("shrink-0"),
+    `the filter/export row must not grow: ${root![1]}`);
+  // And it must still be a sibling of the list rather than something that
+  // wraps it — a wrapper would reintroduce the height competition.
+  assert(src.includes("<LeadFilterBar"), "the filter row is rendered by the view");
+  assert(!/<LeadFilterBar[\s\S]{0,4000}<\/LeadFilterBar>/.test(src),
+    "the filter row is self-closing, not a wrapper around the list");
 });
