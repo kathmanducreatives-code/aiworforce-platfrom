@@ -191,6 +191,10 @@ export default function LeadFilterBar({
                   <button
                     key={scope}
                     role="menuitem"
+                    // The label and the count are separate elements, so the
+                    // accessible name is built here or the item announces as
+                    // an unnamed menuitem.
+                    aria-label={`${EXPORT_SCOPE_LABEL[scope]} — ${scope === 'qualified' ? qualifiedTotal : shown} rows`}
                     onClick={() => fire(scope)}
                     className="w-full text-left px-3 py-2 hover:bg-white/[0.04] transition-colors"
                   >
@@ -208,6 +212,7 @@ export default function LeadFilterBar({
                 <div className="my-1 h-px bg-white/[0.06]" />
                 <button
                   role="menuitem"
+                  aria-label="Export full run diagnostics"
                   onClick={() => { setMenuOpen(false); onExportDiagnostic(); }}
                   className="w-full text-left px-3 py-2 hover:bg-white/[0.04] transition-colors"
                 >
