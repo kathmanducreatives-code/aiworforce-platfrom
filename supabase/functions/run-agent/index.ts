@@ -361,7 +361,9 @@ import {
   dispatchContinuation, type DispatchOutcome,
 } from "../_shared/leadContinuationDispatch.ts";
 import { isFrontier, isUnfinishedFrontier, wasInvestigated } from "../_shared/leadInvestigationBudget.ts";
-import { projectStatus, RESUMABLE_ROW_STATUS } from "../_shared/taskStatusContract.ts";
+import {
+  projectStatus, RESUMABLE_ROW_STATUS, holdsResumableWork,
+} from "../_shared/taskStatusContract.ts";
 import { compileJobIntent } from "../_shared/jobIntentTaxonomy.ts";
 import { emptyCompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
 // From the module that OWNS the type. Importing it from
@@ -5861,6 +5863,31 @@ Deno.serve(async (req) => {
     // status enum and records result_status + counts in the result JSON (no
     // migration). Aria/Penn are not invoked; nothing persists.
     const noResults = buildNoResults(provenanceRejections.count);
+
+    // ── DOES THIS ROW ALREADY OWE A CONTINUATION? ───────────────────────────
+    //
+    // "Nothing qualified in MY slice" is not "this request is over". Run
+    // 7e71d8bc: generation 1 checkpointed `continuation_required` with 21
+    // candidates left and dispatched cleanly; its successor never reached the
+    // capability engine, fell through to this branch, and stamped `complete` /
+    // plan `failed` over the live checkpoint. `resume-stalled-leads` selects
+    // `status = "ready"`, so the run was stranded — fd4ed70a's ending reached
+    // by a writer that bypasses the finalizer entirely.
+    //
+    // The result patch is still merged: the run's own account of what it found
+    // is worth keeping either way. Only the two TERMINAL stamps are withheld,
+    // and only when a continuation is outstanding.
+    const { data: noResRow } = await supabase.from("tasks")
+      .select("result").eq("id", task.id).maybeSingle();
+    const noResPrior = ((noResRow as { result?: Record<string, unknown> } | null)?.result ?? {});
+    const continuationOutstanding = holdsResumableWork(noResPrior);
+    if (continuationOutstanding) {
+      console.log("[run-agent][no-results] skipped terminal stamp — continuation outstanding", {
+        task_id: task.id, plan_id,
+        terminal_status: noResPrior.terminal_status ?? null,
+      });
+    }
+
     // MERGED — see `taskResultMerge.ts`. "Nothing qualified" is a verdict about
     // the run, not a reason to delete the run's own record of why.
     await writeTaskResult(
@@ -5883,10 +5910,14 @@ Deno.serve(async (req) => {
         company_enrichment_observability: companyEnrichmentObservability,
         signal_enrichment_observability: signalEnrichmentObservability,
       },
-      { status: "complete" },
+      // The row keeps `ready` + `continuation_required` when a continuation is
+      // outstanding, so the sweeper can still see it.
+      continuationOutstanding ? {} : { status: "complete" },
       { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
     );
-    await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
+    if (!continuationOutstanding) {
+      await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
+    }
 
     if (ariaFollows && nextStepSlug === "aria") {
       await supabase.from("activity_feed").insert({

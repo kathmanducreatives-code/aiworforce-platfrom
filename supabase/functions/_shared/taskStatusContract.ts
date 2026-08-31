@@ -177,6 +177,44 @@ export function projectApprovalPending(): { rowStatus: TaskRowStatus; taskStatus
   return { rowStatus: "awaiting_approval", taskStatus: "partial" };
 }
 
+/**
+ * DOES THIS ROW HOLD WORK A CONTINUATION WOULD RESUME?
+ *
+ * ── THE WRITE THIS EXISTS TO STOP ──────────────────────────────────────────
+ *
+ * The legacy "no results" terminal stamps `tasks.status = "complete"` and
+ * `task_plans.status = "failed"` whenever a run accepted zero qualified leads.
+ * On the mission path the capability engine returns long before it — the
+ * comment above that branch says so — but a CONTINUATION that never reaches the
+ * engine falls straight through to it.
+ *
+ * Run 7e71d8bc: generation 1 checkpointed `continuation_required` with 21
+ * candidates left and dispatched cleanly. Its successor took the legacy path,
+ * found nothing of its own, and stamped `complete` / `failed` over a live
+ * checkpoint. `resume-stalled-leads` selects `status = "ready"`, so the run was
+ * stranded — the same ending as fd4ed70a, reached by a different writer that
+ * bypasses the finalizer entirely.
+ *
+ * "Nothing qualified in MY slice" is not "this request is over". Only a row
+ * with no continuation outstanding may be finalized by that branch.
+ */
+export function holdsResumableWork(
+  result: Record<string, unknown> | null | undefined,
+): boolean {
+  const r = (result ?? {}) as Record<string, unknown>;
+  // The claim gate's own vocabulary: this is the ONLY string
+  // `claim_sourcing_continuation` accepts, so it is the definition of
+  // "a continuation is outstanding".
+  if (isContinuable(typeof r.terminal_status === "string" ? r.terminal_status : null)) {
+    return true;
+  }
+  // A checkpoint that never got to write a terminal status still represents
+  // paid, restorable work. Absence of a verdict is not permission to discard it.
+  const auto = (r.auto_continuation ?? null) as { continuing?: unknown } | null;
+  if (auto && auto.continuing === true) return true;
+  return false;
+}
+
 /** Is a further continuation allowed for this outcome? */
 export function isContinuable(terminalStatus: string | null | undefined): boolean {
   return terminalStatus === "continuation_required";
