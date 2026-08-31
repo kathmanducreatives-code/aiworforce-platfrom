@@ -52,6 +52,8 @@ export type TerminalReason =
   | "provider_failure"
   | "provider_input_validation_failed"
   | "no_qualified_companies"
+  /** The invocation never reached the engine; it observed nothing. */
+  | "no_execution_state_observed"
   | "unhandled_exception"
   /**
    * The run was REFUSED before any paid work, by a guard doing its job.
@@ -554,6 +556,48 @@ export function decideTerminalRecord(
     accumulated_cost_units: cost,
     elapsed_ms: ctx.elapsedMs,
   };
+
+  // ── NOBODY LOOKED. THAT IS NOT THE SAME AS NOBODY FOUND ANYTHING ────────
+  //
+  // `state` is null when this invocation never called `observe` — the engine
+  // did not run, so no capability, no company and no verdict was ever seen.
+  // Every branch below reads `s` and, on an empty object, falls all the way
+  // through to `completed / no_qualified_companies, resumable: false`: the run
+  // is finished, it found nothing, and it may never be resumed.
+  //
+  // ── WHAT THAT COST ──────────────────────────────────────────────────────
+  //
+  // Task fd4ed70a. Generation 1 checkpointed `continuation_required` with 23
+  // companies still to investigate and dispatched its successor correctly. The
+  // successor booted, took a path that never reached the capability engine,
+  // and returned. The guard's `finally` then wrote `completed /
+  // no_qualified_companies` over the checkpoint — which set `tasks.status` to
+  // `complete`, and the sweeper selects `status = "ready"`, so nothing would
+  // ever look at those 23 companies again. The run died silently, mid-flight,
+  // reporting that it had finished and found nothing.
+  //
+  // `disarm()` exists for this and its own comment records the same overwrite
+  // on task 7cd5cfb1. But disarm has to be CALLED, so it only ever covers the
+  // return paths somebody remembered; the default stayed fail-open, and any
+  // new early return re-creates the bug. This inverts the default instead.
+  //
+  // A crash is still a failure — the error branch below runs first, because an
+  // exception with no state is a failed run, not an unobserved one.
+  // A DEADLINE IS THE MORE SPECIFIC ANSWER when both apply — the invocation did
+  // run, it just ran out of time — and both are partial/resumable, so this only
+  // ever changes the reason, never the row.
+  if (
+    (state === null || state === undefined) &&
+    (ctx.error === undefined || ctx.error === null) &&
+    !ctx.deadlineReached
+  ) {
+    return {
+      ...base, blocked_by: null, status: "partial", reason: "no_execution_state_observed",
+      detail: "this invocation never reached the engine, so it established nothing " +
+        "about the run; the previous checkpoint stands",
+      resumable: true,
+    };
+  }
 
   // An UNCAUGHT ERROR is a failure even if progress was made. Reporting it as
   // partial would hide the exception.

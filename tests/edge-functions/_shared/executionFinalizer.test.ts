@@ -154,9 +154,23 @@ Deno.test("8. the decision is total — no input yields an unknown outcome", () 
   assertEquals(empty.status, "completed");
   assertEquals(empty.reason, "no_qualified_companies");
 
-  // Null state must still produce a record rather than throwing.
-  assertEquals(at(null, { elapsedMs: 0 }).status, "completed");
-  assertEquals(at(undefined, { elapsedMs: 0 }).reason, "no_qualified_companies");
+  // ── NULL STATE MUST STILL PRODUCE A RECORD RATHER THAN THROWING ────────
+  //
+  // Which it does, and that was always this assertion's point. What it used to
+  // pin was the VALUE — `completed / no_qualified_companies` — and that value
+  // was the bug: a null state means this invocation never called `observe()`,
+  // so it never reached the engine and learned nothing. Reporting that as a
+  // finished run with no results wrote `tasks.status = "complete"` over a live
+  // checkpoint, and the sweeper only selects `ready`. Task fd4ed70a lost 23
+  // companies to it.
+  //
+  // Totality is unchanged; the answer is now the truthful one.
+  for (const st of [null, undefined]) {
+    const rec = at(st, { elapsedMs: 0 });
+    assertEquals(rec.status, "partial");
+    assertEquals(rec.reason, "no_execution_state_observed");
+    assertEquals(rec.resumable, true);
+  }
 });
 
 Deno.test("9. an in-flight run is reported even when the deadline also passed", () => {
