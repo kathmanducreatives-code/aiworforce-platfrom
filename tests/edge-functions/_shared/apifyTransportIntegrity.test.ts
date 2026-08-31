@@ -32,6 +32,7 @@ const CANONICAL =
   "Find founders of SaaS startups hiring Sales Operations in the United States. Return 5 qualified leads.";
 
 /** The exact body this mission must put on the wire. */
+const CAPABILITY = "apify_yc_companies_memo23";
 const EXPECTED_BODY = {
   mode: "companies",
   queries: [],
@@ -136,7 +137,10 @@ function envelope(over: Record<string, unknown> = {}) {
     compiled_actor_input: true,
     capability_key: "apify_yc_companies_memo23",
     input: { ...EXPECTED_BODY },
-    compiled_input_hash: hashInput(EXPECTED_BODY),
+    // THE ACTOR IS PART OF THE HASH NOW. `build()` in the compiler passes its
+    // own actorKey; an envelope hashed without it is not the envelope the
+    // compiler would have produced, and the outbound guard says so.
+    compiled_input_hash: hashInput(EXPECTED_BODY, CAPABILITY),
     ...over,
   };
 }
@@ -267,7 +271,7 @@ Deno.test("5. a hash mismatch fails before fetch and records both hashes", async
     assertEquals(r.error, "compiled_input_hash_mismatch");
     const d = r.data as Record<string, unknown>;
     assertEquals(d.expected_hash, "deadbeef");
-    assertEquals(d.outbound_hash, hashInput(EXPECTED_BODY));
+    assertEquals(d.outbound_hash, hashInput(EXPECTED_BODY, CAPABILITY));
     assertEquals(d.capability, "apify_yc_companies_memo23");
     assertEquals(startCalls(cap.calls).length, 0, "no provider call on a mismatch");
   } finally { cap.restore(); }

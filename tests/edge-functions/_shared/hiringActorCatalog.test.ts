@@ -5,6 +5,7 @@
 // point is that the limitation is ENFORCED, not merely documented.
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { isV2Fingerprint } from "../../../supabase/functions/_shared/providerInputFingerprint.ts";
 import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, HIRING_ACTOR_CATALOG, PROFILE_SEARCH_SCRAPER_MODES,
   actorsRequiringEnrichment, hiringActorCard,
@@ -99,7 +100,10 @@ Deno.test("5. solidcode single teamSize compiles, and fan-out produces valid cal
   assert(ok.ok);
   if (ok.ok) {
     assertEquals(ok.actorId, "solidcode/ycombinator-scraper");
-    assert(ok.inputHash.length === 8);
+    // WAS `length === 8`, the width of the old FNV-1a hash. The fingerprint is
+    // now SHA-256 over `{actorKey, input}` and announces its own scheme, so the
+    // property worth asserting is that it IS one — not how wide it happens to be.
+    assert(isV2Fingerprint(ok.inputHash), ok.inputHash);
     assert(ok.batchIdentity.includes("11-50"), "the band must be identifiable in the batch id");
   }
   const fan = fanOutSolidcodeTeamSizes(

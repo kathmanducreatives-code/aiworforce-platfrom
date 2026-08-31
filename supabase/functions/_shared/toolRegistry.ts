@@ -1058,7 +1058,11 @@ async function execSourceWithApify(
   // after every transformation, against the exact object handed to
   // JSON.stringify below — because validating one object and sending another is
   // the failure this whole path keeps repeating.
-  const outboundHash = hashInput(actorInput);
+  // THE SAME FUNCTION AND THE SAME ACTOR KEY THE COMPILER USED. `hashInput` now
+  // hashes `{actorKey, input}`, so an outbound check that omitted the key would
+  // never equal the compiled value and every compiled call would fail closed.
+  const outboundHash = hashInput(
+    actorInput, typeof compiledCapability === "string" ? compiledCapability : "");
   const expectedHash = typeof i.compiled_input_hash === "string" ? i.compiled_input_hash : null;
   if (compiledPassthrough && expectedHash && expectedHash !== outboundHash) {
     console.error("[toolRegistry] compiled_input_hash_mismatch", {

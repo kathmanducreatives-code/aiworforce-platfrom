@@ -203,8 +203,29 @@ export type CompileResult<T> = CompiledActorCall<T> | CompileFailure;
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
-/** FNV-1a. Stable across runs; used for idempotency keys, never for secrecy. */
-export function hashInput(v: unknown): string {
+/**
+ * The compiled call's fingerprint.
+ *
+ * ── WAS FNV-1a 32-BIT, WITHOUT THE ACTOR ──────────────────────────────────
+ *
+ * 4.3e9 values, and the thing it protects is "do not buy this again": a
+ * collision does not corrupt a row, it silently skips a paid call that should
+ * have been made. It also omitted the actor, so one input aimed at two actors
+ * hashed identically and only the surrounding key told them apart.
+ *
+ * Now `SHA-256(canonicalJson({actorKey, input}))`, the same function the
+ * checkpoint and the outbound guard use — one fingerprint boundary, not three.
+ *
+ * `actorKey` is optional so the pre-existing one-argument shape still compiles
+ * for callers that hash something other than an actor payload; every compiler
+ * in this file passes it.
+ */
+export function hashInput(v: unknown, actorKey = ""): string {
+  return providerInputFingerprint(actorKey, v);
+}
+
+/** The pre-v2 hash. READ ONLY — for recognising historical keys. */
+export function legacyHashInput(v: unknown): string {
   const s = canonical(v);
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -218,6 +239,8 @@ function canonical(v: unknown): string {
   return `{${Object.keys(o).sort().filter((k) => o[k] !== undefined)
     .map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(",")}}`;
 }
+
+import { providerInputFingerprint } from "./providerInputFingerprint.ts";
 
 const LINKEDIN_COMPANY_URL =
   /^https?:\/\/([a-z0-9-]+\.)?linkedin\.com\/(company|school|showcase)\/[A-Za-z0-9_\-%.]+\/?$/i;
@@ -277,7 +300,7 @@ function fail(actorKey: string, errors: string[]): CompileFailure {
 function build<T>(actorKey: string, input: T, outType: "company" | "job" | "person",
                   cost: CostEstimate, warnings: string[], batchSeed: string): CompiledActorCall<T> {
   const card = HIRING_ACTOR_CATALOG[actorKey];
-  const inputHash = hashInput(input);
+  const inputHash = hashInput(input, actorKey);
   return {
     ok: true, actorKey, actorId: card.actor_id, input, inputHash,
     batchIdentity: `${actorKey}:${batchSeed}:${inputHash}`,

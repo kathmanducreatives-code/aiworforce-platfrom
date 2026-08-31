@@ -538,7 +538,26 @@ export function providerOperationKey(i: {
   ].join("|");
 }
 
-/** A short, order-independent fingerprint of a compiled provider input. */
+/**
+ * The fingerprint of a compiled provider input.
+ *
+ * ── V2, AND WHY THE OLD ONE IS STILL READ ─────────────────────────────────
+ *
+ * This was djb2 32-bit and carried no actor: the same input aimed at two actors
+ * fingerprinted identically, and 4.3e9 is a small space for a value whose whole
+ * job is "do not buy this again". It is now
+ * `SHA-256(canonicalJson({actorKey, input}))`, prefixed `v2:`.
+ *
+ * `actorKey` is optional ONLY so the legacy call shape keeps compiling; every
+ * production call site passes it. Without it the fingerprint still hashes, but
+ * two actors sharing an input would share a key — so the parameter is required
+ * in spirit and a test asserts every engine call site supplies one.
+ */
+export function inputFingerprintV2(actorKey: string, input: unknown): string {
+  return providerInputFingerprint(actorKey, input);
+}
+
+/** The pre-v2 fingerprint. READ ONLY — never written, kept so paid work matches. */
 export function inputFingerprint(input: unknown): string {
   const norm = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(norm);
@@ -566,11 +585,29 @@ export type SkipReason = "already_completed" | "identity_terminal" | "not_eligib
  * result is not a reason to give up — it is a reason to try once more.
  */
 export function shouldSkipProviderCall(
-  record: CompanyResumeRecord | undefined, operationKey: string,
+  record: CompanyResumeRecord | undefined,
+  operationKey: string,
+  /**
+   * KEYS THIS OPERATION WOULD HAVE HAD UNDER AN OLDER SCHEME.
+   *
+   * A checkpoint written before the v2 fingerprint records the djb2 key. If only
+   * the new key were checked, every already-paid search in every existing
+   * lineage would look unbought and be purchased a second time — the single
+   * worst outcome a fingerprint change can have. Matching either is what makes
+   * the migration free.
+   *
+   * Optional: a caller that passes none behaves exactly as before.
+   */
+  legacyOperationKeys: readonly string[] = [],
 ): { skip: boolean; reason: SkipReason } {
   if (!record) return { skip: false, reason: null };
   if (record.completed_operations.includes(operationKey)) {
     return { skip: true, reason: "already_completed" };
+  }
+  for (const legacy of legacyOperationKeys) {
+    if (legacy && record.completed_operations.includes(legacy)) {
+      return { skip: true, reason: "already_completed" };
+    }
   }
   // ONLY A REAL ANSWER IS A REASON NOT TO ASK AGAIN. `deferred` and
   // `provider_error` are deliberately absent: the question was never answered,
@@ -648,6 +685,8 @@ export function continuationAvailable(c: Checkpoint | null): boolean {
 // per-company records, and the lineage root the operation key is built from.
 
 /** The key `tasks.result` stores the checkpoint under. */
+import { providerInputFingerprint } from "./providerInputFingerprint.ts";
+
 export const CHECKPOINT_RESULT_KEY = "lead_resume_checkpoint" as const;
 /** The key `tasks.result` stores the lineage root task id under. */
 export const LINEAGE_ROOT_RESULT_KEY = "lead_resume_lineage_root" as const;

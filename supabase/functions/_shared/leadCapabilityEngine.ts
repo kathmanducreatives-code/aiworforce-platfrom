@@ -137,7 +137,8 @@ import {
   type ResolvedReferentBinding,
 } from "./referentBinding.ts";
 import {
-  CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, inputFingerprint, MAX_SNAPSHOT_JOBS,
+  CHECKPOINT_RESERVE_MS, QUALIFICATION_RESERVE_MS, inputFingerprint, inputFingerprintV2,
+  MAX_SNAPSHOT_JOBS,
   providerOperationKey,
   shouldCheckpoint, shouldSkipProviderCall, shouldStartWork,
   type CompanyResumeRecord,
@@ -174,6 +175,7 @@ import {
   type CompanyFitResult, type CompanyRecordState, type FunnelCounts,
 } from "./companyFirstStages.ts";
 import { missionTargetsIntermediaries } from "./companyAggregatorEvidence.ts";
+import { mergeDiscoveryActorInput } from "./discoveryInputMerge.ts";
 import {
   identityIsActionable, resolveIdentityAgainstLookups, type IdentityResolution,
 } from "./companyIdentityResolution.ts";
@@ -2804,17 +2806,28 @@ export async function runCapabilityPlan(
     // for everything else this is inert and the call proceeds as before. A skip
     // that returned an empty result the caller then read as evidence would trade
     // money for correctness, which is a worse bargain than the one it replaces.
+    // ── V2 KEY TO WRITE, LEGACY KEY TO RECOGNISE ──────────────────────────
+    //
+    // The fingerprint moved to SHA-256 over `{actorKey, input}`. Every
+    // checkpoint written before that carries the djb2 key, so the skip check is
+    // given both: a search this lineage already paid for must still match, or
+    // the change to the hash would buy every one of them again.
+    const opKeyFor = (fingerprint: string) => providerOperationKey({
+      workspace_id: resumeScope!.workspace_id,
+      lineage_root_task_id: resumeScope!.lineage_root_task_id,
+      company_key: company!.key,
+      capability, provider,
+      input_fingerprint: fingerprint,
+    });
     const operationKey = resumeScope && company
-      ? providerOperationKey({
-        workspace_id: resumeScope.workspace_id,
-        lineage_root_task_id: resumeScope.lineage_root_task_id,
-        company_key: company.key,
-        capability, provider,
-        input_fingerprint: inputFingerprint(call.input),
-      })
+      ? opKeyFor(inputFingerprintV2(provider, call.input))
       : null;
+    const legacyOperationKeys = resumeScope && company
+      ? [opKeyFor(inputFingerprint(call.input))]
+      : [];
     if (operationKey && company) {
-      const verdict = shouldSkipProviderCall(priorRecords.get(company.key), operationKey);
+      const verdict = shouldSkipProviderCall(
+        priorRecords.get(company.key), operationKey, legacyOperationKeys);
       if (verdict.skip) {
         record("skipped_resume_reuse", 0, verdict.reason);
         log("provider_skipped_resume_reuse", {
@@ -3783,16 +3796,33 @@ export async function runCapabilityPlan(
               });
               continue;
             }
-            const compiled = compileHarvestCompanySearchInput({
-              maxItems: maxCandidates,
-              ...structured,
-              // The strategy refines the ICP's filters; it never removes them all.
-              ...sel.input,
-              ...(query ? { searchQuery: query } : {}),
-              // `full` is required: `short` returns employeeCount === null, and an
-              // unverifiable size cannot settle an employee-ceiling gate.
-              scraperMode: "full",
+            // ── EXPLICIT OWNERSHIP, NOT SPREAD ORDER ────────────────────
+            //
+            // This was a spread, and spread REPLACES: a strategy naming
+            // `industryIds` discarded the mission's industries rather than
+            // refining them, which is the opposite of what the comment beside it
+            // claimed. `maxItems` was set twice and the later one silently won.
+            // `mergeDiscoveryActorInput` states one rule per field instead.
+            const merged = mergeDiscoveryActorInput({
+              missionConstraints: structured,
+              strategyInput: { ...sel.input, ...(query ? { searchQuery: query } : {}) },
+              executionConstraints: {
+                maxItems: maxCandidates,
+                // `full` is required: `short` returns employeeCount === null, and
+                // an unverifiable size cannot settle an employee-ceiling gate.
+                scraperMode: "full",
+              },
             });
+            if (merged.strategy_overruled.length > 0) {
+              log("discovery_input_merge_overruled", {
+                capability: cap, provider,
+                overruled: merged.strategy_overruled,
+                provenance: merged.provenance.filter(
+                  (p) => merged.strategy_overruled.includes(p.field)),
+              });
+            }
+            const compiled = compileHarvestCompanySearchInput(
+              merged.input as never);
             const droppedPages = new Map<string, number>();
             for (const r of await callProvider(cap, provider, compiled)) {
               // A SHOWCASE PAGE IS NOT A COMPANY. Dropped HERE, at the pool

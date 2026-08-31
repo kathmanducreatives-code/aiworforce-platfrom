@@ -36,6 +36,8 @@ export type ValidatedCapability =
   | "yc_job_discovery"
   | "ats_job_verification";
 
+import { ACTOR_INPUT_CONTRACTS } from "./actorInputContracts.ts";
+
 export const FINAL_PAYLOAD_VALIDATOR_VERSION = "final-actor-payload-1.0.0";
 
 interface CapabilityPayloadRule {
@@ -143,19 +145,137 @@ export interface FinalPayloadVerdict {
  * An unknown capability passes: legacy `apify_jobs` workflows do not compile
  * through this path and must be unaffected.
  */
+/**
+ * Validate a payload against the actor's own verified contract.
+ *
+ * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
+ *
+ * `RULES` below covers five job capabilities, each written after a specific
+ * incident. Every company-side capability — search, details, employees, posts,
+ * funding, news, technology, YC discovery — fell through to `ok: true`
+ * unconditionally, so the last gate before a paid POST asserted nothing about
+ * the calls that spend most of the money.
+ *
+ * `ACTOR_INPUT_CONTRACTS` already records each actor's verified fields, types
+ * and enums. This reads that, rather than restating it: one schema source, and a
+ * new actor is covered the moment its contract is added.
+ */
+/**
+ * Arrays whose emptiness makes the call meaningless.
+ *
+ * Deliberately short. Every other array in every contract is a filter, and an
+ * absent filter is a legitimate call.
+ */
+const REQUIRED_NON_EMPTY_ARRAYS: Readonly<Record<string, readonly string[]>> =
+  Object.freeze({
+    apify_linkedin_company_details: ["companies"],
+    apify_linkedin_job_search: ["company", "jobTitles"],
+    apify_linkedin_company_employees: ["companies"],
+  });
+
+function validateAgainstContract(
+  capability: string, payload: Record<string, unknown>,
+): string[] {
+  const contract = ACTOR_INPUT_CONTRACTS[capability];
+  if (!contract) return [];
+  const byName = new Map(contract.fields.map((f) => [f.name, f]));
+  const violations: string[] = [];
+
+  for (const [key, value] of Object.entries(payload)) {
+    const field = byName.get(key);
+    if (!field) {
+      // An unknown key is another serializer's vocabulary, or a typo Apify will
+      // silently ignore while charging for the run it did anyway.
+      violations.push(`unsupported_field:${key}`);
+      continue;
+    }
+    if (value === undefined || value === null) continue;
+
+    // ARRAY VS SCALAR IS THE SHAPE THAT KEEPS BREAKING. `industries: "..."` is a
+    // legal enum value in an illegal container, and iterating it yields one
+    // violation per character.
+    if (field.type === "array" && !Array.isArray(value)) {
+      violations.push(`expected_array:${key}`);
+      continue;
+    }
+    if (field.type !== "array" && Array.isArray(value)) {
+      violations.push(`unexpected_array:${key}`);
+      continue;
+    }
+    if (field.type === "integer" && !Number.isInteger(value)) {
+      violations.push(`expected_integer:${key}`);
+      continue;
+    }
+    if (field.type === "string" && typeof value !== "string") {
+      violations.push(`expected_string:${key}`);
+      continue;
+    }
+    if (field.type === "boolean" && typeof value !== "boolean") {
+      violations.push(`expected_boolean:${key}`);
+      continue;
+    }
+    if (field.type === "object" &&
+        (typeof value !== "object" || Array.isArray(value))) {
+      violations.push(`expected_object:${key}`);
+      continue;
+    }
+    if (field.enum) {
+      const vs = Array.isArray(value) ? value : [value];
+      for (const v of vs) {
+        if (!field.enum.includes(String(v))) {
+          violations.push(`invalid_enum:${key}:${String(v)}`);
+        }
+      }
+    }
+    // AN EMPTY ARRAY IS ONLY WRONG WHERE THE ARRAY IS THE ARGUMENT.
+    //
+    // Not a blanket rule: `queries: []` is how memo23 says "no name filter" in
+    // `mode: companies`, and rejecting it would refuse a payload production
+    // sends correctly. Emptiness is a violation only for the fields that ARE the
+    // call — the companies to enrich, the companies and titles to search.
+    if (field.type === "array" && Array.isArray(value) && value.length === 0 &&
+        (REQUIRED_NON_EMPTY_ARRAYS[capability] ?? []).includes(key)) {
+      violations.push(`empty_array:${key}`);
+    }
+  }
+  return violations;
+}
+
 export function validateFinalActorPayload(
   capability: string | null | undefined,
   payload: unknown,
 ): FinalPayloadVerdict {
-  const keys = payload && typeof payload === "object" && !Array.isArray(payload)
+  const isObject = !!payload && typeof payload === "object" && !Array.isArray(payload);
+  const keys = isObject
     ? Object.keys(payload as Record<string, unknown>).sort()
     : [];
 
-  if (!isValidatedCapability(capability)) {
+  // ── SHAPE FIRST, FOR EVERY CAPABILITY ────────────────────────────────────
+  //
+  // A top-level array or scalar is refused whether or not this capability has a
+  // rule. It used to reach `ok: true` for anything unrecognised.
+  if (!isObject) {
     return {
-      ok: true, capability: String(capability ?? "unknown"), actorId: null,
+      ok: false, capability: String(capability ?? "unknown"), actorId: null,
       validatorVersion: FINAL_PAYLOAD_VALIDATOR_VERSION, schemaVerifiedOn: null,
-      payloadKeys: keys, violations: [],
+      payloadKeys: [], violations: ["payload_not_object"],
+    };
+  }
+
+  if (!isValidatedCapability(capability)) {
+    // No bespoke rule — validate against the actor's own contract instead of
+    // waving it through.
+    const cap = String(capability ?? "unknown");
+    const contractViolations = validateAgainstContract(
+      cap, payload as Record<string, unknown>);
+    if (keys.length === 0) contractViolations.unshift("empty_payload");
+    return {
+      ok: contractViolations.length === 0,
+      capability: cap,
+      actorId: ACTOR_INPUT_CONTRACTS[cap] ? cap : null,
+      validatorVersion: FINAL_PAYLOAD_VALIDATOR_VERSION,
+      schemaVerifiedOn: ACTOR_INPUT_CONTRACTS[cap]?.verified_at ?? null,
+      payloadKeys: keys, violations: contractViolations,
     };
   }
 
@@ -177,6 +297,8 @@ export function validateFinalActorPayload(
     // A forbidden key means another vendor's serializer produced this object.
     if (present.has(k)) violations.push(`foreign_serializer_key:${k}`);
   }
+  // AND the contract's own types/enums, where this capability has a contract.
+  violations.push(...validateAgainstContract(capability, payload as Record<string, unknown>));
 
   return {
     ok: violations.length === 0,
