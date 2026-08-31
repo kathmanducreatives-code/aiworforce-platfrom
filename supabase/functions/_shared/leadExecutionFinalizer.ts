@@ -64,7 +64,22 @@ export type TerminalReason =
    * sends whoever reads the row looking for a defect that is not there, while
    * hiding the block codes that say exactly what to fix.
    */
-  | "refused_before_execution";
+  | "refused_before_execution"
+  /**
+   * ── THE THREE ENDINGS A GENERATION CANNOT SEE ────────────────────────────
+   *
+   * `decideTerminalRecord` judges ONE invocation from its engine state, so the
+   * best it can say about a slice that ran cleanly and stopped is
+   * `capability_plan_complete` or `execution_deadline_reached`. Whether the
+   * REQUEST is over is `decideAutoContinuation`'s answer, computed from the
+   * whole lineage — the frontier, the quota, the cancellation.
+   *
+   * These carry that answer into the record, so the row does not end with a
+   * per-slice reason describing a finished request.
+   */
+  | "frontier_exhausted"
+  | "quota_met"
+  | "run_cancelled";
 
 /** Statuses that mean the run genuinely finished its work. Never overwritten. */
 const SUCCESSFUL: ReadonlySet<TerminalStatus> = new Set<TerminalStatus>(["completed"]);
@@ -694,6 +709,61 @@ export function decideTerminalRecord(
   }
   return { ...base, blocked_by: null, status: "completed", reason: "capability_plan_complete",
     detail: null, resumable: false };
+}
+
+/**
+ * SEAL THE RECORD WITH THE LINEAGE'S OWN ENDING.
+ *
+ * ── THE ROW THIS EXISTS TO MAKE IMPOSSIBLE ─────────────────────────────────
+ *
+ * Task fd4ed70a, after seven generations, ended like this:
+ *
+ *     auto_continuation  { decision: "frontier_exhausted", continuing: false }
+ *     terminal_record    { reason: "execution_deadline_reached",
+ *                          status: "partial", resumable: true }
+ *     result.resumable   true
+ *
+ * The `auto_continuation` was right and everything beside it was generation
+ * SIX's answer. The guard skips its write once the task row is terminal — by
+ * design, so a cleanup-time decision cannot overrule the handler's — so the
+ * last record that actually landed belonged to an earlier, still-resumable
+ * slice, and the row said the finished run could be continued.
+ *
+ * This does not re-derive anything. The factual half of the record — which
+ * capabilities ran, what was attempted, what it cost — belongs to the slice
+ * that produced it and is carried through untouched. Only the three fields
+ * that make a CLAIM about whether the request is over are replaced.
+ *
+ * Pure. Returns a new record; never mutates its input.
+ */
+export function sealTerminalRecord(
+  prior: TerminalRecord,
+  ending: { reason: "frontier_exhausted" | "quota_met" | "run_cancelled"; detail?: string | null },
+): TerminalRecord {
+  return {
+    ...prior,
+    status: "completed",
+    reason: ending.reason,
+    detail: ending.detail ?? prior.detail,
+    // THE WHOLE POINT. A sealed lineage has nothing left to resume, and this is
+    // the field every resume gate reads.
+    resumable: false,
+  };
+}
+
+/**
+ * The record reason for an auto-continuation stop that ends the lineage.
+ *
+ * Returns null for every other stop reason — a ceiling, a provider failure or a
+ * failed dispatch leaves the run resumable, and must not be sealed.
+ */
+export function endingReasonFor(
+  stopReason: string,
+): "frontier_exhausted" | "quota_met" | "run_cancelled" | null {
+  if (stopReason === "frontier_exhausted") return "frontier_exhausted";
+  if (stopReason === "quota_met") return "quota_met";
+  if (stopReason === "cancelled") return "run_cancelled";
+  return null;
 }
 
 export interface FinalizeWriter {

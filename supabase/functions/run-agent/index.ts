@@ -118,6 +118,9 @@ import {
   createRunTerminalGuard, supabaseTerminalGuardDb,
 } from "../_shared/leadRunTerminalGuard.ts";
 import {
+  sealTerminalRecord, endingReasonFor, type TerminalRecord,
+} from "../_shared/leadExecutionFinalizer.ts";
+import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
 } from "../_shared/providerResponseContract.ts";
 import {
@@ -350,7 +353,7 @@ import {
   releaseLineageLease, type RpcDb as LeaseRpcDb,
 } from "../_shared/lineageLease.ts";
 import {
-  decideAutoContinuation, foldSlice, readLineageProgress,
+  decideAutoContinuation, foldSlice, readLineageProgress, lineageIsFinished,
   resolveMaxContinuations, resolveMaxLineageCostUnits,
   AUTO_CONTINUATION_VERSION, LINEAGE_PROGRESS_KEY, type LineageProgress,
 } from "../_shared/leadAutoContinuation.ts";
@@ -4831,12 +4834,40 @@ Deno.serve(async (req) => {
 
         const { data: finishedRow } = await supabase.from("tasks").select("result").eq("id", task.id).maybeSingle();
         const priorTaskResult = releaseClaim(((finishedRow as { result?: Record<string, unknown> } | null)?.result ?? {}) as Record<string, unknown>);
+
+        // ── SEAL THE RECORD WHEN THE LINEAGE IS ACTUALLY OVER ───────────────
+        //
+        // The guard's `finally` skips its write once the row is terminal — by
+        // design, so a cleanup-time decision cannot overrule the handler's. The
+        // consequence is that the LAST record to land belongs to the last slice
+        // whose guard still ran, and on fd4ed70a that was generation six:
+        // `execution_deadline_reached / partial / resumable: true`, sitting
+        // beside generation seven's `frontier_exhausted, continuing: false`.
+        //
+        // So the handler writes it, in the same update as the status it agrees
+        // with. Only on a decision that genuinely ends the lineage; a ceiling, a
+        // provider failure or a failed dispatch stays resumable and untouched.
+        const lineageEnding = autoDecision.continue
+          ? null : endingReasonFor(autoDecision.reason);
+        const priorRecord = (priorTaskResult.terminal_record ?? null) as TerminalRecord | null;
+        const sealedRecord = (lineageEnding && priorRecord)
+          ? sealTerminalRecord(priorRecord, { reason: lineageEnding, detail: autoDecision.detail })
+          : null;
+
         await supabase.from("tasks").update({
           status: statuses.rowStatus,
           result: {
             ...priorTaskResult,
             task_status: statuses.taskStatus,
             terminal_status: statuses.terminalStatus,
+            ...(sealedRecord
+              ? {
+                terminal_record: sealedRecord,
+                // The field every resume gate reads. Left alone on every other
+                // path, so a resumable run keeps whatever the finalizer said.
+                resumable: false,
+              }
+              : {}),
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
             company_first: cf,
@@ -5111,12 +5142,26 @@ Deno.serve(async (req) => {
               refused: merged.merge.refused.slice(0, 12),
             });
           }
+          // ── AND TELL THE LINEAGE ROW, TOO ─────────────────────────────
+          //
+          // `release_lineage_lease` has always taken `p_terminal_reason` and set
+          // `status = 'terminal'` from it; nothing ever passed one, so every
+          // lineage went back to `active` however it ended — a finished request
+          // and a mid-flight one were indistinguishable in that column.
+          //
+          // Only the three endings that leave nothing to resume. `terminal`
+          // makes `acquire_lineage_lease` refuse outright, so a ceiling or a
+          // provider failure must NOT arrive here: those stay `active` and
+          // remain claimable, which is what keeps the sweeper working.
           const leaseReleased = await releaseLineageLease({
             db: supabase as unknown as LeaseRpcDb,
             lineageId: lineageRootId, workspaceId: workspace_id,
             holderTaskId: task.id, expectedVersion: leaseVersion,
             nextState: merged.state,
             madeProgress,
+            ...(lineageIsFinished(autoDecision)
+              ? { terminalReason: autoDecision.reason }
+              : {}),
           });
           if (!leaseReleased.released) {
             // A `version_conflict` here means something else advanced this

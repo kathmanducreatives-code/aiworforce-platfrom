@@ -76,6 +76,52 @@ export type StopReason =
    */
   | "dispatch_failed";
 
+/**
+ * STOP REASONS THAT END THE LINEAGE, not merely this slice.
+ *
+ * ── WHY THIS IS A SET AND NOT `!decision.continue` ─────────────────────────
+ *
+ * Every reason here stops the current slice; only these three mean there is
+ * nothing left to come back to.
+ *
+ *   quota_met           the request is satisfied
+ *   frontier_exhausted  every discovered candidate has been investigated
+ *   cancelled           the user ended it
+ *
+ * The others are deliberately absent, and the distinction is load-bearing:
+ * `lead_lineages.status = 'terminal'` makes `acquire_lineage_lease` refuse
+ * outright, so marking a lineage terminal is irreversible from the run's side.
+ *
+ *   continuation_ceiling / cost_ceiling  PROTECTIONS. They bound spend; they
+ *       establish nothing about the candidates, and a deliberate re-run must
+ *       still be able to continue.
+ *   provider_failure                     the frontier is preserved on purpose.
+ *   no_progress                          a barren streak bounds cost; the
+ *       frontier may still hold candidates that a later slice could resolve.
+ *   dispatch_failed                      a fault in OUR plumbing. Sealing the
+ *       lineage on it would make a bug in the handoff permanently unrecoverable
+ *       — which is the exact failure the sweeper exists to catch.
+ */
+export const LINEAGE_FINISHING_REASONS: ReadonlySet<StopReason> = new Set<StopReason>([
+  "quota_met", "frontier_exhausted", "cancelled",
+]);
+
+/**
+ * Does this decision end the LINEAGE, or only this generation?
+ *
+ * Takes the reason as a plain string because `AutoContinuationDecision.reason`
+ * spans both the stop reasons and the CONTINUE reasons
+ * (`quota_unmet_frontier_remains`). Membership of the set above is the whole
+ * test, so a reason outside it — a continue reason included — is correctly
+ * false rather than a type error at the call site.
+ */
+export function lineageIsFinished(
+  decision: { continue: boolean; reason: string } | null | undefined,
+): boolean {
+  if (!decision || decision.continue) return false;
+  return (LINEAGE_FINISHING_REASONS as ReadonlySet<string>).has(decision.reason);
+}
+
 export interface AutoContinuationInput {
   /** Qualified companies PERSISTED so far, across every slice of this request. */
   qualified: number;
