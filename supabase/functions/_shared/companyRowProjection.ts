@@ -13,12 +13,38 @@
 // already executes — no second ingestion pipeline, no second writer, no second
 // Workbench view.
 //
-// INVARIANT: a company row is NEVER quota-eligible and NEVER CONTACT. Only a
-// verified person, through `compoundContactCeiling`, can be CONTACT-ready.
+// ── THE INVARIANT, AND THE MISSION IT WAS WRITTEN FOR ──────────────────────
+//
+// This module used to hold one unconditional rule: a company row is NEVER
+// quota-eligible and NEVER CONTACT, because only a verified person can be
+// CONTACT-ready. On a `contact_ready_leads` mission that is exactly right and it
+// is unchanged below — a company with no decision-maker is not the lead the user
+// asked for, however well it scored.
+//
+// On a `qualified_companies` mission it was the wrong question. There the
+// company IS the deliverable: the engine counts `qualified_company_keys` toward
+// quota, stops on `quota_met` and reports SATISFIED on the strength of Company
+// Brain passes alone, no person involved. Writing those same companies as
+// `NEEDS_REVIEW` / `quota_eligible: false` made the run's own output contradict
+// its own verdict — run e93380bd said 5 of 5 qualified and produced five rows
+// that read `company_brain_status: "qualified"` beside `quota_eligible: false`.
+//
+// So the rule is now conditional on what was asked for, and on nothing else. It
+// is NOT conditional on how good the company looked: `brainGate === "pass"` is
+// still required, and every other path keeps the old values exactly.
 
 import type { PendingDecisionMaker } from "./compoundSourcingPipeline.ts";
 import type { CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
 import { hasStrongId } from "./companyIdentity.ts";
+
+/**
+ * What the mission asked for, as far as this projection is concerned.
+ *
+ * `contact` is the default at every call site that does not say otherwise, so
+ * behaviour is unchanged for every caller that has not been taught about
+ * missions — the person-first compound pipeline included.
+ */
+export type CompanyRowDeliverable = "company" | "contact";
 
 /** Layer-9 Workbench progression for an account row. */
 export type CompanyRowStage =
@@ -57,11 +83,25 @@ export function companyRowKey(pending: PendingDecisionMaker): string {
 export function buildCompanyRowPersistencePlan(
   pending: PendingDecisionMaker,
   workspaceId: string,
+  deliverable: CompanyRowDeliverable = "contact",
 ): CompoundPersistencePlan {
   const id = pending.company;
   const identified = hasStrongId(id);
-  const stage = companyRowStage(pending);
   const job = pending.jobEvidence ?? null;
+
+  // ── IS THIS ROW THE ANSWER, OR A STEP TOWARD ONE? ────────────────────────
+  //
+  // BOTH conditions, never either alone. The mission must have asked for
+  // companies, AND the Company Brain must have actually passed this one. A
+  // Brain pass on a contact mission is still pending a person; an unknown or
+  // failed gate on a company mission is still unqualified. Neither becomes
+  // quota-eligible here.
+  const isDeliverable = deliverable === "company" && pending.brainGate === "pass";
+
+  // The stage follows: a company that IS the deliverable and cleared the Brain
+  // is qualified, not "waiting for a decision-maker search" that the mission
+  // never asked for.
+  const stage: CompanyRowStage = isDeliverable ? "company_qualified" : companyRowStage(pending);
 
   return {
     workspaceId,
@@ -83,7 +123,11 @@ export function buildCompanyRowPersistencePlan(
         compound: true,
         row_kind: "company",
         workbench_stage: stage,
-        verdict: "NEEDS_REVIEW",
+        // `raw.verdict` is what the Workbench resolver reads as the row's
+        // disposition. `qualified` is a QUALIFYING_DISPOSITION there; it says
+        // the COMPANY qualified and deliberately does not say `CONTACT`, which
+        // would imply a person.
+        verdict: isDeliverable ? "QUALIFIED" : "NEEDS_REVIEW",
         pending_reason: pending.reason,
         company_name: id.name ?? null,
         company_domain: id.canonicalDomain ?? null,
@@ -102,16 +146,45 @@ export function buildCompanyRowPersistencePlan(
         hiring_signal_title: job?.title ?? null,
         hiring_signal_url: job?.url ?? null,
         hiring_signal_date: job?.postedDate ?? null,
-        decision_maker_status: stage === "decision_maker_unverified" ? "unverified" : "pending",
+        // NOT "pending" when no person was ever required. `pending` reads as
+        // "we are still looking", which on a company mission is a search that
+        // is not going to happen and a promise the run will never keep.
+        decision_maker_status: isDeliverable
+          ? "not_required"
+          : (stage === "decision_maker_unverified" ? "unverified" : "pending"),
+        // UNCHANGED EITHER WAY. No person means no contact, and a qualified
+        // company is still a company — `contactBlocked` below says the same.
         contact_status: "needs_contact",
-        // HARD INVARIANT: a company row never counts toward the CONTACT quota.
-        quota_eligible: false,
+        // THE ONE FIELD THIS FIX EXISTS FOR. True only when this row is the
+        // thing that was asked for and the Brain passed it — which is the exact
+        // condition under which the engine already counted it toward quota.
+        quota_eligible: isDeliverable,
+        // WHY it is quota-eligible, recorded rather than inferable. A row that
+        // claims quota credit must be able to say what earned it.
+        qualification_basis: isDeliverable ? "company_brain_pass" : null,
+        quota_basis: isDeliverable ? "qualified_companies_mission" : null,
       },
     },
+    // ── TWO FIELDS NAMED `verdict`, TWO VOCABULARIES ────────────────────────
+    //
+    // This one is `CompoundVerdict` — CONTACT | WATCH | NEEDS_REVIEW | REJECT —
+    // and it is the PERSON verdict of the compound pipeline. It drives
+    // `VERDICT_TO_CEIL`, so `CONTACT` here would grant this row a contact
+    // ceiling it must never have. A company row has no person to judge, so
+    // `NEEDS_REVIEW` is the honest value and is UNCHANGED by this fix.
+    //
+    // The row's own qualification lives in `raw.verdict` above, which is what
+    // the Workbench reads. Confusing these two is what this module now names
+    // explicitly rather than leaving for the next reader to work out.
     verdict: "NEEDS_REVIEW",
     persistable: identified,
     persistenceReason: identified ? `company_row_persistable:${stage}` : "company_identity_unresolved",
+    // STILL BLOCKED, STILL FOR THE SAME REASON. Qualifying a company does not
+    // produce a decision-maker, and nothing downstream may read this row as
+    // permission to send anything.
     contactBlocked: true,
-    blockReasons: ["no_verified_decision_maker", `pending:${pending.reason}`],
+    blockReasons: isDeliverable
+      ? ["no_verified_decision_maker", "contact_not_requested"]
+      : ["no_verified_decision_maker", `pending:${pending.reason}`],
   };
 }

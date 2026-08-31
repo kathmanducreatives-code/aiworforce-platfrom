@@ -96,6 +96,42 @@ export type RequestedOutput =
   | "social_posts";
 
 /**
+ * IS THE COMPANY ITSELF THE THING THE USER ASKED FOR?
+ *
+ * ── WHY THIS IS A FUNCTION AND NOT A LITERAL AT TWO CALL SITES ─────────────
+ *
+ * It was a literal at one. `leadCapabilityEngine` decided how many rows a run
+ * had to persist with an inline
+ * `mission.requested_output === "qualified_companies"`, and quota counted
+ * `qualified_company_keys` — the companies the Company Brain passed. But
+ * `buildCompanyRowPersistencePlan`, which writes those same companies, never
+ * received the mission and stamped every row `verdict: NEEDS_REVIEW`,
+ * `quota_eligible: false`, on the reasoning that only a verified PERSON can be
+ * quota-eligible.
+ *
+ * Both halves were internally consistent and they disagreed. Run e93380bd
+ * counted 5 of 5 qualified, stopped on `quota_met` and reported SATISFIED,
+ * while all five rows it wrote say `company_brain_status: "qualified"` beside
+ * `quota_eligible: false` — so the Workbench, reading the rows, showed
+ * Qualified 0 / In review 5 for a run the engine called complete.
+ *
+ * One function, read by the counter and by the writer, is what stops the two
+ * from drifting again.
+ *
+ * ── AND WHY ONLY `qualified_companies` ─────────────────────────────────────
+ *
+ * `enriched_companies` is deliberately NOT here. The engine counts contact
+ * identities for it, so a company row on an enrichment mission does not reach
+ * quota and must not claim to. This predicate says exactly what the quota rule
+ * says and nothing more.
+ */
+export function companyIsTheDeliverable(
+  mission: { requested_output?: string | null } | null | undefined,
+): boolean {
+  return mission?.requested_output === "qualified_companies";
+}
+
+/**
  * HOW an opportunity is discovered and proven — not where the pipeline starts.
  *
  * Deliberately NOT `company_first`/`person_first`/`job_first`. That enum

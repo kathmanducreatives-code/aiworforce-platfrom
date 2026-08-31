@@ -197,7 +197,8 @@ import {
   assertPeopleProviderAllowed, PaidExecutionBlockedError,
 } from "./leadPaidExecutionPreflight.ts";
 import {
-  effectiveRequestedCount, isHiringSignal, missionHash, type LeadMissionV1,
+  companyIsTheDeliverable, effectiveRequestedCount, isHiringSignal, missionHash,
+  type LeadMissionV1,
 } from "./leadMission.ts";
 // WHICH ACTORS DISCOVER THE POOL. Replaces the frozen provider pair and the
 // hardcoded YC literal that answered every mission with the same request.
@@ -6921,7 +6922,10 @@ export async function runCapabilityPlan(
     // The count now follows what the mission asked for, which is also what the
     // completion rule reads: a persistence step with real rows closes, and one
     // with none stays open while anything upstream is still pending.
-    const persistable = opts.mission.requested_output === "qualified_companies"
+    // ONE PREDICATE, shared with the writer. This was an inline literal here
+    // while `buildCompanyRowPersistencePlan` had no idea missions existed —
+    // which is exactly how the count and the rows came to disagree.
+    const persistable = companyIsTheDeliverable(opts.mission)
       ? state.qualified_company_keys.length
       : state.contact_identities.length;
     if (cap === "persistence") {

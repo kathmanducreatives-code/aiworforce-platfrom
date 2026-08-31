@@ -136,7 +136,7 @@ import {
   lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
-import { missionHash } from "../_shared/leadMission.ts";
+import { missionHash, companyIsTheDeliverable } from "../_shared/leadMission.ts";
 import {
   selectResearchPlaybooks, playbookSelectionSummary,
 } from "../_shared/leadResearchPlaybooks.ts";
@@ -3712,7 +3712,14 @@ Deno.serve(async (req) => {
             // decides what executes; it therefore decides what persists.
             const missionPersistence = (playbookAuthorization?.applies &&
                 playbookAuthorization.authorized)
-              ? projectMissionCompanyRows(capabilityRun.companies, workspace_id)
+              ? projectMissionCompanyRows(
+                capabilityRun.companies, workspace_id,
+                // THE SAME PREDICATE THE ENGINE COUNTS QUOTA WITH. Passing it
+                // here is the whole fix: without it the writer assumed every
+                // company row was a step toward a person, and stamped
+                // `NEEDS_REVIEW` on rows this run had already counted as met.
+                companyIsTheDeliverable(persistedMission) ? "company" : "contact",
+              )
               : { version: MISSION_PERSISTENCE_PROJECTION_VERSION, rows: [], skipped: [] };
             const missionPersistPlan = createPersistPlan({
               db: supabase as never, workspaceId: workspace_id, planId: plan_id ?? null,

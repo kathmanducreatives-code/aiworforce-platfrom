@@ -74,6 +74,14 @@ const REJECTING_DISPOSITIONS = new Set(['reject', 'skip', 'rejected', 'skipped']
 /** Verdicts that constitute an EXPLICIT pass. Nothing else qualifies. */
 const QUALIFYING_DISPOSITIONS = new Set(['contact', 'qualified', 'accept', 'accepted', 'pass', 'passed']);
 const MISSING_DM = new Set(['missing', 'none', 'not_found', 'needs_manual_review', 'unverified']);
+/**
+ * The decision-maker status a company row carries when the mission asked for
+ * COMPANIES and no person was ever sought.
+ *
+ * Written by `buildCompanyRowPersistencePlan`. Deliberately not in `MISSING_DM`:
+ * nothing is missing — a search that was never required cannot have failed.
+ */
+const NO_PERSON_REQUIRED = 'not_required';
 const FAILED_EMPLOYER = new Set(['mismatch', 'failed', 'unverified', 'no_match', 'stale']);
 
 function lc(v: unknown): string {
@@ -195,7 +203,20 @@ export function resolveQualification(rec: QualificationRecord): QualificationRes
       qualified: true,
       evaluated: true,
       decidedBy: rec.quota_eligible === true ? 'quota_eligible' : 'disposition',
-      displayLines: ['CONTACT-ready', 'Verified decision-maker', 'Counts toward quota'],
+      // ── SAY WHAT THIS RECORD ACTUALLY HAS ────────────────────────────────
+      //
+      // These three lines were unconditional, from when the only way to reach
+      // this branch was a verified person. A `qualified_companies` mission now
+      // writes quota-eligible COMPANY rows — the company is the deliverable and
+      // no decision-maker was ever sought — and printing "Verified
+      // decision-maker" over one asserts a person who does not exist.
+      //
+      // THE DECISION IS UNTOUCHED. Everything above this line, and `qualified`
+      // itself, are exactly as they were; only the sentences change, and only
+      // to stop claiming evidence the record does not carry.
+      displayLines: dm === NO_PERSON_REQUIRED
+        ? ['Qualified company', 'Company Brain passed it', 'Counts toward quota']
+        : ['CONTACT-ready', 'Verified decision-maker', 'Counts toward quota'],
       context,
     };
   }

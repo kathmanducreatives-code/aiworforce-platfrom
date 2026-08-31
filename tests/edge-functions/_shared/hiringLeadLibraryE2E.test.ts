@@ -699,8 +699,18 @@ Deno.test("run-agent wires the projection to the canonical writer, once", () => 
     "one mission-persistence projection call site",
   );
   assert(
-    /projectMissionCompanyRows\(\s*capabilityRun\.companies, workspace_id\)/.test(RUN),
+    /projectMissionCompanyRows\(\s*capabilityRun\.companies, workspace_id/.test(RUN),
     "it must project the ENGINE's companies",
+  );
+  // AND IT MUST SAY WHAT THE MISSION ASKED FOR.
+  //
+  // Without this argument the writer assumed every company row was a step
+  // toward a person and stamped `NEEDS_REVIEW` / `quota_eligible: false` on
+  // rows the same run had already counted toward `quota_met` — run e93380bd
+  // reported 5 of 5 SATISFIED beside a Workbench reading Qualified 0.
+  assert(
+    /projectMissionCompanyRows\([\s\S]{0,600}?companyIsTheDeliverable\(persistedMission\)/.test(RUN),
+    "the projection must be told whether the company IS the deliverable",
   );
   assert(
     /const missionPersistPlan = createPersistPlan\(\{/.test(RUN),

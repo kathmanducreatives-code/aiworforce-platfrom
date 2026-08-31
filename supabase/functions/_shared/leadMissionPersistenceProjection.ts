@@ -44,7 +44,7 @@ import type { EngineCompany } from "./leadCapabilityEngine.ts";
 import type { CompoundJob, PendingDecisionMaker } from "./compoundSourcingPipeline.ts";
 import type { CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
 import {
-  buildCompanyRowPersistencePlan, companyRowKey,
+  buildCompanyRowPersistencePlan, companyRowKey, type CompanyRowDeliverable,
 } from "./companyRowProjection.ts";
 import { resolveCompanyIdentity, type CompanyIdentity } from "./companyIdentity.ts";
 import { identityIsActionable } from "./companyIdentityResolution.ts";
@@ -156,6 +156,15 @@ function brainGateFor(c: EngineCompany): "pass" | "fail" | "unknown" {
  */
 export function projectMissionCompanyRows(
   companies: readonly EngineCompany[], workspaceId: string,
+  /**
+   * What the mission asked for. Defaults to `contact`, so a caller that has not
+   * been taught about missions keeps exactly the behaviour it had.
+   *
+   * On a `qualified_companies` mission this is what lets the row carry the same
+   * qualification the engine already counted toward quota — see
+   * `buildCompanyRowPersistencePlan`.
+   */
+  deliverable: CompanyRowDeliverable = "contact",
 ): MissionPersistenceProjection {
   const rows: MissionCompanyRow[] = [];
   const skipped: MissionPersistenceProjection["skipped"] = [];
@@ -183,7 +192,7 @@ export function projectMissionCompanyRows(
     // The EXISTING projection, unchanged. It decides `persistable`, the account
     // binding and the never-CONTACT invariant — this module does not restate any
     // of that.
-    const plan = buildCompanyRowPersistencePlan(pending, workspaceId);
+    const plan = buildCompanyRowPersistencePlan(pending, workspaceId, deliverable);
     if (!plan.persistable) {
       skipped.push({ company_key: c.key, reason: plan.persistenceReason });
       continue;
