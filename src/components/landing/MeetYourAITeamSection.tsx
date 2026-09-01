@@ -24,7 +24,7 @@ export default function MeetYourAITeamSection() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 md:gap-8 max-w-[1100px] mx-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-8 max-w-[1100px] mx-auto">
           {EMPLOYEES.map((employee, i) => (
             <motion.div
               key={employee.id}
@@ -49,23 +49,6 @@ export default function MeetYourAITeamSection() {
               </p>
             </motion.div>
           ))}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 0.6, y: 0 }}
-            viewport={{ once: true, margin: '-30px' }}
-            transition={{ duration: 0.5, delay: EMPLOYEES.length * 0.08 }}
-            className="flex flex-col items-center text-center"
-          >
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-2 border-dashed border-white/15 flex items-center justify-center">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">v2</span>
-            </div>
-            <h3 className="mt-5 font-display font-bold text-xl text-white/60">More employees</h3>
-            <p className="text-sm text-white/40 mt-0.5">New employees join as Agentory takes on more kinds of work</p>
-            <span className="mt-2 text-[10px] uppercase tracking-[0.15em] font-mono font-semibold text-white/30">
-              Coming soon
-            </span>
-          </motion.div>
         </div>
 
         <motion.div
