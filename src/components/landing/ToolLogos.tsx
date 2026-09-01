@@ -1,5 +1,16 @@
 import React, { useState } from "react";
 
+// LOCAL BRAND MARKS. These six were hotlinked to worldvectorlogo / webflow
+// URLs that now return 404 and 403, so they rendered as broken images in the
+// ecosystem orbit. Bundling them removes the third-party runtime dependency;
+// nothing about their appearance, size or placement changes.
+import claudeMark from "@/assets/ai-logos/claude.png";
+import perplexityMark from "@/assets/ai-logos/perplexity.svg";
+import hunterMark from "@/assets/ai-logos/hunter.png";
+import linearMark from "@/assets/ai-logos/linear.svg";
+import canvaMark from "@/assets/ai-logos/canva.svg";
+import gammaMark from "@/assets/ai-logos/gamma.jpg";
+
 interface LogoProps {
   className?: string;
   width?: number;
@@ -8,22 +19,22 @@ interface LogoProps {
 
 // Brand colors and metadata exported for reuse
 export const TOOL_BRANDS: Record<string, { bg: string; color: string; label: string; sublabel: string; logo: string }> = {
-  claude:      { bg: "#CC785C", color: "#fff", label: "Claude",      sublabel: "Reasoning & Writing",   logo: "https://cdn.worldvectorlogo.com/logos/claude-ai-icon.svg" },
+  claude:      { bg: "#CC785C", color: "#fff", label: "Claude",      sublabel: "Reasoning & Writing",   logo: claudeMark },
   gemini:      { bg: "#4285F4", color: "#fff", label: "Gemini",      sublabel: "Screening & Analysis",  logo: "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" },
   gpt4:        { bg: "#10A37F", color: "#fff", label: "GPT-4",       sublabel: "Specialized Tasks",     logo: "https://cdn.worldvectorlogo.com/logos/openai-2.svg" },
-  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Real-time Research",    logo: "https://cdn.worldvectorlogo.com/logos/perplexity-ai-icon.svg" },
+  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Real-time Research",    logo: perplexityMark },
   firecrawl:   { bg: "#FF4500", color: "#fff", label: "Firecrawl",   sublabel: "Web Intelligence",      logo: "https://avatars.githubusercontent.com/u/158057725?s=200&v=4" },
   apify:       { bg: "#97D700", color: "#fff", label: "Apify",       sublabel: "LinkedIn Scraping",     logo: "https://avatars.githubusercontent.com/u/38267582?s=200&v=4" },
-  hunter:      { bg: "#F5A623", color: "#fff", label: "Hunter.io",   sublabel: "Email Discovery",       logo: "https://cdn.worldvectorlogo.com/logos/hunter-logo-1.svg" },
+  hunter:      { bg: "#F5A623", color: "#fff", label: "Hunter.io",   sublabel: "Email Discovery",       logo: hunterMark },
   instantly:   { bg: "#6366F1", color: "#fff", label: "Instantly",    sublabel: "Email Sequences",       logo: "https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_2070aafd4809f4e0e27b3c83d5b89673/instantly-ai.png" },
   elevenlabs:  { bg: "#1A1A2E", color: "#fff", label: "ElevenLabs",  sublabel: "Voice Generation",      logo: "https://avatars.githubusercontent.com/u/94662520?s=200&v=4" },
   replicate:   { bg: "#393939", color: "#fff", label: "Replicate",   sublabel: "Image Generation",      logo: "https://avatars.githubusercontent.com/u/60199344?s=200&v=4" },
   notion:      { bg: "#FFFFFF", color: "#000", label: "Notion",      sublabel: "Documentation",         logo: "https://cdn.worldvectorlogo.com/logos/notion-2.svg" },
-  linear:      { bg: "#5E6AD2", color: "#fff", label: "Linear",      sublabel: "Task Management",       logo: "https://cdn.worldvectorlogo.com/logos/linear-2.svg" },
+  linear:      { bg: "#5E6AD2", color: "#fff", label: "Linear",      sublabel: "Task Management",       logo: linearMark },
   github:      { bg: "#24292E", color: "#fff", label: "GitHub",      sublabel: "Code Management",       logo: "https://cdn.worldvectorlogo.com/logos/github-icon-1.svg" },
   cal:         { bg: "#111827", color: "#fff", label: "Cal.com",      sublabel: "Scheduling",           logo: "https://avatars.githubusercontent.com/u/79145102?s=200&v=4" },
-  canva:       { bg: "#00C4CC", color: "#fff", label: "Canva",       sublabel: "Design Handoff",        logo: "https://cdn.worldvectorlogo.com/logos/canva-1.svg" },
-  gamma:       { bg: "#6C47FF", color: "#fff", label: "Gamma",       sublabel: "Presentations",         logo: "https://assets-global.website-files.com/627ad4d9ef927a5344f7220f/6489dae9c91c6e4b96b9ce0c_gamma-logo-mark.svg" },
+  canva:       { bg: "#00C4CC", color: "#fff", label: "Canva",       sublabel: "Design Handoff",        logo: canvaMark },
+  gamma:       { bg: "#6C47FF", color: "#fff", label: "Gamma",       sublabel: "Presentations",         logo: gammaMark },
 };
 
 // Reusable ToolLogoImage component with fallback

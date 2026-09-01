@@ -4,8 +4,10 @@ import { ArrowRight, Check } from 'lucide-react';
 import { AI_MODELS } from '@/data/aiModelLogos';
 import { AI_TOOLS } from '@/data/aiToolLogos';
 import { cn } from '@/lib/utils';
+import { EMPLOYEES } from './employees';
+import { EmployeeAvatar } from './EmployeePortrait';
 
-const templates = ['📧 Customer Success', '💰 Fundraising', '🤝 Partnerships', '📞 Cold Calling', '📱 Community Management', '🌍 Localization', '+ 200 more templates'];
+const templates = ['📧 Customer Success', '💰 Fundraising', '🤝 Partnerships', '📞 Cold Calling', '📱 Community Management', '🌍 Localization', '+ build your own'];
 
 const MODEL_OPTIONS = [
   { ...AI_MODELS['gpt-4o'],        selected: false },
@@ -22,15 +24,15 @@ const AgentBuilderSection = () => {
   const navigate = useNavigate();
 
   return (
-    <section id="enterprise" className="relative z-10 py-24 md:py-32">
+    <section id="build-your-own" className="relative z-10 py-24 md:py-32">
       <div className="max-w-[1100px] mx-auto px-6">
         <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">BUILD YOUR OWN</span>
+          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">BUILD YOUR OWN AI EMPLOYEE</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            Pre-built departments for the most<br />common jobs. Custom agents for<br />everything specific to you.
+            Need an employee for<br />something else?<br />Build one.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            Every business has functions that do not fit a template. The agent builder lets you create any agent in four steps — name it, pick the AI model, plug in your tools, write the prompt once, and your new agent joins the workforce immediately.
+            Start with Agentory's ready-to-work AI employees, then create new ones for the jobs unique to your business. They inherit your company context and work alongside the rest of your Agentory team.
           </p>
         </div>
 
@@ -50,17 +52,17 @@ const AgentBuilderSection = () => {
 
             <div className="p-5 space-y-4">
               <div>
-                <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Agent name</label>
+                <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">What should this employee do?</label>
                 <div className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white bg-white/[0.02]">Customer Success Agent</div>
               </div>
               <div>
-                <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Department</label>
+                <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Kind of work</label>
                 <div className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/60 bg-white/[0.02]">Custom ▾</div>
               </div>
 
               {/* Model selector — real logos */}
               <div>
-                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">AI Model</label>
+                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Handled for you</label>
                 <div className="grid grid-cols-3 gap-2">
                   {MODEL_OPTIONS.map((m) => (
                     <div
@@ -84,7 +86,7 @@ const AgentBuilderSection = () => {
 
               {/* Tools selector — real logos */}
               <div>
-                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Assign tools</label>
+                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Chosen for the job</label>
                 <div className="grid grid-cols-2 gap-2">
                   {TOOL_OPTIONS.map((t) => (
                     <div
@@ -120,11 +122,11 @@ const AgentBuilderSection = () => {
               <div className="space-y-1.5 pt-2">
                 <div className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-xs text-white/40">Company Brain inherited automatically</span>
+                  <span className="text-xs text-white/40">Knows your company automatically</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-xs text-white/40">Agent joins workforce immediately</span>
+                  <span className="text-xs text-white/40">Joins your team immediately</span>
                 </div>
               </div>
 
@@ -138,14 +140,29 @@ const AgentBuilderSection = () => {
           </div>
         </motion.div>
 
+        {/* The team the new employee joins. Without this the builder reads as a
+            standalone tool; with it, it reads as hiring into an existing team. */}
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-mono text-white/25">Joins</span>
+          <div className="flex items-center -space-x-2">
+            {EMPLOYEES.map((employee) => (
+              <EmployeeAvatar key={employee.id} employee={employee} size={30} />
+            ))}
+            <span className="w-[30px] h-[30px] rounded-full border border-dashed border-emerald-500/40 bg-emerald-500/[0.06] flex items-center justify-center text-emerald-400 text-[13px] font-bold relative z-10">
+              +
+            </span>
+          </div>
+          <span className="text-[11px] text-white/30">your existing AI team</span>
+        </div>
+
         {/* Template pills */}
         <div className="mt-10 flex flex-wrap justify-center gap-2">
-          {templates.map(t => (
+        {templates.map(t => (
             <span key={t} className="text-xs text-white/30 bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded-full">{t}</span>
           ))}
         </div>
         <p className="text-center text-xs text-white/20 mt-4">
-          Built by founders. One click to install. Prompts included. Company Brain inherited.
+          Start with Agentory's ready-to-work AI employees, then create new ones for the jobs unique to your business. They inherit your company context and work alongside the rest of your Agentory team.
         </p>
       </div>
     </section>

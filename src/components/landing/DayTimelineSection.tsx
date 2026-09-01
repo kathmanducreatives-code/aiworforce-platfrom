@@ -2,19 +2,21 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, Clock, AlertTriangle } from 'lucide-react';
 import { Users, TrendingUp, Pen, Eye, BarChart2, User } from 'lucide-react';
+import { employeeByName } from './employees';
+import { EmployeeAvatar } from './EmployeePortrait';
 
 const timeline = [
-  { time: '7:00 AM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
-  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Asked Penn to pursue Acme Corp lead.', output: '', status: 'decision' },
-  { time: '7:45 AM', agent: 'Penn', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
+  { time: '7:00 AM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
+  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Asked Mira to pursue the Acme Corp lead.', output: '', status: 'decision' },
+  { time: '7:45 AM', agent: 'Mira', dept: 'Outreach', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
   { time: '8:02 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved. Sent from my inbox.', output: '', status: 'decision' },
-  { time: '9:30 AM', agent: 'Scout', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Lookalike candidate scan complete', output: '127 candidates found matching your Senior Engineer ICP. Sending to Aria for screening.', status: 'done' },
-  { time: '9:31 AM', agent: 'Aria', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Screening 127 candidates asynchronously', output: 'AI interviews running in background. Results ready by morning.', status: 'progress' },
-  { time: '11:00 AM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
-  { time: '11:05 AM', agent: 'Scribe', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
+  { time: '9:30 AM', agent: 'Atlas', dept: 'Research', color: 'bg-purple-500/20 border-purple-500/40', action: 'Company research complete', output: '40 companies researched against your ICP. Ranking them by fit now.', status: 'done' },
+  { time: '9:31 AM', agent: 'Atlas', dept: 'Research', color: 'bg-purple-500/20 border-purple-500/40', action: 'Qualifying and ranking the shortlist', output: 'Evidence checked against each company. Ranked list ready shortly.', status: 'progress' },
+  { time: '11:00 AM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
+  { time: '11:05 AM', agent: 'Mira', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
   { time: '2:30 PM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved post. Minor edit to closing line.', output: '', status: 'decision' },
-  { time: '2:32 PM', agent: 'Scribe', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Final post handed back for scheduling', output: 'Cleaned-up draft ready in your queue for tomorrow 9am.', status: 'done' },
-  { time: '5:00 PM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'End of day summary ready', output: 'Today: 1 outreach approved. 127 candidates in screening. 1 post drafted. 3 competitor signals. Your time: 47 minutes.', status: 'done' },
+  { time: '2:32 PM', agent: 'Mira', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Final post handed back for scheduling', output: 'Cleaned-up draft ready in your queue for tomorrow 9am.', status: 'done' },
+  { time: '5:00 PM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'End of day summary ready', output: 'Today: 1 outreach approved, 12 companies qualified, 1 post drafted, 3 signals reviewed. Your time: 47 minutes.', status: 'done' },
 ];
 
 const statusIcon = (s: string) => {
@@ -38,12 +40,12 @@ const DayTimelineSection = () => {
     <section id="day-timeline" className="relative z-10 py-24 md:py-32">
       <div className="max-w-[900px] mx-auto px-6">
         <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">A MONDAY WITH YOUR WORKFORCE</span>
+          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">A MONDAY WITH YOUR AI TEAM</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
             47 minutes of your time.<br />A full week of work done.
           </h2>
           <p className="text-white/40 text-lg max-w-[560px] mx-auto leading-relaxed">
-            This is what your AI workforce does on a typical day. The founder's only job is to review and decide.
+            This is a normal day's work handed to Agentory. Your only job is to review and decide.
           </p>
         </div>
 
@@ -78,7 +80,18 @@ const DayTimelineSection = () => {
                     <div className={`w-6 h-6 rounded-full ${item.color} border flex items-center justify-center`}>
                       {statusIcon(item.status)}
                     </div>
-                    <span className="text-xs font-bold text-white">{item.agent}</span>
+                    {(() => {
+                      // The face makes the day feel staffed rather than automated.
+                      const employee = employeeByName(item.agent);
+                      return employee ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <EmployeeAvatar employee={employee} size={18} />
+                          <span className="text-xs font-bold" style={{ color: employee.accent }}>{item.agent}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-white">{item.agent}</span>
+                      );
+                    })()}
                     <span className="text-[10px] text-white/30 px-1.5 py-0.5 rounded bg-white/[0.04]">{item.dept}</span>
                   </div>
                   <p className="text-sm text-white/70 font-medium">{item.action}</p>
@@ -102,9 +115,9 @@ const DayTimelineSection = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
               { num: '47 min', label: 'Your time invested' },
-              { num: '1', label: 'Meeting booked' },
-              { num: '127', label: 'Candidates screened' },
-              { num: '€0', label: 'Agency fees paid' },
+              { num: '40', label: 'Companies researched' },
+              { num: '3', label: 'Drafts ready for review' },
+              { num: '4', label: 'Decisions you made' },
             ].map(s => (
               <div key={s.label}>
                 <div className="font-mono font-black text-2xl text-emerald-400 tabular-nums">{s.num}</div>
@@ -112,7 +125,7 @@ const DayTimelineSection = () => {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-white/30 mt-6">Your AI workforce handled the rest.</p>
+          <p className="text-center text-sm text-white/30 mt-6">Agentory handled the rest.</p>
           <div className="text-center mt-6">
             <button onClick={() => navigate('/auth')} className="conic-border group h-[44px] inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
               Start your first Monday <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

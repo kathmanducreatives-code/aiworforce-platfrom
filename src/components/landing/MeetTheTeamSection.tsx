@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, MessageSquare, Eye, Radio, PenLine, Send,
-  Target, TrendingUp, FileText, Brain, GitBranch, Crown, ArrowRight, ChevronDown, User,
+  Target, TrendingUp, Brain, GitBranch, Crown, ArrowRight, ChevronDown, User,
 } from 'lucide-react';
 import { TOOL_BRANDS, TOOL_LOGO_MAP } from './ToolLogos';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { EMPLOYEE_BY_ID, type EmployeeId } from './employees';
+import { EmployeeAvatar } from './EmployeePortrait';
 
 const DEPT = {
-  talent: { color: "#34d399", label: "Talent", bg: "rgba(52,211,153,0.12)" },
-  growth: { color: "#60a5fa", label: "Growth", bg: "rgba(96,165,250,0.12)" },
+  talent: { color: "#34d399", label: "Research", bg: "rgba(52,211,153,0.12)" },
+  growth: { color: "#60a5fa", label: "Review", bg: "rgba(96,165,250,0.12)" },
   content: { color: "#a78bfa", label: "Content", bg: "rgba(167,139,250,0.12)" },
-  intelligence: { color: "#fbbf24", label: "Intelligence", bg: "rgba(251,191,36,0.12)" },
+  intelligence: { color: "#fbbf24", label: "Signals", bg: "rgba(251,191,36,0.12)" },
   founder: { color: "#e2e8f0", label: "You", bg: "rgba(226,232,240,0.12)" },
 } as const;
 
@@ -23,12 +25,14 @@ interface Agent {
   job: string; tools: string[]; talksTo: string[];
 }
 
+// PUBLIC IDENTITIES ONLY. The legacy backend slugs (scout / aria / hawk / penn /
+// scribe) still power execution, but `@/config/agentRegistry` states they must
+// never be rendered publicly — this simulation used to show all five by name.
 const AGENTS: Agent[] = [
-  { id: "scout", name: "Scout", title: "Talent Scout Agent", department: "talent", icon: Search, job: "Finds candidates matching your ICP across LinkedIn while you sleep.", tools: ["apify","firecrawl"], talksTo: ["Aria"] },
-  { id: "aria", name: "Aria", title: "AI Screening Agent", department: "talent", icon: MessageSquare, job: "Runs async AI interviews with every applicant. Scores answers across 12 criteria.", tools: ["gemini","claude"], talksTo: ["Founder"] },
-  { id: "penn", name: "Penn", title: "Outreach Copywriter Agent", department: "growth", icon: PenLine, job: "Writes personalized cold emails referencing the exact trigger that made this lead hot.", tools: ["claude"], talksTo: ["Founder"] },
-  { id: "hawk", name: "Hawk", title: "Competitor Monitor Agent", department: "intelligence", icon: Target, job: "Watches competitor pricing, hiring, product, and reviews around the clock.", tools: ["firecrawl","perplexity"], talksTo: ["Scribe","Founder"] },
-  { id: "scribe", name: "Scribe", title: "Content Writer Agent", department: "content", icon: FileText, job: "Drafts posts, newsletters, and responses in your brand voice. Ready for review.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "lyra", name: "Lyra", title: "Signals & Monitoring", department: "intelligence", icon: Target, job: "Watches hiring, funding, growth and competitor moves, and tells you what changed.", tools: ["firecrawl","perplexity"], talksTo: ["Atlas","Founder"] },
+  { id: "atlas", name: "Atlas", title: "Research & Company Intelligence", department: "talent", icon: Search, job: "Researches companies, markets and candidates, checks the facts, and ranks what is worth your time.", tools: ["apify","firecrawl"], talksTo: ["Mira","Orion"] },
+  { id: "mira", name: "Mira", title: "Content & Outreach", department: "content", icon: PenLine, job: "Writes in your voice — posts, messages and outreach — and brings every draft to you for approval.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "orion", name: "Orion", title: "Pipeline & Review", department: "growth", icon: MessageSquare, job: "Tracks what is waiting on you, and what to approve, contact, watch or skip next.", tools: ["claude"], talksTo: ["Founder"] },
 ];
 
 interface FeedMessage {
@@ -37,39 +41,40 @@ interface FeedMessage {
 }
 
 const MESSAGES: FeedMessage[] = [
-  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
-    text: "Overnight monitoring complete. 1 competitor pricing change detected (Ashby, −22%). 2 funding rounds in your space. Flagging the pricing change for your review.",
+  { agentId: "lyra", agentName: "Lyra", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
+    text: "Overnight scan done. A competitor changed their pricing, and two companies in your market raised. Flagging the pricing change for you.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "07:12 AM", isFounder: true,
-    text: "Reviewed. Asked Scribe to draft a response post on our pricing model. Moving on with my day." },
-  { agentId: "scribe", agentName: "Scribe", department: "content", tools: ["claude"], time: "07:18 AM",
-    text: "LinkedIn post drafted: why our pricing model benefits customers more. Written in your brand voice. Ready for your review.",
+    text: "Reviewed. Asked Mira to draft a response post on our pricing." },
+  { agentId: "mira", agentName: "Mira", department: "content", tools: ["claude"], time: "07:18 AM",
+    text: "Post drafted in your brand voice. Ready for your review.",
     passedTo: "You", passedToDept: "founder" },
-  { agentId: "scout", agentName: "Scout", department: "talent", tools: ["apify","firecrawl"], time: "07:30 AM",
-    text: "ICP lookalike scan complete for Senior Engineer role. 127 candidates found across LinkedIn. Similarity scores: 6 above 90%, 18 above 80%. Sending top 24 to Aria for AI screening.",
-    passedTo: "Aria", passedToDept: "talent" },
-  { agentId: "aria", agentName: "Aria", department: "talent", tools: ["gemini","claude"], time: "08:00 AM",
-    text: "AI screening running on 24 candidates. Each gets a 12-criteria interview. Results back to you with a ranked shortlist by end of day." },
-  { agentId: "penn", agentName: "Penn", department: "growth", tools: ["claude"], time: "09:14 AM",
-    text: "Outreach drafted for James Park at Acme Corp using their Series A trigger + his LinkedIn post as the hook. Brand voice check: passed. Ready to send.",
+  { agentId: "atlas", agentName: "Atlas", department: "talent", tools: ["apify","firecrawl"], time: "09:04 AM",
+    text: "Researched 40 companies against your ICP. 12 qualified, ranked by fit, each with the evidence attached.",
+    passedTo: "Mira", passedToDept: "content" },
+  { agentId: "mira", agentName: "Mira", department: "content", tools: ["claude"], time: "09:14 AM",
+    text: "Outreach drafted for the top 3, each referencing the signal that made them relevant. Nothing sends until you approve it.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "09:22 AM", isFounder: true,
-    text: "Email looks perfect. Approved. I'll send it from my inbox." },
-  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["claude"], time: "18:00 PM",
-    text: "End of day summary. Today: 1 outreach approved (Acme Corp). 127 candidates screened — 6 scoring above 90%. 1 competitor pricing alert handled. Your time invested: 47 minutes." },
+    text: "Drafts look right. Approved. I'll send them from my inbox." },
+  { agentId: "atlas", agentName: "Atlas", department: "talent", tools: ["gemini","claude"], time: "11:30 AM",
+    text: "Screened this week's applicants against the role. Six worth your time, ranked, with the reasoning for each.",
+    passedTo: "Orion", passedToDept: "growth" },
+  { agentId: "orion", agentName: "Orion", department: "growth", tools: ["claude"], time: "18:00 PM",
+    text: "End of day: 1 outreach approved, 12 companies qualified, 6 candidates shortlisted, 1 competitor alert handled. Your time today: 47 minutes." },
 ];
 
 const DEPARTMENTS_LIST = [
-  { key: "talent" as const, label: "Talent", count: 2 },
-  { key: "growth" as const, label: "Growth", count: 1 },
+  { key: "talent" as const, label: "Research", count: 1 },
+  { key: "intelligence" as const, label: "Signals", count: 1 },
   { key: "content" as const, label: "Content", count: 1 },
-  { key: "intelligence" as const, label: "Intelligence", count: 1 },
+  { key: "growth" as const, label: "Review", count: 1 },
 ];
 
 const truths = [
-  { icon: Brain, title: "One brain. Every agent knows everything.", body: "Tell ScreeningPilot about your company once. Your brand voice, your ICP, your competitors, your goals. From that moment every agent operates with full context — permanently. What you tell one, all of them remember." },
-  { icon: GitBranch, title: "They pass work to each other. You just decide.", body: "Scout finds candidates and passes them to Aria. Hawk spots a competitor move and tells Scribe to draft a response. Penn writes outreach for warm leads as soon as they're identified. The handoffs happen automatically — no configuration, no prompting, no tab switching." },
-  { icon: Crown, title: "You are the only human in the room.", body: "Your agents brief each other, execute the work, and surface only what needs a human decision. Eight minutes of reviewing their outputs replaces eight hours of doing the work yourself. You are the founder making calls — not the intern running between desks." },
+  { icon: Brain, title: "One company context. Every employee has it.", body: "Tell Agentory about your company once: what you sell, who you sell to, your voice, your competitors, your goals. From then on every AI employee works from that same context. What you tell one, all of them know." },
+  { icon: GitBranch, title: "They pass work to each other.", body: "Lyra spots a signal and hands it to Atlas. Atlas qualifies a company and hands it to Mira. Mira drafts the outreach and hands it to you. The handoffs happen without you setting them up — no configuration, no re-prompting, no copy-paste between tabs." },
+  { icon: Crown, title: "You are the only human in the room.", body: "Your AI employees brief each other, do the work, and surface only what needs a human decision. Minutes of reviewing replaces hours of doing it yourself. You are the founder making calls — not the intern running between desks." },
 ];
 
 const MeetTheTeamSection = () => {
@@ -112,18 +117,18 @@ const MeetTheTeamSection = () => {
   const allRevealed = currentStep >= MESSAGES.length - 1;
 
   return (
-    <section ref={sectionRef} className="relative w-full overflow-visible" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section id="how-it-works" ref={sectionRef} className="relative w-full overflow-visible" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       {/* Headline — outside the pinned area */}
       <div className="px-4 pt-24 md:pt-36 pb-12">
         <div className="max-w-[1100px] mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="text-center">
-            <p className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">YOUR AI WORKFORCE</p>
+            <p className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">A DAY INSIDE AGENTORY</p>
             <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.04em] text-foreground mb-6">
-              Meet the team running<br />your company right now.
+              They work together.<br />You just decide.
             </h2>
             <p className="text-foreground/40 text-base md:text-lg max-w-[600px] mx-auto leading-relaxed">
-              Every agent has a role, a set of tools, and colleagues they work with. They pass information between departments automatically. You hired them all for €149/month.
+              Every AI employee has a job, the tools for it, and colleagues they hand work to. When one finds something another should act on, it passes it over — without you setting it up.
             </p>
           </motion.div>
         </div>
@@ -142,7 +147,7 @@ const MeetTheTeamSection = () => {
                   <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
                   <div className="w-3 h-3 rounded-full bg-green-500/70" />
                 </div>
-                <span className="font-mono text-[11px] text-foreground/30">ScreeningPilot Internal · 5 agents online</span>
+                <span className="font-mono text-[11px] text-foreground/30">Agentory · your AI team</span>
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   <span className="font-mono text-[10px] text-primary/60">All systems active</span>
@@ -152,7 +157,7 @@ const MeetTheTeamSection = () => {
               <div className="flex">
                 {/* Sidebar — desktop only */}
                 <div className="w-[200px] border-r border-white/[0.06] p-4 hidden lg:block shrink-0">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mb-3">DEPARTMENTS</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mb-3">THE WORK</p>
                   {DEPARTMENTS_LIST.map(d => (
                     <div key={d.key} className="flex items-center justify-between py-1.5">
                       <div className="flex items-center gap-2">
@@ -165,15 +170,21 @@ const MeetTheTeamSection = () => {
                   <div className="flex items-center justify-between py-1.5 opacity-40">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-white/20" />
-                      <span className="text-xs text-white/30">Engineering</span>
+                      <span className="text-xs text-white/30">More work</span>
                     </div>
                     <span className="text-[9px] text-white/15">Soon</span>
                   </div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mt-6 mb-3">AGENTS ONLINE</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mt-6 mb-3">EMPLOYEES ONLINE</p>
                   <div className="flex flex-wrap gap-1">
-                    {AGENTS.map(a => (
-                      <span key={a.id} className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-white/30">{a.name}</span>
-                    ))}
+                    {AGENTS.map(a => {
+                      const employee = EMPLOYEE_BY_ID[a.id as EmployeeId];
+                      return (
+                        <span key={a.id} className="inline-flex items-center gap-1 text-[9px] pl-0.5 pr-1.5 py-0.5 rounded bg-white/[0.04] text-white/40">
+                          {employee && <EmployeeAvatar employee={employee} size={14} ring={false} />}
+                          {a.name}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -193,15 +204,17 @@ const MeetTheTeamSection = () => {
                             className={`rounded-xl border p-4 ${isFounder ? "border-white/[0.1] bg-white/[0.04]" : "border-white/[0.05] bg-white/[0.02]"}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full flex items-center justify-center"
-                                  style={{ backgroundColor: isFounder ? "rgba(226,232,240,0.15)" : dept.bg }}>
-                                  {isFounder ? <User className="w-3.5 h-3.5 text-white/60" /> : (() => {
-                                    const agent = AGENTS.find(a => a.id === msg.agentId);
-                                    if (!agent) return null;
-                                    const Icon = agent.icon;
-                                    return <Icon className="w-3.5 h-3.5" style={{ color: dept.color }} />;
-                                  })()}
-                                </div>
+                                {/* The face, not a glyph — the employee speaking here is the
+                                    same character the visitor met in the hero. */}
+                                {isFounder ? (
+                                  <div className="w-7 h-7 rounded-full flex items-center justify-center"
+                                    style={{ backgroundColor: "rgba(226,232,240,0.15)" }}>
+                                    <User className="w-3.5 h-3.5 text-white/60" />
+                                  </div>
+                                ) : (() => {
+                                  const employee = EMPLOYEE_BY_ID[msg.agentId as EmployeeId];
+                                  return employee ? <EmployeeAvatar employee={employee} size={28} /> : null;
+                                })()}
                                 <span className="text-xs font-bold" style={{ color: isFounder ? "#e2e8f0" : dept.color }}>{msg.agentName}</span>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: dept.bg, color: dept.color }}>{dept.label}</span>
                               </div>
@@ -302,10 +315,17 @@ const MeetTheTeamSection = () => {
               className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: DEPT[agent.department].bg }}>
-                    <agent.icon className="w-5 h-5" style={{ color: DEPT[agent.department].color }} />
-                  </div>
+                  {(() => {
+                    const employee = EMPLOYEE_BY_ID[agent.id as EmployeeId];
+                    return employee ? (
+                      <EmployeeAvatar employee={employee} size={44} />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: DEPT[agent.department].bg }}>
+                        <agent.icon className="w-5 h-5" style={{ color: DEPT[agent.department].color }} />
+                      </div>
+                    );
+                  })()}
                   <div>
                     <p className="text-sm font-bold text-white">{agent.name}</p>
                     <p className="text-[10px] text-white/30">{agent.title}</p>
@@ -333,12 +353,14 @@ const MeetTheTeamSection = () => {
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] text-white/20 uppercase tracking-wider">Talks to</span>
-                {agent.talksTo.map(name => {
+                {/* "Founder" is rendered by the dedicated line below, so it is
+                    excluded here — listing it in both printed it twice. */}
+                {agent.talksTo.filter(name => name !== "Founder").map(name => {
                   const target = AGENTS.find(a => a.name === name);
                   const color = target ? DEPT[target.department].color : "#6b7280";
                   return <span key={name} className="text-[10px] font-medium" style={{ color }}>{name}</span>;
                 })}
-                {agent.talksTo.includes("Founder") && <span className="text-[10px] font-medium text-white/50">Founder</span>}
+                {agent.talksTo.includes("Founder") && <span className="text-[10px] font-medium text-white/50">You</span>}
               </div>
             </motion.div>
           ))}
@@ -348,7 +370,7 @@ const MeetTheTeamSection = () => {
             transition={{ duration: 0.4, delay: AGENTS.length * 0.08 }}
             className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5 flex flex-col items-center justify-center text-center min-h-[180px]">
             <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-2">v2 · Soon</span>
-            <p className="text-sm text-white/50 font-medium">More agents joining the team in v2</p>
+            <p className="text-sm text-white/50 font-medium">More employees join as Agentory takes on more work</p>
           </motion.div>
         </div>
 

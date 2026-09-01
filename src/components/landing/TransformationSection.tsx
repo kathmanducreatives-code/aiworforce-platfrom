@@ -3,19 +3,19 @@ import { motion } from 'framer-motion';
 import { X, Check } from 'lucide-react';
 
 const withoutItems = [
-  '15 tools that forget you every session',
-  '6 hours/week briefing AI with the same context',
-  '€195,000/year in human team costs',
-  'Recruiting: 6 weeks per hire',
+  'A dozen AI tools that forget your company every session',
+  'Hours every week re-explaining your business',
+  'Research in one tab, content in another, leads in a third',
+  'You copy the output of one tool into the next',
   'You are the connection between everything',
 ];
 
 const withItems = [
-  '1 Company Brain shared across all agents',
-  '10 minutes setup. Context stored forever.',
-  '€149/month for your entire AI workforce',
-  'Recruiting: 48 hours from post to shortlist',
-  'Agents brief each other automatically',
+  'One company context every AI employee works from',
+  'Tell Agentory once. Remembered from then on.',
+  'Research, leads, content and outreach in one place',
+  'Your employees pass work to each other',
+  'You review the results and decide',
 ];
 
 export const TransformationSection = () => {
@@ -84,7 +84,7 @@ export const TransformationSection = () => {
           <div className="pl-4 md:pl-10 pt-8 md:pt-0 border-t md:border-t-0 border-white/[0.06]">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-emerald-400 font-semibold">WITH PILOT</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-emerald-400 font-semibold">WITH AGENTORY</span>
             </div>
             <div className="space-y-4">
               {withItems.map((item, i) => (
@@ -102,7 +102,7 @@ export const TransformationSection = () => {
             </div>
             <div className="mt-8 font-mono text-xs border-t border-emerald-500/15 pt-4">
               <div className="bg-emerald-600 rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.3)] flex justify-between items-center text-sm font-bold tracking-wide border border-emerald-400/20">
-                <span>€149/MONTH</span><span>·</span><span>ALL FIVE DEPARTMENTS</span>
+                <span>ONE COMPANY BRAIN</span><span>·</span><span>ONE PLACE</span>
               </div>
             </div>
           </div>

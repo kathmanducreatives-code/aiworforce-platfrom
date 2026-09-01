@@ -16,9 +16,9 @@ const HUBS = [
 ];
 
 const COLUMNS = [
-  { Icon: Globe, title: "Works everywhere", body: "ScreeningPilot runs in the cloud with zero regional restrictions. Your workforce operates at full capacity whether you are building in Bangalore or Brooklyn." },
-  { Icon: Languages, title: "Speaks your market", body: "The Company Brain stores your market context. Your agents write outreach for US investors and Indian founders differently — because they know exactly who you are talking to in each market." },
-  { Icon: Shield, title: "Trusted globally", body: "GDPR compliant. SOC2 ready. Encrypted at rest and in transit. Your data never leaves your control regardless of where you are building." },
+  { Icon: Globe, title: "Works everywhere", body: "Agentory runs in the cloud with no regional restrictions. Your AI employees work at full capacity whether you are building in Bangalore or Brooklyn." },
+  { Icon: Languages, title: "Knows your market", body: "Your company context includes the markets you sell into. Your AI employees research and write differently for different audiences — because they know who you are talking to." },
+  { Icon: Shield, title: "Your data stays yours", body: "Encrypted at rest and in transit. Your company context, your prompts and your employees' outputs belong to you, wherever you are building." },
 ];
 
 const WORLD_MAP_PATH = `
@@ -88,7 +88,7 @@ const GlobalSection = () => {
         </motion.div>
 
         <div className="text-center mt-6">
-          <p className="text-sm text-white/30">Join founders from <span className="text-white/60 font-semibold">50+ countries</span></p>
+          <p className="text-sm text-white/30">Built for <span className="text-white/60 font-semibold">founders anywhere</span></p>
           <p className="text-2xl mt-2 opacity-60">🇺🇸 🇬🇧 🇮🇳 🇨🇦 🇦🇺 🇩🇪 🇸🇬 🇧🇷 🇮🇱 🇦🇪</p>
         </div>
       </div>

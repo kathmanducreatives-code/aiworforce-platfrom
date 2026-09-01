@@ -6,7 +6,7 @@ const Footer = () => (
       <div>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-white/25 mb-4">Product</h4>
         <div className="space-y-3">
-          {['AI Workforce Platform', 'Talent Department', 'Growth Department', 'Intelligence Department', 'Custom Agent Builder', 'Pricing'].map((l) => (
+          {['Research', 'Leads', 'Signals', 'Content & Outreach', 'Recruiting', 'Build your own', 'Pricing'].map((l) => (
             <a key={l} href="#" className="block text-sm text-white/30 hover:text-white/60 transition-colors">{l}</a>
           ))}
         </div>
@@ -41,9 +41,9 @@ const Footer = () => (
     <div className="border-t border-white/[0.04] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(5,150,105,0.5)]" />
-        <span className="text-xs text-white/20">© 2026 ScreeningPilot</span>
+        <span className="text-xs text-white/20">© 2026 Agentory</span>
       </div>
-      <p className="text-xs text-white/15 italic">Built to give every founder an AI workforce.</p>
+      <p className="text-xs text-white/15 italic">Built to give every business an AI team.</p>
     </div>
   </footer>
 );

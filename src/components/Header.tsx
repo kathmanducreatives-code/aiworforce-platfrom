@@ -22,10 +22,10 @@ const Header = () => {
   }, []);
 
   const navItems = [
-    { label: 'How It Works', href: '#hero-to-expert-sequence' },
-    { label: 'Departments', href: '#departments' },
+    { label: 'How it works', href: '#how-it-works' },
+    { label: 'What it does', href: '#the-work' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'Enterprise', href: '#enterprise' },
+    { label: 'FAQ', href: '#faq' },
   ];
 
   return (
@@ -37,7 +37,7 @@ const Header = () => {
         {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
           <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.5)] group-hover:scale-125 transition-transform animate-pulse" />
-          <span className="font-display font-bold text-lg text-white tracking-tight">ScreeningPilot</span>
+          <span className="font-display font-bold text-lg text-white tracking-tight">Agentory</span>
         </div>
 
         {/* Desktop Nav */}
@@ -60,10 +60,9 @@ const Header = () => {
             </>
           ) : (
             <>
-              <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium transition-colors">Sign In</button>
-              <button onClick={() => navigate('/dashboard')} className="text-sm text-neutral-300 hover:text-white font-medium transition-colors">Launch App</button>
+              <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium transition-colors">Sign in</button>
               <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[36px] px-5 bg-emerald-500/[0.04] border border-emerald-500/25 text-emerald-300 text-sm font-medium rounded-full transition-all duration-300 hover:bg-emerald-500/[0.08] hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] flex items-center justify-center">
-                Meet your workforce →
+                Put Agentory to work →
               </button>
             </>
           )}
@@ -98,8 +97,8 @@ const Header = () => {
             <a key={item.label} href={item.href} className="block py-3 text-sm text-neutral-400 hover:text-white font-medium border-b border-white/[0.03] last:border-0">{item.label}</a>
           ))}
           <div className="mt-4 flex gap-3 items-center">
-            <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium">Sign In</button>
-            <button onClick={() => navigate('/auth')} className="bg-emerald-500/[0.08] border border-emerald-500/20 text-emerald-300 text-sm font-medium px-4 py-2 rounded-full">Meet your workforce →</button>
+            <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium">Sign in</button>
+            <button onClick={() => navigate('/auth')} className="bg-emerald-500/[0.08] border border-emerald-500/20 text-emerald-300 text-sm font-medium px-4 py-2 rounded-full">Put Agentory to work →</button>
           </div>
         </div>
       )}

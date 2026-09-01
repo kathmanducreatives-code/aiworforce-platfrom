@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Linkedin, Mail, MapPin, Clock } from 'lucide-react';
+import { EMPLOYEE_BY_ID } from './employees';
+import { EmployeeChip } from './EmployeePortrait';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -69,7 +71,7 @@ const ProductLookalike = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="departments" className="relative w-full h-screen overflow-hidden font-display">
+    <section ref={sectionRef} id="demo-recruiting" className="relative w-full h-screen overflow-hidden font-display">
       <div className="absolute inset-0 pointer-events-none" style={{
         backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
         backgroundSize: '100px 100px',
@@ -86,14 +88,21 @@ const ProductLookalike = () => {
         <div className="text-center mb-6">
           <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/40 bg-transparent mb-4 opacity-0 mx-auto">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">TALENT DEPARTMENT</span>
+            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">ONE JOB YOU CAN HAND OVER · RECRUITING</span>
           </div>
           <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
-            Your recruiting team.<br />Always hiring. While you sleep.
+            Give them a hiring job.<br />Get a ranked shortlist back.
           </h2>
           <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
-            Scout finds candidates who match your ideal profile. Aria screens every applicant through an AI interview and scores answers across 12 criteria. You receive a ranked shortlist.
+            Tell Agentory the role you are filling. Your AI employees find people who match, review every applicant against what the job actually needs, and bring back a ranked shortlist with the reasoning attached. You decide who to talk to.
           </p>
+          {/* Recruiting is not a separate product — it is the same two employees
+              doing a different job. Naming them here is what makes that land. */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+            <EmployeeChip employee={EMPLOYEE_BY_ID.atlas} label="researches and ranks" />
+            <span className="text-white/20 text-xs">→</span>
+            <EmployeeChip employee={EMPLOYEE_BY_ID.orion} label="queues your decisions" />
+          </div>
         </div>
 
         <div className="look-mockup max-w-5xl mx-auto w-full opacity-0">
@@ -104,7 +113,7 @@ const ProductLookalike = () => {
                 <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                 <div className="w-3 h-3 rounded-full bg-green-400/60" />
               </div>
-              <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">Talent Department · Scout Agent Active</span></div>
+              <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">Agentory · Recruiting</span></div>
             </div>
 
             <div className="p-5">

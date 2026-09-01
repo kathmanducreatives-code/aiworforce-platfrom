@@ -3,9 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ClaudeLogo, FirecrawlLogo, InstantlyLogo, ApifyLogo, GeminiLogo, ReplicateLogo, ElevenLabsLogo, PerplexityLogo, NotionLogo, LinearLogo, GitHubLogo } from "./ToolLogos";
+import { EMPLOYEE_BY_ID, type EmployeeId } from './employees';
+import { EmployeeAvatar } from './EmployeePortrait';
 
 interface DeptCard {
   emoji: string;
+  /** Which AI employees do this kind of work. More than one where it needs a handoff. */
+  owners?: EmployeeId[];
   name: string;
   room: string;
   tools: { Logo: React.FC<{ width?: number; height?: number }>; name: string }[];
@@ -15,67 +19,67 @@ interface DeptCard {
 
 const DEPARTMENTS: DeptCard[] = [
   {
-    emoji: "🎯", name: "Talent Department", room: "talent",
+    emoji: "🎯", name: "Research & Recruiting", room: "talent", owners: ["atlas"],
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: GeminiLogo, name: "Gemini" },
       { Logo: ApifyLogo, name: "Apify" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
     ],
     activities: [
-      { done: true, text: "Scout found 34 candidates matching ICP" },
-      { done: true, text: "Aria completed 28 AI screening interviews" },
-      { done: false, text: "Aria scoring answers across 12 criteria for top 8" },
+      { done: true, text: "Atlas researched 34 companies matching your ICP" },
+      { done: true, text: "Atlas qualified 28 of them against your criteria" },
+      { done: false, text: "Atlas ranking the strongest 8 by fit" },
       { done: true, text: "Shortlist ready: 6 candidates ranked for review" },
-      { done: false, text: "Scout monitoring open-to-work signals on LinkedIn" },
+      { done: false, text: "Atlas reviewing this week's applicants for the open role" },
       { done: true, text: "Market salary for this role: $145k–$190k" },
     ],
   },
   {
-    emoji: "📣", name: "Growth Department", room: "growth",
+    emoji: "📣", name: "Leads & Outreach", room: "growth", owners: ["lyra", "atlas", "mira"],
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
       { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
     ],
     activities: [
-      { done: true, text: "Hawk flagged Acme Corp — Series A trigger" },
-      { done: true, text: "Penn wrote personalized outreach for James Park" },
-      { done: false, text: "Penn drafting follow-ups for 12 leads in queue" },
+      { done: true, text: "Lyra flagged Acme Corp — funding signal" },
+      { done: true, text: "Mira drafted outreach referencing that signal" },
+      { done: false, text: "Mira drafting follow-ups for 12 leads in queue" },
       { done: true, text: "Reply detected from TechFlow Inc — flagging urgent" },
-      { done: false, text: "Penn scoring 47 leads from this week's funding news" },
+      { done: false, text: "Orion queueing 47 leads for your review" },
       { done: true, text: "Outreach drafts ready for 3 warm leads" },
     ],
   },
   {
-    emoji: "🎨", name: "Content Department", room: "content",
+    emoji: "🎨", name: "Content", room: "content", owners: ["mira"],
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: ReplicateLogo, name: "Replicate" },
       { Logo: ElevenLabsLogo, name: "ElevenLabs" },
     ],
     activities: [
-      { done: true, text: "Scribe wrote LinkedIn post in your brand voice" },
-      { done: false, text: "Scribe drafting newsletter for tomorrow" },
-      { done: true, text: "Scribe queued 3 pieces of content this week" },
+      { done: true, text: "Mira wrote a LinkedIn post in your brand voice" },
+      { done: false, text: "Mira drafting a newsletter for tomorrow" },
+      { done: true, text: "Mira queued 3 pieces of content this week" },
       { done: true, text: "Brand voice check passed: 98% consistency score" },
       { done: false, text: "Repurposing last week's top post into 3 formats" },
       { done: true, text: "Cold email sequence drafted: 5 emails, 3 subjects" },
     ],
   },
   {
-    emoji: "🔍", name: "Intelligence Department", room: "intelligence",
+    emoji: "🔍", name: "Signals & Monitoring", room: "intelligence", owners: ["lyra"],
     tools: [
       { Logo: FirecrawlLogo, name: "Firecrawl" }, { Logo: PerplexityLogo, name: "Perplexity" },
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: NotionLogo, name: "Notion" },
     ],
     activities: [
-      { done: true, text: "Hawk detected competitor pricing change" },
-      { done: true, text: "Hawk updated salary benchmarks for open roles" },
-      { done: true, text: "Hawk delivered morning brief — 3 signals found" },
-      { done: false, text: "Hawk scanning 23 competitor job postings" },
+      { done: true, text: "Lyra detected a competitor pricing change" },
+      { done: true, text: "Lyra refreshed hiring and market data" },
+      { done: true, text: "Lyra delivered the morning brief — 3 signals found" },
+      { done: false, text: "Lyra scanning 23 competitor job postings" },
       { done: true, text: "3 companies in your space raised this week" },
       { done: true, text: "Weekly intelligence report saved to Notion" },
     ],
   },
   {
-    emoji: "⚙️", name: "Engineering Department", room: "engineering", comingSoon: true,
+    emoji: "⚙️", name: "Engineering", room: "engineering", comingSoon: true,
     tools: [
       { Logo: ClaudeLogo, name: "Claude" }, { Logo: GitHubLogo, name: "GitHub" },
       { Logo: LinearLogo, name: "Linear" },
@@ -134,15 +138,15 @@ const TeamsAtWorkSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative z-10 py-24 md:py-32">
+    <section id="the-work" ref={sectionRef} className="relative z-10 py-24 md:py-32">
       <div className="max-w-[1100px] mx-auto px-6">
         <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">YOUR DEPARTMENTS, LIVE</span>
+          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">WHAT AGENTORY HANDLES</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            Five working agents.<br />Three active departments.<br />All sharing one company brain.
+            The work you can hand over.<br />All of it sharing one company context.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            Scout, Aria, Penn, Hawk, and Scribe handle sourcing, screening, outreach drafting, competitor monitoring, and content writing. More agents joining the team in v2.
+            Research, leads, signals, content, outreach, recruiting and company intelligence — handled by AI employees who all know your business. More kinds of work as Agentory grows.
           </p>
         </div>
 
@@ -164,6 +168,26 @@ const TeamsAtWorkSection = () => {
                   </span>
                 )}
               </div>
+              {/* WHO DOES THIS. Faces sit above the tools, because the employee is
+                  the thing being sold and the tooling is what they reach for. */}
+              {dept.owners && dept.owners.length > 0 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Who:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {dept.owners.map((id, oi) => {
+                      const employee = EMPLOYEE_BY_ID[id];
+                      if (!employee) return null;
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1">
+                          {oi > 0 && <span className="text-white/15 text-[10px] mr-0.5">→</span>}
+                          <EmployeeAvatar employee={employee} size={20} />
+                          <span className="text-[11px] font-medium" style={{ color: employee.accent }}>{employee.name}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Tools:</span>
                 {dept.tools.slice(0, 3).map(t => (
@@ -179,7 +203,7 @@ const TeamsAtWorkSection = () => {
                 {dept.comingSoon ? (
                   <button onClick={() => navigate("/auth")} className="text-xs text-white/30 font-medium hover:text-white/50 transition-colors flex items-center gap-1">Join waitlist <ArrowRight className="w-3 h-3" /></button>
                 ) : (
-                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-xs text-emerald-400/80 font-medium hover:text-emerald-400 transition-colors flex items-center gap-1">View Department <ArrowRight className="w-3 h-3" /></button>
+                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-xs text-emerald-400/80 font-medium hover:text-emerald-400 transition-colors flex items-center gap-1">View the work <ArrowRight className="w-3 h-3" /></button>
                 )}
               </div>
             </motion.div>

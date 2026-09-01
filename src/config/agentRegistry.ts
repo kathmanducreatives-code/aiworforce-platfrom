@@ -19,14 +19,17 @@
 // Canonical public identity assets. Legacy files (scout.png, aria.png,
 // hawk.png, penn.png, scribe.png) remain on disk for backend-history
 // compatibility but are no longer imported by public UI as of Phase 1.6.
+//
+// Lyra was the one exception: her avatar was read from `lyra.png.asset.json`,
+// whose `/__l5e/...` URL is a Lovable-hosted path that resolves to index.html
+// in a normal build — every product surface rendered her as a broken image.
+// She now imports a real local asset like Atlas, Mira and Orion do.
 import pilotImg from '@/assets/agents/pilot.webp';
 import atlasImg from '@/assets/agents/public/atlas.webp';
 import miraImg from '@/assets/agents/public/mira.webp';
 import orionImg from '@/assets/agents/public/orion.webp';
-import lyraAsset from '@/assets/agents/public/lyra.png.asset.json';
+import lyraImg from '@/assets/agents/public/lyra.webp';
 import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
-
-const lyraImg = lyraAsset.url;
 
 export type PublicAgentId = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion';
 export type LegacyAgentId = 'pilot' | 'scout' | 'aria' | 'hawk' | 'penn' | 'scribe';

@@ -53,43 +53,50 @@ const Landing = () => {
         <HeroHook />
         {/* 3. Global Trust Bar */}
         <GlobalTrustBar />
-        {/* 4. Ecosystem */}
-        <EcosystemSection />
-        {/* 5. The Problem (Transformation) */}
+        {/* 4. The Problem (Transformation) */}
         <TransformationSection />
-        {/* 6. Meet Your AI Team — portraits + powered by */}
+        {/* 5. Your AI Team — portraits + powered by */}
         <MeetYourAITeamSection />
-        {/* 6b. War Room workforce simulation */}
+        {/* 6. They work together — war room simulation (#how-it-works) */}
         <MeetTheTeamSection />
-        {/* 7. Talent Department */}
-        <ProductLookalike />
-        {/* 8. Growth Department */}
-        <ProductScreening />
-        {/* 9. Intelligence Department */}
-        <ExpertJourney />
-        {/* 10. A Day With Your Workforce */}
-        <DayTimelineSection />
-        {/* 11. Teams At Work */}
+        {/*
+          7. Under the hood — the tool orbit.
+          MOVED from position 4. Leading with the tools read as an integration
+          marketplace; the same orbit means "you never manage any of this" only
+          once the reader already knows there are AI employees using it.
+        */}
+        <EcosystemSection />
+        {/* 8. What Agentory handles (#the-work) */}
         <TeamsAtWorkSection />
-        {/* 12. The Math */}
+        {/*
+          9-11. The three demos, GROUPED and reordered: Leads → Signals →
+          Recruiting. Recruiting led the page before, which made it the identity
+          rather than one example of the breadth.
+        */}
+        <ProductScreening />
+        <ExpertJourney />
+        <ProductLookalike />
+        {/* 12. A Monday with your AI team */}
+        <DayTimelineSection />
+        {/* 13. What this replaces */}
         <TimeMath />
-        {/* 13. Social Proof */}
+        {/* 14. How businesses use Agentory */}
         <SocialProof />
-        {/* 14. Custom Agent Builder */}
+        {/* 15. Build your own AI employee (#build-your-own) */}
         <AgentBuilderSection />
-        {/* 15. Pricing */}
+        {/* 16. Pricing */}
         <PricingCard />
-        {/* 16. FAQ */}
+        {/* 17. FAQ (#faq) */}
         <FAQSection />
-        {/* 17. Global */}
+        {/* 18. Global */}
         <GlobalSection />
-        {/* 18. Marquee */}
+        {/* 19. Marquee */}
         <MarqueeBanner />
-        {/* 19. Final CTA */}
+        {/* 20. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 20. Footer */}
+      {/* 21. Footer */}
       <Footer />
     </div>
   );

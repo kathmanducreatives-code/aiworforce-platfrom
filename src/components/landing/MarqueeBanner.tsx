@@ -1,5 +1,5 @@
-const row1 = '5 DEPARTMENTS · 15 AGENTS · 1 COMPANY BRAIN ◆ YOUR ENTIRE AI WORKFORCE FOR €149/MONTH ◆ ';
-const row2 = 'TALENT · GROWTH · CONTENT · INTELLIGENCE · COMMAND ◆ SET UP IN 10 MINUTES ◆ CANCEL ANYTIME ◆ ';
+const row1 = 'RESEARCH · LEADS · SIGNALS · CONTENT · OUTREACH · RECRUITING · MONITORING ◆ ONE PLACE ◆ ';
+const row2 = 'AI EMPLOYEES FOR YOUR BUSINESS ◆ ONE COMPANY BRAIN ◆ SET UP IN MINUTES ◆ CANCEL ANYTIME ◆ ';
 
 const MarqueeBanner = () => (
     <section className="py-8 overflow-hidden border-y border-white/[0.04]">

@@ -136,13 +136,13 @@ export const ExpertJourney = () => {
         <div className="sequence-viewport">
           <div className="blueprint-grid" />
 
-          {/* Stage 1 — Hawk */}
+          {/* Stage 1 — Lyra */}
           <div className="sequence-stage stage-1">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Intelligence · Hawk Agent</div>
-                <h3 className="seq-title">Knows what your competitors did last night.</h3>
-                <p className="seq-copy">Hawk monitors competitor pricing, product launches, hiring patterns, and G2 reviews — around the clock.</p>
+                <div className="seq-label">Lyra · Signals &amp; Monitoring</div>
+                <h3 className="seq-title">Know what changed before anyone tells you.</h3>
+                <p className="seq-copy">Lyra watches competitor pricing, product launches, hiring patterns and public reviews, and flags what actually changed.</p>
                 <div className="seq-bullets">
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Pricing change detection</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hiring pattern analysis</span></div>
@@ -161,15 +161,15 @@ export const ExpertJourney = () => {
             </div>
           </div>
 
-          {/* Stage 2 — Hawk market lens */}
+          {/* Stage 2 — Lyra market lens */}
           <div className="sequence-stage stage-2">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Intelligence · Hawk (Market Lens)</div>
-                <h3 className="seq-title">Tracks market shifts in real time.</h3>
-                <p className="seq-copy">Hawk also tracks talent markets, salary benchmarks, and industry funding — so you always know what the market looks like.</p>
+                <div className="seq-label">Lyra · Market view</div>
+                <h3 className="seq-title">Watches the market, not just your rivals.</h3>
+                <p className="seq-copy">Lyra also tracks hiring activity, funding and market movement, so you always know what your space looks like.</p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Salary benchmark updates</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Market &amp; funding updates</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Funding round tracking</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Talent market trends</span></div>
                 </div>
@@ -186,17 +186,17 @@ export const ExpertJourney = () => {
             </div>
           </div>
 
-          {/* Stage 3 — Scribe daily brief */}
+          {/* Stage 3 — daily brief */}
           <div className="sequence-stage stage-3">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Content · Scribe (Daily Brief)</div>
+                <div className="seq-label">Orion · Daily brief</div>
                 <h3 className="seq-title">Your 3-minute morning report. Every day at 7am.</h3>
-                <p className="seq-copy">Scribe synthesizes Hawk's overnight findings into your daily morning report. What happened overnight. What needs your attention.</p>
+                <p className="seq-copy">Overnight findings come back as a short daily brief. What happened. What needs your attention.</p>
                 <div className="seq-bullets">
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Competitor moves overnight</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Action items prioritized</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Cross-department intelligence</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Findings shared with your other employees</span></div>
                 </div>
               </div>
               <div className="sequence-ui">
@@ -214,13 +214,13 @@ export const ExpertJourney = () => {
           <div className="sequence-stage stage-4">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Intelligence Department · Complete</div>
-                <h3 className="seq-title">Your research team never sleeps.</h3>
-                <p className="seq-copy">Hawk watches competitors and the market. Scribe turns it into a daily brief you can read in 3 minutes.</p>
+                <div className="seq-label">Agentory · Complete</div>
+                <h3 className="seq-title">Give them a watching job.</h3>
+                <p className="seq-copy">Your AI employees watch. You read three minutes and decide.</p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hawk: 5 competitors monitored 24/7</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hawk: Market and salary data refreshed daily</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Scribe: Morning report drafted at 7am</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Lyra: competitors monitored around the clock</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Lyra: market and hiring data refreshed daily</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Your morning brief, drafted overnight</span></div>
                 </div>
                 <p className="seq-copy"><strong className="text-white">Intelligence costs: €0 in research staff.</strong></p>
               </div>
@@ -262,9 +262,9 @@ export const ExpertJourney = () => {
                   {/* Agent status rows */}
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8 }}>
                     {[
-                      { name: 'Hawk', status: 'Monitoring 5 competitors now' },
-                      { name: 'Hawk', status: 'Market scan: 12 signals found' },
-                      { name: 'Scribe', status: 'Next brief: tomorrow 7:00 AM' },
+                      { name: 'Lyra', status: 'Monitoring competitors now' },
+                      { name: 'Atlas', status: 'Market scan: 12 signals found' },
+                      { name: 'Orion', status: 'Next brief: tomorrow morning' },
                     ].map((a, i) => (
                       <div key={`${a.name}-${i}`} className="agent-status-row">
                         <div className="agent-dot" />

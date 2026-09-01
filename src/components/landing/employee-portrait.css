@@ -1,0 +1,127 @@
+/*
+ * Pseudo-3D employee portrait.
+ *
+ * Kept out of `src/index.css` on purpose: these are component styles, not
+ * design tokens, and the landing refresh is not allowed to touch the design
+ * system. Everything below is additive and namespaced under `.emp3d`.
+ *
+ * The only animated properties are `transform` and `opacity`, so every frame
+ * stays on the compositor. `--rx/--ry/--mx/--my/--sx/--sy` are written by the
+ * component's rAF handler; with no pointer they hold their rest values and the
+ * card renders perfectly flat.
+ */
+
+.emp3d {
+  perspective: 620px;
+  isolation: isolate;
+}
+
+.emp3d__disc,
+.emp3d__glow,
+.emp3d__status {
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Depth 1: accent bloom ─────────────────────────────────────────────────
+   Sits behind the portrait and furthest from the viewer, so it swings widest
+   as the card tilts. This is what sells the parallax. */
+.emp3d__glow {
+  position: absolute;
+  inset: -14%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--accent) 38%, transparent) 0%,
+    transparent 62%
+  );
+  filter: blur(16px);
+  opacity: 0.55;
+  transform: rotateX(var(--rx)) rotateY(var(--ry)) translateZ(-42px) scale(1.04);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease;
+}
+
+.emp3d:hover .emp3d__glow {
+  opacity: 0.9;
+}
+
+/* ── Depth 2: the portrait ──────────────────────────────────────────────── */
+.emp3d__disc {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  overflow: hidden;
+  transform: rotateX(var(--rx)) rotateY(var(--ry)) translateZ(0);
+  box-shadow:
+    /* the shadow travels opposite the tilt, so the light source stays put */
+    var(--sx) calc(var(--sy) + 18px) 38px -12px rgba(0, 0, 0, 0.72),
+    0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  background: #0a0a0a;
+}
+
+.emp3d__disc img {
+  /* A hair of scale so the portrait never reveals an edge mid-tilt. */
+  transform: scale(1.03);
+}
+
+/* ── Depth 3: specular sheen + rim light ────────────────────────────────── */
+.emp3d__sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 26%,
+    transparent 58%
+  );
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.emp3d:hover .emp3d__sheen {
+  opacity: 1;
+}
+
+.emp3d__rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.14),
+    inset 0 -18px 28px -18px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Depth 4: status dot, nearest the viewer ───────────────────────────── */
+.emp3d__status {
+  position: absolute;
+  right: 6%;
+  bottom: 6%;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #10b981;
+  border: 2px solid #050505;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.55);
+  transform: rotateX(var(--rx)) rotateY(var(--ry)) translateZ(26px);
+}
+
+/* Touch and reduced-motion users never get the tilt handlers, but pin the
+   transforms flat regardless so nothing can be left mid-rotation. */
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .emp3d__disc,
+  .emp3d__glow,
+  .emp3d__status {
+    transform: none;
+    transition: none;
+  }
+  .emp3d__glow {
+    transform: scale(1.04);
+  }
+  .emp3d__status {
+    transform: none;
+  }
+}

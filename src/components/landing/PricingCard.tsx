@@ -8,17 +8,17 @@ import { PRICING_PLANS } from '@/lib/pricing/plans';
 gsap.registerPlugin(ScrollTrigger);
 
 const HOW_IT_WORKS = [
-  { n: 1, label: 'Choose a workflow', sub: 'From the Workflow Center.' },
-  { n: 2, label: 'See the estimated credits', sub: 'Before anything runs.' },
-  { n: 3, label: 'Agentory does the work', sub: 'Real workforce, real output.' },
-  { n: 4, label: 'You pay only for useful output', sub: 'Partial results are charged fairly.' },
+  { n: 1, label: 'Give Agentory a job', sub: 'In plain language.' },
+  { n: 2, label: 'See the cost before it runs', sub: 'Always, up front.' },
+  { n: 3, label: 'Agentory does the work', sub: 'Real employees, real output.' },
+  { n: 4, label: 'You only pay for useful output', sub: 'Partial results are charged fairly.' },
 ];
 
 const PLAN_VALUE: Record<string, string[]> = {
-  starter: ['~8 lead scans', '~80 enrichments', '~30 outreach drafts'],
-  founder_pro: ['~20 lead scans', '~50 enrichments', '~100 outreach drafts', 'Weekly radar'],
-  growth: ['~60 lead scans', '~200 enrichments', '~400 outreach drafts'],
-  scale: ['~180 lead scans', '~600 enrichments', 'Agency workflows'],
+  starter: ['~8 research jobs', '~80 companies researched', '~30 drafts'],
+  founder_pro: ['~20 research jobs', '~50 companies researched', '~100 drafts', 'Weekly monitoring'],
+  growth: ['~60 research jobs', '~200 companies researched', '~400 drafts'],
+  scale: ['~180 research jobs', '~600 companies researched', 'Agency workflows'],
 };
 
 const PricingCard = () => {
@@ -50,11 +50,11 @@ const PricingCard = () => {
       <div className="text-center mb-12 max-w-3xl mx-auto">
         <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ PRICING</p>
         <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-          Pay for workflows,<br />not seats of software you don't use.
+          Pay for work,<br />not seats of software you don't use.
         </h2>
         <p className="mt-5 text-[15px] text-white/55 leading-relaxed">
-          Every plan includes monthly workflow credits. Credits are used when your AI workforce runs real work:
-          finding signals, enriching companies, discovering decision-makers, drafting outreach, and creating content.
+          Every plan includes monthly credits. Credits are used when your AI employees do real work — researching
+          companies, finding leads, checking signals, drafting outreach, writing content and screening candidates.
         </p>
       </div>
 
@@ -158,9 +158,9 @@ const PricingCard = () => {
               <Sparkles className="h-4 w-4 text-emerald-300 mt-0.5 shrink-0" />
               <div className="text-[13px] text-white/70 leading-relaxed">
                 <span className="text-white font-semibold">Example.</span>{' '}
-                Find 5 hiring-signal leads ≈ ~15 credits. Scout may review 20+ raw signals,
-                reject weak matches, and return 5 qualified accounts with source, fit score,
-                and next step.
+                Find 5 companies with a hiring signal ≈ ~15 credits. Your employees may review
+                20+ raw signals, reject weak matches, and return 5 qualified accounts with the
+                source, a fit score, and the next step.
               </div>
             </div>
             <div className="flex items-start gap-2.5 mt-3 pt-3 border-t border-white/[0.04]">

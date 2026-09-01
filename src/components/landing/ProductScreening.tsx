@@ -3,14 +3,16 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { GyroTilt } from '../shared/GyroTilt';
 import { X, Loader2, Link as LinkIcon } from 'lucide-react';
+import { EMPLOYEE_BY_ID, type EmployeeId } from './employees';
+import { EmployeeAvatar } from './EmployeePortrait';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const steps = [
-    { num: 1, title: 'Hawk surfaces a funding trigger', desc: 'Acme Corp raised €8M Series A — warm lead flagged' },
-    { num: 2, title: 'Penn writes personalized outreach', desc: 'Email written in your voice, referencing the exact event' },
-    { num: 3, title: 'You approve and send from your inbox', desc: 'No automated sends — every email is yours to ship' },
-    { num: 4, title: 'Reply received — meeting booked', desc: 'James Park replied. You confirmed the call.' },
+const steps: { num: number; who?: EmployeeId; title: string; desc: string }[] = [
+    { num: 1, who: 'lyra', title: 'finds the signal', desc: 'Acme Corp raised a Series A — flagged as worth a look' },
+    { num: 2, who: 'atlas', title: 'checks it is real', desc: 'Confirmed against the company, and dated this month' },
+    { num: 3, who: 'mira', title: 'drafts the outreach', desc: 'Written in your voice, referencing the exact trigger' },
+    { num: 4, title: 'You approve and send', desc: 'No automated sends — every email is yours to ship' },
 ];
 
 const fullTitle = 'Acme Corp — Series A Lead';
@@ -161,13 +163,13 @@ const ProductScreening = () => {
                     <div ref={textRef} className="flex-[45] scr-text opacity-0">
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0 scr-badge">
                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">GROWTH DEPARTMENT</span>
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">ONE JOB YOU CAN HAND OVER · LEADS &amp; OUTREACH</span>
                         </div>
                         <h2 className="scr-headline font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
-                            Your sales team.<br />Finding leads before<br />your competitors do.
+                            Give them a lead job.<br />Get companies worth<br />contacting back.
                         </h2>
                         <p className="scr-subtext text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Hawk monitors funding announcements and competitor moves for companies that need you right now. Penn writes a personalized email in your voice. You approve and send from your own inbox.
+                            Describe the companies you want. Your AI employees find them, confirm the signal you asked for is real and recent, then draft outreach in your voice referencing the exact reason each company is worth contacting. Nothing sends until you approve it.
                         </p>
 
                         {/* Steps */}
@@ -177,12 +179,30 @@ const ProductScreening = () => {
 
                             {steps.map((step) => (
                                 <div key={step.num} className="scr-step-row flex items-start gap-4 py-3.5 relative">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 z-10 transition-all duration-500 ${activeStep >= step.num
-                                        ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(5,150,105,0.5)] scale-110'
-                                        : 'bg-white/[0.06] text-white/30 scale-100'
-                                        }`}>{step.num}</div>
+                                    {(() => {
+                                        const employee = step.who ? EMPLOYEE_BY_ID[step.who] : undefined;
+                                        const on = activeStep >= step.num;
+                                        if (employee) {
+                                            return (
+                                                <span className={`w-8 h-8 shrink-0 z-10 rounded-full transition-all duration-500 ${on ? 'scale-110 opacity-100' : 'scale-100 opacity-40'}`}>
+                                                    <EmployeeAvatar employee={employee} size={32} />
+                                                </span>
+                                            );
+                                        }
+                                        return (
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 z-10 transition-all duration-500 ${on
+                                                ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(5,150,105,0.5)] scale-110'
+                                                : 'bg-white/[0.06] text-white/30 scale-100'
+                                                }`}>{step.num}</div>
+                                        );
+                                    })()}
                                     <div className={`transition-all duration-500 ${activeStep >= step.num ? 'opacity-100 translate-x-0' : 'opacity-30 translate-x-[20px]'}`}>
-                                        <p className="font-semibold text-sm text-white">{step.title}</p>
+                                        <p className="font-semibold text-sm text-white">
+                                            {step.who && (
+                                                <span style={{ color: EMPLOYEE_BY_ID[step.who]?.accent }}>{EMPLOYEE_BY_ID[step.who]?.name} </span>
+                                            )}
+                                            {step.title}
+                                        </p>
                                         <p className="text-xs text-white/30 mt-0.5">{step.desc}</p>
                                     </div>
                                 </div>
@@ -192,7 +212,7 @@ const ProductScreening = () => {
 
                     <div ref={mockupRef} className="flex-[55] opacity-0 relative group">
                         <div className={`absolute -top-3 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(5,150,105,0.3)] border border-emerald-400/30 flex items-center gap-2 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-90'}`}>
-                            <LinkIcon className="w-3.5 h-3.5" /> Reply received — meeting booked!
+                            <LinkIcon className="w-3.5 h-3.5" /> Approved — ready to send!
                         </div>
 
                         <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-border bg-background">
@@ -202,7 +222,7 @@ const ProductScreening = () => {
                                     <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                                     <div className="w-3 h-3 rounded-full bg-green-400/60" />
                                 </div>
-                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">Growth Department · Penn Agent</span></div>
+                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">Agentory · Leads &amp; Outreach</span></div>
                             </div>
 
                             <div className="p-6">
@@ -264,7 +284,7 @@ const ProductScreening = () => {
                                         `}
                                     >
                                         {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> :
-                                            showToast ? '✓ Reply Received — Meeting Booked' :
+                                            showToast ? '✓ Approved — ready to send from your inbox' :
                                                 'Send Outreach'}
                                     </button>
                                 </div>

@@ -31,7 +31,7 @@ const ORBITAL_TOOLS: OrbitalTool[] = [
 ];
 
 const TABS = ["all", "talent", "growth", "content", "intelligence"] as const;
-const TAB_LABELS: Record<string, string> = { all: "All Tools", talent: "Talent", growth: "Growth", content: "Content", intelligence: "Intelligence" };
+const TAB_LABELS: Record<string, string> = { all: "Everything", talent: "Research", growth: "Leads", content: "Content", intelligence: "Signals" };
 const DEPT_COLORS: Record<string, string> = { talent: "#34d399", growth: "#60a5fa", content: "#a78bfa", intelligence: "#fbbf24" };
 
 const RING_CONFIG = {
@@ -113,7 +113,6 @@ const EcosystemSection = () => {
     return tool.departments.includes(activeTab);
   }, [activeTab]);
 
-  const stat1 = useCountUp(16, 1200, inView);
 
   const crossConnections = useMemo(() => {
     const lines: { from: string; to: string; color: string; active: boolean }[] = [];
@@ -149,12 +148,12 @@ const EcosystemSection = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">THE ECOSYSTEM</span>
+          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">UNDER THE HOOD</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            Every AI tool your business needs.<br />All plugged into one brain.
+            The best AI for every job.<br />One place to run it all.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            ScreeningPilot connects the world's best AI tools and orchestrates them as a single coordinated team. Each tool knows what the others are doing. No switching. No re-explaining. No data lost between tabs.
+            Your AI employees use the right model, research source and tool for each job. You give Agentory the work. Agentory handles what's underneath. No switching. No re-explaining. No data lost between tabs.
           </p>
         </motion.div>
 
@@ -363,16 +362,16 @@ const EcosystemSection = () => {
         </div>
         {activeTab !== "all" && (
           <p className="text-center text-xs text-white/30 mb-4">
-            {ORBITAL_TOOLS.filter(t => t.departments.includes(activeTab)).length} tools powering this department
+            {ORBITAL_TOOLS.filter(t => t.departments.includes(activeTab)).length} of the tools behind this work
           </p>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 mb-16">
           {[
-            { num: `${stat1}+`, label: "AI tools connected", sub: "And growing every month" },
-            { num: "1", label: "Company Brain", sub: "Shared across every tool" },
-            { num: "0", label: "Tabs to switch between", sub: "Everything runs from ScreeningPilot" },
+            { num: "Many", label: "Models and sources behind your employees", sub: "Chosen per job, not by you" },
+            { num: "1", label: "Company context", sub: "Shared by every AI employee" },
+            { num: "0", label: "Tools for you to manage", sub: "Everything runs from Agentory" },
           ].map(s => (
             <motion.div key={s.label}
               initial={{ opacity: 0, y: 20 }}
@@ -393,7 +392,7 @@ const EcosystemSection = () => {
           viewport={{ once: true, amount: 0.1 }}
           transition={{ duration: 0.5 }}
           className="text-center font-display font-bold text-xl md:text-2xl text-white/80 max-w-[560px] mx-auto leading-relaxed">
-          You bring the vision.<br />ScreeningPilot brings the team.<br />Together you build something unstoppable.
+          You bring the work.<br />Agentory brings the team, the tools<br />and the result.
         </motion.p>
       </div>
     </section>
