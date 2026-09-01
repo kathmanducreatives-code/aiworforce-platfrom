@@ -35,19 +35,19 @@ const HeroHook = () => {
 
         <h1 ref={headlineRef} className="font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-foreground mb-10">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
-            {["You're",'doing','the','work'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
+            {['The','AI','platform'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
-            {['of','ten','people.'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
+            {['built','for','modern'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
-            <span className="word inline-block opacity-0 text-primary">Now you don't have to.</span>
+            <span className="word inline-block opacity-0 text-primary">business teams.</span>
           </div>
         </h1>
 
         <div ref={subtextRef} className="opacity-0 mb-10">
           <p className="font-display text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto leading-relaxed">
-            Agentory gives you AI employees for the work your business does online — research, leads, content, signals, outreach, recruiting and more. One place to give them the work. One place to get the results.
+            AI employees that research, find leads, monitor signals, create content, handle outreach, and more — so your team can focus on decisions, relationships, and growth.
           </p>
         </div>
 
