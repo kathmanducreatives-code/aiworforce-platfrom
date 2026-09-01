@@ -248,7 +248,31 @@ Deno.serve(async (req) => {
     // to `tasks_sweep_stuck_runs`, which moves a stuck row to `ready` before
     // this sweeper is meant to see it — two sweepers, one subject at a time —
     // and widening to them would put both on the same row.
-    .in("status", ["ready", "complete"])
+    //
+    // ── AND A `complete` ROW MUST CARRY THE CLAIM, IN SQL, NOT ONLY IN CODE ──
+    //
+    // This was `.in("status", ["ready", "complete"])`, and `eligibleForAutoResume`
+    // was left to refuse the finished ones. It does refuse them — correctly, as
+    // `already_terminal` — but a refusal changes nothing about the row, so it
+    // matches again on the next tick, and the next, for ever.
+    //
+    // Measured on production the day it shipped: 72 rows in the window, 54 of
+    // them finished runs that could never leave it. Ordered oldest-first with
+    // `limit 50`, those permanent residents held the ENTIRE window, and the
+    // lineages that genuinely needed resuming — which sort newest — were never
+    // reached. Tasks a7a9371d, e01ad74f and 633ad466 all sat unswept behind
+    // them, and every one had to be continued by hand.
+    //
+    // The predicate is the one `eligibleForAutoResume` and
+    // `claim_sourcing_continuation` already enforce, moved to where it can
+    // actually keep the window small: `ready`, or `complete` that still says
+    // `continuation_required`. Same 14 candidates either way — the 54 simply
+    // stop being fetched.
+    .or(
+      "status.eq.ready," +
+        "and(status.eq.complete," +
+        "result->>terminal_status.eq.continuation_required)",
+    )
     .gte("created_at", new Date(now - SCAN_HORIZON_MS).toISOString())
     .lte("updated_at", new Date(now - STALE_AFTER_MS).toISOString())
     .order("updated_at", { ascending: true })

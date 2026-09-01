@@ -211,3 +211,44 @@ Deno.test("the prune is reached even when nothing is recovered", async () => {
   assert(block.includes("resolvedRunIds.size === 0"),
     "the short-circuit must require nothing to add AND nothing to remove");
 });
+
+// ══ THE SWEEPER'S WINDOW ═══════════════════════════════════════════════════
+
+Deno.test("the sweeper query excludes finished runs in SQL, not only in code", async () => {
+  // ── THE REGRESSION THIS PINS ────────────────────────────────────────────
+  //
+  // Widening the query to `status in ('ready','complete')` — so a stamped-over
+  // checkpoint could be recovered — also admitted every genuinely FINISHED run,
+  // because `quota_met` and `search_exhausted` both leave `status: complete`.
+  // `eligibleForAutoResume` refuses them as `already_terminal`, correctly, but a
+  // refusal changes nothing about the row, so it matches again on every tick.
+  //
+  // Production, the day it shipped: 72 rows in the window, 54 of them permanent
+  // residents. Ordered oldest-first with `limit 50` they held the whole window,
+  // and the lineages that needed resuming — which sort newest — were never
+  // reached. The same predicate in SQL brings the window to 14.
+  const src = await Deno.readTextFile(
+    new URL("../../supabase/functions/resume-stalled-leads/index.ts", import.meta.url),
+  );
+  const i = src.indexOf("let q = admin.from(\"tasks\")");
+  assert(i > 0, "the sweeper query must be present");
+  const raw = src.slice(i, src.indexOf(".limit(50)", i));
+  // CODE ONLY. The comment above the query quotes the predicate it replaced, and
+  // a whole-block regex reads that quotation as the live code — the same way an
+  // earlier version of the `cost_source` test read its answer out of a comment.
+  const block = raw.split("\n")
+    .filter((l) => !l.trim().startsWith("//"))
+    .join("\n");
+  assert(
+    !/\.in\("status",\s*\["ready",\s*"complete"\]\)/.test(block),
+    "an unqualified `complete` lets finished runs occupy the window for ever",
+  );
+  assert(block.includes("status.eq.ready"), "a `ready` row is still swept");
+  assert(
+    block.includes("result->>terminal_status.eq.continuation_required"),
+    "and a `complete` row only when it still claims a continuation",
+  );
+  // The window must stay ordered oldest-first and bounded — starvation is what
+  // the predicate above exists to prevent, not something it may reintroduce.
+  assert(block.includes('.order("updated_at", { ascending: true })'));
+});
