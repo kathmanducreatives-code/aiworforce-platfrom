@@ -6577,8 +6577,31 @@ export async function runCapabilityPlan(
       // this point was decided by an earlier generation or an earlier pass —
       // `decideCompanyBrain` is called nowhere else — so the set cannot include
       // a verdict this loop is about to make.
+      // ── A HALF-RESTORED DECISION IS NOT A DECISION ───────────────────────
+      //
+      // A REVIEW or REJECT outcome is only meaningful with the evaluation it
+      // cites: `buildLeadVerdict` reads `mission_evaluation.icp_fit`, and
+      // without it every such company reports "ICP fit could not be
+      // established" for ever. Before `mission_evaluation` was checkpointed,
+      // that pair came back split — outcome yes, reasoning no — and this set
+      // then short-circuited the evaluator, so the company could never be
+      // re-judged either. Thirty-eight evaluated companies on lineage 57b937ab,
+      // none of which could ever qualify.
+      //
+      // A QUALIFIED outcome is exempt: it is already the terminal answer, the
+      // verdict below reads it directly, and re-running the evaluator on a
+      // company this lineage has already passed would be a model call bought to
+      // change nothing.
+      //
+      // So an incomplete non-qualified decision is treated as NOT decided, and
+      // the evaluator runs again. That costs one call on a checkpoint written
+      // before this field existed, and nothing at all on one written after.
       const restoredBrainKeys = new Set(
-        eligibleOrdered.filter((c) => c.brain !== null).map((c) => c.key));
+        eligibleOrdered
+          .filter((c) =>
+            c.brain !== null &&
+            (c.brain.outcome === "QUALIFIED" || c.mission_evaluation !== null))
+          .map((c) => c.key));
       for (let qIndex = 0; qIndex < eligibleOrdered.length; qIndex++) {
         const c = eligibleOrdered[qIndex];
 
@@ -8087,6 +8110,30 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // so every continuation started with none and re-decided companies it had
       // already qualified, paying the identity reserve for all of them.
       brain: (c.brain ?? null) as unknown as Record<string, unknown> | null,
+      // ── AND THE EVALUATION THE BRAIN'S DECISION CITES. THE FOURTH ────────
+      //
+      // The other three in this series were labels without their objects. This
+      // one is worse: the object was never written at all, while the `brain`
+      // beside it was — and the pair is what made the loss PERMANENT rather
+      // than merely wasteful.
+      //
+      // `buildLeadVerdict` reads `mission_evaluation.icp_fit`. Without it
+      // `icpVerdictFrom` returns `insufficient_evidence`, and
+      // `qualificationDecision` turns that into "ICP fit could not be
+      // established" — for a company the evaluator had already judged. And
+      // because `brain` DID survive, the restored-decision branch above
+      // short-circuits before the evaluator can run again, so the company is
+      // never re-judged either.
+      //
+      // Task 57b937ab: DiligenceVault (67 employees, "clearly offers a B2B
+      // software platform") and FastSpring (188, "SaaS payments platform,
+      // Belfast office") both came back `held_for_evidence` with
+      // `mission_decision: null` and `mission_failed_requirements: []`. Nothing
+      // failed. The record of their evaluation had simply stopped existing.
+      // Thirty-eight companies were evaluated across that lineage and none
+      // could ever qualify.
+      mission_evaluation: (c.mission_evaluation ?? null) as unknown as
+        Record<string, unknown> | null,
     },
     updated_at: new Date().toISOString(),
   };
@@ -8164,6 +8211,11 @@ export function restoreWorkingSet(
     c.hiring_jobs = Array.isArray(s.hiring_jobs)
       ? (s.hiring_jobs as unknown as NormalizedHiringJob[]) : [];
     c.brain = (s.brain ?? null) as unknown as EngineCompany["brain"];
+    // THE REASONING BEHIND THAT DECISION. Restored beside it, because a brain
+    // outcome without the evaluation it cites is what `buildLeadVerdict` reads
+    // as "ICP fit could not be established".
+    c.mission_evaluation = (s.mission_evaluation ?? null) as unknown as
+      EngineCompany["mission_evaluation"];
     // A company already carried to a terminal outcome must not re-enter the
     // frontier; `shortlisted` stays the derived view of that.
     c.shortlisted = wasInvestigated(c.investigation_state);

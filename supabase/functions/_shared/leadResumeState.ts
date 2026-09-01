@@ -349,6 +349,21 @@ export interface CompanyWorkingSetSnapshot {
    * has none, and the engine behaves exactly as it did.
    */
   brain?: Record<string, unknown> | null;
+  /**
+   * THE EVALUATION THE BRAIN'S DECISION CITES.
+   *
+   * `brain` above survived the checkpoint and this did not, and that pairing is
+   * what made a lost evaluation PERMANENT. `buildLeadVerdict` reads
+   * `mission_evaluation.icp_fit`; without it `icpVerdictFrom` answers
+   * `insufficient_evidence`, so the company is held — and because `brain` DID
+   * come back, the restored-decision branch short-circuits before the evaluator
+   * could run again. Evaluated once, judgement discarded, never re-judged.
+   *
+   * Optional: a checkpoint written before this existed has none, and a company
+   * restored without it is treated as not yet decided rather than as decided
+   * badly — see `restoredBrainKeys`.
+   */
+  mission_evaluation?: Record<string, unknown> | null;
 }
 
 /**
@@ -824,6 +839,9 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     // Written, declared, and — until now — never read back. The same omission
     // that cost `hiring_assessment` a whole incident.
     brain: asObjectOrNull(s.brain),
+    // AND THE EVALUATION IT CITES. Written, declared and read — all three, or
+    // the verdict comes back as an outcome with no reasoning behind it.
+    mission_evaluation: asObjectOrNull(s.mission_evaluation),
   };
 }
 
