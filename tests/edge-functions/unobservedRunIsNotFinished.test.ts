@@ -100,7 +100,18 @@ Deno.test("2b. end to end: the resulting row is eligible for auto-resume", () =>
     `the sweeper must not skip this row as not_ready (got ${verdict.reason})`);
 });
 
-Deno.test("2c. and the OLD default would have been skipped forever", () => {
+Deno.test("2c. the OLD default is no longer a permanent skip", () => {
+  // ── THE DEFECT THIS TEST USED TO PIN AS BEHAVIOUR ───────────────────────
+  //
+  // `status: complete` + `terminal_status: continuation_required` is the exact
+  // contradiction tasks 7e71d8bc and a7a9371d ended in: a valid checkpoint with
+  // work outstanding, stamped over by a later writer, and skipped as
+  // `not_ready` on every tick for ever.
+  //
+  // It is now refused on SUBSTANCE — this fixture carries no `company_first_state`,
+  // so there is no checkpoint to claim — rather than dismissed for its row
+  // status. A row with a real checkpoint is recovered; see
+  // `continuationRouteAndLifecycle.test.ts`.
   const row = any({
     id: "t1", status: "complete",
     updated_at: new Date(Date.now() - 20 * 60_000).toISOString(),
@@ -109,8 +120,9 @@ Deno.test("2c. and the OLD default would have been skipped forever", () => {
     result: { terminal_status: "continuation_required" },
   });
   const verdict = eligibleForAutoResume(row, Date.now());
-  assertEquals(verdict.reason, "not_ready");
-  assertEquals(verdict.disposition, "skip");
+  assert(verdict.reason !== "not_ready",
+    `no longer dismissed for its row status (got ${verdict.reason})`);
+  assertEquals(verdict.eligible, false, "and still refused: it has no checkpoint");
 });
 
 // ═══ 3. WHAT MUST NOT CHANGE ═══════════════════════════════════════════════

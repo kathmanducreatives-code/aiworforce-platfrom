@@ -75,6 +75,34 @@ const discoveryProviders = (state: Record<string, unknown>): string[] =>
       a.outcome !== "skipped_not_configured")
     .map((a) => String(a.provider));
 
+/**
+ * WHICH ACTORS DISCOVERY USED — each counted once, however many pages it read.
+ *
+ * ── WHY THESE TESTS NEEDED A SECOND COUNTER ────────────────────────────────
+ *
+ * Every count below used to be "how many discovery calls happened", because a
+ * strategy of N actors made exactly N calls. Discovery can now take another
+ * page of a source that is still admitting candidates, so that number answers
+ * two questions at once and these tests only ever meant the first: WHICH
+ * actors did the strategy pick, and did anything get bolted on top of its
+ * decision?
+ *
+ * `ProviderAttempt` records a fingerprint rather than the input, so a page
+ * cannot be told from a selection here — which is the right shape for a spend
+ * record and the wrong one for this question. Counting DISTINCT actors answers
+ * it exactly: replenishment re-reads a source already chosen and can never
+ * introduce a new one, so a change in this number is always a change in what
+ * the strategy selected. The page-level assertion in test 14 reads the strategy
+ * record, which does carry inputs.
+ */
+const selectedProviders = (state: Record<string, unknown>): string[] =>
+  [...new Set(
+    (state.provider_attempts as Array<Record<string, unknown>>)
+      .filter((a) => a.capability === "startup_company_discovery" &&
+        a.outcome !== "skipped_not_configured")
+      .map((a) => String(a.provider)),
+  )];
+
 /** Run the plan, recording every provider call the engine actually made. */
 const run = async (o: {
   planDiscovery?: (i: unknown) => Promise<unknown>;
@@ -207,9 +235,14 @@ Deno.test("3. rows from every actor land in ONE deduplicated pool", async () => 
     ]),
   });
 
-  assertEquals(discoveryProviders(result.state).length, 2);
+  assertEquals(selectedProviders(result.state).length, 2);
   const keys = result.state.company_keys as string[];
   // Six distinct YC companies plus four distinct LinkedIn ones, none shared.
+  //
+  // Replenishment may take a further page of the LinkedIn source, and the stub
+  // answers page two with the same four rows. That the pool is still ten is the
+  // point: the union deduplicates across PAGES exactly as it does across
+  // ACTORS, so a re-read row cannot inflate the count.
   assertEquals(keys.length, 10);
   assertEquals(new Set(keys).size, keys.length, "the pool must carry no duplicate key");
 });
@@ -333,7 +366,7 @@ Deno.test("9. breadth does not run once the pool is already big enough", async (
       },
     ]),
   });
-  assertEquals(discoveryProviders(result.state).length, 2, "6 of 60 is not a full pool");
+  assertEquals(selectedProviders(result.state).length, 2, "6 of 60 is not a full pool");
 });
 
 Deno.test("10. a fallback stays silent while the primary is producing", async () => {
@@ -381,7 +414,13 @@ Deno.test("11. the run records which actors were chosen, how, and with what inpu
   assert(d, "the strategy must be recorded on the execution state");
   assertEquals(d.source, "model_repaired", "the bogus filter was dropped");
   const actors = d.actors as Array<Record<string, unknown>>;
-  assertEquals(actors.length, 2);
+  // The two the model chose, plus any page replenishment took of a source that
+  // was still admitting candidates. Every one is recorded with its own input,
+  // which is the guarantee this test is actually about: the record must answer
+  // "what did this run ask, and of whom" without reconstruction.
+  const chosen = actors.filter((a) =>
+    Number((a.input as Record<string, unknown> | undefined)?.startPage ?? 1) <= 1);
+  assertEquals(chosen.length, 2);
   for (const a of actors) {
     assert(Array.isArray(a.input_fields));
     assertEquals("input" in a, true, "the input actually sent must be recorded");
@@ -462,12 +501,26 @@ Deno.test("14. a signal already served adds nothing, and costs nothing extra", a
   // Counted from `provider_attempts`, not the raw call log: identity resolution
   // also calls `apify_linkedin_company_search` with a `searchQuery`, so a filter
   // on the input shape counts its six lookups as discovery too.
-  const providers = discoveryProviders(result.state);
+  //
+  // Counted on SELECTIONS. Replenishment may take a second page of a producing
+  // source, and that is not the failure this test guards: the failure was a
+  // signal handler re-adding an actor the strategy had already weighed, at page
+  // one, as a second independent search. A page is the same question continued;
+  // a re-add is the same question paid for twice.
+  const providers = selectedProviders(result.state);
   assertEquals(providers.length, 2);
   assertEquals(
     providers.filter((p) => p === "apify_linkedin_company_search").length, 1,
     "the declined-then-re-added double call must not happen",
   );
+  // AND NO SECOND FIRST-PAGE SELECTION, which is what a re-add would look like.
+  // Read from the strategy record, the one place that carries the inputs.
+  const selections = ((result.state.discovery_strategy as Record<string, unknown>)
+    .actors as Array<Record<string, unknown>>)
+    .filter((a) => a.actor_key === "apify_linkedin_company_search" &&
+      Number((a.input as Record<string, unknown> | undefined)?.startPage ?? 1) <= 1);
+  assertEquals(selections.length, 1,
+    "a re-added actor would show as a second page-one search");
   // `seen` is still the proof that only ONE discovery-shaped call was made.
   void seen;
 });

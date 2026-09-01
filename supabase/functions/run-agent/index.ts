@@ -136,7 +136,8 @@ import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfoli
 // which is a separate execution path and is not part of the Mission pipeline.
 import {
   buildCheckpoint, CHECKPOINT_RESERVE_MS, CHECKPOINT_RESULT_KEY, LINEAGE_ROOT_RESULT_KEY,
-  lineageRootTaskId, readCheckpointCompanies, type CompanyResumeRecord,
+  lineageRootTaskId, readCheckpointCompanies, readCheckpointDiscoveryState,
+  type CompanyResumeRecord,
 } from "../_shared/leadResumeState.ts";
 import { identityIsActionable } from "../_shared/companyIdentityResolution.ts";
 import { missionHash, companyIsTheDeliverable } from "../_shared/leadMission.ts";
@@ -2504,6 +2505,51 @@ Deno.serve(async (req) => {
         // operation keys as the second instead of re-buying everything. Read
         // from the same verified row as the records, never from the body.
         const leadResumeLineageRoot = resumeLoad.lineageRoot ?? task.id;
+        // ── WHAT THE PREVIOUS SLICE HAD ALREADY ASKED ────────────────────────
+        //
+        // A continuation that restores a pool and only investigates it does not
+        // run discovery, so this slice's engine state carries no source record.
+        // Without the inherited one, "did discovery leave anything untried?"
+        // would answer "unknown" on every slice after the first — and unknown
+        // is read as "no", which would end exactly the lineages this change
+        // exists to keep alive.
+        //
+        // The lease leads, as it does for company records: it is this
+        // generation's own accumulated state, and the parent row is the
+        // fallback for a generation killed before it could release.
+        const inheritedDiscoveryState =
+          readCheckpointDiscoveryState(leaseState) ??
+          readCheckpointDiscoveryState(resumeLoad.parentResult);
+        // ── DID THE PREVIOUS SLICE ASK FOR A WIDER POOL? ─────────────────────
+        //
+        // The one signal that may reopen a completed discovery capability, and
+        // it is read from what the previous slice RECORDED, never re-decided
+        // here. `decideAutoContinuation` wrote `replenishment_required` only
+        // after checking quota, frontier, routes and every ceiling; re-deriving
+        // any of that in a second place is how two components come to describe
+        // one moment differently.
+        //
+        // The routes check is repeated because the debt and the opportunity are
+        // separate facts: a slice may have asked for more and a later provider
+        // failure may have closed the last route since.
+        const priorContinuationDecision = ((resumeLoad.parentResult as Record<string, unknown> | null)
+          ?.auto_continuation as Record<string, unknown> | undefined)?.decision;
+        const discoveryReplenishment =
+          priorContinuationDecision === "replenishment_required" &&
+            inheritedDiscoveryState && !inheritedDiscoveryState.exhausted
+            ? {
+              reason: "replenishment_required",
+              pages_taken: inheritedDiscoveryState.pages_taken,
+              sources_attempted: inheritedDiscoveryState.sources_attempted,
+            }
+            : null;
+        if (discoveryReplenishment) {
+          console.log("[run-agent][discovery-replenishment] debt_carried", {
+            task_id: task.id,
+            pages_taken: discoveryReplenishment.pages_taken,
+            sources_attempted: discoveryReplenishment.sources_attempted,
+          });
+        }
 
         // ── STAGE 2 CHECKPOINT, LOADED SERVER-SIDE ──────────────────────────
         //
@@ -2967,6 +3013,11 @@ Deno.serve(async (req) => {
                           snap.state.pending_capabilities[0] ?? null,
                         companies: snap.resume_records,
                         reason: "execution_deadline_checkpoint",
+                        // WHAT DISCOVERY HAD ALREADY ASKED. Without it the next
+                        // slice restarts a paginating source at page one and
+                        // spends its budget re-reading rows it already holds.
+                        discoverySourceState:
+                          snap.state.discovery_source_state ?? null,
                       }),
                       [LINEAGE_ROOT_RESULT_KEY]: leadResumeLineageRoot,
                       ...(persistedMission
@@ -3349,7 +3400,12 @@ Deno.serve(async (req) => {
               // compiled into a gate. Written by the user during onboarding and
               // read by nothing in the qualification path until now.
               brainQualificationRules: brainIcpCtx.qualification_rules ?? null,
+              // THE RAW-ROW ALLOWANCE, unchanged. The ADMITTED target is a
+              // separate, smaller number the engine derives from what is still
+              // owed — see `ADMITTED_PER_OWED_LEAD`.
               maxCandidates: Math.max(10, quota.requestedLeadCount * 10),
+              remainingLeads: quota.requestedLeadCount,
+              discoveryReplenishment,
             });
 
             // ── ROUND 1 IS THE EXACT MISSION, ALWAYS ─────────────────────
@@ -3851,6 +3907,8 @@ Deno.serve(async (req) => {
                       companies: capabilityRun.resume_records,
                       reason: capabilityRun.state.terminal_reason === "execution_deadline_checkpoint"
                         ? "execution_deadline_checkpoint" : "all_work_complete",
+                      discoverySourceState:
+                        capabilityRun.state.discovery_source_state ?? null,
                     }),
                     // PERSISTED SO THE NEXT CONTINUATION CAN INHERIT IT. Read
                     // back by `lineageRootTaskId`; without it every link in the
@@ -4738,6 +4796,29 @@ Deno.serve(async (req) => {
           // 783fa163 report `no_progress` while Apify run Zs5bYFGlnua1hJWYg
           // was still executing, and then abandon its 1,394 rows.
           pendingRuns: capabilityRun?.state.pending_runs?.length ?? 0,
+          // ── CAN ANYTHING STILL WIDEN THE POOL? ──────────────────────────
+          //
+          // Read from the engine's own record of how discovery ended, never
+          // re-derived here. `run-agent` cannot see which actors ran or whether
+          // the raw ceiling bound, and a lookalike guess at those would be the
+          // familiar failure of two components describing one moment in
+          // contradictory terms.
+          //
+          // ABSENT MEANS UNKNOWN, AND UNKNOWN MEANS NO. A continuation that
+          // restored a pool without running discovery has no source state, and
+          // reading that silence as "routes remain" would spin the lineage on
+          // an assumption. Only an explicit `exhausted: false` — discovery ran,
+          // and stopped for a reason that leaves work available — continues.
+          //
+          // THIS SLICE'S RECORD FIRST, THE INHERITED ONE SECOND. A slice that
+          // ran discovery has the newer truth; one that did not falls back to
+          // what the lineage already established, and only a lineage that has
+          // never run discovery at all reads `false`.
+          discoveryRoutesRemain: (() => {
+            const d = capabilityRun?.state.discovery_source_state
+              ?? inheritedDiscoveryState;
+            return d ? !d.exhausted : false;
+          })(),
         });
         // The status the REST of this branch persists and projects from.
         const effectiveTerminal = autoDecision.continue
@@ -5305,6 +5386,23 @@ Deno.serve(async (req) => {
             instruction: persistedMission?.original_user_query ?? effectiveInstruction,
             toolInput: tool_input_body ?? null,
             leadMission: (persistedMission ?? null) as Record<string, unknown> | null,
+            // ── THE ROUTE THIS SLICE ACTUALLY TOOK ────────────────────────
+            //
+            // Forwarded from THIS invocation's own body rather than re-derived,
+            // so the successor resolves the identical path. Re-deriving it from
+            // the mission or the instruction would be a second router, and two
+            // routers is how a continuation of a company-first run came to be
+            // executed as a jobs search.
+            //
+            // `isProviderSourcingStep` is the fallback because it is the SAME
+            // structured resolution the parent itself routed on — body
+            // `tool_needed`, then `tool_input.tool_name`, then
+            // `selected_actor_key`. A parent whose route came from `tool_input`
+            // forwards that object anyway, so this only closes the case where
+            // the body field was the sole carrier. No text is sniffed here.
+            toolNeeded: tool_needed_body ??
+              (isProviderSourcingStep ? "source_with_apify" : null),
+            executionMode: execution_mode_body ?? null,
             continuationIndex: progress.continuations_used,
           }, {
             fetch: (url, init) => fetch(url, init),
@@ -6061,6 +6159,40 @@ Deno.serve(async (req) => {
     return json({ error: "step_failed", details: apiError, task_id: task.id }, 500);
   }
 
+  // ── A GENERIC STEP MUST NOT END A LINEAGE THAT OWES MORE WORK ────────────
+  //
+  // ── THE RUN THIS EXISTS FOR ──────────────────────────────────────────────
+  //
+  // Task a7a9371d, 2026-08-31 16:40:17. Its parent slice had correctly written
+  // `status: "ready"` + `terminal_status: "continuation_required"` — the
+  // checkpoint contract, from `projectStatus`. The successor then took the
+  // generic LLM path and stamped `status: "complete"` here, unconditionally,
+  // over the top of it. `resume-stalled-leads` selects `ready`, so the lineage
+  // could never be recovered: 22 candidates unexamined, quota 0 of 5, and a row
+  // that claimed to be finished. Task 7e71d8bc failed identically at 10:26.
+  //
+  // The invariant is not new and the test for it is not new either. The
+  // sibling no-results writer already guards the same stamp with
+  // `holdsResumableWork`, and says why: "The row keeps `ready` +
+  // `continuation_required` when a continuation is outstanding, so the sweeper
+  // can still see it." This is that same call, at the writer that was missed.
+  //
+  // ONLY `complete` IS WITHHELD. A genuinely terminal outcome — `quota_met`,
+  // `frontier_exhausted`, `cancelled`, a spend ceiling — never sets
+  // `terminal_status: "continuation_required"`, so `holdsResumableWork` is
+  // false for all of them and they finish exactly as before. `failed` and
+  // `awaiting_approval` are untouched: this reads only the completion case.
+  const { data: finalPriorRow } = await supabase.from("tasks")
+    .select("result").eq("id", task.id).maybeSingle();
+  const finalPrior = ((finalPriorRow as { result?: Record<string, unknown> } | null)
+    ?.result ?? {});
+  const finalContinuationOutstanding = holdsResumableWork(finalPrior);
+  if (finalContinuationOutstanding) {
+    console.log("[run-agent][generic-tail] skipped terminal stamp — continuation outstanding", {
+      task_id: task.id, plan_id,
+      terminal_status: finalPrior.terminal_status ?? null,
+    });
+  }
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   // ── MERGED. THIS TAIL ONCE ERASED A WHOLE CAPABILITY RUN ─────────────────
   //
@@ -6089,7 +6221,9 @@ Deno.serve(async (req) => {
       company_enrichment_observability: companyEnrichmentObservability,
       signal_enrichment_observability: signalEnrichmentObservability,
     },
-    { status: finalStatus },
+    // THE RESULT IS STILL MERGED — only the terminal STATUS is withheld. The
+    // step's own output is real work and is kept either way.
+    finalContinuationOutstanding ? {} : { status: finalStatus },
     { log: (m, meta) => console.warn(`[run-agent][task-result] ${m}`, meta) },
   );
 

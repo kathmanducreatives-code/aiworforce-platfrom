@@ -631,6 +631,39 @@ export interface Checkpoint {
   continuation_required: boolean;
   checkpoint_reason: "execution_deadline_checkpoint" | "all_work_complete";
   companies: CompanyResumeRecord[];
+  /**
+   * WHAT DISCOVERY HAD ALREADY ASKED, SO THE NEXT SLICE DOES NOT ASK IT AGAIN.
+   *
+   * ── WHY THIS IS RUN-LEVEL AND NOT PER-COMPANY ──────────────────────────
+   *
+   * Every other field here describes a COMPANY. This describes the SEARCH: the
+   * actors already tried, how far down each one's index we have read, and
+   * whether anything remains that could widen the pool. No company carries
+   * that, and a slice that has to re-derive it re-derives it wrong — it would
+   * restart a paginating source at page one.
+   *
+   * Restarting page one is cheap in money and expensive in time: the identical
+   * input hashes to the identical `logical_call_key`, so the completed run is
+   * ADOPTED rather than re-bought, and the slice spends its budget re-reading
+   * rows it already holds instead of finding new ones.
+   *
+   * Optional, like every field added here after the fact. A checkpoint written
+   * before this existed has none, and the reader narrows absence to "discovery
+   * state unknown" — which `decideAutoContinuation` treats as "no routes
+   * remain", the behaviour those runs already had.
+   */
+  discovery_source_state?: {
+    sources_attempted: string[];
+    pages_taken: Record<string, number>;
+    admitted: number;
+    /** Admitted candidates still able to do downstream work. Optional: a
+     * checkpoint written before this existed has none. */
+    available_admitted?: number;
+    raw_rows: number;
+    pool_target: number;
+    exhausted: boolean;
+    stop_reason: string;
+  } | null;
 }
 
 /**
@@ -648,6 +681,8 @@ export function buildCheckpoint(i: {
   nextPendingCapability: string | null;
   companies: readonly CompanyResumeRecord[];
   reason: Checkpoint["checkpoint_reason"];
+  /** From `CapabilityExecutionState.discovery_source_state`, carried verbatim. */
+  discoverySourceState?: Checkpoint["discovery_source_state"];
 }): Checkpoint {
   const pending = i.companies.filter((c) => !companyIsComplete(c));
   const complete = i.companies.filter(companyIsComplete);
@@ -664,6 +699,10 @@ export function buildCheckpoint(i: {
     continuation_required: pending.length > 0 || i.nextPendingCapability !== null,
     checkpoint_reason: i.reason,
     companies: [...i.companies],
+    // WRITTEN, DECLARED AND READ BACK. All three, or it does not survive a
+    // resume — the failure this file has already recorded twice, for
+    // `identity` and for the hiring assessment.
+    discovery_source_state: i.discoverySourceState ?? null,
   };
 }
 
@@ -819,6 +858,45 @@ function readInvalidatedStages(raw: unknown): Record<string, string> | null {
     out[stage] = at;
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * THE SEARCH STATE A RESUME NEEDS, READ BACK OFF THE CHECKPOINT.
+ *
+ * Its own reader because it is run-level, while `readCheckpointCompanies`
+ * returns a list of companies. Same contract as everything else here: an
+ * unrecognised or absent value narrows to `null`, which the caller reads as
+ * "discovery state unknown" and therefore as "no routes remain" — the terminal
+ * behaviour a checkpoint from before this field existed already had.
+ */
+export function readCheckpointDiscoveryState(
+  taskResult: unknown,
+): Checkpoint["discovery_source_state"] {
+  const result = asRecord(taskResult);
+  const checkpoint = asRecord(result?.[CHECKPOINT_RESULT_KEY]);
+  if (!checkpoint || checkpoint.version !== RESUME_STATE_VERSION) return null;
+  const d = asRecord(checkpoint.discovery_source_state);
+  if (!d) return null;
+  const pages: Record<string, number> = {};
+  for (const [k, v] of Object.entries(asRecord(d.pages_taken) ?? {})) {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) pages[k] = v;
+  }
+  const num = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : 0;
+  return {
+    sources_attempted: Array.isArray(d.sources_attempted)
+      ? d.sources_attempted.filter((x): x is string => typeof x === "string")
+      : [],
+    pages_taken: pages,
+    admitted: num(d.admitted),
+    available_admitted: num(d.available_admitted),
+    raw_rows: num(d.raw_rows),
+    pool_target: num(d.pool_target),
+    // DEFAULTS TO EXHAUSTED. An unreadable flag must not be the reason a
+    // lineage keeps spending; the safe direction for this one field is to stop.
+    exhausted: d.exhausted !== false,
+    stop_reason: typeof d.stop_reason === "string" ? d.stop_reason : "unknown",
+  };
 }
 
 export function readCheckpointCompanies(taskResult: unknown): CompanyResumeRecord[] {

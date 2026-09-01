@@ -281,18 +281,54 @@ export function discoveryCatalogBriefing(): Array<Record<string, unknown>> {
  *   * a count above the published ceiling — clamped, not dropped, because the
  *     intent was legitimate and only the magnitude was not
  */
+/**
+ * EVERY INPUT THIS ACTOR ACTUALLY ACCEPTS — one answer, from three sources.
+ *
+ * ── WHY THIS FUNCTION EXISTS ───────────────────────────────────────────────
+ *
+ * The repo described each actor's inputs in three places that were allowed to
+ * disagree, and the narrowest of them silently won. For
+ * `apify_linkedin_company_search` on 2026-08-31:
+ *
+ *   supported_filters   searchQuery, locations, industryIds, companySize,
+ *                       scraperMode
+ *   ACTOR_INPUT_CONTRACTS  …the same, PLUS maxItems, startPage, takePages
+ *   input_limits        maxItems: 1000, takePages: 20
+ *
+ * `compileActorInput` read only the first, so run 7e71d8bc recorded
+ * `dropped_filters: startPage` with the reason "has no such input" — a
+ * sentence the actor's own live schema, its verified input contract, and the
+ * limits on its own card all contradict. Pagination, the cheapest way to widen
+ * a thin pool, was unreachable because of a false statement about the contract.
+ *
+ * The verified contract is authoritative where it exists: it is read from the
+ * live build schema and carries a `verified_at`. `supported_filters` remains
+ * the answer for actors that have no contract yet, so nothing an actor could
+ * previously send is lost, and `input_limits` contributes the fields it caps —
+ * a limit on a field is a statement that the field exists.
+ */
+export function acceptedInputFields(card: HiringActorCard): string[] {
+  const fields = new Set<string>((card.supported_filters ?? []).map(String));
+  for (const f of ACTOR_INPUT_CONTRACTS[card.actor_key]?.fields ?? []) {
+    fields.add(String(f.name));
+  }
+  for (const k of Object.keys(card.input_limits ?? {})) fields.add(String(k));
+  return [...fields];
+}
+
 export function compileActorInput(
   card: HiringActorCard, proposed: Record<string, unknown>, maxItems: number,
 ): { input: Record<string, unknown>; dropped: DroppedFilter[] } {
   const input: Record<string, unknown> = {};
   const dropped: DroppedFilter[] = [];
+  const accepted = acceptedInputFields(card);
 
   for (const [field, value] of Object.entries(proposed)) {
-    if (!card.supported_filters.includes(field)) {
+    if (!accepted.includes(field)) {
       dropped.push({
         field,
         reason: `${card.actor_key} has no such input; its schema accepts ` +
-          `${card.supported_filters.join(", ")}`,
+          `${accepted.join(", ")}`,
       });
       continue;
     }

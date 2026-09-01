@@ -69,7 +69,7 @@ import type { NormalizedNewsArticle } from "./hiringActorNormalizers.ts";
 import { normalizeNewsArticle } from "./hiringActorNormalizers.ts";
 import {
   prequalifyDiscoveredCompanies, mergePrequalification,
-  genericPrequalificationKey,
+  genericPrequalificationKey, admittedCandidateCount,
 } from "./leadGenericPrequalification.ts";
 import {
   assessSignals, verdictsClaimingUninvestigatedSignals,
@@ -206,7 +206,7 @@ import {
   type DiscoveryActorSelection, type DiscoveryStrategy,
   buildDiscoveryPlannerPayload, blockedDiscoveryStrategy, DiscoveryStrategyBlockedError,
   discoveryStrategyDiagnostics, shouldRunSelection, strategyActorKeys,
-  validateDiscoveryStrategy,
+  validateDiscoveryStrategy, acceptedInputFields,
 } from "./leadDiscoveryStrategy.ts";
 import type { DiscoveryResultsSummary } from "./agentoryBriefing.ts";
 import {
@@ -252,6 +252,69 @@ export const CAPABILITY_EXECUTION_STATE_VERSION = "capability-execution-state-v1
  * same conclusion. Callers that want the old strictly-one-shot behaviour pass 1.
  */
 export const DEFAULT_DISCOVERY_PASSES = 2;
+
+/**
+ * THE SPEND CEILING THAT REPLACES THE ROW COUNT AS A STOP.
+ *
+ * Discovery now finishes on ADMITTED candidates, which is the right question
+ * and an unbounded one: a source with a five-percent admission rate would page
+ * forever chasing a target it cannot reach. So the raw pool keeps a ceiling —
+ * `maxCandidates * MAX_RAW_ROWS_PER_ADMITTED` — and reaching it ends discovery
+ * whatever the admitted count says.
+ *
+ * Four, because run 7e71d8bc admitted 34 of 50 (68%) on a source and a mission
+ * we now have measured evidence for; a factor of four tolerates an admission
+ * rate down to 25% before it binds, which is well beneath anything observed,
+ * and caps the worst case at four times the spend the old code allowed rather
+ * than an open-ended one.
+ */
+export const MAX_RAW_ROWS_PER_ADMITTED = 4;
+
+/**
+ * THE ADMISSION RATE BELOW WHICH ANOTHER PAGE IS NOT WORTH BUYING.
+ *
+ * Pagination is the cheapest replenishment there is, but "cheap" is not
+ * "free", and a source admitting one row in ten is not a source that will do
+ * better on page two — it is a source whose index does not hold what the
+ * mission asked for. Below this floor the right move is a different question,
+ * which is what the re-plan immediately after it is for.
+ *
+ * A fifth, set beneath every admission rate observed in production (run
+ * 7e71d8bc: 0.68) so that it bounds genuinely unproductive sources without
+ * second-guessing ordinary ones.
+ */
+export const MIN_PAGINATION_YIELD = 0.2;
+
+/**
+ * ADMITTED CANDIDATES TO HOLD PER QUALIFIED LEAD STILL OWED.
+ *
+ * ── WHY THIS IS NOT `maxCandidates` ────────────────────────────────────────
+ *
+ * `maxCandidates` is `requestedLeadCount * 10`, and that ten has always meant
+ * RAW ROWS: buy ten rows per lead and hope one survives triage, hiring and the
+ * Brain. Reading the same number as an ADMITTED target — companies that already
+ * passed the mission's hard constraints — silently raises the bar by the whole
+ * width of the funnel, and would have bought page two of a source that had just
+ * returned 34 usable companies for a five-lead request.
+ *
+ * Four admitted companies per owed lead. The downstream funnel is triage →
+ * enrichment → hiring verification → Brain, and run 7e71d8bc is the only
+ * measured evidence for its width: 34 admitted became 22 shortlisted. A factor
+ * of four holds roughly twice that attrition in reserve without pre-buying a
+ * pool the run may never look at.
+ *
+ * Being too small is now the cheap direction to be wrong in, which is the whole
+ * reason this number can be modest: an insufficient pool empties the frontier,
+ * and `replenishment_required` reopens discovery to widen it. Before that
+ * existed, an under-sized pool ended the request.
+ */
+export const ADMITTED_PER_OWED_LEAD = 4;
+
+/**
+ * Never let the target fall so low that one bad triage round empties the pool.
+ * A single-lead request still wants a handful of candidates to choose between.
+ */
+export const MINIMUM_ADMITTED_TARGET = 8;
 
 /**
  * Stages a planned chain may legitimately DESELECT.
@@ -501,6 +564,54 @@ export interface CapabilityExecutionState {
    * continuations, which skip discovery entirely.
    */
   discovery_strategy?: Record<string, unknown>;
+  /**
+   * WHETHER DISCOVERY COULD STILL WIDEN THIS POOL.
+   *
+   * ── WHY A LATER SLICE HAS TO BE TOLD THIS ──────────────────────────────
+   *
+   * `decideAutoContinuation` used to read an exhausted frontier as the end of
+   * the request. It can now ask instead whether anything remains that would
+   * widen the pool — but it runs in `run-agent`, one layer above the engine,
+   * and cannot see which actors ran, which pages were taken, or whether the
+   * raw ceiling bound. Only discovery knows that, so discovery says it.
+   *
+   * Absent means "this slice did not run discovery" — a continuation that
+   * restored a pool and only investigated it — and the caller reads absence as
+   * "unknown", which keeps the previous terminal behaviour rather than
+   * inventing a route that may not exist.
+   */
+  discovery_source_state?: {
+    /** Actor keys this lineage has already asked, in order. */
+    sources_attempted: string[];
+    /** Pages taken per actor key, so a resume does not re-take page 1. */
+    pages_taken: Record<string, number>;
+    /** LIFETIME admitted candidates at the moment discovery stopped. */
+    admitted: number;
+    /**
+     * Admitted candidates that could still enter or continue the investigation
+     * frontier — the number discovery actually decides on. Lower than
+     * `admitted` on any slice that has already spent part of its pool.
+     */
+    available_admitted: number;
+    /** Raw rows held when discovery stopped. */
+    raw_rows: number;
+    /** The pool target admission was measured against. */
+    pool_target: number;
+    /**
+     * TRUE when nothing further could widen this pool: every proposed actor
+     * ran, the planner declined to propose more, or the raw-row ceiling bound.
+     * This is the field that makes `frontier_exhausted` truthful again.
+     */
+    exhausted: boolean;
+    /** Why discovery stopped, for the audit trail. */
+    stop_reason:
+      | "admitted_target_met"
+      | "raw_row_ceiling"
+      | "no_further_actor_proposed"
+      | "pass_limit"
+      | "schema_failure"
+      | "run_pending";
+  };
   /**
    * Stage removals the chain PROPOSED and containment refused.
    *
@@ -1739,6 +1850,40 @@ export interface CapabilityEngineOpts {
    */
   bindings?: readonly ResolvedReferentBinding[];
   maxCandidates?: number;
+  /**
+   * Qualified leads still owed, for sizing the ADMITTED target.
+   *
+   * Absent means "the whole request is still owed", which is correct for a
+   * first slice and conservative for any other.
+   */
+  remainingLeads?: number;
+  /**
+   * AN EXPLICIT DEBT: the previous slice ended asking for a wider pool.
+   *
+   * ── THE ONE EXCEPTION TO "A COMPLETED CAPABILITY IS NEVER RE-PAID FOR" ──
+   *
+   * Discovery is deliberately absent from `CAPABILITY_STAGE`, so once it has
+   * completed every later slice skips it. That is the right default and it is
+   * why `replenishment_required` did nothing on its own: the continuation ran,
+   * discovery was skipped, the frontier was still empty, and the lineage burned
+   * barren slices until `no_progress` stopped it.
+   *
+   * This is the narrowest possible opening. It is set ONLY by `run-agent`, ONLY
+   * when the previous slice's own recorded decision was
+   * `replenishment_required` — which itself already required quota unmet, an
+   * exhausted frontier, discovery routes remaining, and every ceiling intact —
+   * and it reopens ONLY discovery. No other completed capability becomes
+   * runnable, and nothing here relaxes spend identity: a page already bought
+   * hashes to the same `logical_call_key` and is adopted, not re-purchased.
+   */
+  discoveryReplenishment?: {
+    /** The parent slice's `auto_continuation.decision`, carried verbatim. */
+    reason: string;
+    /** Pages already taken per actor, restored from the checkpoint. */
+    pages_taken: Record<string, number>;
+    /** Actors this lineage has already asked. */
+    sources_attempted: string[];
+  } | null;
   rolePacks?: readonly RolePack[];
   postedLimit?: "1h" | "24h" | "week" | "month";
   ycRegions?: string[];
@@ -3379,6 +3524,70 @@ export async function runCapabilityPlan(
       });
     }
 
+    // ── THE ONE CAPABILITY A REPLENISHMENT DEBT MAY REOPEN ─────────────────
+    //
+    // Narrow on every axis, deliberately: only discovery, only when `run-agent`
+    // saw the previous slice record `replenishment_required`, and only while
+    // the pool it is being asked to widen is actually spent. Every other
+    // completed capability stays skipped exactly as before.
+    //
+    // The frontier condition is enforced UPSTREAM, in
+    // `decideAutoContinuation`: `replenishment_required` is only ever emitted
+    // for `frontierRemaining <= 0`, so a debt cannot exist while candidates
+    // remain to investigate. It is not re-checked here on purpose — deciding
+    // the same thing in two places is how the two come to disagree.
+    const replenishmentDebt =
+      opts.discoveryReplenishment?.reason === "replenishment_required" &&
+      DISCOVERY_REPLENISHABLE.has(cap) &&
+      state.completed_capabilities.includes(cap);
+    if (replenishmentDebt) {
+      log("discovery_reopened_for_replenishment", {
+        capability: cap,
+        sources_attempted: opts.discoveryReplenishment?.sources_attempted ?? [],
+        pages_taken: opts.discoveryReplenishment?.pages_taken ?? {},
+        note: "the previous slice exhausted its pool with quota unmet and " +
+          "discovery routes remaining",
+      });
+      // ── THE POOL COMES BACK FIRST. REPLENISHMENT ADDS; IT NEVER REPLACES ──
+      //
+      // Reopening discovery skips the `skipped_resumed` branch below, and that
+      // branch is the ONLY place the working set is restored from the
+      // checkpoint. Without this the reopened discovery would run against an
+      // empty `companies`, the new rows would make it non-empty, and every
+      // later restore is guarded on `companies.length === 0` — so the entire
+      // prior pool, with its triage verdicts, enrichment, hiring evidence and
+      // Brain decisions, would be silently dropped and re-bought.
+      //
+      // So the restore happens here, before the reopen, exactly as it does in
+      // the skip. Discovery then merges into a pool that already holds
+      // everything the lineage knows, and `addCompany` deduplicates the overlap
+      // the same way it does across actors.
+      //
+      // No investigation slice is taken here. The frontier is empty — that is
+      // what `replenishment_required` means — and this slice's work is to widen
+      // the pool, not to advance a cursor that has nothing left to advance
+      // over.
+      if (companies.length === 0 && resumeScope) {
+        const restored = restoreWorkingSet(resumeScope.records);
+        for (const c of restored) companies.push(c);
+        log("working_set_restored_for_replenishment", {
+          capability: cap,
+          restored: restored.length,
+          records: resumeScope.records.length,
+          frontier: restored.filter(
+            (c) => isFrontier(c.investigation_state)).length,
+        });
+      }
+      // BACK ON THE LIST, so the normal path below runs it. Removed from
+      // `completed_capabilities` because it is genuinely no longer complete:
+      // the pool it produced has been spent and the mission still needs more.
+      state.completed_capabilities =
+        state.completed_capabilities.filter((c) => c !== cap);
+      if (!state.pending_capabilities.includes(cap)) {
+        state.pending_capabilities = [cap, ...state.pending_capabilities];
+      }
+    }
+
     // RESUME. A capability already completed is not re-paid for.
     if (state.completed_capabilities.includes(cap) && !owedByCompanies) {
       outcomes.push({
@@ -3623,6 +3832,157 @@ export async function runCapabilityPlan(
         log("signal_coverage_shortfall", { statement: coverage.shortfall_statement });
       }
 
+      // ── WHAT "ENOUGH" MEANS, AND WHY IT IS NO LONGER A ROW COUNT ─────────
+      //
+      // Discovery used to finish when `companies.length` reached
+      // `maxCandidates`. That number says how much a provider RETURNED, never
+      // how much of it this mission can use, and the two came apart badly on
+      // run 7e71d8bc: fifty LinkedIn rows, sixteen outside the mission's own
+      // 20–200 employee range, discovery declared complete, zero qualified.
+      //
+      // Worse, it made the roles inert. `shouldRunSelection` gives `breadth` a
+      // pool that is not yet big enough and `fallback` an empty one — but it
+      // was handed the row count, so a pool of fifty unusable rows read as full
+      // and no second source could ever earn its call.
+      //
+      // `admittedCandidateCount` is the SAME free pass the engine already runs
+      // later, not a new gate. Bounds come from the mission and only the
+      // mission: `size_enforceable` is false when the user expressed no range,
+      // so a missionless run keeps its old behaviour of never rejecting on
+      // size. Geography is not consulted — presence semantics are unchanged.
+      const missionEmployeeRange = opts.mission?.company_profile?.employee_range;
+      const admissionBounds = {
+        min: missionEmployeeRange?.min ?? null,
+        max: missionEmployeeRange?.max ?? null,
+      };
+      const admissionEnforceable =
+        admissionBounds.min != null || admissionBounds.max != null;
+      /**
+       * How many rows in the pool this mission could actually continue with.
+       *
+       * Recomputed rather than accumulated. The pool is bounded by
+       * `maxCandidates` and the pass is pure arithmetic over fields already in
+       * memory, so recomputing is cheap; accumulating would mean keeping a
+       * second running total in step with a list that is appended to from five
+       * different provider branches, which is precisely the kind of bookkeeping
+       * that drifts.
+       */
+      const admittedNow = (): number =>
+        admittedCandidateCount(
+          companies.map((c) => c.company),
+          admissionBounds,
+          { size_enforceable: admissionEnforceable },
+        );
+
+      // ── ADMITTED IS A LIFETIME COUNT. DISCOVERY NEEDS AN AVAILABLE ONE ───
+      //
+      // ── THE RUN THIS EXISTS FOR ──────────────────────────────────────────
+      //
+      // Task 74de044e, 2026-09-01. Its frontier emptied with 0 of 5 qualified,
+      // `replenishment_required` fired correctly, discovery reopened — and then
+      // bought nothing, six times over. The restored pool held 34 lifetime
+      // admitted companies against a target of 20, so the very first guard in
+      // `executeSelections` broke before a single call. Twenty-one of those 34
+      // had already been investigated and settled; they could not satisfy any
+      // further downstream work, and counting them said the pool was full when
+      // nothing in it was left to do.
+      //
+      // So the target is measured against candidates that can still DO
+      // something, and `admittedNow` is kept for the record.
+      //
+      // ── WHY THESE TWO PREDICATES AND NOT A NEW COMPANY STATE ─────────────
+      //
+      // Both already exist and both are already authoritative:
+      //
+      //   `excluded_permanently` — "closed by a decision: GPT said irrelevant,
+      //   or a mission constraint". `isUnfinishedFrontier` refuses to re-queue
+      //   one for exactly this reason: it was a DECISION, not a deferral.
+      //
+      //   `nextStageFor` — the stage machine every resumed slice already routes
+      //   on. It returns null when identity is terminal, enrichment failed, or
+      //   the Brain has decided, which is the same question asked here: does
+      //   this company still owe a stage?
+      //
+      // Nothing new is invented, and a company is available only if BOTH agree.
+      const availableAdmittedNow = (): number => {
+        const scored = prequalifyDiscoveredCompanies(
+          companies.map((c) => c.company),
+          admissionBounds,
+          { size_enforceable: admissionEnforceable },
+        );
+        const admittedKeys = new Set(
+          scored.companies.filter((p) => p.eligible).map((p) => p.company_key),
+        );
+        let n = 0;
+        for (const c of companies) {
+          // The prequalifier's own key, never a lookalike — the invariant
+          // `prequalifyDiscoveredCompanies` throws on rather than tolerate.
+          if (!admittedKeys.has(genericPrequalificationKey(c.company))) continue;
+          if (c.investigation_state === "excluded_permanently") continue;
+          if (nextStageFor(toResumeRecord(c)) === null) continue;
+          n++;
+        }
+        return n;
+      };
+
+      // ── HOW MANY ADMITTED CANDIDATES THIS SLICE ACTUALLY NEEDS ───────────
+      //
+      // Deterministic, and deliberately NOT `maxCandidates`. See
+      // `ADMITTED_PER_OWED_LEAD` for why the raw-row allowance is the wrong
+      // scale for this question.
+      //
+      // Clamped above by `maxCandidates` so the admitted target can never ask
+      // for more usable companies than the run is allowed to hold rows for,
+      // which would be a target no amount of paging could reach.
+      const owedLeads = Math.max(
+        1,
+        opts.remainingLeads ?? effectiveRequestedCount(opts.mission),
+      );
+      const admittedTarget = Math.min(
+        maxCandidates,
+        Math.max(MINIMUM_ADMITTED_TARGET, owedLeads * ADMITTED_PER_OWED_LEAD),
+      );
+
+      // ── PAGES ALREADY BOUGHT, ACROSS EVERY SLICE OF THIS LINEAGE ────────
+      //
+      // Seeded from the checkpoint, not from this invocation. `askedQuestions`
+      // is in-memory and dies with the slice, so a reopened discovery that
+      // trusted it would ask for page two again — adopted rather than
+      // re-bought, so no money is lost, but the slice would spend its whole
+      // budget re-reading rows the pool already holds and end no wider than it
+      // started. That is the failure this restore exists to prevent.
+      const pagesTaken: Record<string, number> = {
+        ...(opts.discoveryReplenishment?.pages_taken ?? {}),
+      };
+
+      /**
+       * DID THIS ACTOR ACTUALLY REACH THE PROVIDER ON THIS PAGE?
+       *
+       * ── WHY A PAGE CURSOR MAY NOT MOVE ON INTENT ────────────────────────
+       *
+       * Task 74de044e recorded `pages_taken: 7` for an actor that was called
+       * exactly ONCE. The cursor was advanced where the page was CHOSEN, and
+       * `executeSelections` then broke on its first guard without buying
+       * anything — so the number described what the engine had considered
+       * asking, not what it had asked. A checkpoint carrying that number tells
+       * the next slice to resume at page 8 of an index it has read one page of.
+       *
+       * `pages_taken: N` must mean provider operations exist through page N.
+       * These are the outcomes that make that true: a call that ran, a call
+       * that ran and returned nothing, and a call whose answer was already
+       * bought and adopted. Everything else — refused on credit, refused on
+       * deadline, compile failure, still pending — leaves the cursor alone,
+       * because none of them produced an operation for that page.
+       */
+      const PAGE_COMMITTING_OUTCOMES: ReadonlySet<string> = new Set([
+        "ok", "empty", "rows_dropped",
+        "skipped_idempotent", "skipped_resume_reuse", "run_adopted",
+      ]);
+      const attemptCountFor = (actorKey: string): number =>
+        state.provider_attempts.filter((a) =>
+          a.capability === cap && a.provider === actorKey &&
+          PAGE_COMMITTING_OUTCOMES.has(String(a.outcome))).length;
+
       // ── ONE PASS OVER A SET OF SELECTIONS ────────────────────────────────
       //
       // Extracted from the loop it used to BE so that a second pass can reuse
@@ -3645,12 +4005,25 @@ export async function runCapabilityPlan(
           // second source to answer a question already in flight is the waste this
           // whole gate exists to stop.
           if (runPending) break;
-          if (companies.length >= maxCandidates) break;
+          // ADMITTED, NOT RETURNED. A pool of `maxCandidates` unusable rows is
+          // not a finished pool, and this is the line that used to say it was.
+          // The raw length still bounds spend below.
+          if (availableAdmittedNow() >= admittedTarget) break;
+          // AND A HARD CEILING ON WHAT MAY BE BOUGHT. Admission decides whether
+          // the pool is good enough; this decides how much of it we will pay to
+          // hold at all, so a source with a very low admission rate cannot page
+          // forever. Without it the two counters disagree and the loop is
+          // unbounded on the only axis that costs money.
+          if (companies.length >= maxCandidates * MAX_RAW_ROWS_PER_ADMITTED) break;
           // ROLE DECIDES WHETHER THIS ONE EARNS ITS CALL. `fallback` runs only on
           // an empty pool — the old solidcode special-case, now the contract for
           // every actor that carries the role — and `breadth` stops widening a
           // pool that is already big enough to satisfy the request.
-          if (!shouldRunSelection(sel, companies.length, maxCandidates)) {
+          //
+          // Both now read the ADMITTED count, which is what makes either role
+          // reachable: `breadth` widens a pool that returned rows but few usable
+          // ones, and `fallback` fires when nothing usable came back at all.
+          if (!shouldRunSelection(sel, availableAdmittedNow(), admittedTarget)) {
             tried.push(provider);
             continue;
           }
@@ -3908,7 +4281,60 @@ export async function runCapabilityPlan(
         }
       };
 
+      // ── A REOPENED DISCOVERY RESUMES; IT DOES NOT RESTART ────────────────
+      //
+      // Without this the first pass of a replenishment slice re-asks page one of
+      // every actor. Spend identity makes that harmless to the bill — the input
+      // hashes to the `logical_call_key` already settled, so the completed run
+      // is adopted — and useless to the mission: the slice re-reads rows the
+      // restored pool already contains and ends exactly as wide as it began,
+      // which is the barren-slice loop this whole fix exists to remove.
+      //
+      // So the debt is paid where it was left. Each actor that supports paging
+      // and has pages left advances to its next unread one; an actor that
+      // supports neither is left alone, and the re-plan below is what finds it
+      // a different question to ask.
+      /**
+       * Pages this pass PROPOSED, held until the provider confirms them.
+       * `actor -> { page, attemptsBefore }`.
+       */
+      const proposedPages = new Map<string, { page: number; before: number }>();
+      if (opts.discoveryReplenishment) {
+        for (const sel of strategy.selections) {
+          const card = hiringActorCard(sel.actor_key);
+          if (!card || !acceptedInputFields(card).includes("startPage")) continue;
+          const limit = Number(card.input_limits?.takePages ?? 0);
+          const taken = pagesTaken[sel.actor_key] ?? 0;
+          if (taken <= 0 || limit <= taken) continue;
+          // THE INPUT CARRIES THE NEXT PAGE; THE CURSOR DOES NOT MOVE YET.
+          sel.input = { ...sel.input, startPage: taken + 1 };
+          proposedPages.set(sel.actor_key, {
+            page: taken + 1, before: attemptCountFor(sel.actor_key),
+          });
+          log("discovery_replenishment_page_proposed", {
+            actor: sel.actor_key, page: taken + 1, page_limit: limit,
+          });
+        }
+        state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
+      }
+
       await executeSelections(strategy.selections);
+
+      // COMMIT, now that the provider layer has answered. A page the run only
+      // considered leaves no attempt behind and moves nothing.
+      for (const [actorKey, proposal] of proposedPages) {
+        if (attemptCountFor(actorKey) > proposal.before) {
+          pagesTaken[actorKey] = proposal.page;
+          log("discovery_replenishment_page_committed", {
+            actor: actorKey, page: proposal.page,
+          });
+        } else {
+          log("discovery_replenishment_page_not_taken", {
+            actor: actorKey, page: proposal.page,
+            note: "no provider operation was executed or adopted for this page",
+          });
+        }
+      }
 
       // ── EXECUTE → INSPECT → REPLAN ────────────────────────────────────────
       //
@@ -3947,6 +4373,12 @@ export async function runCapabilityPlan(
           `${sel.actor_key}|${inputFingerprint(sel.input ?? {})}`),
       );
       const passLimit = Math.max(1, opts.maxDiscoveryPasses ?? DEFAULT_DISCOVERY_PASSES);
+      // WHY DISCOVERY STOPPED, recorded as it happens rather than reconstructed
+      // afterwards. A stop reason inferred from the final counts cannot tell
+      // "the planner had nothing more to offer" from "the ceiling bound", and
+      // those two mean opposite things to the next slice.
+      let discoveryStop: NonNullable<
+        CapabilityExecutionState["discovery_source_state"]>["stop_reason"] = "pass_limit";
       // ── EVERY ACTOR THE STRATEGY ALREADY CONSIDERED, NOT ONLY THOSE THAT RAN ──
       //
       // Briefly changed to `[...used]` on the reasoning that an actor which never
@@ -3960,20 +4392,122 @@ export async function runCapabilityPlan(
       // DIFFERENT set; if the right answer is one this pass already weighed, the
       // answer is not to buy it behind the strategy's back.
       const actorsRun = [...strategyKeys];
+      // PAGE ONE IS ALREADY TAKEN. Seeded from the actors this pass ran so the
+      // first pagination asks for page two, not page one again — which would be
+      // the identical question and would be adopted rather than run.
+      //
+      // `??` and not `=`: an inherited count from an earlier slice is the
+      // authority. Overwriting it with 1 is exactly how a resumed replenishment
+      // would re-ask for page two.
+      for (const k of actorsRun) pagesTaken[k] = pagesTaken[k] ?? 1;
       for (let pass = 2; pass <= passLimit; pass++) {
-        if (schemaFailure || runPending) break;
-        if (companies.length >= maxCandidates) break;
+        if (schemaFailure || runPending) {
+          discoveryStop = schemaFailure ? "schema_failure" : "run_pending";
+          break;
+        }
+        if (availableAdmittedNow() >= admittedTarget) {
+          discoveryStop = "admitted_target_met";
+          break;
+        }
+        if (companies.length >= maxCandidates * MAX_RAW_ROWS_PER_ADMITTED) {
+          discoveryStop = "raw_row_ceiling";
+          break;
+        }
         const summary = summariseDiscoveryPool(
           actorsRun[actorsRun.length - 1] ?? "(none)", companies, opts.mission);
         // ENOUGH IS ENOUGH. A pool that met the target and carries no stated
         // problem is not re-planned — the cheapest planning call is the one that
         // does not happen.
-        const shortfall = companies.length < maxCandidates ||
+        //
+        // Measured on admitted rows for the same reason as the pass above: a
+        // re-plan is exactly what a pool of unusable rows needs, and the row
+        // count was the thing hiding that it needed one.
+        const shortfall = availableAdmittedNow() < admittedTarget ||
           summary.observed_problems.length > 0;
-        if (!shortfall) break;
+        if (!shortfall) { discoveryStop = "admitted_target_met"; break; }
+
+        // ── THE NEXT PAGE BEFORE THE NEXT PROVIDER ───────────────────────
+        //
+        // A source that is admitting candidates has more of them; its next page
+        // is the same question asked further down the same index, at the same
+        // unit price, with no new integration and no new failure mode. Buying a
+        // DIFFERENT provider first pays a premium to re-derive what this one is
+        // already producing.
+        //
+        // Only for a source that is actually producing: `yield` is admitted
+        // over raw for the whole pool, and beneath the floor the honest reading
+        // is that this index does not hold what the mission wants, so another
+        // page buys more of the same miss. Run 7e71d8bc's own numbers — 34
+        // admitted of 50 raw, 68% — sit far above the floor, which is what
+        // makes pagination the right first move for exactly that run.
+        const lastActor = actorsRun[actorsRun.length - 1];
+        const lastCard = lastActor ? hiringActorCard(lastActor) : null;
+        const pageLimit = Number(lastCard?.input_limits?.takePages ?? 0);
+        const pagesSoFar = pagesTaken[lastActor ?? ""] ?? 1;
+        const rawYield = companies.length > 0
+          ? admittedNow() / companies.length
+          : 0;
+        if (
+          lastCard &&
+          acceptedInputFields(lastCard).includes("startPage") &&
+          pageLimit > pagesSoFar &&
+          rawYield >= MIN_PAGINATION_YIELD
+        ) {
+          const nextPage = pagesSoFar + 1;
+          // THE SAME SELECTION, ONE PAGE ON. Rebuilt from the selection that ran
+          // rather than composed here, so every filter the strategy chose is
+          // carried forward unchanged and only the page moves. A different
+          // `startPage` is a different `input_hash`, so this is a distinct
+          // billable operation and a replay of page 1 is still adopted rather
+          // than re-bought.
+          const prior = strategy.selections.find((x) => x.actor_key === lastActor);
+          if (prior) {
+            const paged: DiscoveryActorSelection = {
+              ...prior,
+              role: "breadth",
+              input: { ...prior.input, startPage: nextPage },
+              rationale:
+                `page ${nextPage} of ${lastActor} — ${admittedNow()} of ` +
+                `${companies.length} rows admitted so far, so the source is ` +
+                `still producing candidates this mission can use`,
+            };
+            const question =
+              `${paged.actor_key}|${inputFingerprint(paged.input ?? {})}`;
+            if (!askedQuestions.has(question)) {
+              log("discovery_pagination_running", {
+                pass, actor: lastActor, page: nextPage,
+                admitted: admittedNow(), raw: companies.length,
+                yield: Number(rawYield.toFixed(3)),
+              });
+              const before = attemptCountFor(lastActor);
+              await executeSelections([paged]);
+              askedQuestions.add(question);
+              // SAME RULE AS THE REPLENISHMENT PATH. `executeSelections` can
+              // decline this call on any of its guards — a credit refusal, the
+              // deadline, the raw ceiling — and a page nobody bought must not
+              // move the cursor the next slice resumes from.
+              if (attemptCountFor(lastActor) > before) {
+                pagesTaken[lastActor] = nextPage;
+              } else {
+                log("discovery_pagination_page_not_taken", {
+                  actor: lastActor, page: nextPage,
+                  note: "no provider operation was executed or adopted",
+                });
+              }
+              strategy.selections.push(paged);
+              state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
+              // PAGINATION IS A PASS. Re-measure the pool before deciding anything
+              // else, so a page that filled the target does not also buy a
+              // re-plan on the strength of a stale count.
+              continue;
+            }
+          }
+        }
 
         log("discovery_replan_considering", {
-          pass, pool: companies.length, target: maxCandidates,
+          pass, pool: companies.length, admitted: admittedNow(),
+          available_admitted: availableAdmittedNow(),
+          admitted_target: admittedTarget, raw_ceiling: maxCandidates,
           problems: summary.observed_problems,
         });
         // THE ATTEMPTS THEMSELVES, so the planner is told what each actor did
@@ -3990,6 +4524,7 @@ export async function runCapabilityPlan(
           log("discovery_replan_declined", {
             pass, reason: next.violations[0]?.code ?? "no_further_actor_proposed",
           });
+          discoveryStop = "no_further_actor_proposed";
           break;
         }
         log("discovery_replan_running", {
@@ -4003,6 +4538,36 @@ export async function runCapabilityPlan(
           strategy.selections.push(sel);
         }
         state.discovery_strategy = discoveryStrategyDiagnostics(strategy);
+      }
+      // ── WHAT THE NEXT SLICE NEEDS TO KNOW ABOUT THIS POOL ────────────────
+      //
+      // Written unconditionally at the end of discovery, including when it
+      // stopped early, because "discovery ran and could not widen further" and
+      // "discovery never ran" are different facts and only the second may be
+      // read as unknown.
+      //
+      // `exhausted` is the field `decideAutoContinuation` turns into a terminal
+      // decision, so it is deliberately conservative: only a stop that PROVES
+      // nothing more was available counts. `admitted_target_met` does not —
+      // the pool was good enough this time, and a later slice that has spent it
+      // may legitimately ask for more.
+      {
+        const admittedAtStop = admittedNow();
+        state.discovery_source_state = {
+          sources_attempted: [...actorsRun],
+          pages_taken: { ...pagesTaken },
+          // LIFETIME admitted, kept for the record and the funnel. The number
+          // discovery DECIDES on is `available_admitted` beside it — see
+          // `availableAdmittedNow`.
+          admitted: admittedAtStop,
+          available_admitted: availableAdmittedNow(),
+          raw_rows: companies.length,
+          pool_target: admittedTarget,
+          exhausted: discoveryStop === "no_further_actor_proposed" ||
+            discoveryStop === "raw_row_ceiling",
+          stop_reason: discoveryStop,
+        };
+        log("discovery_source_state", state.discovery_source_state);
       }
       // `state.company_keys` is DERIVED once, at the return. See the note there.
 
@@ -4898,7 +5463,36 @@ export async function runCapabilityPlan(
     // for every single company and spent the wall clock the run needed to finish.
     if (cap === "company_enrichment") {
       let enriched = 0;
-      const actionable = companies.filter((c) => c.identity && identityIsActionable(c.identity));
+      // ── ALREADY ENRICHED IS NOT ACTIONABLE ────────────────────────────────
+      //
+      // ── THE RUN THIS EXISTS FOR ───────────────────────────────────────────
+      //
+      // Task ecb9afe9, 2026-09-01. Four batches of ten companies were bought
+      // 8, 7, 5 and 4 times — 51 real Apify runs where 31 were owed, about
+      // $0.80 of external spend on one mission. Every duplicate was
+      // `apify_linkedin_company_details` and none was the job search, because
+      // hiring has its own operation-key guard and this stage has none:
+      //
+      //   `shouldSkipProviderCall` needs an `operationKey`, which needs a
+      //   `company` — and the enrichment call is BATCHED, so it passes none.
+      //   `completed_operations` is written under the same condition, so the
+      //   purchase is never recorded either. `deps.callCompleted` would have
+      //   caught it and is supplied only by tests.
+      //
+      // With all three inert, the only thing deciding whether to re-buy was
+      // this filter, and it asked about identity alone. Every slice therefore
+      // re-batched every resolved company, however thoroughly it had already
+      // been enriched. The internal ledger deduplicated on `idempotency_key`
+      // so no credit was double-charged; Apify billed every run.
+      //
+      // The cost is O(slices x batches), which is why this stayed invisible
+      // while continuations did no real work and appeared the moment they did.
+      //
+      // `enriched` is carried on the checkpoint snapshot and restored by
+      // `restoreWorkingSet`, so this holds across slices and not merely within
+      // one.
+      const actionable = companies.filter((c) =>
+        c.identity && identityIsActionable(c.identity) && !c.enriched);
       // DEDUPED. Two YC rows can resolve to one LinkedIn company; enriching it
       // twice pays twice for the same record.
       const byUrl = new Map<string, EngineCompany[]>();
@@ -7564,6 +8158,19 @@ export function restoreWorkingSet(
  * Skipping any of them on a resume is what leaves `companies` empty, so these
  * are exactly the steps that must trigger a restore.
  */
+/**
+ * THE CAPABILITIES A REPLENISHMENT DEBT MAY REOPEN — discovery, and only
+ * discovery.
+ *
+ * Its own set rather than a reuse of `WORKING_SET_CAPABILITIES`, which also
+ * contains `known_company_resolution`: resolving a named list is not something
+ * a wider pool is ever the answer to, and re-running it would re-ask a question
+ * whose answer has not changed.
+ */
+const DISCOVERY_REPLENISHABLE: ReadonlySet<string> = new Set([
+  "startup_company_discovery", "general_company_discovery",
+]);
+
 const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
   "startup_company_discovery", "general_company_discovery", "known_company_resolution",
 ]);

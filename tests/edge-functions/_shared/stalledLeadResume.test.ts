@@ -96,10 +96,20 @@ Deno.test("a TERMINAL task is never restarted", () => {
 Deno.test("a task that is not `ready` is left alone", () => {
   // `running` belongs to `tasks_sweep_stuck_runs`, which moves it to `ready`
   // first. Two sweepers, one subject at a time.
-  for (const s of ["running", "complete", "failed", "skipped", "partial"]) {
+  //
+  // `complete` LEFT THIS LIST when a stamped-over checkpoint became
+  // recoverable — see `RECOVERABLE_STAMPED_ROW_STATUSES`. It is still refused
+  // unless the row explicitly says `continuation_required`, which is asserted
+  // directly below rather than by lumping it in here.
+  for (const s of ["running", "failed", "skipped", "partial"]) {
     assertEquals(eligibleForAutoResume(STALLED({ status: s }), NOW, {}).reason,
       "not_ready", s);
   }
+  // A `complete` row with no continuation claim is an ordinary finished step.
+  const finished = STALLED({ status: "complete" });
+  delete (finished.result as Record<string, unknown>).terminal_status;
+  assertEquals(eligibleForAutoResume(finished, NOW, {}).reason, "not_ready",
+    "a finished step must not be swept up");
 });
 
 Deno.test("a task another worker is holding is not touched", () => {
@@ -566,12 +576,18 @@ Deno.test("it is checked BEFORE silence, ceilings and shape", () => {
   assertEquals(eligibleForAutoResume(abandoned, NOW, {}).reason, "auto_resume_suppressed");
 });
 
-Deno.test("a row that is not `ready` is still reported as not_ready", () => {
-  // Status is the sweeper's own precondition and outranks the marker; reporting
-  // a complete row as "parked" would be a second wrong answer.
+Deno.test("a stamped-over row reports the marker, not the row status", () => {
+  // This used to assert `not_ready`, on the reading that row status outranks
+  // the marker. That was right while `complete` was a dead end; now that a
+  // stamped-over checkpoint is recoverable, "somebody parked this on purpose"
+  // is the true answer and `not_ready` would be the second wrong one.
   const done = CHECKPOINTED({ status: "complete" });
   Object.assign(done.result!, suppressed(ago(60_000)));
-  assertEquals(eligibleForAutoResume(done, NOW, {}).reason, "not_ready");
+  assertEquals(eligibleForAutoResume(done, NOW, {}).reason, "auto_resume_suppressed");
+  // And a row status this sweeper does not own is still refused outright.
+  const running = CHECKPOINTED({ status: "running" });
+  Object.assign(running.result!, suppressed(ago(60_000)));
+  assertEquals(eligibleForAutoResume(running, NOW, {}).reason, "not_ready");
 });
 
 Deno.test("A MALFORMED MARKER IS IGNORED, never trusted", () => {

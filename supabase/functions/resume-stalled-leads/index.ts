@@ -230,7 +230,25 @@ Deno.serve(async (req) => {
   let q = admin.from("tasks")
     .select("id, workspace_id, user_id, plan_id, agent_slug, step_index, status, " +
       "updated_at, created_at, continuation_claim_expires_at, result")
-    .eq("status", "ready")
+    // ── THE ROW STATES A STALLED CONTINUATION MAY BE FOUND IN ──────────────
+    //
+    // `ready` is the healthy checkpoint state and still the normal case. The
+    // rest are rows a later writer stamped over the top of a valid checkpoint —
+    // task a7a9371d, whose successor wrote `complete` on a row that still said
+    // `terminal_status: continuation_required` with 22 candidates unexamined.
+    // A row this query cannot SEE is a row nothing can ever recover.
+    //
+    // This is the set `isResumableRowStatus` and `claim_sourcing_continuation`
+    // already accept, not a new one, and it is NOT "resume all complete tasks":
+    // `eligibleForAutoResume` refuses anything whose terminal status is present
+    // and not `continuation_required`, so `quota_met`, `frontier_exhausted` and
+    // `cancelled` are still terminal, and a non-`ready` row must carry the
+    // continuation claim EXPLICITLY to be considered at all.
+    // `complete` ONLY, not the whole legacy set. `running` and `partial` belong
+    // to `tasks_sweep_stuck_runs`, which moves a stuck row to `ready` before
+    // this sweeper is meant to see it — two sweepers, one subject at a time —
+    // and widening to them would put both on the same row.
+    .in("status", ["ready", "complete"])
     .gte("created_at", new Date(now - SCAN_HORIZON_MS).toISOString())
     .lte("updated_at", new Date(now - STALE_AFTER_MS).toISOString())
     .order("updated_at", { ascending: true })

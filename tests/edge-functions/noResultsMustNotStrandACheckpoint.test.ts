@@ -106,10 +106,21 @@ const sweeperRow = (status: string, result: Record<string, unknown>) => any({
   },
 });
 
-Deno.test("2. stamped `complete`, the row is invisible to the sweeper forever", () => {
+Deno.test("2. stamped `complete`, the row is no longer invisible — but the guard still matters", () => {
+  // ── WHAT CHANGED, AND WHAT DID NOT ──────────────────────────────────────
+  //
+  // This asserted `not_ready`: a row stamped `complete` was permanently
+  // unreachable, which is exactly why the writer guard above exists. The
+  // sweeper now recovers a stamped-over checkpoint, so `not_ready` is no longer
+  // the answer — this row is refused further down, for a reason that is true of
+  // THIS fixture rather than of its row status.
+  //
+  // The guard is still the primary defence. Recovery costs a stalled lineage
+  // minutes of silence and a wasted tick; not writing the stamp costs nothing.
   const verdict = eligibleForAutoResume(sweeperRow("complete", GEN1_RESULT), Date.now());
-  assertEquals(verdict.reason, "not_ready");
-  assertEquals(verdict.disposition, "skip");
+  assertEquals(verdict.reason, "no_mission",
+    "refused on substance, not on being the wrong row status");
+  assertEquals(verdict.eligible, false);
 });
 
 Deno.test("2b. left alone, the row is still reachable", () => {

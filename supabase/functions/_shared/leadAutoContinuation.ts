@@ -143,6 +143,27 @@ export interface AutoContinuationInput {
   providerFailed?: boolean;
   cancelled?: boolean;
   /**
+   * IS THERE STILL DISCOVERY WORK THAT COULD WIDEN THE POOL?
+   *
+   * ── WHY AN EXHAUSTED FRONTIER STOPPED BEING TERMINAL ───────────────────
+   *
+   * `frontier_exhausted` reads "everything discovered has been investigated,
+   * so a further slice has nothing to look at". That was true while discovery
+   * was one-shot: the pool the first batch produced was the only pool there
+   * would ever be, and once it was spent the run genuinely had no more to say.
+   *
+   * Discovery can now widen — the same source's next page, a `breadth` actor,
+   * a `fallback` actor. So the sentence has two halves that used to be one:
+   * the FRONTIER is exhausted, and the SOURCES may not be. Stopping on the
+   * first while the second is false ends a mission that could still have
+   * found the leads the user asked for, which is precisely the failure this
+   * change exists to remove.
+   *
+   * Absent or false keeps the previous behaviour exactly: an exhausted
+   * frontier is terminal. Only a caller that can actually replenish sets it.
+   */
+  discoveryRoutesRemain?: boolean;
+  /**
    * Paid provider runs still in flight, from `state.pending_runs`.
    *
    * ── WHY THIS DECISION NEEDS IT ──────────────────────────────────────────
@@ -169,7 +190,8 @@ export interface AutoContinuationInput {
 
 export interface AutoContinuationDecision {
   continue: boolean;
-  reason: StopReason | "quota_unmet_frontier_remains" | "awaiting_provider_run";
+  reason: StopReason | "quota_unmet_frontier_remains" | "awaiting_provider_run"
+    | "replenishment_required";
   /**
    * HOW the next slice should be started.
    *
@@ -242,12 +264,41 @@ export function decideAutoContinuation(
   // Every one of these tells the user something about the candidates. None of
   // them can be known yet if a call we already paid for is still running.
 
-  // AN EXHAUSTED POOL IS A REAL ANSWER. Everything discovered has been
-  // investigated or decided; a further slice has nothing to look at.
+  // AN EXHAUSTED POOL IS A REAL ANSWER — BUT ONLY ONCE NOTHING CAN WIDEN IT.
+  //
+  // Ordered before the ceilings deliberately: replenishment is still WORK, and
+  // work is what `continuationsUsed`, `costUnitsUsed` and `barrenSlices` exist
+  // to bound. So this branch decides only that the run is not FINISHED; every
+  // ceiling below still gets to stop it, and a replenishing lineage is bounded
+  // exactly as a normal one is.
   if (!awaiting && i.frontierRemaining <= 0) {
-    return stop("frontier_exhausted",
-      `every discovered candidate has been investigated; ` +
-      `${i.qualified} of ${i.requestedCount} qualified`);
+    if (!i.discoveryRoutesRemain) {
+      return stop("frontier_exhausted",
+        `every discovered candidate has been investigated; ` +
+        `${i.qualified} of ${i.requestedCount} qualified`);
+    }
+    // NOT AN ANSWER YET. The pool is spent and the sources are not, so the
+    // honest state is "we have not finished looking", not "there is nobody
+    // else". Falling through would report `quota_unmet_frontier_remains`,
+    // which would be false — the frontier is empty; it is the SOURCES that
+    // remain — so this says what is actually true about the next slice.
+    if (i.continuationsUsed < i.maxContinuations &&
+        i.costUnitsUsed < i.maxCostUnits) {
+      const need = i.requestedCount - i.qualified;
+      return {
+        continue: true,
+        reason: "replenishment_required",
+        dispatch_mode: "immediate",
+        detail:
+          `every discovered candidate has been investigated and ` +
+          `${i.qualified} of ${i.requestedCount} qualified; discovery routes ` +
+          `remain, so the next slice widens the pool rather than ending the ` +
+          `request ${need} short`,
+        user_message:
+          `Still working — I've been through every company found so far and ` +
+          `need ${need} more, so I'm widening the search.`,
+      };
+    }
   }
 
   if (!awaiting && i.providerFailed) {

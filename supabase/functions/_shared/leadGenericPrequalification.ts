@@ -424,3 +424,37 @@ export function emptyPrequalificationResult(): PrequalificationResult {
     employee_size_excluded: 0, eligible_companies: 0,
   };
 }
+
+/**
+ * HOW MANY OF THESE ROWS ARE WORTH CONTINUING WITH.
+ *
+ * ── WHY DISCOVERY NEEDS THIS, AND WHY IT IS NOT A NEW GATE ────────────────
+ *
+ * The discovery loop used to decide it was finished by counting ROWS. A
+ * provider that returned fifty unusable rows was indistinguishable from one
+ * that returned fifty good ones, so `shouldRunSelection` could never reach a
+ * `breadth` or `fallback` actor: the pool always looked full. Run 7e71d8bc is
+ * the worked example — fifty rows, sixteen of them outside the mission's own
+ * employee range, discovery satisfied, quota unmet.
+ *
+ * This is deliberately NOT a second admission system. It is one call into
+ * `prequalifyDiscoveredCompanies` — the same free, deterministic, GPT-free and
+ * provider-free pass the engine already runs later — reading the count it
+ * already computes. Anything that changes what `eligible` means changes this
+ * number by construction, which is the only way the two can be kept honest.
+ *
+ * v1 admission is exactly what that pass already enforces:
+ *   * a usable identity — a row with neither name nor domain is not a company;
+ *   * a directory/platform artifact is not a prospect;
+ *   * the employee range, and ONLY when the mission itself expressed one.
+ *
+ * No geography. Presence semantics are unchanged, and HQ filtering is not
+ * introduced here or anywhere in this change.
+ */
+export function admittedCandidateCount(
+  companies: readonly NormalizedHiringCompany[],
+  size: GenericSizeBounds = {},
+  policy: GenericPrequalificationPolicy = {},
+): number {
+  return prequalifyDiscoveredCompanies(companies, size, policy).eligible_companies;
+}

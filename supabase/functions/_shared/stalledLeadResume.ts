@@ -49,7 +49,7 @@ import {
   DEFAULT_MAX_CONTINUATIONS, DEFAULT_MAX_LINEAGE_COST_UNITS, LINEAGE_PROGRESS_KEY,
   MAX_BARREN_SLICES,
 } from "./leadAutoContinuation.ts";
-import { RESUMABLE_ROW_STATUS } from "./taskStatusContract.ts";
+import { RESUMABLE_ROW_STATUS, isResumableRowStatus } from "./taskStatusContract.ts";
 import { assessCheckpointResume } from "./workflowContinuation.ts";
 
 export const STALLED_LEAD_RESUME_VERSION = "stalled-lead-resume-v1" as const;
@@ -92,6 +92,25 @@ export const MAX_RESUMABLE_AGE_MS = 2 * 60 * 60_000;
 
 /** The exact terminal status a claimable checkpoint carries. */
 export const CLAIMABLE_TERMINAL_STATUS = "continuation_required";
+
+/**
+ * ROW STATES A STAMPED-OVER CHECKPOINT MAY BE RECOVERED FROM.
+ *
+ * `ready` is what a healthy checkpoint writes and is handled separately. This
+ * is the narrow addition: a row a LATER writer stamped `complete` over the top
+ * of a valid checkpoint, which is what happened to tasks a7a9371d and 7e71d8bc
+ * and left both permanently invisible to this sweeper.
+ *
+ * Deliberately NOT the whole `LEGACY_RESUMABLE_ROW_STATUSES` set.
+ * `tasks_sweep_stuck_runs` owns `running` and `partial` and moves such a row to
+ * `ready` before this sweeper should act on it; including them here would put
+ * two sweepers on one subject. `failed` and `skipped` are never recoverable.
+ *
+ * Recovery from these states additionally requires an EXPLICIT
+ * `continuation_required` — see the gate below — so an ordinary finished step
+ * can never be swept up.
+ */
+export const RECOVERABLE_STAMPED_ROW_STATUSES: readonly string[] = ["complete"];
 
 export type IneligibleReason =
   | "not_ready" | "already_terminal" | "no_checkpoint" | "claim_held"
@@ -241,7 +260,34 @@ export function eligibleForAutoResume(
   const go = (evidence: NonNullable<Eligibility["evidence"]>): Eligibility =>
     ({ eligible: true, reason: "resumable", evidence, disposition: "resume" });
 
-  if (row.status !== RESUMABLE_ROW_STATUS) return no("not_ready");
+  // ── WHICH ROW STATES A STALLED CONTINUATION MAY BE FOUND IN ─────────────
+  //
+  // `ready` is what a healthy checkpoint writes and remains the normal case.
+  // The widening is for rows a LATER writer stamped over the top of it.
+  //
+  // Task a7a9371d is the worked example: its parent wrote `ready` +
+  // `continuation_required`, and a successor that fell into the generic path
+  // then wrote `complete` on the same row. `terminal_status` still said the
+  // work was outstanding, 22 candidates were still unexamined, and this
+  // function refused it as `not_ready` on every tick for ever. Task 7e71d8bc
+  // died the same way.
+  //
+  // THIS IS NOT A WIDENING OF THE CONTRACT — it is this function catching up
+  // with it. `isResumableRowStatus` has always counted `partial`, `running` and
+  // `complete` as legacy resumable states, and `claim_sourcing_continuation`
+  // accepts exactly the same set, gated on the same terminal status:
+  //
+  //   if v_row.status in ('complete','failed','skipped')
+  //      and v_terminal is distinct from 'continuation_required' → already_terminal
+  //
+  // The gate below is what keeps this narrow. A row is only reachable here if
+  // its terminal status is `continuation_required` or absent, so a `quota_met`,
+  // `frontier_exhausted` or `cancelled` row is refused as `already_terminal`
+  // whatever its row status says. This never resurrects a finished run.
+  if (row.status !== RESUMABLE_ROW_STATUS &&
+      !RECOVERABLE_STAMPED_ROW_STATUSES.includes(String(row.status ?? ""))) {
+    return no("not_ready");
+  }
 
   // ── A GENERATION MAY DECLINE TO BE AUTO-CONTINUED ───────────────────────
   //
@@ -275,6 +321,23 @@ export function eligibleForAutoResume(
     ? result.terminal_status : null;
   if (terminalStatus !== null && terminalStatus !== CLAIMABLE_TERMINAL_STATUS) {
     return no("already_terminal");
+  }
+  // ── A NON-`ready` ROW NEEDS THE CLAIM STATED, NOT MERELY UNCONTRADICTED ──
+  //
+  // Checked AFTER the terminal test so a finished run is still refused as
+  // `already_terminal` — the truthful reason — rather than as `not_ready`.
+  //
+  // Absence of a terminal status is enough for a `ready` row: that is a run
+  // that stopped without ever writing an outcome, and the note above explains
+  // why those must not be dismissed. It is NOT enough for `complete`,
+  // `partial` or `running`, because a `complete` row saying nothing about
+  // continuation is exactly what an ordinary finished step looks like. Only a
+  // row that explicitly still says `continuation_required` may be recovered
+  // from those states — which is the same condition
+  // `claim_sourcing_continuation` applies before it will hand out a claim.
+  if (row.status !== RESUMABLE_ROW_STATUS &&
+      terminalStatus !== CLAIMABLE_TERMINAL_STATUS) {
+    return no("not_ready");
   }
 
   // The claim requires `company_first_state`; without it the RPC answers
@@ -390,6 +453,7 @@ export function resumeRequestFor(row: StalledTaskRow): {
   resumeTaskId: string; workspaceId: string; userId: string; planId: string | null;
   agentSlug: string; stepIndex: number; instruction: string;
   toolInput: null; leadMission: Record<string, unknown> | null; continuationIndex: number;
+  toolNeeded: string | null; executionMode: string | null;
 } | null {
   const result = obj(row.result);
   const mission = obj(result.lead_mission);
@@ -413,5 +477,25 @@ export function resumeRequestFor(row: StalledTaskRow): {
     toolInput: null,
     leadMission: mission as Record<string, unknown>,
     continuationIndex: int(progress.continuations_used) + 1,
+    // ── THE ROUTE, SO BOTH DISPATCHERS AGREE ────────────────────────────────
+    //
+    // The immediate handoff forwards the parent's own `tool_needed`. This path
+    // has no parent invocation to copy from, so it states the route from what
+    // the ROW structurally proves: `eligibleForAutoResume` has already refused
+    // anything without `company_first_state` and a `continuation_required`
+    // terminal status, and `instruction` above comes from a compiled
+    // `lead_mission`. A row that reaches here is a lead sourcing lineage; there
+    // is no other kind.
+    //
+    // Stated rather than sniffed. Until now this sent `toolInput: null` and let
+    // `shouldUseApify`'s text test on the instruction decide, which is the
+    // fallback that exists for callers who supply nothing structured — not
+    // something a known sourcing lineage should be depending on.
+    toolNeeded: "source_with_apify",
+    executionMode:
+      typeof result.executed_sourcing_mode === "string" &&
+        result.executed_sourcing_mode
+        ? result.executed_sourcing_mode
+        : "company_first",
   };
 }

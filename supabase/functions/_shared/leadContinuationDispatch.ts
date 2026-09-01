@@ -64,6 +64,41 @@ export interface DispatchRequest {
   stepIndex: number;
   instruction: string;
   /**
+   * THE ROUTE, NOT JUST THE WORK — the field the successor resolves its own
+   * execution path from.
+   *
+   * ── WHY A CONTINUATION WITHOUT IT DOES NOTHING ─────────────────────────
+   *
+   * `run-agent` decides whether an invocation is lead sourcing before it looks
+   * at any checkpoint: `isProviderSourcingTool` reads `body.tool_needed`,
+   * `tool_input.tool_name` and `tool_input.selected_actor_key`, and
+   * `resolvePlannedTool` returns `"generic"` when all three are empty. A
+   * dispatch that carried `tool_input: { lead_mission }` and nothing else
+   * satisfied none of them.
+   *
+   * The text-sniff fallback cannot rescue it either, and must not be asked to:
+   * `shouldUseApify` only sniffs `instruction` when `tool_input` is ABSENT, and
+   * a continuation always sends one.
+   *
+   * So the successor ran the generic LLM path, never entered the capability
+   * engine, and reported `no_execution_state_observed` — observed identically
+   * on tasks 7e71d8bc (2026-08-31 10:26) and a7a9371d (16:40). The mission and
+   * the checkpoint were both present and both unread, because nothing had said
+   * which road to take to them.
+   *
+   * This is the structured contract the first invocation already uses, carried
+   * forward verbatim. It is not a new routing signal and it is not inferred.
+   */
+  toolNeeded: string | null;
+  /**
+   * WHICH WORKFLOW THE PARENT WAS RUNNING.
+   *
+   * `bodyDeclaresCompanyFirst` reads `execution_mode === "company_first"` to
+   * reach the qualified-lead route at all. Carried for the same reason as
+   * `toolNeeded`: the successor must resolve the same road, not a similar one.
+   */
+  executionMode: string | null;
+  /**
    * THE COMPILED MISSION, CARRIED — ON BOTH CARRIERS.
    *
    * A `LeadMissionV1` is NOT part of the checkpoint. `readPersistedLeadMission`
@@ -222,6 +257,10 @@ export async function dispatchContinuation(
         agent_slug: req.agentSlug,
         step_index: req.stepIndex,
         instruction: req.instruction,
+        // THE ROUTE. Omitted only when the parent had none — a continuation
+        // must never invent one it was not itself running under.
+        ...(req.toolNeeded ? { tool_needed: req.toolNeeded } : {}),
+        ...(req.executionMode ? { execution_mode: req.executionMode } : {}),
         // BOTH CARRIERS. See `DispatchRequest.leadMission`.
         ...(req.toolInput ? { tool_input: req.toolInput } : {}),
         ...(req.leadMission ? { lead_mission: req.leadMission } : {}),
