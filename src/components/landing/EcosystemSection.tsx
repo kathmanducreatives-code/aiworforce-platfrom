@@ -28,18 +28,54 @@ const TABS = ["all", "talent", "growth", "content", "intelligence"] as const;
 const TAB_LABELS: Record<string, string> = { all: "Everything", talent: "Research", growth: "Leads", content: "Content", intelligence: "Signals" };
 const DEPT_COLORS: Record<string, string> = { talent: "#34d399", growth: "#60a5fa", content: "#a78bfa", intelligence: "#fbbf24" };
 
+const ORBIT_SECONDS = 150;
+
 const RING_CONFIG = {
-  1: { radius: 190, duration: 120, direction: "normal" as const, offsetAngle: -Math.PI / 4 },
-  2: { radius: 310, duration: 90, direction: "reverse" as const, offsetAngle: 0 },
-  3: { radius: 350, duration: 150, direction: "normal" as const, offsetAngle: Math.PI / 8 },
+  1: { radius: 190, duration: ORBIT_SECONDS, direction: "normal" as const, offsetAngle: -Math.PI / 4 },
+  2: { radius: 310, duration: ORBIT_SECONDS, direction: "normal" as const, offsetAngle: Math.PI / 7 },
+  3: { radius: 350, duration: ORBIT_SECONDS, direction: "normal" as const, offsetAngle: Math.PI / 8 },
 };
 
 const DEPT_CONNECTIONS: Record<string, [string, string][]> = {
-  talent: [["claude","gemini"],["apify","firecrawl"],["gemini","apify"]],
-  growth: [["firecrawl","claude"],["apify","resend"],["claude","resend"]],
-  intelligence: [["firecrawl","perplexity"],["perplexity","gpt4"]],
-  content: [["claude","gpt4"],["gemini","claude"]],
+  talent: [["claude","gemini"],["apify","firecrawl"],["gemini","apify"],["firecrawl","gpt4"]],
+  growth: [["firecrawl","claude"],["apify","resend"],["claude","resend"],["perplexity","apify"]],
+  intelligence: [["firecrawl","perplexity"],["perplexity","gpt4"],["gpt4","claude"]],
+  content: [["claude","gpt4"],["gemini","claude"],["gemini","resend"]],
 };
+
+/**
+ * DECORATIVE GEOMETRY — the constellation behind the department web.
+ *
+ * Two derived layers, both computed once from ORBITAL_TOOLS so they stay
+ * correct if the tool list changes again:
+ *
+ *   RING_LINKS  each ring closed into a polygon, so neighbours are visibly
+ *               on the same orbit
+ *   CHORDS      fanned links from every inner tool to two outer ones, which
+ *               is what stops the diagram reading as a plain hub-and-spoke
+ *
+ * They carry no meaning and are drawn very faintly — texture, not data.
+ */
+const ringMembers = (ring: number) => ORBITAL_TOOLS.filter(t => t.ring === ring).map(t => t.id);
+
+const RING_LINKS: [string, string][] = ([1, 2, 3] as const).flatMap(ring => {
+  const ids = ringMembers(ring);
+  if (ids.length < 3) return [];
+  return ids.map((id, i) => [id, ids[(i + 1) % ids.length]] as [string, string]);
+});
+
+const CHORDS: [string, string][] = (() => {
+  const inner = ringMembers(1);
+  const outer = ringMembers(2);
+  if (!inner.length || !outer.length) return [];
+  const out: [string, string][] = [];
+  inner.forEach((id, i) => {
+    // Two chords each, offset so the fans interleave instead of overlapping.
+    out.push([id, outer[(i * 2) % outer.length]]);
+    out.push([id, outer[(i * 2 + 3) % outer.length]]);
+  });
+  return out;
+})();
 
 const getNodePosition = (index: number, total: number, radius: number, offsetAngle: number = 0) => {
   const angle = (index / total) * 2 * Math.PI + offsetAngle;
@@ -127,6 +163,7 @@ const EcosystemSection = () => {
       <style>{`
         @keyframes orbit1 { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes orbit2 { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+        @keyframes dashFlow { to { stroke-dashoffset: -40; } }
         @keyframes breathe { 0%,100% { box-shadow: 0 0 40px rgba(0,255,148,0.2), 0 0 80px rgba(0,255,148,0.08); } 50% { box-shadow: 0 0 60px rgba(0,255,148,0.4), 0 0 120px rgba(0,255,148,0.15); } }
         @keyframes pulse-to-center {
           0% { transform: translate(0,0); opacity: 1; }
@@ -165,7 +202,17 @@ const EcosystemSection = () => {
                 perspective: 1200,
               }}
             >
-              {/* SVG layer for rings, connection lines, and cross-connections */}
+              {/* SVG layer for rings, connection lines, and cross-connections.
+                  Rotates on the same clock as the orbital rings, so every line
+                  stays welded to the two tools it joins. */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  animation: `orbit1 ${ORBIT_SECONDS}s linear infinite`,
+                  transformOrigin: "center",
+                  willChange: "transform",
+                }}
+              >
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 750 750">
                 {([1, 2, 3] as const).map(ring => (
                   <circle key={ring} cx={CENTER} cy={CENTER} r={RING_CONFIG[ring].radius}
@@ -186,6 +233,52 @@ const EcosystemSection = () => {
                     />
                   );
                 })}
+                {/* Layer 1 — chords. Long fanned links between rings, dotted and
+                    barely there. Drawn first so everything else sits over them. */}
+                {CHORDS.map(([a, b], i) => {
+                  const posA = NODE_POSITIONS[a];
+                  const posB = NODE_POSITIONS[b];
+                  if (!posA || !posB) return null;
+                  return (
+                    <line key={`chord-${i}`}
+                      x1={CENTER + posA.x} y1={CENTER + posA.y}
+                      x2={CENTER + posB.x} y2={CENTER + posB.y}
+                      stroke="rgba(0,255,148,0.5)"
+                      strokeWidth={1}
+                      strokeDasharray="1 9"
+                      strokeLinecap="round"
+                      opacity={activeTab === "all" ? 0.18 : 0.05}
+                      style={{ transition: "opacity 0.4s ease" }}
+                    />
+                  );
+                })}
+
+                {/* Layer 2 — ring polygons, with the dash pattern travelling
+                    around each orbit. Opposite directions per ring so the two
+                    orbits read as counter-rotating. */}
+                {RING_LINKS.map(([a, b], i) => {
+                  const posA = NODE_POSITIONS[a];
+                  const posB = NODE_POSITIONS[b];
+                  if (!posA || !posB) return null;
+                  const outer = ORBITAL_TOOLS.find(t => t.id === a)?.ring === 2;
+                  return (
+                    <line key={`ring-link-${i}`}
+                      x1={CENTER + posA.x} y1={CENTER + posA.y}
+                      x2={CENTER + posB.x} y2={CENTER + posB.y}
+                      stroke="rgba(0,255,148,0.6)"
+                      strokeWidth={1}
+                      strokeDasharray="3 7"
+                      opacity={activeTab === "all" ? 0.3 : 0.08}
+                      style={{
+                        transition: "opacity 0.4s ease",
+                        animation: `dashFlow ${outer ? 5 : 3.5}s linear infinite${outer ? " reverse" : ""}`,
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Layer 3 — the department web. This one carries meaning, so it
+                    is the only layer that brightens when a tab is chosen. */}
                 {crossConnections.map((conn, i) => {
                   const posA = NODE_POSITIONS[conn.from];
                   const posB = NODE_POSITIONS[conn.to];
@@ -197,14 +290,20 @@ const EcosystemSection = () => {
                       stroke={conn.color}
                       strokeWidth={conn.active ? 2 : 1}
                       strokeDasharray={conn.active ? "none" : "4 6"}
-                      opacity={conn.active ? 0.6 : (activeTab === "all" ? 0.15 : 0.03)}
-                      style={{ transition: "all 0.4s ease" }}
+                      opacity={conn.active ? 0.65 : (activeTab === "all" ? 0.12 : 0.03)}
+                      style={{
+                        transition: "all 0.4s ease",
+                        animation: conn.active ? "dashFlow 2.5s linear infinite" : undefined,
+                      }}
                     />
                   );
                 })}
               </svg>
+              </div>
 
-              {/* Center Pilot Brain */}
+              {/* Centre — the product, not an agent. Pilot is one employee among
+                  several; putting a single name at the centre of the tool graph
+                  implied the others sat outside it. */}
               <motion.div
                 initial={{ scale: 0, opacity: 0 }}
                 animate={inView ? { scale: 1, opacity: 1 } : {}}
@@ -214,9 +313,9 @@ const EcosystemSection = () => {
               >
                 <div className="w-[100px] h-[100px] rounded-full flex items-center justify-center border-2 border-emerald-400/60"
                   style={{ background: "radial-gradient(circle, #0D2818 0%, #051208 100%)", animation: "breathe 3s ease-in-out infinite" }}>
-                  <span className="font-display font-black text-base text-emerald-400 tracking-tight">Pilot</span>
+                  <span className="font-display font-black text-[15px] text-emerald-400 tracking-tight">Agentory</span>
                 </div>
-                <span className="text-[10px] text-emerald-400/60 mt-1 font-mono">BRAIN</span>
+                <span className="text-[10px] text-emerald-400/60 mt-1 font-mono">COMPANY CONTEXT</span>
               </motion.div>
 
               {/* Orbital rings with tools — real logos */}
@@ -314,9 +413,9 @@ const EcosystemSection = () => {
             <div className="flex flex-col items-center mb-6">
               <div className="w-16 h-16 rounded-full flex items-center justify-center border-2 border-emerald-400/60"
                 style={{ background: "radial-gradient(circle, #0D2818 0%, #051208 100%)", boxShadow: "0 0 30px rgba(0,255,148,0.3)" }}>
-                <span className="font-display font-black text-sm text-emerald-400">Pilot</span>
+                <span className="font-display font-black text-[13px] text-emerald-400">Agentory</span>
               </div>
-              <span className="text-xs text-emerald-400/60 mt-1 font-mono">BRAIN</span>
+              <span className="text-[10px] text-emerald-400/60 mt-1 font-mono">COMPANY CONTEXT</span>
             </div>
             <div className="grid grid-cols-4 gap-3">
               {ORBITAL_TOOLS.map(tool => {
