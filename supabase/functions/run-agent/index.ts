@@ -2429,7 +2429,53 @@ Deno.serve(async (req) => {
             return [];
           }
         })();
-        const recoveredPendingRuns = recoverPendingRuns(startedRunRows);
+        // ── WHICH OF THOSE RUNS THE LEDGER HAS ALREADY ACCOUNTED FOR ────────
+        //
+        // A SECOND, NARROW QUERY rather than widening the one above. That one
+        // is capped at 50 rows and ordered by nothing in particular; letting
+        // terminal rows compete for those slots would push genuinely pending
+        // runs out of the window, which is the opposite of what recovery is
+        // for. This asks only about the run ids already in hand.
+        const resolvedRunIds = await (async () => {
+          const ids = startedRunRows
+            .map((r) => (typeof r.provider_run_id === "string" ? r.provider_run_id : ""))
+            .filter((x): x is string => !!x);
+          if (ids.length === 0) return new Set<string>();
+          try {
+            // deno-lint-ignore no-explicit-any
+            const { data, error } = await (supabase as any)
+              .from(LEAD_EXECUTION_CALLS_TABLE)
+              .select("provider_run_id, status")
+              .eq("task_id", leadResumeParentTaskId)
+              .eq("workspace_id", workspace_id)
+              .in("provider_run_id", ids)
+              .in("status", ["reused", "succeeded", "failed", "timed_out"])
+              .limit(200) as unknown as {
+                data: Array<{ provider_run_id: string | null }> | null; error: unknown;
+              };
+            if (error) {
+              // BEST EFFORT, LIKE THE READ ABOVE. An unreadable answer means
+              // "nothing known to be resolved", which is the behaviour this
+              // guard replaced — never a reason to fail the run.
+              console.error("[run-agent][pending-run-recovery] resolved read failed",
+                String(error));
+              return new Set<string>();
+            }
+            return new Set(
+              (data ?? []).map((r) => r.provider_run_id ?? "").filter((x) => !!x),
+            );
+          } catch (e) {
+            console.error("[run-agent][pending-run-recovery] resolved read threw",
+              String(e));
+            return new Set<string>();
+          }
+        })();
+        const recoveredPendingRuns = recoverPendingRuns(startedRunRows, resolvedRunIds);
+        if (resolvedRunIds.size > 0) {
+          console.log("[run-agent][pending-run-recovery] skipped already-resolved", {
+            task_id: task.id, run_ids: [...resolvedRunIds],
+          });
+        }
         if (recoveredPendingRuns.length > 0) {
           console.log("[run-agent][pending-run-recovery] rebuilt from ledger", {
             task_id: task.id,
@@ -2894,7 +2940,22 @@ Deno.serve(async (req) => {
                       // its real runtime. Wall-clock from the POST would be the
                       // gap between two invocations, not the Actor's runtime,
                       // and writing it would be inventing a measurement.
-                      cost_source: "reused_no_charge",
+                      // ── AN ALLOWED VALUE, OR THE WHOLE UPDATE IS REJECTED ──
+                      //
+                      // This said `reused_no_charge`, which is not one of the
+                      // four `lead_execution_calls_cost_source_check` permits —
+                      // `provider_reported`, `event_priced`, `estimated`,
+                      // `unknown`. The constraint predates the value by eight
+                      // days, so this settle has never once succeeded, and the
+                      // failure was logged as "[object Object]" every time.
+                      //
+                      // Nothing is lost by saying `unknown`: it is the honest
+                      // answer for exactly the reason the comment above gives —
+                      // the invocation that started this run died before it
+                      // could see the provider's usage. "No second charge" is
+                      // already carried by `status: "reused"` and by
+                      // `next_decision: "adopted_without_second_charge"`.
+                      cost_source: "unknown",
                       next_decision: "adopted_without_second_charge",
                       metadata: {
                         adopted_by_task: task.id,
@@ -2909,8 +2970,22 @@ Deno.serve(async (req) => {
                     .eq("workspace_id", workspace_id)
                     .eq("status", "started");
                   if (error) {
-                    console.error("[run-agent][run-adopted] settle failed",
-                      { run_id: info.run_id, error: String(error) });
+                    // ── SAY WHAT WENT WRONG, NOT "[object Object]" ──────────
+                    //
+                    // `String(error)` on a PostgREST error object yields
+                    // exactly that, and it is why a CHECK violation ran in
+                    // production for three days looking like a generic
+                    // failure. The fields below are the ones that name the
+                    // constraint and the offending value.
+                    const e = error as {
+                      message?: string; code?: string;
+                      details?: string; hint?: string;
+                    };
+                    console.error("[run-agent][run-adopted] settle failed", {
+                      run_id: info.run_id,
+                      message: e?.message ?? null, code: e?.code ?? null,
+                      details: e?.details ?? null, hint: e?.hint ?? null,
+                    });
                   } else {
                     console.log("[run-agent][run-adopted] ledger settled",
                       { run_id: info.run_id, rows: info.rows });
@@ -3322,11 +3397,31 @@ Deno.serve(async (req) => {
                 const restored =
                   readCapabilityExecutionState(body as Record<string, unknown>) ??
                   readCapabilityExecutionState(resumedTaskResult);
-                if (!restored || recoveredPendingRuns.length === 0) return restored;
+                if (!restored) return restored;
+                // ── NOTHING TO ADD IS NOT NOTHING TO DO ──────────────────
+                //
+                // This short-circuited on `recoveredPendingRuns.length === 0`
+                // alone, which is precisely the state the ledger guard
+                // produces when it works: a settled run is skipped, the
+                // recovered list comes back empty, and the merge — and with it
+                // the prune — was never reached. So the guard succeeding was
+                // what stopped the stale checkpoint entry being removed, and
+                // e01ad74f stayed parked with `pending_runs: 1` through both
+                // fixes.
+                //
+                // There is work to do whenever there is something to ADD or
+                // something to REMOVE.
+                if (recoveredPendingRuns.length === 0 && resolvedRunIds.size === 0) {
+                  return restored;
+                }
                 return {
                   ...restored,
+                  // THE SAME RESOLVED SET ON BOTH SIDES. A run the ledger has
+                  // settled must not survive in the checkpoint either — see
+                  // `mergePendingRuns`.
                   pending_runs: mergePendingRuns(
-                    restored.pending_runs ?? [], recoveredPendingRuns),
+                    restored.pending_runs ?? [], recoveredPendingRuns,
+                    resolvedRunIds),
                 } as typeof restored;
               })(),
               // THE RESUME GUARD'S SCOPE — supplied on EVERY run, not only on a

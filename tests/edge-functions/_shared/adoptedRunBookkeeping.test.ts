@@ -246,7 +246,11 @@ Deno.test("run-agent settles only a genuinely open row, and only its own", async
   );
   const i = RUN.indexOf("onRunAdopted: async (info) =>");
   assert(i > 0, "the settle must be wired");
-  const block = RUN.slice(i, i + 3200);
+  // Bounded by the next sibling option rather than a character count. A fixed
+  // window silently stops covering the assertions below it as soon as anything
+  // is added above them — which is how the scope checks at the end of this test
+  // fell outside the block they were written to guard.
+  const block = RUN.slice(i, RUN.indexOf("deadline: terminalGuard.deadline", i));
   // ── `reused`, NOT `succeeded` ──────────────────────────────────────────
   //
   // This asserted `succeeded`, and that is what shipped: the one row in task
@@ -261,7 +265,26 @@ Deno.test("run-agent settles only a genuinely open row, and only its own", async
   assert(block.includes("raw_count: info.rows"));
   // AND WHY IT CARRIES NO COST OR DURATION, rather than leaving the started-row
   // defaults to read as missing data.
-  assert(block.includes('cost_source: "reused_no_charge"'));
+  //
+  // ── THIS ASSERTED `reused_no_charge`, AND THAT IS WHAT SHIPPED ──────────
+  //
+  // `lead_execution_calls_cost_source_check` permits four values —
+  // `provider_reported`, `event_priced`, `estimated`, `unknown` — and the
+  // constraint predates that literal by eight days. So the UPDATE was rejected
+  // every single time, the started row never settled, and
+  // `recoverPendingRuns` resurrected the run on every later slice until the
+  // lineage parked on `awaiting_provider_run`. Task e01ad74f, five
+  // continuations and three barren slices, is the bill for it.
+  //
+  // Pinning a value the database refuses is worse than not testing it: it made
+  // the wrong literal look deliberate. The intent — say WHY there is no cost —
+  // is kept, and `next_decision` is what carries it.
+  assert(
+    /cost_source: "(provider_reported|event_priced|estimated|unknown)"/.test(block),
+    "cost_source must be a value the CHECK constraint permits",
+  );
+  assert(block.includes('next_decision: "adopted_without_second_charge"'),
+    "and the row must still say why it carries no cost");
   assert(block.includes("duration_unknown_reason"));
   // SCOPE. A settle that could touch another workspace's row, another task's
   // row, or an already-settled row would be worse than the stale status.

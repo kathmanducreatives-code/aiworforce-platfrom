@@ -109,6 +109,30 @@ export function redactionIsIdentityFor(input: unknown): boolean {
  */
 export function recoverPendingRuns(
   rows: readonly LedgerStartedRow[],
+  /**
+   * Runs the ledger already has an OUTCOME for, whatever their `started` row
+   * still says.
+   *
+   * ── WHY A STARTED ROW IS NOT PROOF A RUN IS PENDING ──────────────────────
+   *
+   * Adoption settles the started row by updating it in place. Task e01ad74f
+   * shows what happens when that write fails: run sYUy3Er8siHqMDocB was
+   * adopted at 08:06 — 26 rows read, spliced out of `pending_runs` correctly —
+   * and its settle UPDATE was rejected by a CHECK constraint. The row stayed
+   * `started`, so this function resurrected it on every later slice, undoing
+   * the removal each time. `decideAutoContinuation` reads a non-empty
+   * `pending_runs` as `awaiting_provider_run` and defers, so the lineage spent
+   * five continuations and three barren slices waiting for a run that had
+   * already been read.
+   *
+   * The constraint violation is fixed. This is the guard that makes the NEXT
+   * settle failure cost a stale ledger row instead of a parked lineage: a run
+   * with any terminal row — `reused`, `succeeded`, `failed`, `timed_out` — has
+   * been accounted for, and re-queueing it can only mislead.
+   *
+   * Absent or empty preserves the previous behaviour exactly.
+   */
+  resolvedRunIds: ReadonlySet<string> = new Set(),
 ): RecoveredPendingRun[] {
   const out: RecoveredPendingRun[] = [];
   const seen = new Set<string>();
@@ -116,6 +140,8 @@ export function recoverPendingRuns(
     if (r.status !== "started") continue;
     const runId = typeof r.provider_run_id === "string" ? r.provider_run_id.trim() : "";
     if (!runId || seen.has(runId)) continue;
+    // AN OUTCOME ELSEWHERE OUTRANKS A STALE `started`.
+    if (resolvedRunIds.has(runId)) continue;
     // The ACTOR key is what `pending_runs.provider` holds. `provider_id` is the
     // vendor ("apify"), which is not specific enough to match a call.
     const provider = typeof r.capability === "string" ? r.capability.trim() : "";
@@ -161,7 +187,32 @@ export function recoverPendingRuns(
 export function mergePendingRuns<T extends { run_id: string }>(
   checkpointed: readonly T[],
   recovered: readonly RecoveredPendingRun[],
+  /**
+   * Runs the ledger has already accounted for — dropped from BOTH sides.
+   *
+   * ── WHY THE CHECKPOINT NEEDS THE SAME FILTER AS THE LEDGER ──────────────
+   *
+   * `recoverPendingRuns` stops a settled run being resurrected from the ledger.
+   * That is only half of it: a run resurrected on an EARLIER slice was then
+   * checkpointed, and the checkpoint is read back here. Task e01ad74f is the
+   * proof — after the ledger guard shipped, its recovery correctly logged
+   * `skipped already-resolved`, and the lineage stayed parked anyway, because
+   * the same entry was sitting in `restored.pending_runs`.
+   *
+   * It cannot clear itself. The engine only splices an entry out when it ADOPTS
+   * the run, and adoption requires a call whose input fingerprint matches; by
+   * the time the pool has moved on, no call ever will. So the entry outlives
+   * every slice, `decideAutoContinuation` keeps reading a non-empty list as
+   * `awaiting_provider_run`, and the lineage defers for ever.
+   *
+   * Empty or absent preserves the previous behaviour exactly.
+   */
+  resolvedRunIds: ReadonlySet<string> = new Set(),
 ): Array<T | RecoveredPendingRun> {
-  const have = new Set(checkpointed.map((r) => r.run_id));
-  return [...checkpointed, ...recovered.filter((r) => !have.has(r.run_id))];
+  const live = checkpointed.filter((r) => !resolvedRunIds.has(r.run_id));
+  const have = new Set(live.map((r) => r.run_id));
+  return [
+    ...live,
+    ...recovered.filter((r) => !have.has(r.run_id) && !resolvedRunIds.has(r.run_id)),
+  ];
 }

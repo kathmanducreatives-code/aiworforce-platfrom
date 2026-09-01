@@ -211,7 +211,9 @@ Deno.test("run-agent rebuilds pending runs from the ledger on every resume", () 
   const RUN = Deno.readTextFileSync(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
-  assert(RUN.includes("recoverPendingRuns(startedRunRows)"));
+  // Now also handed the runs the ledger has already accounted for, so a failed
+  // settle costs a stale row rather than a lineage parked on a run it has read.
+  assert(RUN.includes("recoverPendingRuns(startedRunRows, resolvedRunIds)"));
   assert(RUN.includes("mergePendingRuns("), "and merges rather than replaces");
   // Scoped to the paying lineage, by the same ownership gate the resume
   // records use. A run may only be adopted by whoever bought it.

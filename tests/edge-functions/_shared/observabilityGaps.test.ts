@@ -78,10 +78,20 @@ Deno.test("5. an adopted run is recorded as reused, never as a plain success", (
   // did — and it kept `cost_source: "unknown"` and `duration_ms: null`.
   const at = RUN_AGENT.indexOf("onRunAdopted: async (info)");
   assert(at > 0);
-  const block = RUN_AGENT.slice(at, at + 2600);
+  // Bounded by the UPDATE's own filter chain rather than a character count: a
+  // fixed window silently shrinks its coverage every time a comment is added
+  // above the fields it is meant to be asserting on.
+  const block = RUN_AGENT.slice(at, RUN_AGENT.indexOf('.eq("provider_run_id"', at));
   assert(block.includes('status: "reused"'), "the row must say it was reused");
   assertEquals(/status: "succeeded"/.test(block), false);
-  assert(block.includes('cost_source: "reused_no_charge"'),
+  // A VALUE THE CONSTRAINT PERMITS. `reused_no_charge` is not one, so the
+  // settle it was pinned to was rejected on every adoption — see
+  // `adoptedRunBookkeeping.test.ts` for the run that paid for it.
+  assert(
+    /cost_source: "(provider_reported|event_priced|estimated|unknown)"/.test(block),
+    "cost_source must be writable",
+  );
+  assert(block.includes('next_decision: "adopted_without_second_charge"'),
     "and why it carries no cost");
   assert(block.includes("duration_unknown_reason"),
     "and why it carries no duration — rather than inventing a wall-clock figure");
