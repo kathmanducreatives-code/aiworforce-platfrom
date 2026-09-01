@@ -235,7 +235,17 @@ export interface ProjectableCompany {
     failed_requirements: readonly { requirement: string; why: string }[];
   } | null;
   /** Set when a paid stage was skipped or failed for run-level reasons. */
-  stageBlock?: { capability: string; reason: "deferred" | "provider_error" } | null;
+  /**
+   * `qualification_deferred` is the same clock decision as `deferred`, one
+   * stage later: the company is fully investigated and owes only a Brain call.
+   * The Workbench reads both as "the run stopped before finishing this", which
+   * is true of each; the split exists so scheduling can prioritise the one that
+   * needs no provider call.
+   */
+  stageBlock?: {
+    capability: string;
+    reason: "deferred" | "qualification_deferred" | "provider_error";
+  } | null;
   /**
    * Where this company sits in the investigation frontier.
    *

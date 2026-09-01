@@ -1434,7 +1434,21 @@ export interface EngineCompany {
    * `capability` scopes it, so an enrichment failure can never be misread as an
    * identity outcome. Null means every call this company made was answered.
    */
-  stage_block: { capability: CapabilityId; reason: "deferred" | "provider_error" } | null;
+  /**
+   * Why a stage stopped short on this company.
+   *
+   * `deferred`               investigation was budgeted, then abandoned
+   * `qualification_deferred` fully investigated; only a Brain call is owed
+   * `provider_error`         the provider failed
+   *
+   * The first two shared one string until task 3417c428. `sliceFrontier` reads
+   * `deferred` as "still owed investigation" and so counted four
+   * fully-investigated companies as unfinished investigation — which is true of
+   * neither, and made the two states indistinguishable to every consumer.
+   */
+  stage_block:
+    | { capability: CapabilityId; reason: "deferred" | "qualification_deferred" | "provider_error" }
+    | null;
   enriched: NormalizedHiringCompany | null;
   /**
    * WHAT HAPPENED WHEN ENRICHMENT WAS ATTEMPTED — explicitly, not inferred.
@@ -3490,8 +3504,65 @@ export async function runCapabilityPlan(
     !!executionPlan && OPTIONAL_BY_CHAIN.has(cap) &&
     !capabilityIsPlanned(executionPlan, cap);
 
-  for (let stepIndex = 0; stepIndex < opts.plan.steps.length; stepIndex++) {
-    const step = opts.plan.steps[stepIndex];
+  // ── A SLICE THAT ALREADY OWES BRAIN DECISIONS PAYS THAT DEBT FIRST ───────
+  //
+  // ── THE RUN THIS EXISTS FOR ──────────────────────────────────────────────
+  //
+  // Task 3417c428, slice at 11:06:56. Four companies — investigated, enriched,
+  // hiring-verified, each carrying its assessment, jobs and evaluation — needed
+  // one Brain call apiece. The slice spent 145 of its 147 seconds elsewhere:
+  //
+  //     +  0.0s  capability_reopened  company_enrichment   (4 outstanding)
+  //     + 11.4s  company_enrichment_complete
+  //     + 11.8s  capability_reopened  hiring_verification
+  //     + 11.9s  job search          + 42.3s  job search   + 63.0s  job search
+  //     +145.5s  hiring_verification_complete
+  //     +145.9s  qualification_deadline_stop { not_reached: 4, remaining_ms: 0 }
+  //
+  // `capabilityStillOwed` reopened enrichment and hiring for OTHER companies,
+  // correctly — but the chain is walked in order, so four companies that needed
+  // no provider work at all sat behind three job searches. The next slice did
+  // the same, and the one after that, until `MAX_BARREN_SLICES` stopped a run
+  // whose best candidates were one model call from a verdict.
+  //
+  // ── WHY REORDERING AND NOT A SCHEDULER ───────────────────────────────────
+  //
+  // The debt is already expressible: `capabilityStillOwed` is the same
+  // predicate that reopened the other two stages, and it reads the same durable
+  // records. Nothing new is detected here and no state is added — only the
+  // order in which an already-owed stage is visited.
+  //
+  // DISCOVERY STAYS FIRST. It is where `restoreWorkingSet` runs, so moving
+  // qualification ahead of it would hand the Brain an empty pool. Qualification
+  // moves to just after it, ahead of the stages that buy providers.
+  //
+  // FRESH MISSIONS ARE UNTOUCHED: with no resume records there is no debt, the
+  // predicate is false, and the plan is walked exactly as written.
+  const qualificationDebt = QUALIFICATION_PRIORITY_CAPABILITIES.some((c) =>
+    capabilityStillOwed(c, opts.resume?.records ?? []));
+  const orderedSteps = qualificationDebt
+    ? [
+      // Everything up to and including the stage that restores the pool.
+      ...opts.plan.steps.filter((s) => WORKING_SET_CAPABILITIES.has(s.capability)),
+      // Then the debt.
+      ...opts.plan.steps.filter((s) =>
+        QUALIFICATION_PRIORITY_CAPABILITIES.includes(s.capability)),
+      // Then the rest, in the plan's own order.
+      ...opts.plan.steps.filter((s) =>
+        !WORKING_SET_CAPABILITIES.has(s.capability) &&
+        !QUALIFICATION_PRIORITY_CAPABILITIES.includes(s.capability)),
+    ]
+    : opts.plan.steps;
+  if (qualificationDebt) {
+    log("qualification_debt_prioritised", {
+      owed: (opts.resume?.records ?? []).filter((r) =>
+        nextStageFor(r) === "brain").length,
+      order: orderedSteps.map((s) => s.capability),
+    });
+  }
+
+  for (let stepIndex = 0; stepIndex < orderedSteps.length; stepIndex++) {
+    const step = orderedSteps[stepIndex];
     const cap = step.capability;
 
     // ── A COMPLETED CAPABILITY IS NOT NECESSARILY A FINISHED ONE ─────────
@@ -6677,8 +6748,20 @@ export async function runCapabilityPlan(
           // "the run stopped; resumable, and never a fact about the company".
           for (const pending of eligibleOrdered.slice(qIndex)) {
             if (pending.brain !== null) continue;
+            // ── ITS OWN REASON, NOT "deferred" ─────────────────────────
+            //
+            // `deferred` means investigation was budgeted and abandoned, and
+            // `sliceFrontier` reads it that way — `isUnfinishedFrontier` treats
+            // it as a company still owed INVESTIGATION. Qualification deferral
+            // is a different state: the company is fully investigated and owes
+            // only a Brain call.
+            //
+            // Sharing one string made `sliceFrontier` unable to tell them
+            // apart. Splitting it keeps the funnel's accounting exact without
+            // teaching one consumer a second meaning.
             pending.stage_block = {
-              capability: "company_brain_qualification", reason: "deferred",
+              capability: "company_brain_qualification",
+              reason: "qualification_deferred",
             };
           }
           break;
@@ -8247,6 +8330,18 @@ const DISCOVERY_REPLENISHABLE: ReadonlySet<string> = new Set([
   "startup_company_discovery", "general_company_discovery",
 ]);
 
+/**
+ * The stages whose outstanding work is paid before any provider stage reopens.
+ *
+ * Qualification only: it is the one stage that can finish a company using
+ * evidence already bought, so a slice that owes it is a slice that can produce
+ * a verdict without spending. Every other stage's debt implies a purchase, and
+ * those keep the plan's own order.
+ */
+const QUALIFICATION_PRIORITY_CAPABILITIES: readonly CapabilityId[] = [
+  "company_brain_qualification",
+];
+
 const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
   "startup_company_discovery", "general_company_discovery", "known_company_resolution",
 ]);
@@ -9010,7 +9105,7 @@ export function toFunnelCompanies(
     // budget before reaching this company; the funnel reports it as `withheld`
     // rather than counting it as a company that vanished.
     brain_blocked: c.brain === null &&
-      c.stage_block?.capability === "company_brain_qualification",
+      c.stage_block?.reason === "qualification_deferred",
     brain: c.brain?.outcome ?? null,
     evaluated: c.decision_source === "gpt_evaluation",
     decision_source: c.decision_source,

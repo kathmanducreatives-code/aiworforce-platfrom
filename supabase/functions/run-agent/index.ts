@@ -378,6 +378,16 @@ import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability 
 import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 
 
+/**
+ * Stage blocks that mean "this company still has work that can be done".
+ *
+ * Split so scheduling can prioritise a qualification debt — which needs no
+ * provider call — over investigation work that does. Both remain live.
+ */
+const DEFERRED_STAGE_REASONS: readonly string[] = [
+  "deferred", "qualification_deferred",
+];
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -4843,7 +4853,23 @@ Deno.serve(async (req) => {
           ? capabilityRun.companies.filter((c) =>
             isUnfinishedFrontier(
               c.investigation_state,
-              (c as { stage_block?: { reason?: string } | null }).stage_block?.reason === "deferred",
+              // ── BOTH DEFERRALS ARE LIVE WORK ──────────────────────────
+              //
+              // `deferred` is investigation budgeted and abandoned;
+              // `qualification_deferred` is a company already investigated,
+              // enriched and hiring-verified that owes only a Brain call. Both
+              // can still produce progress, so both belong in the frontier —
+              // the invariant here is "work that can still produce progress",
+              // not "work of one particular kind".
+              //
+              // They are split so SCHEDULING can tell them apart, not so this
+              // count can drop one. Dropping the second would abandon four
+              // fully-paid candidates in order to buy replacements, which is
+              // the outcome the split exists to avoid.
+              DEFERRED_STAGE_REASONS.includes(
+                String((c as { stage_block?: { reason?: string } | null })
+                  .stage_block?.reason ?? ""),
+              ),
             )).length
           : 0;
         const priorTaskRow = await supabase

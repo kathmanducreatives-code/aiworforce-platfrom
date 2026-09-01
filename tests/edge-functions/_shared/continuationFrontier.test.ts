@@ -104,18 +104,32 @@ Deno.test("run-agent counts deferred companies into the frontier", () => {
   const RUN = Deno.readTextFileSync(
     new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
   );
-  const block = RUN.slice(
-    RUN.indexOf("const sliceFrontier"),
-    RUN.indexOf("const sliceFrontier") + 700,
-  );
+  // Bounded by code, not a character count: a fixed window silently stops
+  // covering the assertions below it the moment a comment is added above them.
+  const start = RUN.indexOf("const sliceFrontier");
+  const block = RUN.slice(start, RUN.indexOf("const priorTaskRow", start));
   assert(
     block.includes("isUnfinishedFrontier"),
     "the continuation frontier must use the deferred-aware predicate",
   );
+  // ── THE SIGNAL IS NOW A SET, NOT ONE STRING ─────────────────────────────
+  //
+  // `deferred` used to mean both "investigation was budgeted and abandoned"
+  // and "fully investigated, only a Brain call owed". Task 3417c428 is what
+  // that conflation cost: `sliceFrontier` read four qualification-deferred
+  // companies as owing investigation. The reasons are split now, and BOTH are
+  // still frontier — the split is for scheduling, never a way to drop one.
   assert(
-    /stage_block\?\.reason === "deferred"/.test(block),
-    "and it must read the engine's own deferral signal",
+    block.includes("DEFERRED_STAGE_REASONS"),
+    "and it must read the engine's own deferral signals",
   );
+  const decl = RUN.slice(
+    RUN.indexOf("const DEFERRED_STAGE_REASONS"),
+    RUN.indexOf("const DEFERRED_STAGE_REASONS") + 260,
+  );
+  assert(decl.includes('"deferred"'), "investigation deferral stays frontier");
+  assert(decl.includes('"qualification_deferred"'),
+    "and so does qualification deferral — it is one Brain call from a verdict");
   assertEquals(
     /\(c\) => isFrontier\(c\.investigation_state\)\)\.length/.test(block), false,
     "the pending-only count is what reported an exhausted frontier for 19 deferred candidates",
