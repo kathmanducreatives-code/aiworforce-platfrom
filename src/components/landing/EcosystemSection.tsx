@@ -11,23 +11,17 @@ interface OrbitalTool {
   description: string;
 }
 
+// Seven real providers instead of seventeen. With ten decorative nodes gone
+// there is room to render the survivors much larger, so each mark is legible
+// rather than a 48px speck on the outer ring.
 const ORBITAL_TOOLS: OrbitalTool[] = [
-  { id: "claude", ring: 1, size: 72, departments: ["talent","growth","content","intelligence"], description: "Writing, analysis, and reasoning engine" },
-  { id: "gemini", ring: 1, size: 72, departments: ["talent"], description: "AI screening and evaluation" },
-  { id: "gpt4", ring: 1, size: 68, departments: ["intelligence"], description: "Specialized AI tasks" },
-  { id: "perplexity", ring: 1, size: 64, departments: ["growth","intelligence"], description: "Real-time web research" },
-  { id: "firecrawl", ring: 2, size: 60, departments: ["growth","talent","intelligence"], description: "Web scraping & intelligence" },
-  { id: "apify", ring: 2, size: 60, departments: ["growth","talent"], description: "LinkedIn data extraction" },
-  { id: "hunter", ring: 2, size: 56, departments: ["growth"], description: "Email discovery & verification" },
-  { id: "instantly", ring: 2, size: 56, departments: ["growth"], description: "Cold email sequences" },
-  { id: "elevenlabs", ring: 3, size: 52, departments: ["content"], description: "Voice and audio generation" },
-  { id: "replicate", ring: 3, size: 52, departments: ["content"], description: "Image and visual generation" },
-  { id: "notion", ring: 3, size: 52, departments: ["intelligence"], description: "Documentation and knowledge" },
-  { id: "linear", ring: 3, size: 52, departments: ["intelligence"], description: "Task and project tracking" },
-  { id: "github", ring: 3, size: 52, departments: [], description: "Code management" },
-  { id: "cal", ring: 3, size: 48, departments: ["talent"], description: "Meeting scheduling" },
-  { id: "canva", ring: 3, size: 48, departments: ["content"], description: "Design handoff" },
-  { id: "gamma", ring: 3, size: 48, departments: ["content"], description: "Presentation generation" },
+  { id: "claude", ring: 1, size: 104, departments: ["talent","growth","content","intelligence"], description: "Writing, analysis and reasoning" },
+  { id: "gpt4", ring: 1, size: 96, departments: ["intelligence","content"], description: "Specialized model tasks" },
+  { id: "gemini", ring: 1, size: 96, departments: ["talent","content"], description: "Analysis and screening" },
+  { id: "perplexity", ring: 2, size: 88, departments: ["growth","intelligence"], description: "Live web research" },
+  { id: "firecrawl", ring: 2, size: 88, departments: ["growth","talent","intelligence"], description: "Web intelligence" },
+  { id: "apify", ring: 2, size: 88, departments: ["growth","talent"], description: "Structured data extraction" },
+  { id: "resend", ring: 2, size: 82, departments: ["growth"], description: "Email delivery" },
 ];
 
 const TABS = ["all", "talent", "growth", "content", "intelligence"] as const;
@@ -35,16 +29,16 @@ const TAB_LABELS: Record<string, string> = { all: "Everything", talent: "Researc
 const DEPT_COLORS: Record<string, string> = { talent: "#34d399", growth: "#60a5fa", content: "#a78bfa", intelligence: "#fbbf24" };
 
 const RING_CONFIG = {
-  1: { radius: 160, duration: 120, direction: "normal" as const, offsetAngle: -Math.PI / 4 },
-  2: { radius: 250, duration: 90, direction: "reverse" as const, offsetAngle: 0 },
+  1: { radius: 190, duration: 120, direction: "normal" as const, offsetAngle: -Math.PI / 4 },
+  2: { radius: 310, duration: 90, direction: "reverse" as const, offsetAngle: 0 },
   3: { radius: 350, duration: 150, direction: "normal" as const, offsetAngle: Math.PI / 8 },
 };
 
 const DEPT_CONNECTIONS: Record<string, [string, string][]> = {
   talent: [["claude","gemini"],["apify","firecrawl"],["gemini","apify"]],
-  growth: [["claude","instantly"],["firecrawl","claude"],["hunter","instantly"]],
+  growth: [["firecrawl","claude"],["apify","resend"],["claude","resend"]],
   intelligence: [["firecrawl","perplexity"],["perplexity","gpt4"]],
-  content: [["claude","replicate"],["claude","elevenlabs"]],
+  content: [["claude","gpt4"],["gemini","claude"]],
 };
 
 const getNodePosition = (index: number, total: number, radius: number, offsetAngle: number = 0) => {

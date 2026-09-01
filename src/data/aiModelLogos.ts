@@ -1,6 +1,7 @@
 import openaiLogo from '@/assets/ai-logos/openai.png';
 import claudeLogo from '@/assets/ai-logos/claude.png';
-import geminiLogo from '@/assets/ai-logos/gemini.png';
+// `gemini.png` is mislabelled in the assets folder — it holds Apify's mark.
+import geminiLogo from '@/assets/ai-logos/gemini-mark.svg';
 import type { AgentModelKey } from './agentProfiles';
 
 export interface AiModel {

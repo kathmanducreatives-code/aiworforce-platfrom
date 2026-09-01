@@ -1,15 +1,21 @@
 import React, { useState } from "react";
 
-// LOCAL BRAND MARKS. These six were hotlinked to worldvectorlogo / webflow
-// URLs that now return 404 and 403, so they rendered as broken images in the
-// ecosystem orbit. Bundling them removes the third-party runtime dependency;
-// nothing about their appearance, size or placement changes.
+// LOCAL BRAND MARKS for every provider in the table.
+//
+// These were hotlinked to worldvectorlogo, webflow and GitHub avatar URLs.
+// Several had rotted: the Apify entry pointed at github user 38267582, which
+// is an unrelated person, so the orbit rendered a stranger's profile photo.
+// Everything is bundled now, and the avatar ids that remain are the real
+// organisation accounts.
 import claudeMark from "@/assets/ai-logos/claude.png";
+import openaiMark from "@/assets/ai-logos/openai.png";
+// NB: `gemini.png` in this folder is mislabelled — it is Apify's mark, not
+// Gemini's. Use the real Gemini logo here.
+import geminiMark from "@/assets/ai-logos/gemini-mark.svg";
 import perplexityMark from "@/assets/ai-logos/perplexity.svg";
-import hunterMark from "@/assets/ai-logos/hunter.png";
-import linearMark from "@/assets/ai-logos/linear.svg";
-import canvaMark from "@/assets/ai-logos/canva.svg";
-import gammaMark from "@/assets/ai-logos/gamma.jpg";
+import firecrawlMark from "@/assets/ai-logos/firecrawl.png";
+import apifyMark from "@/assets/ai-logos/apify.png";
+import resendMark from "@/assets/ai-logos/resend.svg";
 
 interface LogoProps {
   className?: string;
@@ -18,23 +24,21 @@ interface LogoProps {
 }
 
 // Brand colors and metadata exported for reuse
+// THE PROVIDERS AGENTORY ACTUALLY CALLS.
+//
+// This table used to list seventeen tools. Ten of them — Notion, Linear,
+// GitHub, Cal.com, Canva, Gamma, ElevenLabs, Replicate, Instantly, Hunter.io —
+// appear nowhere in the backend, so the ecosystem orbit was advertising
+// integrations that do not exist. The seven below are the providers the edge
+// functions genuinely invoke.
 export const TOOL_BRANDS: Record<string, { bg: string; color: string; label: string; sublabel: string; logo: string }> = {
   claude:      { bg: "#CC785C", color: "#fff", label: "Claude",      sublabel: "Reasoning & Writing",   logo: claudeMark },
-  gemini:      { bg: "#4285F4", color: "#fff", label: "Gemini",      sublabel: "Screening & Analysis",  logo: "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" },
-  gpt4:        { bg: "#10A37F", color: "#fff", label: "GPT-4",       sublabel: "Specialized Tasks",     logo: "https://cdn.worldvectorlogo.com/logos/openai-2.svg" },
-  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Real-time Research",    logo: perplexityMark },
-  firecrawl:   { bg: "#FF4500", color: "#fff", label: "Firecrawl",   sublabel: "Web Intelligence",      logo: "https://avatars.githubusercontent.com/u/158057725?s=200&v=4" },
-  apify:       { bg: "#97D700", color: "#fff", label: "Apify",       sublabel: "LinkedIn Scraping",     logo: "https://avatars.githubusercontent.com/u/38267582?s=200&v=4" },
-  hunter:      { bg: "#F5A623", color: "#fff", label: "Hunter.io",   sublabel: "Email Discovery",       logo: hunterMark },
-  instantly:   { bg: "#6366F1", color: "#fff", label: "Instantly",    sublabel: "Email Sequences",       logo: "https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_2070aafd4809f4e0e27b3c83d5b89673/instantly-ai.png" },
-  elevenlabs:  { bg: "#1A1A2E", color: "#fff", label: "ElevenLabs",  sublabel: "Voice Generation",      logo: "https://avatars.githubusercontent.com/u/94662520?s=200&v=4" },
-  replicate:   { bg: "#393939", color: "#fff", label: "Replicate",   sublabel: "Image Generation",      logo: "https://avatars.githubusercontent.com/u/60199344?s=200&v=4" },
-  notion:      { bg: "#FFFFFF", color: "#000", label: "Notion",      sublabel: "Documentation",         logo: "https://cdn.worldvectorlogo.com/logos/notion-2.svg" },
-  linear:      { bg: "#5E6AD2", color: "#fff", label: "Linear",      sublabel: "Task Management",       logo: linearMark },
-  github:      { bg: "#24292E", color: "#fff", label: "GitHub",      sublabel: "Code Management",       logo: "https://cdn.worldvectorlogo.com/logos/github-icon-1.svg" },
-  cal:         { bg: "#111827", color: "#fff", label: "Cal.com",      sublabel: "Scheduling",           logo: "https://avatars.githubusercontent.com/u/79145102?s=200&v=4" },
-  canva:       { bg: "#00C4CC", color: "#fff", label: "Canva",       sublabel: "Design Handoff",        logo: canvaMark },
-  gamma:       { bg: "#6C47FF", color: "#fff", label: "Gamma",       sublabel: "Presentations",         logo: gammaMark },
+  gpt4:        { bg: "#10A37F", color: "#fff", label: "OpenAI",      sublabel: "Specialized Tasks",     logo: openaiMark },
+  gemini:      { bg: "#4285F4", color: "#fff", label: "Gemini",      sublabel: "Analysis & Screening",  logo: geminiMark },
+  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Live Research",         logo: perplexityMark },
+  firecrawl:   { bg: "#FF4500", color: "#fff", label: "Firecrawl",   sublabel: "Web Intelligence",      logo: firecrawlMark },
+  apify:       { bg: "#97D700", color: "#fff", label: "Apify",       sublabel: "Data Extraction",       logo: apifyMark },
+  resend:      { bg: "#1F1F1F", color: "#fff", label: "Resend",      sublabel: "Email Delivery",        logo: resendMark },
 };
 
 // Reusable ToolLogoImage component with fallback
@@ -222,14 +226,4 @@ export const TOOL_LOGO_MAP: Record<string, React.FC<LogoProps>> = {
   perplexity: PerplexityLogo,
   firecrawl: FirecrawlLogo,
   apify: ApifyLogo,
-  hunter: HunterLogo,
-  instantly: InstantlyLogo,
-  elevenlabs: ElevenLabsLogo,
-  replicate: ReplicateLogo,
-  notion: NotionLogo,
-  linear: LinearLogo,
-  github: GitHubLogo,
-  cal: CalLogo,
-  canva: CanvaLogo,
-  gamma: GammaLogo,
 };
