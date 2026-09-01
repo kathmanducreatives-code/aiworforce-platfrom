@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, MessageSquare, Eye, Radio, PenLine, Send,
-  Target, TrendingUp, Brain, GitBranch, Crown, ArrowRight, ChevronDown, User,
+  Target, TrendingUp, ArrowRight, ChevronDown, User,
 } from 'lucide-react';
 import { TOOL_BRANDS, TOOL_LOGO_MAP } from './ToolLogos';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -71,11 +71,6 @@ const DEPARTMENTS_LIST = [
   { key: "growth" as const, label: "Review", count: 1 },
 ];
 
-const truths = [
-  { icon: Brain, title: "One company context. Every employee has it.", body: "Tell Agentory about your company once: what you sell, who you sell to, your voice, your competitors, your goals. From then on every AI employee works from that same context. What you tell one, all of them know." },
-  { icon: GitBranch, title: "They pass work to each other.", body: "Lyra spots a signal and hands it to Atlas. Atlas qualifies a company and hands it to Mira. Mira drafts the outreach and hands it to you. The handoffs happen without you setting them up — no configuration, no re-prompting, no copy-paste between tabs." },
-  { icon: Crown, title: "You are the only human in the room.", body: "Your AI employees brief each other, do the work, and surface only what needs a human decision. Minutes of reviewing replaces hours of doing it yourself. You are the founder making calls — not the intern running between desks." },
-];
 
 const MeetTheTeamSection = () => {
   const navigate = useNavigate();
@@ -305,92 +300,8 @@ const MeetTheTeamSection = () => {
         ))}
       </div>
 
-      {/* Agent Profile Cards + Truth Blocks + Closing */}
+      {/* Closing */}
       <div className="max-w-[1100px] mx-auto px-4 py-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-20">
-          {AGENTS.map((agent, i) => (
-            <motion.div key={agent.id} initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  {(() => {
-                    const employee = EMPLOYEE_BY_ID[agent.id as EmployeeId];
-                    return employee ? (
-                      <EmployeeAvatar employee={employee} size={44} />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: DEPT[agent.department].bg }}>
-                        <agent.icon className="w-5 h-5" style={{ color: DEPT[agent.department].color }} />
-                      </div>
-                    );
-                  })()}
-                  <div>
-                    <p className="text-sm font-bold text-white">{agent.name}</p>
-                    <p className="text-[10px] text-white/30">{agent.title}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[9px] text-emerald-400/60 font-mono">ACTIVE</span>
-                </div>
-              </div>
-              <p className="text-xs text-white/40 leading-relaxed mb-4">{agent.job}</p>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[9px] text-white/20 uppercase tracking-wider">Tools</span>
-                <div className="flex gap-1">
-                  {agent.tools.map(t => {
-                    const Logo = TOOL_LOGO_MAP[t];
-                    return (
-                      <div key={t} className="w-6 h-6 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: TOOL_BRANDS[t]?.bg || "#333", border: "1px solid rgba(255,255,255,0.06)" }}>
-                        {Logo && <Logo width={14} height={14} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-white/20 uppercase tracking-wider">Talks to</span>
-                {/* "Founder" is rendered by the dedicated line below, so it is
-                    excluded here — listing it in both printed it twice. */}
-                {agent.talksTo.filter(name => name !== "Founder").map(name => {
-                  const target = AGENTS.find(a => a.name === name);
-                  const color = target ? DEPT[target.department].color : "#6b7280";
-                  return <span key={name} className="text-[10px] font-medium" style={{ color }}>{name}</span>;
-                })}
-                {agent.talksTo.includes("Founder") && <span className="text-[10px] font-medium text-white/50">You</span>}
-              </div>
-            </motion.div>
-          ))}
-          {/* v2 placeholder card */}
-          <motion.div initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.4, delay: AGENTS.length * 0.08 }}
-            className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5 flex flex-col items-center justify-center text-center min-h-[180px]">
-            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-2">v2 · Soon</span>
-            <p className="text-sm text-white/50 font-medium">More employees join as Agentory takes on more work</p>
-          </motion.div>
-        </div>
-
-        {/* Truth Blocks */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12 mb-20">
-          {truths.map((t, i) => {
-            const Icon = t.icon;
-            return (
-              <motion.div key={t.title} initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }}
-                transition={{ duration: 0.4, delay: i * 0.1 }} className="text-center md:text-left">
-                <Icon className="w-7 h-7 text-emerald-400 mb-4 mx-auto md:mx-0" />
-                <h3 className="font-display font-bold text-white text-lg mb-2">{t.title}</h3>
-                <p className="text-white/40 text-sm leading-relaxed">{t.body}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        {/* Closing */}
         <div className="text-center max-w-[560px] mx-auto">
           <p className="font-display text-xl md:text-2xl text-white/80 leading-snug mb-2">
             This is not software.<br />This is your team.<br />They started work<br />the moment you signed up.

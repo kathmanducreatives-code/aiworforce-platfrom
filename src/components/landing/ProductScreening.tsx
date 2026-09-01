@@ -140,6 +140,7 @@ const ProductScreening = () => {
 
     return (
         <section
+            id="the-work"
             ref={sectionRef}
             className="relative w-full h-screen overflow-hidden font-display"
             style={{}}

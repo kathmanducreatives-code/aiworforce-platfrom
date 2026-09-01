@@ -20,7 +20,6 @@ import { ExpertJourney } from "@/components/landing/ExpertJourney";
 import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
 import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
 import EcosystemSection from "@/components/landing/EcosystemSection";
-import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
 import GlobalSection from "@/components/landing/GlobalSection";
 import DayTimelineSection from "@/components/landing/DayTimelineSection";
 import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
@@ -66,37 +65,36 @@ const Landing = () => {
           once the reader already knows there are AI employees using it.
         */}
         <EcosystemSection />
-        {/* 8. What Agentory handles (#the-work) */}
-        <TeamsAtWorkSection />
         {/*
-          9-11. The three demos, GROUPED and reordered: Leads → Signals →
+          8-10. The three demos, GROUPED and reordered: Leads → Signals →
           Recruiting. Recruiting led the page before, which made it the identity
-          rather than one example of the breadth.
+          rather than one example of the breadth. The first one carries
+          #the-work, the nav's "What it does" target.
         */}
         <ProductScreening />
         <ExpertJourney />
         <ProductLookalike />
-        {/* 12. A Monday with your AI team */}
+        {/* 11. A Monday with your AI team */}
         <DayTimelineSection />
-        {/* 13. What this replaces */}
+        {/* 12. What this replaces */}
         <TimeMath />
-        {/* 14. How businesses use Agentory */}
+        {/* 13. How businesses use Agentory */}
         <SocialProof />
-        {/* 15. Build your own AI employee (#build-your-own) */}
+        {/* 14. Build your own AI employee (#build-your-own) */}
         <AgentBuilderSection />
-        {/* 16. Pricing */}
+        {/* 15. Pricing */}
         <PricingCard />
-        {/* 17. FAQ (#faq) */}
+        {/* 16. FAQ (#faq) */}
         <FAQSection />
-        {/* 18. Global */}
+        {/* 17. Global */}
         <GlobalSection />
-        {/* 19. Marquee */}
+        {/* 18. Marquee */}
         <MarqueeBanner />
-        {/* 20. Final CTA */}
+        {/* 19. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 21. Footer */}
+      {/* 20. Footer */}
       <Footer />
     </div>
   );
