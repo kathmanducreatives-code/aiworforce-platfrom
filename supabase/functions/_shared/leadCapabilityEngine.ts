@@ -6634,6 +6634,30 @@ export async function runCapabilityPlan(
             priced_as: qualificationOp,
             pre_grounded_remaining: eligibleOrdered.slice(qIndex).filter(isPreGrounded).length,
           });
+          // ── SAY IT ON THE COMPANIES, NOT ONLY IN THE LOG ───────────────────
+          //
+          // The count above is an aggregate; the funnel accounts per company.
+          // Without a marker, everything past `qIndex` is simply a company with
+          // `brain === null` — indistinguishable from one that was never
+          // eligible — so `leadMissionFunnel` could attribute none of them and
+          // reported `UNACCOUNTED=31`, which is its alarm for a SILENT LOSS.
+          //
+          // Nothing was lost: `toResumeRecord` maps an absent brain to
+          // `not_started`, `nextStageFor` routes that back here, and a later
+          // slice picks them up — the investigated count climbing 43→52 across
+          // slices of task 633ad466 is that working. But the funnel said
+          // otherwise, and a false alarm on the one counter that means "we lost
+          // companies" costs whoever reads it next the same hours it cost here.
+          //
+          // `deferred` is the same word `enrichment` and `identity` already use
+          // for the same clock decision, and the funnel maps it to `withheld` —
+          // "the run stopped; resumable, and never a fact about the company".
+          for (const pending of eligibleOrdered.slice(qIndex)) {
+            if (pending.brain !== null) continue;
+            pending.stage_block = {
+              capability: "company_brain_qualification", reason: "deferred",
+            };
+          }
           break;
         }
         // Measured across the whole company, not per call, because the estimate
@@ -8930,6 +8954,11 @@ export function toFunnelCompanies(
       : c.identity.status === "mismatch" ? "mismatch" : "unresolved",
     enrichment: c.enrichment_outcome,
     reached_brain: c.brain !== null,
+    // THE CLOCK, NOT A JUDGEMENT. Set when the qualification loop ran out of
+    // budget before reaching this company; the funnel reports it as `withheld`
+    // rather than counting it as a company that vanished.
+    brain_blocked: c.brain === null &&
+      c.stage_block?.capability === "company_brain_qualification",
     brain: c.brain?.outcome ?? null,
     evaluated: c.decision_source === "gpt_evaluation",
     decision_source: c.decision_source,

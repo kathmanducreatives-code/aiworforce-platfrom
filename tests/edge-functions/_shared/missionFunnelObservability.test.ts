@@ -312,3 +312,61 @@ Deno.test("3d. persistence reports what was WRITTEN, not what was eligible", asy
   assertEquals(persistence.detail.written, 0,
     "a qualified company that failed to persist must not be reported as written");
 });
+
+// ═══ THE DEADLINE-STOPPED BRAIN STAGE ══════════════════════════════════════
+//
+// ── THE FIXTURE THIS FILE WAS MISSING ────────────────────────────────────
+//
+// Every case above models a company that either reached the Brain or never
+// became eligible. Neither is what production actually produces: the
+// qualification loop walks `eligibleOrdered` in strength order and BREAKS when
+// `shouldStartWork` refuses the next call, leaving everything past that point
+// with `brain: null` and no attribution.
+//
+// Task 633ad466 reported `company_brain: 40→9 UNACCOUNTED=31` for exactly that
+// — thirty-one companies the clock never reached. They keep
+// `brain: not_started`, `nextStageFor` routes them back, and a later slice
+// qualifies them, so nothing was lost. But `unaccounted` is this file's alarm
+// for a SILENT LOSS, and it fired on ordinary, safe deferral. A false alarm on
+// that counter costs whoever reads it next the hours it cost the first time.
+
+Deno.test("a deadline-stopped Brain stage is withheld, not unaccounted", () => {
+  const f = buildMissionFunnel([
+    co(),
+    // Reached the Brain and was judged.
+    co({ key: "judged.com", brain: "REVIEW", verdict: "unknown", persisted: false }),
+    // The clock stopped before these two were reached.
+    co({
+      key: "deferred-1.com", reached_brain: false, brain: null,
+      brain_blocked: true, evaluated: false, decision_source: "not_evaluated",
+      verdict: null, persisted: false,
+    }),
+    co({
+      key: "deferred-2.com", reached_brain: false, brain: null,
+      brain_blocked: true, evaluated: false, decision_source: "not_evaluated",
+      verdict: null, persisted: false,
+    }),
+  ]);
+  const brain = f.stages.find((s) => s.stage === "company_brain")!;
+  assertEquals(brain.entered, 4, "all four resolved identity");
+  assertEquals(brain.advanced, 2, "two reached the Brain");
+  assertEquals(brain.withheld, 2, "and two were deferred by the clock");
+  assertEquals(brain.unaccounted, 0,
+    "a clock decision is attributable — `unaccounted` means a SILENT loss");
+  assert(funnelIsBalanced(f), "the funnel must still balance");
+});
+
+Deno.test("a company that vanished is still unaccounted", () => {
+  // The guard the fix must not weaken: no marker, no attribution.
+  const f = buildMissionFunnel([
+    co(),
+    co({
+      key: "vanished.com", reached_brain: false, brain: null,
+      evaluated: false, decision_source: "not_evaluated", verdict: null,
+      persisted: false,
+    }),
+  ]);
+  const brain = f.stages.find((s) => s.stage === "company_brain")!;
+  assertEquals(brain.withheld, 0, "nothing said why it left");
+  assertEquals(brain.unaccounted, 1, "so it is still reported as a silent loss");
+});

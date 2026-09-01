@@ -92,6 +92,13 @@ export interface FunnelCompany {
   identity: "resolved" | "unresolved" | "mismatch" | "blocked" | "not_attempted";
   enrichment: EnrichmentOutcome;
   reached_brain: boolean;
+  /**
+   * The qualification loop ran out of budget before reaching this company.
+   *
+   * Resumable and NOT a judgement, exactly like `identity: "blocked"`. Optional
+   * so a caller that does not report it behaves as before.
+   */
+  brain_blocked?: boolean;
   brain: "QUALIFIED" | "REVIEW" | "REJECT" | null;
   evaluated: boolean;
   decision_source: DecisionSource;
@@ -226,6 +233,21 @@ export function buildMissionFunnel(
   // empty provider result is an absence of evidence, not a proven negative, so
   // the company reaches the Brain and is held rather than rejected.
   const reachedBrain = companies.filter((c) => c.reached_brain).length;
+  // ── WHY THE BRAIN STAGE CAN LOSE COMPANIES WITHOUT LOSING THEM ───────────
+  //
+  // The Brain assembles and removes nobody, so `entered - advanced` used to be
+  // reported entirely as `unaccounted` — this stage's alarm for a silent drop.
+  // On task 633ad466 that read `UNACCOUNTED=31` for thirty-one companies the
+  // qualification loop had simply run out of clock before reaching. They keep
+  // `brain: not_started`, `nextStageFor` routes them back, and a later slice
+  // qualifies them; nothing was lost, and the alarm was false.
+  //
+  // A clock decision is `withheld` by this file's own vocabulary — "the run
+  // stopped or failed; resumable, and never a fact about the company" — and
+  // that is now what it is counted as. `unaccounted` goes back to meaning what
+  // it says.
+  const brainWithheld = companies.filter(
+    (c) => !c.reached_brain && c.brain_blocked === true).length;
   const evaluated = companies.filter((c) => c.evaluated).length;
   const notEvaluated = companies.filter(
     (c) => c.reached_brain && !c.evaluated).length;
@@ -262,9 +284,10 @@ export function buildMissionFunnel(
       }),
       // The Brain assembles; it removes nobody either. A difference here means a
       // company never arrived, which `unaccounted` will surface.
-      stage("company_brain", identityResolved, reachedBrain, {}, {
-        reached: reachedBrain,
-      }),
+      stage("company_brain", identityResolved, reachedBrain,
+        { withheld: brainWithheld }, {
+          reached: reachedBrain, deadline_deferred: brainWithheld,
+        }),
       stage("mission_evaluator", reachedBrain, qualified,
         { decided: rejected, withheld: unknown }, {
           evaluated, not_evaluated: notEvaluated,
