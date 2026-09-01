@@ -340,6 +340,58 @@ export function normalizeLinkedInCompanyCandidate(
 }
 
 /** linkedin-company enrichment. The authoritative company record. */
+/**
+ * EVERY PLACE THIS COMPANY IS, NOT THE FIRST FIELD THAT PARSED.
+ *
+ * ── THE BUG THIS REPLACES ──────────────────────────────────────────────────
+ *
+ * This read `locations[0].linkedinText`. `linkedinText` is a field on the JOB
+ * actor's `location`; the COMPANY actor has never emitted it. So the expression
+ * was `undefined` on every row and every enriched company carried
+ * `geography: null` — not flattened, never populated.
+ *
+ * `hardFactsForPrompt` hands that null to the evaluator, which then cannot
+ * establish where a company is. On lineage e70cbf3a it held four companies for
+ * exactly that reason:
+ *
+ *   Metaview  "four London openings … however, the supplied evidence does not
+ *              establish that the company is located in the United Kingdom"
+ *   Kody      "a verified SDR opening in London … company geography is not
+ *              independently established beyond the job location"
+ *
+ * Kody's London office was in the payload we had already paid for:
+ *
+ *   locations: [ { country: "GB", city: "London",    headquarter: false, … },
+ *                { country: "CN", city: "Shenzhen",  headquarter: false, … },
+ *                { country: "US", city: "Sunnyvale", headquarter: true,  … } ]
+ *
+ * ── WHY EVERY LOCATION, AND WHY THE HEADQUARTERS IS NOT SPECIAL ────────────
+ *
+ * Geography means REAL PRESENCE in the requested market, not where the company
+ * is registered. Kody and Termgrid are both US-headquartered with genuine
+ * London offices, and both are legitimately "in the UK" for a mission that asks
+ * for UK companies. Reading `locations[0]`, or filtering to `headquarter:
+ * true`, would drop exactly the companies the rule exists to keep.
+ *
+ * `parsed.text` is preferred because it is the provider's own normalised
+ * rendering ("London, United Kingdom"); the raw `city`/`country` pair is the
+ * fallback for a row that failed to parse. Order is the provider's, and
+ * duplicates are dropped so a company with three London entries reads once.
+ */
+export function enrichedGeography(raw: unknown): string | null {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<string>();
+  for (const entry of raw as Record<string, unknown>[]) {
+    if (!entry || typeof entry !== "object") continue;
+    const parsed = entry.parsed as Record<string, unknown> | undefined;
+    const text = s(parsed?.text) ??
+      [s(entry.city), s(parsed?.countryFull) ?? s(entry.country)]
+        .filter(Boolean).join(", ");
+    if (text) seen.add(text);
+  }
+  return seen.size > 0 ? [...seen].join("; ") : null;
+}
+
 export function normalizeLinkedInCompanyEnriched(
   r: Record<string, unknown>,
 ): NormalizedHiringCompany {
@@ -356,8 +408,7 @@ export function normalizeLinkedInCompanyEnriched(
     industry_ids: inds,
     employee_count: n(r.employeeCount),
     employee_range_advisory: rangeText(r),
-    geography: s((Array.isArray(r.locations) && (r.locations as Record<string, unknown>[])[0]
-      ? (r.locations as Record<string, unknown>[])[0].linkedinText : null)),
+    geography: enrichedGeography(r.locations),
     company_type: s(r.companyType),
     startup_evidence: founded && n(founded.year) !== null
       ? { year_founded: n(founded.year) } : null,
