@@ -32,11 +32,8 @@ import {
   AgentStatus,
   DepartmentBadge,
   CapabilityChip,
-  DataSource,
-  DataFlow,
-  IntelligenceEvent,
+  FeedRow,
   MetricCard,
-  OutputCard,
   ActionRecommendation,
 } from './agentSystem';
 
@@ -58,10 +55,10 @@ const STYLES = `
   position: sticky; top: 0; height: 100vh; perspective: 1500px; overflow: hidden;
 }
 #hero-to-expert-sequence .blueprint-grid {
-  position: absolute; inset: 0; z-index: 0; opacity: 0.2;
+  position: absolute; inset: 0; z-index: 0; opacity: 0.1;
   background:
-    radial-gradient(circle at 20% 18%, rgba(0,255,150,0.2), transparent 44%),
-    radial-gradient(circle at 82% 22%, rgba(0,255,150,0.15), transparent 42%),
+    radial-gradient(circle at 20% 18%, rgba(0,255,150,0.1), transparent 46%),
+    radial-gradient(circle at 82% 22%, rgba(0,255,150,0.08), transparent 44%),
     linear-gradient(rgba(0,255,150,0.18) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0,255,150,0.18) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 68px 68px, 68px 68px;
@@ -73,14 +70,14 @@ const STYLES = `
 #hero-to-expert-sequence .sequence-card {
   width: min(1160px, 94vw); height: min(80vh, 704px); border-radius: 24px;
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(0,255,150,0.2);
-  box-shadow: 0 0 40px rgba(0,255,150,0.15); overflow: hidden;
+  background: rgba(9,11,14,0.82); border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 70px -30px rgba(0,0,0,0.9); overflow: hidden;
   display: grid; grid-template-columns: 0.82fr 1.18fr;
   transform-style: preserve-3d; will-change: transform, opacity;
 }
 /* One vertical rhythm for every left column, so the cards feel machined. */
 #hero-to-expert-sequence .sequence-content {
-  padding: 34px 30px; border-right: 1px solid rgba(0,255,150,0.14);
+  padding: 34px 30px; border-right: 1px solid rgba(255,255,255,0.07);
   display: flex; flex-direction: column; justify-content: center; gap: 0;
   min-width: 0; min-height: 0; overflow: hidden;
 }
@@ -102,7 +99,7 @@ const STYLES = `
 }
 @media (max-width: 1024px) {
   #hero-to-expert-sequence .sequence-card { grid-template-columns: 1fr; height: min(86vh, 780px); }
-  #hero-to-expert-sequence .sequence-content { border-right: 0; border-bottom: 1px solid rgba(0,255,150,0.14); padding: 22px; }
+  #hero-to-expert-sequence .sequence-content { border-right: 0; border-bottom: 1px solid rgba(255,255,255,0.07); padding: 22px; }
   #hero-to-expert-sequence .sequence-ui { padding: 16px; }
   /* Diagrams drop rather than shrink into illegibility. */
   #hero-to-expert-sequence .hide-sm { display: none !important; }
@@ -111,13 +108,18 @@ const STYLES = `
 
 /* ────────────────────────────────────────────────────── stage 1 · LISA ── */
 
-const WATCHED = ['Ashby', 'Greenhouse', 'Lever', 'Workable', 'Personio', 'G2'];
+const SIGNALS = [
+  { lead: 'Ashby', primary: 'Cut starter plan pricing by 20%', meta: 'Detected 06:12 · pricing page', tag: 'Urgent', tone: 'urgent' as const },
+  { lead: 'Greenhouse', primary: 'Opened 6 engineering roles', meta: 'Hiring page · third week of growth', tag: 'Hiring', tone: 'positive' as const },
+  { lead: 'Personio', primary: 'Opened 14 sales roles', meta: 'Expanding into UK mid-market', tag: 'Growth', tone: 'positive' as const },
+  { lead: 'Lever', primary: 'Shipped an analytics module', meta: 'Changelog · competitive overlap', tag: 'Product', tone: 'default' as const },
+];
 
 function LisaPanel() {
   return (
     <AgentPanel
-      title="Monitoring network"
-      status={<AgentStatus employee={LISA} label="Scanning 48 sources" />}
+      title="Signal feed"
+      status={<AgentStatus employee={LISA} label="48 sources" />}
       metrics={
         <>
           <MetricCard value="48" label="Sources" accent={LISA.accent} />
@@ -127,42 +129,8 @@ function LisaPanel() {
         </>
       }
     >
-      <div className="flex-1 min-h-0 flex items-center gap-3">
-        {/* What she watches */}
-        <div className="w-[124px] shrink-0 h-full flex flex-col">
-          <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2.5 shrink-0">Sources</p>
-          <div className="flex-1 flex flex-col justify-center gap-2.5">
-            {WATCHED.map((label) => (
-              <div key={label} className="rounded-md border border-white/[0.1] bg-white/[0.05] px-2.5 py-2">
-                <span className="text-[13px] text-white/80 truncate block">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <svg className="w-[58px] h-full shrink-0 hide-sm" viewBox="0 0 58 260" preserveAspectRatio="none" aria-hidden="true">
-          {[22, 65, 108, 151, 194, 237].map((y, i) => (
-            <DataFlow key={y} x1={0} y1={y} x2={54} y2={130} accent={LISA.accent} delay={i * 0.34} />
-          ))}
-        </svg>
-
-        <AgentPortrait employee={LISA} size={88} className="shrink-0" />
-
-        <svg className="w-[34px] h-full shrink-0 hide-sm" viewBox="0 0 34 260" preserveAspectRatio="none" aria-hidden="true">
-          {[62, 130, 198].map((y, i) => (
-            <DataFlow key={y} x1={2} y1={130} x2={34} y2={y} accent={LISA.accent} delay={0.4 + i * 0.4} />
-          ))}
-        </svg>
-
-        {/* What survives the filter */}
-        <div className="flex-1 min-w-0 h-full flex flex-col">
-          <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2.5 shrink-0">Worth knowing</p>
-          <div className="flex-1 flex flex-col justify-center gap-3">
-            <IntelligenceEvent source="Ashby" headline="Pricing dropped 20%" tag="Urgent" tone="urgent" />
-            <IntelligenceEvent source="Greenhouse" headline="+6 engineering hires" tag="Hiring" tone="opportunity" />
-            <IntelligenceEvent source="Personio" headline="Opened 14 sales roles" tag="Growth" tone="opportunity" />
-          </div>
-        </div>
+      <div className="feed-list justify-center">
+        {SIGNALS.map((r) => <FeedRow key={r.lead} {...r} />)}
       </div>
     </AgentPanel>
   );
@@ -170,21 +138,18 @@ function LisaPanel() {
 
 /* ───────────────────────────────────────────────────── stage 2 · ATLAS ── */
 
-/**
- * Deterministic phyllotaxis scatter. Fewer, larger dots than before — the
- * earlier 84-node field read as noise rather than as a market.
- */
-const FIELD = Array.from({ length: 54 }, (_, i) => {
-  const a = i * 2.399963;
-  const r = Math.sqrt(i / 54);
-  return { x: 50 + Math.cos(a) * r * 43, y: 50 + Math.sin(a) * r * 43, keep: i % 5 === 0, hot: i % 17 === 0 };
-});
+const ACCOUNTS = [
+  { lead: 'Acme AI', primary: 'Series A · hiring a Head of Sales', meta: 'Sarah Chen · VP Growth', tag: '94% match' },
+  { lead: 'Northstar', primary: '$8M raised · recruiting team expanding', meta: 'James Okafor · COO', tag: '89% match' },
+  { lead: 'Loop Systems', primary: '52 employees · 4 open revenue roles', meta: 'Priya Raman · Head of Talent', tag: '86% match' },
+  { lead: 'Harbour', primary: 'Entered the UK market this quarter', meta: 'Daniel Weiss · Founder', tag: '81% match' },
+];
 
 function AtlasPanel() {
   return (
     <AgentPanel
-      title="Prospect radar"
-      status={<AgentStatus employee={ATLAS} label="Analysing 842 / 1,842" />}
+      title="Priority accounts"
+      status={<AgentStatus employee={ATLAS} label="842 / 1,842 analysed" />}
       metrics={
         <>
           <MetricCard value="1,842" label="Scanned" accent={ATLAS.accent} />
@@ -194,68 +159,8 @@ function AtlasPanel() {
         </>
       }
     >
-      <div className="flex-1 min-h-0 flex gap-5 items-center">
-        {/* The radar is the hero. The funnel that used to sit here duplicated
-            the metric row exactly, so it is gone. */}
-        <div className="relative flex-1 min-w-0 h-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="h-full max-h-[330px] aspect-square" aria-hidden="true">
-            <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" />
-            <circle cx="50" cy="50" r="29" fill="none" stroke="rgba(255,255,255,0.07)" />
-            <circle cx="50" cy="50" r="14" fill="none" stroke={`${ATLAS.accent}45`} />
-            {FIELD.map((d, i) => (
-              <circle
-                key={i}
-                cx={d.x}
-                cy={d.y}
-                r={d.hot ? 2.6 : d.keep ? 1.7 : 1.05}
-                fill={d.hot ? ATLAS.accent : d.keep ? `${ATLAS.accent}99` : 'rgba(255,255,255,0.22)'}
-              />
-            ))}
-            <g className="atlas-sweep" style={{ transformOrigin: '50px 50px' }}>
-              <path d="M50 50 L50 6 A44 44 0 0 1 81 19 Z" fill={`${ATLAS.accent}16`} />
-              <line x1="50" y1="50" x2="50" y2="6" stroke={ATLAS.accent} strokeWidth="0.7" strokeOpacity="0.7" />
-            </g>
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="font-display font-black text-[30px] leading-none text-white/95 tabular-nums">1,842</span>
-            <span className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mt-1.5">companies</span>
-          </div>
-        </div>
-
-        {/* The account that survives the scan, large enough to actually read. */}
-        <div className="w-[236px] shrink-0 h-full flex flex-col justify-center">
-          <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2.5 shrink-0">Top opportunity</p>
-          <div
-            className="rounded-xl border p-3.5"
-            style={{ borderColor: `${ATLAS.accent}40`, background: `linear-gradient(180deg, ${ATLAS.accent}16, rgba(255,255,255,0.02))` }}
-          >
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <span className="text-[16px] font-display font-black text-white">Acme AI</span>
-              <span
-                className="text-[11px] font-mono px-2 py-[3px] rounded shrink-0"
-                style={{ color: ATLAS.accent, background: `${ATLAS.accent}24` }}
-              >
-                94% MATCH
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {[
-                ['Funding', 'Series A'],
-                ['Hiring', '+14 employees'],
-                ['Signal', 'New Head of Sales'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-3">
-                  <span className="text-[12px] text-white/45">{k}</span>
-                  <span className="text-[13px] text-white/85 truncate">{v}</span>
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-white/[0.1] mt-3 pt-2.5">
-              <p className="text-[13.5px] text-white/90">Sarah Chen</p>
-              <p className="text-[12px] text-white/45 mt-0.5">VP Growth · decision maker</p>
-            </div>
-          </div>
-        </div>
+      <div className="feed-list justify-center">
+        {ACCOUNTS.map((r) => <FeedRow key={r.lead} {...r} accent={ATLAS.accent} />)}
       </div>
     </AgentPanel>
   );
@@ -263,25 +168,18 @@ function AtlasPanel() {
 
 /* ────────────────────────────────────────────────────── stage 3 · LYRA ── */
 
-const LYRA_INPUTS = [
-  { kind: 'Signal', label: 'Competitor cut pricing 20%' },
-  { kind: 'Customer', label: 'Screening forms take too long' },
-  { kind: 'Founder', label: 'AI should reduce admin' },
-  { kind: 'Library', label: '38 previous posts' },
-];
-
-const LYRA_OUTPUTS = [
-  { k: 'LinkedIn', t: 'Recruiters do not need more AI tools' },
-  { k: 'Carousel', t: '5 recruiting tasks AI should own' },
-  { k: 'Blog', t: 'The new AI recruiting stack' },
-  { k: 'Newsletter', t: '3 changes in recruiting this week' },
+const DRAFTS = [
+  { lead: 'LinkedIn', primary: 'Recruiters do not need more AI tools', meta: 'From the Ashby pricing signal', tag: 'Ready' },
+  { lead: 'Carousel', primary: '5 recruiting tasks AI should own', meta: 'From 38 previous posts', tag: 'Ready' },
+  { lead: 'Blog', primary: 'The new AI recruiting stack', meta: 'From customer conversations', tag: 'Drafting' },
+  { lead: 'Newsletter', primary: '3 changes in recruiting this week', meta: 'From this week’s signals', tag: 'Queued' },
 ];
 
 function LyraPanel() {
   return (
     <AgentPanel
-      title="Content engine"
-      status={<AgentStatus employee={LYRA} label="Draft 3 of 4 generating" />}
+      title="Content queue"
+      status={<AgentStatus employee={LYRA} label="Draft 3 of 4" />}
       metrics={
         <>
           <MetricCard value="12" label="Ideas found" accent={LYRA.accent} />
@@ -291,34 +189,8 @@ function LyraPanel() {
         </>
       }
     >
-      <div className="flex-1 min-h-0 flex items-center gap-2">
-        <div className="w-[168px] shrink-0 h-full flex flex-col">
-          <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2.5 shrink-0">Knows</p>
-          <div className="flex-1 flex flex-col justify-center gap-2.5">
-            {LYRA_INPUTS.map((s) => <DataSource key={s.kind} kind={s.kind} label={s.label} accent={LYRA.accent} />)}
-          </div>
-        </div>
-
-        <svg className="w-[42px] h-full shrink-0 hide-sm" viewBox="0 0 42 260" preserveAspectRatio="none" aria-hidden="true">
-          {[32, 97, 162, 227].map((y, i) => (
-            <DataFlow key={y} x1={0} y1={y} x2={38} y2={130} accent={LYRA.accent} delay={i * 0.4} />
-          ))}
-        </svg>
-
-        <AgentPortrait employee={LYRA} size={80} className="shrink-0" />
-
-        <svg className="w-[42px] h-full shrink-0 hide-sm" viewBox="0 0 42 260" preserveAspectRatio="none" aria-hidden="true">
-          {[32, 97, 162, 227].map((y, i) => (
-            <DataFlow key={y} x1={4} y1={130} x2={42} y2={y} accent={LYRA.accent} delay={0.2 + i * 0.4} />
-          ))}
-        </svg>
-
-        <div className="flex-1 min-w-0 h-full flex flex-col">
-          <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2.5 shrink-0">Publishes</p>
-          <div className="flex-1 flex flex-col justify-center gap-2.5">
-            {LYRA_OUTPUTS.map((o) => <OutputCard key={o.k} kind={o.k} title={o.t} accent={LYRA.accent} />)}
-          </div>
-        </div>
+      <div className="feed-list justify-center">
+        {DRAFTS.map((r) => <FeedRow key={r.lead} {...r} accent={LYRA.accent} />)}
       </div>
     </AgentPanel>
   );
@@ -326,7 +198,11 @@ function LyraPanel() {
 
 /* ───────────────────────────────────────────────────── stage 4 · ORION ── */
 
-const FEEDS: Record<string, string> = { signals: '4 signals', leads: '7 leads', content: '3 drafts' };
+const BRIEF = [
+  { lead: '01 · Lisa · Signals', primary: 'Ashby cut pricing 20%', meta: 'Pressure may increase across SMB accounts', tag: 'Competitor', tone: 'urgent' as const },
+  { lead: '02 · Atlas · Leads', primary: '7 high-fit accounts became active', meta: '3 are hiring recruiting leaders', tag: 'Pipeline', tone: 'positive' as const },
+  { lead: '03 · Lyra · Content', primary: 'Your pricing POV is ready', meta: 'Drafted from today’s competitor signal', tag: 'Content', tone: 'default' as const },
+];
 
 function OrionPanel() {
   return (
@@ -342,54 +218,16 @@ function OrionPanel() {
         </>
       }
     >
-      <div className="flex-1 min-h-0 flex flex-col gap-3">
-        {/* The specialists feed the brief from above so they support it rather
-            than compete with it for the panel's width. */}
-        <div className="flex items-center gap-4 shrink-0">
-          {SPECIALISTS.map((e) => (
-            <div key={e.id} className="flex items-center gap-2">
-              <AgentPortrait employee={e} size={30} />
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold leading-tight" style={{ color: e.accent }}>{e.name}</p>
-                <p className="text-[11.5px] text-white/45 leading-tight">{FEEDS[e.discipline]}</p>
-              </div>
-            </div>
-          ))}
-          <div className="flex-1 h-px bg-gradient-to-r from-white/15 to-transparent hide-sm" />
+      <div className="flex-1 min-h-0 flex flex-col justify-center">
+        <p className="text-[12.5px] text-white/40 mb-5">Wednesday · 3 things deserve your attention</p>
+        <div className="feed-list">
+          {BRIEF.map((r) => <FeedRow key={r.lead} {...r} />)}
         </div>
-
-        {/* The brief itself, taking the space it deserves. */}
-        <div className="flex-1 min-h-0 rounded-xl border border-white/[0.1] bg-white/[0.025] p-4 flex flex-col">
-          <div className="flex items-baseline justify-between gap-3 mb-3 shrink-0">
-            <span className="text-[15px] font-display font-black text-white">Good morning</span>
-            <span className="text-[12px] text-white/45">3 things deserve your attention</span>
-          </div>
-
-          <div className="space-y-2 flex-1 min-h-0">
-            <IntelligenceEvent
-              source="01 · Lisa · Signals" tag="Competitor" tone="urgent"
-              headline="Ashby cut pricing 20%."
-              detail="Pressure may increase across SMB accounts."
-            />
-            <IntelligenceEvent
-              source="02 · Atlas · Leads" tag="Pipeline" tone="opportunity"
-              headline="7 high-fit accounts became active."
-              detail="3 are currently hiring recruiting leaders."
-            />
-            <IntelligenceEvent
-              source="03 · Lyra · Content" tag="Content"
-              headline="Your pricing POV is ready."
-              detail="Drafted from today's competitor signal."
-            />
-          </div>
-
-          <div className="border-t border-white/[0.1] mt-3 pt-3 shrink-0">
-            <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-white/45 mb-2">Today</p>
-            <div className="space-y-1.5">
-              <ActionRecommendation text="Contact 3 priority accounts" />
-              <ActionRecommendation text="Publish the pricing POV" />
-              <ActionRecommendation text="Review competitive positioning" />
-            </div>
+        <div className="mt-5 pt-4 border-t border-white/[0.055]">
+          <p className="text-[11px] font-mono uppercase tracking-[0.08em] text-white/35 mb-2.5">Today</p>
+          <div className="space-y-2">
+            <ActionRecommendation text="Contact 3 priority accounts" />
+            <ActionRecommendation text="Publish the pricing POV" />
           </div>
         </div>
       </div>
@@ -412,10 +250,13 @@ function WorkforceDiagram() {
           <AgentStatus employee={ORION} />
         </div>
 
-        <svg className="w-full max-w-[560px] h-[54px] hide-sm" viewBox="0 0 560 54" aria-hidden="true">
-          {[95, 280, 465].map((x, i) => (
-            <DataFlow key={x} x1={280} y1={2} x2={x} y2={52} accent={SPECIALISTS[i].accent} delay={i * 0.45} />
-          ))}
+        <svg className="w-full max-w-[560px] h-[46px] hide-sm" viewBox="0 0 560 46" fill="none" aria-hidden="true">
+          <path
+            d="M280 0 V16 M95 46 V30 H465 V46 M280 30 V16 M95 30 H465"
+            stroke="rgba(255,255,255,0.16)"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
 
         <div className="grid grid-cols-3 gap-4 sm:gap-10 w-full max-w-[560px]">
@@ -457,9 +298,9 @@ export const ExpertJourney = () => {
     if (!section) return;
     const ctx = gsap.context(() => {
       const stages = gsap.utils.toArray<HTMLElement>('#hero-to-expert-sequence .sequence-stage');
-      gsap.set(stages, { opacity: 0, scale: 0.9, y: 80, rotateX: 0, transformOrigin: 'center center' });
+      gsap.set(stages, { opacity: 0, scale: 0.985, y: 26, rotateX: 0, transformOrigin: 'center center' });
       const tl = gsap.timeline({
-        defaults: { ease: 'power2.inOut' },
+        defaults: { ease: 'power2.out' },
         scrollTrigger: {
           trigger: section, start: 'top top', end: `+=${STAGES * 100}%`, scrub: 1.2, pin: true, anticipatePin: 1,
         },
@@ -467,9 +308,9 @@ export const ExpertJourney = () => {
       for (let i = 1; i <= STAGES; i++) {
         tl.to(`.stage-${i}`, { opacity: 1, scale: 1, y: 0, duration: 0.75 });
         if (i < STAGES) {
-          tl.to(`.stage-${i}`, { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
+          tl.to(`.stage-${i}`, { scale: 0.985, y: -26, opacity: 0, duration: 0.7 });
         } else {
-          tl.to(`.stage-${i}`, { boxShadow: '0 0 60px rgba(0,255,150,0.22)', duration: 0.6 });
+          tl.to(`.stage-${i}`, { duration: 0.6 });
         }
       }
     }, sectionRef);
@@ -527,10 +368,6 @@ export const ExpertJourney = () => {
     <>
       <style>{STYLES}</style>
       <style>{AGENT_SYSTEM_STYLES}</style>
-      <style>{`
-        .atlas-sweep { animation: atlasSweep 7s linear infinite; }
-        @keyframes atlasSweep { to { transform: rotate(360deg); } }
-      `}</style>
       <section id="hero-to-expert-sequence" ref={sectionRef}>
         <div className="sequence-viewport">
           <div className="blueprint-grid" />

@@ -108,7 +108,6 @@ export const AgentPortrait = memo(function AgentPortrait({
             {employee.initial}
           </span>
         )}
-        <span className="agent-portrait__scan" aria-hidden="true" />
         <span className="agent-portrait__rim" aria-hidden="true" />
       </span>
     </div>
@@ -283,33 +282,47 @@ export function ActionRecommendation({ text }: { text: string }) {
   );
 }
 
-/* ───────────────────────────────────────────────────────────── DATA FLOW ── */
+/* ────────────────────────────────────────────────────────────── FEED ROW ── */
 
 /**
- * A connection with a packet running along it. One weight, one opacity, one
- * packet size everywhere — previously these varied per panel, which is why the
- * cards read as different products.
+ * The workhorse of every agent panel. Each agent's main area is now a list of
+ * these rather than a diagram: a leading source or format, the thing that
+ * happened, and how it was graded.
+ *
+ * Lists are what this class of software actually looks like, they are readable
+ * in one pass, and using the same row everywhere makes the four panels
+ * consistent by construction rather than by hand.
  */
-export function DataFlow({
-  x1, y1, x2, y2, accent = '#10b981', delay = 0, dashed = false,
+export function FeedRow({
+  lead,
+  primary,
+  meta,
+  tag,
+  tone = 'default',
+  accent,
 }: {
-  x1: number; y1: number; x2: number; y2: number;
-  accent?: string; delay?: number; dashed?: boolean;
+  lead: string;
+  primary: string;
+  meta?: string;
+  tag?: string;
+  tone?: 'urgent' | 'positive' | 'default';
+  accent?: string;
 }) {
+  const toneColor =
+    tone === 'urgent' ? '#fb7185' : tone === 'positive' ? '#34d399' : 'rgba(255,255,255,0.42)';
   return (
-    <g>
-      <line
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke={accent}
-        strokeWidth={1.5}
-        strokeOpacity={dashed ? 0.3 : 0.45}
-        strokeDasharray={dashed ? '4 6' : undefined}
-        vectorEffect="non-scaling-stroke"
-      />
-      <circle r={2.6} fill={accent} className="flow-packet">
-        <animateMotion dur="2.8s" repeatCount="indefinite" begin={`${delay}s`} path={`M${x1},${y1} L${x2},${y2}`} />
-      </circle>
-    </g>
+    <div className="feed-row">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="text-[11.5px] font-mono uppercase tracking-[0.08em] text-white/40 truncate">{lead}</span>
+        {tag && (
+          <span className="text-[11px] font-mono uppercase tracking-[0.06em] shrink-0" style={{ color: tone === 'default' && accent ? accent : toneColor }}>
+            {tag}
+          </span>
+        )}
+      </div>
+      <p className="text-[14.5px] text-white/90 leading-snug mt-1.5">{primary}</p>
+      {meta && <p className="text-[12.5px] text-white/40 leading-snug mt-1">{meta}</p>}
+    </div>
   );
 }
 
@@ -318,9 +331,8 @@ export function DataFlow({
 export const AGENT_SYSTEM_STYLES = `
 .agent-panel {
   width: 100%; min-width: 0; display: flex; flex-direction: column;
-  border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); padding: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.42));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); padding: 20px;
+  background: rgba(8,10,13,0.62);
 }
 .agent-panel__bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -331,6 +343,10 @@ export const AGENT_SYSTEM_STYLES = `
   text-transform: uppercase; color: rgba(255,255,255,0.5);
 }
 .agent-panel__main { flex: 1; min-height: 0; display: flex; }
+.feed-list { display: flex; flex-direction: column; width: 100%; }
+.feed-row { padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,0.055); }
+.feed-row:first-child { padding-top: 0; }
+.feed-row:last-child { border-bottom: 0; padding-bottom: 0; }
 .agent-panel__metrics {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
   margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.09);
@@ -349,13 +365,13 @@ export const AGENT_SYSTEM_STYLES = `
 .agent-portrait { position: relative; }
 .agent-portrait__bloom {
   position: absolute; inset: -20%; border-radius: 9999px; pointer-events: none;
-  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--a) 42%, transparent), transparent 66%);
-  filter: blur(14px); opacity: 0.55; transition: opacity 700ms ease;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--a) 26%, transparent), transparent 68%);
+  filter: blur(16px); opacity: 0.35; transition: opacity 700ms ease;
 }
-.agent-portrait[data-active="true"] .agent-portrait__bloom { opacity: 0.9; }
+.agent-portrait[data-active="true"] .agent-portrait__bloom { opacity: 0.5; }
 .agent-portrait__disc {
   position: absolute; inset: 0; border-radius: 9999px; overflow: hidden; display: block;
-  border: 1.5px solid color-mix(in srgb, var(--a) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--a) 42%, transparent);
   box-shadow: 0 12px 34px -12px rgba(0,0,0,0.85);
   background: #07090c;
 }
@@ -365,12 +381,6 @@ export const AGENT_SYSTEM_STYLES = `
   position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -14px 24px -14px rgba(0,0,0,0.9);
 }
-.agent-portrait__scan {
-  position: absolute; left: 0; right: 0; height: 34%; pointer-events: none;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--a) 24%, transparent), transparent);
-  animation: agentScan 4.5s ease-in-out infinite;
-}
-@keyframes agentScan { 0% { top: -34%; opacity: 0; } 18% { opacity: 1; } 82% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
 
 .agent-status-dot {
   width: 7px; height: 7px; border-radius: 9999px; background: var(--a); flex-shrink: 0;
@@ -382,6 +392,6 @@ export const AGENT_SYSTEM_STYLES = `
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-portrait__scan, .agent-status-dot, .flow-packet, .atlas-sweep { animation: none !important; }
+  .agent-status-dot { animation: none !important; }
 }
 `;
