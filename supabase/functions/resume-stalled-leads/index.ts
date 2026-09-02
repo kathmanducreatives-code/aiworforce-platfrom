@@ -29,7 +29,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   eligibleForAutoResume, resumeRequestFor, STALE_AFTER_MS, MAX_RESUMABLE_AGE_MS,
-  CLAIMABLE_TERMINAL_STATUS, type StalledTaskRow,
+  type StalledTaskRow,
 } from "../_shared/stalledLeadResume.ts";
 import { dispatchContinuation } from "../_shared/leadContinuationDispatch.ts";
 import {
@@ -290,9 +290,23 @@ Deno.serve(async (req) => {
     // PAID WORK WAITING TO BE ADOPTED — the strongest reason to come back, and
     // the one `recoverPendingRuns` will turn into a `GET` rather than a second
     // POST once the slice runs.
+    // ── ASKED FOR EVERY ROW, NOT ONLY THE ONES ALREADY LABELLED RESUMABLE ──
+    //
+    // This was guarded on `terminal_status === "continuation_required"`, so any
+    // row wearing another label reported `false` regardless of what the ledger
+    // actually held — and `eligibleForAutoResume` then had no way to know a
+    // paid call was still running.
+    //
+    // The guard was circular: the label is what the sweeper is deciding, and a
+    // row mislabelled by an earlier slice could never present the one fact that
+    // would have corrected it. Whether a provider is mid-sentence is a question
+    // about the LEDGER, and the ledger answers it the same way whatever the row
+    // says about itself.
+    //
+    // One indexed lookup per scanned row, on a window the query above already
+    // keeps to fourteen.
     let hasStartedProviderRun = false;
-    if (row.result && (row.result as Record<string, unknown>).terminal_status ===
-        CLAIMABLE_TERMINAL_STATUS) {
+    {
       const { data: started } = await admin.from(LEAD_EXECUTION_CALLS_TABLE)
         .select("provider_run_id")
         .eq("task_id", row.id).eq("workspace_id", row.workspace_id ?? "")

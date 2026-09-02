@@ -367,13 +367,38 @@ export function decideAutoContinuation(
  * Did this slice achieve anything at all?
  *
  * Investigating somebody counts even when nobody qualified: the frontier moved
- * and the next slice sees a different set. Only a slice that did neither is
- * barren.
+ * and the next slice sees a different set.
+ *
+ * ── AND SO DOES DECIDING SOMEBODY ────────────────────────────────────────
+ *
+ * This asked only about qualification and investigation, so a slice that
+ * carried a dozen companies to a Brain verdict — durable, irreversible, and the
+ * difference between a company that needs work and one that does not — counted
+ * as having achieved nothing.
+ *
+ * Lineage 744644ab is what that cost. Its last three slices made new Brain
+ * decisions and drained the frontier from sixteen to zero; none qualified
+ * anybody and none investigated anybody new, because the companies were already
+ * investigated and the verdicts were rejections. Two of them tripped the barren
+ * counter, the sweeper terminated the run as `no_progress` at 1 of 5 with the
+ * pool fully worked and page 3 unbought, and a job search that had already
+ * SUCCEEDED was left unadopted.
+ *
+ * A RESTORED decision is not a new one. `brainDecidedDelta` is growth in
+ * companies holding a Brain outcome, so a slice that only replays what the
+ * checkpoint already knew still counts as barren — which is the case this
+ * counter exists to catch.
  */
 export function sliceWasBarren(
-  i: { qualifiedDelta: number; investigatedDelta: number },
+  i: {
+    qualifiedDelta: number;
+    investigatedDelta: number;
+    /** Optional so an older caller keeps its exact previous behaviour. */
+    brainDecidedDelta?: number;
+  },
 ): boolean {
-  return i.qualifiedDelta <= 0 && i.investigatedDelta <= 0;
+  return i.qualifiedDelta <= 0 && i.investigatedDelta <= 0 &&
+    (i.brainDecidedDelta ?? 0) <= 0;
 }
 
 type EnvReader = (key: string) => string | undefined;
@@ -448,6 +473,17 @@ export interface LineageProgress {
   /** Cumulative paid provider work across the lineage. Governs the ceiling. */
   cost_units_used: number;
   barren_slices: number;
+  /**
+   * Companies this lineage has carried to a Brain outcome.
+   *
+   * A cumulative count, like the two beside it, so `foldSlice` can derive the
+   * per-slice delta the same way. Optional on read: a lineage checkpointed
+   * before this existed has none, and an absent value narrows to 0, which makes
+   * the first slice after the upgrade look like it decided everything it holds
+   * — generous in exactly the safe direction, since the counter only ever
+   * PREVENTS a premature stop.
+   */
+  brain_decided?: number;
   /** Highest qualified count observed. Never allowed to fall — see below. */
   qualified_high_water: number;
   /**
@@ -482,6 +518,7 @@ export function newLineageProgress(): LineageProgress {
   return {
     version: AUTO_CONTINUATION_VERSION,
     continuations_used: 0, cost_units_used: 0, barren_slices: 0,
+    brain_decided: 0,
     qualified_high_water: 0,
     unique_companies_investigated: 0, investigation_authorisations: 0,
     stopped_reason: null, stopped_detail: null,
@@ -514,6 +551,13 @@ export function foldSlice(
     authorisationsInPool: number;
     /** Paid provider cost units accumulated across the lineage. */
     costUnitsInLineage: number;
+    /**
+     * Distinct companies holding a Brain outcome, from the working set.
+     *
+     * Cumulative like the two above. Optional: a caller that does not report it
+     * gets exactly the previous behaviour.
+     */
+    brainDecidedInPool?: number;
   },
 ): LineageProgress {
   // DELTAS ARE DERIVED HERE, from cumulative in and cumulative held. They are
@@ -525,13 +569,25 @@ export function foldSlice(
   const qualifiedDelta = slice.qualifiedInPool - prior.qualified_high_water;
   const investigatedDelta =
     slice.uniqueCompaniesInvestigatedInPool - prior.unique_companies_investigated;
-  const barren = sliceWasBarren({ qualifiedDelta, investigatedDelta });
+  // A DECISION IS PROGRESS. See `sliceWasBarren` for the run this exists for.
+  // `brain_decided` is absent on a lineage checkpointed before this field, and
+  // narrows to 0 — so the first slice after the upgrade reads its whole decided
+  // set as new. That is generous in the safe direction: this term can only ever
+  // PREVENT a stop, never cause one.
+  const brainDecidedDelta = slice.brainDecidedInPool === undefined
+    ? 0
+    : slice.brainDecidedInPool - (prior.brain_decided ?? 0);
+  const barren = sliceWasBarren({
+    qualifiedDelta, investigatedDelta, brainDecidedDelta,
+  });
   const keepHigher = (was: number, now: number) => Math.max(was, Math.max(0, now));
   return {
     ...prior,
     // The one true per-call increment.
     continuations_used: prior.continuations_used + 1,
     cost_units_used: keepHigher(prior.cost_units_used, slice.costUnitsInLineage),
+    brain_decided: keepHigher(
+      prior.brain_decided ?? 0, slice.brainDecidedInPool ?? 0),
     barren_slices: barren ? prior.barren_slices + 1 : 0,
     qualified_high_water: keepHigher(prior.qualified_high_water, slice.qualifiedInPool),
     unique_companies_investigated: keepHigher(
@@ -552,6 +608,9 @@ export function readLineageProgress(raw: unknown): LineageProgress {
     continuations_used: n(o.continuations_used),
     cost_units_used: n(o.cost_units_used),
     barren_slices: n(o.barren_slices),
+    // Written, declared AND read back — a field that skips the third never
+    // survives a resume, which this file's neighbours have each learned once.
+    brain_decided: n(o.brain_decided),
     qualified_high_water: n(o.qualified_high_water),
     // THE OLD FIELD IS DELIBERATELY NOT READ. A pre-split checkpoint holds
     // `investigated_total`, and its value is a sum of cumulative snapshots —

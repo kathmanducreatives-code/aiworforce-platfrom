@@ -401,6 +401,29 @@ export function eligibleForAutoResume(
   // not, which is how lineage 9da530ae was re-dispatched three times at
   // `barren_slices: 9` — each successor making zero provider calls and changing
   // nothing. A second opinion that ignores the first is not a safety net.
+  // ── A PAID RUN IN FLIGHT OUTRANKS EVERY FINDING ABOUT THE CANDIDATES ────
+  //
+  // Moved ABOVE the barren check, which is where `decideAutoContinuation`
+  // already has it: every one of its findings is guarded by `!awaiting`,
+  // because none of them can be known while a call we have paid for is still
+  // running. The sweeper asked in the opposite order and had no such guard.
+  //
+  // Lineage 744644ab is what that cost. Its last slice decided
+  // `awaiting_provider_run, continuing: true` while job search
+  // xczA1HpLcL008EbU1 was mid-flight; the run SUCCEEDED at 16:31:18 with three
+  // job rows; and the sweeper — reading a `barren_slices` of 2 that was itself
+  // wrong — terminated the lineage as `no_progress` before ever reaching this
+  // check. The row recorded the contradiction: `continuing: true` beside
+  // `terminal_status: "no_progress"`, and three companies' hiring evidence
+  // bought and thrown away.
+  //
+  // Ceilings stay above this deliberately. They are facts about SPEND, true
+  // whatever the provider returns, and `decideAutoContinuation` orders them the
+  // same way.
+  const state = obj(result.capability_execution_state);
+  const checkpointedPending = Array.isArray(state.pending_runs) && state.pending_runs.length > 0;
+  if (checkpointedPending || opts.hasStartedProviderRun) return go("pending_provider_run");
+
   const barren = int(progress.barren_slices);
   if (barren >= MAX_BARREN_SLICES) {
     return stop("no_progress",
@@ -408,9 +431,6 @@ export function eligibleForAutoResume(
   }
 
   // ── IS THERE ANYTHING TO COME BACK FOR? ──────────────────────────────────
-  const state = obj(result.capability_execution_state);
-  const checkpointedPending = Array.isArray(state.pending_runs) && state.pending_runs.length > 0;
-  if (checkpointedPending || opts.hasStartedProviderRun) return go("pending_provider_run");
   if (obj(result.auto_continuation).continuing === true) return go("continuation_intended");
 
   // ── A COHERENT CHECKPOINT IS ITSELF A REASON TO COME BACK ───────────────

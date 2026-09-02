@@ -4897,6 +4897,19 @@ Deno.serve(async (req) => {
           uniqueCompaniesInvestigatedInPool: uniqueInvestigated,
           authorisationsInPool: capabilityRun?.state.investigation_selected ?? 0,
           costUnitsInLineage: capabilityRun?.state.accumulated_cost_units ?? 0,
+          // ── A BRAIN VERDICT IS PROGRESS ────────────────────────────────
+          //
+          // Counted from the working set, which is deduplicated and restored
+          // whole, so a company decided in an earlier slice is counted once —
+          // `foldSlice` takes the delta, and a slice that only RESTORES
+          // decisions still reads as barren.
+          //
+          // Without this, lineage 744644ab spent its last three slices carrying
+          // companies to verdicts and draining the frontier from sixteen to
+          // zero, and every one of them counted as having achieved nothing.
+          brainDecidedInPool: capabilityRun
+            ? capabilityRun.companies.filter((c) => c.brain !== null).length
+            : 0,
         });
         const autoDecision = decideAutoContinuation({
           // THE HIGH-WATER MARK, not this slice's count. A slice that evaluated

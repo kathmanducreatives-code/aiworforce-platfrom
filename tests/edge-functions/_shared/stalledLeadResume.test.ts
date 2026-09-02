@@ -375,7 +375,18 @@ Deno.test("9da530ae IS STOPPED — barren slices end the lineage", () => {
   // 09:27, each successor making zero provider calls.
   const barren = CHECKPOINTED();
   (barren.result![LINEAGE_PROGRESS_KEY] as Record<string, unknown>).barren_slices = 9;
-  const v = eligibleForAutoResume(barren, NOW, { hasStartedProviderRun: true });
+  // ── NO RUN IN FLIGHT, WHICH IS WHAT THE INCIDENT ACTUALLY WAS ───────────
+  //
+  // This passed `hasStartedProviderRun: true`, incidentally — the incident's
+  // own description is "each successor making zero provider calls". A paid run
+  // mid-flight now outranks a barren verdict, because no finding about the pool
+  // can be known while a call we have already paid for is still running
+  // (lineage 744644ab: terminated `no_progress` while job search
+  // xczA1HpLcL008EbU1 was succeeding, and its three job rows were discarded).
+  //
+  // The rule this test exists for is unchanged and still asserted: with nothing
+  // in flight, a barren streak ends the lineage.
+  const v = eligibleForAutoResume(barren, NOW, { hasStartedProviderRun: false });
   assertEquals(v.eligible, false);
   assertEquals(v.reason, "no_progress");
   assertEquals(v.disposition, "terminate");
