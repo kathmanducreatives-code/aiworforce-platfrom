@@ -29,10 +29,10 @@ interface Agent {
 // scribe) still power execution, but `@/config/agentRegistry` states they must
 // never be rendered publicly — this simulation used to show all five by name.
 const AGENTS: Agent[] = [
-  { id: "lyra", name: "Lyra", title: "Signals & Monitoring", department: "intelligence", icon: Target, job: "Watches hiring, funding, growth and competitor moves, and tells you what changed.", tools: ["firecrawl","perplexity"], talksTo: ["Atlas","Founder"] },
-  { id: "atlas", name: "Atlas", title: "Research & Company Intelligence", department: "talent", icon: Search, job: "Researches companies, markets and candidates, checks the facts, and ranks what is worth your time.", tools: ["apify","firecrawl"], talksTo: ["Mira","Orion"] },
-  { id: "mira", name: "Mira", title: "Content & Outreach", department: "content", icon: PenLine, job: "Writes in your voice — posts, messages and outreach — and brings every draft to you for approval.", tools: ["claude"], talksTo: ["Founder"] },
-  { id: "orion", name: "Orion", title: "Pipeline & Review", department: "growth", icon: MessageSquare, job: "Tracks what is waiting on you, and what to approve, contact, watch or skip next.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "mira", name: "Lisa", title: "Signal Intelligence", department: "intelligence", icon: Target, job: "Watches hiring, funding, growth and competitor moves, and tells you what changed.", tools: ["firecrawl","perplexity"], talksTo: ["Atlas","Founder"] },
+  { id: "atlas", name: "Atlas", title: "Lead Intelligence", department: "talent", icon: Search, job: "Searches the market, matches companies to your ICP, and ranks who is worth your time.", tools: ["apify","firecrawl"], talksTo: ["Lyra","Orion"] },
+  { id: "lyra", name: "Lyra", title: "Content Intelligence", department: "content", icon: PenLine, job: "Turns company knowledge and market intelligence into content worth publishing.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "orion", name: "Orion", title: "Executive Intelligence", department: "growth", icon: MessageSquare, job: "Combines what the team found into one short briefing, and says what deserves your attention.", tools: ["claude"], talksTo: ["Founder"] },
 ];
 
 interface FeedMessage {
@@ -41,18 +41,18 @@ interface FeedMessage {
 }
 
 const MESSAGES: FeedMessage[] = [
-  { agentId: "lyra", agentName: "Lyra", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
+  { agentId: "mira", agentName: "Lisa", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
     text: "Overnight scan done. A competitor changed their pricing, and two companies in your market raised. Flagging the pricing change for you.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "07:12 AM", isFounder: true,
-    text: "Reviewed. Asked Mira to draft a response post on our pricing." },
-  { agentId: "mira", agentName: "Mira", department: "content", tools: ["claude"], time: "07:18 AM",
+    text: "Reviewed. Asked Lyra to draft a response post on our pricing." },
+  { agentId: "lyra", agentName: "Lyra", department: "content", tools: ["claude"], time: "07:18 AM",
     text: "Post drafted in your brand voice. Ready for your review.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "atlas", agentName: "Atlas", department: "talent", tools: ["apify","firecrawl"], time: "09:04 AM",
     text: "Researched 40 companies against your ICP. 12 qualified, ranked by fit, each with the evidence attached.",
-    passedTo: "Mira", passedToDept: "content" },
-  { agentId: "mira", agentName: "Mira", department: "content", tools: ["claude"], time: "09:14 AM",
+    passedTo: "Lyra", passedToDept: "content" },
+  { agentId: "lyra", agentName: "Lyra", department: "content", tools: ["claude"], time: "09:14 AM",
     text: "Outreach drafted for the top 3, each referencing the signal that made them relevant. Nothing sends until you approve it.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "09:22 AM", isFounder: true,

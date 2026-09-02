@@ -6,17 +6,17 @@ import { employeeByName } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
 
 const timeline = [
-  { time: '7:00 AM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
-  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Asked Mira to pursue the Acme Corp lead.', output: '', status: 'decision' },
-  { time: '7:45 AM', agent: 'Mira', dept: 'Outreach', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
+  { time: '7:00 AM', agent: 'Lisa', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
+  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Asked Lyra to draft a POV on the Acme signal.', output: '', status: 'decision' },
+  { time: '7:45 AM', agent: 'Lyra', dept: 'Content', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
   { time: '8:02 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved. Sent from my inbox.', output: '', status: 'decision' },
   { time: '9:30 AM', agent: 'Atlas', dept: 'Research', color: 'bg-purple-500/20 border-purple-500/40', action: 'Company research complete', output: '40 companies researched against your ICP. Ranking them by fit now.', status: 'done' },
   { time: '9:31 AM', agent: 'Atlas', dept: 'Research', color: 'bg-purple-500/20 border-purple-500/40', action: 'Qualifying and ranking the shortlist', output: 'Evidence checked against each company. Ranked list ready shortly.', status: 'progress' },
-  { time: '11:00 AM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
-  { time: '11:05 AM', agent: 'Mira', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
+  { time: '11:00 AM', agent: 'Lisa', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
+  { time: '11:05 AM', agent: 'Lyra', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
   { time: '2:30 PM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved post. Minor edit to closing line.', output: '', status: 'decision' },
-  { time: '2:32 PM', agent: 'Mira', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Final post handed back for scheduling', output: 'Cleaned-up draft ready in your queue for tomorrow 9am.', status: 'done' },
-  { time: '5:00 PM', agent: 'Lyra', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'End of day summary ready', output: 'Today: 1 outreach approved, 12 companies qualified, 1 post drafted, 3 signals reviewed. Your time: 47 minutes.', status: 'done' },
+  { time: '2:32 PM', agent: 'Lyra', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Final post handed back for scheduling', output: 'Cleaned-up draft ready in your queue for tomorrow 9am.', status: 'done' },
+  { time: '5:00 PM', agent: 'Lisa', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'End of day summary ready', output: 'Today: 1 outreach approved, 12 companies qualified, 1 post drafted, 3 signals reviewed. Your time: 47 minutes.', status: 'done' },
 ];
 
 const statusIcon = (s: string) => {
