@@ -2,35 +2,78 @@
  * AGENT DESIGN SYSTEM — the shared visual language for the AI workforce
  * sequence.
  *
- * The four agent stages must feel like one system while each one's MAIN
- * visualisation stays distinct (a monitoring network, a prospect radar, a
- * content engine, a briefing assembly). Everything that repeats between them
- * lives here so the typography, glass, line weight, status language and motion
- * stay identical; only the big graphic differs.
+ * The four agents keep distinct main visualisations (a monitoring network, a
+ * prospect radar, a content engine, a briefing). Everything structural is
+ * shared so they read as four apps inside one operating system rather than
+ * four different products.
  *
- * PERFORMANCE. Everything animates on transform/opacity only. There are no
- * canvases, no particle systems and no per-frame layout reads — node positions
- * are computed once from simple trigonometry and the rest is CSS. Node counts
- * drop on small screens rather than being scaled down until illegible.
+ * TYPE SCALE. Fixed here, in CSS, so no panel can drift:
+ *
+ *   panel title / status      12px      uppercase, 0.1em
+ *   primary content           14–15px   what the visitor must actually read
+ *   secondary                 12.5px    supporting detail
+ *   micro                     11px      truly secondary only — never smaller
+ *   metric value              26px      (30px when it is the point of the card)
+ *   metric label              11px      light tracking; readability over style
+ *
+ * Nothing renders below 11px. Earlier passes used 8.5–10px, which looked
+ * sophisticated at desk distance and was unreadable at normal viewing
+ * distance.
+ *
+ * COLOUR. An agent's accent is allowed on exactly six things: portrait rim,
+ * department chip, key visualisation lines, important nodes, the primary
+ * metric, and the live status dot. Everything else stays neutral, which is
+ * what keeps four accent colours from turning the page into confetti.
+ *
+ * PERFORMANCE. Transform and opacity only; no canvas, no particles, no
+ * per-frame layout reads.
  */
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { Employee } from './employees';
+
+/* ──────────────────────────────────────────────────────────── PANEL FRAME ── */
+
+/**
+ * The common right-panel frame: status bar, main visualisation, metric row.
+ * All four agents use it, so bar height, padding, rules and metric alignment
+ * are identical by construction rather than by discipline.
+ */
+export function AgentPanel({
+  title,
+  status,
+  metrics,
+  children,
+}: {
+  title: string;
+  status?: ReactNode;
+  metrics?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="agent-panel">
+      <div className="agent-panel__bar">
+        <span className="agent-panel__title">{title}</span>
+        {status}
+      </div>
+      <div className="agent-panel__main">{children}</div>
+      {metrics && <div className="agent-panel__metrics">{metrics}</div>}
+    </div>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────── AGENT PORTRAIT ── */
 
 /**
- * The agent, rendered as a presence rather than a headshot: a bloom in the
- * agent's accent, a soft rim, and a slow scan pass over the portrait.
- *
- * The scan and bloom are the only "AI" signals used — no HUD furniture, no
- * reticles. If real holographic renders land later they drop straight into the
- * same container and the treatment still reads.
+ * The agent as a presence: an accent bloom, a soft rim, a slow scan pass.
+ * Every instance uses the same crop (`object-cover` on a circle with a fixed
+ * focal point), the same rim weight and the same bloom radius, so no agent
+ * reads as more prominent than another at equal size.
  */
 export const AgentPortrait = memo(function AgentPortrait({
   employee,
-  size = 108,
+  size = 96,
   active = true,
   className,
 }: {
@@ -55,7 +98,7 @@ export const AgentPortrait = memo(function AgentPortrait({
             height={size * 2}
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover"
+            className="agent-portrait__img"
           />
         ) : (
           <span
@@ -74,23 +117,17 @@ export const AgentPortrait = memo(function AgentPortrait({
 
 /* ────────────────────────────────────────────────────────── AGENT IDENTITY ── */
 
-export function AgentIdentity({
-  employee,
-  size = 'md',
-}: {
-  employee: Employee;
-  size?: 'sm' | 'md';
-}) {
+export function AgentIdentity({ employee, size = 'md' }: { employee: Employee; size?: 'sm' | 'md' }) {
   const big = size === 'md';
   return (
     <div className="min-w-0">
       <p
-        className={cn('font-display font-black tracking-tight leading-none', big ? 'text-[19px]' : 'text-[13px]')}
+        className={cn('font-display font-black tracking-tight leading-none', big ? 'text-[21px]' : 'text-[16px]')}
         style={{ color: employee.accent }}
       >
         {employee.name}
       </p>
-      <p className={cn('text-white/40 leading-tight mt-1', big ? 'text-[11.5px]' : 'text-[9.5px]')}>
+      <p className={cn('text-white/55 leading-tight mt-1.5', big ? 'text-[13px]' : 'text-[12px]')}>
         {employee.function}
       </p>
     </div>
@@ -99,25 +136,20 @@ export function AgentIdentity({
 
 /* ──────────────────────────────────────────────────────────── AGENT STATUS ── */
 
-/** Live status. The dot pulses; the label is the agent's present-tense job. */
 export function AgentStatus({ employee, label }: { employee: Employee; label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
       <span className="agent-status-dot" style={{ ['--a' as string]: employee.accent }} aria-hidden="true" />
-      <span className="text-[10px] text-white/45">{label ?? employee.status}</span>
+      <span className="text-[12px] text-white/60">{label ?? employee.status}</span>
     </span>
   );
 }
 
-/**
- * A counter that ticks, so the workforce reads as working rather than posed.
- * Deliberately slow and small — this is a heartbeat, not a slot machine.
- */
+/** A slow tick, so the workforce reads as working. A heartbeat, not a counter. */
 export function LiveCounter({ from, to, suffix = '', period = 2600 }: { from: number; to: number; suffix?: string; period?: number }) {
   const [n, setN] = useState(from);
   useEffect(() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) { setN(to); return; }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setN(to); return; }
     const id = setInterval(() => setN((v) => (v >= to ? from : v + Math.max(1, Math.round((to - from) / 24)))), period / 24);
     return () => clearInterval(id);
   }, [from, to, period]);
@@ -129,101 +161,124 @@ export function LiveCounter({ from, to, suffix = '', period = 2600 }: { from: nu
 export function DepartmentBadge({ employee }: { employee: Employee }) {
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[9.5px] font-mono uppercase tracking-[0.15em]"
-      style={{ borderColor: `${employee.accent}33`, background: `${employee.accent}12`, color: employee.accent }}
+      className="inline-flex items-center rounded-full border px-3 py-[5px] text-[11px] font-mono uppercase tracking-[0.1em]"
+      style={{ borderColor: `${employee.accent}42`, background: `${employee.accent}18`, color: employee.accent }}
     >
       {employee.tag}
     </span>
   );
 }
 
-export function CapabilityChip({ label, accent }: { label: string; accent: string }) {
+export function CapabilityChip({ label }: { label: string }) {
   return (
-    <span
-      className="inline-flex items-center rounded-md border px-2 py-[3px] text-[9px] font-mono uppercase tracking-[0.12em] text-white/55"
-      style={{ borderColor: 'rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.03)', boxShadow: `inset 0 0 0 1px ${accent}0d` }}
-    >
+    <span className="inline-flex items-center h-[26px] rounded-md border border-white/[0.14] bg-white/[0.05] px-2.5 text-[11px] font-mono uppercase tracking-[0.06em] text-white/70">
       {label}
     </span>
   );
 }
 
-/** A watched source or an input feeding an agent. */
-export function DataSource({ label, detail, accent, dim }: { label: string; detail?: string; accent?: string; dim?: boolean }) {
+/** A watched source, or an input feeding an agent. */
+export function DataSource({ kind, label, accent }: { kind?: string; label: string; accent?: string }) {
   return (
     <div
-      className="rounded-lg border px-2.5 py-1.5 transition-all duration-500"
-      style={{
-        borderColor: dim ? 'rgba(255,255,255,0.05)' : `${accent ?? '#10b981'}2e`,
-        background: dim ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.04)',
-        opacity: dim ? 0.32 : 1,
-      }}
+      className="rounded-lg border border-white/[0.1] px-3 py-2"
+      style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02))' }}
     >
-      <p className="text-[10px] text-white/70 leading-tight truncate">{label}</p>
-      {detail && <p className="text-[9px] text-white/30 leading-tight truncate mt-0.5">{detail}</p>}
+      {kind && (
+        <p className="text-[11px] font-mono uppercase tracking-[0.1em] mb-1" style={{ color: accent ?? 'rgba(255,255,255,0.4)' }}>
+          {kind}
+        </p>
+      )}
+      <p className="text-[13px] text-white/85 leading-snug">{label}</p>
     </div>
   );
 }
 
-/** A classified event produced by an agent. */
+/** A classified event: who it came from, what changed, how it was graded. */
 export function IntelligenceEvent({
   source,
   headline,
   tag,
   tone = 'default',
+  detail,
 }: {
   source: string;
   headline: string;
   tag: string;
   tone?: 'urgent' | 'opportunity' | 'default';
+  detail?: string;
 }) {
-  const toneColor = tone === 'urgent' ? '#f87171' : tone === 'opportunity' ? '#34d399' : 'rgba(255,255,255,0.4)';
+  const toneColor = tone === 'urgent' ? '#fb7185' : tone === 'opportunity' ? '#34d399' : 'rgba(255,255,255,0.55)';
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-[9px] font-mono uppercase tracking-[0.14em] text-white/25 truncate">{source}</span>
+    <div
+      className="rounded-lg border border-white/[0.1] px-3.5 py-2.5"
+      style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015))' }}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <span className="text-[11.5px] font-mono uppercase tracking-[0.1em] text-white/50 truncate">{source}</span>
         <span
-          className="text-[8.5px] font-mono uppercase tracking-[0.12em] px-1.5 py-[2px] rounded shrink-0"
-          style={{ color: toneColor, background: `${toneColor}14` }}
+          className="text-[11px] font-mono uppercase tracking-[0.08em] px-2 py-[3px] rounded shrink-0"
+          style={{ color: toneColor, background: `${toneColor}1f` }}
         >
           {tag}
         </span>
       </div>
-      <p className="text-[11px] text-white/75 leading-snug">{headline}</p>
+      <p className="text-[14px] text-white/90 leading-snug">{headline}</p>
+      {detail && <p className="text-[12.5px] text-white/45 leading-snug mt-1">{detail}</p>}
     </div>
   );
 }
 
-export function MetricCard({ value, label, accent }: { value: string; label: string; accent?: string }) {
+/**
+ * One number in the standard metric row. `primary` marks the number that is
+ * the actual point of the card — for Lisa that is "4 worth knowing", not
+ * "48 sources watched", because the value is the filtering.
+ */
+export function MetricCard({
+  value,
+  label,
+  accent,
+  primary = false,
+}: {
+  value: string;
+  label: string;
+  accent?: string;
+  primary?: boolean;
+}) {
   return (
     <div className="text-center">
-      <div className="font-display font-black text-[20px] leading-none tabular-nums" style={{ color: accent ?? '#34d399' }}>
+      <div
+        className={cn('metric__value', primary && 'metric__value--primary')}
+        style={{ color: primary ? accent ?? '#34d399' : 'rgba(255,255,255,0.92)', ['--a' as string]: accent ?? '#34d399' }}
+      >
         {value}
       </div>
-      <div className="text-[8.5px] font-mono uppercase tracking-[0.14em] text-white/25 mt-1.5">{label}</div>
+      <div className="metric__label">{label}</div>
     </div>
   );
 }
 
-/** A produced asset — a draft, a brief, a qualified account. */
+/** A produced asset, styled to hint at the medium it will be published in. */
 export function OutputCard({ kind, title, accent }: { kind: string; title: string; accent: string }) {
   return (
     <div
-      className="rounded-lg border px-3 py-2 text-left"
-      style={{ borderColor: `${accent}26`, background: `linear-gradient(180deg, ${accent}0f, rgba(255,255,255,0.02))` }}
+      className="rounded-lg border overflow-hidden"
+      style={{ borderColor: `${accent}33`, background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))' }}
     >
-      <p className="text-[8.5px] font-mono uppercase tracking-[0.14em] mb-1" style={{ color: accent }}>{kind}</p>
-      <p className="text-[11px] text-white/80 leading-snug">{title}</p>
+      <div className="flex items-center gap-1.5 px-3 pt-2 pb-1.5">
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />
+        <span className="text-[11px] font-mono uppercase tracking-[0.1em]" style={{ color: accent }}>{kind}</span>
+      </div>
+      <p className="text-[13.5px] text-white/90 leading-snug px-3 pb-2.5">{title}</p>
     </div>
   );
 }
 
-/** The recommendation Orion hands the founder. */
-export function ActionRecommendation({ n, text }: { n: string; text: string }) {
+export function ActionRecommendation({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="text-[9px] font-mono text-emerald-400/70 mt-[3px] shrink-0">{n}</span>
-      <span className="text-[11.5px] text-white/70 leading-snug">{text}</span>
+      <span className="text-[13px] text-emerald-400/80 leading-snug shrink-0">→</span>
+      <span className="text-[13.5px] text-white/75 leading-snug">{text}</span>
     </div>
   );
 }
@@ -231,110 +286,102 @@ export function ActionRecommendation({ n, text }: { n: string; text: string }) {
 /* ───────────────────────────────────────────────────────────── DATA FLOW ── */
 
 /**
- * A luminous connection between two points in an SVG, with a packet running
- * along it. `delay` staggers packets so a group of lines reads as traffic
- * rather than a metronome.
+ * A connection with a packet running along it. One weight, one opacity, one
+ * packet size everywhere — previously these varied per panel, which is why the
+ * cards read as different products.
  */
 export function DataFlow({
-  x1, y1, x2, y2, accent = '#10b981', delay = 0, dim = false, dashed = false,
+  x1, y1, x2, y2, accent = '#10b981', delay = 0, dashed = false,
 }: {
   x1: number; y1: number; x2: number; y2: number;
-  accent?: string; delay?: number; dim?: boolean; dashed?: boolean;
+  accent?: string; delay?: number; dashed?: boolean;
 }) {
   return (
-    <g opacity={dim ? 0.18 : 1}>
+    <g>
       <line
         x1={x1} y1={y1} x2={x2} y2={y2}
         stroke={accent}
-        strokeWidth={1}
-        strokeOpacity={dim ? 0.2 : 0.3}
-        strokeDasharray={dashed ? '3 6' : undefined}
+        strokeWidth={1.5}
+        strokeOpacity={dashed ? 0.3 : 0.45}
+        strokeDasharray={dashed ? '4 6' : undefined}
         vectorEffect="non-scaling-stroke"
       />
-      {!dim && (
-        <circle r={2.1} fill={accent} className="flow-packet">
-          <animateMotion dur="2.6s" repeatCount="indefinite" begin={`${delay}s`} path={`M${x1},${y1} L${x2},${y2}`} />
-        </circle>
-      )}
+      <circle r={2.6} fill={accent} className="flow-packet">
+        <animateMotion dur="2.8s" repeatCount="indefinite" begin={`${delay}s`} path={`M${x1},${y1} L${x2},${y2}`} />
+      </circle>
     </g>
-  );
-}
-
-/** The shared context layer every agent reads from and writes to. */
-export function SharedMemoryNode({ compact = false }: { compact?: boolean }) {
-  return (
-    <div
-      className={cn(
-        'relative rounded-xl border overflow-hidden',
-        compact ? 'px-4 py-2.5' : 'px-5 py-3.5',
-      )}
-      style={{
-        borderColor: 'rgba(16,185,129,0.28)',
-        background: 'linear-gradient(180deg, rgba(16,185,129,0.14), rgba(16,185,129,0.03))',
-        boxShadow: '0 0 30px rgba(16,185,129,0.12), inset 0 1px 0 rgba(255,255,255,0.07)',
-      }}
-    >
-      <span className="memory-sweep" aria-hidden="true" />
-      <p className="relative font-mono text-[9.5px] uppercase tracking-[0.2em] text-emerald-300/80">Shared memory</p>
-      {!compact && (
-        <p className="relative text-[10px] text-white/40 mt-1 leading-snug">
-          Company context · ICP · Brand voice · Competitors · Past decisions
-        </p>
-      )}
-    </div>
   );
 }
 
 /* ───────────────────────────────────────────────────────────────── STYLES ── */
 
-/**
- * Injected once by the sequence. Kept out of `src/index.css` — these are
- * component styles, not design tokens.
- */
 export const AGENT_SYSTEM_STYLES = `
+.agent-panel {
+  width: 100%; min-width: 0; display: flex; flex-direction: column;
+  border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); padding: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.42));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.agent-panel__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.09);
+}
+.agent-panel__title {
+  font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,255,255,0.5);
+}
+.agent-panel__main { flex: 1; min-height: 0; display: flex; }
+.agent-panel__metrics {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.09);
+}
+.metric__value {
+  font-family: var(--font-display, inherit); font-weight: 900; font-size: 26px;
+  line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+/* The number the card actually exists to show. */
+.metric__value--primary { font-size: 30px; text-shadow: 0 0 22px color-mix(in srgb, var(--a) 45%, transparent); }
+.metric__label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255,255,255,0.45); margin-top: 6px; line-height: 1.2;
+}
+
 .agent-portrait { position: relative; }
 .agent-portrait__bloom {
-  position: absolute; inset: -22%; border-radius: 9999px; pointer-events: none;
-  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--a) 45%, transparent), transparent 66%);
-  filter: blur(14px); opacity: 0.5; transition: opacity 700ms ease;
+  position: absolute; inset: -20%; border-radius: 9999px; pointer-events: none;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--a) 42%, transparent), transparent 66%);
+  filter: blur(14px); opacity: 0.55; transition: opacity 700ms ease;
 }
-.agent-portrait[data-active="true"] .agent-portrait__bloom { opacity: 0.95; }
+.agent-portrait[data-active="true"] .agent-portrait__bloom { opacity: 0.9; }
 .agent-portrait__disc {
   position: absolute; inset: 0; border-radius: 9999px; overflow: hidden; display: block;
-  border: 1px solid color-mix(in srgb, var(--a) 40%, transparent);
-  box-shadow: 0 14px 40px -12px rgba(0,0,0,0.8);
+  border: 1.5px solid color-mix(in srgb, var(--a) 55%, transparent);
+  box-shadow: 0 12px 34px -12px rgba(0,0,0,0.85);
   background: #07090c;
 }
+/* One crop for every agent: same scale, same focal point, so none reads larger. */
+.agent-portrait__img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
 .agent-portrait__rim {
   position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.16), inset 0 -16px 26px -16px rgba(0,0,0,0.9);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -14px 24px -14px rgba(0,0,0,0.9);
 }
-/* A single slow pass. Enough to read as "scanning", not enough to distract. */
 .agent-portrait__scan {
   position: absolute; left: 0; right: 0; height: 34%; pointer-events: none;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--a) 26%, transparent), transparent);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--a) 24%, transparent), transparent);
   animation: agentScan 4.5s ease-in-out infinite;
 }
 @keyframes agentScan { 0% { top: -34%; opacity: 0; } 18% { opacity: 1; } 82% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
 
 .agent-status-dot {
-  width: 6px; height: 6px; border-radius: 9999px; background: var(--a);
+  width: 7px; height: 7px; border-radius: 9999px; background: var(--a); flex-shrink: 0;
   animation: agentStatusPulse 2.2s ease-in-out infinite;
 }
 @keyframes agentStatusPulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--a) 45%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--a) 50%, transparent); }
   70% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--a) 0%, transparent); }
 }
 
-.memory-sweep {
-  position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(52,211,153,0.16), transparent);
-  transform: translateX(-100%); animation: memorySweep 5s ease-in-out infinite;
-}
-@keyframes memorySweep { 0% { transform: translateX(-100%); } 60%, 100% { transform: translateX(100%); } }
-
 @media (prefers-reduced-motion: reduce) {
-  .agent-portrait__scan, .agent-status-dot, .memory-sweep, .flow-packet { animation: none !important; }
-  .memory-sweep { opacity: 0; }
+  .agent-portrait__scan, .agent-status-dot, .flow-packet, .atlas-sweep { animation: none !important; }
 }
 `;
