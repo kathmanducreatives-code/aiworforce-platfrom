@@ -6,6 +6,7 @@ import { AI_TOOLS } from '@/data/aiToolLogos';
 import { cn } from '@/lib/utils';
 import { EMPLOYEES } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 const templates = ['📧 Customer Success', '💰 Fundraising', '🤝 Partnerships', '📞 Cold Calling', '📱 Community Management', '🌍 Localization', '+ build your own'];
 
@@ -42,7 +43,7 @@ const AgentBuilderSection = () => {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={SECTION_VIEWPORT}
           transition={{ duration: 0.6 }}
           className="max-w-xl mx-auto"
         >

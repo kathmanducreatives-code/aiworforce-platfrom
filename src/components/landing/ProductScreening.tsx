@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { pinEnd, DEMO_SCENES, SCRUB } from './scrollSystem';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { GyroTilt } from '../shared/GyroTilt';
 import { X, Loader2, Link as LinkIcon } from 'lucide-react';
@@ -66,9 +67,9 @@ const ProductScreening = () => {
                 scrollTrigger: {
                     trigger: sectionRef.current,
                     start: 'top top',
-                    end: '+=1850',
+                    end: pinEnd(DEMO_SCENES),
                     pin: true,
-                    scrub: prefersReduced ? false : 1.1,
+                    scrub: prefersReduced ? false : SCRUB,
                     anticipatePin: 1,
                     fastScrollEnd: true,
                     onUpdate: (self) => {
@@ -142,7 +143,7 @@ const ProductScreening = () => {
         <section
             id="the-work"
             ref={sectionRef}
-            className="relative w-full h-screen overflow-hidden font-display"
+            className="relative w-full scroll-frame overflow-hidden font-display"
             style={{}}
         >
             <div className="absolute inset-0 pointer-events-none" style={{

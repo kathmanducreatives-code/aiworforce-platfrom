@@ -4,6 +4,7 @@ import { ArrowRight, Check, Clock, AlertTriangle } from 'lucide-react';
 import { Users, TrendingUp, Pen, Eye, BarChart2, User } from 'lucide-react';
 import { employeeByName } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 const timeline = [
   { time: '7:00 AM', agent: 'Lisa', dept: 'Signals', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
@@ -58,7 +59,7 @@ const DayTimelineSection = () => {
               key={i}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
+              viewport={SECTION_VIEWPORT}
               transition={{ duration: 0.4, delay: i * 0.05 }}
               className={`relative flex items-start gap-4 mb-6 ${i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} md:gap-8`}
             >
@@ -108,7 +109,7 @@ const DayTimelineSection = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
+          viewport={SECTION_VIEWPORT}
           className="mt-12 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-8"
         >
           <h3 className="font-display font-bold text-lg text-white text-center mb-6">Your Monday. By the numbers.</h3>

@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check } from 'lucide-react';
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 const withoutItems = [
   'A dozen AI tools that forget your company every session',
@@ -36,7 +37,7 @@ export const TransformationSection = () => {
     <section ref={sectionRef} className="relative w-full px-4 py-28 md:py-36 z-10" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="max-w-5xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }}
+          viewport={SECTION_VIEWPORT} transition={{ duration: 0.6 }}
           className="text-center mb-16">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] mb-4 text-emerald-500 font-semibold">THE REALITY</p>
           <h2 className="font-display font-black text-[clamp(2rem,4.5vw,3.8rem)] leading-[1.05] tracking-[-0.04em] text-white">
@@ -109,7 +110,7 @@ export const TransformationSection = () => {
         </div>
 
         <motion.p initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.5, delay: 0.8 }}
+          viewport={SECTION_VIEWPORT} transition={{ duration: 0.5, delay: 0.8 }}
           className="text-center font-display font-bold text-xl md:text-2xl text-white/70 mt-16 max-w-lg mx-auto">
           There is a better way to run a company.
         </motion.p>

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import PoweredByStrip from '@/components/agents/PoweredByStrip';
 import { EMPLOYEES } from './employees';
 import { EmployeePortrait3D } from './EmployeePortrait';
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 export default function MeetYourAITeamSection() {
   return (
@@ -10,7 +11,7 @@ export default function MeetYourAITeamSection() {
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={SECTION_VIEWPORT}
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
@@ -30,7 +31,7 @@ export default function MeetYourAITeamSection() {
               key={employee.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-30px' }}
+              viewport={SECTION_VIEWPORT}
               transition={{ duration: 0.5, delay: i * 0.08 }}
               className="flex flex-col items-center text-center group"
             >
@@ -54,7 +55,7 @@ export default function MeetYourAITeamSection() {
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
+          viewport={SECTION_VIEWPORT}
           transition={{ duration: 0.6, delay: 0.3 }}
           className="mt-20 md:mt-24"
         >

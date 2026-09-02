@@ -9,6 +9,7 @@ import { TOOL_BRANDS, TOOL_LOGO_MAP } from './ToolLogos';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { EMPLOYEE_BY_ID, type EmployeeId } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 const DEPT = {
   talent: { color: "#34d399", label: "Research", bg: "rgba(52,211,153,0.12)" },
@@ -153,7 +154,7 @@ const MeetTheTeamSection = () => {
       <div className="px-4 pt-24 md:pt-32 pb-4">
         <div className="max-w-[1100px] mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="text-center">
+            viewport={SECTION_VIEWPORT} transition={{ duration: 0.6 }} className="text-center">
             <p className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">A DAY INSIDE AGENTORY</p>
             <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.04em] text-foreground mb-6">
               They work together.<br />You just decide.
@@ -167,7 +168,8 @@ const MeetTheTeamSection = () => {
 
       {/* War Room — scroll-pinned on desktop */}
       <div ref={trackRef} className="relative" style={{ height: isMobile ? "auto" : "280vh" }}>
-        <div className={isMobile ? "" : "sticky top-0 h-screen flex items-center"} style={{ zIndex: 10 }}>
+        <div className={isMobile ? "" : "sticky scroll-frame flex items-center"}
+          style={{ zIndex: 10, top: 0 }}>
           <div className="max-w-[1100px] mx-auto w-full px-4">
             <div className="rounded-2xl border border-white/[0.08] overflow-hidden relative"
               style={{ background: "linear-gradient(180deg, #0a0e14 0%, #060a10 100%)" }}>

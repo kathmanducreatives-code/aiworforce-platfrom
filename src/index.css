@@ -9,6 +9,10 @@
 
 /* === Premium typography & radius tokens (v4 polish) === */
 :root {
+  /* Height of the fixed header. Mirrors NAV_OFFSET in scrollSystem.ts —
+     change both together. */
+  --nav-offset: 76px;
+
   --font-micro: 12px;
   --font-xs:    13px;
   --font-sm:    14.5px;
@@ -2223,4 +2227,31 @@ body::-webkit-scrollbar,
 
 body {
   overflow-x: hidden;             /* prevent accidental horizontal overflow */
+}
+
+
+/* ── SCROLL FRAME ────────────────────────────────────────────────────────────
+   The usable viewport: full height minus the fixed navbar. Every pinned or
+   sticky landing section uses this instead of `h-screen`, so content is
+   centred in the space the reader can actually see rather than behind the
+   header. `svh` keeps mobile browser chrome from making sections jump. */
+.scroll-frame {
+  height: 100svh;
+  padding-top: var(--nav-offset);
+  padding-bottom: 28px;
+  box-sizing: border-box;
+}
+
+/* The recruiting composition is the tallest framed block on the page — a full
+   heading stack above a 464px mockup. On short laptop viewports it fit with
+   only 11px of clearance while the other framed sections had 40-60px. Easing
+   the mockup down a few percent buys the same breathing room without touching
+   type, copy or the number of rows shown. */
+@media (max-height: 940px) {
+  #demo-recruiting .text-center { margin-bottom: 0.375rem; }
+  /* Shave real layout height off the mockup's chrome and rows. Transform-based
+     scaling was tried first and does nothing here — it does not affect layout,
+     so the composition box stayed the same height. */
+  #demo-recruiting .look-mockup .candidate-card { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  #demo-recruiting .look-mockup > div > div:first-child { padding-top: 0.375rem; padding-bottom: 0.375rem; }
 }

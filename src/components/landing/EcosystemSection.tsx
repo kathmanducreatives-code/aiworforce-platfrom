@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { TOOL_BRANDS, ToolLogoImage } from "./ToolLogos";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SECTION_VIEWPORT } from './scrollSystem';
 
 interface OrbitalTool {
   id: string;
@@ -175,7 +176,7 @@ const EcosystemSection = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
+          viewport={SECTION_VIEWPORT}
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
@@ -425,7 +426,7 @@ const EcosystemSection = () => {
                   <motion.div key={tool.id}
                     initial={{ opacity: 0, scale: 0.8 }}
                     whileInView={{ opacity: active ? 1 : 0.3, scale: 1 }}
-                    viewport={{ once: true, amount: 0.1 }}
+                    viewport={SECTION_VIEWPORT}
                     transition={{ duration: 0.4 }}
                     className="flex flex-col items-center gap-1">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
@@ -469,7 +470,7 @@ const EcosystemSection = () => {
             <motion.div key={s.label}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.1 }}
+              viewport={SECTION_VIEWPORT}
               transition={{ duration: 0.5 }}
               className="text-center">
               <div className="font-display font-black text-4xl text-white tabular-nums">{s.num}</div>
@@ -482,7 +483,7 @@ const EcosystemSection = () => {
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
+          viewport={SECTION_VIEWPORT}
           transition={{ duration: 0.5 }}
           className="text-center font-display font-bold text-xl md:text-2xl text-white/80 max-w-[560px] mx-auto leading-relaxed">
           You bring the work.<br />Agentory brings the team, the tools<br />and the result.

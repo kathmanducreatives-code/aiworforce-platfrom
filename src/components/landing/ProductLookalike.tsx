@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
+import { pinEnd, DEMO_SCENES, SCRUB } from './scrollSystem';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Linkedin, Mail, MapPin, Clock } from 'lucide-react';
 import { EMPLOYEE_BY_ID } from './employees';
@@ -27,9 +28,9 @@ const ProductLookalike = () => {
         scrollTrigger: {
           trigger: sectionRef.current,
           start: 'top top',
-          end: '+=1400',
+          end: pinEnd(DEMO_SCENES),
           pin: true,
-          scrub: 1.2,
+          scrub: SCRUB,
           anticipatePin: 1,
           fastScrollEnd: true,
         }
@@ -71,7 +72,7 @@ const ProductLookalike = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="demo-recruiting" className="relative w-full h-screen overflow-hidden font-display">
+    <section ref={sectionRef} id="demo-recruiting" className="relative w-full scroll-frame overflow-hidden font-display">
       <div className="absolute inset-0 pointer-events-none" style={{
         backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
         backgroundSize: '100px 100px',
@@ -85,12 +86,12 @@ const ProductLookalike = () => {
       </div>
 
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
-        <div className="text-center mb-6">
+        <div className="text-center mb-4">
           <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/40 bg-transparent mb-4 opacity-0 mx-auto">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">ONE JOB YOU CAN HAND OVER · RECRUITING</span>
           </div>
-          <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
+          <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-2.5 opacity-0">
             Give them a hiring job.<br />Get a ranked shortlist back.
           </h2>
           <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
@@ -98,7 +99,7 @@ const ProductLookalike = () => {
           </p>
           {/* Recruiting is not a separate product — it is the same two employees
               doing a different job. Naming them here is what makes that land. */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
             <EmployeeChip employee={EMPLOYEE_BY_ID.atlas} label="researches and ranks" />
             <span className="text-white/20 text-xs">→</span>
             <EmployeeChip employee={EMPLOYEE_BY_ID.orion} label="queues your decisions" />

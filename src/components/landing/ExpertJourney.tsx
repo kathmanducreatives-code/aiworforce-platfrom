@@ -24,6 +24,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { EMPLOYEE_BY_ID, SPECIALISTS, ORION, type Employee } from './employees';
+import { SCRUB } from './scrollSystem';
 import {
   AGENT_SYSTEM_STYLES,
   AgentPanel,
@@ -48,11 +49,11 @@ const STAGES = 5;
 const STYLES = `
 #hero-to-expert-sequence {
   position: relative;
-  height: ${STAGES * 100 + 100}vh;
+  height: 100svh;
   background: transparent;
 }
 #hero-to-expert-sequence .sequence-viewport {
-  position: sticky; top: 0; height: 100vh; perspective: 1500px; overflow: hidden;
+  position: sticky; top: 0; height: 100svh; perspective: 1500px; overflow: hidden;
 }
 #hero-to-expert-sequence .blueprint-grid {
   position: absolute; inset: 0; z-index: 0; opacity: 0.1;
@@ -64,11 +65,13 @@ const STYLES = `
   background-size: 100% 100%, 100% 100%, 68px 68px, 68px 68px;
 }
 #hero-to-expert-sequence .sequence-stage {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  /* Centre in the usable viewport, not behind the fixed navbar. */
+  position: absolute; top: var(--nav-offset); left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
   opacity: 0; transform: scale(0.9); z-index: 2; will-change: transform, opacity; transform-style: preserve-3d;
 }
 #hero-to-expert-sequence .sequence-card {
-  width: min(1160px, 94vw); height: min(80vh, 704px); border-radius: 24px;
+  width: min(1160px, 94vw); height: min(calc(100svh - var(--nav-offset) - 64px), 704px); border-radius: 24px;
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   background: rgba(9,11,14,0.82); border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 24px 70px -30px rgba(0,0,0,0.9); overflow: hidden;
@@ -302,7 +305,7 @@ export const ExpertJourney = () => {
       const tl = gsap.timeline({
         defaults: { ease: 'power2.out' },
         scrollTrigger: {
-          trigger: section, start: 'top top', end: `+=${STAGES * 100}%`, scrub: 1.2, pin: true, anticipatePin: 1,
+          trigger: section, start: 'top top', end: `+=${STAGES * 100}%`, scrub: SCRUB, pin: true, anticipatePin: 1,
         },
       });
       for (let i = 1; i <= STAGES; i++) {
