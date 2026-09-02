@@ -26,6 +26,7 @@
  */
 
 import { PUBLIC_AGENTS, type PublicAgentId } from '@/config/agentRegistry';
+import pilotPortrait from '@/assets/agents/pilot.webp';
 
 const portraitFiles = import.meta.glob('../../assets/agents/public/*.webp', {
   eager: true,
@@ -40,10 +41,10 @@ function portraitFor(id: string): string | null {
   return hit ? hit[1] : null;
 }
 
-export type EmployeeId = Extract<PublicAgentId, 'lyra' | 'atlas' | 'mira' | 'orion'>;
+export type EmployeeId = Extract<PublicAgentId, 'lyra' | 'atlas' | 'mira' | 'orion' | 'pilot'>;
 
 /** The kind of work an employee owns. Drives accent colour and grouping. */
-export type EmployeeDiscipline = 'signals' | 'leads' | 'content' | 'executive';
+export type EmployeeDiscipline = 'signals' | 'leads' | 'content' | 'executive' | 'coordination';
 
 export interface Employee {
   id: EmployeeId;
@@ -73,6 +74,23 @@ export interface Employee {
 }
 
 export const EMPLOYEES: Employee[] = [
+  {
+    // Pilot is the coordinator, not a specialist: it takes the request, opens
+    // the mission and hands work out. It is deliberately not in SPECIALISTS.
+    id: 'pilot',
+    name: PUBLIC_AGENTS.pilot.name,
+    discipline: 'coordination',
+    function: 'Workflow coordinator',
+    tag: 'PILOT',
+    specialty: 'Turns a request into a mission, delegates it, and brings the result back for review.',
+    status: 'Coordinating',
+    headlineClaim: 'Pilot turned your request into a live workflow.',
+    capabilities: ['DELEGATION', 'MISSION SETUP', 'PROGRESS', 'FOUNDER REVIEW'],
+    handsOffTo: 'atlas',
+    accent: PUBLIC_AGENTS.pilot.accentHex,
+    portrait: pilotPortrait,
+    initial: 'P',
+  },
   {
     id: 'mira',
     name: 'Lisa',
@@ -141,7 +159,9 @@ export const EMPLOYEE_BY_ID: Record<EmployeeId, Employee> = EMPLOYEES.reduce(
 );
 
 /** The three specialists that report into Orion. */
-export const SPECIALISTS = EMPLOYEES.filter((e) => e.discipline !== 'executive');
+export const SPECIALISTS = EMPLOYEES.filter(
+  (e) => e.discipline !== 'executive' && e.discipline !== 'coordination',
+);
 export const ORION = EMPLOYEE_BY_ID.orion;
 
 /** Resolve by public name, for sections that carry a name string. */

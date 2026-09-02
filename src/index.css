@@ -2249,6 +2249,17 @@ section[id] {
   box-sizing: border-box;
 }
 
+/* The fixed frame only makes sense where a section is actually pinned, which
+   is desktop. Below that the demos stack, and forcing them into one viewport
+   height clipped the headline off the top and the results off the bottom. */
+@media (max-width: 1023px) {
+  .scroll-frame {
+    height: auto;
+    min-height: 100svh;
+    padding-bottom: 56px;
+  }
+}
+
 /* The recruiting composition is the tallest framed block on the page — a full
    heading stack above a 464px mockup. On short laptop viewports it fit with
    only 11px of clearance while the other framed sections had 40-60px. Easing
