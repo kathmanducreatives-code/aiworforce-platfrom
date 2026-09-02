@@ -6,8 +6,16 @@ const Footer = () => (
       <div>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-white/25 mb-4">Product</h4>
         <div className="space-y-3">
-          {['Research', 'Leads', 'Signals', 'Content & Outreach', 'Recruiting', 'Build your own', 'Pricing'].map((l) => (
-            <a key={l} href="#" className="block text-sm text-white/30 hover:text-white/60 transition-colors">{l}</a>
+          {[
+            { label: 'How it works', href: '#how-it-works' },
+            { label: 'What it does', href: '#the-work' },
+            { label: 'Signals & monitoring', href: '#hero-to-expert-sequence' },
+            { label: 'Recruiting', href: '#demo-recruiting' },
+            { label: 'Build your own', href: '#build-your-own' },
+            { label: 'Under the hood', href: '#ecosystem' },
+            { label: 'Pricing', href: '#pricing' },
+          ].map((l) => (
+            <a key={l.label} href={l.href} className="block text-sm text-white/30 hover:text-white/60 transition-colors">{l.label}</a>
           ))}
         </div>
       </div>

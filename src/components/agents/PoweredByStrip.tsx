@@ -7,12 +7,14 @@ interface Props {
   label?: string;
 }
 
+// Providers the backend actually calls. ElevenLabs was listed here and appears
+// in no edge function — the same unsupported claim removed from the ecosystem
+// orbit, just in a different component.
 const LOGOS = [
   { src: AI_MODELS['gpt-4o'].logo,        label: 'OpenAI',      bg: 'bg-white' },
   { src: AI_MODELS['claude-sonnet'].logo, label: 'Anthropic',   bg: 'bg-orange-500/10' },
   { src: AI_MODELS['gemini-pro'].logo,    label: 'Gemini',      bg: 'bg-white' },
   { src: AI_TOOLS.firecrawl.logo,         label: 'Firecrawl',   bg: 'bg-white' },
-  { src: AI_TOOLS.elevenlabs.logo,        label: 'ElevenLabs',  bg: 'bg-white' },
 ];
 
 export default function PoweredByStrip({ className, label = 'POWERED BY THE BEST AI INFRASTRUCTURE' }: Props) {

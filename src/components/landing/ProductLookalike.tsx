@@ -56,7 +56,7 @@ const ProductLookalike = () => {
       }
 
       const skeletons = sectionRef.current?.querySelectorAll('.candidate-skeleton');
-      if (skeletons) { tl.to(skeletons, { opacity: 0, duration: 0.5 }, 2.8); }
+      if (skeletons?.length) { tl.to(skeletons, { opacity: 0, duration: 0.5 }, 2.8); }
 
       const badges = sectionRef.current?.querySelectorAll('.match-badge');
       if (badges) {

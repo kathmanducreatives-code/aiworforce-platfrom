@@ -15,9 +15,11 @@ const MODEL_OPTIONS = [
   { ...AI_MODELS['gemini-pro'],    selected: false },
 ];
 
+// ElevenLabs is not wired to anything in the backend, so it is not offered
+// here either. Both rows are providers the product genuinely calls.
 const TOOL_OPTIONS = [
-  { ...AI_TOOLS.firecrawl,  selected: true,  badge: 'Web Scraping' },
-  { ...AI_TOOLS.elevenlabs, selected: false, badge: 'Voice'        },
+  { ...AI_TOOLS.firecrawl, selected: true,  badge: 'Web Research' },
+  { ...AI_TOOLS.apify,     selected: false, badge: 'Data'         },
 ];
 
 const AgentBuilderSection = () => {

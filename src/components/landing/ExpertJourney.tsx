@@ -91,31 +91,42 @@ export const ExpertJourney = () => {
       const uiBars = gsap.utils.toArray<HTMLElement>('#hero-to-expert-sequence .ui-bar');
       gsap.set(stages, { opacity: 0, scale: 0.9, y: 80, rotateX: 0, transformOrigin: 'center center' });
       const tl = gsap.timeline({ defaults: { ease: 'power2.inOut' }, scrollTrigger: {
-        trigger: '#hero-to-expert-sequence', start: 'top top', end: '+=400%', scrub: 1.2, pin: true, anticipatePin: 1,
+        // The element, not a selector string. Under StrictMode's double-invoke
+        // the selector was resolved while the node was detached, which is where
+        // "Element not found: #hero-to-expert-sequence" came from.
+        trigger: section, start: 'top top', end: '+=400%', scrub: 1.2, pin: true, anticipatePin: 1,
       }});
-      tl.to('.stage-1', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
-        .to('.stage-1 .ui-badge', { y: -24, duration: 0.55 }, '<')
-        .to('.stage-1 .ui-bar', { y: -34, duration: 0.55 }, '<')
-        .to('.stage-1 .ui-widget', { y: -18, duration: 0.55 }, '<')
-        .to('.stage-1', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
-      tl.to('.stage-2', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
-        .to('.stage-2 .ui-badge', { y: -24, duration: 0.55 }, '<')
-        .to('.stage-2 .ui-bar', { y: -34, duration: 0.55 }, '<')
-        .to('.stage-2 .ui-widget', { y: -18, duration: 0.55 }, '<')
-        .to('.stage-2', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
-      tl.to('.stage-3', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
-        .to('.stage-3 .ui-badge', { y: -24, duration: 0.55 }, '<')
-        .to('.stage-3 .ui-bar', { y: -34, duration: 0.55 }, '<')
-        .to('.stage-3 .ui-widget', { y: -18, duration: 0.55 }, '<')
-        .to('.stage-3', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
-      tl.to('.stage-4', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
-        .to('.stage-4 .ui-badge', { y: -24, duration: 0.55 }, '<')
-        .to('.stage-4 .ui-bar', { y: -34, duration: 0.55 }, '<')
-        .to('.stage-4 .ui-widget', { y: -18, duration: 0.55 }, '<')
-        .to('.stage-4', { boxShadow: '0 0 60px rgba(0,255,150,0.22)', duration: 0.6 });
-      tl.to(uiBadges, { yPercent: -10, duration: 0.001 }, 0)
-        .to(uiBars, { yPercent: -12, duration: 0.001 }, 0)
-        .to(uiWidgets, { yPercent: -8, duration: 0.001 }, 0);
+
+      // Not every stage has a .ui-bar / .ui-badge / .ui-widget. GSAP warns once
+      // per selector that matches nothing, so the console filled with "target
+      // not found" on every load. Tween only what is actually there.
+      const to = (target: string | HTMLElement[], vars: gsap.TweenVars, pos?: string) => {
+        const exists = typeof target === 'string' ? !!section.querySelector(target) : target.length > 0;
+        if (exists) tl.to(target, vars, pos);
+      };
+      tl.to('.stage-1', { opacity: 1, scale: 1, y: 0, duration: 0.75 });
+      to('.stage-1 .ui-badge', { y: -24, duration: 0.55 }, '<');
+      to('.stage-1 .ui-bar', { y: -34, duration: 0.55 }, '<');
+      to('.stage-1 .ui-widget', { y: -18, duration: 0.55 }, '<');
+      tl.to('.stage-1', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
+      tl.to('.stage-2', { opacity: 1, scale: 1, y: 0, duration: 0.75 });
+      to('.stage-2 .ui-badge', { y: -24, duration: 0.55 }, '<');
+      to('.stage-2 .ui-bar', { y: -34, duration: 0.55 }, '<');
+      to('.stage-2 .ui-widget', { y: -18, duration: 0.55 }, '<');
+      tl.to('.stage-2', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
+      tl.to('.stage-3', { opacity: 1, scale: 1, y: 0, duration: 0.75 });
+      to('.stage-3 .ui-badge', { y: -24, duration: 0.55 }, '<');
+      to('.stage-3 .ui-bar', { y: -34, duration: 0.55 }, '<');
+      to('.stage-3 .ui-widget', { y: -18, duration: 0.55 }, '<');
+      tl.to('.stage-3', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
+      tl.to('.stage-4', { opacity: 1, scale: 1, y: 0, duration: 0.75 });
+      to('.stage-4 .ui-badge', { y: -24, duration: 0.55 }, '<');
+      to('.stage-4 .ui-bar', { y: -34, duration: 0.55 }, '<');
+      to('.stage-4 .ui-widget', { y: -18, duration: 0.55 }, '<');
+      tl.to('.stage-4', { boxShadow: '0 0 60px rgba(0,255,150,0.22)', duration: 0.6 });
+      to(uiBadges, { yPercent: -10, duration: 0.001 }, '0');
+      to(uiBars, { yPercent: -12, duration: 0.001 }, '0');
+      to(uiWidgets, { yPercent: -8, duration: 0.001 }, '0');
     }, sectionRef);
     return () => ctx.revert();
   }, []);
