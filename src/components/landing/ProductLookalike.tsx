@@ -92,17 +92,17 @@ const ProductLookalike = () => {
             <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">ONE JOB YOU CAN HAND OVER · RECRUITING</span>
           </div>
           <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-2.5 opacity-0">
-            Give them a hiring job.<br />Get a ranked shortlist back.
+            From open role to<br />ranked shortlist.
           </h2>
-          <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
-            Tell Agentory the role you are filling. Your AI employees find people who match, review every applicant against what the job actually needs, and bring back a ranked shortlist with the reasoning attached. You decide who to talk to.
+          <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[780px] mx-auto opacity-0">
+            Tell Agentory who you need. Your AI employees find, evaluate, and rank candidates against the role — then bring back the strongest matches with clear reasoning. You decide who moves forward.
           </p>
           {/* Recruiting is not a separate product — it is the same two employees
               doing a different job. Naming them here is what makes that land. */}
           <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-            <EmployeeChip employee={EMPLOYEE_BY_ID.atlas} label="researches and ranks" />
+            <EmployeeChip employee={EMPLOYEE_BY_ID.atlas} label="Candidate intelligence" />
             <span className="text-white/20 text-xs">→</span>
-            <EmployeeChip employee={EMPLOYEE_BY_ID.orion} label="queues your decisions" />
+            <EmployeeChip employee={EMPLOYEE_BY_ID.orion} label="Review & decisions" />
           </div>
         </div>
 

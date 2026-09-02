@@ -11,7 +11,7 @@
 :root {
   /* Height of the fixed header. Mirrors NAV_OFFSET in scrollSystem.ts —
      change both together. */
-  --nav-offset: 76px;
+  --nav-offset: 64px;
 
   --font-micro: 12px;
   --font-xs:    13px;
@@ -2235,6 +2235,13 @@ body {
    sticky landing section uses this instead of `h-screen`, so content is
    centred in the space the reader can actually see rather than behind the
    header. `svh` keeps mobile browser chrome from making sections jump. */
+/* Anchored sections were landing flush against the fixed header — there was no
+   scroll-margin anywhere in the codebase, so every in-page link put the
+   heading directly underneath the bar. */
+section[id] {
+  scroll-margin-top: calc(var(--nav-offset) + 16px);
+}
+
 .scroll-frame {
   height: 100svh;
   padding-top: var(--nav-offset);

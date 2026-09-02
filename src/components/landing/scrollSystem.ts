@@ -19,9 +19,10 @@
  * Everything scroll-related now reads its numbers from here.
  */
 
-/** Height of the fixed header. It shrinks to ~59px once scrolled; the larger
- *  resting value is used so nothing is ever crowded at the top of the page. */
-export const NAV_OFFSET = 76;
+/** Height of the fixed header. It is a constant height — the bar changes only
+ *  its surface on scroll, not its size, so this value is exact rather than a
+ *  worst case. Mirrors --nav-offset in index.css; change both together. */
+export const NAV_OFFSET = 64;
 
 /**
  * The frame every major section composes inside: the viewport minus the

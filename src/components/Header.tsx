@@ -22,16 +22,20 @@ const Header = () => {
   }, []);
 
   const navItems = [
-    { label: 'How it works', href: '#how-it-works' },
-    { label: 'What it does', href: '#the-work' },
+    // #day-timeline is the section literally headed "How Agentory works" —
+    // one job followed through the team. #hero-to-expert-sequence is where the
+    // four employees are introduced. #the-work opens the run of job demos
+    // (leads, then recruiting), which is the closest thing to a use-case index.
+    { label: 'How it works', href: '#day-timeline' },
+    { label: 'AI employees', href: '#hero-to-expert-sequence' },
+    { label: 'Use cases', href: '#the-work' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'FAQ', href: '#faq' },
   ];
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
-      ? 'bg-[#030303]/60 backdrop-blur-xl border-b border-white/[0.03] py-3'
-      : 'bg-transparent py-5'
+    <header className={`fixed top-0 left-0 right-0 z-50 py-3.5 transition-colors duration-300 ${scrolled
+      ? 'bg-[#050607]/80 backdrop-blur-md border-b border-white/[0.06]'
+      : 'bg-[#050607]/40 backdrop-blur-sm border-b border-transparent'
       }`}>
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
@@ -41,12 +45,12 @@ const Header = () => {
         </div>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-7">
           {navItems.map((item) => (
             <a key={item.label} href={item.href}
-              className="text-sm text-neutral-400 hover:text-white font-medium transition-colors duration-300 relative group">
+              className="text-[13.5px] text-neutral-400 hover:text-white font-medium transition-colors duration-200 relative group py-1">
               {item.label}
-              <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-emerald-400 group-hover:w-full transition-all duration-300" />
+              <span className="absolute -bottom-0.5 left-0 right-0 h-px bg-white/25 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-200" />
             </a>
           ))}
         </nav>
@@ -60,7 +64,7 @@ const Header = () => {
             </>
           ) : (
             <>
-              <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium transition-colors">Sign in</button>
+              <button onClick={() => navigate('/auth')} className="text-[13.5px] text-neutral-400 hover:text-white font-medium transition-colors">Sign in</button>
               <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[36px] px-5 bg-emerald-500/[0.04] border border-emerald-500/25 text-emerald-300 text-sm font-medium rounded-full transition-all duration-300 hover:bg-emerald-500/[0.08] hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] flex items-center justify-center">
                 Put Agentory to work →
               </button>
