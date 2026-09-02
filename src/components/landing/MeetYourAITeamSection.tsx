@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import PoweredByStrip from '@/components/agents/PoweredByStrip';
-import { EMPLOYEES } from './employees';
+import { WORKFORCE } from './employees';
 import { EmployeePortrait3D } from './EmployeePortrait';
 import { SECTION_VIEWPORT } from './scrollSystem';
 
@@ -26,7 +26,7 @@ export default function MeetYourAITeamSection() {
         </motion.div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-8 max-w-[1100px] mx-auto">
-          {EMPLOYEES.map((employee, i) => (
+          {WORKFORCE.map((employee, i) => (
             <motion.div
               key={employee.id}
               initial={{ opacity: 0, y: 20 }}

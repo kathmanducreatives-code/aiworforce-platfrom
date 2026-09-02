@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ArrowRight } from 'lucide-react';
-import { EMPLOYEES } from './employees';
+import { WORKFORCE } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
 
 const HeroHook = () => {
@@ -59,14 +59,14 @@ const HeroHook = () => {
         <div ref={agentRef} className="opacity-0 mb-12">
           <div className="relative flex items-center justify-center gap-6 md:gap-8">
             {/* Connecting line — the handoff path between employees */}
-            <div className="absolute top-7 left-1/2 -translate-x-1/2 hidden md:block" style={{ width: `${(EMPLOYEES.length - 1) * 80}px`, height: 1 }}>
+            <div className="absolute top-7 left-1/2 -translate-x-1/2 hidden md:block" style={{ width: `${(WORKFORCE.length - 1) * 80}px`, height: 1 }}>
               <div className="w-full h-px bg-primary/20" />
               <div className="absolute top-0 left-0 w-3 h-px bg-primary animate-[travelDot_3s_linear_infinite]"
                 style={{ boxShadow: "0 0 6px hsl(var(--primary) / 0.6)" }} />
             </div>
             <style>{`@keyframes travelDot { 0% { left: 0; } 100% { left: calc(100% - 12px); } }`}</style>
 
-            {EMPLOYEES.map((employee, i) => (
+            {WORKFORCE.map((employee, i) => (
               <div key={employee.id} className="flex flex-col items-center gap-2 relative z-10">
                 <div className="relative w-14 h-14 rounded-full flex items-center justify-center">
                   <EmployeeAvatar employee={employee} size={56} />

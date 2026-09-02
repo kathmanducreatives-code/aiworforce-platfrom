@@ -4,7 +4,7 @@ import { ArrowRight, Check } from 'lucide-react';
 import { AI_MODELS } from '@/data/aiModelLogos';
 import { AI_TOOLS } from '@/data/aiToolLogos';
 import { cn } from '@/lib/utils';
-import { EMPLOYEES } from './employees';
+import { WORKFORCE } from './employees';
 import { EmployeeAvatar } from './EmployeePortrait';
 import { SECTION_VIEWPORT } from './scrollSystem';
 
@@ -148,7 +148,7 @@ const AgentBuilderSection = () => {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <span className="text-[10px] uppercase tracking-[0.15em] font-mono text-white/25">Joins</span>
           <div className="flex items-center -space-x-2">
-            {EMPLOYEES.map((employee) => (
+            {WORKFORCE.map((employee) => (
               <EmployeeAvatar key={employee.id} employee={employee} size={30} />
             ))}
             <span className="w-[30px] h-[30px] rounded-full border border-dashed border-emerald-500/40 bg-emerald-500/[0.06] flex items-center justify-center text-emerald-400 text-[13px] font-bold relative z-10">

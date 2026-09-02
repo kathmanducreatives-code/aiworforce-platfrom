@@ -158,6 +158,14 @@ export const EMPLOYEE_BY_ID: Record<EmployeeId, Employee> = EMPLOYEES.reduce(
   {} as Record<EmployeeId, Employee>,
 );
 
+/**
+ * The employees who do the jobs. Pilot coordinates the work rather than owning
+ * a discipline, so it is not one of them — sections that present "the team"
+ * should use this, not EMPLOYEES, or Pilot turns up as a fifth face in layouts
+ * built for four.
+ */
+export const WORKFORCE = EMPLOYEES.filter((e) => e.discipline !== 'coordination');
+
 /** The three specialists that report into Orion. */
 export const SPECIALISTS = EMPLOYEES.filter(
   (e) => e.discipline !== 'executive' && e.discipline !== 'coordination',
