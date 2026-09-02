@@ -76,9 +76,11 @@ const MeetTheTeamSection = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const sectionRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
-  const sentinelRefs = useRef<(HTMLDivElement | null)[]>([]);
+  /** Which way the reader is moving. Drives the enter/exit direction below. */
+  const [direction, setDirection] = useState<"down" | "up">("down");
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -90,31 +92,65 @@ const MeetTheTeamSection = () => {
     return () => obs.disconnect();
   }, []);
 
-  // Scroll-pinned message reveal (desktop only)
+  // SCROLL-PINNED REVEAL, read from scroll position rather than ratcheted.
+  //
+  // This used to be eight IntersectionObservers doing
+  // `setCurrentStep(prev => Math.max(prev, i))`. `Math.max` meant the step
+  // could only ever go up: scrolling back through the section left the feed
+  // fully revealed, the progress rail pinned at 8/8 and the summary bar
+  // showing. The section played once and was inert on the way back.
+  //
+  // Deriving the step from the track's own offset makes it symmetric — the
+  // same scroll position always yields the same state, in either direction —
+  // and gives us the direction itself, which the animation below needs.
+  const stepRef = useRef(-1);
   useEffect(() => {
     if (isMobile) return;
-    const observers: IntersectionObserver[] = [];
-    sentinelRefs.current.forEach((el, i) => {
-      if (!el) return;
-      const obs = new IntersectionObserver(([entry]) => {
-        if (entry.isIntersecting) {
-          setCurrentStep(prev => Math.max(prev, i));
-        }
-      }, { threshold: 0.5 });
-      obs.observe(el);
-      observers.push(obs);
-    });
-    return () => observers.forEach(o => o.disconnect());
-  }, [isMobile, inView]);
+    const track = trackRef.current;
+    if (!track) return;
+
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const rect = track.getBoundingClientRect();
+      const travel = rect.height - window.innerHeight;
+      if (travel <= 0) return;
+      const progress = Math.min(1, Math.max(0, -rect.top / travel));
+      // Steps are spread across 94% of the track and the last 6% holds on the
+      // final message, so the summary has a beat to land before the pin
+      // releases. Spreading them over less than that left a long stretch at
+      // the end where scrolling changed nothing, which reads as broken.
+      const raw = Math.floor((progress / 0.94) * MESSAGES.length);
+      const step = Math.max(-1, Math.min(MESSAGES.length - 1, raw));
+      if (step !== stepRef.current) {
+        setDirection(step > stepRef.current ? "down" : "up");
+        stepRef.current = step;
+        setCurrentStep(step);
+      }
+    };
+
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(read); };
+    read();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [isMobile]);
 
   const visibleMessages = isMobile ? MESSAGES : MESSAGES.slice(0, currentStep + 1);
-  const displayMessages = visibleMessages.slice(-4);
+  const displayMessages = visibleMessages.slice(-5);
+  /** Who is speaking right now, and who they are handing to — drives the rail. */
+  const activeMessage = currentStep >= 0 ? MESSAGES[Math.min(currentStep, MESSAGES.length - 1)] : null;
+  const handoffTarget = activeMessage?.passedTo ?? null;
   const allRevealed = currentStep >= MESSAGES.length - 1;
 
   return (
     <section id="how-it-works" ref={sectionRef} className="relative w-full overflow-visible" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       {/* Headline — outside the pinned area */}
-      <div className="px-4 pt-24 md:pt-36 pb-12">
+      <div className="px-4 pt-24 md:pt-32 pb-4">
         <div className="max-w-[1100px] mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="text-center">
@@ -130,7 +166,7 @@ const MeetTheTeamSection = () => {
       </div>
 
       {/* War Room — scroll-pinned on desktop */}
-      <div className="relative" style={{ height: isMobile ? "auto" : "500vh" }}>
+      <div ref={trackRef} className="relative" style={{ height: isMobile ? "auto" : "280vh" }}>
         <div className={isMobile ? "" : "sticky top-0 h-screen flex items-center"} style={{ zIndex: 10 }}>
           <div className="max-w-[1100px] mx-auto w-full px-4">
             <div className="rounded-2xl border border-white/[0.08] overflow-hidden relative"
@@ -169,22 +205,69 @@ const MeetTheTeamSection = () => {
                     </div>
                     <span className="text-[9px] text-white/15">Soon</span>
                   </div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mt-6 mb-3">EMPLOYEES ONLINE</p>
-                  <div className="flex flex-wrap gap-1">
-                    {AGENTS.map(a => {
+                  {/* HANDOFF RAIL.
+                      This column used to end here with four 9px name chips and
+                      then ~45% dead height. It now carries the section's whole
+                      argument: who is holding the work right now, and who it
+                      goes to next. The active employee lifts and lights in
+                      their accent colour; the connector below them fills when
+                      they hand off. */}
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mt-6 mb-3">THE TEAM</p>
+                  <div className="relative">
+                    {AGENTS.map((a, ai) => {
                       const employee = EMPLOYEE_BY_ID[a.id as EmployeeId];
+                      const active = activeMessage?.agentId === a.id;
+                      const handedOn = handoffTarget === a.name;
+                      const last = ai === AGENTS.length - 1;
                       return (
-                        <span key={a.id} className="inline-flex items-center gap-1 text-[9px] pl-0.5 pr-1.5 py-0.5 rounded bg-white/[0.04] text-white/40">
-                          {employee && <EmployeeAvatar employee={employee} size={14} ring={false} />}
-                          {a.name}
-                        </span>
+                        <div key={a.id} className="relative">
+                          <div
+                            className="flex items-center gap-2.5 py-1.5 rounded-lg pl-1 pr-2 transition-all duration-500"
+                            style={{
+                              background: active ? `${employee?.accent ?? "#10b981"}14` : "transparent",
+                              transform: active ? "translateX(3px)" : "none",
+                            }}
+                          >
+                            <span
+                              className="rounded-full transition-all duration-500 shrink-0"
+                              style={{
+                                boxShadow: active
+                                  ? `0 0 0 2px ${employee?.accent ?? "#10b981"}, 0 0 12px ${employee?.accent ?? "#10b981"}66`
+                                  : "none",
+                                opacity: active ? 1 : 0.4,
+                              }}
+                            >
+                              {employee && <EmployeeAvatar employee={employee} size={26} ring={false} />}
+                            </span>
+                            <span className="min-w-0">
+                              <span
+                                className="block text-[12px] font-semibold leading-tight transition-colors duration-500"
+                                style={{ color: active ? employee?.accent ?? "#fff" : "rgba(255,255,255,0.45)" }}
+                              >
+                                {a.name}
+                              </span>
+                              <span className="block text-[9px] text-white/25 leading-tight truncate">{a.title}</span>
+                            </span>
+                          </div>
+                          {!last && (
+                            <div className="ml-[14px] h-3 w-px bg-white/[0.07] relative overflow-hidden">
+                              <div
+                                className="absolute inset-x-0 top-0 transition-all duration-500"
+                                style={{
+                                  height: active || handedOn ? "100%" : "0%",
+                                  background: employee?.accent ?? "#10b981",
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
                 </div>
 
                 {/* Message Feed */}
-                <div className="flex-1 min-w-0 relative overflow-hidden" style={{ height: isMobile ? 380 : 440 }}>
+                <div className="flex-1 min-w-0 relative overflow-hidden" style={{ height: isMobile ? 380 : 470 }}>
                   <div className="absolute top-0 left-0 right-0 h-16 z-10 pointer-events-none"
                     style={{ background: "linear-gradient(to bottom, #0a0e14, transparent)" }} />
                   <div className="p-4 flex flex-col justify-end h-full gap-3">
@@ -194,8 +277,10 @@ const MeetTheTeamSection = () => {
                         const isFounder = msg.isFounder;
                         return (
                           <motion.div key={`${msg.agentId}-${msg.time}`}
-                            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }} layout
+                            initial={{ opacity: 0, y: direction === "down" ? 26 : -26, scale: 0.985 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: direction === "down" ? -18 : 18, scale: 0.985 }}
+                            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }} layout
                             className={`rounded-xl border p-4 ${isFounder ? "border-white/[0.1] bg-white/[0.04]" : "border-white/[0.05] bg-white/[0.02]"}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -216,14 +301,20 @@ const MeetTheTeamSection = () => {
                               <span className="font-mono text-[10px] text-white/20">{msg.time}</span>
                             </div>
                             {msg.tools.length > 0 && (
-                              <div className="flex gap-1 mb-2">
+                              <div className="flex flex-wrap gap-1.5 mb-2.5">
                                 {msg.tools.map(t => {
                                   const Logo = TOOL_LOGO_MAP[t];
+                                  const brand = TOOL_BRANDS[t];
                                   return (
-                                    <div key={t} className="w-5 h-5 rounded-full flex items-center justify-center"
-                                      style={{ backgroundColor: TOOL_BRANDS[t]?.bg || "#333" }}>
-                                      {Logo && <Logo width={11} height={11} />}
-                                    </div>
+                                    <span key={t}
+                                      className="inline-flex items-center gap-1.5 rounded-md border py-0.5 pl-1 pr-2"
+                                      style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                                      <span className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                                        style={{ backgroundColor: brand?.bg || "#333" }}>
+                                        {Logo && <Logo width={10} height={10} />}
+                                      </span>
+                                      <span className="text-[10px] text-white/45">{brand?.label ?? t}</span>
+                                    </span>
                                   );
                                 })}
                               </div>
@@ -236,7 +327,9 @@ const MeetTheTeamSection = () => {
                                 <ArrowRight className="w-3 h-3 text-white/20" />
                                 <span className="text-[10px] text-white/20">Passed to:</span>
                                 <span className="text-[10px] font-semibold" style={{ color: DEPT[msg.passedToDept].color }}>
-                                  {msg.passedTo} · {DEPT[msg.passedToDept].label}
+                                  {msg.passedToDept === "founder"
+                                    ? msg.passedTo
+                                    : `${msg.passedTo} · ${DEPT[msg.passedToDept].label}`}
                                 </span>
                               </motion.div>
                             )}
@@ -259,12 +352,18 @@ const MeetTheTeamSection = () => {
 
                 {/* Progress bar — desktop */}
                 {!isMobile && (
-                  <div className="w-8 border-l border-white/[0.06] hidden lg:flex flex-col items-center justify-between py-4 shrink-0">
-                    <div className="flex-1 w-1 bg-white/[0.06] rounded-full relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-full bg-emerald-500 rounded-full transition-all duration-500"
-                        style={{ height: `${((currentStep + 1) / MESSAGES.length) * 100}%` }} />
+                  <div className="w-10 border-l border-white/[0.06] hidden lg:flex flex-col items-center justify-between py-4 shrink-0">
+                    <div className="flex-1 w-[3px] bg-white/[0.07] rounded-full relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full rounded-full transition-all duration-500"
+                        style={{
+                          height: `${(Math.max(0, currentStep + 1) / MESSAGES.length) * 100}%`,
+                          background: "linear-gradient(180deg, #34d399 0%, #10b981 100%)",
+                          boxShadow: "0 0 8px rgba(16,185,129,0.5)",
+                        }} />
                     </div>
-                    <span className="text-[8px] text-white/20 font-mono mt-2">{Math.min(currentStep + 1, MESSAGES.length)}/{MESSAGES.length}</span>
+                    <span className="text-[10px] text-white/35 font-mono mt-2 tabular-nums">
+                      {Math.max(0, Math.min(currentStep + 1, MESSAGES.length))}/{MESSAGES.length}
+                    </span>
                   </div>
                 )}
               </div>
@@ -276,9 +375,9 @@ const MeetTheTeamSection = () => {
                   <div className="flex items-center justify-center gap-8 text-center">
                     {[
                       { value: "47min", label: "Your time today" },
-                      { value: "1", label: "Meeting booked" },
-                      { value: "127", label: "Candidates screened" },
-                      { value: "€0", label: "Agency fees" },
+                      { value: "12", label: "Companies qualified" },
+                      { value: "3", label: "Drafts to review" },
+                      { value: "4", label: "Decisions you made" },
                     ].map(s => (
                       <div key={s.label}>
                         <div className="font-mono font-bold text-lg text-emerald-400">{s.value}</div>
@@ -292,23 +391,17 @@ const MeetTheTeamSection = () => {
           </div>
         </div>
 
-        {/* Sentinel divs for scroll-triggered reveals (desktop) */}
-        {!isMobile && MESSAGES.map((_, i) => (
-          <div key={i} ref={el => { sentinelRefs.current[i] = el; }}
-            className="absolute w-1 h-1 pointer-events-none"
-            style={{ top: `${((i + 0.5) / MESSAGES.length) * 100}%`, left: 0 }} />
-        ))}
       </div>
 
       {/* Closing */}
-      <div className="max-w-[1100px] mx-auto px-4 py-20">
+      <div className="max-w-[1100px] mx-auto px-4 pt-8 pb-20">
         <div className="text-center max-w-[560px] mx-auto">
           <p className="font-display text-xl md:text-2xl text-white/80 leading-snug mb-2">
             This is not software.<br />This is your team.<br />They started work<br />the moment you signed up.
           </p>
-          <p className="text-white/30 text-sm mb-8">Stop managing tools. Start leading a workforce.</p>
+          <p className="text-white/30 text-sm mb-8">Stop managing tools. Start handing over the work.</p>
           <button onClick={() => navigate('/auth')} className="conic-border group h-[44px] inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
-            Meet your workforce <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            Put Agentory to work <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
