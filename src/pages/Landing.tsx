@@ -55,7 +55,6 @@ const Landing = () => {
         {/* 4. The Problem (Transformation) */}
         <TransformationSection />
         {/* 5. Your AI Team — portraits + powered by */}
-        <MeetYourAITeamSection />
         {/* 6. They work together — war room simulation (#how-it-works) */}
         <MeetTheTeamSection />
         {/*
