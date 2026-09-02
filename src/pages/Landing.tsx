@@ -13,14 +13,11 @@ import ProductLookalike from "@/components/landing/ProductLookalike";
 import TimeMath from "@/components/landing/TimeMath";
 import SocialProof from "@/components/landing/SocialProof";
 import PricingCard from "@/components/landing/PricingCard";
-import FAQSection from "@/components/landing/FAQSection";
 import MarqueeBanner from "@/components/landing/MarqueeBanner";
-import FinalCTA from "@/components/landing/FinalCTA";
 import { ExpertJourney } from "@/components/landing/ExpertJourney";
 import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
 import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
 import EcosystemSection from "@/components/landing/EcosystemSection";
-import GlobalSection from "@/components/landing/GlobalSection";
 import DayTimelineSection from "@/components/landing/DayTimelineSection";
 import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
 import MeetYourAITeamSection from "@/components/landing/MeetYourAITeamSection";
@@ -84,13 +81,10 @@ const Landing = () => {
         {/* 15. Pricing */}
         <PricingCard />
         {/* 16. FAQ (#faq) */}
-        <FAQSection />
         {/* 17. Global */}
-        <GlobalSection />
         {/* 18. Marquee */}
         <MarqueeBanner />
         {/* 19. Final CTA */}
-        <FinalCTA />
       </main>
 
       {/* 20. Footer */}

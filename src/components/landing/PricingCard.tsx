@@ -5,6 +5,13 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Check, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 import { PRICING_PLANS } from '@/lib/pricing/plans';
 
+/**
+ * Hidden from the landing page for now. Deliberately a display filter rather
+ * than a change to `plans.ts`, which billing, the credit drawer and the ledger
+ * all read — deleting the tiers there would break anyone already on them.
+ */
+const HIDDEN_ON_LANDING = ['growth', 'scale'];
+
 gsap.registerPlugin(ScrollTrigger);
 
 const HOW_IT_WORKS = [
@@ -60,7 +67,7 @@ const PricingCard = () => {
 
       <div ref={cardRef} className="max-w-6xl mx-auto opacity-0">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {PRICING_PLANS.map((plan) => {
+          {PRICING_PLANS.filter((plan) => !HIDDEN_ON_LANDING.includes(plan.id)).map((plan) => {
             const value = PLAN_VALUE[plan.id];
             return (
               <div
@@ -133,49 +140,6 @@ const PricingCard = () => {
           })}
         </div>
 
-        {/* How credits work */}
-        <div className="mt-16 max-w-5xl mx-auto">
-          <div className="text-center mb-8">
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.15em] text-emerald-400 font-semibold mb-3">
-              ◆ HOW CREDITS WORK
-            </p>
-            <h3 className="font-display font-bold text-white text-2xl">
-              Fair credits for real work.
-            </h3>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.n} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <div className="text-emerald-400 font-mono text-[11px] mb-1.5">Step {s.n}</div>
-                <div className="text-white text-[13.5px] font-semibold">{s.label}</div>
-                <div className="text-white/45 text-[11.5px] mt-1">{s.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-5">
-            <div className="flex items-start gap-2.5">
-              <Sparkles className="h-4 w-4 text-emerald-300 mt-0.5 shrink-0" />
-              <div className="text-[13px] text-white/70 leading-relaxed">
-                <span className="text-white font-semibold">Example.</span>{' '}
-                Find 5 companies with a hiring signal ≈ ~15 credits. Your employees may review
-                20+ raw signals, reject weak matches, and return 5 qualified accounts with the
-                source, a fit score, and the next step.
-              </div>
-            </div>
-            <div className="flex items-start gap-2.5 mt-3 pt-3 border-t border-white/[0.04]">
-              <ShieldCheck className="h-4 w-4 text-emerald-300 mt-0.5 shrink-0" />
-              <div className="text-[12.5px] text-white/55">
-                Nothing is sent automatically. All outreach is draft-only and approval-gated.
-                You always see the estimated cost before a workflow runs.
-              </div>
-            </div>
-          </div>
-
-          <p className="text-center text-[11px] text-white/30 mt-6">
-            Every plan includes monthly workflow credits. Credit usage depends on workflow type and provider availability.
-          </p>
-        </div>
       </div>
     </section>
   );
