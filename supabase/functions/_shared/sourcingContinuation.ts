@@ -51,14 +51,60 @@ export function decideResume(
     | undefined;
   if (!state) return { ok: false, reason: "no_checkpoint" };
   if (state.version !== SOURCING_STATE_VERSION) return { ok: false, reason: "checkpoint_version_mismatch" };
-  // A finished run must not be resumable — that is what the terminal statuses mean.
-  if (state.terminal_status) return { ok: false, reason: "already_terminal" };
 
-  // The ROW must also advertise itself as resumable. A task sitting at `complete`
-  // with a genuine terminal result is finished, whatever a stale checkpoint says.
-  const resultTerminal = typeof (row.result ?? {})["terminal_status"] === "string"
-    ? String((row.result ?? {})["terminal_status"]) : null;
-  if (isTerminalOutcome(resultTerminal)) return { ok: false, reason: "already_terminal" };
+  // ── ONE AUTHORITY ON "HAS THIS RUN FINISHED", NOT TWO ────────────────────
+  //
+  // This asked the CHECKPOINT first and refused on any terminal status it
+  // carried. `claim_sourcing_continuation` — the RPC that takes the claim
+  // moments later — asks the ROW first:
+  //
+  //     coalesce(result->>'terminal_status',
+  //              result->'company_first_state'->>'terminal_status',
+  //              result->'company_first'->>'status')
+  //
+  // So the two disagreed about exactly one shape, and it is a shape the system
+  // produces routinely. Task 2f3d9c5c, verbatim:
+  //
+  //     result.terminal_status                     "continuation_required"
+  //     company_first_state.terminal_status        "round_limit_reached"
+  //     company_first_state.next_action            "stopped"
+  //     company_first_state.terminal_reason        "the legacy sourcing loop is
+  //                                                 disabled for this run…"
+  //
+  // The legacy quota controller stamps a terminal status when it believes the
+  // run is over — and because `maxRounds` is 0 while the capability engine owns
+  // sourcing, `rounds.length >= maxRounds` is `0 >= 0`, so a loop that never ran
+  // stamps `round_limit_reached`. Auto-continuation then correctly overrode the
+  // ROW to `continuation_required`, because the engine had work left. The
+  // checkpoint kept the stale verdict.
+  //
+  // The RPC would have granted the claim. This refused first, every three
+  // minutes, for as long as the sweeper kept trying: 15 rejections, zero
+  // dispatches, a run frozen at generation 4 with a live frontier.
+  //
+  // THE ROW IS THE AUTHORITY, and it is the same authority the RPC uses. The
+  // checkpoint is consulted only when the row says nothing — which is what
+  // `coalesce` means, and what this now mirrors exactly. A genuinely finished
+  // run still refuses: its ROW carries the terminal status too.
+  //
+  // Same defect as the `round_limit_reached` note in `run-agent` and the
+  // `execution_deadline_reached` note in `leadRunTerminalGuard` — a run
+  // declaring itself finished and then enforcing it against its own successor —
+  // reaching the resume gate by a third route.
+  const rowTerminal = typeof (row.result ?? {})["terminal_status"] === "string"
+    ? String((row.result ?? {})["terminal_status"])
+    : null;
+  const effectiveTerminal = rowTerminal ??
+    (typeof state.terminal_status === "string" ? state.terminal_status : null);
+
+  // `continuation_required` is the one value that means "not finished". Anything
+  // else that is set — and only what is SET — ends the run.
+  if (effectiveTerminal !== null && effectiveTerminal !== "continuation_required") {
+    return { ok: false, reason: "already_terminal" };
+  }
+  // Kept as a distinct check: `isTerminalOutcome` knows the vocabulary, and a
+  // row carrying a terminal outcome is finished whatever the checkpoint says.
+  if (isTerminalOutcome(rowTerminal)) return { ok: false, reason: "already_terminal" };
   if (!isResumableRowStatus(row.status)) return { ok: false, reason: "not_resumable_state" };
 
   const instruction = typeof row.payload?.instruction === "string" ? row.payload.instruction : null;

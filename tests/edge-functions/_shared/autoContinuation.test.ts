@@ -431,8 +431,16 @@ Deno.test("16b. a thin pool ends honestly short rather than looping", () => {
 // run declared itself finished and then enforced it against its own successor.
 //
 // And it refused on TWO gates, not one: the top-level `result.terminal_status`
-// AND the copy inside `company_first_state`, which is read first. Fixing either
-// alone changes nothing.
+// AND the copy inside `company_first_state`, which was read first.
+//
+// ── SUPERSEDED 2026-09-03, SEE TEST 19 ─────────────────────────────────────
+//
+// The fix chosen here was to make the WRITER put `continuation_required` in
+// both places and leave the reader strict. Task 2f3d9c5c proved that
+// insufficient: the two values are written at different moments by different
+// authorities, so they cannot be kept in sync from the writing side. The reader
+// now uses the row as the single authority, matching the precedence
+// `claim_sourcing_continuation` has always applied.
 
 import {
   decideResume,
@@ -478,18 +486,53 @@ Deno.test("18. with the frontier as authority, the same run IS resumable", () =>
   assert(d.ok, `expected resumable, got ${d.ok === false ? d.reason : ""}`);
 });
 
-Deno.test("19. BOTH gates must be cleared — either one alone still refuses", () => {
-  // The nested copy is read first, so fixing only the top level changes nothing.
-  const topOnly = decideResume(
+Deno.test("19. the ROW is the authority; the checkpoint speaks only in its silence", () => {
+  // ── THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-09-03 ─────────────────────
+  //
+  // It required BOTH gates to be cleared, on the reasoning that the fix belonged
+  // in the WRITER: a continuing run should write `continuation_required` into
+  // the row and the checkpoint alike, so a strict reader was safe.
+  //
+  // That decision did not hold, and could not have. Task 2f3d9c5c froze at
+  // generation 4 with a live frontier — 15 rejections, 3 dispatches, 45 minutes
+  // — on exactly the shape the old assertion demanded be refused:
+  //
+  //     result.terminal_status                "continuation_required"
+  //     company_first_state.terminal_status   "round_limit_reached"
+  //     company_first_state.next_action       "stopped"
+  //
+  // The legacy controller stamps the checkpoint from its `next_action: stopped`
+  // branch, AFTER auto-continuation has already overridden the row — so the two
+  // are written at different moments by different authorities and keeping them
+  // in sync is not something the writer can guarantee. Worse, `maxRounds` is 0
+  // while the capability engine owns sourcing, so `rounds.length >= maxRounds`
+  // is `0 >= 0` and a loop that never ran stamps `round_limit_reached`; its own
+  // recorded reason reads "the legacy sourcing loop is disabled for this run".
+  //
+  // And a writer-side correction alone could never have been enough: the old
+  // reader refused on ANY truthy checkpoint status, so `quota_not_met` would
+  // have deadlocked just as `round_limit_reached` did.
+  //
+  // `claim_sourcing_continuation` — the RPC that takes the claim moments later —
+  // has always read the row first:
+  //
+  //     coalesce(result->>'terminal_status',
+  //              company_first_state->>'terminal_status', …)
+  //
+  // Two gates disagreeing about whether a run has finished IS the defect. One
+  // authority replaces two kept in sync by hand.
+  const rowSaysContinue = decideResume(
     rowAfterSlice({ terminal: "continuation_required", stateTerminal: "round_limit_reached" }),
     "ws-1", "task-1");
-  assertFalse(topOnly.ok, "the nested checkpoint still says the run is over");
+  assert(rowSaysContinue.ok,
+    "the row says the engine has work left; a stale checkpoint must not veto it");
 
-  // And fixing only the nested one leaves the top-level terminal in force.
-  const nestedOnly = decideResume(
+  // UNCHANGED, and the half that was always right: a row carrying a terminal
+  // status ends the run whatever the checkpoint says.
+  const rowSaysFinished = decideResume(
     rowAfterSlice({ terminal: "round_limit_reached", stateTerminal: null }),
     "ws-1", "task-1");
-  assertFalse(nestedOnly.ok);
+  assertFalse(rowSaysFinished.ok);
 });
 
 Deno.test("20. `continuation_required` is the one terminal status that resumes", () => {
