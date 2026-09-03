@@ -134,6 +134,9 @@ import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts"
 // EVIDENCE_ENRICHMENT=execute.
 import { computeEvidenceDebts } from "../_shared/webEvidenceDebt.ts";
 import { runEvidenceCollection } from "../_shared/webEvidenceRunner.ts";
+import {
+  readFreshPages, readResearchedRequirements,
+} from "../_shared/webEvidenceStore.ts";
 import { EVIDENCE_PLANNER_PROMPT } from "../_shared/webEvidencePlanner.ts";
 import { EVIDENCE_EXTRACTION_PROMPT } from "../_shared/webEvidenceExtraction.ts";
 import { routeModel } from "../_shared/gptModelRouter.ts";
@@ -3876,20 +3879,45 @@ Deno.serve(async (req) => {
             const evidenceMode = Deno.env.get("EVIDENCE_ENRICHMENT") ?? "off";
             if (evidenceMode === "plan_only" || evidenceMode === "execute") {
               try {
-                const report = computeEvidenceDebts(
-                  capabilityRun.companies.map((c) => ({
-                    key: c.key,
-                    company: c.company,
-                    enriched: c.enriched,
-                    mission_evaluation: c.mission_evaluation,
-                    identity: c.identity,
-                    known_evidence_types: [
-                      ...new Set((c.evidence_registry?.items ?? [])
-                        .map((it) => it.evidence_type)),
-                    ],
-                  })),
-                  { max_companies: 5 },
-                );
+                const debtCandidates = capabilityRun.companies.map((c) => ({
+                  key: c.key,
+                  company: c.company,
+                  enriched: c.enriched,
+                  mission_evaluation: c.mission_evaluation,
+                  identity: c.identity,
+                  known_evidence_types: [
+                    ...new Set((c.evidence_registry?.items ?? [])
+                      .map((it) => it.evidence_type)),
+                  ],
+                }));
+
+                // ── WHAT WE HAVE ALREADY RESEARCHED ─────────────────────────
+                //
+                // Without this the gate re-raises the same debt on every slice,
+                // because P2 does not change a qualification outcome — the
+                // company stays `insufficient_evidence` for ever. Lineage
+                // 40295080 bought 120 pages for 24 distinct URLs that way.
+                //
+                // Computed from the debts the gate WOULD raise, then fed back
+                // in, so the lookup is one query over a handful of companies
+                // rather than the whole pool.
+                const provisional = computeEvidenceDebts(debtCandidates, {
+                  max_companies: 5,
+                });
+                const alreadyResearched = provisional.debts.length > 0
+                  ? await readResearchedRequirements(supabase, {
+                    workspace_id,
+                    pairs: provisional.debts.map((d) => ({
+                      company_key: d.company_key,
+                      requirement_id: d.requirement_id,
+                    })),
+                  })
+                  : new Set<string>();
+
+                const report = computeEvidenceDebts(debtCandidates, {
+                  max_companies: 5,
+                  already_researched: alreadyResearched,
+                });
                 console.log("[run-agent][evidence-debt][dry-run]", {
                   task_id: task.id,
                   mode: evidenceMode,
@@ -3961,6 +3989,21 @@ Deno.serve(async (req) => {
                       extract: (p) =>
                         callJson(extractGen, EVIDENCE_EXTRACTION_PROMPT, p),
                       db: supabase,
+                      // FREE REUSE. A page already held fresh for this site is
+                      // served from the table: no fetch, no credit, no ledger
+                      // row. Keyed on (domain, intent) rather than the
+                      // requirement, so a differently-worded mission reuses the
+                      // same fetch and reaches its own conclusion from it.
+                      readCache: async (domain: string) => {
+                        const rows = await readFreshPages(supabase, {
+                          workspace_id, domain,
+                        });
+                        return new Map([...rows].map(([intent, r]) => [intent, {
+                          source_url: r.source_url,
+                          source_text: r.source_text,
+                          fetched_at: r.fetched_at,
+                        }]));
+                      },
                       log: (event, meta) =>
                         console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
                       // ── THE PAID BOUNDARY ─────────────────────────────────
@@ -3999,6 +4042,9 @@ Deno.serve(async (req) => {
                           ? String((data.pages[0] as Record<string, unknown>)?.markdown ?? "")
                           : "";
                         const meta = (data.metadata ?? {}) as Record<string, unknown>;
+                        const code = typeof meta.statusCode === "number"
+                          ? meta.statusCode
+                          : null;
                         return {
                           ok: r.ok === true,
                           markdown: md,
@@ -4007,6 +4053,7 @@ Deno.serve(async (req) => {
                             : typeof data.source_url === "string"
                             ? data.source_url
                             : null) ?? url,
+                          status_code: code,
                           status: r.ok === true
                             ? (md.trim() ? "ok" : "empty")
                             : String(r.error ?? "").includes("timeout")
@@ -4020,6 +4067,7 @@ Deno.serve(async (req) => {
                     task_id: task.id,
                     planned: evidenceRun.planned,
                     pages_fetched: evidenceRun.pages_fetched,
+                    pages_reused: evidenceRun.pages_reused,
                     claims_kept: evidenceRun.claims_kept,
                     claims_rejected: evidenceRun.claims_rejected,
                     rows_written: evidenceRun.rows_written,
@@ -4029,6 +4077,7 @@ Deno.serve(async (req) => {
                     companies: evidenceRun.companies.map((c) => ({
                       company: c.company_name,
                       pages: c.pages_fetched,
+                      reused: c.pages_reused,
                       ok: c.pages_ok,
                       claims: c.claims_kept,
                       outcome: c.outcome,

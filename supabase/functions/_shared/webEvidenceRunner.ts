@@ -33,7 +33,7 @@ import {
   buildExtractionInput,
   parseExtractionStrict,
 } from "./webEvidenceExtraction.ts";
-import { resolvePages, sameSite } from "./pageIntentResolver.ts";
+import { looksLikeMissingPage, resolvePages, sameSite } from "./pageIntentResolver.ts";
 import { toStoredRows, writeWebEvidence } from "./webEvidenceStore.ts";
 
 export interface EvidenceRunBudget extends PlannerBudget {
@@ -60,13 +60,31 @@ export type PageFetcher = (i: {
   /** The URL actually served, after redirects, when the provider reports one. */
   final_url?: string | null;
   status: "ok" | "empty" | "blocked" | "not_found" | "timeout";
+  /** The provider's own HTTP status, when it reports one. Decides over the
+   * content heuristic: a real 404 needs no guessing. */
+  status_code?: number | null;
   provider_run_id?: string | null;
 }>;
+
+/**
+ * Fresh pages already held for a site, keyed by page intent.
+ *
+ * THE CACHE READ THAT STOPS THE LOOP AT THE FETCH LAYER. The debt gate stops
+ * the same company being re-raised; this stops the same PAGE being re-bought
+ * when a different requirement, or a different mission, asks for it.
+ */
+export type CacheReader = (domain: string) => Promise<Map<string, {
+  source_url: string;
+  source_text: string;
+  fetched_at: string;
+}>>;
 
 export interface EvidenceRunnerDeps {
   plan: (payload: Record<string, unknown>) => Promise<unknown>;
   extract: (payload: Record<string, unknown>) => Promise<unknown>;
   fetchPage: PageFetcher;
+  /** Optional. Omitted, every page is bought — the pre-fix behaviour. */
+  readCache?: CacheReader | null;
   db?: SupabaseClient | null;
   now?: () => string;
   log?: (event: string, meta: Record<string, unknown>) => void;
@@ -78,6 +96,8 @@ export interface CompanyEvidenceOutcome {
   domain: string;
   requirement_id: string;
   pages_fetched: number;
+  /** Served from cache. Free: no fetch, no credit, no ledger row. */
+  pages_reused: number;
   pages_ok: number;
   claims_kept: number;
   claims_rejected: number;
@@ -94,6 +114,7 @@ export interface EvidenceRunReport {
   planned: number;
   companies: CompanyEvidenceOutcome[];
   pages_fetched: number;
+  pages_reused: number;
   claims_kept: number;
   claims_rejected: number;
   rows_written: number;
@@ -108,6 +129,7 @@ const EMPTY_REPORT: EvidenceRunReport = {
   planned: 0,
   companies: [],
   pages_fetched: 0,
+  pages_reused: 0,
   claims_kept: 0,
   claims_rejected: 0,
   rows_written: 0,
@@ -173,6 +195,7 @@ export async function runEvidenceCollection(i: {
       domain: d.domain,
       requirement_id: d.requirement_id,
       pages_fetched: 0,
+      pages_reused: 0,
       pages_ok: 0,
       claims_kept: 0,
       claims_rejected: 0,
@@ -190,6 +213,7 @@ export async function runEvidenceCollection(i: {
       domain: req.domain,
       requirement_id: req.requirement_id,
       pages_fetched: 0,
+      pages_reused: 0,
       pages_ok: 0,
       claims_kept: 0,
       claims_rejected: 0,
@@ -215,9 +239,42 @@ export async function runEvidenceCollection(i: {
     }
 
     const pages: WebEvidencePage[] = [];
+    const freshPages: WebEvidencePage[] = [];
     let providerRunId: string | null = null;
 
+    // ── WHAT WE ALREADY HAVE, BEFORE WE BUY ANYTHING ──────────────────────
+    let cached = new Map<string, { source_url: string; source_text: string; fetched_at: string }>();
+    if (i.deps.readCache) {
+      try {
+        cached = await i.deps.readCache(req.domain);
+      } catch (e) {
+        // A cache that cannot be read degrades to buying, never to failing.
+        log("evidence-cache-read-failed", { domain: req.domain, error: String(e) });
+      }
+    }
+
     for (const t of targets) {
+      const hit = cached.get(t.intent);
+      if (hit) {
+        // FREE. No fetch, no credit, no ledger row. Counted separately from
+        // `pages_fetched` so the telemetry cannot make reuse look like spend.
+        outcome.pages_reused++;
+        report.pages_reused++;
+        const reused: WebEvidencePage = {
+          url: hit.source_url,
+          intent: t.intent,
+          markdown: hit.source_text,
+          fetched_at: hit.fetched_at,
+          status: "ok",
+        };
+        pages.push(reused);
+        if (hit.source_text.trim()) outcome.pages_ok++;
+        log("evidence-cache-hit", {
+          company: debt.company_name, url: hit.source_url, intent: t.intent,
+        });
+        continue;
+      }
+
       let res;
       try {
         res = await i.deps.fetchPage({
@@ -241,20 +298,30 @@ export async function runEvidenceCollection(i: {
       // the attempt is visible, and its text is discarded rather than read.
       const served = res.final_url ?? t.url;
       const offSite = !sameSite(req.domain, served);
-      const status = offSite ? "blocked" : res.status;
+
+      // ── A 200 THAT SAYS "NOT FOUND" IS NOT A PAGE ──────────────────────
+      //
+      // Sites answer 200 with a not-found body; run 40295080 stored three of
+      // them as `ok`. Harmless while every slice re-fetched — durable false
+      // evidence now that the cache is read.
+      const missing = !offSite && res.ok &&
+        looksLikeMissingPage(res.markdown, res.status_code);
+      const status = offSite ? "blocked" : missing ? "not_found" : res.status;
+      const usable = status === "ok" && !offSite && res.markdown.trim().length > 0;
 
       pages.push({
         url: t.url,
         intent: t.intent,
-        markdown: offSite || !res.ok ? "" : res.markdown,
+        markdown: usable ? res.markdown : "",
         fetched_at: now(),
         status,
       });
-      if (status === "ok" && !offSite && res.markdown.trim()) outcome.pages_ok++;
+      if (usable) outcome.pages_ok++;
 
       log("evidence-fetch", {
         company: debt.company_name, url: t.url, intent: t.intent,
-        status, off_site: offSite, chars: res.markdown.length,
+        status, off_site: offSite, missing_page: missing,
+        chars: res.markdown.length,
       });
 
       if (pagesSpent >= budget.max_pages_total) break;
@@ -315,6 +382,7 @@ export async function runEvidenceCollection(i: {
           workspace_id: i.workspace_id,
           company_key: req.company_key,
           domain: req.domain,
+          requirement_id: req.requirement_id,
           provider_run_id: providerRunId,
           pages: pages.filter((p) => p.markdown.trim().length > 0),
         }),

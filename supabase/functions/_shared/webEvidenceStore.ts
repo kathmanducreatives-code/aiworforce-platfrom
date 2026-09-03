@@ -41,6 +41,39 @@ export interface StoredWebEvidenceRow {
   provider: string;
   provider_run_id: string | null;
   status: string;
+  /** WHICH question prompted the fetch. Not an answer to it. */
+  requirement_id: string | null;
+}
+
+/**
+ * How long a fetched page stands before it is worth buying again.
+ *
+ * Mirrors `DEFAULT_FRESHNESS_HOURS` in `conditionalEnrichmentPlanner` rather
+ * than inventing a second policy: positioning pages move slowly, careers pages
+ * move with hiring, newsrooms move with announcements.
+ */
+export const PAGE_TTL_HOURS: Readonly<Record<string, number>> = Object.freeze({
+  pricing: 720,
+  product: 720,
+  homepage: 720,
+  about: 720,
+  customers: 720,
+  case_studies: 720,
+  locations: 168,
+  newsroom: 168,
+  integrations: 336,
+  docs: 336,
+  careers: 72,
+});
+
+export function ttlHoursFor(intent: string): number {
+  return PAGE_TTL_HOURS[intent] ?? 720;
+}
+
+export function isFresh(fetchedAt: string, intent: string, now: number): boolean {
+  const t = Date.parse(fetchedAt);
+  if (!isFinite(t)) return false;
+  return now - t <= ttlHoursFor(intent) * 3600_000;
 }
 
 /**
@@ -57,6 +90,7 @@ export function toStoredRows(i: {
   workspace_id: string;
   company_key: string;
   domain: string;
+  requirement_id?: string | null;
   provider_run_id?: string | null;
   pages: readonly WebEvidencePage[];
 }): StoredWebEvidenceRow[] {
@@ -74,8 +108,103 @@ export function toStoredRows(i: {
       provider: "firecrawl",
       provider_run_id: i.provider_run_id ?? null,
       status: p.status,
+      requirement_id: i.requirement_id ?? null,
     };
   });
+}
+
+// ─────────────────────────────── the read path ──────────────────────────────
+
+/**
+ * Companies already researched for a given requirement, recently enough.
+ *
+ * THE FIX FOR THE LOOP. Without this the debt gate re-raises the same debt on
+ * every slice, because P2 does not change a qualification outcome and so the
+ * company stays `insufficient_evidence` for ever. Lineage 40295080 bought 120
+ * pages for 24 distinct URLs that way.
+ *
+ * Returns keys shaped `company_key:requirement_id`, which is exactly what
+ * `computeEvidenceDebts` takes as `already_researched`.
+ *
+ * NEVER THROWS. A cache that cannot be read must not stop a mission; it degrades
+ * to the previous behaviour of researching again, which is wasteful but correct.
+ */
+export async function readResearchedRequirements(
+  db: SupabaseClient,
+  i: {
+    workspace_id: string;
+    pairs: ReadonlyArray<{ company_key: string; requirement_id: string }>;
+    now?: number;
+  },
+): Promise<ReadonlySet<string>> {
+  const out = new Set<string>();
+  if (i.pairs.length === 0) return out;
+  const now = i.now ?? Date.now();
+  try {
+    const { data, error } = await db
+      .from(WEB_EVIDENCE_TABLE)
+      .select("company_key,requirement_id,page_intent,fetched_at,status")
+      .eq("workspace_id", i.workspace_id)
+      .in("company_key", [...new Set(i.pairs.map((p) => p.company_key))]);
+    if (error || !data) return out;
+    const wanted = new Set(i.pairs.map((p) => `${p.company_key}:${p.requirement_id}`));
+    for (const r of data as Array<Record<string, string>>) {
+      const key = `${r.company_key}:${r.requirement_id}`;
+      if (!wanted.has(key)) continue;
+      // A STALE ROW IS NOT A RESEARCHED REQUIREMENT. Freshness is the whole
+      // reason the debt may legitimately be raised a second time.
+      if (!isFresh(r.fetched_at, r.page_intent, now)) continue;
+      out.add(key);
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
+export interface CachedPage {
+  source_url: string;
+  page_intent: string;
+  source_text: string;
+  fetched_at: string;
+  status: string;
+}
+
+/**
+ * Fresh pages already held for a site.
+ *
+ * Keyed on (domain, page_intent) — NOT on the requirement — so a mission asking
+ * a different question reuses the same fetch. That is the property the whole
+ * "cache pages, not answers" decision exists to buy.
+ *
+ * Only `ok` rows are returned: a 404 body is recorded for provenance but must
+ * never be served back as though it were a page.
+ */
+export async function readFreshPages(
+  db: SupabaseClient,
+  i: { workspace_id: string; domain: string; now?: number },
+): Promise<Map<string, CachedPage>> {
+  const out = new Map<string, CachedPage>();
+  const now = i.now ?? Date.now();
+  try {
+    const { data, error } = await db
+      .from(WEB_EVIDENCE_TABLE)
+      .select("source_url,page_intent,source_text,fetched_at,status")
+      .eq("workspace_id", i.workspace_id)
+      .eq("domain", i.domain)
+      .eq("status", "ok")
+      .order("fetched_at", { ascending: false })
+      .limit(50);
+    if (error || !data) return out;
+    for (const r of data as unknown as CachedPage[]) {
+      if (out.has(r.page_intent)) continue;          // newest wins
+      if (!isFresh(r.fetched_at, r.page_intent, now)) continue;
+      out.set(r.page_intent, r);
+    }
+  } catch {
+    return out;
+  }
+  return out;
 }
 
 /**

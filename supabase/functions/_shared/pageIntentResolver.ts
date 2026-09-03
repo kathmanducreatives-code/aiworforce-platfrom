@@ -103,6 +103,61 @@ export function isHttpUrl(s: string): boolean {
   }
 }
 
+// ────────────────────────── "this page is not there" ───────────────────────
+
+/**
+ * Phrases a not-found page says about itself.
+ *
+ * Used ONLY together with a length bound — see `looksLikeMissingPage`. A long
+ * page that happens to mention a 404 is a real page; a 220-character page that
+ * says "404 - Page not found" is not.
+ */
+const MISSING_PAGE_PHRASES: readonly string[] = [
+  "404",
+  "page not found",
+  "page isn't found",
+  "page is gone",
+  "no longer exists",
+  "can't find what you were looking for",
+  "cannot be found",
+  "doesn't exist",
+];
+
+/**
+ * Content this long is a real page whatever it says about 404s. Chosen above
+ * the three soft-404 bodies the first live run stored — 223, 245 and 620
+ * characters — and far below the shortest genuine page it kept.
+ */
+export const MISSING_PAGE_MAX_CHARS = 1200;
+
+/**
+ * True when a 200 response is really a "page not found".
+ *
+ * ── WHY THIS MATTERS MORE ONCE THE CACHE IS READ ───────────────────────────
+ *
+ * Run 40295080 stored three of these as `status: "ok"` — hebbia.com/locations,
+ * immuta.com/pricing, neotalogic.com/product — because the sites answer 200
+ * with a not-found body. While every slice re-fetched, that was mostly noise.
+ * With a cache that is READ, a stored 404 would be served back as evidence for
+ * as long as its TTL lasts, and the extractor would be invited to quote it.
+ *
+ * Deliberately CONSERVATIVE: a real page misread as missing costs one wasted
+ * fetch, while a 404 misread as real becomes durable false evidence. When the
+ * provider reports a status code, that decides and this heuristic is not
+ * consulted at all.
+ */
+export function looksLikeMissingPage(
+  markdown: string,
+  statusCode?: number | null,
+): boolean {
+  if (typeof statusCode === "number" && statusCode >= 400) return true;
+  const text = (markdown ?? "").trim();
+  if (!text) return false;
+  if (text.length > MISSING_PAGE_MAX_CHARS) return false;
+  const lower = text.toLowerCase();
+  return MISSING_PAGE_PHRASES.some((p) => lower.includes(p));
+}
+
 export interface ResolvedPage {
   intent: PageIntent;
   url: string;
