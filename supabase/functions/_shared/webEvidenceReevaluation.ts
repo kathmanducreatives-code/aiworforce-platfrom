@@ -51,6 +51,20 @@ export interface ReevalOutcome {
   still_open: string[];
   /** Requirements carried forward untouched from the first pass. */
   carried: string[];
+  /**
+   * The merged verdict, for the caller to apply.
+   *
+   * RETURNED, not written onto the candidate. The first version mutated
+   * `c.mission_evaluation` — but `run-agent` maps the engine's companies into
+   * fresh object literals before calling this, so the mutation landed on a
+   * throwaway and the verdict was computed and discarded. The live canary
+   * logged Metaview as `qualified` while the checkpoint still held
+   * `insufficient_evidence`.
+   *
+   * A module that decides must hand its decision back, not reach into whatever
+   * object it happened to be given.
+   */
+  merged: MissionEvaluation | null;
   pages_used: number;
   /** Citations the verifier refused. A fabrication counter. */
   dropped_citations: number;
@@ -121,7 +135,7 @@ export async function reevaluateWithWebEvidence(
     report.outcomes.push({
       company_key: c.key, company_name: c.company_name, skipped: reason,
       before: c.mission_evaluation?.decision ?? null, after: null,
-      resolved: [], still_open: [], carried: [], pages_used: 0,
+      resolved: [], still_open: [], carried: [], merged: null, pages_used: 0,
       dropped_citations: 0,
     });
   };
@@ -219,6 +233,7 @@ export async function reevaluateWithWebEvidence(
       resolved,
       still_open: merged.unknown_fields,
       carried,
+      merged,
       pages_used: pages.length,
       dropped_citations: parsed.raw_shape.dropped_citations.length,
     });
@@ -231,8 +246,8 @@ export async function reevaluateWithWebEvidence(
       dropped_citations: parsed.raw_shape.dropped_citations.length,
     });
 
-    // The caller owns persistence: this module decides, it does not write.
-    (c as { mission_evaluation: MissionEvaluation | null }).mission_evaluation = merged;
+    // The caller owns persistence AND application: this module decides, and
+    // hands the decision back on the outcome above.
   }
 
   return report;

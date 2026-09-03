@@ -140,6 +140,7 @@ import {
 } from "../_shared/missionEvaluation.ts";
 import { buildEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { buildCompanyEvidence } from "../_shared/leadCompanyEvidence.ts";
+import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import {
   readFreshPages, readResearchedRequirements,
 } from "../_shared/webEvidenceStore.ts";
@@ -4138,7 +4139,32 @@ Deno.serve(async (req) => {
                         console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
                     },
                   );
+                  // ── APPLY THE VERDICTS TO THE REAL COMPANIES ──────────
+                  //
+                  // The candidates above are fresh object literals, so nothing
+                  // the runner decided has reached the engine's companies yet.
+                  // Everything downstream — the checkpoint, the funnel, the
+                  // Lead Library projection — reads those, so without this the
+                  // re-evaluation is computed and thrown away. That is exactly
+                  // what the first live canary did: it logged Metaview as
+                  // qualified while the checkpoint kept insufficient_evidence.
+                  let reappliedCount = 0;
+                  for (const o of reevalReport.outcomes) {
+                    if (!o.merged) continue;
+                    const target = engineRun.companies.find((x) => x.key === o.company_key);
+                    if (!target) continue;
+                    target.mission_evaluation = o.merged;
+                    reappliedCount++;
+                  }
+                  // `resume_records` was built inside the engine BEFORE this
+                  // ran, so it still describes the pre-re-evaluation world. The
+                  // checkpoint is written from it, and a stale record would
+                  // resume a company whose verdict has since changed.
+                  if (reappliedCount > 0) {
+                    engineRun.resume_records = engineRun.companies.map(toResumeRecord);
+                  }
                   console.log("[run-agent][evidence-reevaluation]", {
+                    reapplied: reappliedCount,
                     task_id: task.id,
                     considered: reevalReport.considered,
                     reevaluated: reevalReport.reevaluated,

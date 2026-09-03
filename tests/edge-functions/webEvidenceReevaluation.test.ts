@@ -441,3 +441,47 @@ Deno.test("PRIOR requirements are never re-judged on receipt count", () => {
   const merged = mergeReevaluation(prior, next, pageIntentFor);
   assertEquals(merged.matched_requirements.length, 3);
 });
+
+// ── THE DECISION MUST REACH THE CALLER ──────────────────────────────────────
+//
+// The first live canary logged Metaview as `qualified` while the checkpoint
+// still held `insufficient_evidence`. The runner mutated `c.mission_evaluation`
+// on the candidate it was handed — and `run-agent` maps the engine's companies
+// into fresh object literals before calling, so the write landed on a
+// throwaway. The verdict was computed and discarded.
+
+Deno.test("the merged verdict is RETURNED, not written onto the candidate", async () => {
+  const c = candidate();
+  const before = c.mission_evaluation;
+  const r = await reevaluateWithWebEvidence([c], {
+    db: fakeDb([okPage]), workspace_id: "w",
+    reevaluate: () => Promise.resolve({
+      mission_fit: "pass", unknown_fields: [],
+      matched_requirements: [{
+        requirement: "Company is a B2B SaaS company",
+        evidence_id: "web_page:company_website:0", excerpt: "no", support: "verified",
+      }],
+    }),
+    rebuildRegistry: (k, p) => registryFor(k, p),
+  });
+  // The candidate handed in is untouched — a module that decides hands its
+  // decision back rather than reaching into whatever object it was given.
+  assertEquals(c.mission_evaluation, before);
+  // And the decision is on the outcome, where the caller can apply it.
+  const outcome = r.outcomes.find((o) => o.skipped === null);
+  assert(outcome, "a re-evaluated company must report an outcome");
+  assert(outcome!.merged !== null, "the merged verdict must be returned");
+});
+
+Deno.test("a skipped company carries no merged verdict to apply", () => {
+  // Guards the write-back loop: `if (!o.merged) continue`.
+  return reevaluateWithWebEvidence(
+    [candidate({ mission_evaluation: priorEval({ decision: "qualified" }) })],
+    { db: fakeDb([okPage]), workspace_id: "w",
+      reevaluate: () => Promise.resolve({}),
+      rebuildRegistry: (k, p) => registryFor(k, p) },
+  ).then((r) => {
+    assertEquals(r.outcomes[0].skipped, "not_insufficient");
+    assertEquals(r.outcomes[0].merged, null);
+  });
+});
