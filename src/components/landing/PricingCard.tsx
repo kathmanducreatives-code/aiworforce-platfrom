@@ -22,6 +22,7 @@ const HOW_IT_WORKS = [
 ];
 
 const PLAN_VALUE: Record<string, string[]> = {
+  free_trial: ['~1 research job', '~10 companies researched', '~3 drafts'],
   starter: ['~8 research jobs', '~80 companies researched', '~30 drafts'],
   founder_pro: ['~20 research jobs', '~50 companies researched', '~100 drafts', 'Weekly monitoring'],
   growth: ['~60 research jobs', '~200 companies researched', '~400 drafts'],
@@ -54,10 +55,10 @@ const PricingCard = () => {
       className="relative px-4 py-28 md:py-36"
       style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
     >
-      <div className="text-center mb-12 max-w-3xl mx-auto">
+      <div className="text-center mb-14 max-w-[820px] mx-auto">
         <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ PRICING</p>
         <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-          Pay for work,<br />not seats of software you don't use.
+          Pay for work, not seats<br />of software you don't use.
         </h2>
         <p className="mt-5 text-[15px] text-white/55 leading-relaxed">
           Every plan includes monthly credits. Credits are used when your AI employees do real work — researching
@@ -65,14 +66,16 @@ const PricingCard = () => {
         </p>
       </div>
 
-      <div ref={cardRef} className="max-w-6xl mx-auto opacity-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div ref={cardRef} className="max-w-[1020px] mx-auto opacity-0">
+        {/* Columns follow the number of visible plans rather than a fixed five,
+            so hiding a tier re-centres the row instead of stranding it left. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
           {PRICING_PLANS.filter((plan) => !HIDDEN_ON_LANDING.includes(plan.id)).map((plan) => {
             const value = PLAN_VALUE[plan.id];
             return (
               <div
                 key={plan.id}
-                className="rounded-2xl p-5 relative flex flex-col"
+                className="rounded-2xl p-6 relative flex flex-col h-full"
                 style={{
                   background: 'rgba(255,255,255,0.02)',
                   border: plan.highlighted ? '1px solid rgba(0,255,148,0.35)' : '1px solid rgba(255,255,255,0.06)',
@@ -81,19 +84,19 @@ const PricingCard = () => {
               >
                 {plan.highlighted && (
                   <span
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
+                    className="absolute -top-[11px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.1em] px-3 py-1 rounded-full shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)]"
                     style={{ background: '#10b981', color: '#022c22' }}
                   >
                     ★ Most Popular
                   </span>
                 )}
-                <h3 className="font-display font-bold text-white text-[15px]">{plan.name}</h3>
-                <p className="text-[11.5px] text-white/45 mt-1 min-h-[2.5em]">{plan.description}</p>
+                <h3 className="font-display font-bold text-white text-[17px]">{plan.name}</h3>
+                <p className="text-[12.5px] text-white/45 mt-1.5 min-h-[3em] leading-snug">{plan.description}</p>
                 <p className="tabular-nums mt-3">
-                  <span className="font-mono font-black text-white text-3xl">€{plan.priceMonthly}</span>
+                  <span className="font-mono font-black text-white text-4xl">€{plan.priceMonthly}</span>
                   <span className="text-xs text-white/30">/mo</span>
                 </p>
-                <div className="mt-1 text-[12px] text-emerald-300 font-mono tabular-nums">
+                <div className="mt-1.5 text-[12.5px] text-emerald-300 font-mono tabular-nums">
                   {plan.credits.toLocaleString()} credits · {plan.seats} seat{plan.seats > 1 ? 's' : ''}
                 </div>
                 {plan.overagePerCredit > 0 && (
