@@ -129,7 +129,9 @@ const HeroHook = () => {
 
         <h1 className="hero-h1 font-display font-black text-white mx-auto mb-11">
           <span className="hero-line">
-            <span className="hero-reveal hero-line--intro">Agentory is where you</span>
+            <span className="hero-reveal hero-line--intro">
+              Agentory <span className="hero-serif">is where you</span>
+            </span>
           </span>
           <span className="hero-line">
             <span className="hero-reveal">build, assign, and manage</span>
@@ -233,6 +235,11 @@ const HeroHook = () => {
         .hero-copy--size { font-size: clamp(18px, 1.5vw, 23px); }
         .hero-reveal { display: block; transform: translateY(105%); opacity: 0; will-change: transform; }
         /* Line one stays fully readable — it is the sentence's subject. */
+        .hero-serif {
+          font-family: 'Instrument Serif', Georgia, serif;
+          font-style: italic; font-weight: 400; letter-spacing: -0.01em;
+          color: rgba(255,255,255,0.8);
+        }
         .hero-line--intro { font-size: 0.6em; font-weight: 800; letter-spacing: -0.035em; color: rgba(255,255,255,0.92); }
         .hero-accent {
           position: relative; display: inline-block;
