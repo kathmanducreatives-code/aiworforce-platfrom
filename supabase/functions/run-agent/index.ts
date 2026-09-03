@@ -4002,6 +4002,10 @@ Deno.serve(async (req) => {
                           source_url: r.source_url,
                           source_text: r.source_text,
                           fetched_at: r.fetched_at,
+                          // Carried through so the runner can tell "we have
+                          // this page" from "we asked and it is not there".
+                          // Both stop a fetch; only the first is evidence.
+                          status: r.status,
                         }]));
                       },
                       log: (event, meta) =>
@@ -4068,6 +4072,7 @@ Deno.serve(async (req) => {
                     planned: evidenceRun.planned,
                     pages_fetched: evidenceRun.pages_fetched,
                     pages_reused: evidenceRun.pages_reused,
+                    pages_known_missing: evidenceRun.pages_known_missing,
                     claims_kept: evidenceRun.claims_kept,
                     claims_rejected: evidenceRun.claims_rejected,
                     rows_written: evidenceRun.rows_written,
@@ -4078,6 +4083,7 @@ Deno.serve(async (req) => {
                       company: c.company_name,
                       pages: c.pages_fetched,
                       reused: c.pages_reused,
+                      known_missing: c.pages_known_missing,
                       ok: c.pages_ok,
                       claims: c.claims_kept,
                       outcome: c.outcome,

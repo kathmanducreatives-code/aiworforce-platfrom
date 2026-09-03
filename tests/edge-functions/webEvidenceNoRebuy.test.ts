@@ -118,7 +118,14 @@ Deno.test("a DIFFERENT requirement on the same company still raises a debt", () 
 const cacheWith = (intents: Record<string, string>): CacheReader => () =>
   Promise.resolve(new Map(Object.entries(intents).map(([intent, text]) => [
     intent,
-    { source_url: `https://x.com/${intent}`, source_text: text, fetched_at: "2026-09-03T00:00:00Z" },
+    {
+      source_url: `https://x.com/${intent}`, source_text: text,
+      fetched_at: "2026-09-03T00:00:00Z",
+      // A cached page is only reusable EVIDENCE when it succeeded. Absences are
+      // cached too now — see webEvidenceNegativeCache.test.ts — and they stop a
+      // fetch without being reused, so this helper has to say which it is.
+      status: "ok",
+    },
   ])));
 
 Deno.test("THE LOOP: a fresh cached page is reused, never re-fetched", async () => {

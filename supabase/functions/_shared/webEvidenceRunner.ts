@@ -77,6 +77,8 @@ export type CacheReader = (domain: string) => Promise<Map<string, {
   source_url: string;
   source_text: string;
   fetched_at: string;
+  /** ok | empty | blocked | not_found | timeout. Only `ok` may be cited. */
+  status: string;
 }>>;
 
 export interface EvidenceRunnerDeps {
@@ -98,6 +100,8 @@ export interface CompanyEvidenceOutcome {
   pages_fetched: number;
   /** Served from cache. Free: no fetch, no credit, no ledger row. */
   pages_reused: number;
+  /** Known absent from a previous attempt. Not bought, not evidence. */
+  pages_known_missing: number;
   pages_ok: number;
   claims_kept: number;
   claims_rejected: number;
@@ -115,6 +119,7 @@ export interface EvidenceRunReport {
   companies: CompanyEvidenceOutcome[];
   pages_fetched: number;
   pages_reused: number;
+  pages_known_missing: number;
   claims_kept: number;
   claims_rejected: number;
   rows_written: number;
@@ -130,6 +135,7 @@ const EMPTY_REPORT: EvidenceRunReport = {
   companies: [],
   pages_fetched: 0,
   pages_reused: 0,
+  pages_known_missing: 0,
   claims_kept: 0,
   claims_rejected: 0,
   rows_written: 0,
@@ -196,6 +202,7 @@ export async function runEvidenceCollection(i: {
       requirement_id: d.requirement_id,
       pages_fetched: 0,
       pages_reused: 0,
+      pages_known_missing: 0,
       pages_ok: 0,
       claims_kept: 0,
       claims_rejected: 0,
@@ -214,6 +221,7 @@ export async function runEvidenceCollection(i: {
       requirement_id: req.requirement_id,
       pages_fetched: 0,
       pages_reused: 0,
+      pages_known_missing: 0,
       pages_ok: 0,
       claims_kept: 0,
       claims_rejected: 0,
@@ -239,11 +247,14 @@ export async function runEvidenceCollection(i: {
     }
 
     const pages: WebEvidencePage[] = [];
-    const freshPages: WebEvidencePage[] = [];
+    /** Intents actually fetched this slice — the only rows worth writing. */
+    const fetchedIntents = new Set<string>();
     let providerRunId: string | null = null;
 
     // ── WHAT WE ALREADY HAVE, BEFORE WE BUY ANYTHING ──────────────────────
-    let cached = new Map<string, { source_url: string; source_text: string; fetched_at: string }>();
+    let cached = new Map<string, {
+      source_url: string; source_text: string; fetched_at: string; status: string;
+    }>();
     if (i.deps.readCache) {
       try {
         cached = await i.deps.readCache(req.domain);
@@ -256,19 +267,48 @@ export async function runEvidenceCollection(i: {
     for (const t of targets) {
       const hit = cached.get(t.intent);
       if (hit) {
+        // ── A KNOWN-ABSENT PAGE IS AN ANSWER, AND IT IS FREE ───────────────
+        //
+        // "We asked and it is not there" is as good a reason not to spend as a
+        // successful fetch. Filtering these out of the cache is what made run
+        // d3a79c32 buy diligencevault.com 16 times for 4 URLs.
+        //
+        // It is NOT evidence: no text, never shown to the extractor, and it
+        // cannot make a company look investigated when nothing was learned.
+        if (hit.status !== "ok" || !hit.source_text.trim()) {
+          outcome.pages_known_missing++;
+          report.pages_known_missing++;
+          pages.push({
+            url: hit.source_url,
+            intent: t.intent,
+            markdown: "",
+            fetched_at: hit.fetched_at,
+            // Narrowed against the vocabulary rather than cast: a status the
+            // table somehow holds outside it becomes `empty`, which is the
+            // conservative reading — we asked, we got nothing usable.
+            status: (["empty", "blocked", "not_found", "timeout"] as const)
+                .includes(hit.status as "empty" | "blocked" | "not_found" | "timeout")
+              ? hit.status as "empty" | "blocked" | "not_found" | "timeout"
+              : "empty",
+          });
+          log("evidence-cache-known-missing", {
+            company: debt.company_name, url: hit.source_url,
+            intent: t.intent, status: hit.status,
+          });
+          continue;
+        }
         // FREE. No fetch, no credit, no ledger row. Counted separately from
         // `pages_fetched` so the telemetry cannot make reuse look like spend.
         outcome.pages_reused++;
         report.pages_reused++;
-        const reused: WebEvidencePage = {
+        pages.push({
           url: hit.source_url,
           intent: t.intent,
           markdown: hit.source_text,
           fetched_at: hit.fetched_at,
           status: "ok",
-        };
-        pages.push(reused);
-        if (hit.source_text.trim()) outcome.pages_ok++;
+        });
+        outcome.pages_ok++;
         log("evidence-cache-hit", {
           company: debt.company_name, url: hit.source_url, intent: t.intent,
         });
@@ -287,6 +327,7 @@ export async function runEvidenceCollection(i: {
         res = { ok: false, markdown: "", status: "timeout" as const };
       }
       pagesSpent++;
+      fetchedIntents.add(t.intent);
       outcome.pages_fetched++;
       report.pages_fetched++;
       providerRunId = res.provider_run_id ?? providerRunId;
@@ -384,7 +425,21 @@ export async function runEvidenceCollection(i: {
           domain: req.domain,
           requirement_id: req.requirement_id,
           provider_run_id: providerRunId,
-          pages: pages.filter((p) => p.markdown.trim().length > 0),
+          // ── EVERY PAGE WE ASKED FOR, INCLUDING THE ONES THAT ARE NOT
+          //    THERE ────────────────────────────────────────────────────────
+          //
+          // This filtered to pages with text, so an unusable page stored
+          // nothing — and a cache with nothing to say cannot stop the next
+          // slice buying it again. Run d3a79c32: 44 calls for 21 URLs,
+          // volody.com fetched 7 times and stored 0 rows.
+          //
+          // The schema always intended this. Its own comment reads: "an empty
+          // or blocked page is a recorded observation, not a failure to hide …
+          // a missing row would look like we never asked."
+          //
+          // Only what we FETCHED is written: re-writing a cache hit would be
+          // recording an observation we did not make.
+          pages: pages.filter((p) => fetchedIntents.has(p.intent)),
         }),
       );
       report.rows_written += written;

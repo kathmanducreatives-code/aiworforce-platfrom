@@ -165,8 +165,10 @@ export async function readResearchedRequirements(
 export interface CachedPage {
   source_url: string;
   page_intent: string;
+  /** Empty for every status except `ok`. */
   source_text: string;
   fetched_at: string;
+  /** ok | empty | blocked | not_found | timeout. Only `ok` may be cited. */
   status: string;
 }
 
@@ -177,8 +179,20 @@ export interface CachedPage {
  * a different question reuses the same fetch. That is the property the whole
  * "cache pages, not answers" decision exists to buy.
  *
- * Only `ok` rows are returned: a 404 body is recorded for provenance but must
- * never be served back as though it were a page.
+ * ── NEGATIVE RESULTS COUNT AS ANSWERS ─────────────────────────────────────
+ *
+ * Every status is returned, not just `ok`. A fresh `not_found` row means WE
+ * ALREADY ASKED and the page is not there — which is exactly as good a reason
+ * not to buy it again as a successful fetch is.
+ *
+ * Run d3a79c32 is what filtering to `ok` cost: 44 Firecrawl calls for 21 URLs,
+ * because a page that never resolves stored nothing, so the cache had nothing
+ * to say and the next slice bought it again. diligencevault.com was fetched 16
+ * times for 4 URLs; volody.com 7 times and stored nothing at all.
+ *
+ * The CALLER decides what a row is good for: `ok` with text is evidence,
+ * anything else is only a reason not to spend. That split lives in the runner,
+ * because it is a judgement about evidence and this is a lookup.
  */
 export async function readFreshPages(
   db: SupabaseClient,
@@ -192,7 +206,6 @@ export async function readFreshPages(
       .select("source_url,page_intent,source_text,fetched_at,status")
       .eq("workspace_id", i.workspace_id)
       .eq("domain", i.domain)
-      .eq("status", "ok")
       .order("fetched_at", { ascending: false })
       .limit(50);
     if (error || !data) return out;
@@ -224,11 +237,19 @@ export async function writeWebEvidence(
     const { error } = await db
       .from(WEB_EVIDENCE_TABLE)
       // A repeated fetch of unchanged content collides on
-      // (workspace, domain, intent, content_hash) and is ignored rather than
-      // duplicated — the row already says what this one would.
+      // (workspace, domain, intent, content_hash) and REFRESHES the row rather
+      // than being dropped.
+      //
+      // `ignoreDuplicates: true` was wrong for the negative rows this now
+      // writes. Every unusable page hashes its empty text to the same value, so
+      // a second `not_found` for the same intent collides with the first — and
+      // ignoring it would leave `fetched_at` pinned to the original attempt.
+      // The row would then age past its TTL and stay aged, and the loop would
+      // come back the moment freshness expired. Re-observing a page IS new
+      // information about when we last looked.
       .upsert(rows as unknown as Record<string, unknown>[], {
         onConflict: "workspace_id,domain,page_intent,content_hash",
-        ignoreDuplicates: true,
+        ignoreDuplicates: false,
       });
     if (error) return { written: 0, error: error.message };
     return { written: rows.length, error: null };
