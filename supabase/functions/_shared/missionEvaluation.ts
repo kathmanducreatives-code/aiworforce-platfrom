@@ -255,6 +255,75 @@ export interface MissionEvaluationInput {
   company: Record<string, unknown>;
 }
 
+export const MISSION_REEVALUATION_CONTEXT_VERSION =
+  "mission-reevaluation-context-v1" as const;
+
+/**
+ * The ONLY thing the engine hands `run-agent` for a second look.
+ *
+ * ── WHY THIS EXISTS AS A TYPE ──────────────────────────────────────────────
+ *
+ * P4 runs outside the capability walk: qualification priority, deadline
+ * budgeting, provider execution and continuation are proven and sensitive, and
+ * a second model call inside that loop would put all four at risk to save a
+ * parameter. But "outside the engine" must not mean "hand `run-agent` the
+ * engine's internals" — the mutable working set, the registry objects, the
+ * deadline, none of that crosses.
+ *
+ * These three fields are exactly `MissionEvaluationInput` MINUS `company`, and
+ * `company` is the one field the re-evaluation rebuilds anyway, from the
+ * registry it assembles with the cached pages folded in. So this is the
+ * complete remainder and nothing more.
+ *
+ * All three are already-decided, already-serializable values the engine
+ * computed for the FIRST pass. Nothing is recompiled: reconstructing the
+ * mission in `run-agent` from lossy state is precisely what this avoids, and
+ * carrying the compiled object forward is what keeps one evaluator contract
+ * rather than two.
+ *
+ * Plain JSON by construction, so it survives the checkpoint boundary unchanged.
+ */
+export interface MissionReevaluationContextV1 {
+  version: typeof MISSION_REEVALUATION_CONTEXT_VERSION;
+  /** The user's request as compiled. Never re-read from their sentence. */
+  instruction: string;
+  /** The compiled mission. Carried, never rebuilt. */
+  mission: Record<string, unknown>;
+  /** The resolved Brain authority split the first pass was given. */
+  brain: Record<string, unknown>;
+}
+
+/**
+ * Lift the context out of an evaluator input the engine already built.
+ *
+ * Taking it from the built input rather than from the raw parts is deliberate:
+ * the two cannot drift, because there is only one place either is assembled.
+ */
+export function reevaluationContextFrom(
+  input: MissionEvaluationInput,
+): MissionReevaluationContextV1 {
+  return {
+    version: MISSION_REEVALUATION_CONTEXT_VERSION,
+    instruction: input.instruction,
+    mission: input.mission,
+    brain: input.brain,
+  };
+}
+
+/** Reconstitute the evaluator base. `company` is supplied by the registry. */
+export function evaluationInputFromContext(
+  ctx: MissionReevaluationContextV1,
+): MissionEvaluationInput {
+  return {
+    schema_version: MISSION_EVALUATION_INPUT_VERSION,
+    instruction: ctx.instruction,
+    mission: ctx.mission,
+    brain: ctx.brain,
+    // Overwritten by `buildMissionReevaluationInput` from the rebuilt registry.
+    company: {},
+  };
+}
+
 /**
  * Everything the evaluator sees, assembled from decided values only.
  *

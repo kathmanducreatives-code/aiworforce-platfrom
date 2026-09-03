@@ -88,7 +88,8 @@ import {
   type QualificationContext,
 } from "./missionQualificationContext.ts";
 import {
-  buildMissionEvaluationInput, notEvaluated,
+  buildMissionEvaluationInput, notEvaluated, reevaluationContextFrom,
+  type MissionReevaluationContextV1,
   type MissionEvaluation, type MissionEvaluationInput,
   type ParsedMissionEvaluation, type DecisionSource,
 } from "./missionEvaluation.ts";
@@ -1971,6 +1972,19 @@ export interface CapabilityEngineOpts {
 export interface CapabilityRunResult {
   state: CapabilityExecutionState;
   companies: EngineCompany[];
+  /**
+   * What a SECOND look needs, and nothing else.
+   *
+   * P4 re-evaluation runs in `run-agent`, outside the capability walk, so that
+   * a model call cannot disturb qualification priority, deadline budgeting or
+   * continuation. This is the whole of what crosses that boundary: three
+   * already-decided, already-serializable values — no working set, no registry
+   * object, no deadline.
+   *
+   * Null when nothing was evaluated, because there is then no compiled mission
+   * that this run actually used and inventing one would be reconstruction.
+   */
+  reevaluation_context: MissionReevaluationContextV1 | null;
   funnel: FunnelCounts;
   /** Per-company stage state, so a resume continues where each one stopped. */
   resume_records: CompanyResumeRecord[];
@@ -2038,6 +2052,19 @@ export async function runCapabilityPlan(
    * `buildSnapshotRow` refuses the rest.
    */
   const headcountSnapshots: HeadcountSnapshotRow[] = [];
+
+  /**
+   * What a later re-evaluation needs from this run, captured once.
+   *
+   * `??=` because every evaluated company builds the same three values from the
+   * same mission and Brain — the FIRST assignment is the whole answer, and
+   * reassigning per company would be writing the same object N times.
+   *
+   * Stays null when nothing was evaluated. There is then no compiled mission
+   * this run actually used, and inventing one is the reconstruction P4 must not
+   * do.
+   */
+  let reevaluationContext: MissionReevaluationContextV1 | null = null;
 
   // ── THE SECOND FINGERPRINT, COMPUTED ONCE ────────────────────────────────
   //
@@ -7020,14 +7047,19 @@ export async function runCapabilityPlan(
         // `evaluateCompanyFit` still runs — above — but as an EVIDENCE
         // SUMMARISER. Its `missing_evidence` tells the evaluator what nobody
         // could establish; its verdict no longer decides.
+        const evaluationInput = buildMissionEvaluationInput({
+          ctx: qualificationCtx,
+          authority: resolveBrainAuthority(qualificationCtx, opts.brain),
+          registry,
+          qualification_rules: opts.brainQualificationRules ?? null,
+        });
+        // LIFTED FROM THE INPUT THE FIRST PASS ACTUALLY USED, not rebuilt from
+        // the parts. One assembly point means the two cannot drift, and the
+        // mission is carried rather than recompiled.
+        reevaluationContext ??= reevaluationContextFrom(evaluationInput);
         const evaluation = deps.evaluateMission
           ? await clockBound("mission_evaluation", () => deps.evaluateMission!({
-            input: buildMissionEvaluationInput({
-              ctx: qualificationCtx,
-              authority: resolveBrainAuthority(qualificationCtx, opts.brain),
-              registry,
-              qualification_rules: opts.brainQualificationRules ?? null,
-            }),
+            input: evaluationInput,
             registry,
             company_key: c.key,
           }))
@@ -7831,6 +7863,7 @@ export async function runCapabilityPlan(
     headcount_snapshots: headcountSnapshots,
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
+    reevaluation_context: reevaluationContext,
   };
 }
 

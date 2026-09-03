@@ -134,6 +134,12 @@ import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts"
 // EVIDENCE_ENRICHMENT=execute.
 import { computeEvidenceDebts } from "../_shared/webEvidenceDebt.ts";
 import { runEvidenceCollection } from "../_shared/webEvidenceRunner.ts";
+import { reevaluateWithWebEvidence } from "../_shared/webEvidenceReevaluation.ts";
+import {
+  evaluationInputFromContext, MISSION_REEVALUATION_PROMPT,
+} from "../_shared/missionEvaluation.ts";
+import { buildEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
+import { buildCompanyEvidence } from "../_shared/leadCompanyEvidence.ts";
 import {
   readFreshPages, readResearchedRequirements,
 } from "../_shared/webEvidenceStore.ts";
@@ -4067,6 +4073,88 @@ Deno.serve(async (req) => {
                       },
                     },
                   });
+                // ── P4: READ BACK WHAT WE ALREADY BOUGHT ────────────────
+                //
+                // Runs OUTSIDE the capability walk, deliberately. Qualification
+                // priority, deadline budgeting, provider execution and
+                // continuation are proven and sensitive; a second model call
+                // inside that loop would put all four at risk to save a
+                // parameter.
+                //
+                // It buys nothing. `reevaluateWithWebEvidence` reads
+                // `company_web_evidence` and skips any company with no cached
+                // page, so a candidate whose evidence was never collected is
+                // simply not re-evaluated.
+                //
+                // The engine hands over `reevaluation_context` — instruction,
+                // compiled mission, resolved Brain — and nothing else. The
+                // mission is CARRIED, never rebuilt from lossy state here.
+                // Bound once so the closures below cannot see a narrowed-away
+                // null: the callbacks run after this scope's guard.
+                const engineRun = capabilityRun;
+                const reevalCtx = engineRun?.reevaluation_context ?? null;
+                if (reevalCtx && evidenceMode === "execute") {
+                  const reevalRoute = routeModel("mission_evaluation");
+                  const reevalGen = createGptStrategistGenerateJson({}, {
+                    model: reevalRoute.model,
+                    reasoningEffort: reevalRoute.reasoning_effort,
+                    tier: reevalRoute.tier,
+                    purpose: reevalRoute.stage,
+                    reason: reevalRoute.reason,
+                  });
+                  const reevalReport = await reevaluateWithWebEvidence(
+                    engineRun.companies.map((c) => ({
+                      key: c.key,
+                      company_name: c.enriched?.company_name ??
+                        c.company?.company_name ?? null,
+                      domain: c.enriched?.canonical_domain ?? null,
+                      mission_evaluation: c.mission_evaluation,
+                      evidence_registry: c.evidence_registry,
+                      evaluation_input: evaluationInputFromContext(reevalCtx),
+                    })),
+                    {
+                      db: supabase,
+                      workspace_id,
+                      reevaluate: (payload) =>
+                        callJson(reevalGen, MISSION_REEVALUATION_PROMPT, payload),
+                      // The registry REBUILT with the cached pages folded in.
+                      // The company's own facts come from the same builder the
+                      // first pass used, so a re-evaluation never sees a
+                      // narrower company than the evaluation it revises.
+                      rebuildRegistry: (companyKey, pages) => {
+                        const c = engineRun.companies.find((x) => x.key === companyKey);
+                        return buildEvidenceRegistry({
+                          evidence: buildCompanyEvidence({
+                            company: (c?.enriched ?? c?.company)!,
+                            company_key: companyKey,
+                            identity: c?.identity ?? null,
+                            jobs: c?.hiring_jobs ?? [],
+                          } as never),
+                          jobs: c?.hiring_jobs ?? [],
+                          web_pages: pages,
+                        });
+                      },
+                      log: (event, meta) =>
+                        console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
+                    },
+                  );
+                  console.log("[run-agent][evidence-reevaluation]", {
+                    task_id: task.id,
+                    considered: reevalReport.considered,
+                    reevaluated: reevalReport.reevaluated,
+                    model_calls: reevalReport.model_calls,
+                    skip_counts: reevalReport.skip_counts,
+                    transitions: reevalReport.outcomes
+                      .filter((o) => o.skipped === null)
+                      .map((o) => ({
+                        company: o.company_name, before: o.before, after: o.after,
+                        resolved: o.resolved, still_open: o.still_open,
+                        carried: o.carried.length, pages: o.pages_used,
+                        dropped_citations: o.dropped_citations,
+                      })),
+                  });
+                }
+
                   console.log("[run-agent][evidence-run]", {
                     task_id: task.id,
                     planned: evidenceRun.planned,
