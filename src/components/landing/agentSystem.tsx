@@ -330,10 +330,26 @@ export function FeedRow({
 
 export const AGENT_SYSTEM_STYLES = `
 .agent-panel {
-  width: 100%; min-width: 0; display: flex; flex-direction: column;
-  border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); padding: 20px;
-  background: rgba(8,10,13,0.62);
+  position: relative; width: 100%; min-width: 0; display: flex; flex-direction: column;
+  border-radius: 18px; padding: 22px; overflow: hidden; isolation: isolate;
+  border: 1px solid rgba(255,255,255,0.075);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.012) 34%, rgba(4,7,9,0.5) 100%),
+    rgba(6,9,11,0.52);
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    0 26px 60px -30px rgba(0,0,0,0.95);
 }
+/* A slow reflection travelling the surface, so the glass reads as material. */
+.agent-panel::before {
+  content: ''; position: absolute; inset: -40% -10%; z-index: -1; pointer-events: none;
+  background: linear-gradient(102deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%);
+  transform: translateX(-60%); animation: panelSheen 18s ease-in-out infinite;
+}
+@keyframes panelSheen { 0%, 70% { transform: translateX(-60%); } 96%, 100% { transform: translateX(60%); } }
 .agent-panel__bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.09);
@@ -342,7 +358,34 @@ export const AGENT_SYSTEM_STYLES = `
   font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.1em;
   text-transform: uppercase; color: rgba(255,255,255,0.5);
 }
-.agent-panel__main { flex: 1; min-height: 0; display: flex; }
+.agent-panel__main { flex: 1; min-height: 0; display: flex; perspective: 1200px; }
+
+/* ── 3D SCENES ─────────────────────────────────────────────────────────────
+   One metaphor per agent, built from planes rather than objects: a filter, a
+   scanned field, a prism, a compressing stack. Transform and opacity only. */
+.scene {
+  position: relative; flex: 1; min-width: 0;
+  transform-style: preserve-3d; --hx: 0; --hy: 0;
+}
+.scene__layer { position: absolute; inset: 0; transform-style: preserve-3d; }
+/* Depth tiers. Foreground lifts more under the cursor than background. */
+.tier-back  { transform: translate3d(calc(var(--hx) * 2px),  calc(var(--hy) * 2px),  -60px); transition: transform 600ms cubic-bezier(0.22,1,0.36,1); }
+.tier-mid   { transform: translate3d(calc(var(--hx) * 4px),  calc(var(--hy) * 4px),   0);    transition: transform 600ms cubic-bezier(0.22,1,0.36,1); }
+.tier-front { transform: translate3d(calc(var(--hx) * 7px),  calc(var(--hy) * 7px),  46px);  transition: transform 600ms cubic-bezier(0.22,1,0.36,1); }
+
+/* A pane of the same smoked glass, used for every surface inside a scene. */
+.pane {
+  border-radius: 12px; border: 1px solid rgba(255,255,255,0.09);
+  background: linear-gradient(170deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015) 60%, rgba(0,0,0,0.25));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), 0 14px 30px -20px rgba(0,0,0,0.9);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.pane--ghost { border-color: rgba(255,255,255,0.05); background: rgba(255,255,255,0.022); box-shadow: none; backdrop-filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-panel::before { animation: none; opacity: 0; }
+  .tier-back, .tier-mid, .tier-front { transition: none; }
+}
 .feed-list { display: flex; flex-direction: column; width: 100%; }
 .feed-row { padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,0.055); }
 .feed-row:first-child { padding-top: 0; }
