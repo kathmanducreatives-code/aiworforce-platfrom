@@ -136,6 +136,24 @@ export const GPT_STAGES = [
   "request_understanding",
   /** Terra re-reading an understanding whose SHAPE the parser could repair. */
   "request_understanding_repair",
+  /**
+   * Names the pages that would answer a requirement nothing has proven yet.
+   *
+   * It chooses INTENTS from a fixed vocabulary, never a URL, and the gate has
+   * already decided which companies are worth spending on — so a poor answer
+   * costs one wasted page fetch on a candidate we were going to research
+   * anyway, never a wrong company and never an unbounded crawl.
+   */
+  "evidence_planning",
+  /**
+   * Reads fetched pages and says what they support, quoting them.
+   *
+   * Every excerpt is checked against the page text by substring match and
+   * dropped when it does not appear, so a fabricated reading cannot survive
+   * validation. The pages are already bought; a second reading does not
+   * improve them.
+   */
+  "evidence_extraction",
 ] as const;
 
 export type GptStage = typeof GPT_STAGES[number];
@@ -315,6 +333,21 @@ const POLICY: Readonly<Record<GptStage, StagePolicy>> = Object.freeze({
       "decides whether a claim is supported by evidence already bought; the " +
       "evidence does not improve on a second reading, so a retry changes cost " +
       "and not the answer",
+  },
+  evidence_planning: {
+    primary: LUNA, effort: "none", escalation: null,
+    reason:
+      "picks page intents from a fixed vocabulary for candidates the " +
+      "deterministic gate already approved; it cannot name a URL, widen the " +
+      "candidate set or raise its own budget, so a weak plan costs one page " +
+      "fetch and never a wrong target",
+  },
+  evidence_extraction: {
+    primary: LUNA, effort: "none", escalation: null,
+    reason:
+      "reads pages already paid for and must quote them verbatim; excerpts " +
+      "that do not appear in the page text are dropped by the validator, so " +
+      "a second reading buys cost rather than a better-grounded answer",
   },
   pool_evaluation: {
     primary: LUNA, effort: "none", escalation: null,

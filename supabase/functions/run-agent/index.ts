@@ -128,9 +128,16 @@ import {
 } from "../_shared/workflowContinuation.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
 import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts";
-// Adaptive evidence enrichment, P1. Pure and side-effect free — the module
-// computes debts and nothing else; see the dry-run block for how it is used.
+// Adaptive evidence enrichment. `computeEvidenceDebts` is pure — it names the
+// candidates blocked only for want of evidence. `runEvidenceCollection` is the
+// P2 path that actually buys pages for them, and runs only under
+// EVIDENCE_ENRICHMENT=execute.
 import { computeEvidenceDebts } from "../_shared/webEvidenceDebt.ts";
+import { runEvidenceCollection } from "../_shared/webEvidenceRunner.ts";
+import { EVIDENCE_PLANNER_PROMPT } from "../_shared/webEvidencePlanner.ts";
+import { EVIDENCE_EXTRACTION_PROMPT } from "../_shared/webEvidenceExtraction.ts";
+import { routeModel } from "../_shared/gptModelRouter.ts";
+import { createGptStrategistGenerateJson } from "../_shared/gptStrategistModel.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
 // `applyMissionPrecedence`, `buildClassifierPayload`, `parseSemanticFitStrict`
 // and `SEMANTIC_INPUT_SCHEMA_VERSION` are no longer imported here: they existed
@@ -3866,7 +3873,8 @@ Deno.serve(async (req) => {
             //
             // OFF unless explicitly enabled, so a deploy cannot start doing
             // anything new by accident.
-            if (Deno.env.get("EVIDENCE_ENRICHMENT") === "plan_only") {
+            const evidenceMode = Deno.env.get("EVIDENCE_ENRICHMENT") ?? "off";
+            if (evidenceMode === "plan_only" || evidenceMode === "execute") {
               try {
                 const report = computeEvidenceDebts(
                   capabilityRun.companies.map((c) => ({
@@ -3884,6 +3892,7 @@ Deno.serve(async (req) => {
                 );
                 console.log("[run-agent][evidence-debt][dry-run]", {
                   task_id: task.id,
+                  mode: evidenceMode,
                   pool: capabilityRun.companies.length,
                   debts: report.debts.length,
                   skip_counts: report.skip_counts,
@@ -3897,6 +3906,133 @@ Deno.serve(async (req) => {
                     requirement_id: d.requirement_id,
                     open_question: d.open_question,
                     known_evidence_types: d.known_evidence_types,
+                  });
+                }
+
+                // ── P2: COLLECT THE EVIDENCE ────────────────────────────────
+                //
+                // Only under `execute`. This is the first code path in the
+                // feature that spends: one planner call, up to three page
+                // fetches per company through the SAME paid-tool path Apify
+                // uses, and one extraction call per company that returned
+                // readable text.
+                //
+                // It changes NO qualification outcome. The pages are collected
+                // and filed; feeding them back to the evaluator is P4. That is
+                // what makes this safe to run live — the worst case is pages
+                // bought and stored, never a verdict altered by half-built
+                // machinery.
+                if (evidenceMode === "execute" && report.debts.length > 0) {
+                  const planRoute = routeModel("evidence_planning");
+                  const extractRoute = routeModel("evidence_extraction");
+                  const planGen = createGptStrategistGenerateJson({}, {
+                    model: planRoute.model,
+                    reasoningEffort: planRoute.reasoning_effort,
+                    tier: planRoute.tier,
+                    purpose: planRoute.stage,
+                    reason: planRoute.reason,
+                  });
+                  const extractGen = createGptStrategistGenerateJson({}, {
+                    model: extractRoute.model,
+                    reasoningEffort: extractRoute.reasoning_effort,
+                    tier: extractRoute.tier,
+                    purpose: extractRoute.stage,
+                    reason: extractRoute.reason,
+                  });
+                  const callJson = async (
+                    gen: ReturnType<typeof createGptStrategistGenerateJson>,
+                    systemPrompt: string,
+                    payload: Record<string, unknown>,
+                  ) => {
+                    const r = await gen({
+                      systemPrompt,
+                      messages: [{ role: "user", content: JSON.stringify(payload) }],
+                    } as never);
+                    return (r as { ok?: boolean; json?: unknown })?.ok
+                      ? (r as { json?: unknown }).json
+                      : null;
+                  };
+
+                  const evidenceRun = await runEvidenceCollection({
+                    workspace_id,
+                    debts: report.debts,
+                    deps: {
+                      plan: (p) => callJson(planGen, EVIDENCE_PLANNER_PROMPT, p),
+                      extract: (p) =>
+                        callJson(extractGen, EVIDENCE_EXTRACTION_PROMPT, p),
+                      db: supabase,
+                      log: (event, meta) =>
+                        console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
+                      // ── THE PAID BOUNDARY ─────────────────────────────────
+                      //
+                      // `scrape_url` is already in `PAID_TOOLS`, so this call
+                      // reserves credits and writes a ledger row on the same
+                      // `logical_call_key` machinery Apify uses. Nothing new
+                      // was built for spend, which is why the audit's proven
+                      // idempotency covers this too.
+                      //
+                      // `max_pages: 1` PINS Firecrawl to `/scrape`. The
+                      // `/crawl` branch is asynchronous and would create a
+                      // pending-run class that a continuation ceiling can
+                      // orphan — the exact defect (D2) that cost run a5c1616e
+                      // a paid job search. One synchronous page per call means
+                      // there is never an in-flight fetch to strand.
+                      fetchPage: async ({ url, request_id, company_key }) => {
+                        const r = await runTool("scrape_url", {
+                          url,
+                          extraction_goal: "requirement evidence",
+                          max_pages: 1,
+                          capability_key: "web_evidence_verification",
+                          compiled_input_hash: request_id,
+                          // The ledger's own vocabulary: this enriches a company
+                          // with evidence, and the reason it runs at all is that
+                          // a required piece of evidence is missing.
+                          audit_stage: "company_enrichment",
+                          audit_reason: "fill_required_evidence",
+                          actor_id: "firecrawl_scrape",
+                          ...auditOwnership(),
+                        }, baseCtx);
+                        const data = (r.data ?? {}) as Record<string, unknown>;
+                        const md = typeof data.markdown === "string"
+                          ? data.markdown
+                          : Array.isArray(data.pages) && data.pages.length > 0
+                          ? String((data.pages[0] as Record<string, unknown>)?.markdown ?? "")
+                          : "";
+                        const meta = (data.metadata ?? {}) as Record<string, unknown>;
+                        return {
+                          ok: r.ok === true,
+                          markdown: md,
+                          final_url: (typeof meta.sourceURL === "string"
+                            ? meta.sourceURL
+                            : typeof data.source_url === "string"
+                            ? data.source_url
+                            : null) ?? url,
+                          status: r.ok === true
+                            ? (md.trim() ? "ok" : "empty")
+                            : String(r.error ?? "").includes("timeout")
+                            ? "timeout"
+                            : "not_found",
+                        };
+                      },
+                    },
+                  });
+                  console.log("[run-agent][evidence-run]", {
+                    task_id: task.id,
+                    planned: evidenceRun.planned,
+                    pages_fetched: evidenceRun.pages_fetched,
+                    claims_kept: evidenceRun.claims_kept,
+                    claims_rejected: evidenceRun.claims_rejected,
+                    rows_written: evidenceRun.rows_written,
+                    store_error: evidenceRun.store_error,
+                    plan_rejections: evidenceRun.plan_rejections,
+                    claim_rejections: evidenceRun.claim_rejections,
+                    companies: evidenceRun.companies.map((c) => ({
+                      company: c.company_name,
+                      pages: c.pages_fetched,
+                      ok: c.pages_ok,
+                      claims: c.claims_kept,
+                      outcome: c.outcome,
+                    })),
                   });
                 }
               } catch (e) {
