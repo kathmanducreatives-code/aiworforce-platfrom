@@ -117,7 +117,6 @@ const HeroHook = () => {
       ))}
       <span className="hero-field" aria-hidden="true" />
       <span className="hero-bloom" aria-hidden="true" />
-      <span className="hero-scan" aria-hidden="true" />
       <span className="hero-vignette" aria-hidden="true" />
 
       <div className="hero-inner relative z-20 w-full text-center">
@@ -128,34 +127,41 @@ const HeroHook = () => {
           </span>
         </p>
 
-        <h1 className="hero-h1 font-display font-black text-white mx-auto">
+        <h1 className="hero-h1 font-display font-black text-white mx-auto mb-11">
           <span className="hero-line">
-            <span className="hero-reveal hero-line--intro">
-              Agentory <span className="hero-serif">is where you</span>
-            </span>
+            <span className="hero-reveal hero-line--intro">Agentory is where you</span>
           </span>
           <span className="hero-line">
             <span className="hero-reveal">build, assign, and manage</span>
           </span>
           <span className="hero-line">
-            <span className="hero-reveal hero-accent">AI employees.</span>
+            <span className="hero-reveal hero-accent">
+              <span aria-hidden="true">
+                {'AI employees.'.split('').map((ch, i) => (
+                  <span key={i} className="hero-wave" style={{ animationDelay: `${(i * 0.05).toFixed(2)}s` }}>
+                    {ch === ' ' ? '\u00A0' : ch}
+                  </span>
+                ))}
+              </span>
+              <span className="sr-only">AI employees.</span>
+            </span>
           </span>
         </h1>
 
-        <p className="hero-copy opacity-0 translate-y-4 text-white/60 text-[18px] md:text-[20px] leading-[1.6] max-w-[700px] mx-auto mt-8">
+        <p className="hero-copy opacity-0 translate-y-4 text-white/68 leading-[1.55] max-w-[760px] mx-auto hero-copy--size">
           Create specialized AI employees, give them responsibilities, and run their work across
           your business — all from one place.
         </p>
 
         <div className="hero-cta opacity-0 translate-y-3 mt-10">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-            <button ref={primaryRef} onClick={() => navigate('/auth')} className="hero-primary group">
+            <button ref={primaryRef} onClick={() => navigate('/auth')} className="hero-btn hero-primary group">
               Put Agentory to work
-              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-[4px]" />
+              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-[5px]" />
             </button>
-            <a href="#your-next-hires" className="hero-secondary">See how it works</a>
+            <a href="#your-next-hires" className="hero-btn hero-secondary">See how it works</a>
           </div>
-          <p className="text-[13.5px] text-white/35 mt-6">Set up in minutes · Start free · Cancel anytime</p>
+          <p className="text-[13.5px] text-white/35 mt-[18px]">Set up in minutes · Start free · Cancel anytime</p>
         </div>
       </div>
 
@@ -180,17 +186,14 @@ const HeroHook = () => {
         .hero-bloom {
           position: absolute; left: 50%; top: 44%; width: min(1100px, 92vw); height: 620px;
           transform: translate(-50%, -50%); z-index: 1; pointer-events: none; border-radius: 9999px;
-          background: radial-gradient(closest-side, rgba(16,185,129,0.15), transparent 72%);
-          filter: blur(40px); animation: heroBreathe 13s ease-in-out infinite;
+          background: radial-gradient(closest-side, rgba(16,185,129,0.16), transparent 72%);
+          filter: blur(40px); animation: heroBreathe 5.5s cubic-bezier(0.4,0,0.2,1) infinite;
         }
-        @keyframes heroBreathe { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+        /* Same 5.5s clock as the wave, a beat behind, so the light reads as a
+           response to the type rather than as its own loop. */
+        @keyframes heroBreathe { 0%, 26%, 100% { opacity: 0.7; } 11% { opacity: 1; } }
         /* One light crossing a grid line. The only moving decoration. */
-        .hero-scan {
-          position: absolute; left: 0; right: 0; top: 34%; height: 1px; z-index: 1; pointer-events: none;
-          background: linear-gradient(90deg, transparent, rgba(52,211,153,0.5), transparent);
-          transform: translateX(-100%); animation: heroScan 17s ease-in-out infinite;
-        }
-        @keyframes heroScan { 0%, 62% { transform: translateX(-100%); } 88%, 100% { transform: translateX(100%); } }
+ }
         .hero-vignette {
           position: absolute; inset: 0; z-index: 2; pointer-events: none;
           background:
@@ -203,13 +206,13 @@ const HeroHook = () => {
           font-family: 'Inter Tight', system-ui, sans-serif; font-weight: 900;
           font-size: clamp(90px, 13vw, 210px); line-height: 0.8; letter-spacing: -0.05em;
           color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,0.026);
-          animation: heroDrift 22s ease-in-out infinite;
+          animation: heroDrift 34s ease-in-out infinite;
         }
         .hero-ghost--tl { top: 3%;  left: -8%;  }
         .hero-ghost--tr { top: 8%;  right: -9%; animation-delay: -6s; }
         .hero-ghost--bl { bottom: 4%; left: -9%; animation-delay: -12s; }
         .hero-ghost--br { bottom: 1%; right: -8%; animation-delay: -18s; }
-        @keyframes heroDrift { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(6px,-8px,0); } }
+        @keyframes heroDrift { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(3px,-4px,0); } }
 
         /* ── Composition, compressing as the hero exits ─────────────────── */
         .hero-inner {
@@ -223,55 +226,84 @@ const HeroHook = () => {
 
         /* ── Headline ──────────────────────────────────────────────────── */
         .hero-h1 {
-          font-size: clamp(2.3rem, 5.4vw, 4.6rem);
-          line-height: 1.03; letter-spacing: -0.045em; max-width: 1050px;
+          font-size: clamp(2.55rem, 6.2vw, 7rem);
+          line-height: 0.97; letter-spacing: -0.048em; max-width: 1180px;
         }
-        .hero-line { display: block; overflow: hidden; padding-bottom: 0.09em; }
+        .hero-line { display: block; overflow: hidden; padding-bottom: 0.1em; }
+        .hero-copy--size { font-size: clamp(18px, 1.5vw, 23px); }
         .hero-reveal { display: block; transform: translateY(105%); opacity: 0; will-change: transform; }
         /* Line one stays fully readable — it is the sentence's subject. */
-        .hero-line--intro { font-size: 0.74em; letter-spacing: -0.035em; color: rgba(255,255,255,0.94); }
-        .hero-serif {
-          font-family: 'Instrument Serif', Georgia, serif;
-          font-style: italic; font-weight: 400; letter-spacing: -0.01em;
-          color: rgba(255,255,255,0.78);
-        }
+        .hero-line--intro { font-size: 0.6em; font-weight: 800; letter-spacing: -0.035em; color: rgba(255,255,255,0.92); }
         .hero-accent {
           position: relative; display: inline-block;
-          background: linear-gradient(178deg, #6ee7b7 4%, #34d399 52%, #10b981 100%);
-          -webkit-background-clip: text; background-clip: text; color: transparent;
           transition: letter-spacing 420ms cubic-bezier(0.22,1,0.36,1), filter 420ms ease;
           filter: drop-shadow(0 0 26px rgba(16,185,129,calc(0.3 - var(--s) * 0.3)));
         }
-        .hero-accent::after {
-          content: ''; position: absolute; inset: -0.12em -0.25em; pointer-events: none;
-          background: linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.2) 50%, transparent 58%);
-          transform: translateX(-125%); animation: heroSheen 11s ease-in-out infinite;
+        .hero-wave {
+          display: inline-block; will-change: transform;
+          background: linear-gradient(178deg, #6ee7b7 4%, #34d399 52%, #10b981 100%);
+          -webkit-background-clip: text; background-clip: text; color: transparent;
+          animation: heroWave 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
-        @keyframes heroSheen { 0%, 76% { transform: translateX(-125%); } 92%, 100% { transform: translateX(125%); } }
-        .hero-h1:hover .hero-accent { letter-spacing: -0.058em; filter: drop-shadow(0 0 40px rgba(16,185,129,0.5)); }
-
+        @keyframes heroWave {
+          0%, 20%, 100% { transform: translateY(0); }
+          7%  { transform: translateY(-5px); }
+          14% { transform: translateY(1px); }
+        }
+        .hero-h1:hover .hero-accent { letter-spacing: -0.058em; }
         /* ── Buttons ───────────────────────────────────────────────────── */
+        /* Built as control surfaces rather than pills: an outer shell, an
+           inset face, and edge highlights doing the work instead of a drop
+           shadow. Corners are softened rectangles, not full rounds, which is
+           what keeps them reading as product rather than as marketing. */
+        .hero-btn {
+          position: relative; height: 52px; border-radius: 14px;
+          display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+          padding-inline: 26px; font-size: 15px; font-weight: 650; letter-spacing: -0.01em;
+          overflow: hidden; isolation: isolate;
+          transform: translate3d(var(--bx, 0px), calc(var(--by, 0px) + var(--lift, 0px)), 0);
+          transition: transform 300ms cubic-bezier(0.22,1,0.36,1),
+                      box-shadow 300ms ease, filter 300ms ease, border-color 300ms ease, background-color 300ms ease;
+        }
+        .hero-btn:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 3px; }
+
         .hero-primary {
-          --bx: 0px; --by: 0px;
-          height: 48px; display: inline-flex; align-items: center; gap: 10px;
-          padding-inline: 28px; border-radius: 9999px;
-          background: linear-gradient(180deg, #4ade80, #10b981);
-          color: #04120b; font-weight: 650; font-size: 15px;
-          box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset, 0 6px 30px rgba(16,185,129,0.3);
-          transform: translate3d(var(--bx), var(--by), 0);
-          transition: transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease;
+          --bx: 0px; --by: 0px; --lift: 0px;
+          color: #04120b;
+          background: linear-gradient(180deg, #4ade80 0%, #22c55e 42%, #0f9d6f 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.5),
+            inset 0 -1px 0 rgba(0,0,0,0.22),
+            0 8px 26px -8px rgba(16,185,129,0.55);
         }
-        .hero-primary:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.38) inset, 0 8px 40px rgba(16,185,129,0.46); }
-        .hero-primary:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 3px; }
+        /* Light sweep, on hover only — nothing loops here. */
+        .hero-primary::before {
+          content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+          background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,0.42) 50%, transparent 62%);
+          transform: translateX(-130%); transition: transform 700ms cubic-bezier(0.22,1,0.36,1);
+        }
+        .hero-primary:hover { --lift: -2px; filter: brightness(1.05);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.6),
+            inset 0 -1px 0 rgba(0,0,0,0.22),
+            0 12px 34px -8px rgba(16,185,129,0.7);
+        }
+        .hero-primary:hover::before { transform: translateX(130%); }
+
         .hero-secondary {
-          height: 48px; display: inline-flex; align-items: center; padding-inline: 26px;
-          border-radius: 9999px; font-weight: 600; font-size: 15px;
-          color: rgba(255,255,255,0.68); border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.03); backdrop-filter: blur(10px);
-          transition: color 220ms ease, border-color 220ms ease, background-color 220ms ease;
+          --lift: 0px;
+          color: rgba(255,255,255,0.78);
+          background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.022));
+          border: 1px solid rgba(255,255,255,0.13);
+          backdrop-filter: blur(14px) saturate(140%);
+          -webkit-backdrop-filter: blur(14px) saturate(140%);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.3);
         }
-        .hero-secondary:hover { color: #fff; border-color: rgba(52,211,153,0.4); background: rgba(255,255,255,0.06); }
-        .hero-secondary:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 3px; }
+        .hero-secondary:hover {
+          --lift: -1px; color: #fff; border-color: rgba(52,211,153,0.42);
+          background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.04));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 6px 20px -10px rgba(16,185,129,0.5);
+        }
 
         /* ── Bottom cue ────────────────────────────────────────────────── */
         /* Brightens as the hero leaves, so the handover feels intentional. */
@@ -286,14 +318,18 @@ const HeroHook = () => {
         @media (max-width: 1023px) {
           /* Ghost words become clutter before they become atmosphere. */
           .hero-ghost { display: none; }
-          .hero-scan { display: none; }
-          .hero-h1 { font-size: clamp(2rem, 8vw, 2.9rem); }
+          .hero-h1 { font-size: clamp(2.1rem, 8.4vw, 3.2rem); }
+          /* Per-letter motion gets messy at small sizes; the phrase keeps a
+             single soft highlight instead. */
+          .hero-wave { animation: none; }
+          .hero-accent { animation: heroAccentGlow 5.5s ease-in-out infinite; }
+          @keyframes heroAccentGlow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.14); } }
+          .hero-secondary { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .hero-bloom, .hero-scan, .hero-ghost, .hero-accent::after, .hero-cue__line { animation: none; }
-          .hero-accent::after { opacity: 0; }
-          .hero-inner, .hero-eyebrow, .hero-cue { transform: none; opacity: 1; }
+          .hero-bloom, .hero-ghost, .hero-wave, .hero-cue__line { animation: none; }
+                    .hero-inner, .hero-eyebrow, .hero-cue { transform: none; opacity: 1; }
           .hero-primary { transition: box-shadow 260ms ease; }
         }
       `}</style>
