@@ -1,23 +1,19 @@
 /**
  * HERO — typography is the graphic.
  *
- * Everything below this section already carries rich product visuals, so the
- * hero deliberately holds none: no portraits, no cards, no diagrams. What
- * makes it feel alive is the writing, the line composition, a masked reveal,
- * and a background that responds very slightly to the cursor.
+ * Everything below the fold already carries product visuals, so the hero holds
+ * none: no portraits, no cards, no diagrams. It states what Agentory is and
+ * hands to section two, which introduces the employees.
  *
- * THE CAST CAME OUT. The hero used to introduce all four employees with
- * portraits, names and tags — which is now exactly what section two does, one
- * screen later, in more depth. Meeting them twice in the first two screens
- * made the hero read as a summary of the page rather than an opening line.
+ * What makes it feel expensive is refinement rather than furniture — a masked
+ * line reveal, an ambient field that follows the cursor with heavy smoothing,
+ * ghost words holding the corners, and a scroll exit that compresses into the
+ * next section instead of cutting.
  *
- * COPY leads into section two rather than competing with it. The hero states
- * the problem in the founder's own terms; "Your next four hires might not be
- * human" is the answer, and the scroll cue hands over to it.
- *
- * MOTION is masked line reveal, roughly 1.1s end to end, then almost nothing:
- * a highlight that crosses the accent phrase every twelve seconds and a 3px
- * parallax on the background. It should read as alive, not as animated.
+ * PERFORMANCE. Transform and opacity only. Two rAF-throttled listeners
+ * (pointer, scroll) write CSS variables; everything else is CSS. No canvas, no
+ * particles, no WebGL. Cursor-driven effects are desktop-only and every
+ * animation stops under prefers-reduced-motion.
  */
 
 import { useEffect, useRef } from 'react';
@@ -25,177 +21,280 @@ import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ArrowRight } from 'lucide-react';
 
+/** Atmospheric only — the disciplines the product covers, held at the edges. */
+const GHOSTS = [
+  { word: 'Research', className: 'hero-ghost--tl' },
+  { word: 'Leads', className: 'hero-ghost--tr' },
+  { word: 'Content', className: 'hero-ghost--bl' },
+  { word: 'Signals', className: 'hero-ghost--br' },
+];
+
 const HeroHook = () => {
   const navigate = useNavigate();
   const sectionRef = useRef<HTMLElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const fine = window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
 
     const ctx = gsap.context(() => {
       if (reduce) {
         gsap.set('.hero-reveal', { y: '0%', opacity: 1 });
-        gsap.set('.hero-fade', { opacity: 1, y: 0 });
+        gsap.set('.hero-eyebrow, .hero-copy, .hero-cta, .hero-cue', { opacity: 1, y: 0 });
         return;
       }
-      // Lines rise through their own mask, each a beat behind the last. The
-      // accent line lands last so the eye finishes on the point.
-      const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
-      tl.to('.hero-eyebrow', { opacity: 1, duration: 0.6 }, 0)
-        .to('.hero-reveal', { y: '0%', opacity: 1, duration: 1.0, stagger: 0.11 }, 0.14)
-        .to('.hero-copy', { opacity: 1, y: 0, duration: 0.9 }, 0.62)
-        .to('.hero-cta', { opacity: 1, y: 0, duration: 0.8 }, 0.78)
-        .to('.hero-cue', { opacity: 1, duration: 0.8 }, 0.98);
+      // Roughly 1.15s end to end. Each line rises through its own mask a beat
+      // behind the last, so the eye finishes on the accent.
+      gsap.timeline({ defaults: { ease: 'expo.out' } })
+        .to('.hero-eyebrow', { opacity: 1, y: 0, duration: 0.7 }, 0)
+        .to('.hero-reveal', { y: '0%', opacity: 1, duration: 1.05, stagger: 0.1 }, 0.16)
+        .to('.hero-copy', { opacity: 1, y: 0, duration: 0.9 }, 0.66)
+        .to('.hero-cta', { opacity: 1, y: 0, duration: 0.8 }, 0.82)
+        .to('.hero-cue', { opacity: 1, duration: 0.9 }, 1.0);
     }, sectionRef);
 
-    // A few pixels of counter-movement is enough to give the type something to
-    // sit in front of. Any more and it reads as a gimmick.
-    if (reduce) return () => ctx.revert();
-    let frame = 0;
-    const onMove = (e: MouseEvent) => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const x = (e.clientX / window.innerWidth - 0.5) * -6;
-        const y = (e.clientY / window.innerHeight - 0.5) * -6;
-        el.style.setProperty('--px', `${x.toFixed(2)}px`);
-        el.style.setProperty('--py', `${y.toFixed(2)}px`);
+    const cleanups: (() => void)[] = [() => ctx.revert()];
+
+    // Scroll exit: the hero compresses rather than cutting. Written as a
+    // variable so the whole composition can key off one number.
+    let sFrame = 0;
+    const onScroll = () => {
+      if (sFrame) return;
+      sFrame = requestAnimationFrame(() => {
+        sFrame = 0;
+        const h = el.offsetHeight || 1;
+        el.style.setProperty('--s', String(Math.min(1, Math.max(0, window.scrollY / h))));
       });
     };
-    window.addEventListener('mousemove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      if (frame) cancelAnimationFrame(frame);
-      ctx.revert();
-    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    cleanups.push(() => { window.removeEventListener('scroll', onScroll); if (sFrame) cancelAnimationFrame(sFrame); });
+
+    if (fine && !reduce) {
+      // Heavily smoothed so it reads as ambience, not as a cursor toy.
+      let px = 50, py = 46, tx = 50, ty = 46, raf = 0;
+      const tick = () => {
+        px += (tx - px) * 0.045;
+        py += (ty - py) * 0.045;
+        el.style.setProperty('--mx', `${px.toFixed(2)}%`);
+        el.style.setProperty('--my', `${py.toFixed(2)}%`);
+        raf = requestAnimationFrame(tick);
+      };
+      const onMove = (e: PointerEvent) => {
+        tx = (e.clientX / window.innerWidth) * 100;
+        ty = (e.clientY / window.innerHeight) * 100;
+      };
+      window.addEventListener('pointermove', onMove, { passive: true });
+      raf = requestAnimationFrame(tick);
+      cleanups.push(() => { window.removeEventListener('pointermove', onMove); cancelAnimationFrame(raf); });
+
+      // A couple of pixels of pull on the primary CTA. Any more is a gimmick.
+      const btn = primaryRef.current;
+      if (btn) {
+        const onBtn = (e: PointerEvent) => {
+          const r = btn.getBoundingClientRect();
+          btn.style.setProperty('--bx', `${((e.clientX - r.left) / r.width - 0.5) * 6}px`);
+          btn.style.setProperty('--by', `${((e.clientY - r.top) / r.height - 0.5) * 4}px`);
+        };
+        const offBtn = () => { btn.style.setProperty('--bx', '0px'); btn.style.setProperty('--by', '0px'); };
+        btn.addEventListener('pointermove', onBtn);
+        btn.addEventListener('pointerleave', offBtn);
+        cleanups.push(() => { btn.removeEventListener('pointermove', onBtn); btn.removeEventListener('pointerleave', offBtn); });
+      }
+    }
+
+    return () => cleanups.forEach((f) => f());
   }, []);
 
   return (
-    <section
-      ref={sectionRef}
-      className="hero relative min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-28 pb-20"
-    >
-      {/* Atmosphere. Nothing here is an object — it only frames the type. */}
-      <div className="hero-bloom" aria-hidden="true" />
-      <div className="hero-vignette" aria-hidden="true" />
+    <section ref={sectionRef} className="hero relative min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-28 pb-24">
+      {/* Atmosphere. None of this is an object; it only frames the type. */}
+      {GHOSTS.map((g) => (
+        <span key={g.word} className={`hero-ghost ${g.className}`} aria-hidden="true">{g.word}</span>
+      ))}
+      <span className="hero-field" aria-hidden="true" />
+      <span className="hero-bloom" aria-hidden="true" />
+      <span className="hero-scan" aria-hidden="true" />
+      <span className="hero-vignette" aria-hidden="true" />
 
-      <div className="relative z-20 w-full max-w-[1000px] mx-auto">
-        <p className="hero-eyebrow opacity-0 font-mono text-[11px] uppercase tracking-[0.22em] text-emerald-400/90 mb-9">
-          Built for the AI-native company
+      <div className="hero-inner relative z-20 w-full text-center">
+        <p className="hero-eyebrow opacity-0 translate-y-2 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.03] backdrop-blur-md px-4 py-1.5 mb-9">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-emerald-300/90">
+            AI employees for business
+          </span>
         </p>
 
-        {/* Editorial composition: a restrained opening line, a heavier middle,
-            and the accent landing last and indented. */}
-        <h1 className="hero-h1 font-display font-black text-white mb-9">
+        <h1 className="hero-h1 font-display font-black text-white mx-auto">
           <span className="hero-line">
-            <span className="hero-reveal hero-line--sm">Your best hours</span>
+            <span className="hero-reveal hero-line--intro">
+              Agentory <span className="hero-serif">is where you</span>
+            </span>
           </span>
           <span className="hero-line">
-            <span className="hero-reveal">shouldn’t go to work</span>
+            <span className="hero-reveal">build, assign, and manage</span>
           </span>
-          <span className="hero-line hero-line--indent">
-            <span className="hero-reveal hero-accent">that runs itself.</span>
+          <span className="hero-line">
+            <span className="hero-reveal hero-accent">AI employees.</span>
           </span>
         </h1>
 
-        <p className="hero-copy opacity-0 translate-y-4 text-white/55 text-[17px] md:text-[19px] leading-[1.55] max-w-[540px]">
-          Agentory gives recurring business work an owner.
-          <br className="hidden sm:block" /> Your team keeps the decisions.
+        <p className="hero-copy opacity-0 translate-y-4 text-white/60 text-[18px] md:text-[20px] leading-[1.6] max-w-[700px] mx-auto mt-8">
+          Create specialized AI employees, give them responsibilities, and run their work across
+          your business — all from one place.
         </p>
 
         <div className="hero-cta opacity-0 translate-y-3 mt-10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <button
-              onClick={() => navigate('/auth')}
-              className="hero-primary group h-[46px] inline-flex items-center gap-2.5 bg-emerald-500 text-[#04120b] font-semibold text-[15px] px-7 rounded-full"
-            >
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+            <button ref={primaryRef} onClick={() => navigate('/auth')} className="hero-primary group">
               Put Agentory to work
-              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-[4px]" />
             </button>
-            <a
-              href="#your-next-hires"
-              className="hero-secondary h-[46px] inline-flex items-center text-white/65 font-semibold text-[15px] px-7 rounded-full border border-white/12"
-            >
-              See how it works
-            </a>
+            <a href="#your-next-hires" className="hero-secondary">See how it works</a>
           </div>
-          <p className="text-[13.5px] text-white/32 mt-5">Set up in minutes · Start free · Cancel anytime</p>
+          <p className="text-[13.5px] text-white/35 mt-6">Set up in minutes · Start free · Cancel anytime</p>
         </div>
       </div>
 
-      {/* Hands over to section two. */}
-      <a
-        href="#your-next-hires"
-        className="hero-cue opacity-0 absolute bottom-9 left-1/2 -translate-x-1/2 inline-flex items-center gap-2.5 font-mono text-[10.5px] uppercase tracking-[0.2em] text-white/30 hover:text-white/60 transition-colors duration-300"
-      >
-        Meet your next hires
-        <span className="hero-cue__arrow">↓</span>
+      {/* Hands over to "Your next four hires might not be human." */}
+      <a href="#your-next-hires" className="hero-cue opacity-0 absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-emerald-300/45 hover:text-emerald-300/80 transition-colors duration-300">
+          Meet your next hires ↓
+        </span>
+        <span className="hero-cue__line" aria-hidden="true" />
       </a>
 
       <style>{`
-        .hero { --px: 0px; --py: 0px; }
+        .hero { --mx: 50%; --my: 46%; --s: 0; }
 
-        /* Ambient light behind the headline, drifting with the cursor. */
-        .hero-bloom {
-          position: absolute; inset: -10%; z-index: 1; pointer-events: none;
-          background: radial-gradient(58% 46% at 38% 44%, rgba(16,185,129,0.13), transparent 68%);
-          transform: translate3d(var(--px), var(--py), 0);
-          transition: transform 700ms cubic-bezier(0.22,1,0.36,1);
+        /* ── Atmosphere ─────────────────────────────────────────────────── */
+        /* Ambient field following the cursor. Large, dim, slow. */
+        .hero-field {
+          position: absolute; inset: -20%; z-index: 1; pointer-events: none;
+          background: radial-gradient(46% 42% at var(--mx) var(--my), rgba(16,185,129,0.11), transparent 66%);
         }
-        /* Darkens the edges so the grid never competes with the type. */
+        /* Fixed bloom behind the headline, breathing on a 13s cycle. */
+        .hero-bloom {
+          position: absolute; left: 50%; top: 44%; width: min(1100px, 92vw); height: 620px;
+          transform: translate(-50%, -50%); z-index: 1; pointer-events: none; border-radius: 9999px;
+          background: radial-gradient(closest-side, rgba(16,185,129,0.15), transparent 72%);
+          filter: blur(40px); animation: heroBreathe 13s ease-in-out infinite;
+        }
+        @keyframes heroBreathe { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+        /* One light crossing a grid line. The only moving decoration. */
+        .hero-scan {
+          position: absolute; left: 0; right: 0; top: 34%; height: 1px; z-index: 1; pointer-events: none;
+          background: linear-gradient(90deg, transparent, rgba(52,211,153,0.5), transparent);
+          transform: translateX(-100%); animation: heroScan 17s ease-in-out infinite;
+        }
+        @keyframes heroScan { 0%, 62% { transform: translateX(-100%); } 88%, 100% { transform: translateX(100%); } }
         .hero-vignette {
           position: absolute; inset: 0; z-index: 2; pointer-events: none;
           background:
-            radial-gradient(72% 60% at 40% 46%, rgba(0,0,0,0.72), transparent 70%),
-            linear-gradient(180deg, rgba(0,0,0,0.35), transparent 22%, transparent 72%, rgba(0,0,0,0.55));
+            radial-gradient(64% 54% at 50% 46%, rgba(0,0,0,0.72), transparent 70%),
+            linear-gradient(180deg, rgba(0,0,0,0.4), transparent 20%, transparent 74%, rgba(0,0,0,0.6));
         }
+        /* Ghost words. Outlined, cropped, barely there. */
+        .hero-ghost {
+          position: absolute; z-index: 0; pointer-events: none; user-select: none;
+          font-family: 'Inter Tight', system-ui, sans-serif; font-weight: 900;
+          font-size: clamp(90px, 13vw, 210px); line-height: 0.8; letter-spacing: -0.05em;
+          color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,0.026);
+          animation: heroDrift 22s ease-in-out infinite;
+        }
+        .hero-ghost--tl { top: 3%;  left: -8%;  }
+        .hero-ghost--tr { top: 8%;  right: -9%; animation-delay: -6s; }
+        .hero-ghost--bl { bottom: 4%; left: -9%; animation-delay: -12s; }
+        .hero-ghost--br { bottom: 1%; right: -8%; animation-delay: -18s; }
+        @keyframes heroDrift { 0%, 100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(6px,-8px,0); } }
 
+        /* ── Composition, compressing as the hero exits ─────────────────── */
+        .hero-inner {
+          max-width: 1120px; margin-inline: auto;
+          transform: translateY(calc(var(--s) * -26px)) scale(calc(1 - var(--s) * 0.04));
+          opacity: calc(1 - var(--s) * 0.9);
+          will-change: transform, opacity;
+        }
+        /* The eyebrow goes first, so the headline is the last thing holding. */
+        .hero-eyebrow { opacity: calc(1 - var(--s) * 2.4); }
+
+        /* ── Headline ──────────────────────────────────────────────────── */
         .hero-h1 {
-          font-size: clamp(2.4rem, 6.4vw, 5.4rem);
-          line-height: 0.98;
-          letter-spacing: -0.05em;
+          font-size: clamp(2.3rem, 5.4vw, 4.6rem);
+          line-height: 1.03; letter-spacing: -0.045em; max-width: 1050px;
         }
-        /* Each line is its own mask; the span inside rises through it. */
-        .hero-line { display: block; overflow: hidden; padding-bottom: 0.08em; }
-        .hero-line--sm { font-size: 0.62em; letter-spacing: -0.035em; color: rgba(255,255,255,0.5); }
-        .hero-line--indent { padding-left: clamp(0px, 5vw, 74px); }
+        .hero-line { display: block; overflow: hidden; padding-bottom: 0.09em; }
         .hero-reveal { display: block; transform: translateY(105%); opacity: 0; will-change: transform; }
-
+        /* Line one stays fully readable — it is the sentence's subject. */
+        .hero-line--intro { font-size: 0.74em; letter-spacing: -0.035em; color: rgba(255,255,255,0.94); }
+        .hero-serif {
+          font-family: 'Instrument Serif', Georgia, serif;
+          font-style: italic; font-weight: 400; letter-spacing: -0.01em;
+          color: rgba(255,255,255,0.78);
+        }
         .hero-accent {
-          color: #34d399;
-          position: relative;
-          transition: letter-spacing 400ms cubic-bezier(0.22,1,0.36,1), text-shadow 400ms ease;
+          position: relative; display: inline-block;
+          background: linear-gradient(178deg, #6ee7b7 4%, #34d399 52%, #10b981 100%);
+          -webkit-background-clip: text; background-clip: text; color: transparent;
+          transition: letter-spacing 420ms cubic-bezier(0.22,1,0.36,1), filter 420ms ease;
+          filter: drop-shadow(0 0 26px rgba(16,185,129,calc(0.3 - var(--s) * 0.3)));
         }
-        /* One highlight crossing the accent every twelve seconds. */
         .hero-accent::after {
-          content: ''; position: absolute; inset: -0.1em -0.2em; pointer-events: none;
-          background: linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.22) 50%, transparent 58%);
-          transform: translateX(-120%);
-          animation: heroSheen 12s ease-in-out infinite;
+          content: ''; position: absolute; inset: -0.12em -0.25em; pointer-events: none;
+          background: linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.2) 50%, transparent 58%);
+          transform: translateX(-125%); animation: heroSheen 11s ease-in-out infinite;
         }
-        @keyframes heroSheen { 0%, 78% { transform: translateX(-120%); } 92%, 100% { transform: translateX(120%); } }
-        .hero-h1:hover .hero-accent {
-          letter-spacing: -0.062em;
-          text-shadow: 0 0 34px rgba(52,211,153,0.42);
-        }
+        @keyframes heroSheen { 0%, 76% { transform: translateX(-125%); } 92%, 100% { transform: translateX(125%); } }
+        .hero-h1:hover .hero-accent { letter-spacing: -0.058em; filter: drop-shadow(0 0 40px rgba(16,185,129,0.5)); }
 
+        /* ── Buttons ───────────────────────────────────────────────────── */
         .hero-primary {
-          box-shadow: 0 4px 26px rgba(16,185,129,0.28);
-          transition: box-shadow 300ms ease, background-color 300ms ease;
+          --bx: 0px; --by: 0px;
+          height: 48px; display: inline-flex; align-items: center; gap: 10px;
+          padding-inline: 28px; border-radius: 9999px;
+          background: linear-gradient(180deg, #4ade80, #10b981);
+          color: #04120b; font-weight: 650; font-size: 15px;
+          box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset, 0 6px 30px rgba(16,185,129,0.3);
+          transform: translate3d(var(--bx), var(--by), 0);
+          transition: transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease;
         }
-        .hero-primary:hover { background-color: #4ade80; box-shadow: 0 6px 34px rgba(16,185,129,0.42); }
-        .hero-secondary { transition: color 250ms ease, border-color 250ms ease, background-color 250ms ease; }
-        .hero-secondary:hover { color: #fff; border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
+        .hero-primary:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.38) inset, 0 8px 40px rgba(16,185,129,0.46); }
+        .hero-primary:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 3px; }
+        .hero-secondary {
+          height: 48px; display: inline-flex; align-items: center; padding-inline: 26px;
+          border-radius: 9999px; font-weight: 600; font-size: 15px;
+          color: rgba(255,255,255,0.68); border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.03); backdrop-filter: blur(10px);
+          transition: color 220ms ease, border-color 220ms ease, background-color 220ms ease;
+        }
+        .hero-secondary:hover { color: #fff; border-color: rgba(52,211,153,0.4); background: rgba(255,255,255,0.06); }
+        .hero-secondary:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 3px; }
 
-        .hero-cue__arrow { display: inline-block; animation: heroCue 2.6s ease-in-out infinite; }
-        @keyframes heroCue { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+        /* ── Bottom cue ────────────────────────────────────────────────── */
+        /* Brightens as the hero leaves, so the handover feels intentional. */
+        .hero-cue { opacity: calc(1 - var(--s) * 1.6); }
+        .hero-cue__line {
+          display: block; width: 1px; height: 34px;
+          background: linear-gradient(180deg, rgba(52,211,153,0.5), transparent);
+          transform-origin: top; animation: heroCueLine 3.4s ease-in-out infinite;
+        }
+        @keyframes heroCueLine { 0%, 100% { transform: scaleY(0.45); opacity: 0.5; } 50% { transform: scaleY(1); opacity: 1; } }
+
+        @media (max-width: 1023px) {
+          /* Ghost words become clutter before they become atmosphere. */
+          .hero-ghost { display: none; }
+          .hero-scan { display: none; }
+          .hero-h1 { font-size: clamp(2rem, 8vw, 2.9rem); }
+        }
 
         @media (prefers-reduced-motion: reduce) {
-          .hero-bloom { transition: none; }
-          .hero-accent::after, .hero-cue__arrow { animation: none; }
+          .hero-bloom, .hero-scan, .hero-ghost, .hero-accent::after, .hero-cue__line { animation: none; }
           .hero-accent::after { opacity: 0; }
+          .hero-inner, .hero-eyebrow, .hero-cue { transform: none; opacity: 1; }
+          .hero-primary { transition: box-shadow 260ms ease; }
         }
       `}</style>
     </section>

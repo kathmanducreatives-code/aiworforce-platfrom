@@ -33,10 +33,7 @@ const Header = () => {
   ];
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 py-3.5 transition-colors duration-300 ${scrolled
-      ? 'bg-[#050607]/80 backdrop-blur-md border-b border-white/[0.06]'
-      : 'bg-[#050607]/40 backdrop-blur-sm border-b border-transparent'
-      }`}>
+    <header className={`nav-glass fixed top-0 left-0 right-0 z-50 py-3.5 transition-all duration-300 ${scrolled ? 'is-scrolled' : ''}`}>
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
@@ -48,9 +45,8 @@ const Header = () => {
         <nav className="hidden md:flex items-center gap-7">
           {navItems.map((item) => (
             <a key={item.label} href={item.href}
-              className="text-[13.5px] text-neutral-400 hover:text-white font-medium transition-colors duration-200 relative group py-1">
+              className="nav-link text-[13.5px] text-neutral-400 hover:text-white font-medium transition-colors duration-200 relative py-1">
               {item.label}
-              <span className="absolute -bottom-0.5 left-0 right-0 h-px bg-white/25 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-200" />
             </a>
           ))}
         </nav>
@@ -106,6 +102,34 @@ const Header = () => {
           </div>
         </div>
       )}
+      <style>{`
+        .nav-glass {
+          background: rgba(5,6,7,0.42);
+          backdrop-filter: blur(10px) saturate(140%);
+          -webkit-backdrop-filter: blur(10px) saturate(140%);
+          border-bottom: 1px solid transparent;
+        }
+        .nav-glass.is-scrolled {
+          background: rgba(5,6,7,0.82);
+          backdrop-filter: blur(18px) saturate(160%);
+          -webkit-backdrop-filter: blur(18px) saturate(160%);
+          border-bottom-color: rgba(255,255,255,0.07);
+        }
+        /* A hairline of green at the very edge, only once lifted off the top. */
+        .nav-glass.is-scrolled::after {
+          content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(52,211,153,0.22), transparent);
+        }
+        /* A dot rather than an underline — quieter, and it reads as a state. */
+        .nav-link::after {
+          content: ''; position: absolute; left: 50%; bottom: -5px;
+          width: 3px; height: 3px; border-radius: 9999px; background: #34d399;
+          transform: translateX(-50%) scale(0); opacity: 0;
+          transition: transform 200ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease;
+        }
+        .nav-link:hover::after { transform: translateX(-50%) scale(1); opacity: 1; }
+        @media (prefers-reduced-motion: reduce) { .nav-link::after { transition: none; } }
+      `}</style>
     </header>
   );
 };
