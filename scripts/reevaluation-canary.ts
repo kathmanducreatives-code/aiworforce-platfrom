@@ -124,7 +124,14 @@ for (const m of rawObj.matched_requirements ?? []) {
   console.log("  quote:", JSON.stringify(String(m.excerpt ?? "").slice(0, 120)));
 }
 const parsed = parseMissionEvaluationStrict(raw, registry);
-const merged = mergeReevaluation(fx.prior, parsed.evaluation);
+// The registry knows which page each id came from; the receipt rule needs it
+// to tell corroboration from one page quoted twice.
+const pageIntentFor = (id: string) => {
+  const it = registry.items.find((x) => x.evidence_id === id);
+  const pi = it?.metadata?.page_intent;
+  return typeof pi === "string" ? pi : null;
+};
+const merged = mergeReevaluation(fx.prior, parsed.evaluation, pageIntentFor);
 
 console.log("\n── AFTER ───────────────────────────────────────────────");
 console.log("  decision      :", merged.decision);
@@ -139,6 +146,7 @@ for (const m of merged.matched_requirements) {
   console.log(`     ${isNew ? "NEW" : "  ✓"}`, m.requirement.slice(0, 58));
   console.log("          cite:", m.evidence_id);
   console.log("          quote:", JSON.stringify(m.excerpt.slice(0, 90)));
+  console.log("          page :", pageIntentFor(m.evidence_id) ?? "(n/a)", "| support:", m.support ?? "verified");
 }
 console.log("  failed        :", merged.failed_requirements.length);
 for (const f of merged.failed_requirements) console.log("     ✗", f.requirement, "—", f.why.slice(0, 70));

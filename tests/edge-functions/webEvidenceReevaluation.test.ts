@@ -304,3 +304,140 @@ Deno.test("web_page items reach the registry as citable evidence", () => {
   assert(web[0].evidence_id.length > 0, "must be citable");
   assertEquals(web[0].verification_state, "verified");
 });
+
+// ══════════ THE RECEIPT MUST CARRY THE VERDICT ══════════
+//
+// The Metaview canary qualified on reasoning that cited per-seat recurring
+// pricing AND a platform sold to teams — two independent facts. The receipt
+// attached was one quote carrying the second fact only. The verdict was right
+// and its inspectable justification was thinner than the reasoning behind it.
+//
+// These pin the rule that closes that gap. It counts receipts and compares ids;
+// it reads no requirement text, so it is not specific to any claim.
+
+import {
+  enforceReceiptSufficiency, type RequirementMatch,
+} from "../../supabase/functions/_shared/missionEvaluation.ts";
+
+const B2B = "Company is a B2B SaaS company";
+const cite = (id: string, support: "verified" | "supported", req = B2B): RequirementMatch =>
+  ({ requirement: req, evidence_id: id, excerpt: "x", support });
+
+const PAGES: Record<string, string> = {
+  "web_page:pricing": "pricing",
+  "web_page:product": "product",
+  "web_page:pricing2": "pricing",
+};
+const pageIntentFor = (id: string) => PAGES[id] ?? null;
+
+Deno.test("VERIFIED: one sufficient citation closes the requirement", () => {
+  const r = enforceReceiptSufficiency([cite("web_page:pricing", "verified")], pageIntentFor);
+  assertEquals(r.satisfied.length, 1);
+  assertEquals(r.insufficient.length, 0);
+});
+
+Deno.test("SUPPORTED: two distinct citations from two pages close it", () => {
+  const r = enforceReceiptSufficiency(
+    [cite("web_page:pricing", "supported"), cite("web_page:product", "supported")],
+    pageIntentFor,
+  );
+  assertEquals(r.satisfied.length, 2);
+  assertEquals(r.insufficient.length, 0);
+});
+
+Deno.test("SUPPORTED with ONE citation stays insufficient", () => {
+  // The Metaview shape exactly: corroborating reasoning, a single receipt.
+  const r = enforceReceiptSufficiency([cite("web_page:pricing", "supported")], pageIntentFor);
+  assertEquals(r.satisfied.length, 0);
+  assertEquals(r.insufficient[0].reason, "supported_needs_two_citations");
+  assertEquals(r.insufficient[0].citations, 1);
+});
+
+Deno.test("SUPPORTED with two citations from the SAME page stays insufficient", () => {
+  // Two quotes off one page is one fact stated twice, not corroboration.
+  const r = enforceReceiptSufficiency(
+    [cite("web_page:pricing", "supported"), cite("web_page:pricing2", "supported")],
+    pageIntentFor,
+  );
+  assertEquals(r.satisfied.length, 0);
+  assertEquals(r.insufficient[0].reason, "corroboration_from_one_page");
+});
+
+Deno.test("the same evidence cited twice is ONE receipt", () => {
+  const r = enforceReceiptSufficiency(
+    [cite("web_page:pricing", "supported"), cite("web_page:pricing", "supported")],
+    pageIntentFor,
+  );
+  assertEquals(r.satisfied.length, 0, "quoting one item twice is not two facts");
+});
+
+Deno.test("the WEAKEST claim governs a mixed set", () => {
+  // A hedge must not be laundered by pairing it with a confident duplicate.
+  const r = enforceReceiptSufficiency(
+    [cite("web_page:pricing", "verified"), cite("web_page:pricing", "supported")],
+    pageIntentFor,
+  );
+  assertEquals(r.satisfied.length, 0);
+});
+
+Deno.test("SUPPORTED + one citation DROPPED by the verifier stays insufficient", () => {
+  // The verifier runs first, so a dropped citation never reaches this. What
+  // arrives is the survivor alone — and one survivor is not corroboration.
+  const survived = [cite("web_page:pricing", "supported")]; // second was dropped
+  const r = enforceReceiptSufficiency(survived, pageIntentFor);
+  assertEquals(r.satisfied.length, 0);
+});
+
+Deno.test("evidence with no page intent is independent by nature", () => {
+  // Firmographic and job evidence carry no page. Two such citations corroborate.
+  const r = enforceReceiptSufficiency(
+    [cite("employee_count:linkedin:1", "supported"), cite("job_posting:x:2", "supported")],
+    pageIntentFor,
+  );
+  assertEquals(r.satisfied.length, 2);
+});
+
+Deno.test("MERGE: a thin receipt does not close the requirement", () => {
+  const prior = priorEval();
+  const next = {
+    ...priorEval(), mission_fit: "pass", unknown_fields: [],
+    matched_requirements: [
+      { requirement: B2B, evidence_id: "web_page:pricing", excerpt: "x",
+        support: "supported" as const },
+    ],
+  } as MissionEvaluation;
+  const merged = mergeReevaluation(prior, next, pageIntentFor);
+  assertEquals(merged.decision, "insufficient_evidence");
+  assert(!merged.matched_requirements.some((m) => m.requirement === B2B),
+    "an unjustified requirement is stripped from the record");
+  // And the three established ones are untouched.
+  assertEquals(merged.matched_requirements.length, 3);
+});
+
+Deno.test("MERGE: two independent receipts do close it, prior verdicts intact", () => {
+  const prior = priorEval();
+  const next = {
+    ...priorEval(), mission_fit: "pass", unknown_fields: [],
+    matched_requirements: [
+      { requirement: B2B, evidence_id: "web_page:pricing", excerpt: "x", support: "supported" as const },
+      { requirement: B2B, evidence_id: "web_page:product", excerpt: "y", support: "supported" as const },
+    ],
+  } as MissionEvaluation;
+  const merged = mergeReevaluation(prior, next, pageIntentFor);
+  assertEquals(merged.decision, "qualified");
+  assertEquals(merged.unknown_fields.length, 0);
+  for (const p of prior.matched_requirements) {
+    const kept = merged.matched_requirements.find((m) => m.requirement === p.requirement);
+    assert(kept, `${p.requirement} must survive`);
+    assertEquals(kept!.evidence_id, p.evidence_id, "original citation preserved");
+  }
+});
+
+Deno.test("PRIOR requirements are never re-judged on receipt count", () => {
+  // They were decided against a registry this pass never saw. Re-judging their
+  // receipts here would discard verified work on evidence that is not in view.
+  const prior = priorEval();
+  const next = { ...priorEval(), matched_requirements: [], unknown_fields: [] } as MissionEvaluation;
+  const merged = mergeReevaluation(prior, next, pageIntentFor);
+  assertEquals(merged.matched_requirements.length, 3);
+});

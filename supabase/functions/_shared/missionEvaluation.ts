@@ -94,12 +94,112 @@ export type DecisionSource =
   | "insufficient_evidence"
   | "not_evaluated";
 
+/**
+ * How strongly ONE receipt is claimed to establish a requirement.
+ *
+ * Declared by the model, ENFORCED by code: `supported` is an admission that
+ * this citation is not sufficient alone, and `enforceReceiptSufficiency` then
+ * insists on a second surviving one. A model cannot promote its own evidence
+ * by relabelling it.
+ */
+export type RequirementSupport = "verified" | "supported";
+
 /** A Mission requirement the evidence satisfies, with the receipt. */
 export interface RequirementMatch {
   requirement: string;
   evidence_id: string;
   /** Copied verbatim from that item's `source_text`. Checked, not trusted. */
   excerpt: string;
+  /**
+   * Absent means `verified` — the shape every existing caller emits, so the
+   * first-pass evaluator is unchanged by this field's arrival.
+   */
+  support?: RequirementSupport;
+}
+
+export interface ReceiptVerdict {
+  /** Requirements whose surviving receipts justify them. */
+  satisfied: RequirementMatch[];
+  /** Requirements the model claimed but whose receipts do not carry them. */
+  insufficient: Array<{ requirement: string; reason: string; citations: number }>;
+}
+
+/**
+ * Does the evidence a REVIEWER can inspect justify the verdict?
+ *
+ * ── THE GAP THIS CLOSES ────────────────────────────────────────────────────
+ *
+ * The Metaview canary qualified on reasoning that cited per-seat recurring
+ * pricing AND a platform sold to teams — two independent facts, exactly the bar
+ * the prompt sets. The receipt attached to the verdict was one quote,
+ * "Proactive, 24/7 candidate search for your team", which carries the second
+ * fact and not the first. The verdict was right and its justification was
+ * thinner than the reasoning behind it.
+ *
+ * Strong internal reasoning plus a weak surviving receipt must not qualify a
+ * company. What a reviewer can open has to be enough on its own.
+ *
+ *   verified   one surviving citation that establishes the requirement alone
+ *   supported  TWO surviving citations, distinct evidence, and — where the
+ *              projection says so — from different pages, because two quotes
+ *              off one page are one fact stated twice
+ *
+ * Generic by construction: it counts receipts and compares ids. It reads no
+ * requirement text and knows nothing about any particular claim.
+ */
+export function enforceReceiptSufficiency(
+  matched: readonly RequirementMatch[],
+  pageIntentFor?: (evidenceId: string) => string | null,
+): ReceiptVerdict {
+  const byRequirement = new Map<string, RequirementMatch[]>();
+  for (const m of matched) {
+    const list = byRequirement.get(m.requirement) ?? [];
+    list.push(m);
+    byRequirement.set(m.requirement, list);
+  }
+
+  const satisfied: RequirementMatch[] = [];
+  const insufficient: ReceiptVerdict["insufficient"] = [];
+
+  for (const [requirement, cites] of byRequirement) {
+    // Distinct EVIDENCE, not distinct claims: citing one item twice is one
+    // receipt however many times it is quoted.
+    const distinct = [...new Map(cites.map((c) => [c.evidence_id, c])).values()];
+    // `supported` if ANY receipt admits it needs corroboration. The weakest
+    // claim governs — a model must not launder a hedge by pairing it with a
+    // confident duplicate.
+    const needsTwo = cites.some((c) => c.support === "supported");
+
+    if (!needsTwo) { satisfied.push(...distinct); continue; }
+
+    if (distinct.length < 2) {
+      insufficient.push({
+        requirement,
+        reason: "supported_needs_two_citations",
+        citations: distinct.length,
+      });
+      continue;
+    }
+    if (pageIntentFor) {
+      const pages = new Set(
+        distinct.map((c) => pageIntentFor(c.evidence_id)).filter(Boolean),
+      );
+      // Only enforced when the projection actually knows the pages. Evidence
+      // types that carry no page intent are independent by their nature.
+      const known = distinct.filter((c) => pageIntentFor(c.evidence_id)).length;
+      if (known >= 2 && pages.size < 2) {
+        insufficient.push({
+          requirement,
+          reason: "corroboration_from_one_page",
+          citations: distinct.length,
+        });
+        continue;
+      }
+    }
+    satisfied.push(...distinct);
+  }
+
+  return { satisfied, insufficient };
 }
 
 /** A Mission requirement the evidence does not satisfy. */
@@ -320,6 +420,15 @@ export const MISSION_REEVALUATION_PROMPT = [
   "  it — for example per-seat recurring pricing tiers on a pricing page.",
   "- Satisfied by corroboration: at least TWO INDEPENDENT facts, from two",
   "  different pages, pointing the same way with nothing contradicting them.",
+  "",
+  "CITE EVERY FACT YOU RELY ON. Mark each entry with \"support\":",
+  "  \"verified\"  this one citation establishes the requirement by itself",
+  "  \"supported\" this citation is part of a corroborating set",
+  "A requirement marked \"supported\" needs TWO surviving citations from two",
+  "different pages — emit one matched_requirements entry per citation, repeating",
+  "the requirement text. Reasoning that rests on two facts while citing one is",
+  "treated as insufficient: the receipt a reviewer opens has to carry the",
+  "argument on its own.",
   "- NOT satisfied: one weak indicator, or an industry label. A provider",
   "  category such as 'Software Development' NEVER establishes a business",
   "  model, a customer type or a sales motion on its own. That inference is",
@@ -338,7 +447,7 @@ export const MISSION_REEVALUATION_PROMPT = [
   "Return ONLY this JSON:",
   '{"mission_fit":"pass|review|fail","icp_fit":"strong|plausible|weak",',
   '"hiring_fit":"verified|plausible|absent","confidence":0.0,"match_score":0,',
-  '"matched_requirements":[{"requirement":"","evidence_id":"","excerpt":""}],',
+  '"matched_requirements":[{"requirement":"","evidence_id":"","excerpt":"","support":"verified|supported"}],',
   '"failed_requirements":[{"requirement":"","evidence_id":null,"why":""}],',
   '"reasoning":"","rejection_reasons":[],',
   '"evidence_quality":"strong|moderate|weak","unknown_fields":[],"next_action":null}',
@@ -418,16 +527,33 @@ export function buildMissionReevaluationInput(i: {
  */
 export function mergeReevaluation(
   prior: MissionEvaluation, next: MissionEvaluation,
+  /** Maps an evidence_id to its page, when the registry knows one. */
+  pageIntentFor?: (evidenceId: string) => string | null,
 ): MissionEvaluation {
   const failedNow = new Set(next.failed_requirements.map((f) => f.requirement));
-  const byRequirement = new Map<string, RequirementMatch>();
-  // Prior first, then the new pass overwrites where it re-cited the same one.
-  for (const m of prior.matched_requirements) {
-    if (!failedNow.has(m.requirement)) byRequirement.set(m.requirement, m);
-  }
-  for (const m of next.matched_requirements) byRequirement.set(m.requirement, m);
 
-  const matched = [...byRequirement.values()];
+  // ── ONE REQUIREMENT MAY CARRY SEVERAL RECEIPTS ──────────────────────────
+  //
+  // Keyed by requirement AND evidence, not by requirement alone. Keying by
+  // requirement collapsed a corroborating pair into whichever citation arrived
+  // last — so a requirement that supplied two independent facts reached
+  // `enforceReceiptSufficiency` holding one, and was refused for thinness it
+  // did not have. Corroboration cannot be checked after the evidence for it has
+  // been deduplicated away.
+  const cited = new Map<string, RequirementMatch>();
+  const rekey = (m: RequirementMatch) => `${m.requirement}\u0000${m.evidence_id}`;
+
+  // The new pass REPLACES the prior receipts for any requirement it re-cites,
+  // rather than adding to them: mixing a stale citation with a fresh one would
+  // let evidence from two different registries corroborate each other.
+  const reCited = new Set(next.matched_requirements.map((m) => m.requirement));
+  for (const m of prior.matched_requirements) {
+    if (failedNow.has(m.requirement) || reCited.has(m.requirement)) continue;
+    cited.set(rekey(m), m);
+  }
+  for (const m of next.matched_requirements) cited.set(rekey(m), m);
+
+  const matchedAll = [...cited.values()];
 
   // ── AN OPEN REQUIREMENT CLOSES ON EVIDENCE, NOT ON SILENCE ──────────────
   //
@@ -450,14 +576,29 @@ export function mergeReevaluation(
   // would be exactly the phrase-matching this path exists to avoid. The
   // presence of new verified evidence is the signal that generalises.
   const priorRequirements = new Set(prior.matched_requirements.map((m) => m.requirement));
-  const newlyCited = matched.filter((m) => !priorRequirements.has(m.requirement));
+  const matched = matchedAll;
+
+  // ── THE RECEIPT MUST CARRY THE VERDICT ──────────────────────────────────
+  //
+  // Applied to NEWLY cited requirements only. Requirements the first pass
+  // established keep their verdicts and citations untouched: they were decided
+  // against a registry this pass never saw, and re-judging their receipts here
+  // would discard verified work on evidence that is simply absent from view.
+  const newlyClaimed = matched.filter((m) => !priorRequirements.has(m.requirement));
+  const receipts = enforceReceiptSufficiency(newlyClaimed, pageIntentFor);
+  const insufficientNow = new Set(receipts.insufficient.map((x) => x.requirement));
+  const newlyCited = receipts.satisfied;
+  // A requirement whose receipts were refused is not satisfied, so it is
+  // stripped from the record and cannot count toward closing the open list.
+  const kept = matched.filter((m) => !insufficientNow.has(m.requirement));
+
   const stillOpen = newlyCited.length === 0
     ? [...prior.unknown_fields]
-    : next.unknown_fields.filter((u) => !matched.some((m) => m.requirement === u));
+    : next.unknown_fields.filter((u) => !kept.some((m) => m.requirement === u));
 
   return {
     ...next,
-    matched_requirements: matched,
+    matched_requirements: kept,
     unknown_fields: stillOpen,
     // The decision follows the merged picture, not the second pass alone: a
     // company whose only open requirement is now cited has nothing unresolved
@@ -598,7 +739,11 @@ export function parseMissionEvaluationStrict(
       dropped.push(`excerpt_not_in_source:${evidence_id}`);
       continue;
     }
-    matched_requirements.push({ requirement, evidence_id, excerpt });
+    // The model's own admission of how strong this receipt is. Anything other
+    // than the literal "supported" is `verified`, so a malformed or missing
+    // value cannot quietly relax the two-citation rule.
+    const support = e.support === "supported" ? "supported" as const : "verified" as const;
+    matched_requirements.push({ requirement, evidence_id, excerpt, support });
   }
 
   const failed_requirements: RequirementFailure[] = [];
