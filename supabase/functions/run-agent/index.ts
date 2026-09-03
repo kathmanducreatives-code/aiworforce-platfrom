@@ -128,6 +128,9 @@ import {
 } from "../_shared/workflowContinuation.ts";
 import { projectEvaluationRows } from "../_shared/leadWorkbenchProjection.ts";
 import { formatFunnel, unbalancedStages } from "../_shared/leadMissionFunnel.ts";
+// Adaptive evidence enrichment, P1. Pure and side-effect free — the module
+// computes debts and nothing else; see the dry-run block for how it is used.
+import { computeEvidenceDebts } from "../_shared/webEvidenceDebt.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
 // `applyMissionPrecedence`, `buildClassifierPayload`, `parseSemanticFitStrict`
 // and `SEMANTIC_INPUT_SCHEMA_VERSION` are no longer imported here: they existed
@@ -3846,6 +3849,64 @@ Deno.serve(async (req) => {
                   unaccounted: s.unaccounted,
                 })),
               });
+            }
+
+            // ── ADAPTIVE EVIDENCE ENRICHMENT — DRY RUN (P1) ────────────────
+            //
+            // OBSERVATION ONLY. This computes which candidates are blocked
+            // solely for want of evidence and LOGS them. It calls no provider,
+            // no model, spends nothing, and changes no company state.
+            //
+            // It exists to answer one question on live data before any money is
+            // committed: does the gate select exactly the candidates we think
+            // it does? On lineage a5c1616e that should be the 7-8 companies
+            // that passed UK presence, size and verified sales hiring and
+            // stalled on "B2B SaaS" — and NOT the 30 excluded on employee size
+            // or the 27 whose hiring was refuted.
+            //
+            // OFF unless explicitly enabled, so a deploy cannot start doing
+            // anything new by accident.
+            if (Deno.env.get("EVIDENCE_ENRICHMENT") === "plan_only") {
+              try {
+                const report = computeEvidenceDebts(
+                  capabilityRun.companies.map((c) => ({
+                    key: c.key,
+                    company: c.company,
+                    enriched: c.enriched,
+                    mission_evaluation: c.mission_evaluation,
+                    identity: c.identity,
+                    known_evidence_types: [
+                      ...new Set((c.evidence_registry?.items ?? [])
+                        .map((it) => it.evidence_type)),
+                    ],
+                  })),
+                  { max_companies: 5 },
+                );
+                console.log("[run-agent][evidence-debt][dry-run]", {
+                  task_id: task.id,
+                  pool: capabilityRun.companies.length,
+                  debts: report.debts.length,
+                  skip_counts: report.skip_counts,
+                });
+                for (const d of report.debts) {
+                  console.log("[run-agent][evidence-debt][candidate]", {
+                    task_id: task.id,
+                    company: d.company_name,
+                    domain: d.domain,
+                    match_score: d.match_score,
+                    requirement_id: d.requirement_id,
+                    open_question: d.open_question,
+                    known_evidence_types: d.known_evidence_types,
+                  });
+                }
+              } catch (e) {
+                // A DRY RUN MUST NEVER BREAK A MISSION. This is observation
+                // bolted onto a working pipeline; if it throws, the mission
+                // carries on exactly as it did before this block existed.
+                console.error("[run-agent][evidence-debt][dry-run-failed]", {
+                  task_id: task.id, error: String(e),
+                });
+              }
             }
 
             // ── THE SAME RESULT, ALSO INTO THE CANONICAL LEAD LIBRARY ───────
