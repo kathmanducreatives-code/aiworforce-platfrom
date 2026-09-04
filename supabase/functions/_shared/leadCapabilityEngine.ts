@@ -1450,6 +1450,16 @@ export interface EngineCompany {
   stage_block:
     | { capability: CapabilityId; reason: "deferred" | "qualification_deferred" | "provider_error" }
     | null;
+  /**
+   * WHY THE BRAIN GATE DID NOT ADMIT THIS COMPANY.
+   *
+   * Set where eligibility is decided, read only by the funnel. Deliberately NOT
+   * `stage_block`: the workbench projection returns "deferred — the run stopped
+   * before this company could be finished; resuming will continue it" for ANY
+   * stage_block, and a company the gate refused on the evidence is not waiting
+   * on a resume. One definition, one reader, no other consumer to mislead.
+   */
+  brain_gate: "refuted" | "not_established" | null;
   enriched: NormalizedHiringCompany | null;
   /**
    * WHAT HAPPENED WHEN ENRICHMENT WAS ATTEMPTED — explicitly, not inferred.
@@ -6408,6 +6418,44 @@ export async function runCapabilityPlan(
         // signal the mission required — and a filter that only asks about
         // openings cannot see it.
         Object.values(c.signal_evidence).some((a) => a.length > 0));
+
+      // ── AND WHY EVERYONE ELSE IS NOT ────────────────────────────────────
+      //
+      // THE ALARM THAT RANG ON EVERY RUN. `company_brain` reported a non-zero
+      // `unaccounted` on essentially every mission for weeks — 47 of 62 on
+      // 8cfdfd10, 110 of 139 on b1348724 — and `unaccounted` is this file's one
+      // counter that means "a stage dropped companies and cannot say where they
+      // went". A counter that is never zero cannot raise an alarm.
+      //
+      // Nothing was actually lost. The funnel's `entered` for this stage is
+      // every identity-resolved company, but only companies that pass the gate
+      // above are ever handed to the Brain, and the gate's decision was recorded
+      // nowhere. `qualification_deferred` covers the ones the CLOCK stopped;
+      // there was no marker for the ones the gate never admitted.
+      //
+      // TWO OUTCOMES, NOT ONE, because the architecture's own rule distinguishes
+      // them: an empty provider result is an absence of evidence, not a proven
+      // negative. A refuted company is a fact — `excluded`. A company whose
+      // signal was never established is an absence — `withheld`, still owed a
+      // check, and `nextStageFor` will route it back.
+      //
+      // Set here, where eligibility is actually decided, so the funnel READS the
+      // gate rather than re-deriving it. Two definitions of "eligible for the
+      // Brain" is how they drift apart.
+      //
+      // `stage_block` is per-slice — it is not on the checkpoint snapshot — and
+      // this is the last stage of a slice, so nothing downstream reads it but
+      // the funnel. A company already carrying a more specific block keeps it.
+      const eligibleKeys = new Set(eligible.map((c) => c.key));
+      for (const c of companies) {
+        if (eligibleKeys.has(c.key) || c.brain !== null) continue;
+        // `hiring_not_verified` is the vocabulary's "no relevant commercial
+        // signal at all" — a conclusion reached FROM evidence, so a fact. No
+        // assessment at all is an absence, and absence is not a negative.
+        c.brain_gate = c.hiring_assessment?.verdict === "hiring_not_verified"
+          ? "refuted"
+          : "not_established";
+      }
       /** One company's canonical registry. Shared by both evaluation paths. */
       const registryFor = (c: EngineCompany) => buildEvidenceRegistry({
         evidence: buildCompanyEvidence({
@@ -9063,7 +9111,7 @@ function addCompany(
     // PENDING, NOT EXCLUDED. A company enters the frontier and leaves it only
     // by being investigated or by a decision that closes it.
     investigation_state: "pending_investigation", investigation_rank: Number.MAX_SAFE_INTEGER,
-    company: c, identity: null, stage_block: null, enriched: null,
+    company: c, identity: null, stage_block: null, brain_gate: null, enriched: null,
     // NOT_ATTEMPTED IS THE HONEST DEFAULT, exactly as with `evaluation_path`.
     // A company leaves it only when the stage actually tries.
     enrichment_outcome: "not_attempted",
@@ -9224,6 +9272,9 @@ export function toFunnelCompanies(
     // rather than counting it as a company that vanished.
     brain_blocked: c.brain === null &&
       c.stage_block?.reason === "qualification_deferred",
+    // Read from the gate's own marker, never recomputed here.
+    brain_refuted: c.brain === null && c.brain_gate === "refuted",
+    brain_unproven: c.brain === null && c.brain_gate === "not_established",
     brain: c.brain?.outcome ?? null,
     evaluated: c.decision_source === "gpt_evaluation",
     decision_source: c.decision_source,

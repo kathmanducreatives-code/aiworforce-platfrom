@@ -99,6 +99,16 @@ export interface FunnelCompany {
    * so a caller that does not report it behaves as before.
    */
   brain_blocked?: boolean;
+  /**
+   * The Brain gate refused this company for a STATED reason.
+   *
+   * `brain_refuted` is a fact about the company — the signal the mission
+   * required was checked and refuted. `brain_unproven` is an absence — it was
+   * never established, the company is still owed a check, and `nextStageFor`
+   * routes it back. Counted as `excluded` and `withheld` respectively.
+   */
+  brain_refuted?: boolean;
+  brain_unproven?: boolean;
   brain: "QUALIFIED" | "REVIEW" | "REJECT" | null;
   evaluated: boolean;
   decision_source: DecisionSource;
@@ -247,7 +257,31 @@ export function buildMissionFunnel(
   // that is now what it is counted as. `unaccounted` goes back to meaning what
   // it says.
   const brainWithheld = companies.filter(
-    (c) => !c.reached_brain && c.brain_blocked === true).length;
+    (c) => c.identity === "resolved" && !c.reached_brain &&
+      c.brain_blocked === true).length;
+  // ── AND THE ONES THE GATE NEVER ADMITTED ─────────────────────────────────
+  //
+  // The comment above fixed the CLOCK case and left the gate case, so this
+  // stage still reported a non-zero `unaccounted` on essentially every run —
+  // 47 of 62 on 8cfdfd10, 110 of 139 on b1348724. `unaccounted` is the one
+  // counter meaning "companies went missing and we cannot say where", and one
+  // that is never zero cannot raise an alarm.
+  //
+  // Both flags are set by the eligibility gate itself, so this file reads the
+  // decision rather than re-deriving it.
+  //
+  // SCOPED TO WHAT ACTUALLY ENTERED THIS STAGE. `entered` is
+  // `identityResolved`, and the gate marks every ineligible company in the
+  // working set — including ones that never resolved an identity and are
+  // already accounted for at an earlier stage. Counting those here drove
+  // `unaccounted` NEGATIVE (-80 on the frontier suite), which is the same class
+  // of error as the one being fixed, in the opposite direction.
+  const enteredBrainStage = (c: FunnelCompany) =>
+    c.identity === "resolved" && !c.reached_brain;
+  const brainRefuted = companies.filter(
+    (c) => enteredBrainStage(c) && c.brain_refuted === true).length;
+  const brainUnproven = companies.filter(
+    (c) => enteredBrainStage(c) && c.brain_unproven === true).length;
   const evaluated = companies.filter((c) => c.evaluated).length;
   const notEvaluated = companies.filter(
     (c) => c.reached_brain && !c.evaluated).length;
@@ -285,8 +319,14 @@ export function buildMissionFunnel(
       // The Brain assembles; it removes nobody either. A difference here means a
       // company never arrived, which `unaccounted` will surface.
       stage("company_brain", identityResolved, reachedBrain,
-        { withheld: brainWithheld }, {
-          reached: reachedBrain, deadline_deferred: brainWithheld,
+        {
+          excluded: brainRefuted,
+          withheld: brainWithheld + brainUnproven,
+        }, {
+          reached: reachedBrain,
+          deadline_deferred: brainWithheld,
+          signal_refuted: brainRefuted,
+          signal_not_established: brainUnproven,
         }),
       stage("mission_evaluator", reachedBrain, qualified,
         { decided: rejected, withheld: unknown }, {

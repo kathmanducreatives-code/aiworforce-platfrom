@@ -281,9 +281,27 @@ export function eligibleForAutoResume(
   //      and v_terminal is distinct from 'continuation_required' → already_terminal
   //
   // The gate below is what keeps this narrow. A row is only reachable here if
-  // its terminal status is `continuation_required` or absent, so a `quota_met`,
-  // `frontier_exhausted` or `cancelled` row is refused as `already_terminal`
-  // whatever its row status says. This never resurrects a finished run.
+  // its terminal status is `continuation_required` or absent, so a `quota_met`
+  // or `frontier_exhausted` row is refused as `already_terminal` whatever its
+  // row status says. This never resurrects a finished run.
+  //
+  // ── CANCELLATION IS NOT ONE OF THOSE, AND SAYING SO HERE WAS WRONG ───────
+  //
+  // This comment used to list `cancelled` alongside them. It is not a task
+  // terminal status: cancellation writes to the LINEAGE row on purpose, because
+  // a `terminal_status` on the task is a last-writer-wins field an in-flight
+  // slice overwrites — the 2f3d9c5c defect. So a cancelled run reaches this
+  // function with `continuation_required` intact and passes every check here.
+  //
+  // Lineage 8cfdfd10 was cancelled at 10:45 on 2026-09-04 and was still being
+  // claimed at 15:54, `checkpoint_version` up to 64. The two-hour abandonment
+  // gate below could not stop it either: it measures `updated_at`, and the
+  // claim RPC SETS `updated_at`, so every claim refreshed the timestamp that
+  // would otherwise have retired the row. Self-sustaining, not self-limiting.
+  //
+  // The refusal now comes from `claim_sourcing_continuation`, which reads the
+  // lineage row under the task lock and answers `lineage_cancelled`. Nothing in
+  // THIS function detects cancellation; do not add a check here that claims to.
   if (row.status !== RESUMABLE_ROW_STATUS &&
       !RECOVERABLE_STAMPED_ROW_STATUSES.includes(String(row.status ?? ""))) {
     return no("not_ready");
