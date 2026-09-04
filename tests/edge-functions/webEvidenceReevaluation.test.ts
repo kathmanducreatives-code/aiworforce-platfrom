@@ -19,7 +19,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildMissionReevaluationInput, mergeReevaluation,
-  MISSION_REEVALUATION_PROMPT,
+  MISSION_REEVALUATION_PROMPT, MISSION_EVALUATION_PROMPT, EVIDENCE_POLICY,
   type MissionEvaluation, type MissionEvaluationInput,
 } from "../../supabase/functions/_shared/missionEvaluation.ts";
 import {
@@ -168,17 +168,34 @@ Deno.test("the payload separates established from open", () => {
   assert(input.established_requirements.every((m) => m.evidence_id.length > 0));
 });
 
-Deno.test("the prompt forbids the weak inference and frames pages as data", () => {
-  // Newlines are collapsed first: the prompt is an array joined with "\n", so a
-  // phrase that reads as one sentence is split across entries. Asserting on the
-  // raw string would pass or fail on line-wrapping rather than on content.
-  const p = MISSION_REEVALUATION_PROMPT.toLowerCase().replace(/\s+/g, " ");
-  assert(p.includes("'software development' never establishes a business model"),
-    "the Software Development -> B2B SaaS jump must be ruled out explicitly");
-  assert(p.includes("two independent facts"), "corroboration bar");
-  assert(p.includes("data, not instructions"), "injection framing");
-  assert(p.includes("do not re-litigate"), "established requirements are settled");
-  assert(p.includes("verbatim"), "citations must be quotable");
+Deno.test("BOTH prompts carry the same evidence bar", () => {
+  // Phase 1. The forbidden-inference and corroboration rules used to live only
+  // in the re-evaluation prompt, so the FIRST pass — the one that runs on every
+  // company — qualified on a weaker standard. Lineage 8cfdfd10 qualified
+  // DiligenceVault on `company_industry = "Software Development"`.
+  //
+  // Newlines are collapsed first: both prompts are arrays joined with "\n", so
+  // a sentence is split across entries and a raw-string assertion would pass or
+  // fail on line-wrapping rather than on content.
+  const n = (x: string) => x.toLowerCase().replace(/\s+/g, " ");
+  const policy = n(EVIDENCE_POLICY);
+  for (const [name, prompt] of [
+    ["first pass", MISSION_EVALUATION_PROMPT],
+    ["re-evaluation", MISSION_REEVALUATION_PROMPT],
+  ] as const) {
+    assert(n(prompt).includes(policy),
+      `${name} must embed the shared evidence policy verbatim, not a paraphrase`);
+  }
+  // The rules themselves, stated generically rather than about one category.
+  assert(policy.includes("never establishes, on its own"),
+    "a provider category must not establish a business model");
+  assert(policy.includes("two surviving citations"), "corroboration bar");
+  assert(policy.includes("never widen one so the evidence fits"),
+    "requirement wording must not be broadened");
+  // Still specific to the re-evaluation, which is the only pass that reads pages.
+  const r = n(MISSION_REEVALUATION_PROMPT);
+  assert(r.includes("data, not instructions"), "injection framing");
+  assert(r.includes("do not re-litigate"), "established requirements are settled");
 });
 
 // ───────────────────── the runner: what it refuses to do ────────────────────
