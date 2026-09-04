@@ -108,3 +108,40 @@ Deno.test("the context carries no mutable engine state", () => {
   // Only the three fields plus the version tag exist at the top level.
   assertEquals(Object.keys(ctx).length, 4);
 });
+
+// ── THE CONTEXT IS A PROPERTY OF THE RUN, NOT OF AN EVALUATION ──────────────
+//
+// It was assigned lazily inside the per-company evaluation loop, so it existed
+// only when the engine evaluated somebody NEW. On a resumed slice every verdict
+// is restored and that loop body never runs.
+//
+// Lineage b1348724: seven generations after the write-back fix deployed,
+// `decided_by_model: 0` on every slice, five evidence debts raised each time,
+// and P4 skipped on all of them because run-agent found a null context. The
+// re-evaluation had candidates, cached pages and a working write-back, and
+// never ran once.
+
+import { emptyEvidenceRegistry } from "../../supabase/functions/_shared/leadEvidenceRegistry.ts";
+
+Deno.test("an empty registry still yields a usable mission/brain context", () => {
+  // This is what the engine builds the context from, before any company exists.
+  const reg = emptyEvidenceRegistry("");
+  assertEquals(reg.items.length, 0, "it cites nothing");
+  assertEquals(reg.company_key, "");
+  // A claim checked against it is dropped, so it can never stand in for a real
+  // registry where a verdict is decided.
+  assertEquals(reg.hard_facts.employee_count, null);
+  assertEquals(reg.hard_facts.geography, null);
+});
+
+Deno.test("the context does not depend on any company having been evaluated", () => {
+  // Built from ctx + authority only. `company` is the sole part of an evaluator
+  // input that needs a registry, and re-evaluation replaces it wholesale.
+  const withCompany = reevaluationContextFrom({
+    ...input(),
+    company: { company_key: "acme", evidence: [{ evidence_id: "x" }] },
+  });
+  const withoutCompany = reevaluationContextFrom({ ...input(), company: {} });
+  assertEquals(withCompany, withoutCompany,
+    "the company half must not influence the carried context");
+});

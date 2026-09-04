@@ -115,7 +115,7 @@ import {
 } from "./companyBrainSemanticFit.ts";
 import type { PortfolioCandidate } from "./opportunityPortfolio.ts";
 import {
-  buildEvidenceRegistry, type EvidenceRegistry,
+  buildEvidenceRegistry, emptyEvidenceRegistry, type EvidenceRegistry,
 } from "./leadEvidenceRegistry.ts";
 import { buildCompanyEvidence } from "./leadCompanyEvidence.ts";
 import type { GroundedVerification } from "./groundedClaims.ts";
@@ -1984,7 +1984,7 @@ export interface CapabilityRunResult {
    * Null when nothing was evaluated, because there is then no compiled mission
    * that this run actually used and inventing one would be reconstruction.
    */
-  reevaluation_context: MissionReevaluationContextV1 | null;
+  reevaluation_context: MissionReevaluationContextV1;
   funnel: FunnelCounts;
   /** Per-company stage state, so a resume continues where each one stopped. */
   resume_records: CompanyResumeRecord[];
@@ -2053,18 +2053,6 @@ export async function runCapabilityPlan(
    */
   const headcountSnapshots: HeadcountSnapshotRow[] = [];
 
-  /**
-   * What a later re-evaluation needs from this run, captured once.
-   *
-   * `??=` because every evaluated company builds the same three values from the
-   * same mission and Brain — the FIRST assignment is the whole answer, and
-   * reassigning per company would be writing the same object N times.
-   *
-   * Stays null when nothing was evaluated. There is then no compiled mission
-   * this run actually used, and inventing one is the reconstruction P4 must not
-   * do.
-   */
-  let reevaluationContext: MissionReevaluationContextV1 | null = null;
 
   // ── THE SECOND FINGERPRINT, COMPUTED ONCE ────────────────────────────────
   //
@@ -2113,6 +2101,31 @@ export async function runCapabilityPlan(
   // `technical`, and `technical` could not produce a qualifying tier.
   const qualificationCtx = buildQualificationContext(opts.mission);
   log("qualification_context", qualificationContextSummary(qualificationCtx));
+
+  // ── WHAT A SECOND LOOK NEEDS, BUILT ONCE FOR THE WHOLE RUN ──────────────
+  //
+  // This was assigned lazily inside the per-company evaluation loop, at the
+  // point the first evaluator input was built. That made it a by-product of
+  // evaluating somebody NEW — and on a resumed slice every verdict is restored,
+  // so the loop body never runs.
+  //
+  // Lineage b1348724 is what that cost: seven generations after the fix
+  // deployed, `decided_by_model: 0` on every slice, five evidence debts raised
+  // each time, and P4 skipped on all of them because `run-agent` found a null
+  // context. The re-evaluation had candidates, cached pages and a working
+  // write-back, and never ran.
+  //
+  // The mission and the Brain authority are properties of the RUN, not of any
+  // company, and both are already settled here. `buildMissionEvaluationInput`
+  // is still the one assembler — it is called with a placeholder registry whose
+  // only contribution, `company`, the re-evaluation replaces anyway.
+  const reevaluationContext: MissionReevaluationContextV1 =
+    reevaluationContextFrom(buildMissionEvaluationInput({
+      ctx: qualificationCtx,
+      authority: resolveBrainAuthority(qualificationCtx, opts.brain),
+      registry: emptyEvidenceRegistry(""),
+      qualification_rules: opts.brainQualificationRules ?? null,
+    }));
 
   /**
    * The hiring verdict that costs NOTHING, for one company.
@@ -7053,10 +7066,6 @@ export async function runCapabilityPlan(
           registry,
           qualification_rules: opts.brainQualificationRules ?? null,
         });
-        // LIFTED FROM THE INPUT THE FIRST PASS ACTUALLY USED, not rebuilt from
-        // the parts. One assembly point means the two cannot drift, and the
-        // mission is carried rather than recompiled.
-        reevaluationContext ??= reevaluationContextFrom(evaluationInput);
         const evaluation = deps.evaluateMission
           ? await clockBound("mission_evaluation", () => deps.evaluateMission!({
             input: evaluationInput,
