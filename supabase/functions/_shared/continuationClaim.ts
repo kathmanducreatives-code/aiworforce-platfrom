@@ -46,6 +46,10 @@ export type ClaimRefusal =
   | "workspace_mismatch"
   | "no_checkpoint"
   | "already_terminal"
+  // Someone stopped this run. Distinct from `already_terminal` on purpose:
+  // "this finished" and "someone stopped it" are different facts, and the
+  // sweeper's logs should not conflate them.
+  | "lineage_cancelled"
   | "not_resumable_state"
   | "not_permitted"
   | "claim_unavailable";
@@ -141,6 +145,7 @@ export const CLAIM_REFUSAL_MESSAGE: Record<ClaimRefusal, string> = {
   workspace_mismatch: "That sourcing run belongs to a different workspace.",
   no_checkpoint: "That run has no saved checkpoint to continue from.",
   already_terminal: "That run has already finished.",
+  lineage_cancelled: "That run was cancelled.",
   not_resumable_state: "That run is not in a resumable state.",
   not_permitted: "You do not have permission to continue this run.",
   // Deliberately generic: the raw database error is logged, never rendered.
@@ -252,7 +257,10 @@ export async function claimContinuationViaRpc(args: {
   }
   if (row.claimed) return { available: true, claimed: true, checkpointVersion: row.checkpoint_version };
 
-  const reason = (["already_claimed", "task_not_found", "workspace_mismatch", "no_checkpoint", "already_terminal", "not_resumable_state"] as const)
+  // EVERY REASON THE RPC CAN RETURN MUST BE LISTED HERE. An unlisted one falls
+  // through to `lost_race`, which renders "Another continuation started first"
+  // — a wrong answer, confidently given, for a run that was cancelled.
+  const reason = (["already_claimed", "task_not_found", "workspace_mismatch", "no_checkpoint", "already_terminal", "lineage_cancelled", "not_resumable_state"] as const)
     .find((r) => r === row.reason) ?? "lost_race";
   return { available: true, claimed: false, reason, heldUntil: row.held_until, category: "conflict", code: null };
 }
