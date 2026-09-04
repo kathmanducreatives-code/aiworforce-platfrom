@@ -64,7 +64,11 @@ const cache = (
 // ─────────────────── the write side: nothing is forgotten ───────────────────
 
 Deno.test("THE LOOP: an unusable page is still written to the cache", async () => {
-  let written: readonly WebEvidencePage[] = [];
+  // Accumulated across calls, not captured from one. Pages are written ONE AT A
+  // TIME the moment each is fetched — batching to the end of the company is
+  // where a deadline lands, and lineage b1348724 bought `pump.co/about` three
+  // times because two earlier fetches died before the batch write ran.
+  const writes: unknown[][] = [];
   await runEvidenceCollection({
     workspace_id: "w", debts: [debt("volody")],
     deps: {
@@ -77,15 +81,20 @@ Deno.test("THE LOOP: an unusable page is still written to the cache", async () =
       db: {
         from: () => ({
           upsert: (rows: unknown[]) => {
-            written = rows as unknown as WebEvidencePage[];
+            writes.push(rows);
             return Promise.resolve({ error: null });
           },
         }),
       } as never,
     },
   });
+  const written = writes.flat() as Array<{ status: string; source_text: string }>;
   assertEquals(written.length, 3, "volody.com stored 0 rows for 7 calls");
-  for (const r of written as unknown as Array<{ status: string; source_text: string }>) {
+  // ONE PAGE PER WRITE: the property that makes an interrupted slice lose at
+  // most the page it was mid-fetch on, rather than every page before it.
+  assertEquals(writes.length, 3, "each page persists on its own, as it is fetched");
+  for (const w of writes) assertEquals(w.length, 1);
+  for (const r of written) {
     assertEquals(r.status, "not_found");
     assertEquals(r.source_text, "", "a 404 body is never stored as text");
   }
@@ -166,7 +175,7 @@ Deno.test("absence and evidence are counted apart", async () => {
 });
 
 Deno.test("a cache hit is never re-written as a fresh observation", async () => {
-  let written: unknown[] = [];
+  const written: unknown[] = [];
   await runEvidenceCollection({
     workspace_id: "w", debts: [debt("x")],
     deps: {
@@ -176,7 +185,7 @@ Deno.test("a cache hit is never re-written as a fresh observation", async () => 
       readCache: cache({ pricing: { text: "cached", status: "ok" } }),
       db: {
         from: () => ({
-          upsert: (rows: unknown[]) => { written = rows; return Promise.resolve({ error: null }); },
+          upsert: (rows: unknown[]) => { written.push(...rows); return Promise.resolve({ error: null }); },
         }),
       } as never,
     },
@@ -281,4 +290,50 @@ Deno.test("readFreshPages still drops stale rows whatever their status", async (
     { workspace_id: "w", domain: "x.com", now },
   );
   assertEquals(got.size, 0, "an absence expires like anything else");
+});
+
+// ── AN INTERRUPTED SLICE KEEPS WHAT IT ALREADY BOUGHT ───────────────────────
+//
+// Lineage b1348724 bought 24 pages for 17 URLs. `pump.co/about` three times:
+//
+//     16:58:00  call started    -> never finalized, no row
+//     18:35:09  call succeeded  -> no row
+//     18:47:13  call succeeded  -> row written 18:47:16
+//
+// The write was batched to the end of the company, so a slice that died
+// part-way lost every page it had fetched, and the next slice bought them
+// again. This is the regression test for that.
+
+Deno.test("a slice that dies mid-company keeps the pages already fetched", async () => {
+  const persisted: Array<{ source_url: string }> = [];
+  let fetches = 0;
+  await runEvidenceCollection({
+    workspace_id: "w", debts: [debt("pump")],
+    deps: {
+      plan: plan("pump", ["pricing", "product", "customers"]),
+      extract: noClaims,
+      fetchPage: (i) => {
+        fetches++;
+        // The third fetch dies the way an Edge slice does: mid-call, after two
+        // pages have already been bought.
+        if (fetches === 3) throw new Error("execution deadline reached");
+        return Promise.resolve({ ok: true, markdown: `body ${i.url}`, status: "ok" as const });
+      },
+      db: {
+        from: () => ({
+          upsert: (rows: unknown[]) => {
+            persisted.push(...(rows as Array<{ source_url: string }>));
+            return Promise.resolve({ error: null });
+          },
+        }),
+      } as never,
+    },
+  });
+  // Under the old batched write this was ZERO: the two paid-for pages died with
+  // the slice and were re-bought next time.
+  assert(persisted.length >= 2,
+    `pages bought before the failure must survive it, got ${persisted.length}`);
+  const urls = persisted.map((p) => p.source_url);
+  assert(urls.includes("https://pump.com/pricing"));
+  assert(urls.includes("https://pump.com/product"));
 });

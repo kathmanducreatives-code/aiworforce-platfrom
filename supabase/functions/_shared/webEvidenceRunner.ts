@@ -247,9 +247,6 @@ export async function runEvidenceCollection(i: {
     }
 
     const pages: WebEvidencePage[] = [];
-    /** Intents actually fetched this slice — the only rows worth writing. */
-    const fetchedIntents = new Set<string>();
-    let providerRunId: string | null = null;
 
     // ── WHAT WE ALREADY HAVE, BEFORE WE BUY ANYTHING ──────────────────────
     let cached = new Map<string, {
@@ -327,10 +324,8 @@ export async function runEvidenceCollection(i: {
         res = { ok: false, markdown: "", status: "timeout" as const };
       }
       pagesSpent++;
-      fetchedIntents.add(t.intent);
       outcome.pages_fetched++;
       report.pages_fetched++;
-      providerRunId = res.provider_run_id ?? providerRunId;
 
       // ── THE REDIRECT GUARD ────────────────────────────────────────────
       //
@@ -350,14 +345,53 @@ export async function runEvidenceCollection(i: {
       const status = offSite ? "blocked" : missing ? "not_found" : res.status;
       const usable = status === "ok" && !offSite && res.markdown.trim().length > 0;
 
-      pages.push({
+      const fetched: WebEvidencePage = {
         url: t.url,
         intent: t.intent,
         markdown: usable ? res.markdown : "",
         fetched_at: now(),
         status,
-      });
+      };
+      pages.push(fetched);
       if (usable) outcome.pages_ok++;
+
+      // ── PERSIST BEFORE THE NEXT FETCH, NOT AT THE END ──────────────────
+      //
+      // The write was batched once per company, after every page. A slice that
+      // hit its deadline in between bought pages and lost them, and the next
+      // slice bought them again because the cache had nothing to say.
+      //
+      // Lineage b1348724, `pump.co/about`, verbatim:
+      //
+      //     16:58:00  call started    -> never finalized, no row
+      //     18:35:09  call succeeded  -> no row
+      //     18:47:13  call succeeded  -> row written 18:47:16
+      //
+      // Three purchases of one page; 24 calls for 17 URLs across that run.
+      //
+      // This is the same interruption that leaves `status: started` rows in the
+      // ledger — which I diagnosed as observability-only because they hold no
+      // credits and block no sweeper. True, and incomplete: the same death also
+      // loses the PAGE, and a lost page is a guaranteed re-buy.
+      //
+      // One page, one write, before anything else can be interrupted.
+      if (i.deps.db) {
+        const w = await writeWebEvidence(
+          i.deps.db,
+          toStoredRows({
+            workspace_id: i.workspace_id,
+            company_key: req.company_key,
+            domain: req.domain,
+            requirement_id: req.requirement_id,
+            provider_run_id: res.provider_run_id ?? null,
+            // Including the pages that are not there: "we asked and it is
+            // absent" is what stops the next slice asking again.
+            pages: [fetched],
+          }),
+        );
+        report.rows_written += w.written;
+        if (w.error) report.store_error = w.error;
+      }
 
       log("evidence-fetch", {
         company: debt.company_name, url: t.url, intent: t.intent,
@@ -414,37 +448,9 @@ export async function runEvidenceCollection(i: {
       }
     }
 
-    // Persist the PAGES regardless of what the extractor made of them: the text
-    // is a fact about the company and a later mission may read it differently.
-    if (i.deps.db && pages.length > 0) {
-      const { written, error } = await writeWebEvidence(
-        i.deps.db,
-        toStoredRows({
-          workspace_id: i.workspace_id,
-          company_key: req.company_key,
-          domain: req.domain,
-          requirement_id: req.requirement_id,
-          provider_run_id: providerRunId,
-          // ── EVERY PAGE WE ASKED FOR, INCLUDING THE ONES THAT ARE NOT
-          //    THERE ────────────────────────────────────────────────────────
-          //
-          // This filtered to pages with text, so an unusable page stored
-          // nothing — and a cache with nothing to say cannot stop the next
-          // slice buying it again. Run d3a79c32: 44 calls for 21 URLs,
-          // volody.com fetched 7 times and stored 0 rows.
-          //
-          // The schema always intended this. Its own comment reads: "an empty
-          // or blocked page is a recorded observation, not a failure to hide …
-          // a missing row would look like we never asked."
-          //
-          // Only what we FETCHED is written: re-writing a cache hit would be
-          // recording an observation we did not make.
-          pages: pages.filter((p) => fetchedIntents.has(p.intent)),
-        }),
-      );
-      report.rows_written += written;
-      if (error) report.store_error = error;
-    }
+    // Nothing to persist here: every page was written the moment it was
+    // fetched, above. Batching to the end of the company is precisely where a
+    // deadline lands, and what turned interrupted slices into repeat purchases.
 
     report.companies.push(outcome);
   }
