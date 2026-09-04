@@ -4794,6 +4794,40 @@ export async function runCapabilityPlan(
       // again. Applied here, after the working set exists and before it is
       // ranked.
       if (resumeScope) for (const c of companies) restoreFromResume(c);
+
+      // ── THE PAID ROWS ARE DURABLE BEFORE ANYTHING ELSE IS ATTEMPTED ──────
+      //
+      // Everything below this line — triage, ranking, the plan amendment — is
+      // model work. It is fast on a good day and it is not bounded by anything
+      // the platform respects, so a slice can die inside it holding companies
+      // that were already paid for.
+      //
+      // Lineage 610951da, verbatim from its own logs:
+      //
+      //     08:36:43  discovery returned          (one Apify call, one credit)
+      //     08:37:00  mission-triage batch 2, 25 companies
+      //     08:38:40  isolate killed
+      //     ...       no checkpoint, ever
+      //
+      // `publish("accounts_found")` sits at the END of this capability, after
+      // the amendment, so it was never reached. The task kept
+      // `checkpoint_version: 0` and no `company_first_state`, and
+      // `eligibleForAutoResume` answered `no_checkpoint` on every sweeper tick
+      // for two hours until the row aged out. The mission could not resume and
+      // its spend was stranded.
+      //
+      // Marking discovery COMPLETE here is truthful: the capability's job is to
+      // fetch companies from a provider, and it has. Triage and ranking are
+      // post-processing that happen to live in the same block.
+      //
+      // SAFE BECAUSE THE POOL CANNOT REACH A PAID STAGE UNTRIAGED.
+      // `ensureMissionIntelligence` already states that invariant for every
+      // route and is idempotent, so a slice resumed from this checkpoint
+      // re-applies triage before spending. The one risk this ordering creates
+      // is the one the codebase already closed.
+      finish(cap, "complete", companies.length, used, true, null);
+      await publish(state.prequalification ? "prequalified" : "accounts_found");
+
       await applyMissionIntelligence(companies);
       // THE FIRST SLICE. Ranking and selection are now separate acts: the
       // ranking is decided once, here; the slice is taken here and again on
@@ -4931,9 +4965,10 @@ export async function runCapabilityPlan(
         }
       }
 
-      finish(cap, "complete", companies.length, used, true, null);
-      // The event names what actually happened to the pool, so a route with no
-      // free pre-pass does not report a prequalification it never ran.
+      // ALREADY FINISHED AND PUBLISHED, above, before the model work began.
+      // Publishing again is cheap and keeps the checkpoint current with
+      // whatever triage and the amendment decided — but the capability is NOT
+      // finished twice, which would double-count the pool.
       await publish(state.prequalification ? "prequalified" : "accounts_found");
       continue;
     }
