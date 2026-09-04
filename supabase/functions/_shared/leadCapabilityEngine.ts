@@ -2216,13 +2216,17 @@ export async function runCapabilityPlan(
   /**
    * Re-attach what an earlier invocation already proved about this company.
    *
-   * Deliberately narrow. The record carries STAGES and ONE payload — the
-   * resolved LinkedIn URL — so that is all this restores. Restoring the URL is
-   * what actually stops the re-buy: the identity stage already declines to pay
-   * for a company it can name, so a restored company never reaches the search
-   * actor at all. Enrichment, hiring and founder payloads are NOT in the record,
-   * so those stages are deliberately left to run again rather than be skipped
-   * into an empty result the Brain would read as a proven negative.
+   * Narrow, but no longer blind to what was already bought. The record carries
+   * STAGES, the resolved LinkedIn URL, and a per-company SNAPSHOT; this restores
+   * from all three. Restoring the URL is what stops the identity re-buy: that
+   * stage declines to pay for a company it can name, so a restored company never
+   * reaches the search actor at all.
+   *
+   * Hiring and founder payloads are still deliberately left to run again rather
+   * than be skipped into an empty result the Brain would read as a proven
+   * negative — and hiring has its own operation-key guard besides, carried by
+   * `completed_operations` above. Enrichment is the exception, and the reason is
+   * below.
    *
    * Idempotent — it is applied before every capability and must stay safe to
    * repeat.
@@ -2250,7 +2254,7 @@ export async function runCapabilityPlan(
       frontierRestored.add(c.key);
       const snap = prior.snapshot as unknown as {
         investigation_state?: unknown; investigation_rank?: unknown;
-        identity?: unknown;
+        identity?: unknown; enriched?: unknown;
       };
       c.investigation_state = asInvestigationState(snap.investigation_state);
       if (typeof snap.investigation_rank === "number") {
@@ -2262,6 +2266,40 @@ export async function runCapabilityPlan(
       // same rule the frontier fields above follow.
       if (!c.identity && snap.identity && typeof snap.identity === "object") {
         c.identity = snap.identity as unknown as typeof c.identity;
+      }
+      // ── AND WHAT ENRICHMENT ALREADY COST ─────────────────────────────────
+      //
+      // THE RUNS THIS EXISTS FOR. Every duplicate paid Apify call in the four
+      // days to 2026-09-04 was `apify_linkedin_company_details`, and the count
+      // tracks how many times a lineage re-ran discovery:
+      //
+      //     b1348724   5 searches   7+4+4+3+2 duplicate runs
+      //     2f3d9c5c   4 searches   5+5+3+2   duplicate runs
+      //     8cfdfd10   3 searches   2         duplicate runs
+      //     610951da   1 search     none
+      //
+      // `company_enrichment` selects on `!c.enriched`, which holds within a
+      // slice. Across slices there are TWO restore paths, and they disagreed:
+      // `restoreWorkingSet` — taken when discovery is SKIPPED — assigns
+      // `c.enriched` from the snapshot, while this one, taken when discovery
+      // RE-RUNS and rebuilds the working set from the provider, did not. So a
+      // rediscovered company arrived enriched-looking-unenriched and the same
+      // batch of ten was bought again, once per continuation, for the life of
+      // the lineage.
+      //
+      // The internal ledger deduplicated on `logical_call_key` and escalated
+      // `attempt_number` instead, so no credit was double-charged and the
+      // accounting looked clean. Apify billed every run.
+      //
+      // ONLY A REAL PAYLOAD IS RESTORED. `asObjectOrNull` yields null for a
+      // company that was never enriched, and null is exactly what re-runs the
+      // stage — so this cannot skip a company into an empty result. Live
+      // progress still wins, the same rule identity follows above.
+      if (!c.enriched && snap.enriched && typeof snap.enriched === "object") {
+        c.enriched = snap.enriched as unknown as typeof c.enriched;
+        // The same narrowing `restoreWorkingSet` applies: surviving evidence IS
+        // the success, so the outcome is not left saying the stage never ran.
+        c.enrichment_outcome = "success";
       }
     }
     if (prior.identity === "resolved" && prior.linkedin_company_url &&
@@ -5634,9 +5672,12 @@ export async function runCapabilityPlan(
       // The cost is O(slices x batches), which is why this stayed invisible
       // while continuations did no real work and appeared the moment they did.
       //
-      // `enriched` is carried on the checkpoint snapshot and restored by
-      // `restoreWorkingSet`, so this holds across slices and not merely within
-      // one.
+      // `enriched` is carried on the checkpoint snapshot and restored by BOTH
+      // resume paths, so this holds across slices and not merely within one.
+      // It was one path for a while — `restoreWorkingSet`, taken when discovery
+      // is skipped — and `restoreFromResume`, taken when discovery re-runs, did
+      // not assign it. That gap re-bought this batch once per continuation for
+      // the life of any lineage that rediscovered; see the note there.
       const actionable = companies.filter((c) =>
         c.identity && identityIsActionable(c.identity) && !c.enriched);
       // DEDUPED. Two YC rows can resolve to one LinkedIn company; enriching it
