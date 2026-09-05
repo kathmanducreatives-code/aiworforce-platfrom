@@ -840,7 +840,35 @@ export async function recordModelCall(
 ): Promise<void> {
   if (!writer) return;
   const t = spec.telemetry;
-  const row = buildStartedRow({
+  // ── THE MODEL NAME MUST BE ON THE ROW THAT IS INSERTED ──────────────────
+  //
+  // `lead_execution_calls_model_call_names_model` is
+  //
+  //   record_kind <> 'model_call'
+  //     OR (metadata ? 'model' AND length(coalesce(metadata->>'model','')) > 0)
+  //
+  // and a CHECK is evaluated on INSERT, not only on UPDATE. This function used
+  // to insert first and attach `metadata.model` in the FOLLOWING `finalize`, so
+  // the inserted row carried `metadata: null` — `buildStartedRow` hardcodes it —
+  // and the constraint rejected every single one.
+  //
+  // NULL DOES NOT SAVE IT. `metadata ? 'model'` on a null column is NULL, but
+  // the second conjunct `length(coalesce(null->>'model','')) > 0` is FALSE, and
+  // `NULL AND FALSE` is FALSE in SQL. So the whole predicate is FALSE and the
+  // row is refused — not the "NULL check passes" case that reasoning about the
+  // first conjunct alone suggests. I made exactly that error while diagnosing
+  // this and ruled the constraint out; it was the cause.
+  //
+  // `createLedgerWriter.insert` swallows anything that is not a unique
+  // violation, by design, so the failure was silent. On lineage 4ef85feb the
+  // collector drained 20 model calls across five slices and the table stayed
+  // empty — which is precisely what the migration's own comment predicted would
+  // happen if a `model_call` row were ever written without the model on it.
+  //
+  // The finalize below still writes the full metadata — token counts, effort,
+  // latency, fallback reason. This carries only what the constraint demands, so
+  // the row is admissible the moment it exists.
+  const started = buildStartedRow({
     ...spec,
     record_kind: "model_call",
     // The vendor that ran it. Honest, and distinct from `agentory_internal`,
@@ -853,6 +881,14 @@ export async function recordModelCall(
     stage: spec.stage ?? "other",
     reason: spec.reason ?? "unspecified",
   });
+  const row = {
+    ...started,
+    metadata: {
+      model: t.model,
+      role: t.role,
+      telemetry_version: t.version,
+    } as Record<string, unknown>,
+  };
   try {
     await writer.insert(row);
     await writer.finalize(row.id, {
