@@ -191,3 +191,110 @@ Deno.test("THE DIAGNOSTIC CAN FAIL: a dropped payload is visible in the counts",
 
   assertEquals(inRecords2, 0, "a dropped payload must show as zero, not be masked");
 });
+
+// ── AND WHAT HAPPENED TO IT ────────────────────────────────────────────────
+//
+// `checkpoint_published` records what was OFFERED. On lineage e5d4fc14 that was
+// not enough: it showed 87 enriched twice, the next slice restored 83, and
+// nothing said whether the write was skipped or landed and was later lost.
+// `checkpoint_write` records the fate.
+
+Deno.test("THE FATE: a written checkpoint reports written + version", async () => {
+  const logs: Array<{ event: string; meta: Record<string, unknown> }> = [];
+  await runCapabilityPlan({
+    invoke: (_c: CompiledActorCall<unknown>) =>
+      Promise.resolve(
+        Array.from({ length: 6 }, (_, i) => row(i)) as Record<string, unknown>[],
+      ),
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+    evaluateMission: stubMissionEvaluator({ mission_fit: "review" }),
+    planDiscovery: () =>
+      Promise.resolve([{
+        actor_key: "apify_linkedin_company_search",
+        role: "primary",
+        input: { searchQuery: "B2B SaaS", locations: ["United Kingdom"] },
+      }]),
+    onCheckpoint: (_s: unknown) => ({ written: true, checkpoint_version: 7 }),
+    log: (event: string, meta: Record<string, unknown>) => logs.push({ event, meta }),
+  } as never, {
+    mission: mission(),
+    plan: buildCapabilityGraph(mission() as never),
+    brain: BRAIN, maxCandidates: 50, remainingLeads: 5,
+    readEnv: () => undefined,
+  } as never);
+
+  const writes = logs.filter((l) => l.event === "checkpoint_write");
+  assert(writes.length > 0, "no checkpoint_write event — the fate is unrecorded");
+  for (const w of writes) {
+    assertEquals(w.meta.written, true);
+    assertEquals(w.meta.checkpoint_version, 7);
+    assert("enriched_in_records" in w.meta);
+  }
+});
+
+Deno.test("THE SILENT SKIP: a refused write reports the reason", async () => {
+  // The case that matters. A skip used to be invisible; it must now name itself.
+  const logs: Array<{ event: string; meta: Record<string, unknown> }> = [];
+  await runCapabilityPlan({
+    invoke: (_c: CompiledActorCall<unknown>) =>
+      Promise.resolve(
+        Array.from({ length: 6 }, (_, i) => row(i)) as Record<string, unknown>[],
+      ),
+    verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+    evaluateMission: stubMissionEvaluator({ mission_fit: "review" }),
+    planDiscovery: () =>
+      Promise.resolve([{
+        actor_key: "apify_linkedin_company_search",
+        role: "primary",
+        input: { searchQuery: "B2B SaaS", locations: ["United Kingdom"] },
+      }]),
+    onCheckpoint: (_s: unknown) => ({
+      written: false,
+      reason: "prior_terminal:round_limit_reached",
+    }),
+    log: (event: string, meta: Record<string, unknown>) => logs.push({ event, meta }),
+  } as never, {
+    mission: mission(),
+    plan: buildCapabilityGraph(mission() as never),
+    brain: BRAIN, maxCandidates: 50, remainingLeads: 5,
+    readEnv: () => undefined,
+  } as never);
+
+  const writes = logs.filter((l) => l.event === "checkpoint_write");
+  assert(writes.length > 0);
+  for (const w of writes) {
+    assertEquals(w.meta.written, false);
+    assertEquals(w.meta.reason, "prior_terminal:round_limit_reached");
+  }
+});
+
+Deno.test("a caller that returns nothing still works, and logs no fate", () => {
+  // Backwards compatible: the outcome is optional, and an older caller simply
+  // gets no `checkpoint_write` line rather than a crash.
+  return (async () => {
+    const logs: Array<{ event: string; meta: Record<string, unknown> }> = [];
+    await runCapabilityPlan({
+      invoke: (_c: CompiledActorCall<unknown>) =>
+        Promise.resolve(
+          Array.from({ length: 6 }, (_, i) => row(i)) as Record<string, unknown>[],
+        ),
+      verifyEmployer: () => ({ verified: true, outcome: "ok" }),
+      evaluateMission: stubMissionEvaluator({ mission_fit: "review" }),
+      planDiscovery: () =>
+        Promise.resolve([{
+          actor_key: "apify_linkedin_company_search",
+          role: "primary",
+          input: { searchQuery: "B2B SaaS", locations: ["United Kingdom"] },
+        }]),
+      onCheckpoint: () => {},
+      log: (event: string, meta: Record<string, unknown>) => logs.push({ event, meta }),
+    } as never, {
+      mission: mission(),
+      plan: buildCapabilityGraph(mission() as never),
+      brain: BRAIN, maxCandidates: 50, remainingLeads: 5,
+      readEnv: () => undefined,
+    } as never);
+    assertEquals(logs.filter((l) => l.event === "checkpoint_write").length, 0);
+    assert(logs.filter((l) => l.event === "checkpoint_published").length > 0);
+  })();
+});

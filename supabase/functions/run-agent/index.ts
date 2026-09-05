@@ -150,6 +150,7 @@ import { EVIDENCE_PLANNER_PROMPT } from "../_shared/webEvidencePlanner.ts";
 import { EVIDENCE_EXTRACTION_PROMPT } from "../_shared/webEvidenceExtraction.ts";
 import { routeModel } from "../_shared/gptModelRouter.ts";
 import { createGptStrategistGenerateJson } from "../_shared/gptStrategistModel.ts";
+import { reapplyMissionEvaluation } from "../_shared/leadCapabilityEngine.ts";
 import { buildPortfolio, interpretTargets } from "../_shared/opportunityPortfolio.ts";
 // `applyMissionPrecedence`, `buildClassifierPayload`, `parseSemanticFitStrict`
 // and `SEMANTIC_INPUT_SCHEMA_VERSION` are no longer imported here: they existed
@@ -3105,11 +3106,13 @@ Deno.serve(async (req) => {
                   console.warn("[run-agent][checkpoint] refused as incoherent", {
                     task_id: task.id, reason: snap.incoherence,
                   });
-                  return;
+                  return { written: false, reason: `incoherent: ${snap.incoherence}` };
                 }
                 // Nothing bought yet is nothing to come back for.
                 if (snap.state.provider_attempts.length === 0 &&
-                    snap.state.pending_runs.length === 0) return;
+                    snap.state.pending_runs.length === 0) {
+                  return { written: false, reason: "nothing_bought_yet" };
+                }
                 try {
                   const { data: cur } = await supabase
                     .from("tasks").select("result").eq("id", task.id).maybeSingle();
@@ -3119,7 +3122,13 @@ Deno.serve(async (req) => {
                   // write must never resurrect a completed or failed task.
                   const priorTerminal = typeof prior.terminal_status === "string"
                     ? prior.terminal_status : null;
-                  if (priorTerminal && priorTerminal !== "continuation_required") return;
+                  // THE SILENT SKIP. A finalized verdict owns the row, so a late
+                  // stage-boundary write is dropped here — correctly, but until now
+                  // without a word. This is the leading candidate for H1's missing
+                  // writes and it must be visible.
+                  if (priorTerminal && priorTerminal !== "continuation_required") {
+                    return { written: false, reason: `prior_terminal:${priorTerminal}` };
+                  }
                   await supabase.from("tasks").update({
                     result: {
                       ...prior,
@@ -3400,8 +3409,23 @@ Deno.serve(async (req) => {
                     // checkpoint into a failed run.
                     console.log("[run-agent][checkpoint] notice failed", String(e));
                   }
+                  // ── THE WRITE LANDED. SAY SO, AND SAY AT WHAT VERSION ──
+                  //
+                  // Read back one column, immediately. The engine pairs this
+                  // with the `checkpoint_published` counts it offered, which is
+                  // what separates "skipped", "written", and "written then lost"
+                  // — the three cases lineage e5d4fc14 could not tell apart.
+                  const { data: after } = await supabase.from("tasks")
+                    .select("checkpoint_version").eq("id", task.id).maybeSingle();
+                  return {
+                    written: true,
+                    checkpoint_version:
+                      (after as { checkpoint_version?: number } | null)?.checkpoint_version ??
+                        null,
+                  };
                 } catch (e) {
                   console.log("[run-agent][checkpoint] write failed", String(e));
+                  return { written: false, reason: `threw: ${String(e).slice(0, 80)}` };
                 }
               },
               // THE GUARD SEES THE LATEST STATE, so a kill after enrichment is
@@ -4182,13 +4206,42 @@ Deno.serve(async (req) => {
                   // re-evaluation is computed and thrown away. That is exactly
                   // what the first live canary did: it logged Metaview as
                   // qualified while the checkpoint kept insufficient_evidence.
-                  let reappliedCount = 0;
-                  for (const o of reevalReport.outcomes) {
-                    if (!o.merged) continue;
-                    const target = engineRun.companies.find((x) => x.key === o.company_key);
-                    if (!target) continue;
-                    target.mission_evaluation = o.merged;
-                    reappliedCount++;
+                  //
+                  // ── AND THE VERDICT, NOT JUST THE EVALUATION ───────────
+                  //
+                  // This used to assign `mission_evaluation` and stop. But
+                  // `c.verdict` is derived from `c.brain.outcome`,
+                  // `state.qualified_company_keys` from `c.verdict`, and
+                  // `qualifiedIn()` — quota logic, delivery, the final result
+                  // and persistence — reads that array. So on lineage e5d4fc14
+                  // P4 resolved Metaview's last open requirement from its own
+                  // pricing page, wrote `qualified` with five verified receipts
+                  // and a match score of 95, and the run still reported ZERO
+                  // qualified and delivered nothing.
+                  //
+                  // `reapplyMissionEvaluation` is the engine's own
+                  // reconciliation point: it re-runs `decideCompanyBrain` with
+                  // the inputs that company was originally judged with, applies
+                  // the same enrichment precondition, and rebuilds the key
+                  // arrays from the same expression the qualification loop
+                  // uses. Doing any of that here would be a second answer to
+                  // "is this company qualified".
+                  const reapply = reapplyMissionEvaluation(
+                    engineRun as unknown as {
+                      companies: Parameters<typeof reapplyMissionEvaluation>[0]["companies"];
+                      state: Parameters<typeof reapplyMissionEvaluation>[0]["state"];
+                    },
+                    reevalReport.outcomes.flatMap((o) =>
+                      o.merged ? [{ company_key: o.company_key, evaluation: o.merged }] : []
+                    ),
+                  );
+                  const reappliedCount = reapply.reapplied;
+                  if (reapply.qualified_added.length > 0) {
+                    console.log("[run-agent][evidence-reevaluation][qualified]", {
+                      task_id: task.id,
+                      newly_qualified: reapply.qualified_added,
+                      qualified_total: engineRun.state.qualified_company_keys.length,
+                    });
                   }
                   // `resume_records` was built inside the engine BEFORE this
                   // ran, so it still describes the pre-re-evaluation world. The

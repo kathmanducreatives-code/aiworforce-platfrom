@@ -1460,6 +1460,18 @@ export interface EngineCompany {
    * on a resume. One definition, one reader, no other consumer to mislead.
    */
   brain_gate: "refuted" | "not_established" | null;
+  /**
+   * THE INPUTS THIS COMPANY WAS JUDGED WITH.
+   *
+   * Kept so a LATER evaluation — P4 re-reading web evidence after the engine has
+   * returned — can be re-judged by the SAME rule rather than a second one. The
+   * gates, the policy, the hiring verdict and the grounding are computed inside
+   * the qualification loop from state a caller cannot reconstruct; without this,
+   * anything outside the engine wanting to honour a new verdict would have to
+   * reimplement `decideCompanyBrain`'s inputs, and two implementations of "is
+   * this company qualified" is precisely what this codebase keeps paying for.
+   */
+  brain_inputs: BrainJudgementInputs | null;
   enriched: NormalizedHiringCompany | null;
   /**
    * WHAT HAPPENED WHEN ENRICHMENT WAS ATTEMPTED — explicitly, not inferred.
@@ -1803,7 +1815,22 @@ export interface CapabilityEngineDeps {
    * can be correct. AWAITED: an edge isolate can be torn down before an
    * unawaited write settles.
    */
-  onCheckpoint?: (snapshot: CheckpointSnapshot) => void | Promise<void>;
+  /**
+   * Persist a checkpoint, and SAY WHAT HAPPENED.
+   *
+   * The outcome is optional so existing callers keep working, but without it the
+   * engine can only log what it OFFERED. On lineage e5d4fc14 that was the gap:
+   * `checkpoint_published` recorded 87 enriched companies twice, the next slice
+   * restored 83, and nothing distinguished "the write was skipped" from "the
+   * write landed and was later overwritten or read stale".
+   */
+  onCheckpoint?: (
+    snapshot: CheckpointSnapshot,
+  ) =>
+    | void
+    | CheckpointWriteOutcome
+    | Promise<void>
+    | Promise<CheckpointWriteOutcome | void>;
   log?: (msg: string, meta?: unknown) => void;
 }
 
@@ -3404,7 +3431,27 @@ export async function runCapabilityPlan(
         (c) => c.identity && identityIsActionable(c.identity)).length,
       coherent: snap.coherent,
     });
-    await deps.onCheckpoint?.(snap);
+    const outcome = await deps.onCheckpoint?.(snap);
+    // ── AND WHAT HAPPENED TO IT ──────────────────────────────────────────
+    //
+    // `checkpoint_published` above records what was OFFERED. This records the
+    // fate. Together they separate the three cases lineage e5d4fc14 could not:
+    //
+    //   offered but skipped  — written:false with a reason
+    //   written successfully — written:true with the resulting version
+    //   written then lost    — written:true here, yet the next restore holds less
+    if (outcome && typeof outcome === "object") {
+      log("checkpoint_write", {
+        stage,
+        written: outcome.written,
+        reason: outcome.reason ?? null,
+        checkpoint_version: outcome.checkpoint_version ?? null,
+        enriched_in_records: snap.resume_records.filter((r) => {
+          const e = (r.snapshot as { enriched?: unknown } | null | undefined)?.enriched;
+          return e !== null && e !== undefined;
+        }).length,
+      });
+    }
   };
 
   const finish = (
@@ -7150,6 +7197,17 @@ export async function runCapabilityPlan(
             unacknowledged_conflicts: 0,
           };
 
+        // CAPTURED AT THE MOMENT OF JUDGEMENT, before any branch decides. See
+        // `brain_inputs`: this is what lets a P4 re-evaluation be re-judged by
+        // this same rule instead of a second one.
+        c.brain_inputs = {
+          gates: gateInput,
+          policy: appliedPolicy,
+          hiring_verified: hiringVerified,
+          grounding: groundingForBrain,
+          enrichment_planned: enrichmentPlanned,
+        };
+
         // ── A FALSIFIABLE FACT STILL REJECTS, AND ONLY A FALSIFIABLE FACT ───
         //
         // Four checkable facts, and nothing else:
@@ -8070,6 +8128,15 @@ export async function runCapabilityPlan(
  * exactly as the return path does it. A caller cannot assemble one incorrectly
  * because a caller is never given the parts.
  */
+/** What actually happened to a checkpoint the engine offered. */
+export interface CheckpointWriteOutcome {
+  written: boolean;
+  /** Why not, when `written` is false. The silent skip is the thing to catch. */
+  reason?: string;
+  /** The row's `checkpoint_version` AFTER the write. */
+  checkpoint_version?: number | null;
+}
+
 export interface CheckpointSnapshot {
   state: CapabilityExecutionState;
   resume_records: CompanyResumeRecord[];
@@ -8439,6 +8506,133 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
  * without a snapshot — checkpoints written before the field existed — are
  * skipped, which degrades to the previous behaviour instead of throwing.
  */
+export interface BrainJudgementInputs {
+  gates: Parameters<typeof decideCompanyBrain>[0]["gates"];
+  policy: Parameters<typeof decideCompanyBrain>[0]["policy"];
+  hiring_verified: boolean;
+  grounding: Parameters<typeof decideCompanyBrain>[0]["grounding"];
+  enrichment_planned: boolean;
+}
+
+/**
+ * Re-judge a company against a NEW mission evaluation, by the engine's own rule.
+ *
+ * ── THE RUN THIS EXISTS FOR ────────────────────────────────────────────────
+ *
+ * Lineage e5d4fc14, 2026-09-05. P4 read Metaview's pricing page, resolved the
+ * one open requirement and wrote `decision: "qualified"`, `mission_fit: "pass"`,
+ * five verified receipts, zero unknown fields, match score 95. The run reported
+ * ZERO qualified companies and delivered nothing.
+ *
+ * The write-back set `mission_evaluation` and stopped there. `c.verdict` is
+ * derived from `c.brain.outcome`, `state.qualified_company_keys` is derived from
+ * `c.verdict`, and `qualifiedIn()` — quota logic, delivery, the final result and
+ * persistence — reads that array. None of them were touched, so a company the
+ * system had proved was a match could not be counted or returned.
+ *
+ * ── WHY THIS LIVES HERE ────────────────────────────────────────────────────
+ *
+ * `decideCompanyBrain` needs the gates, the applied policy, the hiring verdict
+ * and the grounding — all computed inside the qualification loop from state no
+ * caller can reconstruct. Re-deriving them outside the engine would be a SECOND
+ * answer to "is this company qualified", and the two would drift. So the engine
+ * keeps what it judged with (`brain_inputs`) and exposes this one reconciliation
+ * point; `run-agent` calls it rather than assigning fields itself.
+ *
+ * Idempotent: applying the same evaluation twice reaches the same verdict and
+ * the key arrays are rebuilt from scratch, so a company is counted once.
+ */
+export function reapplyMissionEvaluation(
+  run: { companies: EngineCompany[]; state: CapabilityExecutionState },
+  updates: ReadonlyArray<{ company_key: string; evaluation: MissionEvaluation }>,
+): { reapplied: number; qualified_added: string[] } {
+  const before = new Set(run.state.qualified_company_keys);
+  let reapplied = 0;
+
+  for (const u of updates) {
+    const c = run.companies.find((x) => x.key === u.company_key);
+    if (!c) continue;
+    c.mission_evaluation = u.evaluation;
+    reapplied++;
+
+    // Without the captured inputs this company was never judged by the Brain in
+    // this run; leaving the verdict alone is the honest outcome — better an
+    // uncounted company than one counted by a rule we had to invent.
+    const bi = c.brain_inputs;
+    if (!bi) continue;
+
+    const e = u.evaluation;
+    c.brain = decideCompanyBrain({
+      gates: bi.gates,
+      semantic: {
+        mission_fit: e.mission_fit,
+        icp_fit: e.icp_fit,
+        match_score: e.match_score,
+        business_model: "unknown",
+        company_fit: e.mission_fit,
+        confidence: e.confidence,
+        agentory_use_case: e.icp_fit === "strong"
+          ? "strong"
+          : e.icp_fit === "plausible"
+          ? "plausible"
+          : "weak",
+        supporting_evidence: e.matched_requirements.map(
+          (m) => `${m.requirement}: ${m.excerpt}`),
+        conflicting_evidence: e.failed_requirements.map(
+          (f) => `${f.requirement}: ${f.why}`),
+        // `fit` is null for a company that never reached the deterministic gate;
+        // the evaluator's own unknowns still stand on their own.
+        unknown_fields: [...new Set([
+          ...e.unknown_fields, ...(c.fit?.missing_evidence ?? []),
+        ])],
+        reason: e.reasoning,
+      },
+      policy: bi.policy,
+      hiring_verified: bi.hiring_verified,
+      grounding: bi.grounding,
+    } as Parameters<typeof decideCompanyBrain>[0]);
+
+    c.classification = {
+      verdict: e.mission_fit === "pass" ? "pass"
+        : e.mission_fit === "fail" ? "fail" : "unknown",
+      reason: e.reasoning,
+      source: "mission_evaluation",
+    };
+
+    // THE SAME PRECONDITION THE FIRST PASS APPLIES. Enrichment was planned and
+    // produced no evidence => a HOLD, never a pass, however the model reads the
+    // web page. Re-judging without this would let P4 qualify a company the first
+    // pass deliberately held.
+    if (c.brain.outcome === "QUALIFIED" && bi.enrichment_planned &&
+        !enrichmentIsEvidence(c.enrichment_outcome)) {
+      c.decision_source = "insufficient_evidence";
+      c.verdict = "unknown";
+      continue;
+    }
+    c.decision_source = "gpt_evaluation";
+    c.verdict = c.brain.outcome === "QUALIFIED"
+      ? "pass"
+      : c.brain.outcome === "REJECT"
+      ? "reject"
+      : "unknown";
+  }
+
+  // ── THE AUTHORITATIVE COUNT, REBUILT FROM THE SAME EXPRESSION ────────────
+  //
+  // Identical to the qualification loop's own line. Rebuilt wholesale rather
+  // than appended to, so re-applying the same verdict cannot count a company
+  // twice.
+  run.state.qualified_company_keys = run.companies
+    .filter((c) => c.verdict === "pass").map((c) => c.key);
+  run.state.unknown_company_keys = run.companies
+    .filter((c) => c.verdict === "unknown").map((c) => c.key);
+
+  return {
+    reapplied,
+    qualified_added: run.state.qualified_company_keys.filter((k) => !before.has(k)),
+  };
+}
+
 export function restoreWorkingSet(
   records: readonly CompanyResumeRecord[],
 ): EngineCompany[] {
@@ -9148,7 +9342,8 @@ function addCompany(
     // PENDING, NOT EXCLUDED. A company enters the frontier and leaves it only
     // by being investigated or by a decision that closes it.
     investigation_state: "pending_investigation", investigation_rank: Number.MAX_SAFE_INTEGER,
-    company: c, identity: null, stage_block: null, brain_gate: null, enriched: null,
+    company: c, identity: null, stage_block: null, brain_gate: null,
+    brain_inputs: null, enriched: null,
     // NOT_ATTEMPTED IS THE HONEST DEFAULT, exactly as with `evaluation_path`.
     // A company leaves it only when the stage actually tries.
     enrichment_outcome: "not_attempted",
