@@ -127,12 +127,34 @@ Deno.test("8. an unknown actor is UNKNOWN, never zero", () => {
 });
 
 Deno.test("9. a REUSED run is not charged a second start fee", () => {
+  // `adopted` is now the signal, not `started: false` alone. See test 9b: the
+  // absence of a start is also true of a provider that has no runs to start.
   const c = priceProviderCall({
-    actorKey: SEARCH, itemCount: 15, input: { scraperMode: "short" }, started: false,
+    actorKey: SEARCH, itemCount: 15, input: { scraperMode: "short" },
+    started: false, adopted: true,
   });
   assertEquals(c.estimated_usd, 0,
     "an adopted run was already paid for; charging again makes idempotency look expensive");
   assertEquals(c.source, "event_priced");
+});
+
+Deno.test("9b. a call that never started and adopted NOTHING is not free", () => {
+  // ── THE FIRECRAWL ROWS ──────────────────────────────────────────────────
+  //
+  // `started: runId !== null` is false for every failed Firecrawl scrape,
+  // because `/scrape` is synchronous and returns no run id at all. Read as an
+  // adoption, that recorded 39 failed calls as `event_priced` at exactly
+  // $0.00 — the ledger asserting on a high provenance grade that a failed call
+  // was free. During an outage the spend would read as untouched.
+  //
+  // Zero is only a measured answer when something was actually adopted.
+  const c = priceProviderCall({
+    actorKey: "firecrawl_scrape", itemCount: 0, started: false,
+  });
+  assertEquals(c.actual_usd, null);
+  assertEquals(c.estimated_usd, null,
+    "no card and no adoption is 'we do not know', never 'it was free'");
+  assertEquals(c.source, "unknown");
 });
 
 Deno.test("10. a FAILED call that started still costs its start fee", () => {

@@ -213,6 +213,9 @@ Deno.test("AN ADOPTED RUN COSTS THIS CALL NOTHING", () => {
     input: {},
     run: { usageTotalUsd: 0.0001 },   // the provider reports the original charge
     started: false,                    // …but this call adopted it
+    adopted: true,                     // …and says so positively: `started:
+    // false` alone is also true of a provider with no run ids, which priced
+    // every failed Firecrawl scrape at $0.00.
   });
   assertEquals(adopted.actual_usd, null, "an adoption records no actual spend");
   assertEquals(adopted.estimated_usd, 0, "zero is the correct answer, not a rounding");

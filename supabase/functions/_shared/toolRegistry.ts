@@ -2005,6 +2005,9 @@ function outcomeFromToolResult(
         input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
         run: (d.provider_usage ?? null) as ProviderRunUsage | null,
         started: !resumed,
+        // THE POSITIVE SIGNAL. `resumed` is the only thing that knows this call
+        // re-read a run another row already paid for.
+        adopted: resumed === true,
       }),
       metadata: {
         actor_id: d.actor_id ?? null,

@@ -127,6 +127,16 @@ export interface PriceProviderCallInput {
   run?: ProviderRunUsage | null;
   /** False for a call that never started — a reused run charges nothing new. */
   started?: boolean;
+  /**
+   * THIS CALL RE-READ A RUN SOMEBODY ELSE ALREADY BOUGHT.
+   *
+   * The only condition under which zero is a MEASURED answer rather than an
+   * absence of one. `started === false` alone cannot carry it: a provider that
+   * has no run ids at all — Firecrawl's `/scrape` is synchronous and returns
+   * none — reports `started: false` on every failure, and was priced as a free
+   * adoption on that basis.
+   */
+  adopted?: boolean;
 }
 
 /**
@@ -156,7 +166,23 @@ export function priceProviderCall(i: PriceProviderCallInput): ExecutionCost {
   // questions. The run was bought once, by the row that started it; re-reading
   // its dataset is free. Zero is not a rounding of a small number here — it is
   // the correct answer.
-  if (i.started === false) {
+  //
+  // ── AND "NOT STARTED" IS NOT THE SAME AS "ADOPTED" ──────────────────────
+  //
+  // This test read `started === false` alone, which is true of an adopted run
+  // AND of a provider that has no run ids to report. Firecrawl's `/scrape` is
+  // synchronous and returns none, so `started: runId !== null` was false on
+  // every failed scrape and 39 failed Firecrawl calls were recorded as
+  // `event_priced` at exactly $0.00 — the ledger asserting, on its highest
+  // provenance grade short of the provider's own figure, that a failed call
+  // was free.
+  //
+  // `modelCostModel` already states the rule one layer over: "NO USAGE
+  // REPORTED IS NOT A FREE CALL... during an outage every row would read as a
+  // priced, free call and the bill would look untouched while nothing worked."
+  // The same rule belongs here. Without a positive adoption signal the honest
+  // answer falls through to the card, and to `unknown` when there is no card.
+  if (i.started === false && i.adopted === true) {
     return { actual_usd: null, estimated_usd: 0, source: "event_priced" };
   }
 
