@@ -414,7 +414,38 @@ export function decideNextRound(
 export function finalTerminalReason(
   state: MultiRoundState, decision: RoundDecision,
 ): MultiRoundTerminalReason {
-  if (state.delivered_opportunity_count >= state.requested_opportunity_count) {
+  // ── NOTHING QUALIFIED IS NOT A COMPLETED REQUEST ────────────────────────
+  //
+  // THE RUN THIS EXISTS FOR. Lineage 4ef85feb, 2026-09-05, one second apart:
+  //
+  //   [multi-round][complete] { requested: 5, delivered: 5, qualified: 0,
+  //                             review: 10, shortfall: 0 }
+  //   [multi-round] round_loop_stop { terminal_reason: "completed",
+  //                                   detail: "delivered 5 of 5 requested" }
+  //   [trace] outcome: 0 of 5 qualified — execution_deadline_checkpoint
+  //
+  // Two subsystems reached opposite conclusions about the same run in the same
+  // second. `eligibleForDelivery` admits `review` rows on purpose — an
+  // undecided company is still an opportunity worth showing — so ten reviews
+  // filled a five-row delivery window, `remaining_shortfall` went to zero, and
+  // the ending was recorded as success on a run that qualified nobody.
+  //
+  // This file's own contract is the rule being enforced: "`completed` means the
+  // requested number was actually reached... so a shortfall is never dressed up
+  // as success." A window filled entirely with undecided companies has not
+  // reached what the user asked for.
+  //
+  // DELIBERATELY THE ZERO CASE ONLY. A run that qualified four and delivered a
+  // fifth as review HAS produced leads, and calling that `quota_not_met` would
+  // be its own dishonesty. Only "we decided nothing" is refused here.
+  //
+  // LABELLING, NOT BEHAVIOUR. `decideNextRound` has already returned
+  // `start: false` before this is called — the loop is over either way, and no
+  // extra round and no extra spend follows from this rename.
+  if (
+    state.delivered_opportunity_count >= state.requested_opportunity_count &&
+    state.qualified_count > 0
+  ) {
     return "completed";
   }
   return decision.terminal_reason && decision.terminal_reason !== "completed"
