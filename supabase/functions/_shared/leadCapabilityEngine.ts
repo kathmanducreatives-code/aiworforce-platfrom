@@ -3367,7 +3367,44 @@ export async function runCapabilityPlan(
     //
     // `checkpointSnapshot` takes both halves together and says whether the
     // result is coherent. AWAITED, because the write it drives must land.
-    await deps.onCheckpoint?.(checkpointSnapshot(state, companies));
+    // ── WHAT THE CHECKPOINT ACTUALLY CARRIES, AT THE MOMENT IT IS WRITTEN ──
+    //
+    // OBSERVABILITY ONLY. Nothing here changes what is published.
+    //
+    // On lineage 4ef85feb the enrichment gate re-bought the same ten companies
+    // three times. Identity resolution grew 40 -> 46 -> 51 while enrichment
+    // selected 12 -> 18 -> 23, so the "already enriched" baseline sat frozen at
+    // exactly 28 across three slices and then jumped to 51 at the end. Every
+    // component tests correct in isolation — `restoreWorkingSet` restores the
+    // payload from a real record, `toResumeRecord` round-trips it, no checkpoint
+    // was refused as incoherent, no write errored, and no two `run-agent` slices
+    // ran concurrently. The effect is visible and the mechanism is not.
+    //
+    // The gap is that nothing records what the checkpoint HELD at write time.
+    // `companies_enriched` goes to `onProgress`, which logs nothing, and the
+    // checkpoint is overwritten in place so the history is gone. These two
+    // counts are the whole question:
+    //
+    //   in_memory  — companies the engine believes it has enriched
+    //   in_records — companies whose resume record actually carries the payload
+    //
+    // They should be equal. If they diverge, the loss is in `toResumeRecord`.
+    // If they agree here and the next slice restores fewer, the loss is in the
+    // write or the read, and the next run says which.
+    const snap = checkpointSnapshot(state, companies);
+    log("checkpoint_published", {
+      stage,
+      companies: companies.length,
+      enriched_in_memory: companies.filter((c) => c.enriched !== null).length,
+      enriched_in_records: snap.resume_records.filter((r) => {
+        const e = (r.snapshot as { enriched?: unknown } | null | undefined)?.enriched;
+        return e !== null && e !== undefined;
+      }).length,
+      identity_actionable: companies.filter(
+        (c) => c.identity && identityIsActionable(c.identity)).length,
+      coherent: snap.coherent,
+    });
+    await deps.onCheckpoint?.(snap);
   };
 
   const finish = (
