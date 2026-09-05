@@ -20,6 +20,7 @@
 // Pure apart from the injected facade. No provider import, no network.
 
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
+import type { GptDeps } from "./gptProvider.ts";
 import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import { DEFAULT_LEAD_INTELLIGENCE_MODEL } from "./leadIntelligenceModel.ts";
@@ -100,6 +101,14 @@ export interface BuildTriageBindingInput {
   read?: EnvReader;
   /** Injected in tests. Production uses the configured strategist adapter. */
   generate?: GenerateJsonFn;
+  /**
+   * WHERE A MODEL CALL IS RECORDED.
+   *
+   * Passed in rather than read from anywhere ambient, so the workspace and task
+   * a row is attributed to are the ones this binding was built for — the same
+   * rule `leadMissionCompilerBinding` states.
+   */
+  onModelCall?: GptDeps["onModelCall"];
   /** Candidates expected, so the batch allowance is never larger than the work. */
   poolSize?: number;
   /**
@@ -168,7 +177,8 @@ export function buildMissionTriageBinding(
     requested_count: input.requestedCount ?? undefined,
     pool_size: input.poolSize ?? undefined,
   });
-  const generate = input.generate ?? createGptStrategistGenerateJson({}, {
+  const generate = input.generate ??
+    createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, {
     // THE ROUTER'S MODEL AND EFFORT. Both these stages run on Luna at effort
     // `none`: they read evidence already paid for, and an undecidable verdict
     // degrades to a defined outcome rather than escalating — so a second model

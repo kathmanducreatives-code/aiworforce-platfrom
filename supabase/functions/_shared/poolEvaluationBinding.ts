@@ -26,6 +26,7 @@
 
 import { routeModel } from "./gptModelRouter.ts";
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
+import type { GptDeps } from "./gptProvider.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
   buildBatchPayload, evaluateBatchResponse, resolveBatchLimits,
@@ -168,6 +169,14 @@ export function buildPoolBinding(input: {
   workspaceId: string;
   read?: EnvReader;
   generate?: GenerateJsonFn;
+  /**
+   * WHERE A MODEL CALL IS RECORDED.
+   *
+   * Passed in rather than read from anywhere ambient, so the workspace and task
+   * a row is attributed to are the ones this binding was built for — the same
+   * rule `leadMissionCompilerBinding` states.
+   */
+  onModelCall?: GptDeps["onModelCall"];
   originalUserQuery: string | null;
   missionDirectives?: Record<string, unknown> | null;
   groundingThreshold?: number;
@@ -189,7 +198,8 @@ export function buildPoolBinding(input: {
   // model id below is retained ONLY as a diagnostic of what the legacy env var
   // asked for; it no longer selects anything. See gptStrategistModel.ts for why
   // no JSON schema is sent here.
-  const generate = input.generate ?? createGptStrategistGenerateJson({}, (() => {
+  const generate = input.generate ??
+    createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {
     // ROUTED, LIKE EVERY OTHER STAGE. This passed nothing, so it inherited the
     // `reasoning` tier and silently resolved to gpt-4.1 — a model choice made
     // by omission, invisible in the cost trace, for batch qualification.

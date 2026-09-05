@@ -37,6 +37,7 @@
 
 import { routeModel } from "./gptModelRouter.ts";
 import { createGptStrategistGenerateJson } from "./gptStrategistModel.ts";
+import type { GptDeps } from "./gptProvider.ts";
 import type { GenerateJsonFn } from "./intelligence/plannerWrapper.ts";
 import {
   buildGroundedClassifierPayload, parseGroundedResult, verifyGroundedResult,
@@ -133,6 +134,14 @@ export interface BuildGroundedBindingInput {
   read?: EnvReader;
   /** Injected in tests. Production uses the configured strategist adapter. */
   generate?: GenerateJsonFn;
+  /**
+   * WHERE A MODEL CALL IS RECORDED.
+   *
+   * Passed in rather than read from anywhere ambient, so the workspace and task
+   * a row is attributed to are the ones this binding was built for — the same
+   * rule `leadMissionCompilerBinding` states.
+   */
+  onModelCall?: GptDeps["onModelCall"];
   originalUserQuery: string | null;
   missionDirectives?: Record<string, unknown> | null;
   /** Reuses the EXISTING classification allowance. Never adds to it. */
@@ -159,7 +168,8 @@ export function buildGroundedBrainBinding(
   // The legacy model id is retained only as a diagnostic of what the old env
   // asked for; it no longer selects anything. No JSON schema is sent — see
   // gptStrategistModel.ts: `plannerWrapper` already owns these shapes.
-  const generate = input.generate ?? createGptStrategistGenerateJson({}, (() => {
+  const generate = input.generate ??
+    createGptStrategistGenerateJson({ onModelCall: input.onModelCall }, (() => {
     // ROUTED, LIKE EVERY OTHER STAGE. This passed nothing, so it inherited the
     // `reasoning` tier and silently resolved to gpt-4.1 — a model choice made
     // by omission, invisible in the cost trace, for grounded evidence reading.

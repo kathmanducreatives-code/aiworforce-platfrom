@@ -63,7 +63,9 @@ import { adaptiveStrategyBinding, bridgeDiagnostics, claudeFirstFromPersistedPla
 import { createLeadOwnershipLedger, assertPlannerProvenance, describePlannerProvenance } from "../_shared/leadOwnership.ts";
 // Task-level funnel outcomes, recorded apart from provider calls so no Actor is
 // credited with numbers several calls produced.
-import { createLedgerWriter, recordStageResult } from "../_shared/executionLedger.ts";
+import {
+  createLedgerWriter, ModelCallCollector, recordStageResult,
+} from "../_shared/executionLedger.ts";
 import { selectLeadPlannerAdapter } from "../_shared/leadPlannerInterface.ts";
 import { loadAuthoritativeLeadPlan } from "../_shared/intelligence/leads/leadPlanAuthority.ts";
 // PR #108 — SEQUENTIAL execution of the validated ordered hiring-source plan.
@@ -2115,6 +2117,28 @@ Deno.serve(async (req) => {
           company_first_will_run: !resumeSatisfied,
         });
 
+        // ── WHAT THE MODELS COST THIS RUN ──────────────────────────────────
+        //
+        // `recordModelCall`, the `model_call` record kind, its CHECK constraints
+        // and its unit tests were all built and shipped — and the collector was
+        // wired into `pilot-chat` only. `run-agent` never passed the seam, so in
+        // the ten days to 2026-09-04 the ledger held exactly ONE `model_call`
+        // row, from a pilot path, against 1277 provider rows. Every lead
+        // mission's model spend — triage, evaluation, discovery and execution
+        // planning, pool and round planning, evidence planning and extraction,
+        // and the P4 re-evaluation — was unrecorded. A run could be audited for
+        // Apify dollars to the cent and still not say what the models cost.
+        //
+        // Declared HERE because this is the outermost point that reaches both
+        // the first binding below and the drain after the run; every factory in
+        // between takes the same `onModelCall` seam.
+        //
+        // COLLECT NOW, WRITE LATER — the same rule `pilot-chat` states. The sink
+        // is synchronous and cannot fail, so nothing on the paid path can be
+        // slowed or broken by bookkeeping; the drain is awaited once, at the end,
+        // inside the ledger's existing try block.
+        const modelCalls = new ModelCallCollector();
+
         // SEMANTIC CLASSIFICATION BINDING. Constructed here rather than further
         // down because the capability engine is what consults it: an UNKNOWN
         // Company Brain verdict is resolved, not rejected, and this is the thing
@@ -2122,6 +2146,7 @@ Deno.serve(async (req) => {
         // and the workspace allow-list must pass.
         const classificationBinding = buildSemanticClassificationBinding({
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
           requestedLeadCount: quota.requestedLeadCount,
         });
 
@@ -2158,6 +2183,7 @@ Deno.serve(async (req) => {
         const modelRouting = new ModelRoutingLedger();
         const missionEvaluationBinding = buildMissionEvaluationBinding({
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
           requestedCount: quota.requestedLeadCount,
           shortlistSize: resolveInvestigationBudget({
             requestedCount: quota.requestedLeadCount,
@@ -2189,6 +2215,7 @@ Deno.serve(async (req) => {
         // prequalification verdict stands exactly as it does today.
         const triageBinding = buildMissionTriageBinding({
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
           poolSize: Math.max(10, quota.requestedLeadCount * 10),
           // THE ROUTER'S SIGNAL. Triage is the same work at any quota; what the
           // quota changes is whether a misordering costs a position or a lead.
@@ -2212,6 +2239,7 @@ Deno.serve(async (req) => {
         // was already permitted to.
         const groundedBinding = buildGroundedBrainBinding({
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
           originalUserQuery: persistedMission?.original_user_query ?? null,
           missionDirectives: persistedMission?.directives
             ? {
@@ -2234,6 +2262,7 @@ Deno.serve(async (req) => {
         // and the engine keeps the per-company path exactly as it was.
         const poolBinding = buildPoolBinding({
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
           originalUserQuery: persistedMission?.original_user_query ?? null,
           missionDirectives: (persistedMission?.directives ?? null) as never,
         });
@@ -2278,7 +2307,10 @@ Deno.serve(async (req) => {
           contract: contractCheck,
         });
 
-        const multiRoundBinding = buildMultiRoundBinding({ workspaceId: workspace_id });
+        const multiRoundBinding = buildMultiRoundBinding({
+          workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
+        });
         let multiRoundSummary:
           ReturnType<typeof roundSummaryForWorkbench> | null = null;
         console.log("[run-agent][stage4][binding]", {
@@ -2742,6 +2774,7 @@ Deno.serve(async (req) => {
               // `mergeCompanyBrainIntoMission` enforces on the mission itself.
               planDiscovery: makeGptDiscoveryPlanner({
                 readEnv: readEnvSafe,
+                onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
               }, {
                 brain: {
@@ -2772,6 +2805,7 @@ Deno.serve(async (req) => {
               // the sequence this system ran before chains existed.
               planExecution: makeGptExecutionPlanner({
                 readEnv: readEnvSafe,
+                onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-execution-plan] ${m}`, meta ?? ""),
               }, {
                 brain: {
@@ -3960,14 +3994,14 @@ Deno.serve(async (req) => {
                 if (evidenceMode === "execute" && report.debts.length > 0) {
                   const planRoute = routeModel("evidence_planning");
                   const extractRoute = routeModel("evidence_extraction");
-                  const planGen = createGptStrategistGenerateJson({}, {
+                  const planGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {
                     model: planRoute.model,
                     reasoningEffort: planRoute.reasoning_effort,
                     tier: planRoute.tier,
                     purpose: planRoute.stage,
                     reason: planRoute.reason,
                   });
-                  const extractGen = createGptStrategistGenerateJson({}, {
+                  const extractGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {
                     model: extractRoute.model,
                     reasoningEffort: extractRoute.reasoning_effort,
                     tier: extractRoute.tier,
@@ -4096,7 +4130,7 @@ Deno.serve(async (req) => {
                 const reevalCtx = engineRun?.reevaluation_context ?? null;
                 if (reevalCtx && evidenceMode === "execute") {
                   const reevalRoute = routeModel("mission_evaluation");
-                  const reevalGen = createGptStrategistGenerateJson({}, {
+                  const reevalGen = createGptStrategistGenerateJson({ onModelCall: modelCalls.sink }, {
                     model: reevalRoute.model,
                     reasoningEffort: reevalRoute.reasoning_effort,
                     tier: reevalRoute.tier,
@@ -6031,6 +6065,31 @@ Deno.serve(async (req) => {
             reason: "unspecified" as const,
             ...own,
           };
+
+          // ── AND THE MODELS ENTER THE LEDGER ──────────────────────────────
+          //
+          // Drained here, inside the block that already writes this run's stage
+          // results: the writer, workspace, task and plan are all in hand, and a
+          // ledger failure is already swallowed after logging — bookkeeping must
+          // never fail a run it is only describing.
+          //
+          // AFTER every model call this slice can make, including the evidence
+          // planner, the extractor and the P4 re-evaluation, which all run later
+          // than the engine itself.
+          //
+          // The collector clears itself before writing, so a partial drain
+          // cannot double-write on a later call: `lead_execution_calls` has no
+          // uniqueness constraint that would catch a duplicate, and a
+          // double-counted model call is a wrong bill rather than a loud error.
+          const modelRowsWritten = await modelCalls.drain(ledger, {
+            workspace_id, task_id: task.id, plan_id: plan_id ?? null,
+            logical_call_key: `${task.id}:model`,
+          });
+          if (modelRowsWritten > 0) {
+            console.log("[run-agent][model-ledger]", {
+              task_id: task.id, rows: modelRowsWritten,
+            });
+          }
           await recordStageResult(ledger, {
             ...base,
             stage: "company_discovery",
