@@ -13,6 +13,7 @@ import {
   type MissionEvaluation,
 } from "../supabase/functions/_shared/missionEvaluation.ts";
 import { buildEvidenceRegistry } from "../supabase/functions/_shared/leadEvidenceRegistry.ts";
+import { selectCompanyPages } from "../supabase/functions/_shared/webEvidenceSelection.ts";
 import { buildCompanyEvidence } from "../supabase/functions/_shared/leadCompanyEvidence.ts";
 import { createGptStrategistGenerateJson } from "../supabase/functions/_shared/gptStrategistModel.ts";
 import { routeModel } from "../supabase/functions/_shared/gptModelRouter.ts";
@@ -27,6 +28,14 @@ const fx = JSON.parse(await Deno.readTextFile(Deno.args[0])) as {
 const call = Deno.args.includes("--call");
 
 // ── EXACTLY what run-agent/index.ts does today ────────────────────────────
+// ── WHAT PRODUCTION NOW SHOWS THE MODEL ───────────────────────────────────
+const selection = selectCompanyPages(fx.pages);
+console.log(`  selection    : ${selection.chars_in} -> ${selection.chars_out} chars, ` +
+  `${selection.pages.length}/${fx.pages.length} pages, ` +
+  `${selection.duplicate_blocks} duplicate blocks`);
+for (const d of selection.dropped) console.log("      dropped:", d.reason, d.source_url);
+fx.pages = selection.pages as typeof fx.pages;
+
 // The DECLARED field names — `identity_state` and `commercial_jobs`, not
 // `identity` and `jobs`. The production path now reaches the engine's own
 // builder; this mirrors what that builder is given.

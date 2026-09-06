@@ -154,14 +154,18 @@ Deno.test("2. a page that arrives since is a new question", async () => {
 
 // ══════════ 3. the key is about the pages, and nothing else ═══════════════
 
-Deno.test("3. the key is order-independent and page-derived", () => {
-  const a = reevaluationOperationKey([{ source_url: "b" }, { source_url: "a" }]);
-  const b = reevaluationOperationKey([{ source_url: "a" }, { source_url: "b" }]);
-  const dup = reevaluationOperationKey([{ source_url: "a" }, { source_url: "a" },
-    { source_url: "b" }]);
+Deno.test("3. the key is order-independent and derived from what is SHOWN", () => {
+  const P = (u: string, t = "text of " + u) => ({ source_url: u, source_text: t });
+  const a = reevaluationOperationKey([P("b"), P("a")]);
+  const b = reevaluationOperationKey([P("a"), P("b")]);
+  const dup = reevaluationOperationKey([P("a"), P("a"), P("b")]);
   assertEquals(a, b, "the order pages come back in is not information");
   assertEquals(a, dup, "nor is the same page listed twice");
-  assert(a !== reevaluationOperationKey([{ source_url: "a" }]));
+  assert(a !== reevaluationOperationKey([P("a")]));
+  // The TEXT is part of the question. A page whose content changed — or whose
+  // selection changed — has not been asked about yet.
+  assert(a !== reevaluationOperationKey([P("b", "new copy"), P("a")]),
+    "sealing on the URL alone would hold a question asked of different text");
   assert(a.startsWith("web_evidence_reevaluation:"),
     "it shares the namespace of every other completed operation");
 });
@@ -231,4 +235,64 @@ Deno.test("6. a model call that THREW records nothing and is retried", async () 
   const again = await reevaluateWithWebEvidence([candidate()], deps(calls));
   assertEquals(calls.n, 1);
   assert(again.outcomes[0].operation_key);
+});
+
+// ══════════ 7. an unusable answer buys exactly one more attempt ═══════════
+
+Deno.test("7. an UNUSABLE response is retried once, then sealed", async () => {
+  // Not an outage: the call returned. It returned something the strict parser
+  // cannot use, which is neither an answer nor a reason to ask for ever.
+  const junk = () => Promise.resolve({ nothing: "the parser can use" });
+  let attempts = 0;
+  const ledger: string[] = [];
+
+  const run = async () => {
+    const r = await reevaluateWithWebEvidence(
+      [candidate({ completed_operations: [...ledger] })],
+      { ...deps({ n: 0 }), reevaluate: () => { attempts++; return junk(); } },
+    );
+    const k = r.outcomes[0].operation_key;
+    if (k) ledger.push(k);
+    return r;
+  };
+
+  const first = await run();
+  assertEquals(attempts, 1);
+  assert(first.outcomes[0].operation_key!.startsWith("web_evidence_reevaluation_attempt:"),
+    "the first unusable answer records an ATTEMPT, not a seal");
+
+  const second = await run();
+  assertEquals(attempts, 2, "and buys exactly one more call");
+  assert(second.outcomes[0].operation_key!.startsWith("web_evidence_reevaluation:"),
+    "the second unusable answer seals it");
+
+  // A third slice must buy nothing. This is the bound.
+  const third = await run();
+  assertEquals(attempts, 2, "two calls per evidence state, ever");
+  assertEquals(third.skip_counts["no_new_evidence"], 1);
+
+  // ...and a page arriving still reopens it, because the seal is on the
+  // evidence, not on the company.
+  const more = [...PAGES, {
+    source_url: "https://metaview.ai/customers", page_intent: "customers",
+    source_text: "Trusted by teams at Ramp and Brex.", status: "ok",
+    fetched_at: new Date().toISOString(),
+  }];
+  await reevaluateWithWebEvidence(
+    [candidate({ completed_operations: [...ledger] })],
+    { ...deps({ n: 0 }, more), reevaluate: () => { attempts++; return junk(); } },
+  );
+  assertEquals(attempts, 3, "new evidence is a new question, with its own two attempts");
+});
+
+Deno.test("8. a USABLE answer seals immediately, with no retry", async () => {
+  const calls = { n: 0 };
+  const r = await reevaluateWithWebEvidence([candidate()], deps(calls));
+  assert(r.outcomes[0].operation_key!.startsWith("web_evidence_reevaluation:"),
+    "an answer the parser could use is not owed a second attempt");
+  const again = await reevaluateWithWebEvidence(
+    [candidate({ completed_operations: [r.outcomes[0].operation_key!] })], deps(calls),
+  );
+  assertEquals(calls.n, 1);
+  assertEquals(again.skip_counts["no_new_evidence"], 1);
 });

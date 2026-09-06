@@ -29,6 +29,7 @@ import {
   type MissionEvaluationInput,
 } from "./missionEvaluation.ts";
 import { readFreshPages } from "./webEvidenceStore.ts";
+import { selectCompanyPages } from "./webEvidenceSelection.ts";
 import { fingerprint, type EvidenceRegistry } from "./leadEvidenceRegistry.ts";
 
 /**
@@ -62,10 +63,44 @@ import { fingerprint, type EvidenceRegistry } from "./leadEvidenceRegistry.ts";
  * information.
  */
 export function reevaluationOperationKey(
-  pages: ReadonlyArray<{ source_url: string }>,
+  pages: ReadonlyArray<{ source_url: string; source_text?: string }>,
 ): string {
-  const urls = [...new Set(pages.map((p) => p.source_url))].sort();
-  return `web_evidence_reevaluation:${fingerprint(urls)}`;
+  // ── THE TEXT, NOT ONLY THE URL ──────────────────────────────────────────
+  //
+  // The key seals "this evidence, already asked about". Keying on URLs alone
+  // sealed "these addresses", so a page re-fetched with new content — or the
+  // same page newly made legible by `selectCompanyPages` — stayed sealed
+  // behind a question that had been asked of different text. A company is
+  // asked again when what it would be shown has changed, and not otherwise.
+  const parts = [...new Set(
+    pages.map((p) => `${p.source_url}\u0000${fingerprint([p.source_text ?? ""])}`),
+  )].sort();
+  return `web_evidence_reevaluation:${fingerprint(parts)}`;
+}
+
+/**
+ * ONE RETRY, AND ONLY ONE, WHEN THE MODEL ANSWERS UNUSABLY.
+ *
+ * ── WHY A SECOND KEY AND NOT A COUNTER ─────────────────────────────────────
+ *
+ * A response that fails `parseMissionEvaluationStrict` outright is neither an
+ * outage nor an answer. Sealing it would lose a company to one bad
+ * deserialization until a new page arrives; retrying it freely would restore
+ * the thirty-seven-call pathology through a different door.
+ *
+ * So the FIRST unusable answer records this marker instead of the seal, and
+ * the second records the seal. Two calls per evidence state, ever.
+ *
+ * A marker rather than a number because `completed_operations` is a set of
+ * strings the checkpoint already carries — a counter would need a new field on
+ * the resume record, and an in-memory one would reset on the next slice, which
+ * is precisely the boundary this has to survive.
+ */
+export function reevaluationAttemptKey(
+  pages: ReadonlyArray<{ source_url: string; source_text?: string }>,
+): string {
+  return reevaluationOperationKey(pages)
+    .replace("web_evidence_reevaluation:", "web_evidence_reevaluation_attempt:");
 }
 
 export type ReevalSkipReason =
@@ -229,7 +264,7 @@ export async function reevaluateWithWebEvidence(
 
     // A `not_found` row records that we asked and the page is absent. It stops a
     // fetch; it is not something the evaluator can read.
-    const pages = [...cached.values()]
+    const fetched = [...cached.values()]
       .filter((p) => p.status === "ok" && p.source_text.trim().length > 0)
       .map((p) => ({
         source_url: p.source_url,
@@ -237,6 +272,25 @@ export async function reevaluateWithWebEvidence(
         source_text: p.source_text,
         fetched_at: p.fetched_at,
       }));
+
+    // ── WHAT OF THESE PAGES IS ACTUALLY EVIDENCE ──────────────────────────
+    //
+    // Applied HERE, on rows already bought, so every page in the store gets
+    // the benefit without a single re-fetch. Half of a stored page is markdown
+    // markup and a site's siblings repeat each other; `selectCompanyPages`
+    // removes both and bounds what is left. Nothing is rewritten, so a quote
+    // is still a substring of what the site published.
+    const selected = selectCompanyPages(fetched);
+    const pages = selected.pages;
+    if (selected.dropped.length > 0 || selected.chars_out < selected.chars_in) {
+      log("reeval-page-selection", {
+        company: c.company_name,
+        fetched: fetched.length, shown: pages.length,
+        chars_in: selected.chars_in, chars_out: selected.chars_out,
+        duplicate_blocks: selected.duplicate_blocks,
+        dropped: selected.dropped,
+      });
+    }
 
     if (pages.length === 0) { skip(c, "no_cached_evidence"); continue; }
 
@@ -262,6 +316,10 @@ export async function reevaluateWithWebEvidence(
       skip(c, "no_new_evidence");
       continue;
     }
+    // Present only when a previous slice got an unusable answer to this exact
+    // evidence. It buys ONE more call, never a third.
+    const attemptKey = reevaluationAttemptKey(pages);
+    const retryUsed = c.completed_operations?.includes(attemptKey) ?? false;
 
     const registry = deps.rebuildRegistry(c.key, pages);
     const payload = buildMissionReevaluationInput({
@@ -322,7 +380,11 @@ export async function reevaluateWithWebEvidence(
       still_open: merged.unknown_fields,
       carried,
       merged,
-      operation_key: operationKey,
+      // An unusable answer records the attempt marker the first time and the
+      // seal the second. Anything the parser could use seals immediately.
+      operation_key: parsed.parse_status === "invalid_insufficient_evidence"
+        ? (retryUsed ? operationKey : attemptKey)
+        : operationKey,
       pages_used: pages.length,
       dropped_citations: parsed.raw_shape.dropped_citations.length,
     });
@@ -333,6 +395,12 @@ export async function reevaluateWithWebEvidence(
       resolved, still_open: merged.unknown_fields,
       carried: carried.length, pages: pages.length,
       dropped_citations: parsed.raw_shape.dropped_citations.length,
+      parse_status: parsed.parse_status,
+      // "retry_pending" is the one state worth seeing in a log: an unusable
+      // answer that has bought itself exactly one more attempt.
+      seal: parsed.parse_status === "invalid_insufficient_evidence"
+        ? (retryUsed ? "sealed_after_retry" : "retry_pending")
+        : "sealed",
     });
 
     // The caller owns persistence AND application: this module decides, and

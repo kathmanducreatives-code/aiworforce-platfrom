@@ -23,6 +23,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canonicalJson, sha256Hex } from "./providerInputFingerprint.ts";
 import type { PageIntent, WebEvidencePage } from "./evidenceRequest.ts";
+import { pageProse } from "./webEvidenceSelection.ts";
 
 export const WEB_EVIDENCE_TABLE = "company_web_evidence";
 
@@ -95,7 +96,17 @@ export function toStoredRows(i: {
   pages: readonly WebEvidencePage[];
 }): StoredWebEvidenceRow[] {
   return i.pages.map((p) => {
-    const text = p.markdown.slice(0, MAX_STORED_TEXT);
+    // ── THE CAP IS SPENT ON PROSE, NOT ON URLs ──────────────────────────
+    //
+    // This sliced the raw markdown, and across the 27 pages already in the
+    // store FORTY-NINE PER CENT of what that kept was markup: image embeds,
+    // link targets, base64 placeholders. Hebbia's homepage spent 6,000 stored
+    // characters to carry 1,338 of text. Stripping first does not store more —
+    // it stores about twice the readable page inside the same bound.
+    //
+    // `pageProse` is idempotent, so a row written here and selected again on
+    // the read path is not stripped twice.
+    const text = pageProse(p.markdown).slice(0, MAX_STORED_TEXT);
     return {
       workspace_id: i.workspace_id,
       company_key: i.company_key,
