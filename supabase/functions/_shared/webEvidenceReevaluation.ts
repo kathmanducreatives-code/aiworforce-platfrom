@@ -214,7 +214,24 @@ export async function reevaluateWithWebEvidence(
     // model was shown — so a citation to an evidence_id that is not there is
     // dropped here exactly as it would have been on the first pass.
     const parsed = parseMissionEvaluationStrict(raw, registry);
-    const merged = mergeReevaluation(prior, parsed.evaluation);
+    // ── WHICH EVIDENCE IS ACTUALLY NEW ──────────────────────────────────
+    //
+    // The first pass's registry is the reference. A requirement it left open
+    // cannot close on an item it already had — that is a re-reading, not new
+    // evidence. With no prior registry there is nothing to compare against, so
+    // nothing is held back on this ground.
+    const priorIds = c.evidence_registry
+      ? new Set(c.evidence_registry.items.map((it) => it.evidence_id))
+      : null;
+    const pageIntentFor = (id: string): string | null => {
+      const it = registry.items.find((x) => x.evidence_id === id);
+      const pi = (it?.metadata ?? {})["page_intent"];
+      return typeof pi === "string" ? pi : null;
+    };
+    const merged = mergeReevaluation(
+      prior, parsed.evaluation, pageIntentFor,
+      priorIds ? (id: string) => !priorIds.has(id) : undefined,
+    );
 
     const resolved = prior.unknown_fields.filter((u) =>
       !merged.unknown_fields.includes(u)

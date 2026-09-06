@@ -140,8 +140,7 @@ import { reevaluateWithWebEvidence } from "../_shared/webEvidenceReevaluation.ts
 import {
   evaluationInputFromContext, MISSION_REEVALUATION_PROMPT,
 } from "../_shared/missionEvaluation.ts";
-import { buildEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
-import { buildCompanyEvidence } from "../_shared/leadCompanyEvidence.ts";
+import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import {
   readFreshPages, readResearchedRequirements,
@@ -4177,22 +4176,23 @@ Deno.serve(async (req) => {
                       reevaluate: (payload) =>
                         callJson(reevalGen, MISSION_REEVALUATION_PROMPT, payload),
                       // The registry REBUILT with the cached pages folded in.
-                      // The company's own facts come from the same builder the
-                      // first pass used, so a re-evaluation never sees a
-                      // narrower company than the evaluation it revises.
-                      rebuildRegistry: (companyKey, pages) => {
-                        const c = engineRun.companies.find((x) => x.key === companyKey);
-                        return buildEvidenceRegistry({
-                          evidence: buildCompanyEvidence({
-                            company: (c?.enriched ?? c?.company)!,
-                            company_key: companyKey,
-                            identity: c?.identity ?? null,
-                            jobs: c?.hiring_jobs ?? [],
-                          } as never),
-                          jobs: c?.hiring_jobs ?? [],
-                          web_pages: pages,
-                        });
-                      },
+                      //
+                      // The ENGINE'S OWN BUILDER, not a copy of it. This used
+                      // to assemble its own `buildCompanyEvidence` call behind
+                      // an `as never`, and the cast hid that it passed
+                      // `identity` where the builder declares `identity_state`
+                      // and `jobs` where it declares `commercial_jobs`. The
+                      // second look was handed a company with no commercial job
+                      // evidence, no strongest signal, no funding round, no
+                      // news evidence, no provider failures, and
+                      // `identity_state: "not_attempted"` for an identity the
+                      // first pass had verified.
+                      //
+                      // `engineRun.rebuild_registry` is the same closure the
+                      // first pass evaluated against, so the two cannot drift.
+                      rebuildRegistry: (companyKey, pages) =>
+                        engineRun.rebuild_registry(companyKey, pages) ??
+                          emptyEvidenceRegistry(companyKey),
                       log: (event, meta) =>
                         console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
                     },

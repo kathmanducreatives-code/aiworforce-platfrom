@@ -53,7 +53,8 @@
 
 import type { QualificationContext, BrainAuthority } from "./missionQualificationContext.ts";
 import {
-  findEvidence, hardFactsForPrompt, registryForPrompt, type EvidenceRegistry,
+  findEvidence, hardFactsForPrompt, registryForPrompt,
+  type EvidenceItem, type EvidenceRegistry,
 } from "./leadEvidenceRegistry.ts";
 
 export const MISSION_EVALUATION_VERSION = "mission-evaluation-v1" as const;
@@ -428,6 +429,26 @@ export function buildMissionEvaluationInput(i: {
  * managed cybersecurity; "Software Development" is not B2B SaaS. This holds for
  * every category and every requirement, which is why it is stated as a rule
  * about EVIDENCE KINDS rather than as a list of phrases.
+ *
+ * ── AND WHAT DOES ESTABLISH ONE ────────────────────────────────────────────
+ *
+ * When the two prohibitions above were promoted from the re-evaluation prompt
+ * to this shared policy, the affirmative half of that prompt was not promoted
+ * with them. The re-evaluator kept "never widen a requirement" and "a category
+ * is not a business model" and LOST "the company's own page states it, or a
+ * structural fact entails it".
+ *
+ * A policy that says only what is forbidden has one answer for everything.
+ * Replaying lineage ab06540f's own payloads against its own cached pages,
+ * Metaview cited a web page in 0 of 3 runs and resolved nothing; with the
+ * affirmative half restored it cited one in 3 of 3 and qualified in 2. Its
+ * pricing page has said "$100 monthly per user" throughout. Nothing about the
+ * evidence changed — only whether the evaluator had been told that a fact can
+ * carry a requirement the page never words for it.
+ *
+ * That is why both halves live here. The bar is not "does a page repeat the
+ * Mission's wording", which no page ever does; it is "does a fact on the
+ * company's own page carry the Mission's requirement as worded".
  */
 export const EVIDENCE_POLICY: string = [
   "THE REQUIREMENT IS THE MISSION'S, NOT YOURS. State each requirement as the",
@@ -441,6 +462,23 @@ export const EVIDENCE_POLICY: string = [
   "customers are, how the product is sold, or what the business model is. That",
   "inference is forbidden however plausible it looks, for every category and",
   "every requirement.",
+  "",
+  "WHAT CAN ESTABLISH A REQUIREMENT. Evidence settles one when:",
+  "- the company says it, in its own words, on its own page; OR",
+  "- a fact on that page ENTAILS it — recurring per-seat or per-month pricing",
+  "  entails a subscription product; a plan priced for teams, seats or",
+  "  enterprises entails business customers; a named office address entails",
+  "  presence in that place; a posted opening entails hiring for that role; OR",
+  "- TWO INDEPENDENT facts, on two different pages, point the same way and",
+  "  nothing contradicts them.",
+  "An entailment is not a widening. The requirement stays worded exactly as the",
+  "Mission words it; what changes is only which fact you cite as carrying it. A",
+  "requirement is not unsettled merely because no page repeats its wording back",
+  "to you — pages state facts, not categories.",
+  "",
+  "CONTRADICTED IS NOT UNRESOLVED. If a page shows the opposite of a",
+  "requirement, put it in failed_requirements with the citation. Never leave a",
+  "contradiction in unknown_fields, and never let one become a pass.",
   "",
   "HOW STRONG IS STRONG ENOUGH. Mark each matched requirement with \"support\":",
   "  \"verified\"  this one citation establishes the requirement by itself —",
@@ -634,6 +672,30 @@ export function mergeReevaluation(
   prior: MissionEvaluation, next: MissionEvaluation,
   /** Maps an evidence_id to its page, when the registry knows one. */
   pageIntentFor?: (evidenceId: string) => string | null,
+  /**
+   * Is this evidence something the FIRST pass did not have?
+   *
+   * ── WHY AN OPEN REQUIREMENT NEEDS NEW EVIDENCE TO CLOSE ──────────────────
+   *
+   * The second look exists because pages arrived. A requirement the first pass
+   * left open, closed on the second by citing an item the first pass ALREADY
+   * HELD, is not evidence arriving — it is the same evidence being read more
+   * generously the second time.
+   *
+   * Replaying lineage ab06540f's own payloads, InEvent's re-evaluator settled
+   * "Whether InEvent is specifically a B2B SaaS company" by quoting its
+   * LinkedIn profile description — "a platform for unforgettable B2B events" —
+   * which the first pass had in hand and had declined to treat as sufficient.
+   * Nothing about that company's evidence had changed since.
+   *
+   * This is the ordering the debt gate already assumes: structured evidence
+   * decides if it can, and web evidence is bought precisely because it could
+   * not. Mechanical, and blind to what any requirement says.
+   *
+   * Omitted when the caller cannot tell the two apart, in which case no
+   * requirement is held back on this ground.
+   */
+  isNewEvidence?: (evidenceId: string) => boolean,
 ): MissionEvaluation {
   const failedNow = new Set(next.failed_requirements.map((f) => f.requirement));
 
@@ -697,7 +759,12 @@ export function mergeReevaluation(
   // stripped from the record and cannot count toward closing the open list.
   const kept = matched.filter((m) => !insufficientNow.has(m.requirement));
 
-  const stillOpen = newlyCited.length === 0
+  // Only receipts resting on evidence the first pass did not have can close
+  // what the first pass left open. See `isNewEvidence`.
+  const onNewEvidence = isNewEvidence
+    ? newlyCited.filter((m) => isNewEvidence(m.evidence_id))
+    : newlyCited;
+  const stillOpen = onNewEvidence.length === 0
     ? [...prior.unknown_fields]
     : next.unknown_fields.filter((u) => !kept.some((m) => m.requirement === u));
 
@@ -752,10 +819,97 @@ function safeJson(s: string): unknown {
 /** Loose whitespace/case comparison — a quote is a quote, not a byte match. */
 function containsExcerpt(sourceText: string | null, excerpt: string): boolean {
   if (!sourceText) return false;
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-  const e = norm(excerpt);
+  const e = normalizeQuote(excerpt);
   // A one- or two-character "quote" proves nothing and would match everything.
-  return e.length >= 4 && norm(sourceText).includes(e);
+  return e.length >= 4 && normalizeQuote(sourceText).includes(e);
+}
+
+function normalizeQuote(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The shortest quote allowed to RELOCATE a citation.
+ *
+ * `containsExcerpt` accepts four characters, which is right for confirming a
+ * citation the model itself pointed at: it is checking a claim, not searching.
+ * A search is a different act. "AI" or "SaaS" occurs on most pages a company
+ * owns, so relocating on one would let the anchor pick a page rather than find
+ * one. Twelve characters is roughly a phrase, and a phrase is the shortest
+ * thing that identifies where it came from.
+ */
+const MIN_ANCHOR_LENGTH = 12;
+
+export type CitationAnchor =
+  | { item: EvidenceItem; outcome: "as_cited" | "repaired"; from: string }
+  | { item: null; outcome: "unknown_evidence_id" | "excerpt_not_in_source" | "ambiguous_excerpt" };
+
+/**
+ * ANCHOR A CITATION TO THE EVIDENCE THAT ACTUALLY CARRIES ITS QUOTE.
+ *
+ * ── THE GAP THIS CLOSES ────────────────────────────────────────────────────
+ *
+ * A citation is an id and a quote. The verifier used to trust the id to select
+ * the item and then check the quote against that item alone, so a real quote
+ * filed under the wrong sibling was destroyed rather than corrected.
+ *
+ * That is not a rare slip. Every page fetched from one company's site enters
+ * the registry as `web_page` with the same abstracted source, and on
+ * metaview.ai the homepage and the product page share their first 4,596
+ * characters of navigation and banner. Asked to cite one, the re-evaluator
+ * quoted the homepage tagline VERBATIM and named the pricing page's id. The
+ * quote was true, first-party, present in this company's own registry — and
+ * `excerpt_not_in_source` threw it away, leaving the requirement open on
+ * evidence that was sitting right there.
+ *
+ * ── WHY THIS DOES NOT LOWER THE BAR ────────────────────────────────────────
+ *
+ * The quote still has to be present VERBATIM, and the registry is built for
+ * ONE company — every item is filed under `evidence.company_key` — so nothing
+ * here can reach another company's evidence. What changes is only which item a
+ * surviving quote is attributed to.
+ *
+ * And a quote that identifies NOTHING still proves nothing. Shared navigation
+ * appears on all four of a site's pages; a quote matching more than one item
+ * does not say which page it came from, so it is dropped rather than assigned
+ * to an arbitrary one. That matters beyond attribution: `page_intent` is what
+ * `enforceReceiptSufficiency` uses to tell corroboration from one page quoted
+ * twice, and letting chrome resolve anywhere would let a site's header
+ * corroborate itself.
+ *
+ * Generic by construction: it compares text to text and knows nothing about
+ * requirements, categories or wording.
+ */
+export function anchorCitation(
+  registry: EvidenceRegistry, evidenceId: string, excerpt: string,
+): CitationAnchor {
+  const named = findEvidence(registry, evidenceId);
+  if (named && containsExcerpt(named.source_text, excerpt)) {
+    return { item: named, outcome: "as_cited", from: evidenceId };
+  }
+
+  // ── AN ID THIS REGISTRY DOES NOT HOLD IS STILL REFUSED OUTRIGHT ─────────
+  //
+  // Repair is for a citation that picked the wrong SIBLING, which is the error
+  // the projection actually provokes. An id that names nothing here was not
+  // mis-picked from a list; it was invented, or it belongs to another company.
+  // The id encodes its company, and that check is worth more than the one
+  // quote it occasionally costs — so it keeps its teeth.
+  if (!named) return { item: null, outcome: "unknown_evidence_id" };
+
+  const e = normalizeQuote(excerpt);
+  if (e.length < MIN_ANCHOR_LENGTH) {
+    return { item: null, outcome: "excerpt_not_in_source" };
+  }
+
+  const carriers = registry.items.filter((x) =>
+    typeof x.source_text === "string" && normalizeQuote(x.source_text).includes(e)
+  );
+  if (carriers.length === 1) {
+    return { item: carriers[0], outcome: "repaired", from: evidenceId };
+  }
+  if (carriers.length > 1) return { item: null, outcome: "ambiguous_excerpt" };
+  return { item: null, outcome: "excerpt_not_in_source" };
 }
 
 /**
@@ -838,17 +992,28 @@ export function parseMissionEvaluationStrict(
     const evidence_id = String(e.evidence_id ?? "").trim();
     const excerpt = String(e.excerpt ?? "").trim();
     if (!requirement || !evidence_id) { dropped.push(`incomplete:${requirement || "(unnamed)"}`); continue; }
-    const item = findEvidence(registry, evidence_id);
-    if (!item) { dropped.push(`unknown_evidence_id:${evidence_id}`); continue; }
-    if (!containsExcerpt(item.source_text, excerpt)) {
-      dropped.push(`excerpt_not_in_source:${evidence_id}`);
+    // The quote is the receipt; the id is only a pointer to it. A verbatim
+    // quote that this company's registry carries under a different item is
+    // re-anchored, not destroyed. See `anchorCitation`.
+    const anchored = anchorCitation(registry, evidence_id, excerpt);
+    if (anchored.item === null) {
+      dropped.push(`${anchored.outcome}:${evidence_id}`);
       continue;
+    }
+    const item = anchored.item;
+    if (anchored.outcome === "repaired") {
+      repaired.push(`citation:${evidence_id}->${item.evidence_id}`);
     }
     // The model's own admission of how strong this receipt is. Anything other
     // than the literal "supported" is `verified`, so a malformed or missing
     // value cannot quietly relax the two-citation rule.
     const support = e.support === "supported" ? "supported" as const : "verified" as const;
-    matched_requirements.push({ requirement, evidence_id, excerpt, support });
+    // `item.evidence_id`, not the model's — a receipt has to name the evidence
+    // a reviewer will actually open, and the page-distinctness rule below reads
+    // the page from this id.
+    matched_requirements.push({
+      requirement, evidence_id: item.evidence_id, excerpt, support,
+    });
   }
 
   // ── ONE BAR, ENFORCED ONCE, FOR BOTH PASSES ─────────────────────────────

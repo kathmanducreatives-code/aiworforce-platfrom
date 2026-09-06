@@ -2022,6 +2022,21 @@ export interface CapabilityRunResult {
    * that this run actually used and inventing one would be reconstruction.
    */
   reevaluation_context: MissionReevaluationContextV1;
+  /**
+   * The SAME registry builder the first pass used, with pages folded in.
+   *
+   * P4 lives in `run-agent` and used to assemble its own. One builder, called
+   * from both places, is the only thing that keeps a second look from being
+   * shown a narrower company than the verdict it is revising. Returns null for
+   * a company this run does not hold.
+   */
+  rebuild_registry: (
+    company_key: string,
+    web_pages: readonly {
+      source_url: string; page_intent: string; source_text: string;
+      fetched_at: string | null;
+    }[],
+  ) => EvidenceRegistry | null;
   funnel: FunnelCounts;
   /** Per-company stage state, so a resume continues where each one stopped. */
   resume_records: CompanyResumeRecord[];
@@ -2230,6 +2245,80 @@ export async function runCapabilityPlan(
    * for was discarded before anything could cite it.
    */
   const roundByCompanyKey = new Map<string, NormalizedFundingRound>();
+  /**
+   * One company's canonical registry. Shared by EVERY evaluation path.
+   *
+   * ── WHY IT LIVES OUT HERE ──────────────────────────────────────────────
+   *
+   * It used to live inside the qualification stage, and P4 — which runs in
+   * `run-agent`, outside the walk — had to rebuild a registry of its own. That
+   * copy diverged on nine fields at once, silenced by an `as never`: it passed
+   * `identity` where the builder declares `identity_state` and `jobs` where it
+   * declares `commercial_jobs`, so the second pass was shown a company with no
+   * commercial job evidence, no strongest signal, no funding round, no news
+   * evidence, no provider failures — and `identity_state: "not_attempted"` for
+   * a company whose identity was a verified match.
+   *
+   * A re-evaluation that sees LESS than the evaluation it revises is not a
+   * second look, and no comment can keep two copies of this in step. So there
+   * is one builder, and the second look calls it with the pages folded in.
+   */
+  const registryFor = (
+    c: EngineCompany,
+    webPages: readonly {
+      source_url: string; page_intent: string; source_text: string;
+      fetched_at: string | null;
+    }[] = [],
+  ) => buildEvidenceRegistry({
+    evidence: buildCompanyEvidence({
+      company_key: c.key,
+      source_capability: opts.plan.entry_capability,
+      source_query: opts.mission.original_user_query,
+      company: c.company,
+      enriched: c.enriched,
+      identity_state: c.identity
+        ? (identityIsActionable(c.identity) ? "resolved"
+          : c.identity.status === "mismatch" ? "mismatch"
+          : c.identity.status === "ambiguous" ? "ambiguous" : "unresolved")
+        : "not_attempted",
+      linkedin_company_url: c.identity?.linkedin_company_url ??
+        c.company.linkedin_company_url ?? null,
+      commercial_jobs: c.hiring_jobs.map((j) => ({
+        title: j.title ?? "", url: j.job_url, location: j.location,
+        posted_date: j.posted_date, tier: c.hiring_assessment?.tier ?? null,
+      })),
+      strongest_signal: c.hiring_assessment?.strongest?.title ?? null,
+    }),
+    // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
+    jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
+    // THE ROUND THAT DISCOVERED THIS COMPANY, when one did.
+    funding_round: roundByCompanyKey.get(c.key) ?? null,
+    // DATED PUBLIC STATEMENTS, kept apart by the signal they prove. An
+    // article proving a launch is not evidence of an expansion, and one
+    // bucket would let a verdict cite the wrong one.
+    expansion_evidence: c.signal_evidence["expansion"] ?? [],
+    launch_evidence: c.signal_evidence["product_launch"] ?? [],
+    yc_description: c.company.description ?? null,
+    // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
+    // found" would let an outage look like a company that is not hiring —
+    // the one inference this whole stage exists to forbid.
+    provider_failures: state.provider_attempts
+      .filter((a) => a.outcome === "error" &&
+        (a.capability === "hiring_verification" ||
+          a.capability === "company_enrichment"))
+      .map((a) => ({
+        provider: a.provider, capability: a.capability,
+        reason: a.reason ?? "provider call failed",
+      })),
+    employee_count_alternatives:
+      c.enriched?.employee_count != null && c.company.employee_count != null &&
+        c.enriched.employee_count !== c.company.employee_count
+        ? [{ source: "discovery", value: c.company.employee_count }]
+        : [],
+    // The pages P2 bought, when a second look is asking about them. Empty on
+    // the first pass, which runs before any page has been fetched.
+    web_pages: webPages,
+  });
   // STAGE 2 state, captured inside the qualification capability and read after
   // the plan finishes — ranking compares the whole pool, so it cannot run until
   // every company that is going to be evaluated has been.
@@ -6540,54 +6629,6 @@ export async function runCapabilityPlan(
           ? "refuted"
           : "not_established";
       }
-      /** One company's canonical registry. Shared by both evaluation paths. */
-      const registryFor = (c: EngineCompany) => buildEvidenceRegistry({
-        evidence: buildCompanyEvidence({
-          company_key: c.key,
-          source_capability: opts.plan.entry_capability,
-          source_query: opts.mission.original_user_query,
-          company: c.company,
-          enriched: c.enriched,
-          identity_state: c.identity
-            ? (identityIsActionable(c.identity) ? "resolved"
-              : c.identity.status === "mismatch" ? "mismatch"
-              : c.identity.status === "ambiguous" ? "ambiguous" : "unresolved")
-            : "not_attempted",
-          linkedin_company_url: c.identity?.linkedin_company_url ??
-            c.company.linkedin_company_url ?? null,
-          commercial_jobs: c.hiring_jobs.map((j) => ({
-            title: j.title ?? "", url: j.job_url, location: j.location,
-            posted_date: j.posted_date, tier: c.hiring_assessment?.tier ?? null,
-          })),
-          strongest_signal: c.hiring_assessment?.strongest?.title ?? null,
-        }),
-        // EMBEDDED **AND** EXTERNALLY VERIFIED openings, both as job evidence.
-        jobs: dedupeJobs([...c.yc_open_jobs, ...c.hiring_jobs]),
-        // THE ROUND THAT DISCOVERED THIS COMPANY, when one did.
-        funding_round: roundByCompanyKey.get(c.key) ?? null,
-        // DATED PUBLIC STATEMENTS, kept apart by the signal they prove. An
-        // article proving a launch is not evidence of an expansion, and one
-        // bucket would let a verdict cite the wrong one.
-        expansion_evidence: c.signal_evidence["expansion"] ?? [],
-        launch_evidence: c.signal_evidence["product_launch"] ?? [],
-        yc_description: c.company.description ?? null,
-        // A FAILED PROVIDER IS RECORDED AS A FAILURE. Reading it as "nothing
-        // found" would let an outage look like a company that is not hiring —
-        // the one inference this whole stage exists to forbid.
-        provider_failures: state.provider_attempts
-          .filter((a) => a.outcome === "error" &&
-            (a.capability === "hiring_verification" ||
-              a.capability === "company_enrichment"))
-          .map((a) => ({
-            provider: a.provider, capability: a.capability,
-            reason: a.reason ?? "provider call failed",
-          })),
-        employee_count_alternatives:
-          c.enriched?.employee_count != null && c.company.employee_count != null &&
-            c.enriched.employee_count !== c.company.employee_count
-            ? [{ source: "discovery", value: c.company.employee_count }]
-            : [],
-      });
 
       // ══ STAGE 2 — COLLECT, THEN EVALUATE ═══════════════════════════════════
       //
@@ -8122,6 +8163,10 @@ export async function runCapabilityPlan(
     funnel: projectFunnel(companies.map((c) => c.record)),
     capability_outcomes: outcomes,
     reevaluation_context: reevaluationContext,
+    rebuild_registry: (key, webPages) => {
+      const c = companies.find((x) => x.key === key);
+      return c ? registryFor(c, webPages) : null;
+    },
   };
 }
 
