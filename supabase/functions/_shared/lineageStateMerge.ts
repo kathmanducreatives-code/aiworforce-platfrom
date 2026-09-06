@@ -186,6 +186,40 @@ function mergeOne(
         }
       }
     }
+
+    // ── A PAYLOAD PRESENT ON ONE SIDE IS NEVER LOST TO A SIDE WITHOUT IT ──
+    //
+    // THE RUN THIS EXISTS FOR. Lineage c31585f8, 2026-09-05. Seventy checkpoint
+    // writes, every one confirmed `written: true` with an advancing
+    // `checkpoint_version` — and the enriched payload count still went
+    // 49 → 42 and 52 → 42 across slice boundaries, re-buying the difference
+    // each time and, on DiligenceVault, discarding a requirement P4 had already
+    // resolved from a page the run had paid for.
+    //
+    // The clauses above are STAGE monotonicity: they fire only when one side
+    // owes work and the other does not. When both sides agree on the stage —
+    // both `completed` — nothing fires, `out` keeps the incoming snapshot, and a
+    // payload the other side holds is dropped on a tie.
+    //
+    // That tie is not rare here. `mergeOne` starts from `incoming` because it is
+    // documented as "the newer view", and at the lineage-restore call site it is
+    // NOT: `lead_lineages.current_state` is written once per slice, at release,
+    // while `tasks.result` is written at every publish. A slice killed between
+    // its last publish and its release leaves the task row AHEAD of the lineage,
+    // and the stale side leads the merge.
+    //
+    // Rather than invert the argument order — which would resurrect the
+    // 2026-08-30 regression the lineage-leads rule was added to fix — this makes
+    // the PAYLOAD monotonic independently of which side leads. Presence beats
+    // absence, always. Neither side can delete evidence the other still holds.
+    for (const f of SNAPSHOT_FIELDS_BY_STAGE[stage]) {
+      const mine = (out.snapshot as Record<string, unknown> | null | undefined)?.[f];
+      const theirs = (stored.snapshot as Record<string, unknown> | null | undefined)?.[f];
+      const absent = (v: unknown) => v === undefined || v === null;
+      if (absent(mine) && !absent(theirs)) {
+        out.snapshot = { ...(out.snapshot ?? {}), [f]: theirs } as typeof out.snapshot;
+      }
+    }
   }
 
   // COMPLETED OPERATIONS ONLY EVER GROW. This is the record of what has been
