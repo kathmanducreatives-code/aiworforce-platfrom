@@ -767,10 +767,60 @@ export function shouldTakeAnotherSlice(i: {
   timeCapacity: number;
   /** Overridable ceiling; 1 disables multi-pass. */
   maxPasses?: number;
+  /**
+   * ALREADY PREPARED, STILL UNDECIDED.
+   *
+   * Companies this run has already paid to identity-resolve, enrich and
+   * hiring-verify, which the qualification stage did not reach — because it was
+   * cut by the deadline, not because they were judged.
+   */
+  qualificationReady?: number;
+  /**
+   * NEAR-QUALIFIED, WAITING ON EVIDENCE.
+   *
+   * Companies whose only open requirement is one P4 could settle from a page.
+   */
+  evidenceDebt?: number;
 }): { take: boolean; reason: string } {
   const ceiling = i.maxPasses ?? MAX_INVESTIGATION_PASSES;
   if (i.qualified >= i.requestedCount) {
     return { take: false, reason: "quota_met" };
+  }
+
+  // ── FINISH WHAT IS ALREADY BOUGHT BEFORE BUYING MORE ────────────────────
+  //
+  // ── THE RUN THIS EXISTS FOR ──────────────────────────────────────────────
+  //
+  // Lineage ab06540f, 2026-09-06. 149 companies discovered, 54 paid to enrich,
+  // 54 hiring-verified — and eighteen ever reached the evaluator. Twice, a
+  // slice cut qualification short:
+  //
+  //     07:16:59  qualification_deadline_stop { evaluated: 7,  not_reached: 4 }
+  //     07:34:45  qualification_deadline_stop { evaluated: 11, not_reached: 5 }
+  //
+  // and the gate below then authorised another ten companies to be prepared on
+  // top of the ones already prepared and undecided. The next slice inherited
+  // more unfinished work than it started with.
+  //
+  // The clauses that follow ask whether MORE work is affordable. Neither asks
+  // whether the work already paid for has been finished, so a run could keep
+  // widening its pool while its best candidates — bought, enriched, verified —
+  // sat one model call from a verdict.
+  //
+  // ORDERED AFTER `quota_met` deliberately: a satisfied request stops, whatever
+  // is pending. Everything else waits behind work already on the books.
+  const readyPending = Math.max(0, Math.trunc(i.qualificationReady ?? 0));
+  if (readyPending > 0) {
+    return { take: false, reason: "qualification_ready_pending" };
+  }
+
+  // AND THE EVIDENCE THOSE VERDICTS ARE WAITING ON. A company one page away
+  // from a decision is worth more than ten that have not been looked at, and
+  // the page is usually already cached — see the negative-cache reuse. Widening
+  // the pool ahead of it spends money to postpone the answer.
+  const debtPending = Math.max(0, Math.trunc(i.evidenceDebt ?? 0));
+  if (debtPending > 0) {
+    return { take: false, reason: "evidence_debt_pending" };
   }
   if (i.frontierRemaining <= 0) {
     return { take: false, reason: "frontier_exhausted" };

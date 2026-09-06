@@ -7689,6 +7689,30 @@ export async function runCapabilityPlan(
         }).capacity
         // No deadline (offline callers) ⇒ the clock cannot bind.
         : Number.MAX_SAFE_INTEGER;
+      // ── WHAT THIS RUN HAS ALREADY BOUGHT AND NOT YET FINISHED ───────────
+      //
+      // Both counts are read from the working set, not tracked separately —
+      // they are questions about the companies in hand, and a second source of
+      // truth for "is this company ready to judge" is the last thing this
+      // scheduler needs.
+      //
+      // READY: identity actionable, enrichment settled with evidence, and no
+      // verdict yet. Exactly the companies `qualification_deadline_stop` leaves
+      // behind when it is cut, and the ones the gate must finish before it
+      // authorises another paid batch.
+      const qualificationReady = companies.filter((c) =>
+        c.verdict === null &&
+        c.identity !== null && identityIsActionable(c.identity) &&
+        enrichmentIsEvidence(c.enrichment_outcome)
+      ).length;
+      // DEBT: judged, undecided, and short of a requirement a page could
+      // settle. `unknown` is the verdict the evaluator gives when it cannot
+      // close one — P4 exists for precisely these.
+      const evidenceDebtPending = companies.filter((c) =>
+        c.verdict === "unknown" &&
+        (c.mission_evaluation?.unknown_fields?.length ?? 0) > 0
+      ).length;
+
       const yieldGate = shouldTakeAnotherSlice({
         qualified: qualifiedSoFar,
         requestedCount: effectiveRequestedCount(opts.mission),
@@ -7696,12 +7720,18 @@ export async function runCapabilityPlan(
         passesTaken: investigationPass,
         timeCapacity: sliceCapacity,
         maxPasses: resolveMaxPasses(opts.readEnv),
+        qualificationReady,
+        evidenceDebt: evidenceDebtPending,
       });
       log("investigation_yield_gate", {
         pass: investigationPass, qualified: qualifiedSoFar,
         requested: effectiveRequestedCount(opts.mission),
         frontier_remaining: frontierLeft, time_capacity: sliceCapacity,
         take_another_slice: yieldGate.take, reason: yieldGate.reason,
+        // The two counts the gate now consults, so a refusal is readable
+        // without re-deriving it from the working set.
+        qualification_ready: qualificationReady,
+        evidence_debt_pending: evidenceDebtPending,
       });
 
       if (yieldGate.take) {
