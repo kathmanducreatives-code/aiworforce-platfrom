@@ -29,13 +29,58 @@ import {
   type MissionEvaluationInput,
 } from "./missionEvaluation.ts";
 import { readFreshPages } from "./webEvidenceStore.ts";
-import type { EvidenceRegistry } from "./leadEvidenceRegistry.ts";
+import { fingerprint, type EvidenceRegistry } from "./leadEvidenceRegistry.ts";
+
+/**
+ * WHAT THIS SECOND LOOK WAS. Durable, so the next slice knows it happened.
+ *
+ * ── THE WASTE THIS ENDS ────────────────────────────────────────────────────
+ *
+ * Lineage ab06540f made THIRTY-SEVEN re-evaluation calls for FIVE companies.
+ * Metaview, Hebbia, Kody, Pump.co and DiligenceVault were each re-asked seven
+ * or eight times, on the same pages, and every answer after the first was
+ * identical to it — `resolved: []`, the same `still_open`, the same counts.
+ *
+ * The guard that should have stopped it compares the fetched pages against the
+ * web_page items in `c.evidence_registry`. That registry is built by the
+ * engine's `registryFor` for the FIRST pass, which runs before any page has
+ * been bought and therefore passes no pages at all. So the set it compares
+ * against is empty on every real candidate and the guard has never once fired
+ * in production. Its unit test passes because the test hands in a registry
+ * with pages in it — the one input production never produces.
+ *
+ * An in-memory guard could not have fixed it anyway. Each slice is a fresh
+ * invocation restored from a checkpoint, so "have I already asked this?" has
+ * to be a question the checkpoint can answer. `completed_operations` is the
+ * engine's own durable per-company ledger of work already paid for, it is
+ * already carried through the resume record, and it is validated as a plain
+ * string list — so a new key survives a resume without a contract change.
+ *
+ * The key covers the PAGES, because they are the whole of what a second look
+ * has that the first did not. A page arriving changes the key and the company
+ * is asked again; nothing arriving means asking again buys a model call and no
+ * information.
+ */
+export function reevaluationOperationKey(
+  pages: ReadonlyArray<{ source_url: string }>,
+): string {
+  const urls = [...new Set(pages.map((p) => p.source_url))].sort();
+  return `web_evidence_reevaluation:${fingerprint(urls)}`;
+}
 
 export type ReevalSkipReason =
   | "not_insufficient"
   | "no_open_requirement"
   | "no_cached_evidence"
   | "no_new_evidence"
+  /**
+   * The call was made and threw. NOT the same as "nothing new to ask".
+   *
+   * It shared `no_new_evidence` until that counter became the dedupe signal,
+   * and a model outage then read as a run that had nothing left to look at.
+   * A throw records no operation key either, so the next slice retries it.
+   */
+  | "reevaluation_failed"
   | "no_domain"
   | "budget_exhausted";
 
@@ -65,6 +110,13 @@ export interface ReevalOutcome {
    * object it happened to be given.
    */
   merged: MissionEvaluation | null;
+  /**
+   * The key the CALLER must record on the company when this ran.
+   *
+   * Handed back rather than written, for the same reason `merged` is: this
+   * module decides and the caller owns persistence. Null on every skip.
+   */
+  operation_key: string | null;
   pages_used: number;
   /** Citations the verifier refused. A fabrication counter. */
   dropped_citations: number;
@@ -88,6 +140,13 @@ export interface ReevalCandidate {
   evidence_registry: EvidenceRegistry | null;
   /** The evaluator payload the first pass used, reused verbatim. */
   evaluation_input: MissionEvaluationInput | null;
+  /**
+   * The engine's durable ledger of work already done for this company.
+   *
+   * Carried through the checkpoint, so a slice that resumes knows which page
+   * sets have already been asked about. See `reevaluationOperationKey`.
+   */
+  completed_operations?: readonly string[];
 }
 
 export interface ReevalDeps {
@@ -135,7 +194,8 @@ export async function reevaluateWithWebEvidence(
     report.outcomes.push({
       company_key: c.key, company_name: c.company_name, skipped: reason,
       before: c.mission_evaluation?.decision ?? null, after: null,
-      resolved: [], still_open: [], carried: [], merged: null, pages_used: 0,
+      resolved: [], still_open: [], carried: [], merged: null,
+      operation_key: null, pages_used: 0,
       dropped_citations: 0,
     });
   };
@@ -192,6 +252,17 @@ export async function reevaluateWithWebEvidence(
       continue;
     }
 
+    // ── AND THE SAME QUESTION IS NOT RE-ASKED ACROSS SLICES ───────────────
+    //
+    // The check above is in-memory and per-invocation. This one is the durable
+    // half: it is what stopped ab06540f asking five companies the same question
+    // thirty-seven times. See `reevaluationOperationKey`.
+    const operationKey = reevaluationOperationKey(pages);
+    if (c.completed_operations?.includes(operationKey)) {
+      skip(c, "no_new_evidence");
+      continue;
+    }
+
     const registry = deps.rebuildRegistry(c.key, pages);
     const payload = buildMissionReevaluationInput({
       base: { ...c.evaluation_input },
@@ -206,7 +277,7 @@ export async function reevaluateWithWebEvidence(
       raw = await deps.reevaluate(payload as unknown as Record<string, unknown>);
     } catch (e) {
       log("reeval-model-failed", { company: c.company_name, error: String(e) });
-      skip(c, "no_new_evidence");
+      skip(c, "reevaluation_failed");
       continue;
     }
 
@@ -251,6 +322,7 @@ export async function reevaluateWithWebEvidence(
       still_open: merged.unknown_fields,
       carried,
       merged,
+      operation_key: operationKey,
       pages_used: pages.length,
       dropped_citations: parsed.raw_shape.dropped_citations.length,
     });

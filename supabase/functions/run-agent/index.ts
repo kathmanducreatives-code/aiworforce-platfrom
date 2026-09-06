@@ -4169,6 +4169,9 @@ Deno.serve(async (req) => {
                       mission_evaluation: c.mission_evaluation,
                       evidence_registry: c.evidence_registry,
                       evaluation_input: evaluationInputFromContext(reevalCtx),
+                      // The durable ledger, so a resumed slice does not re-ask
+                      // a question an earlier slice already paid for.
+                      completed_operations: c.completed_operations,
                     })),
                     {
                       db: supabase,
@@ -4236,6 +4239,21 @@ Deno.serve(async (req) => {
                     ),
                   );
                   const reappliedCount = reapply.reapplied;
+                  // ── RECORD WHAT WAS ASKED, BEFORE THE RESUME RECORDS ARE
+                  //    REBUILT BELOW ────────────────────────────────────────
+                  //
+                  // `toResumeRecord` copies `completed_operations` onto the
+                  // record the checkpoint is written from, so a key pushed
+                  // after that rebuild would be forgotten and the next slice
+                  // would ask again. Which is the whole defect.
+                  let opKeysRecorded = 0;
+                  for (const o of reevalReport.outcomes) {
+                    if (!o.operation_key) continue;
+                    const c = engineRun.companies.find((x) => x.key === o.company_key);
+                    if (!c || c.completed_operations.includes(o.operation_key)) continue;
+                    c.completed_operations.push(o.operation_key);
+                    opKeysRecorded++;
+                  }
                   if (reapply.qualified_added.length > 0) {
                     console.log("[run-agent][evidence-reevaluation][qualified]", {
                       task_id: task.id,
@@ -4247,7 +4265,7 @@ Deno.serve(async (req) => {
                   // ran, so it still describes the pre-re-evaluation world. The
                   // checkpoint is written from it, and a stale record would
                   // resume a company whose verdict has since changed.
-                  if (reappliedCount > 0) {
+                  if (reappliedCount > 0 || opKeysRecorded > 0) {
                     engineRun.resume_records = engineRun.companies.map(toResumeRecord);
                   }
                   console.log("[run-agent][evidence-reevaluation]", {
@@ -4256,6 +4274,7 @@ Deno.serve(async (req) => {
                     considered: reevalReport.considered,
                     reevaluated: reevalReport.reevaluated,
                     model_calls: reevalReport.model_calls,
+                    operations_recorded: opKeysRecorded,
                     skip_counts: reevalReport.skip_counts,
                     transitions: reevalReport.outcomes
                       .filter((o) => o.skipped === null)
