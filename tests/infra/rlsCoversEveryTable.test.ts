@@ -301,6 +301,50 @@ Deno.test("the permissive-policy parser actually recognises one", () => {
     "a dropped policy must not count, and the others must survive the drop");
 });
 
+// ══════════ tables that must not be world-readable, by name ══════════════
+//
+// The generic detector above catches predicates that constrain NOTHING. It
+// cannot catch a policy that constrains rows correctly and still exposes them
+// to the wrong audience — `USING (is_active = true)` granted to PUBLIC is a
+// real predicate and a deliberate decision, and a rule broad enough to
+// condemn it would also condemn a jobs board or a status page. Rather than
+// invent that rule and maintain the allow-list it would need, the tables where
+// the decision has been made are named here.
+
+const NO_PUBLIC_READ: readonly string[] = [
+  // The interview content a workspace authored — the situations it puts
+  // candidates in, and by implication what it screens for. Its only reader is
+  // `adaptive-screening-chat`, which holds the service role.
+  "screening_scenarios",
+];
+
+Deno.test("named tables carry no policy granting anon or PUBLIC a read", () => {
+  const dropped = drops(ALL_SQL);
+  for (const table of NO_PUBLIC_READ) {
+    // Every SELECT/ALL policy on the table that names anon or PUBLIC and has
+    // not since been dropped.
+    const re = new RegExp(
+      String.raw`create\s+policy\s+"?([^"
+]+?)"?\s+on\s+(?:public\.)?"?${table}"?([^;]*);`,
+      "gi",
+    );
+    const exposed: string[] = [];
+    for (const m of ALL_SQL.matchAll(re)) {
+      const name = m[1].trim();
+      const tail = m[2];
+      const reads = /for\s+(select|all)/i.test(tail) || !/for\s+\w+/i.test(tail);
+      const toEveryone = /to\s+(anon|public)/i.test(tail) || !/to\s+\w+/i.test(tail);
+      if (reads && toEveryone && !dropped.has(`${table}\u0000${name}`)) exposed.push(name);
+    }
+    assertEquals(
+      exposed,
+      [],
+      `${table} still grants an unauthenticated read via: ${exposed.join(", ")}. ` +
+        `A policy with no TO clause defaults to PUBLIC, which is everyone.`,
+    );
+  }
+});
+
 // ══════════ what source-level checking cannot reach ═══════════════════════
 
 /**

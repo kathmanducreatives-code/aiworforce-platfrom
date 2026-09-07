@@ -1,0 +1,33 @@
+-- THE LAST UNAUTHENTICATED READ.
+--
+--     "Anyone can view active scenarios"  SELECT  PUBLIC  USING (is_active = true)
+--
+-- ── WHY THIS ONE IS DIFFERENT FROM THE 106 BEFORE IT ───────────────────────
+--
+-- `is_active = true` is a REAL predicate. It constrains rows, so it is neither
+-- a literal `true` nor an `IS NOT NULL` disguise, and the detector in
+-- `rlsCoversEveryTable.test.ts` correctly does not flag it. It was never a
+-- broken policy — it was a deliberate one, granting the whole world read access
+-- to every active screening scenario.
+--
+-- That is a product decision, not a bug, and it is the wrong decision here.
+-- Scenarios are the interview content this workspace authored: the situations
+-- it puts candidates in and, by implication, what it screens for. There is no
+-- public surface that needs them. The only reader is
+-- `adaptive-screening-chat`, which holds the service role and bypasses RLS
+-- entirely, and `src/` does not reference the table at all.
+--
+-- ── WHY IT NEEDS ITS OWN ASSERTION ─────────────────────────────────────────
+--
+-- Precisely because the generic detector cannot see it. A rule broad enough to
+-- catch "PUBLIC may read this table" would also condemn policies that are
+-- legitimately public — a jobs board, a status page — so inventing one would
+-- trade a real hole for a stream of false positives and an allow-list nobody
+-- reads. The honest alternative is a named assertion that says which table and
+-- why, which is what the test now carries.
+--
+-- Table is empty, so nothing is lost. Recruiter-side access, if that product is
+-- ever revived, belongs on a policy scoped to the owning user — the shape
+-- `screening_applications` already uses successfully.
+
+drop policy if exists "Anyone can view active scenarios" on public.screening_scenarios;
