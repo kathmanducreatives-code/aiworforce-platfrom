@@ -139,7 +139,6 @@ Deno.serve(async (req) => {
     source_with_apify: isToolConfigured("source_with_apify").ready,
     scrape_url: isToolConfigured("scrape_url").ready,
     search_web: isToolConfigured("search_web").ready,
-    research_web: isToolConfigured("research_web").ready,
     send_email: isToolConfigured("send_email").ready,
     lovable_ai: !!Deno.env.get("LOVABLE_API_KEY"),
   };
@@ -194,10 +193,9 @@ Deno.serve(async (req) => {
     `Apify hiring signals: ${connectors.source_with_apify ? "configured" : "token missing"}`,
     `Firecrawl page extraction: ${connectors.scrape_url ? "configured" : "missing"}`,
     `Broad web search: ${connectors.search_web ? "configured" : "unavailable (no grounded search connector)"}`,
-    `Perplexity (optional fallback): ${connectors.research_web ? "configured" : "not configured"}`,
   ].join(" · ");
 
-  const sectionIntel = (connectors.search_web || connectors.research_web)
+  const sectionIntel = connectors.search_web
     ? "Live broad research is available. Ask 'Have Hawk gather today's market signals' to run it."
     : "Broad web search is not configured. I can still pull hiring signals via Apify and extract specific URLs via Firecrawl.";
 

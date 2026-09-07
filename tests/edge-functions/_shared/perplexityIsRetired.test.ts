@@ -42,7 +42,6 @@ const ALLOWED: Readonly<Record<string, string>> = Object.freeze({
   "_shared/broadResearchPolicy.ts": "policy comments naming the retired path",
   "orchestrate/index.ts": "comments and the truthful capability message",
   "run-agent/index.ts": "comments explaining why the call is gone",
-  "daily-brief/index.ts": "reports connector status, does not call it",
 });
 
 async function* walk(dir: URL, prefix = ""): AsyncGenerator<{ path: string; text: string }> {

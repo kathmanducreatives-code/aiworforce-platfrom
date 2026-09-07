@@ -122,7 +122,6 @@ Deno.serve(async (req) => {
 
       // Optional enrichment via scrape_url if configured
       const scrapeReady = isToolConfigured("scrape_url").ready;
-      const researchReady = isToolConfigured("research_web").ready;
       const enrichments: { url: string; summary: string }[] = [];
       const warnings: string[] = [];
       const phases: { agent: string; label: string; status: "ok" | "skipped" | "failed" }[] = [];
@@ -182,7 +181,7 @@ Deno.serve(async (req) => {
 
       const draft = (ai.ok && ai.json ? ai.json : {}) as AnyObj;
       const merged = await saveProfile({ ...draft, enriched: enrichments.length > 0 });
-      return json({ ok: true, draft, profile: merged, warnings, phases, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady, research_web: researchReady } });
+      return json({ ok: true, draft, profile: merged, warnings, phases, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady } });
     }
 
     if (action === "generate_followups") {
