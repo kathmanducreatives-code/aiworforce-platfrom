@@ -74,7 +74,7 @@ const GoogleOAuthCallback = () => {
         
         // Redirect after short delay
         setTimeout(() => {
-          navigate('/interview-scheduler/settings');
+          navigate('/settings/integrations');
         }, 2000);
 
       } catch (err: any) {
@@ -114,7 +114,7 @@ const GoogleOAuthCallback = () => {
               <XCircle className="h-12 w-12 text-destructive mx-auto" />
               <h2 className="text-xl font-semibold">Connection Failed</h2>
               <p className="text-muted-foreground">{errorMessage}</p>
-              <Button onClick={() => navigate('/interview-scheduler/settings')}>
+              <Button onClick={() => navigate('/settings/integrations')}>
                 Back to Settings
               </Button>
             </div>

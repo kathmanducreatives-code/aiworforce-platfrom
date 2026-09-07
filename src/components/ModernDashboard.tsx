@@ -9,7 +9,6 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
-import { CandidateAnalysisDialog } from "@/components/CandidateAnalysisDialog";
 
 // Function to generate consistent colors for recruitment names with teal theme
 const getRecruitmentTagColor = (recruitmentName: string): string => {
@@ -1078,13 +1077,6 @@ const ModernDashboard = () => {
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* Full View Dialog - Opens on View button click */}
-      <CandidateAnalysisDialog 
-        open={isFullViewDialogOpen} 
-        onOpenChange={setIsFullViewDialogOpen}
-        candidate={selectedCandidateFullView}
-      />
 
       {/* Folder Naming Dialog - Opens when adding candidates to email sequence */}
       <Dialog open={isFolderDialogOpen} onOpenChange={setIsFolderDialogOpen}>

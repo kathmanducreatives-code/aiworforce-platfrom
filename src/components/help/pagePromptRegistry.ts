@@ -15,7 +15,7 @@ const ENTRIES: { match: (path: string) => boolean; value: PagePrompt }[] = [
     value: { label: 'Ask Pilot about this page', prompt: 'Explain the Awaiting You queue and how I should review and approve items safely.' } },
   { match: (p) => p.startsWith('/leads'),
     value: { label: 'Ask Pilot about this page', prompt: 'Explain the Workbench leads view: what the columns mean, what unlocks them, and what I should do next based on my Company Brain.' } },
-  { match: (p) => p.startsWith('/outreach-engine') || p.startsWith('/email-sequences') || p.startsWith('/lead-crm'),
+  { match: (p) => p.startsWith('/outreach-engine') || p.startsWith('/email-sequences'),
     value: { label: 'Ask Pilot about this page', prompt: 'Explain this outreach surface and how drafts, approvals, and sending work. Recommend a safe first action.' } },
   { match: (p) => p.startsWith('/agents'),
     value: { label: 'Ask Pilot about this page', prompt: 'Explain my AI workforce on this page — who each agent is and when to use them, based on my Company Brain.' } },

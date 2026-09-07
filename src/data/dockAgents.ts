@@ -55,19 +55,7 @@ export const DOCK_AGENTS: DockAgent[] = [
       { time: '1h ago', text: 'Flagged 4 accounts as top opportunities' },
     ],
   },
-  {
-    ...live('mira'),
-    role: 'Your AI Message Strategist',
-    currentTask: "Drafting outreach for today's accounts",
-    progress: 28,
-    status: 'active',
-    href: '/lead-crm',
-    recentActivity: [
-      { time: '7m ago', text: 'Drafted 3 personalized openers' },
-      { time: '1h ago', text: 'Awaiting founder approval on Series A batch' },
-    ],
-  },
-  {
+    {
     ...live('orion'),
     role: 'Your AI Pipeline Operator',
     currentTask: 'Organizing review queue',

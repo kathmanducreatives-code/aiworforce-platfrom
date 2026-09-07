@@ -15,27 +15,6 @@ import EnvironmentBadge from "./components/dev/EnvironmentBadge";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
@@ -54,7 +33,6 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Signals = lazy(() => import("./pages/Signals"));
 const AwaitingYou = lazy(() => import("./pages/AwaitingYou"));
-const Candidates = lazy(() => import("./pages/Candidates"));
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -66,17 +44,12 @@ const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const ClientMetrics = lazy(() => import("./pages/ClientMetrics"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
-const InterviewScheduler = lazy(() => import("./pages/InterviewScheduler"));
-const InterviewSettings = lazy(() => import("./pages/InterviewSettings"));
-const BookInterview = lazy(() => import("./pages/BookInterview"));
 const GoogleOAuthCallback = lazy(() => import("./pages/GoogleOAuthCallback"));
-const CandidateApply = lazy(() => import("./pages/CandidateApply"));
 const OnboardingCompanyBrain = lazy(() => import("./pages/OnboardingCompanyBrain"));
 const CompanyBrainDashboard = lazy(() => import("./pages/CompanyBrainDashboard"));
 const ICPManager = lazy(() => import("./pages/ICPManager"));
 const ICPResultsPage = lazy(() => import("./pages/ICPResultsPage"));
 const ICPCandidateDetail = lazy(() => import("./pages/ICPCandidateDetail"));
-const ScreeningJobs = lazy(() => import("./pages/ScreeningJobs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const LeadScraper = lazy(() => import("./pages/LeadScraper"));
 const DeepSearch = lazy(() => import("./pages/DeepSearch"));
@@ -86,42 +59,10 @@ const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Agents = lazy(() => import("./pages/Agents"));
 const SettingsIntegrations = lazy(() => import("./pages/SettingsIntegrations"));
 const SettingsBilling = lazy(() => import("./pages/SettingsBilling"));
-const JobApplicants = lazy(() => import("./pages/JobApplicants"));
 const JobDistribution = lazy(() => import("./pages/JobDistribution"));
-const ExpertMarketplace = lazy(() => import("./pages/ExpertMarketplace"));
-const PostInterceptor = lazy(() => import("./pages/PostInterceptor"));
-const LeadCRM = lazy(() => import("./pages/LeadCRM"));
 const OutreachEngine = lazy(() => import("./pages/OutreachEngine"));
-const CandidateDossier = lazy(() => import("./pages/candidates/CandidateDossier"));
 const TaskPlanPage = lazy(() => import("./pages/TaskPlanPage"));
 const Workflows = lazy(() => import("./pages/Workflows"));
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -255,19 +196,6 @@ const App = () => (
                     <Route path="/departments" element={<Navigate to="/agents" replace />} />
                     <Route path="/rooms/:dept" element={<Navigate to="/agents" replace />} />
 
-
-
-                    <Route path="/candidates" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <Candidates />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-
-
-
                     <Route path="/folder/:folderName" element={
                       <ProtectedRoute>
                         <MainLayout>
@@ -300,9 +228,6 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-
-
-
                     <Route path="/icp/results/:sessionId" element={
                       <ProtectedRoute>
                         <ICPResultsPage />
@@ -323,39 +248,6 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/interview-scheduler" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <InterviewScheduler />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    <Route path="/interview-settings" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <InterviewSettings />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-                    <Route path="/screening-jobs" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <ScreeningJobs />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    <Route path="/screening-jobs/:jobId" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <JobApplicants />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-
-
                     <Route path="/distribution" element={
                       <ProtectedRoute>
                         <MainLayout>
@@ -364,36 +256,7 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-
-
-
-
-
-
-                    <Route path="/expert-marketplace" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <ExpertMarketplace />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
                     {/* Growth & Outbound Routes */}
-                    <Route path="/post-interceptor" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <PostInterceptor />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    <Route path="/lead-crm" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <LeadCRM />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
                     <Route path="/outreach-engine" element={
                       <ProtectedRoute>
@@ -404,11 +267,8 @@ const App = () => (
                     } />
 
                     {/* Mission Control Candidate UI Routes */}
-                    <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
 
                     {/* Departments overview (2x2 team rooms grid) */}
-
-
 
                     {/* Task plan detail */}
                     <Route path="/plans/:planId" element={
@@ -416,32 +276,6 @@ const App = () => (
                         <MainLayout>
                           <TaskPlanPage />
                         </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    {/* <Route path="/verify" element={<ProtectedRoute><MainLayout><VerifyQueue /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/verify/results" element={<ProtectedRoute><MainLayout><VerifyResults /></MainLayout></ProtectedRoute>} /> */}
-
-                    {/* <Route path="/interviews" element={<ProtectedRoute><MainLayout><InterviewDashboard /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/interviews/marketplace" element={<ProtectedRoute><MainLayout><InterviewMarketplace /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/interviews/scheduled" element={<ProtectedRoute><MainLayout><ScheduledInterviews /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/interviews/completed" element={<ProtectedRoute><MainLayout><CompletedInterviews /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/interviews/reports" element={<ProtectedRoute><MainLayout><InterviewReports /></MainLayout></ProtectedRoute>} /> */}
-
-                    {/* <Route path="/portal/assignments" element={<ProtectedRoute><MainLayout><PortalAssignments /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/portal/submit" element={<ProtectedRoute><MainLayout><PortalSubmit /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/portal/earnings" element={<ProtectedRoute><MainLayout><PortalEarnings /></MainLayout></ProtectedRoute>} /> */}
-                    {/* <Route path="/portal/profile" element={<ProtectedRoute><MainLayout><PortalProfile /></MainLayout></ProtectedRoute>} /> */}
-
-                    {/* Public pages - no auth required */}
-                    <Route path="/apply/:slug" element={<CandidateApply />} />
-                    <Route path="/book/:token" element={<BookInterview />} />
-
-
-                    {/* OAuth callback - protected */}
-                    <Route path="/oauth/google/callback" element={
-                      <ProtectedRoute>
-                        <GoogleOAuthCallback />
                       </ProtectedRoute>
                     } />
 

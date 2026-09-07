@@ -23,9 +23,6 @@ interface CommandPaletteProps {
 
 const pages = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, group: 'Navigate' },
-  { label: 'Job Screening', path: '/screening-jobs', icon: Briefcase, group: 'Navigate' },
-  { label: 'Candidates', path: '/candidates', icon: Users, group: 'Navigate' },
-  { label: 'Interviews', path: '/interview-scheduler', icon: Calendar, group: 'Navigate' },
   { label: 'Lead Scraper', path: '/lead-scraper', icon: Search, group: 'Navigate' },
   { label: 'Deep Search', path: '/deep-search', icon: Brain, group: 'Navigate' },
   { label: 'ICP Intelligence', path: '/icp-intelligence', icon: Target, group: 'Navigate' },
@@ -34,14 +31,11 @@ const pages = [
   { label: 'Competitor Intel', path: '/competitor-intel', icon: Eye, group: 'Navigate' },
   { label: 'Email Sequences', path: '/email-sequences', icon: Mail, group: 'Navigate' },
   { label: 'Job Distribution', path: '/distribution', icon: Share2, group: 'Navigate' },
-  { label: 'Post Interceptor', path: '/post-interceptor', icon: Crosshair, group: 'Navigate' },
-  { label: 'Lead CRM', path: '/lead-crm', icon: Zap, group: 'Navigate' },
   { label: 'Job Tracker', path: '/competitors', icon: Radar, group: 'Navigate' },
   { label: 'Analytics', path: '/analytics', icon: BarChart3, group: 'Navigate' },
 ];
 
 const quickActions = [
-  { label: 'Create New Job', path: '/screening-jobs', icon: Plus, group: 'Quick Actions' },
   { label: 'Upload Resume', path: '/screening', icon: Upload, group: 'Quick Actions' },
   { label: 'Start Lead Scrape', path: '/lead-scraper', icon: Zap, group: 'Quick Actions' },
 ];
@@ -158,62 +152,6 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
       const searchResults: SearchResult[] = [];
 
       try {
-        // Search candidates (resume_analyses)
-        const { data: candidates } = await supabase
-          .from('resume_analyses')
-          .select('id, candidate_name, recruitment_name')
-          .or(`candidate_name.ilike.%${query}%,recruitment_name.ilike.%${query}%`)
-          .limit(5);
-
-        if (candidates) {
-          candidates.forEach(c => {
-            searchResults.push({
-              id: c.id,
-              label: c.candidate_name || 'Unknown',
-              subtitle: c.recruitment_name || 'Candidate',
-              path: `/candidates/${c.id}`,
-              type: 'candidate',
-            });
-          });
-        }
-
-        // Search leads
-        const { data: leads } = await supabase
-          .from('outreach_leads')
-          .select('id, contact_name, company')
-          .or(`contact_name.ilike.%${query}%,company.ilike.%${query}%`)
-          .limit(5);
-
-        if (leads) {
-          leads.forEach(l => {
-            searchResults.push({
-              id: l.id,
-              label: l.contact_name,
-              subtitle: l.company,
-              path: '/lead-crm',
-              type: 'lead',
-            });
-          });
-        }
-
-        // Search screening jobs
-        const { data: jobs } = await supabase
-          .from('screening_jobs')
-          .select('id, title, company_name')
-          .or(`title.ilike.%${query}%,company_name.ilike.%${query}%`)
-          .limit(5);
-
-        if (jobs) {
-          jobs.forEach(j => {
-            searchResults.push({
-              id: j.id,
-              label: j.title,
-              subtitle: j.company_name || 'Job',
-              path: `/screening-jobs/${j.id}`,
-              type: 'job',
-            });
-          });
-        }
       } catch (err) {
         console.error('Search error:', err);
       }
