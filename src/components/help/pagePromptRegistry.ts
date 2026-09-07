@@ -21,8 +21,6 @@ const ENTRIES: { match: (path: string) => boolean; value: PagePrompt }[] = [
     value: { label: 'Ask Pilot about this page', prompt: 'Explain my AI workforce on this page — who each agent is and when to use them, based on my Company Brain.' } },
   { match: (p) => p.startsWith('/signals'),
     value: { label: 'Ask Pilot about this page', prompt: 'Explain the Signals page and what I should act on first, based on my ICP.' } },
-  { match: (p) => p.startsWith('/competitors'),
-    value: { label: 'Ask Pilot about this page', prompt: 'Explain Competitor intelligence and what I should track first, based on my Company Brain.' } },
   { match: (p) => p.startsWith('/onboarding/company-brain'),
     value: { label: 'Ask Pilot about this page', prompt: 'Explain Company Brain and which sections matter most to keep updated for my goals.' } },
 ];

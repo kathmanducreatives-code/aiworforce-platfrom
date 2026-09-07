@@ -80,7 +80,6 @@ const ScreeningJobs = lazy(() => import("./pages/ScreeningJobs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const LeadScraper = lazy(() => import("./pages/LeadScraper"));
 const DeepSearch = lazy(() => import("./pages/DeepSearch"));
-const Competitors = lazy(() => import("./pages/Competitors"));
 const Content = lazy(() => import("./pages/Content"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Agents = lazy(() => import("./pages/Agents"));
@@ -225,9 +224,7 @@ const App = () => (
                     <Route path="/leads/research" element={
                       <ProtectedRoute><MainLayout><DeepSearch /></MainLayout></ProtectedRoute>
                     } />
-                    <Route path="/competitors" element={
-                      <ProtectedRoute><MainLayout><Competitors /></MainLayout></ProtectedRoute>
-                    } />
+                    <Route path="/competitors" element={<Navigate to="/signals" replace />} />
                     <Route path="/content" element={
                       <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
                     } />
@@ -250,7 +247,8 @@ const App = () => (
                     <Route path="/deep-search" element={<Navigate to="/leads?tab=research" replace />} />
                     <Route path="/talent-intel" element={<Navigate to="/leads?tab=research" replace />} />
                     <Route path="/growth-signals" element={<Navigate to="/signals" replace />} />
-                    <Route path="/competitor-intel" element={<Navigate to="/competitors" replace />} />
+                    <Route path="/competitor-intelligence" element={<Navigate to="/signals" replace />} />
+                    <Route path="/competitor-intel" element={<Navigate to="/signals" replace />} />
                     <Route path="/analytics" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/departments" element={<Navigate to="/agents" replace />} />
                     <Route path="/rooms/:dept" element={<Navigate to="/agents" replace />} />
