@@ -150,6 +150,99 @@ Deno.test(`${ARCHIVE} grants no client policy`, () => {
   );
 });
 
+
+// ══════════ no policy may authorise everyone ══════════════════════════════
+//
+// ── THE SECOND HALF OF THE SAME HOLE ───────────────────────────────────────
+//
+// RLS being ON is necessary and not sufficient. 102 policies across 46 tables
+// had `true` as their entire predicate, and 33 of those — on 18 tables — were
+// granted to `anon` or PUBLIC. `linkedin_posts` allowed anonymous DELETE;
+// `screening_templates` allowed PUBLIC DELETE; `screening_applications`
+// allowed anonymous SELECT of every application ever submitted. A table with
+// `USING (true)` is exactly as exposed as a table with no RLS at all, and the
+// first version of this file would have passed every one of them.
+//
+// This computes the NET state rather than grepping: a policy created in the
+// baseline and dropped by a later migration is gone, and must not be counted.
+
+interface Policy { name: string; table: string; }
+
+/** `CREATE POLICY "name" ON public.table ... USING (true) / WITH CHECK (true)` */
+function permissiveCreates(sql: string): Policy[] {
+  const out: Policy[] = [];
+  const re =
+    /create\s+policy\s+"?([^"\n]+?)"?\s+on\s+(?:public\.)?"?([a-z0-9_]+)"?([^;]*);/gi;
+  for (const m of sql.matchAll(re)) {
+    const tail = m[3];
+    const usingTrue = /using\s*\(\s*true\s*\)/i.test(tail);
+    const checkTrue = /with\s+check\s*\(\s*true\s*\)/i.test(tail);
+    // A policy is permissive when every predicate it HAS is `true`. An INSERT
+    // policy has only WITH CHECK; a SELECT policy has only USING. Requiring
+    // both would miss every INSERT policy — which is the mistake the first
+    // audit query made, counting every INSERT policy as permissive because
+    // `polqual` is null for all of them.
+    const hasUsing = /\busing\s*\(/i.test(tail);
+    const hasCheck = /\bwith\s+check\s*\(/i.test(tail);
+    const permissive =
+      (hasUsing && hasCheck) ? (usingTrue && checkTrue)
+        : hasUsing ? usingTrue
+        : hasCheck ? checkTrue
+        : false;
+    if (permissive) out.push({ name: m[1].trim(), table: m[2].toLowerCase() });
+  }
+  return out;
+}
+
+/** `DROP POLICY [IF EXISTS] "name" ON public.table;` */
+function drops(sql: string): Set<string> {
+  const out = new Set<string>();
+  const re =
+    /drop\s+policy\s+(?:if\s+exists\s+)?"?([^"\n]+?)"?\s+on\s+(?:public\.)?"?([a-z0-9_]+)"?\s*;/gi;
+  for (const m of sql.matchAll(re)) out.add(`${m[2].toLowerCase()}\u0000${m[1].trim()}`);
+  return out;
+}
+
+const dropped = drops(ALL_SQL);
+const stillPermissive = permissiveCreates(ALL_SQL)
+  .filter((p) => !dropped.has(`${p.table}\u0000${p.name}`));
+
+Deno.test("THE SECOND HALF: no policy survives with `true` as its whole predicate", () => {
+  const listed = stillPermissive
+    .map((p) => `${p.table}."${p.name}"`)
+    .sort();
+  assertEquals(
+    listed,
+    [],
+    `policies authorising everyone: ${listed.join(", ")}. ` +
+      `A predicate of \`true\` makes RLS decorative — the table is as open as ` +
+      `one with RLS off. Scope it to the workspace, or drop it.`,
+  );
+});
+
+Deno.test("the permissive-policy parser actually recognises one", () => {
+  // The check above passes trivially if the regex matches nothing, and a
+  // silently-broken parser is how this class of bug survives a green suite.
+  const sample = [
+    `CREATE POLICY "open read" ON public.widgets FOR SELECT TO anon USING (true);`,
+    `CREATE POLICY "open write" ON public.widgets FOR INSERT TO anon WITH CHECK (true);`,
+    `CREATE POLICY "scoped" ON public.widgets FOR SELECT TO authenticated `
+      + `USING (workspace_id in (select workspace_id from workspace_members));`,
+  ].join("\n");
+  const found = permissiveCreates(sample).map((p) => p.name).sort();
+  assertEquals(found, ["open read", "open write"], "must catch USING and WITH CHECK forms");
+  assertEquals(
+    permissiveCreates(sample).filter((p) => p.name === "scoped").length, 0,
+    "and must not flag a genuinely scoped policy",
+  );
+  // And a drop must retire it.
+  const after = permissiveCreates(sample).filter((p) =>
+    !drops(`drop policy if exists "open read" on public.widgets;`)
+      .has(`${p.table}\u0000${p.name}`)
+  );
+  assertEquals(after.map((p) => p.name), ["open write"], "a dropped policy must not count");
+});
+
 // ══════════ what source-level checking cannot reach ═══════════════════════
 
 /**
