@@ -65,21 +65,19 @@ const ACCOUNTED: Readonly<Record<string, string>> = Object.freeze({
 });
 
 /**
- * KNOWN-UNMETERED, AND WHY THEY SURVIVE.
+ * KNOWN-UNMETERED. EMPTY, AND IT STAYS EMPTY.
  *
- * These belong to the dormant recruiting product and are reachable ONLY from
- * frontend components — so deleting them means deleting their callers, and the
- * frontend tree currently carries 24 uncommitted files of someone else's work.
- * Removing them is a decision about the recruiting product, not a cleanup.
+ * It once named `screen-candidate`, `generate-screening-invite` and
+ * `parse-resume` — five model call sites reachable only from recruiting
+ * components. Deleting that product deleted them, so every model call in
+ * `supabase/functions` now goes through a seam that reports to
+ * `ModelCallCollector` and honours a run budget.
  *
- * The list may SHRINK and must never grow. Every entry is model spend that
- * appears in no ledger.
+ * An entry here is model spend that appears in no ledger. There is no longer a
+ * reason for one to exist, which is why the count below is pinned at zero
+ * rather than merely "not growing".
  */
-const KNOWN_UNMETERED: Readonly<Record<string, string>> = Object.freeze({
-  "screen-candidate/index.ts": "3 gateway calls; reachable from src/",
-  "generate-screening-invite/index.ts": "1 gateway call; reachable from src/",
-  "parse-resume/index.ts": "1 gateway call; reachable from src/",
-});
+const KNOWN_UNMETERED: Readonly<Record<string, string>> = Object.freeze({});
 
 /** A real call site, not a comment or a doc string. */
 function providerCallSites(text: string): string[] {
@@ -110,12 +108,12 @@ Deno.test("THE INVARIANT: every model provider call is in an accounted file", ()
   );
 });
 
-Deno.test("the known-unmetered list may shrink, never grow", () => {
+Deno.test("there are no unmetered model paths left, and none may return", () => {
   // Pinned. A fourth unmetered function is a regression, and the number is the
   // cheapest possible way to notice one.
   assertEquals(
-    Object.keys(KNOWN_UNMETERED).length, 3,
-    "adding an unmetered provider call is a regression — wire it to the seam instead",
+    Object.keys(KNOWN_UNMETERED).length, 0,
+    "every model call now reports to ModelCallCollector; an unmetered one is a regression",
   );
   for (const p of Object.keys(KNOWN_UNMETERED)) {
     const f = FILES.find((x) => x.path === p);

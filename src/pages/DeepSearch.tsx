@@ -609,16 +609,7 @@ export default function DeepSearch() {
                               ? "No candidates match your search. Try adjusting your filters."
                               : "Upload resumes to start screening candidates."}
                           </p>
-                          {!searchTerm && (
-                            <Button
-                              variant="outline"
-                              onClick={() => navigate("/candidates")}
-                              className="gap-2"
-                            >
-                              <FileText className="w-4 h-4" />
-                              Upload Resumes
-                            </Button>
-                          )}
+
                         </CardContent>
                       </Card>
                     ) : (

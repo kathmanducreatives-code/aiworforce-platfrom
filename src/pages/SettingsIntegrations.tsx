@@ -3,7 +3,6 @@ import { Mail, Calendar, Plug } from "lucide-react";
 
 const ITEMS = [
   { to: "/email-sequences", icon: Mail, title: "Email Sequences", desc: "Configure outreach sequences and reply tracking." },
-  { to: "/interview-scheduler", icon: Calendar, title: "Interviews", desc: "Calendar sync and scheduling (legacy hiring tool)." },
 ];
 
 export default function SettingsIntegrations() {

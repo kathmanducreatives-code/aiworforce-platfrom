@@ -5,7 +5,7 @@ import {
 } from '@/components/ui/command';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, Plus, Upload, Zap, Users, Crosshair, Radar, Briefcase, Loader2, Sparkles,
+  Mail, Share2, BarChart3, Plus, Zap, Users, Crosshair, Loader2, Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
@@ -23,9 +23,6 @@ interface CommandPaletteProps {
 
 const pages = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, group: 'Navigate' },
-  { label: 'Job Screening', path: '/screening-jobs', icon: Briefcase, group: 'Navigate' },
-  { label: 'Candidates', path: '/candidates', icon: Users, group: 'Navigate' },
-  { label: 'Interviews', path: '/interview-scheduler', icon: Calendar, group: 'Navigate' },
   { label: 'Lead Scraper', path: '/lead-scraper', icon: Search, group: 'Navigate' },
   { label: 'Deep Search', path: '/deep-search', icon: Brain, group: 'Navigate' },
   { label: 'ICP Intelligence', path: '/icp-intelligence', icon: Target, group: 'Navigate' },
@@ -39,8 +36,6 @@ const pages = [
 ];
 
 const quickActions = [
-  { label: 'Create New Job', path: '/screening-jobs', icon: Plus, group: 'Quick Actions' },
-  { label: 'Upload Resume', path: '/screening', icon: Upload, group: 'Quick Actions' },
   { label: 'Start Lead Scrape', path: '/lead-scraper', icon: Zap, group: 'Quick Actions' },
 ];
 
@@ -82,7 +77,7 @@ interface SearchResult {
   label: string;
   subtitle: string;
   path: string;
-  type: 'candidate' | 'lead' | 'job';
+  type: 'lead';
 }
 
 const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
@@ -156,25 +151,6 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
       const searchResults: SearchResult[] = [];
 
       try {
-        // Search candidates (resume_analyses)
-        const { data: candidates } = await supabase
-          .from('resume_analyses')
-          .select('id, candidate_name, recruitment_name')
-          .or(`candidate_name.ilike.%${query}%,recruitment_name.ilike.%${query}%`)
-          .limit(5);
-
-        if (candidates) {
-          candidates.forEach(c => {
-            searchResults.push({
-              id: c.id,
-              label: c.candidate_name || 'Unknown',
-              subtitle: c.recruitment_name || 'Candidate',
-              path: `/candidates/${c.id}`,
-              type: 'candidate',
-            });
-          });
-        }
-
         // Search leads
         const { data: leads } = await supabase
           .from('outreach_leads')
@@ -190,25 +166,6 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
               subtitle: l.company,
               path: '/lead-crm',
               type: 'lead',
-            });
-          });
-        }
-
-        // Search screening jobs
-        const { data: jobs } = await supabase
-          .from('screening_jobs')
-          .select('id, title, company_name')
-          .or(`title.ilike.%${query}%,company_name.ilike.%${query}%`)
-          .limit(5);
-
-        if (jobs) {
-          jobs.forEach(j => {
-            searchResults.push({
-              id: j.id,
-              label: j.title,
-              subtitle: j.company_name || 'Job',
-              path: `/screening-jobs/${j.id}`,
-              type: 'job',
             });
           });
         }
@@ -230,9 +187,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
 
   const typeIcon = (type: SearchResult['type']) => {
     switch (type) {
-      case 'candidate': return <Users className="h-4 w-4 text-emerald-500" />;
       case 'lead': return <Zap className="h-4 w-4 text-amber-500" />;
-      case 'job': return <Briefcase className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -240,7 +195,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <div onKeyDown={(e) => { if (e.key === 'Enter' && query.trim() && results.length === 0) { e.preventDefault(); runCommand(query); } }}>
         <CommandInput
-          placeholder="Command your workforce... try 'Tell Aria to screen new applicants'"
+          placeholder="Command your workforce... try 'Ask Scout to source 20 SaaS founders'"
           value={query}
           onValueChange={(v) => { setQuery(v); if (reply) setReply(null); }}
         />

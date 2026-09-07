@@ -19,7 +19,7 @@ interface MainLayoutProps {
   children: ReactNode;
 }
 
-const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search', '/candidates'];
+const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search'];
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useIsMobile();
