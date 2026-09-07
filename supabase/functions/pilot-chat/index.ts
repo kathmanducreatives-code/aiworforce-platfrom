@@ -3,6 +3,10 @@
 // Input: { message, workspace_id, conversation_id? }
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
+import {
+  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
+  MODEL_SPEND_REFUSED, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -1355,6 +1359,41 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
+
+  // ── THE MODEL SPEND CEILING ─────────────────────────────────────────────
+  //
+  // Checked ONCE, here, at request admission — after membership is proven and
+  // before any model call. `toolRegistry` reserves credits for exactly two
+  // things, `source_with_apify` and `scrape_url`; chat reserves nothing and had
+  // no ceiling of any kind, so a user in a loop was an unbounded bill.
+  //
+  // One check per request rather than one per model call. A single chat turn
+  // can make four, and metering each would add four round trips to answer a
+  // question the first one already answered — the bound that matters is
+  // "has this workspace spent too much today", and that does not change
+  // between them.
+  //
+  // Ships in `observe` until proven, exactly as credit enforcement did: the
+  // verdict is computed and logged, and the request proceeds. `MODEL_SPEND_
+  // ENFORCEMENT=enforce` is what makes it refuse.
+  const spend = await authorizeModelSpend({
+    db: admin as unknown as SpendDb,
+    workspace_id: workspaceId,
+    mode: resolveSpendEnforcement(),
+    ...resolveCeiling(),
+  });
+  if (spend.over_ceiling || spend.reason === "query_failed") {
+    console.log("[pilot-chat][model-spend]", describeSpend(spend));
+  }
+  if (!spend.allowed) {
+    return json({
+      error: MODEL_SPEND_REFUSED,
+      detail:
+        `This workspace has reached its model spend ceiling of ` +
+        `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
+        `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+    }, 429);
+  }
 
   // 4. Get or create conversation (conversations table is user-scoped; no workspace_id column)
   if (conversationId) {

@@ -89,8 +89,17 @@ Deno.test("every table the edge functions use is created by the schema", async (
   const missing: string[] = [];
   for (const t of [...referenced].sort()) {
     if (OTHER_SCHEMAS.has(t)) continue;
+    // A VIEW IS A CREATED OBJECT TOO.
+    //
+    // This matched only `create table`, so `lead_model_calls` — a
+    // `create or replace view` over `lead_execution_calls where record_kind =
+    // 'model_call'`, and the documented read surface for model spend — read as
+    // "created by no migration" the moment an edge function first named it.
+    // Adding it to KNOWN_MISSING would have been a lie: it is built, and a
+    // projection rather than a second store is the point of it.
     const created = new RegExp(
-      `create table (if not exists )?(public\\.)?"?${t}"?\\b`, "i",
+      `create (or replace )?(table|(materialized )?view) (if not exists )?(public\\.)?"?${t}"?\\b`,
+      "i",
     ).test(SCHEMA);
     if (!created && !(t in KNOWN_MISSING)) missing.push(t);
   }
