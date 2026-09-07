@@ -90,68 +90,23 @@ interface ToolDef {
   execute: (input: unknown, ctx: ToolContext) => Promise<ToolResult>;
 }
 
-// ---------- Tool: research_web (Perplexity) ----------
-
-async function execResearchWeb(input: unknown): Promise<ToolResult> {
-  const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
-  if (!PERPLEXITY_API_KEY) {
-    return { ok: false, unavailable: true, error: "PERPLEXITY_API_KEY not configured" };
-  }
-
-  const i = (input ?? {}) as { query?: string; recency?: string };
-  const query = (i.query ?? "").toString().trim();
-  if (!query) return { ok: false, error: "missing 'query'" };
-
-  const body: Record<string, unknown> = {
-    model: "sonar",
-    messages: [
-      { role: "system", content: "Be precise, concise, and factual. Cite sources." },
-      { role: "user", content: query },
-    ],
-  };
-  if (i.recency) body.search_recency_filter = i.recency;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25_000);
-    try {
-      const res = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        signal: ctrl.signal,
-        headers: {
-          Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      clearTimeout(timer);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        return {
-          ok: true,
-          data: {
-            content: data?.choices?.[0]?.message?.content ?? "",
-            citations: Array.isArray(data?.citations) ? data.citations : [],
-            model: data?.model,
-          },
-        };
-      }
-      if (res.status >= 500 && attempt === 0) {
-        await new Promise((r) => setTimeout(r, 800));
-        continue;
-      }
-      return { ok: false, error: `Perplexity ${res.status}: ${JSON.stringify(data?.error ?? data)}` };
-    } catch (e) {
-      clearTimeout(timer);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 800));
-        continue;
-      }
-      return { ok: false, error: `Perplexity fetch failed: ${String(e)}` };
-    }
-  }
-  return { ok: false, error: "Perplexity retry exhausted" };
-}
+// ---------- RETIRED: research_web (Perplexity) ----------
+//
+// The executor is GONE, not disabled. It called `api.perplexity.ai` directly —
+// outside `aiProvider` and `gptProvider`, so outside the only two seams that
+// reach `ModelCallCollector`. It was live (13 calls, last 2026-08-31),
+// uncaptured by the model ledger, absent from `PAID_TOOLS` and therefore
+// unmetered by credits too: the one production path that could spend without
+// appearing in any of the three accounting systems.
+//
+// Deleting the function rather than gating it is the point. A flag can be set;
+// an absent `fetch` cannot be. `RETIRED_TOOLS` below keeps the NAME known so
+// callers get a truthful "retired" rather than the `{ready: true}` that
+// `isToolConfigured` returns for any name it has never heard of — which would
+// have told every caller that research was available.
+//
+// Reintroducing it means routing it through the shared model accounting and
+// budget layers, not restoring this function.
 
 // ---------- Tool: scrape_url (Firecrawl v2) ----------
 
@@ -1507,14 +1462,6 @@ async function execSearchWeb(_input: unknown): Promise<ToolResult> {
 // ---------- Registry ----------
 
 const REGISTRY: Record<string, ToolDef> = {
-  research_web: {
-    name: "research_web",
-    provider: "perplexity",
-    description: "Optional fallback: live web research with citations via Perplexity Sonar. Prefer source_with_apify for hiring/company signals and scrape_url for specific URLs.",
-    allowed_agents: ["hawk", "scout"],
-    requires_approval: false,
-    execute: execResearchWeb,
-  },
   search_web: {
     name: "search_web",
     provider: "gemini_search",
@@ -1556,15 +1503,36 @@ const REGISTRY: Record<string, ToolDef> = {
   },
 };
 
+/**
+ * TOOLS THAT ONCE EXISTED AND MUST NOT SILENTLY REAPPEAR AS "READY".
+ *
+ * `isToolConfigured` answers `{ready: true}` for any name absent from
+ * `TOOL_ENV` — the sensible default for a tool needing no key, and exactly the
+ * wrong answer for one that has been removed. Without this entry, deleting
+ * `research_web` would have made every caller believe research was available
+ * and reachable, which is a worse failure than the one being fixed.
+ */
+export const RETIRED_TOOLS: Readonly<Record<string, string>> = Object.freeze({
+  research_web:
+    "retired 2026-09-07 — the Perplexity path spent outside the model ledger, " +
+    "the credit system and the spend ceilings; reintroduce it through those, not around them",
+});
+
 const TOOL_ENV: Record<string, string> = {
-  research_web: "PERPLEXITY_API_KEY",
   search_web: "GEMINI_SEARCH",
   scrape_url: "FIRECRAWL_API_KEY",
   source_with_apify: "APIFY_API_TOKEN",
   send_email: "RESEND_API_KEY",
 };
 
-export function isToolConfigured(name: string): { ready: boolean; env?: string } {
+export function isToolConfigured(
+  name: string,
+): { ready: boolean; env?: string; retired?: string } {
+  // CHECKED FIRST. A retired tool is never ready, whatever the environment
+  // holds — the Perplexity key is still set in production and must not be read
+  // as "research is available".
+  const retired = RETIRED_TOOLS[name];
+  if (retired) return { ready: false, retired };
   const env = TOOL_ENV[name];
   if (!env) return { ready: true };
   return { ready: !!Deno.env.get(env), env };
@@ -1604,6 +1572,16 @@ export async function runTool(
 ): Promise<ToolResult> {
   const tool = REGISTRY[toolName];
   if (!tool) {
+    // A RETIRED TOOL IS UNAVAILABLE, NOT MISSING. Callers already branch on
+    // `unavailable` to mean "an optional capability is absent, continue
+    // without it" — `run-agent`'s broad-research step does exactly that — while
+    // `tool_not_found` reads as a bug and is handled as a failure. Saying which
+    // is which is the difference between a clean degrade and a broken step.
+    const retired = RETIRED_TOOLS[toolName];
+    if (retired) {
+      console.warn("[toolRegistry] tool_retired:", { tool: toolName, reason: retired });
+      return { ok: false, unavailable: true, error: `tool_retired:${toolName}` };
+    }
     console.error("[toolRegistry] tool_not_found:", toolName);
     return { ok: false, error: `tool_not_found:${toolName}` };
   }

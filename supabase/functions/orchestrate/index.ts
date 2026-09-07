@@ -115,7 +115,10 @@ const TOOL_LIMITATION_MESSAGE: Record<string, string> = {
   source_with_apify: "Apify token missing — hiring-signal sourcing unavailable.",
   scrape_url: "Firecrawl missing — page extraction unavailable.",
   search_web: "Broad web search is not configured. Use Apify for hiring signals or Firecrawl for specific URLs.",
-  research_web: "Perplexity not configured (optional fallback).",
+  // RETIRED, not unconfigured. The key is still set in production, so "not
+  // configured" would be a lie that invites someone to "fix" it by checking
+  // the env. There is no executor behind this name any more.
+  research_web: "Web research via Perplexity has been retired — use scrape_url for a specific URL, or source_with_apify for hiring and company signals.",
   send_email: "Resend missing — outreach can be drafted but not sent.",
 };
 
@@ -293,8 +296,9 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
       // Only add a live-pulse step if a live-research tool is actually configured.
       const pulseTool = isToolConfigured("search_web").ready
         ? "search_web"
-        : isToolConfigured("research_web").ready
-        ? "research_web"
+        // `research_web` was the fallback here. It is retired, so the choice is
+        // now search_web or nothing — never a silent substitution of another
+        // paid provider.
         : null;
       if (pulseTool) {
         briefSteps.push(
@@ -394,7 +398,19 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
           planner_source: "expansion",
         }),
       );
-    } else if (!hawk.tool_needed || hawk.tool_needed === "research_web") {
+    } else if (hawk.tool_needed === "research_web") {
+      // A PLAN THAT ASKED FOR RESEARCH DOES NOT BECOME A PLAN THAT BUYS APIFY.
+      //
+      // This shared the branch below and so inherited `defaultTool`, which is
+      // `source_with_apify` for anything hiring-shaped. With `research_web`
+      // retired that would turn every stored plan naming it into a paid
+      // sourcing call the user never asked for — a silent substitution of one
+      // paid provider for another, decided by a regex on the instruction.
+      //
+      // `search_web` is the honest landing place: it reports `unavailable`, so
+      // the step degrades visibly instead of spending.
+      hawk.tool_needed = "search_web";
+    } else if (!hawk.tool_needed) {
       hawk.tool_needed = defaultTool;
     }
     if (/(brief|report|summary|memo)/.test(t) && !has("scribe")) {
@@ -487,8 +503,7 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
     }
     const pulseTool = isToolConfigured("search_web").ready
       ? "search_web"
-      : isToolConfigured("research_web").ready
-      ? "research_web"
+      // Retired; see above.
       : null;
     if (!has("hawk") && pulseTool) {
       steps.push(
@@ -1186,7 +1201,6 @@ TOOLS (priority order matters):
 - source_with_apify   (apify)        allowed: scout, hawk — PRIMARY for finding companies/leads/hiring signals/jobs/posts
 - scrape_url          (firecrawl)    allowed: hawk, scout — PRIMARY for any specific URL/page extraction
 - search_web          (gemini_search) allowed: hawk, scout — broad/current web research (may be unavailable; that's fine)
-- research_web        (perplexity)   allowed: hawk, scout — OPTIONAL fallback only when explicitly preferred
 - summarize_text      (gemini)       allowed: aria, scribe, hawk, scout
 - extract_structured  (gemini)       allowed: aria, scribe, hawk, scout
 - draft_outreach      (gemini)       allowed: penn
@@ -1226,7 +1240,7 @@ Return ONLY valid JSON, no prose, no markdown:
       "agent_slug": "scout",
       "task_title": "Source candidates",
       "task_description": "specific instruction",
-      "tool_needed": "research_web",
+      "tool_needed": "source_with_apify",
       "expected_output": "what this step produces",
       "success_criteria": "how we know it worked",
       "requires_approval": false

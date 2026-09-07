@@ -6516,18 +6516,20 @@ Deno.serve(async (req) => {
       hasScrapedContext: !!scrapedContext,
     });
     if (!apifyContext && !scrapedContext && !skipBroadResearch) {
-      const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
-      if (toolRes.ok && toolRes.data) {
-        const d = toolRes.data as { content?: string; citations?: string[] };
-        const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
-        toolContext = `BROAD RESEARCH:\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
-      } else if (toolRes.unavailable) {
-        toolNotices.push(
-          "Broad web research is not configured for this workspace. Use Apify for hiring signals or Firecrawl for specific URLs.",
-        );
-      } else if (!toolRes.ok) {
-        toolNotices.push(`Research tool failed: ${toolRes.error ?? "unknown"}.`);
-      }
+      // ── THE BROAD-RESEARCH CALL IS GONE WITH ITS PROVIDER ────────────────
+      //
+      // This called `research_web`, which was Perplexity. It is retired, so the
+      // call could now only ever return `tool_retired` — a round trip whose one
+      // possible outcome is the notice below. The notice is kept because the
+      // step's honest report to the user is unchanged: this run has no broad
+      // research context, and it says so.
+      //
+      // NOTHING IS SUBSTITUTED. Reaching for Apify or Firecrawl here would buy
+      // a different provider to answer a question the user did not ask, which
+      // is the failure mode the retirement exists to avoid.
+      toolNotices.push(
+        "Broad web research is unavailable. Use Apify for hiring signals or Firecrawl for specific URLs.",
+      );
     }
   }
 
