@@ -26,7 +26,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
  * checked instead of merely accepted — recorded here as the real remedy.
  */
 type UntypedClient = SupabaseClient<any, any, any>;
-import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import {
+  generateJson, generateText, logProviderCall, type GenerateOpts,
+} from "../_shared/aiProvider.ts";
 import type { ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -203,7 +205,11 @@ type UserIntent =
   | "navigation_help"
   | "unknown";
 
-async function classifyUserIntent(prompt: string, workspaceId: string): Promise<UserIntent> {
+async function classifyUserIntent(
+  prompt: string,
+  workspaceId: string,
+  onModelCall?: GenerateOpts["onModelCall"],
+): Promise<UserIntent> {
   const t = prompt.trim().toLowerCase();
   
   // 1. Check smalltalk via regex
@@ -232,6 +238,7 @@ Respond with ONLY a JSON object containing the "intent" key. Example: {"intent":
 
   try {
     const ai = await generateJson({
+      onModelCall,
       taskType: "helper",
       systemPrompt,
       messages: [{ role: "user", content: prompt }],
@@ -1340,6 +1347,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // anywhere below — so they are given away early rather than at the end.
   fail.admin = admin;
 
+  // ── EVERY MODEL CALL THIS REQUEST MAKES ─────────────────────────────────
+  //
+  // Request-scoped, so chat's own `generateText`/`generateJson` calls land in
+  // `lead_model_calls` alongside the lead engine's. Before this they went only
+  // to `logProviderCall`, which writes an `activity_feed` row with no tokens
+  // and no cost — so `modelSpendCeiling` summed 255 lead-engine rows and saw
+  // nothing of chat, and a ceiling over unrecorded spend is theatre.
+  const chatModelCalls = new ModelCallCollector();
+  fail.modelCalls = chatModelCalls;
+
   // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
   //
   // Built once, here, because this is the first point at which the admin client
@@ -1350,6 +1367,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     writer: createLedgerWriter(admin as unknown as LedgerDb),
     correlationId: crypto.randomUUID(),
   };
+  fail.ledgerWriter = missionLedger.writer;
+  fail.correlationId = missionLedger.correlationId;
 
   // 3. Membership check via workspace_members
   const { data: member } = await admin
@@ -1376,6 +1395,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // Ships in `observe` until proven, exactly as credit enforcement did: the
   // verdict is computed and logged, and the request proceeds. `MODEL_SPEND_
   // ENFORCEMENT=enforce` is what makes it refuse.
+  fail.workspaceId = workspaceId;
   const spend = await authorizeModelSpend({
     db: admin as unknown as SpendDb,
     workspace_id: workspaceId,
@@ -2402,6 +2422,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             "company_brain.onboarded"),
         ];
         const ai = await generateText({
+      onModelCall: fail.modelCalls?.sink,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
@@ -3046,6 +3067,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       "You are Pilot for Agentory, an AI workforce OS. Use the Company Brain below to make your answer specific to THIS business — naturally, not by dumping it or repeating every field. Be concise (≤120 words). Never invent fields that aren't present; if something's missing, say you don't have it yet. Never claim live data was fetched. No emojis.\n\n<company_brain>\n" +
       brainCtx + "\n</company_brain>";
     const ai = await generateText({
+      onModelCall: fail.modelCalls?.sink,
       taskType: "pilot_chat",
       systemPrompt: sys,
       messages: [{ role: "user", content: instruction }],
@@ -3774,6 +3796,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
   // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({
+      onModelCall: fail.modelCalls?.sink,
     taskType: "pilot_chat",
     systemPrompt: pilotSystem,
     messages: msgs,
@@ -3890,6 +3913,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 interface FailureContext {
   admin?: { from: (t: string) => any };
   conversationId?: string | null;
+  /**
+   * THIS REQUEST'S MODEL SPEND, waiting to be written.
+   *
+   * Carried here for the same reason `admin` is: the drain has to happen on
+   * EVERY exit from `handlePilotChat`, and that handler has many returns and
+   * can throw. A drain at the end of the happy path would record nothing for
+   * the requests that matter most — an outage with no ledger rows looks
+   * exactly like a quiet afternoon. The `finally` in the serve wrapper is the
+   * one place every path passes through.
+   */
+  modelCalls?: ModelCallCollector;
+  ledgerWriter?: LedgerWriter | null;
+  workspaceId?: string | null;
+  correlationId?: string | null;
 }
 
 /** What the user is told. Honest about the class, silent about internals. */
@@ -4001,6 +4038,32 @@ if (!Deno.env.get("PILOT_CHAT_IMPORT_ONLY")) Deno.serve(async (req) => {
       // The database is the last thing standing between the user and silence.
       console.error("[pilot-chat][unhandled][save-failed]", String(saveError));
       return json({ error: "pilot_chat_failed", message: content }, 500);
+    }
+  } finally {
+    // ── WRITE WHAT THIS REQUEST SPENT, ON EVERY EXIT ──────────────────────
+    //
+    // `finally`, not the end of the happy path. `handlePilotChat` has many
+    // returns and can throw, and the requests whose model rows matter most are
+    // exactly the ones that failed — an outage with no ledger rows is
+    // indistinguishable from a quiet afternoon. This is the one point every
+    // path passes through, success and failure alike.
+    //
+    // NEVER THROWS. Bookkeeping must not turn a served response into a 500,
+    // and `drain` clears its buffer before writing, so a partial failure
+    // cannot double-count if it is ever reached twice.
+    try {
+      if (fail.modelCalls?.length && fail.ledgerWriter && fail.workspaceId) {
+        const written = await fail.modelCalls.drain(fail.ledgerWriter, {
+          workspace_id: fail.workspaceId,
+          logical_call_key: `pilot_chat:${fail.correlationId ?? "unknown"}`,
+        });
+        console.log("[pilot-chat][model-spend] recorded", { calls: written });
+      }
+    } catch (drainError) {
+      console.warn(
+        "[pilot-chat][model-spend] drain failed",
+        String(drainError).slice(0, 200),
+      );
     }
   }
 });

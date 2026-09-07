@@ -237,3 +237,116 @@ Deno.test("pilot-chat checks the ceiling before it can spend", async () => {
   assert(firstModel > 0, "sanity: chat does call a model");
   assert(src.includes("429"), "a refused request must say too-many/over-limit, not 500");
 });
+
+// ══════════ capture: the meter needs something to sum ═════════════════════
+
+import {
+  generateText, type GenerateOpts,
+} from "../../../supabase/functions/_shared/aiProvider.ts";
+import type { ModelCallTelemetry } from "../../../supabase/functions/_shared/modelCostModel.ts";
+
+/** Stub the network and the env; nothing here reaches a provider. */
+function withStubbedProvider(
+  handler: (url: string) => Response,
+  run: () => Promise<void>,
+): Promise<void> {
+  const realFetch = globalThis.fetch;
+  const realGet = Deno.env.get;
+  globalThis.fetch = ((input: string | URL | Request) =>
+    Promise.resolve(handler(String(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    )))) as typeof fetch;
+  Deno.env.get = ((k: string) =>
+    k === "LOVABLE_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
+  return run().finally(() => {
+    globalThis.fetch = realFetch;
+    Deno.env.get = realGet;
+  });
+}
+
+const okBody = (usage: unknown) =>
+  new Response(JSON.stringify({
+    choices: [{ message: { content: "hello" } }], usage,
+  }), { status: 200, headers: { "content-type": "application/json" } });
+
+Deno.test("CAPTURE: a successful chat call reaches the sink with its tokens", async () => {
+  const seen: Array<{ t: ModelCallTelemetry; ok: boolean }> = [];
+  await withStubbedProvider(
+    () => okBody({ prompt_tokens: 1200, completion_tokens: 300 }),
+    async () => {
+      const r = await generateText({
+        taskType: "pilot_chat", messages: [{ role: "user", content: "hi" }],
+        workspaceId: "w", functionName: "pilot-chat",
+        onModelCall: (t, ok) => seen.push({ t, ok }),
+      } as GenerateOpts);
+      assert(r.ok, "the stubbed call must succeed");
+    },
+  );
+  assertEquals(seen.length, 1, "exactly one call, one telemetry row");
+  assertEquals(seen[0].ok, true);
+  assertEquals(seen[0].t.input_tokens, 1200, "tokens must survive to the ledger");
+  assertEquals(seen[0].t.output_tokens, 300);
+  assert(seen[0].t.role.includes("pilot_chat"), "the row says what spent it");
+});
+
+Deno.test("CAPTURE: a FAILED attempt is still recorded", async () => {
+  // An outage with no ledger rows is indistinguishable from a quiet afternoon,
+  // which is exactly when spend data matters most.
+  const seen: Array<{ t: ModelCallTelemetry; ok: boolean }> = [];
+  await withStubbedProvider(
+    () => new Response("upstream exploded", { status: 500 }),
+    async () => {
+      await generateText({
+        taskType: "pilot_chat", messages: [{ role: "user", content: "hi" }],
+        workspaceId: "w",
+        onModelCall: (t, ok) => seen.push({ t, ok }),
+      } as GenerateOpts);
+    },
+  );
+  assert(seen.length >= 1, "a failed attempt must still produce a row");
+  assert(seen.every((s) => s.ok === false), "and must be marked failed, not ok");
+  // No usage is reported by a 500, and that must not price as free.
+  assertEquals(seen[0].t.input_tokens, null);
+  assert(
+    seen[0].t.estimated_cost_usd === null && seen[0].t.actual_cost_usd === null,
+    "no usage is `unknown` cost, never $0 — the distinction priceModelCall draws",
+  );
+});
+
+Deno.test("CAPTURE: chat's real model is unpriced, and that is visible not silent", async () => {
+  // `DEFAULT_MODELS.pilot_chat` is `google/gemini-3-flash-preview`, which
+  // `MODEL_PRICES` does not know. The row is still written — volume is
+  // recoverable even when money is not — and `cost_source` says so.
+  const seen: ModelCallTelemetry[] = [];
+  await withStubbedProvider(
+    () => okBody({ prompt_tokens: 10, completion_tokens: 5 }),
+    async () => {
+      await generateText({
+        taskType: "pilot_chat", messages: [{ role: "user", content: "hi" }],
+        onModelCall: (t) => seen.push(t),
+      } as GenerateOpts);
+    },
+  );
+  assertEquals(seen.length, 1);
+  assertEquals(seen[0].input_tokens, 10, "tokens are captured regardless of price");
+  assertEquals(
+    seen[0].cost_source, "unknown",
+    "an unpriced model must be marked unknown so `unpriced_calls` can count it",
+  );
+});
+
+Deno.test("pilot-chat drains what it captured, on every exit", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
+  );
+  assert(src.includes("onModelCall: fail.modelCalls?.sink"),
+    "chat's own model calls must feed the collector");
+  // `finally`, because the requests whose rows matter most are the ones that threw.
+  const fin = src.lastIndexOf("} finally {");
+  const drain = src.indexOf("fail.modelCalls.drain(");
+  assert(fin > 0 && drain > fin, "the drain must sit in the finally, not the happy path");
+  assert(
+    src.slice(drain - 400, drain).includes("try {"),
+    "and must be guarded — bookkeeping must not turn a served response into a 500",
+  );
+});

@@ -37,6 +37,26 @@ export interface GenerateOpts {
   workspaceId?: string;
   // when true, request JSON-shaped output (best-effort)
   jsonMode?: boolean;
+  /**
+   * WHERE THIS CALL'S COST GOES.
+   *
+   * ── THE GAP THIS CLOSES ──────────────────────────────────────────────────
+   *
+   * `lead_model_calls` held 256 rows, 255 of them the lead engine's and one
+   * from a mission compilation. Every other model call this function makes —
+   * every chat turn, every Company Brain analysis, every orchestration plan —
+   * went to `logProviderCall`, which writes an `activity_feed` row carrying no
+   * token counts and no cost at all. So chat spend was not merely uncapped, it
+   * was unrecorded, and `modelSpendCeiling` summing that table would have read
+   * $0.00 for chat for ever and called it a clean bill.
+   *
+   * The SAME seam `gptStrategistModel` already uses, so one `ModelCallCollector`
+   * drains both. Synchronous and unable to fail, because nothing on a paid path
+   * should be slowed or broken by bookkeeping — collect now, write later.
+   *
+   * Optional: a caller that does not pass it is unchanged.
+   */
+  onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
 }
 
 export interface GenerateResult {
@@ -52,6 +72,10 @@ export interface GenerateResult {
 }
 
 const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+import {
+  readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
+} from "./modelCostModel.ts";
+
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 // `Record<TaskType, string>` on purpose: a new task type cannot be added
@@ -242,11 +266,38 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
         fn: opts.functionName, task: opts.taskType, agent: opts.agentSlug,
         provider: att.provider, model: att.model, latencyMs,
       });
+      opts.onModelCall?.(
+        buildModelTelemetry({
+          role: `${opts.functionName ?? "aiProvider"}:${opts.taskType}`,
+          model: att.model,
+          // `readModelUsage` reads `raw.usage` — it takes the WHOLE response,
+          // not the usage object. `callLovable`/`callAnthropic` have already
+          // unwrapped it, so it has to be wrapped back or every token count
+          // reads null and every chat call prices as unknown.
+          usage: readModelUsage({ usage: r.usage }),
+          latency_ms: latencyMs,
+          fallback_reason: att === attempts[0] ? null : "primary_attempt_failed",
+        }),
+        true,
+      );
       return {
         ok: true, content: r.content, provider: att.provider, model: att.model,
         usage: r.usage, latencyMs,
       };
     }
+    // A FAILED ATTEMPT IS STILL A CALL. It may have been billed, and during an
+    // outage a ledger with no rows is indistinguishable from a quiet period —
+    // the same reason the mission-compiler drain runs before its throw.
+    opts.onModelCall?.(
+      buildModelTelemetry({
+        role: `${opts.functionName ?? "aiProvider"}:${opts.taskType}`,
+        model: att.model,
+        usage: readModelUsage(undefined),
+        latency_ms: Date.now() - started,
+        fallback_reason: r.errorCode ?? "attempt_failed",
+      }),
+      false,
+    );
     lastErr = r.error ?? "unknown error";
     lastCode = r.errorCode ?? "unknown";
     console.warn("[aiProvider] attempt failed", {
