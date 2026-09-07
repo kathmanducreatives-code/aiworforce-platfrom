@@ -220,5 +220,46 @@ export function describeSpend(v: SpendVerdict): Record<string, unknown> {
   };
 }
 
+/**
+ * LAYER 2 LIMITS, from configuration, for UNPRICED calls.
+ *
+ * Returns null unless `MODEL_RUN_MAX_CALLS` is set, so the default is exactly
+ * today's behaviour and turning the bound on is a config change rather than a
+ * deploy. The other three fall back to generous multiples of it only when it is
+ * present — a half-configured budget that silently bounded tokens at zero would
+ * be an outage dressed as a safety feature.
+ *
+ * The numbers are deliberately NOT defaulted to a guess. Real observed usage:
+ * the heaviest run made 95 model calls and 688,303 tokens, and a chat turn
+ * makes one to four. A limit is a decision about which of those to allow, and
+ * it belongs in configuration where it can be read, not in a constant here.
+ */
+export const RUN_MAX_CALLS_ENV = "MODEL_RUN_MAX_CALLS";
+export const RUN_MAX_INPUT_ENV = "MODEL_RUN_MAX_INPUT_TOKENS";
+export const RUN_MAX_OUTPUT_ENV = "MODEL_RUN_MAX_OUTPUT_TOKENS";
+export const RUN_MAX_TOTAL_ENV = "MODEL_RUN_MAX_TOTAL_TOKENS";
+
+export function resolveRunBudget(read?: EnvReader): {
+  max_calls: number; max_input_tokens: number;
+  max_output_tokens: number; max_total_tokens: number;
+} | null {
+  const r = read ?? ((k: string) => (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
+    .Deno?.env.get(k));
+  const calls = Number(String(r(RUN_MAX_CALLS_ENV) ?? "").trim());
+  if (!Number.isFinite(calls) || calls <= 0) return null;
+  const n = (key: string, fallback: number) => {
+    const v = Number(String(r(key) ?? "").trim());
+    return Number.isFinite(v) && v > 0 ? v : fallback;
+  };
+  const input = n(RUN_MAX_INPUT_ENV, calls * 40_000);
+  const output = n(RUN_MAX_OUTPUT_ENV, calls * 4_000);
+  return {
+    max_calls: calls,
+    max_input_tokens: input,
+    max_output_tokens: output,
+    max_total_tokens: n(RUN_MAX_TOTAL_ENV, input + output),
+  };
+}
+
 /** The error a refused call surfaces. */
 export const MODEL_SPEND_REFUSED = "model_spend_ceiling_reached" as const;

@@ -5,7 +5,7 @@
 
 import {
   authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
-  MODEL_SPEND_REFUSED, type SpendDb,
+  MODEL_SPEND_REFUSED, resolveRunBudget, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -1354,7 +1354,11 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // to `logProviderCall`, which writes an `activity_feed` row with no tokens
   // and no cost — so `modelSpendCeiling` summed 255 lead-engine rows and saw
   // nothing of chat, and a ceiling over unrecorded spend is theatre.
-  const chatModelCalls = new ModelCallCollector();
+  // Layer 2 bounds the unpriced half — chat's models have no price, so the
+  // dollar ceiling cannot see them. `resolveRunBudget` returns null unless
+  // `MODEL_RUN_MAX_CALLS` is configured, so this is today's behaviour until
+  // someone chooses a limit.
+  const chatModelCalls = new ModelCallCollector(resolveRunBudget());
   fail.modelCalls = chatModelCalls;
 
   // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
@@ -2423,6 +2427,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         ];
         const ai = await generateText({
       onModelCall: fail.modelCalls?.sink,
+      budget: fail.modelCalls,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,

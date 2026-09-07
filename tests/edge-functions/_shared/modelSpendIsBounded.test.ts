@@ -19,6 +19,7 @@ import {
   authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
   DEFAULT_CEILING_USD, DEFAULT_PERIOD_DAYS,
   MODEL_SPEND_ENFORCEMENT_ENV, MODEL_SPEND_CEILING_ENV, MODEL_SPEND_PERIOD_ENV,
+  resolveRunBudget, RUN_MAX_CALLS_ENV, RUN_MAX_INPUT_ENV, RUN_MAX_OUTPUT_ENV, RUN_MAX_TOTAL_ENV,
   type SpendDb,
 } from "../../../supabase/functions/_shared/modelSpendCeiling.ts";
 import {
@@ -349,4 +350,209 @@ Deno.test("pilot-chat drains what it captured, on every exit", async () => {
     src.slice(drain - 400, drain).includes("try {"),
     "and must be guarded — bookkeeping must not turn a served response into a 500",
   );
+});
+
+// ══════════ LAYER 2: unpriced calls are bounded by tokens and calls ═══════
+//
+// `modelSpendCeiling` bounds dollars, and four models this system selects
+// every day have no price — chat runs on `google/gemini-3-flash-preview`
+// through the Lovable gateway. A dollar ceiling cannot see them at all, so
+// without this an unpriced model is an unlimited one.
+
+import {
+  ModelCallCollector, type ModelRunBudget,
+} from "../../../supabase/functions/_shared/executionLedger.ts";
+import { UNPRICED_MODELS } from "../../../supabase/functions/_shared/modelCostModel.ts";
+
+const BUDGET: ModelRunBudget = {
+  max_calls: 3, max_input_tokens: 10_000,
+  max_output_tokens: 2_000, max_total_tokens: 11_000,
+};
+
+const unpricedCall = (inTok: number, outTok: number) => ({
+  version: "model-cost-model-v1" as const,
+  role: "chat", model: "google/gemini-3-flash-preview", reasoning_effort: null,
+  input_tokens: inTok, cached_input_tokens: 0, output_tokens: outTok,
+  estimated_cost_usd: null, actual_cost_usd: null,
+  cost_source: "unknown" as const, latency_ms: 5, fallback_reason: null,
+});
+
+const pricedCall = (usd: number) => ({
+  version: "model-cost-model-v1" as const,
+  role: "evaluator", model: "gpt-5.6-luna", reasoning_effort: null,
+  input_tokens: 50_000, cached_input_tokens: 0, output_tokens: 5_000,
+  estimated_cost_usd: null, actual_cost_usd: usd,
+  cost_source: "event_priced" as const, latency_ms: 5, fallback_reason: null,
+});
+
+Deno.test("L2: an unpriced call within the token budget is allowed", () => {
+  const c = new ModelCallCollector(BUDGET);
+  c.sink(unpricedCall(1_000, 100), true);
+  const v = c.check();
+  assert(v.allowed);
+  assertEquals(v.exceeded, null);
+  assertEquals(v.unpriced_calls, 1);
+});
+
+Deno.test("L2: exceeding the CALL budget refuses", () => {
+  const c = new ModelCallCollector(BUDGET);
+  for (let i = 0; i < 3; i++) c.sink(unpricedCall(10, 10), true);
+  const v = c.check();
+  assertEquals(v.allowed, false);
+  assertEquals(v.exceeded, "calls");
+});
+
+Deno.test("L2: exceeding the TOKEN budget refuses even with calls to spare", () => {
+  const c = new ModelCallCollector(BUDGET);
+  c.sink(unpricedCall(10_500, 10), true);
+  const v = c.check();
+  assertEquals(v.allowed, false);
+  assertEquals(v.exceeded, "input_tokens");
+  assertEquals(v.unpriced_calls, 1, "one call, and still over — tokens bound too");
+});
+
+Deno.test("L2: output and total bounds are separate from input", () => {
+  const out = new ModelCallCollector(BUDGET);
+  out.sink(unpricedCall(10, 2_500), true);
+  assertEquals(out.check().exceeded, "output_tokens");
+
+  const tot = new ModelCallCollector(
+    { ...BUDGET, max_input_tokens: 1e9, max_output_tokens: 1e9 },
+  );
+  tot.sink(unpricedCall(9_000, 3_000), true);
+  assertEquals(tot.check().exceeded, "total_tokens");
+});
+
+Deno.test("L2: MULTIPLE CALLS AGGREGATE against one run budget", () => {
+  const c = new ModelCallCollector(BUDGET);
+  c.sink(unpricedCall(4_000, 100), true);
+  assert(c.check().allowed, "one call is fine");
+  c.sink(unpricedCall(4_000, 100), true);
+  assert(c.check().allowed, "two is still fine");
+  c.sink(unpricedCall(4_000, 100), true);
+  assertEquals(c.check().allowed, false, "three sums past the input bound");
+  assertEquals(c.check().unpriced_input_tokens, 12_000);
+});
+
+Deno.test("L2: UNKNOWN COST IS NEVER TREATED AS ZERO", () => {
+  const c = new ModelCallCollector(BUDGET);
+  c.sink(unpricedCall(500, 50), true);
+  const v = c.check();
+  assertEquals(v.priced_usd, 0, "no money is claimed, because none is known");
+  assertEquals(v.unpriced_calls, 1, "but the call is counted and bounded");
+  assertEquals(v.priced_calls, 0);
+});
+
+Deno.test("L2: priced calls do NOT consume the unpriced budget", () => {
+  // The heaviest real run made 95 priced calls and 688,303 tokens. A shared
+  // ceiling low enough to catch a chat loop would have killed it.
+  const c = new ModelCallCollector(BUDGET);
+  for (let i = 0; i < 50; i++) c.sink(pricedCall(0.01), true);
+  const v = c.check();
+  assert(v.allowed, "Layer 1 governs money; Layer 2 must not double-bound it");
+  assertEquals(v.priced_calls, 50);
+  assertEquals(v.unpriced_calls, 0);
+  assertEquals(Math.round(v.priced_usd * 100) / 100, 0.5);
+});
+
+Deno.test("L2: a FAILED unpriced call still consumes budget", () => {
+  // A retry loop that counted only successes would be unbounded by
+  // construction — which is the exact shape of the runaway this guards.
+  const c = new ModelCallCollector(BUDGET);
+  for (let i = 0; i < 3; i++) c.sink(unpricedCall(10, 10), false);
+  assertEquals(c.check().allowed, false, "failures count; retries cannot be free");
+  assertEquals(c.check().exceeded, "calls");
+});
+
+Deno.test("L2: no budget means unchanged behaviour for every existing caller", () => {
+  const c = new ModelCallCollector();
+  for (let i = 0; i < 500; i++) c.sink(unpricedCall(100_000, 10_000), true);
+  const v = c.check();
+  assert(v.allowed, "an absent budget bounds nothing — existing callers are untouched");
+  assertEquals(v.exceeded, null);
+  assertEquals(v.budget, null);
+});
+
+Deno.test("L2: separate runs do not share budget state", () => {
+  const a = new ModelCallCollector(BUDGET);
+  const b = new ModelCallCollector(BUDGET);
+  for (let i = 0; i < 3; i++) a.sink(unpricedCall(10, 10), true);
+  assertEquals(a.check().allowed, false, "a is exhausted");
+  assertEquals(b.check().allowed, true, "b is untouched — budgets are per collector");
+  assertEquals(b.check().unpriced_calls, 0);
+});
+
+Deno.test("L2: the fallback chain cannot bypass an exhausted budget", async () => {
+  // `generateText` walks Lovable's default model, an alternate family, then
+  // Anthropic. Checking once at the top would let an exhausted run buy one more
+  // call from each. The check sits INSIDE the attempt loop; this proves it by
+  // asserting the network is never reached.
+  let fetches = 0;
+  const realFetch = globalThis.fetch;
+  const realGet = Deno.env.get;
+  globalThis.fetch = (() => { fetches++; return Promise.resolve(new Response("{}", { status: 200 })); }) as typeof fetch;
+  Deno.env.get = ((k: string) =>
+    k === "LOVABLE_API_KEY" || k === "ANTHROPIC_API_KEY" ? "test-key" : undefined) as typeof Deno.env.get;
+  try {
+    const exhausted = new ModelCallCollector(BUDGET);
+    for (let i = 0; i < 3; i++) exhausted.sink(unpricedCall(10, 10), true);
+    const r = await generateText({
+      taskType: "pilot_chat", messages: [{ role: "user", content: "hi" }],
+      budget: exhausted,
+    } as GenerateOpts);
+    assertEquals(r.ok, false, "an exhausted budget must refuse");
+    assertEquals(r.errorCode, "model_budget_exhausted", "and say why, truthfully");
+    assertEquals(fetches, 0, "NO provider was reached — not even the fallback");
+  } finally {
+    globalThis.fetch = realFetch;
+    Deno.env.get = realGet;
+  }
+});
+
+Deno.test("the four unpriced models are named, and none has a price", () => {
+  // Retiring one means adding a real invoice figure to MODEL_PRICES and
+  // deleting the name here — never converting `unknown` to $0.
+  const names = Object.keys(UNPRICED_MODELS).sort();
+  assertEquals(names, [
+    "claude-haiku-4-5-20251001",
+    "google/gemini-2.5-flash-lite",
+    "google/gemini-3-flash-preview",
+    "openai/gpt-5-mini",
+  ]);
+  for (const m of names) {
+    assertEquals(MODEL_PRICES[canonicalModelId(m)], undefined,
+      `${m} is listed as unpriced but MODEL_PRICES has a figure — remove it from UNPRICED_MODELS`);
+    assert(UNPRICED_MODELS[m].length > 10, `${m} must say where it is used`);
+  }
+});
+
+Deno.test("L2 is OFF unless a limit is configured", () => {
+  assertEquals(resolveRunBudget(() => undefined), null,
+    "no config means no bound — today's behaviour, unchanged");
+  assertEquals(resolveRunBudget(() => "0"), null, "zero is not a bound, it is a mistake");
+  assertEquals(resolveRunBudget(() => "-5"), null);
+  assertEquals(resolveRunBudget(() => "abc"), null);
+
+  const b = resolveRunBudget((k) => k === RUN_MAX_CALLS_ENV ? "40" : undefined);
+  assertEquals(b?.max_calls, 40);
+  assert((b?.max_input_tokens ?? 0) > 0, "a half-configured budget must not bound tokens at zero");
+  assert((b?.max_total_tokens ?? 0) >= (b?.max_input_tokens ?? 0));
+
+  const full = resolveRunBudget((k) =>
+    k === RUN_MAX_CALLS_ENV ? "10" : k === RUN_MAX_INPUT_ENV ? "500" :
+    k === RUN_MAX_OUTPUT_ENV ? "100" : k === RUN_MAX_TOTAL_ENV ? "550" : undefined);
+  assertEquals(full, {
+    max_calls: 10, max_input_tokens: 500, max_output_tokens: 100, max_total_tokens: 550,
+  });
+});
+
+Deno.test("chat wires both layers, and Layer 2 into the fallback chain", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),
+  );
+  assert(src.includes("new ModelCallCollector(resolveRunBudget())"),
+    "the collector must carry the run budget");
+  assert(src.includes("budget: fail.modelCalls"),
+    "and it must reach generateText, or the fallback chain is unbounded");
+  assert(src.includes("authorizeModelSpend("), "Layer 1 still gates the request");
 });

@@ -57,6 +57,19 @@ export interface GenerateOpts {
    * Optional: a caller that does not pass it is unchanged.
    */
   onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
+  /**
+   * LAYER 2. Consulted before EVERY attempt, not once per call.
+   *
+   * `generateText` walks a fallback chain — Lovable's default model, then an
+   * alternate family, then Anthropic. Checking a budget once at the top would
+   * let an exhausted run keep spending simply by falling through to the next
+   * model, which is the bypass this ordering exists to close.
+   *
+   * Bounds UNPRICED calls, because those are the ones the dollar ceiling in
+   * `modelSpendCeiling` cannot see. Omitted, nothing is bounded and every
+   * existing caller behaves exactly as before.
+   */
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
 }
 
 export interface GenerateResult {
@@ -259,6 +272,27 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
     // instead of failing the whole call. Fixes the case where TEST Lovable is
     // 402 yet ANTHROPIC_API_KEY is configured.
     if (skipLovable && att.provider === "lovable-ai") continue;
+
+    // ── THE BUDGET IS CHECKED HERE, INSIDE THE LOOP ──────────────────────
+    //
+    // Before every attempt, so an exhausted run cannot buy one more call by
+    // falling through to the next model in the chain. Returns a truthful
+    // bounded result rather than throwing: the caller gets `ok: false` with a
+    // code that names the bound, so a partial answer stays a partial answer
+    // instead of becoming an unhandled failure.
+    const verdict = opts.budget?.check();
+    if (verdict && !verdict.allowed) {
+      console.warn("[aiProvider] model budget reached", {
+        fn: opts.functionName, task: opts.taskType,
+        exceeded: verdict.exceeded, model: att.model,
+      });
+      return {
+        ok: false, content: "", provider: "none", model: "",
+        error: `model run budget reached (${verdict.exceeded})`,
+        errorCode: "model_budget_exhausted",
+        latencyMs: Date.now() - started,
+      };
+    }
     const r = await att.run();
     if (r.ok && r.content) {
       const latencyMs = Date.now() - started;

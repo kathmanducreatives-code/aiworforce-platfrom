@@ -44,7 +44,52 @@ export interface ModelPrice {
   /** Charged for the portion of input the provider served from its cache. */
   cached_input_per_1m: number;
   output_per_1m: number;
+  /**
+   * WHERE THE MONEY IS ACTUALLY BILLED.
+   *
+   * Not decoration. `google/gemini-3-flash-preview` reaches us through the
+   * Lovable gateway, and a gateway's rate need not equal the model vendor's
+   * published one — so "the provider charges $X" is not evidence about what
+   * this system pays. Recording the billing surface is what makes a price
+   * checkable against an invoice instead of against a blog post.
+   */
+  billed_by?: "openai" | "anthropic" | "google" | "lovable_gateway";
+  /** Where the figure came from, so a wrong one is traceable to its source. */
+  price_source?: string;
+  /** When it was last confirmed. A price with no date is a rumour. */
+  effective?: string;
 }
+
+/**
+ * MODELS THIS SYSTEM CAN SELECT AND CANNOT PRICE.
+ *
+ * ── WHY THIS LIST EXISTS RATHER THAN A GUESS ───────────────────────────────
+ *
+ * Every one of these is reachable in production today. None has a price here,
+ * and none is given one, because the calls go through the Lovable gateway whose
+ * billing need not match any vendor's list price — a number copied from a
+ * pricing page would look authoritative and be unverifiable, which is worse
+ * than an honest gap.
+ *
+ * So they price as `unknown`, NEVER as `$0`. `priceModelCall` already draws
+ * that distinction; `modelSpendCeiling` counts them in `unpriced_calls`; and
+ * `ModelCallCollector`'s run budget bounds them by TOKENS AND CALLS instead,
+ * which needs no price to work. Unknown cost is contained, not ignored.
+ *
+ * To retire an entry: take the real figure from a Lovable/Anthropic invoice,
+ * add it to `MODEL_PRICES` with `billed_by`, `price_source` and `effective`,
+ * and delete the name here. The test that reads this list will then require it.
+ */
+export const UNPRICED_MODELS: Readonly<Record<string, string>> = Object.freeze({
+  "google/gemini-3-flash-preview":
+    "chat, orchestration, agent execution and Company Brain — billed via the Lovable gateway",
+  "google/gemini-2.5-flash-lite":
+    "the helper tier — billed via the Lovable gateway",
+  "openai/gpt-5-mini":
+    "aiProvider's alternate-family fallback — billed via the Lovable gateway",
+  "claude-haiku-4-5-20251001":
+    "every Anthropic call; providerRouting sends scribe and penn here",
+});
 
 /**
  * The published list prices, as supplied 2026-08-21.
@@ -67,7 +112,10 @@ export interface ModelPrice {
  * makes measurable and does not answer.
  */
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze({
-  "gpt-5.6-luna": { input_per_1m: 0.20, cached_input_per_1m: 0.02, output_per_1m: 1.20 },
+  "gpt-5.6-luna": {
+    input_per_1m: 0.20, cached_input_per_1m: 0.02, output_per_1m: 1.20,
+    billed_by: "openai", price_source: "published list price", effective: "2026-08-21",
+  },
   "gpt-5.6-terra": { input_per_1m: 2.00, cached_input_per_1m: 0.20, output_per_1m: 12.00 },
   "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },

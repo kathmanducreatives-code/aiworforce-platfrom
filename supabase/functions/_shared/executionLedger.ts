@@ -945,8 +945,64 @@ export async function recordModelCall(
  * Collecting is synchronous and cannot fail. Draining is explicit, awaited, and
  * happens where the caller already knows the workspace and task.
  */
+/**
+ * LAYER 2: WHAT BOUNDS A CALL NOBODY CAN PRICE.
+ *
+ * ── WHY A SECOND LAYER AT ALL ──────────────────────────────────────────────
+ *
+ * `modelSpendCeiling` bounds a workspace in DOLLARS, which works only for
+ * models `MODEL_PRICES` knows. Four models this system selects every day are
+ * not in it — chat runs on `google/gemini-3-flash-preview` through the Lovable
+ * gateway — and inventing prices for them would put an unverifiable number in
+ * the audit trail. So they price as `unknown`, and a dollar ceiling cannot see
+ * them at all.
+ *
+ * An unpriced model must not therefore be an unlimited one. Tokens and calls
+ * are counted whatever the price is, so they are what bounds the half of the
+ * bill nobody can value yet.
+ *
+ * ── WHY IT COUNTS ONLY UNPRICED CALLS ──────────────────────────────────────
+ *
+ * Because the priced half is already bounded, and double-bounding it would
+ * make this ceiling fight the USD one. The heaviest real run made 95 model
+ * calls and 688,303 tokens — all of them priced — so a shared ceiling low
+ * enough to catch a chat loop would kill a legitimate lead mission. Layer 1
+ * governs money; Layer 2 governs the calls money cannot yet be attached to.
+ */
+export interface ModelRunBudget {
+  max_calls: number;
+  max_input_tokens: number;
+  max_output_tokens: number;
+  max_total_tokens: number;
+}
+
+export type BudgetBreach =
+  | "calls" | "input_tokens" | "output_tokens" | "total_tokens";
+
+export interface ModelBudgetVerdict {
+  /** May another model call be made? */
+  allowed: boolean;
+  /** Which bound was reached, if any. The honest answer regardless of mode. */
+  exceeded: BudgetBreach | null;
+  /** Unpriced usage so far. What the budget actually governs. */
+  unpriced_calls: number;
+  unpriced_input_tokens: number;
+  unpriced_output_tokens: number;
+  /** Priced spend so far, for the log line. Governed by Layer 1, not here. */
+  priced_calls: number;
+  priced_usd: number;
+  budget: ModelRunBudget | null;
+}
+
 export class ModelCallCollector {
   private readonly calls: Array<{ telemetry: ModelCallTelemetry; ok: boolean }> = [];
+
+  /**
+   * @param budget Bounds for UNPRICED calls. Omitted, nothing is bounded here
+   *               and `check()` always allows — which is what every existing
+   *               caller gets, unchanged.
+   */
+  constructor(private readonly budget: ModelRunBudget | null = null) {}
 
   /** The `onModelCall` seam, ready to pass to `GptDeps`. */
   readonly sink = (telemetry: ModelCallTelemetry, ok: boolean): void => {
@@ -955,6 +1011,53 @@ export class ModelCallCollector {
 
   get length(): number {
     return this.calls.length;
+  }
+
+  /**
+   * May another model call be made?
+   *
+   * CONSULTED BEFORE A CALL, and before EVERY attempt in a fallback chain —
+   * otherwise an exhausted budget would be bypassed by the next model down the
+   * list, which is the failure this exists to prevent.
+   *
+   * A FAILED CALL STILL COUNTS. It reached the provider and may have been
+   * billed, and a retry loop that only counted successes would be unbounded by
+   * construction — exactly the shape of the runaway this guards.
+   */
+  check(): ModelBudgetVerdict {
+    let unpriced = 0, inTok = 0, outTok = 0, pricedCalls = 0, usd = 0;
+    for (const c of this.calls) {
+      const t = c.telemetry;
+      const cost = t.actual_cost_usd ?? t.estimated_cost_usd;
+      // `unknown` is the marker `priceModelCall` sets for a model with no
+      // price. It is NOT zero, and treating it as zero here would hand the
+      // unpriced half of the bill an unlimited allowance.
+      if (t.cost_source === "unknown" || cost === null) {
+        unpriced++;
+        inTok += t.input_tokens ?? 0;
+        outTok += t.output_tokens ?? 0;
+      } else {
+        pricedCalls++;
+        usd += cost;
+      }
+    }
+    const base = {
+      unpriced_calls: unpriced,
+      unpriced_input_tokens: inTok,
+      unpriced_output_tokens: outTok,
+      priced_calls: pricedCalls,
+      priced_usd: Math.round(usd * 1e6) / 1e6,
+      budget: this.budget,
+    };
+    if (!this.budget) return { ...base, allowed: true, exceeded: null };
+    const b = this.budget;
+    const exceeded: BudgetBreach | null =
+      unpriced >= b.max_calls ? "calls"
+        : inTok >= b.max_input_tokens ? "input_tokens"
+        : outTok >= b.max_output_tokens ? "output_tokens"
+        : inTok + outTok >= b.max_total_tokens ? "total_tokens"
+        : null;
+    return { ...base, allowed: exceeded === null, exceeded };
   }
 
   /**
