@@ -72,6 +72,14 @@ export interface OpenAiCompatibleOptions {
    * isolate. Optional, and its absence changes nothing.
    */
   onModelCall?: (t: ModelCallTelemetry, ok: boolean) => void;
+  /**
+   * The run budget, consulted BEFORE the request is sent.
+   *
+   * `leadStrategy`'s models are the gateway's, which `MODEL_PRICES` cannot
+   * price — so the USD ceiling cannot see them and only a token/call bound can.
+   * Omitted, nothing is bounded and behaviour is unchanged.
+   */
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
 }
 
 /**
@@ -96,6 +104,21 @@ export async function completeOpenAiCompatible(
     ? requestBody.reasoning_effort
     : null;
 
+  // ── THE BUDGET IS CHECKED BEFORE THE REQUEST ────────────────────────────
+  //
+  // Not after. A bound that only notices once the tokens are spent is a report,
+  // not a bound.
+  const verdict = opts.budget?.check();
+  if (verdict && !verdict.allowed) {
+    clearTimeout(timer);
+    return {
+      ok: false, model: call.model, provider: opts.provider, content: "",
+      latencyMs: Date.now() - started,
+      error: `model run budget reached (${verdict.exceeded})`,
+      errorCode: "model_budget_exhausted",
+    };
+  }
+
   try {
     const res = await doFetch(opts.endpoint, {
       method: "POST",
@@ -108,6 +131,11 @@ export async function completeOpenAiCompatible(
     const latencyMs = Date.now() - started;
 
     if (!res.ok) {
+      // A FAILED CALL IS STILL A CALL. It reached the provider and may have
+      // been billed, and a ledger with no rows during an outage is
+      // indistinguishable from a quiet period. Only the success path emitted
+      // before this, so every timeout, 429 and 5xx here was invisible.
+      emitFailure(opts, call, sentEffort, latencyMs, normalizeHttpError(res.status));
       return {
         ok: false,
         model: call.model,
@@ -164,12 +192,41 @@ export async function completeOpenAiCompatible(
   } catch (e) {
     clearTimeout(timer);
     const msg = String((e as Error)?.message ?? e);
+    const code = /abort/i.test(msg) ? "timeout" : "network_error";
+    emitFailure(opts, call, sentEffort, Date.now() - started, code);
     return {
       ok: false, model: call.model, provider: opts.provider, content: "",
       latencyMs: Date.now() - started, error: msg.slice(0, 200),
-      errorCode: /abort/i.test(msg) ? "timeout" : "network_error",
+      errorCode: code,
     };
   }
+}
+
+/**
+ * Report a call that failed.
+ *
+ * No usage is reported by a timeout or a 5xx, so `readModelUsage(undefined)`
+ * yields nulls and `priceModelCall` grades the cost `unknown` — never $0. That
+ * distinction is what keeps an outage from reading as a free afternoon.
+ */
+function emitFailure(
+  opts: OpenAiCompatibleOptions,
+  call: StrategistCall,
+  sentEffort: string | null,
+  latencyMs: number,
+  code: string,
+): void {
+  opts.onModelCall?.(
+    buildModelTelemetry({
+      role: call.role ?? "unattributed",
+      model: call.model,
+      reasoning_effort: sentEffort,
+      usage: readModelUsage(undefined),
+      latency_ms: latencyMs,
+      fallback_reason: code,
+    }),
+    false,
+  );
 }
 
 export function modelNotAllowed(

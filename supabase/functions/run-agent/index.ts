@@ -350,6 +350,8 @@ import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 // uses `deterministicOnlyBroadeningPlanner` instead. Re-adding this import
 // would reopen the Claude-fallback path the ownership fix closed.
 import { createLeadStrategyPlanner, isGptBroadeningAuthorized, deterministicOnlyBroadeningPlanner } from "../_shared/leadStrategyOwner.ts";
+import { createLeadStrategistProvider } from "../_shared/leadStrategy/factory.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
 import { projectStrategyMissionSemantics } from "../_shared/leadStrategyContract.ts";
 // Same absence, same reason: the GPT adapter is invoked in orchestrate, and only
 // its already-decided output is rebuilt here.
@@ -1682,8 +1684,26 @@ Deno.serve(async (req) => {
           executionMode: "company_first",
           gptStrategyEnabled: isGptLeadStrategyEnabled(workspace_id).enabled,
         });
+        // ── HOISTED, SO THE STRATEGIST CAN REPORT INTO IT ───────────────────
+        //
+        // This sat 450 lines below, next to the capability bindings, and the
+        // strategy planner is constructed HERE — so the strategist had no
+        // collector to report into and its telemetry went to `undefined`. The
+        // constructor takes no arguments and nothing between the two positions
+        // touches it, so moving it up is free; the drain after the run still
+        // sees the same object.
+        const modelCalls = new ModelCallCollector(resolveRunBudget());
+
         const broadeningPlanner = gptBroadeningAuthorized
           ? createLeadStrategyPlanner({
+            // THE PROVIDER IS CONSTRUCTED HERE so it carries the spend seam.
+            // `runLeadStrategy` falls back to `createLeadStrategistProvider({config})`
+            // when none is passed — which builds one with no `onModelCall`, and
+            // that is how every strategist call came to be unrecorded.
+            provider: createLeadStrategistProvider({
+              onModelCall: modelCalls.sink,
+              budget: modelCalls,
+            }).provider,
             workspaceId: workspace_id,
             agentSlug: agent_slug,
             // R2: the SEMANTIC constraints are projected from the canonical
@@ -2137,7 +2157,8 @@ Deno.serve(async (req) => {
         // is synchronous and cannot fail, so nothing on the paid path can be
         // slowed or broken by bookkeeping; the drain is awaited once, at the end,
         // inside the ledger's existing try block.
-        const modelCalls = new ModelCallCollector();
+        // Declared above the strategy planner now — see the hoist note there.
+        // `ModelCallCollector` takes no dependencies, so its position is free.
 
         // SEMANTIC CLASSIFICATION BINDING. Constructed here rather than further
         // down because the capability engine is what consults it: an UNKNOWN

@@ -4,7 +4,8 @@
 // policy, no prompts, no taxonomy, no validation.
 
 import {
-  completeOpenAiCompatible, missingCredential, modelNotAllowed, type FetchLike,
+  completeOpenAiCompatible, missingCredential, modelNotAllowed,
+  type FetchLike, type OpenAiCompatibleOptions,
 } from "./shared.ts";
 import type {
   QualifiedLeadStrategistProvider, StrategistCall, StrategistResult,
@@ -13,6 +14,16 @@ import type {
 export const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 export interface LovableAiStrategistOptions {
+  /**
+   * Model-spend seam and run budget, forwarded to the shared transport.
+   *
+   * `completeOpenAiCompatible` has emitted telemetry since it was written, but
+   * NOTHING EVER PASSED THIS — `onModelCall` appeared only inside that file, so
+   * every strategist call reported into `undefined`. The seam existed and the
+   * wire did not.
+   */
+  onModelCall?: OpenAiCompatibleOptions["onModelCall"];
+  budget?: OpenAiCompatibleOptions["budget"];
   allowedModels: readonly string[];
   apiKey?: string | null;
   fetchImpl?: FetchLike;
@@ -39,6 +50,8 @@ export class LovableAIStrategistProvider implements QualifiedLeadStrategistProvi
       endpoint: this.opts.endpoint ?? LOVABLE_GATEWAY_URL,
       headers: { Authorization: `Bearer ${apiKey}` },
       fetchImpl: this.opts.fetchImpl,
+      onModelCall: this.opts.onModelCall,
+      budget: this.opts.budget,
     });
   }
 }
