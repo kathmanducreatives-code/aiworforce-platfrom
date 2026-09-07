@@ -1,0 +1,76 @@
+-- FOUR POLICIES THAT CHECKED A SECRET EXISTS, NOT THAT THE CALLER HAD IT.
+--
+-- ── THE PREDICATE ──────────────────────────────────────────────────────────
+--
+--     USING (access_token IS NOT NULL)
+--
+-- That asks whether the ROW has a token. It never compares it to anything the
+-- caller supplied. `access_token` is NOT NULL on every real row, so the
+-- predicate is `true` with a security-shaped name on it:
+--
+--     adaptive_screening_sessions  SELECT  anon    "Public access by token for candidates"
+--     adaptive_screening_sessions  UPDATE  anon    "Candidates can update their session by token"
+--     screening_applications       SELECT  PUBLIC  "Anyone can view applications by token"
+--     screening_applications       UPDATE  PUBLIC  "Anyone can update applications by token"
+--
+-- So any unauthenticated caller could read every screening session and every
+-- application ever submitted — and UPDATE them. The previous migration dropped
+-- 102 policies whose predicate was the literal `true`; these four survived it
+-- by wearing a disguise, and they are the more dangerous kind, because the
+-- name tells a reviewer the opposite of what the SQL does.
+--
+-- ── WHY THIS CANNOT BE REPAIRED IN A POLICY ────────────────────────────────
+--
+-- RLS can only test what the database can see. A bearer token held by an
+-- anonymous browser is not in `auth.uid()`, not in a JWT claim, and not in any
+-- session setting, so no predicate on this table can compare it. Writing
+-- `access_token = <something>` is impossible here: there is no <something>.
+--
+-- The correct shape is a SECURITY DEFINER function that TAKES the token as an
+-- argument and compares it to the row, with the table itself closed to
+-- clients. The application already assumes that design — `CandidateApply.tsx`
+-- calls `update_screening_application_with_token(p_id, p_access_token,
+-- p_extracted_data)` under a comment saying "anon UPDATE is no longer allowed
+-- directly". That function has never existed in this database. The migration
+-- to the right pattern was started and not finished, and these four policies
+-- are what was left holding the door open in the meantime.
+--
+-- ── WHAT THIS MIGRATION DOES, AND DELIBERATELY DOES NOT DO ─────────────────
+--
+-- It closes the hole. Both tables become service-role only, which is the
+-- correct default for a table no client should read wholesale.
+--
+-- It does NOT build the RPC surface that would make the public candidate flow
+-- work again, because that is a feature, not a repair, and the feature is
+-- already dead on two independent counts: the RPC it depends on does not
+-- exist, so `extracted_data` is silently never saved; and both tables have
+-- never held a single row. Every screening Edge Function — adaptive-screening-
+-- chat, screen-candidate, generate-screening-invite, analyze-behavioral-
+-- signals, screening-notifications — uses the service role and is unaffected.
+--
+-- ── WHAT REVIVING IT WOULD TAKE ────────────────────────────────────────────
+--
+-- Recorded here so it is a known path rather than a rediscovery:
+--
+--   1. `create_screening_application(p_job_id)` SECURITY DEFINER, returning
+--      the new id and token. Replaces the anon INSERT.
+--   2. `update_screening_application_with_token(p_id, p_access_token, …)`
+--      SECURITY DEFINER, `where id = p_id and access_token = p_access_token`.
+--      The function the frontend already calls.
+--   3. `screening_application_exists_for_email(p_job_id, p_email)` returning
+--      boolean. The duplicate check in `CandidateApply.tsx` currently SELECTs
+--      `extracted_data` for every applicant to a job and compares emails in
+--      the browser — so even a correct RLS policy would still be handing one
+--      candidate the contact details of all the others. That check belongs in
+--      the database returning a boolean, not in the client returning rows.
+--   4. The same token-argument treatment for the session read/update.
+--   5. `grant execute` to `anon` on those functions and nothing else.
+--
+-- The recruiter-side policy on `screening_applications` — scoped through
+-- `screening_jobs.user_id = auth.uid()` — is correct and is left in place.
+
+drop policy if exists "Public access by token for candidates" on public.adaptive_screening_sessions;
+drop policy if exists "Candidates can update their session by token" on public.adaptive_screening_sessions;
+
+drop policy if exists "Anyone can view applications by token" on public.screening_applications;
+drop policy if exists "Anyone can update applications by token" on public.screening_applications;

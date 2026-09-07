@@ -166,6 +166,52 @@ Deno.test(`${ARCHIVE} grants no client policy`, () => {
 // This computes the NET state rather than grepping: a policy created in the
 // baseline and dropped by a later migration is gone, and must not be counted.
 
+/** The text inside a `USING (...)` / `WITH CHECK (...)`, or null. */
+function clause(tail: string, kw: "using" | "with check"): string | null {
+  const re = new RegExp(kw.replace(" ", "\\s+") + "\\s*\\(", "i");
+  const m = re.exec(tail);
+  if (!m) return null;
+  let depth = 0;
+  const start = m.index + m[0].length - 1;
+  for (let i = start; i < tail.length; i++) {
+    if (tail[i] === "(") depth++;
+    else if (tail[i] === ")") { depth--; if (depth === 0) return tail.slice(start + 1, i); }
+  }
+  return null;
+}
+
+/**
+ * Does this predicate authorise EVERYONE?
+ *
+ * ── TWO SHAPES, ONE DEFECT ─────────────────────────────────────────────────
+ *
+ * `true` is the obvious one. The second is a predicate that names a secret and
+ * never compares it:
+ *
+ *     USING (access_token IS NOT NULL)
+ *
+ * That asks whether the ROW has a token, not whether the CALLER produced one.
+ * `access_token` is NOT NULL on every real row, so it is `true` with a
+ * security-shaped name on it — and four of these guarded every screening
+ * session and every candidate application against `anon`. They are worse than
+ * a bare `true`, because the name tells a reviewer the opposite of what the
+ * SQL does, which is exactly why they survived the sweep that removed 102
+ * literal-`true` policies.
+ *
+ * The rule is narrow on purpose: a predicate built only from `IS NOT NULL`
+ * tests and boolean connectives constrains no row. A genuine predicate
+ * compares something — `auth.uid() = created_by`, a subquery on membership,
+ * `is_active = true` — and none of those match here.
+ */
+function vacuous(pred: string | null): boolean {
+  if (pred === null) return false;
+  const p = pred.replace(/[()]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  if (p === "true") return true;
+  if (!/is not null/.test(p)) return false;
+  // Every remaining term must itself be an `x IS NOT NULL`.
+  return p.split(/\s+(?:and|or)\s+/).every((t) => /^[\w.":]+ is not null$/.test(t.trim()));
+}
+
 interface Policy { name: string; table: string; }
 
 /** `CREATE POLICY "name" ON public.table ... USING (true) / WITH CHECK (true)` */
@@ -175,8 +221,8 @@ function permissiveCreates(sql: string): Policy[] {
     /create\s+policy\s+"?([^"\n]+?)"?\s+on\s+(?:public\.)?"?([a-z0-9_]+)"?([^;]*);/gi;
   for (const m of sql.matchAll(re)) {
     const tail = m[3];
-    const usingTrue = /using\s*\(\s*true\s*\)/i.test(tail);
-    const checkTrue = /with\s+check\s*\(\s*true\s*\)/i.test(tail);
+    const usingTrue = vacuous(clause(tail, "using"));
+    const checkTrue = vacuous(clause(tail, "with check"));
     // A policy is permissive when every predicate it HAS is `true`. An INSERT
     // policy has only WITH CHECK; a SELECT policy has only USING. Requiring
     // both would miss every INSERT policy — which is the mistake the first
@@ -228,9 +274,20 @@ Deno.test("the permissive-policy parser actually recognises one", () => {
     `CREATE POLICY "open write" ON public.widgets FOR INSERT TO anon WITH CHECK (true);`,
     `CREATE POLICY "scoped" ON public.widgets FOR SELECT TO authenticated `
       + `USING (workspace_id in (select workspace_id from workspace_members));`,
+    // The disguised form: names a secret, compares it to nothing.
+    `CREATE POLICY "by token" ON public.widgets FOR SELECT TO anon `
+      + `USING ((access_token IS NOT NULL));`,
+    // A real predicate that merely happens to mention null.
+    `CREATE POLICY "mine" ON public.widgets FOR SELECT TO authenticated `
+      + `USING (owner = auth.uid() AND deleted_at IS NULL);`,
   ].join("\n");
   const found = permissiveCreates(sample).map((p) => p.name).sort();
-  assertEquals(found, ["open read", "open write"], "must catch USING and WITH CHECK forms");
+  assertEquals(found, ["by token", "open read", "open write"],
+    "must catch USING, WITH CHECK, and the `IS NOT NULL` disguise");
+  assertEquals(
+    permissiveCreates(sample).filter((p) => p.name === "mine").length, 0,
+    "and must not flag a real predicate that mentions null",
+  );
   assertEquals(
     permissiveCreates(sample).filter((p) => p.name === "scoped").length, 0,
     "and must not flag a genuinely scoped policy",
@@ -240,7 +297,8 @@ Deno.test("the permissive-policy parser actually recognises one", () => {
     !drops(`drop policy if exists "open read" on public.widgets;`)
       .has(`${p.table}\u0000${p.name}`)
   );
-  assertEquals(after.map((p) => p.name), ["open write"], "a dropped policy must not count");
+  assertEquals(after.map((p) => p.name).sort(), ["by token", "open write"],
+    "a dropped policy must not count, and the others must survive the drop");
 });
 
 // ══════════ what source-level checking cannot reach ═══════════════════════
