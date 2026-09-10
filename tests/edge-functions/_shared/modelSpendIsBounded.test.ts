@@ -163,16 +163,17 @@ Deno.test("THE GAP THIS MAKES LOUD: selectable models that cannot be priced", ()
   // for ever — the meter reads clean while the bill runs. This test does not
   // invent prices; it names the models that need one.
   //
-  // Currently unpriced and selectable: `claude-haiku-4-5-20251001` (every
-  // Anthropic call — `providerRouting` sends scribe and penn there) and
-  // `openai/gpt-5-mini`. Both are recorded in `KNOWN_UNPRICED` rather than
-  // hidden, so adding a price removes a name from a list instead of silently
-  // changing a number.
+  // `claude-haiku-4-5-20251001` WAS on this list and has been retired from it.
+  // It is the one model billed directly by Anthropic rather than through the
+  // Lovable gateway — `ANTHROPIC_MODEL` in aiProvider, reached via
+  // api.anthropic.com with ANTHROPIC_API_KEY — so the published list price IS
+  // the billing basis and is checkable against an Anthropic invoice. The gateway
+  // models stay unpriced for exactly the reason they always did.
   const SELECTABLE = [
     "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol",
     "claude-haiku-4-5-20251001", "openai/gpt-5-mini",
   ];
-  const KNOWN_UNPRICED = ["claude-haiku-4-5-20251001", "openai/gpt-5-mini"];
+  const KNOWN_UNPRICED = ["openai/gpt-5-mini"];
 
   const unpriced = SELECTABLE.filter((m) => !MODEL_PRICES[canonicalModelId(m)]);
   assertEquals(
@@ -362,7 +363,9 @@ Deno.test("pilot-chat drains what it captured, on every exit", async () => {
 import {
   ModelCallCollector, type ModelRunBudget,
 } from "../../../supabase/functions/_shared/executionLedger.ts";
-import { UNPRICED_MODELS } from "../../../supabase/functions/_shared/modelCostModel.ts";
+import {
+  UNPRICED_MODELS, MODEL_PRICES as PRICES_FOR_ROSTER, priceModelCall as priceForRoster,
+} from "../../../supabase/functions/_shared/modelCostModel.ts";
 
 const BUDGET: ModelRunBudget = {
   max_calls: 3, max_input_tokens: 10_000,
@@ -509,12 +512,13 @@ Deno.test("L2: the fallback chain cannot bypass an exhausted budget", async () =
   }
 });
 
-Deno.test("the four unpriced models are named, and none has a price", () => {
-  // Retiring one means adding a real invoice figure to MODEL_PRICES and
-  // deleting the name here — never converting `unknown` to $0.
+Deno.test("the remaining unpriced models are named, and none has a price", () => {
+  // Retiring one means adding a verifiable figure to MODEL_PRICES and deleting
+  // the name here — never converting `unknown` to $0. Was four; haiku-4.5 has
+  // been retired from the list (see the direct-Anthropic test below), so the
+  // three that remain are all gateway-billed.
   const names = Object.keys(UNPRICED_MODELS).sort();
   assertEquals(names, [
-    "claude-haiku-4-5-20251001",
     "google/gemini-2.5-flash-lite",
     "google/gemini-3-flash-preview",
     "openai/gpt-5-mini",
@@ -524,6 +528,51 @@ Deno.test("the four unpriced models are named, and none has a price", () => {
       `${m} is listed as unpriced but MODEL_PRICES has a figure — remove it from UNPRICED_MODELS`);
     assert(UNPRICED_MODELS[m].length > 10, `${m} must say where it is used`);
   }
+});
+
+Deno.test("THE RETIRED ENTRY: haiku-4.5 is priced, and priced correctly", () => {
+  const MODEL_PRICES = PRICES_FOR_ROSTER; const priceModelCall = priceForRoster;
+  // The one model billed directly by Anthropic. Verified against Anthropic's
+  // published API pricing on 2026-09-10: Claude Haiku 4.5 is $1/MTok base
+  // input, $0.10/MTok on cache hits, $5/MTok output.
+  const price = MODEL_PRICES["claude-haiku-4-5-20251001"];
+  assert(price, "the active Anthropic model must be priced");
+  assertEquals(price.input_per_1m, 1.00);
+  assertEquals(price.cached_input_per_1m, 0.10);
+  assertEquals(price.output_per_1m, 5.00);
+  // Provenance is not decoration: it is what makes the figure checkable against
+  // an invoice rather than against a blog post.
+  assertEquals(price.billed_by, "anthropic", "must record WHERE it is billed");
+  assert(price.price_source && price.price_source.length > 20, "must say where the figure came from");
+  assert(price.effective, "a price with no date is a rumour");
+
+  // The exact call that ran in production: task 20fc24e7, 3153 in / 308 out.
+  const real = priceModelCall({
+    model: "claude-haiku-4-5-20251001",
+    usage: { input_tokens: 3153, cached_input_tokens: 0, output_tokens: 308 },
+  });
+  assertEquals(real.source, "event_priced");
+  assertEquals(real.estimated_usd, Math.round((3153 * 1.00 + 308 * 5.00) / 1e6 * 1e6) / 1e6);
+});
+
+Deno.test("FAIL SAFE: an unrecognised haiku snapshot does not inherit this price", () => {
+  const priceModelCall = priceForRoster;
+  // Keyed on the EXACT dated id, unlike the OpenAI entries whose bare ids let
+  // `canonicalModelId` prefix-match snapshots. A future
+  // `claude-haiku-4-5-<newdate>` may not carry today's rate, and prefix matching
+  // would bill it silently at this one. Unknown must stay unknown.
+  const future = priceModelCall({
+    model: "claude-haiku-4-5-20260601",
+    usage: { input_tokens: 1000, output_tokens: 100 },
+  });
+  assertEquals(future.source, "unknown");
+  assertEquals(future.estimated_usd, null);
+  assertEquals(future.actual_usd, null);
+
+  // And a priced model reporting no usage is still not a free call.
+  const noUsage = priceModelCall({ model: "claude-haiku-4-5-20251001", usage: {} });
+  assertEquals(noUsage.source, "unknown");
+  assertEquals(noUsage.estimated_usd, null);
 });
 
 Deno.test("L2 is OFF unless a limit is configured", () => {
@@ -544,6 +593,42 @@ Deno.test("L2 is OFF unless a limit is configured", () => {
   assertEquals(full, {
     max_calls: 10, max_input_tokens: 500, max_output_tokens: 100, max_total_tokens: 550,
   });
+});
+
+Deno.test("THE OTHER HALF: run-agent wires both layers too", async () => {
+  // Layer 1 was in `pilot-chat` ONLY. run-agent does the bulk of this system's
+  // model spend — 250 of the 257 ledger rows when this was written — and was
+  // bounded by neither layer: no `authorizeModelSpend` call, and the generic
+  // agent execution passed no `budget`.
+  //
+  // That mattered more once `claude-haiku-4-5-20251001` was priced. Layer 2's
+  // `check()` counts ONLY unpriced calls, so pricing a model deliberately moves
+  // it out of the token budget and into the money ceiling. Without Layer 1 here,
+  // pricing it would have left it bounded by nothing at all.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url),
+  );
+  assert(src.includes("authorizeModelSpend("),
+    "run-agent must consult the workspace USD ceiling — it is where the spend is");
+  assert(src.includes("MODEL_SPEND_REFUSED"),
+    "and must refuse with the machine-readable code, not prose");
+  assert(src.includes("budget: genericModelCalls"),
+    "the generic agent execution must honour Layer 2 for models with no price");
+  assert(src.includes("new ModelCallCollector(resolveRunBudget())"),
+    "the collector must carry the run budget");
+
+  // The ceiling must be checked AFTER the workspace guard — otherwise it is a
+  // probe for another workspace's spend — and BEFORE any task row is inserted,
+  // so a refusal leaves no orphaned `running` task behind.
+  const guardAt = src.indexOf("decideWorkspaceAccess({");
+  const ceilingAt = src.indexOf("authorizeModelSpend(");
+  const taskInsertAt = src.indexOf('.from("tasks")\n        .insert(');
+  assert(guardAt > 0 && ceilingAt > guardAt,
+    "the ceiling must come after the workspace access guard");
+  if (taskInsertAt > 0) {
+    assert(ceilingAt < taskInsertAt,
+      "the ceiling must be checked before a task row is created");
+  }
 });
 
 Deno.test("chat wires both layers, and Layer 2 into the fallback chain", async () => {

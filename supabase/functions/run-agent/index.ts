@@ -351,7 +351,10 @@ import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
 // would reopen the Claude-fallback path the ownership fix closed.
 import { createLeadStrategyPlanner, isGptBroadeningAuthorized, deterministicOnlyBroadeningPlanner } from "../_shared/leadStrategyOwner.ts";
 import { createLeadStrategistProvider } from "../_shared/leadStrategy/factory.ts";
-import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import {
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
 import { projectStrategyMissionSemantics } from "../_shared/leadStrategyContract.ts";
 // Same absence, same reason: the GPT adapter is invoked in orchestrate, and only
 // its already-decided output is rebuilt here.
@@ -974,6 +977,50 @@ Deno.serve(async (req) => {
 
     const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
     if (!access.ok) return json({ error: access.error }, access.status);
+  }
+
+  // ---- Workspace model spend ceiling -----------------------------------------
+  //
+  // ── THE HALF THE CEILING DID NOT COVER ─────────────────────────────────────
+  //
+  // `authorizeModelSpend` was wired into `pilot-chat` only. run-agent does the
+  // bulk of this system's model spend — 250 of the 257 ledger rows at the time
+  // of writing — and was bounded by nothing:
+  //
+  //   Layer 1, the USD ceiling, bounds PRICED calls .... pilot-chat only
+  //   Layer 2, the run budget, bounds UNPRICED calls ... needs `budget` passed
+  //
+  // `ModelCallCollector.check()` only ever counts the unpriced half, by design:
+  // priced spend is money and belongs to the money ceiling. So a workspace could
+  // run agents all day against a ceiling that never looked at them.
+  //
+  // ONE CHECK PER REQUEST, like pilot-chat, and for the same reason: the bound
+  // that matters is "has this workspace spent too much today", which does not
+  // change between the calls of a single run.
+  //
+  // Placed AFTER the workspace guard so it cannot be used to probe another
+  // workspace's spend, and BEFORE any task row is created so a refusal leaves no
+  // orphaned `running` task behind.
+  {
+    const spend = await authorizeModelSpend({
+      db: supabase as unknown as SpendDb,
+      workspace_id,
+      mode: resolveSpendEnforcement(),
+      ...resolveCeiling(),
+    });
+    if (spend.over_ceiling || spend.reason === "query_failed") {
+      console.log("[run-agent][model-spend]", describeSpend(spend));
+    }
+    if (!spend.allowed) {
+      return json({
+        success: false,
+        error: MODEL_SPEND_REFUSED,
+        message:
+          `This workspace has reached its model spend ceiling of ` +
+          `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
+          `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+      }, 429);
+    }
   }
 
   // Resolve agent (by slug, falling back to id) WITHIN THIS WORKSPACE.
@@ -6782,6 +6829,11 @@ Deno.serve(async (req) => {
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
     onModelCall: genericModelCalls.sink,
+    // LAYER 2, for models with no price. `check()` counts only unpriced calls —
+    // priced spend is money and belongs to the ceiling above — so this is what
+    // bounds a gateway model that cannot be costed. Checked before EVERY attempt
+    // in the fallback chain, inside aiProvider.
+    budget: genericModelCalls,
   });
 
   // DRAINED BEFORE THE ERROR BRANCH, deliberately: a failed or empty generation

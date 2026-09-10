@@ -87,8 +87,6 @@ export const UNPRICED_MODELS: Readonly<Record<string, string>> = Object.freeze({
     "the helper tier — billed via the Lovable gateway",
   "openai/gpt-5-mini":
     "aiProvider's alternate-family fallback — billed via the Lovable gateway",
-  "claude-haiku-4-5-20251001":
-    "every Anthropic call; providerRouting sends scribe and penn here",
 });
 
 /**
@@ -120,6 +118,36 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   "gpt-5.6-sol": { input_per_1m: 5.00, cached_input_per_1m: 0.50, output_per_1m: 30.00 },
   "gpt-4.1": { input_per_1m: 2.00, cached_input_per_1m: 0.50, output_per_1m: 8.00 },
   "gpt-4.1-mini": { input_per_1m: 0.40, cached_input_per_1m: 0.10, output_per_1m: 1.60 },
+
+  // ── THE ONE MODEL BILLED DIRECTLY BY ANTHROPIC ───────────────────────────
+  //
+  // Everything else here is a gateway model, which is why the neighbouring
+  // UNPRICED_MODELS list refuses to price them: the Lovable gateway's rate need
+  // not equal a vendor's published one, so a figure copied from a pricing page
+  // would look authoritative and be unverifiable.
+  //
+  // THIS ONE IS DIFFERENT, and the difference is what makes the price legitimate.
+  // `aiProvider` has two transports — `lovable-ai` via ai.gateway.lovable.dev,
+  // and `anthropic` via api.anthropic.com using ANTHROPIC_API_KEY. This id is
+  // `ANTHROPIC_MODEL`, used ONLY on the direct transport, so Anthropic invoices
+  // it at their list price and the published number IS the billing basis.
+  //
+  // Confirmed against a real production call on 2026-09-10: the first Scribe
+  // generation (task 20fc24e7) recorded provider "anthropic", model
+  // claude-haiku-4-5-20251001, 3153 in / 308 out.
+  //
+  // KEYED ON THE EXACT DATED ID, deliberately, unlike the OpenAI entries whose
+  // bare ids let `canonicalModelId` prefix-match dated snapshots. A future
+  // `claude-haiku-4-5-<newdate>` may not carry today's rate, and prefix matching
+  // would bill it silently at this one. An unrecognised snapshot prices as
+  // `unknown` instead, which is visible in `unpriced_calls`.
+  "claude-haiku-4-5-20251001": {
+    input_per_1m: 1.00, cached_input_per_1m: 0.10, output_per_1m: 5.00,
+    billed_by: "anthropic",
+    price_source: "Anthropic published API pricing, platform.claude.com/docs/en/about-claude/pricing " +
+      "(Claude Haiku 4.5: $1/MTok base input, $0.10/MTok cache hits, $5/MTok output)",
+    effective: "2026-09-10",
+  },
 });
 
 /**
