@@ -5,7 +5,7 @@
 import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const SQL = await Deno.readTextFile(
-  new URL("../../supabase/migrations/20260910120000_lead_mission_v2_claim.sql", import.meta.url),
+  new URL("../../supabase/migrations/20260910140000_lead_mission_v2_claim.sql", import.meta.url),
 );
 
 /** The body of one function, from its CREATE to its closing $function$. */
