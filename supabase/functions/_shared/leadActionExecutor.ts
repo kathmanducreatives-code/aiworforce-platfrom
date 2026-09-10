@@ -30,6 +30,7 @@ import {
 } from "./workbench/openerBackend.ts";
 import { writeContactWithVerifiedAccount, type ContactPersistenceDb } from "./attachContactAccount.ts";
 import { makeOpenerModel } from "./workbench/openerModel.ts";
+import type { ModelCallTelemetry } from "./modelCostModel.ts";
 import {
   readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
   nextBestAction, WORKBENCH_STATE_KEY,
@@ -83,6 +84,13 @@ export interface ExecCtx {
   output_mode?: OutreachOutputMode | null;
   /** Injected in tests so no model is ever reached. */
   openerModel?: ModelBoundary;
+  /**
+   * Accounting seam for the opener model, threaded from the function that owns
+   * the run. Without it `makeOpenerModel` reaches a provider and reports
+   * nothing, so a workbench draft spent against a ceiling that could not see it.
+   */
+  onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
   runTool: RunToolFn;
   toolCtx: unknown;           // ToolContext passed straight through to runTool
 }
@@ -538,7 +546,10 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         (typeof rawRow.gate_decision === "string" && rawRow.gate_decision === "reject");
 
       const eligibility = assessOpenerEligibility(openerCtx, icpExcluded);
-      const model = ctx.openerModel ?? makeOpenerModel({ workspaceId: ctx.workspace_id, agentSlug: ctx.agent_slug ?? "penn" });
+      const model = ctx.openerModel ?? makeOpenerModel({
+          workspaceId: ctx.workspace_id, agentSlug: ctx.agent_slug ?? "penn",
+          onModelCall: ctx.onModelCall, budget: ctx.budget,
+        });
       const openerResult = await generateOpener(openerCtx, eligibility, model);
 
       // Provenance: which seller identity + Brain version produced this attempt.

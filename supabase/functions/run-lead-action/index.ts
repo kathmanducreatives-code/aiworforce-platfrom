@@ -39,6 +39,26 @@ import {
   type DirectLeadActionRequest,
 } from "../_shared/leadActionRequestContract.ts";
 import { summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
+import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+
+/** Bookkeeping must never fail the run it only describes. */
+async function drainModelCalls(
+  collector: ModelCallCollector,
+  admin: unknown,
+  workspace_id: string,
+  task_id: string,
+): Promise<void> {
+  try {
+    const rows = await collector.drain(createLedgerWriter(admin as never), {
+      workspace_id, task_id, plan_id: null,
+      logical_call_key: `${task_id}:model:lead_action`,
+    });
+    if (rows > 0) console.log("[run-lead-action][model-ledger]", { task_id, rows });
+  } catch (e) {
+    console.warn("[run-lead-action][model-ledger] drain failed:", e);
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -178,6 +198,17 @@ Deno.serve(async (req) => {
     user_id: taskUserId,
   };
 
+  // ── THE OPENER MODEL ENTERS THE LEDGER ───────────────────────────────────
+  //
+  // `generate_outreach` reaches a provider through `makeOpenerModel`, which
+  // emits telemetry ONLY through an injected `onModelCall`. Nothing passed one,
+  // so every workbench draft was a real Penn call that reported nothing —
+  // invisible to the workspace ceiling, which sums `lead_model_calls`.
+  //
+  // Created HERE because this function owns the run, and therefore the workspace
+  // and the task the spend belongs to.
+  const modelCalls = new ModelCallCollector(resolveRunBudget());
+
   try {
     const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
     const outcome = await executeLeadAction(leadAction, leadIds, {
@@ -185,7 +216,10 @@ Deno.serve(async (req) => {
       agent_id: agent.id, agent_slug: agent.slug ?? agent_slug, agent_name: agent.name,
       user_id: taskUserId, runTool, toolCtx,
       output_mode: directRequest.output_mode,
+      onModelCall: modelCalls.sink, budget: modelCalls,
     });
+
+    await drainModelCalls(modelCalls, supabase, workspace_id, task.id);
 
     await supabase.from("tasks").update({
       status: outcome.needs_approval ? "awaiting_approval" : "complete",
@@ -205,6 +239,8 @@ Deno.serve(async (req) => {
     // A THROWN BATCH IS NOT "0 SUCCEEDED". Every row is reported as failed with
     // a reason, so the batch never silently reports nothing with no explanation.
     console.error("[run-lead-action] failed:", e);
+    // A THROWN BATCH HAS STILL BEEN BILLED for whatever it managed to call.
+    await drainModelCalls(modelCalls, supabase, workspace_id, task.id);
     await supabase.from("tasks").update({ status: "failed", error_message: String(e) }).eq("id", task.id);
     const failed = leadIds.map((id: string) => ({
       lead_candidate_id: id, status: "failed" as const,

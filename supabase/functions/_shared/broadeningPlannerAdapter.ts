@@ -15,6 +15,7 @@ import { generateJson } from "./aiProvider.ts";
 import type { PlannerInput, PlannerProposal, BroadeningPlannerFn } from "./broadeningPlan.ts";
 import { getJobFamily } from "./jobFamilyRegistry.ts";
 import { detectInjection } from "./broadeningValidator.ts";
+import type { ModelCallTelemetry } from "./modelCostModel.ts";
 
 export const PLANNER_PROMPT_VERSION = "broadening-planner-prompt-1.0.0";
 export const PLANNER_SCHEMA_VERSION = "broadening-planner-result-1.0.0";
@@ -56,6 +57,20 @@ const SYSTEM_PROMPT = [
 export interface PlannerAdapterOpts {
   workspaceId?: string;
   agentSlug?: string;
+  /**
+   * ACCOUNTING SEAM, injected by whoever owns the run.
+   *
+   * `createBroadeningPlanner` is DELIBERATELY NOT CALLED: run-agent documents
+   * the absence and `leadStrategyBroadeningOwnership.test.ts` asserts it, because
+   * this path reaches Gemini via Lovable and falls through to Anthropic whenever
+   * ANTHROPIC_API_KEY is set. Broadening's unauthorized path must make zero
+   * model calls, so it uses `deterministicOnlyBroadeningPlanner`.
+   *
+   * The seam is here anyway so that reviving this cannot reintroduce an
+   * UNMETERED call on top of an unauthorized one.
+   */
+  onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
   /** Below this the proposal is discarded and the deterministic plan is used. */
   minConfidence?: number;
   timeoutMs?: number;
@@ -150,6 +165,8 @@ export function createBroadeningPlanner(opts: PlannerAdapterOpts = {}): {
         workspaceId: opts.workspaceId,
         agentSlug: opts.agentSlug ?? "scout",
         functionName: "run-agent:broadening-planner",
+        onModelCall: opts.onModelCall,
+        budget: opts.budget,
       });
       const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("planner_timeout")), timeoutMs));
       const r = await Promise.race([call, timeout]);

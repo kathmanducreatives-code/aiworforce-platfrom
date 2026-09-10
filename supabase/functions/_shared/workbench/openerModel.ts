@@ -13,6 +13,7 @@
 // emails, phone numbers or internal scoring dumps.
 
 import { generateText } from "../aiProvider.ts";
+import type { ModelCallTelemetry } from "../modelCostModel.ts";
 import type {
   ModelBoundary,
   ModelOpenerRequest,
@@ -170,7 +171,24 @@ function safeParse(text: string): Record<string, unknown> | null {
  * Build the live model boundary. Injected everywhere else, so tests supply a
  * deterministic stub and never reach a provider.
  */
-export function makeOpenerModel(opts: { workspaceId: string; agentSlug?: string }): ModelBoundary {
+export function makeOpenerModel(opts: {
+  workspaceId: string;
+  agentSlug?: string;
+  /**
+   * THE ACCOUNTING SEAM, injected because the run owns it.
+   *
+   * `generateText` emits telemetry ONLY through this callback. Without it this
+   * boundary reached a provider and reported nothing — the opener model is a
+   * real Penn call on every workbench draft, and none of them reached
+   * `lead_model_calls`, which is what the workspace spend ceiling sums.
+   *
+   * Optional so the many tests that stub `ModelBoundary` are unaffected; when
+   * absent, behaviour is exactly what it was.
+   */
+  onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
+  /** Layer 2: bounds calls/tokens for models that have no price. */
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
+}): ModelBoundary {
   return async (req: ModelOpenerRequest): Promise<ModelOpenerResponse> => {
     const { system, user } = buildOpenerPrompt(req);
 
@@ -184,6 +202,8 @@ export function makeOpenerModel(opts: { workspaceId: string; agentSlug?: string 
       agentSlug: opts.agentSlug ?? "penn",
       functionName: "workbench_personalized_opener",
       workspaceId: opts.workspaceId,
+      onModelCall: opts.onModelCall,
+      budget: opts.budget,
     });
 
     if (!res.ok) {

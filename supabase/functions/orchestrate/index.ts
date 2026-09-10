@@ -23,6 +23,8 @@ import {
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
+import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
 import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
@@ -1248,6 +1250,10 @@ Return ONLY valid JSON, no prose, no markdown:
   ]
 }`;
 
+    // Bounds and reports the planner call. `generateJson` forwards into
+    // `generateText`, which emits telemetry ONLY through `onModelCall`.
+    const modelCalls = new ModelCallCollector(resolveRunBudget());
+
     ai = await generateJson({
       taskType: "orchestration_plan",
       systemPrompt: getAgentorySystemPrompt({
@@ -1261,7 +1267,28 @@ Return ONLY valid JSON, no prose, no markdown:
       maxTokens: 2048,
       functionName: "orchestrate",
       workspaceId: workspace_id,
+      onModelCall: modelCalls.sink,
+      budget: modelCalls,
     });
+
+    // ── AND INTO THE LEDGER ────────────────────────────────────────────────
+    //
+    // `logProviderCall` immediately below is NOT accounting: it writes
+    // `activity_feed`, which has no tokens and no cost, while the workspace
+    // ceiling sums `lead_model_calls`. The planner call is a 2048-token
+    // orchestration plan on every instruction and reported nothing.
+    //
+    // Drained here, before the plan is even parsed: a plan this call failed to
+    // produce has still been billed.
+    try {
+      const rows = await modelCalls.drain(createLedgerWriter(admin as never), {
+        workspace_id, task_id: null, plan_id: null,
+        logical_call_key: `orchestrate:${workspace_id}:${Date.now()}:model`,
+      });
+      if (rows > 0) console.log("[orchestrate][model-ledger]", { workspace_id, rows });
+    } catch (e) {
+      console.warn("[orchestrate][model-ledger] drain failed:", e);
+    }
 
     await logProviderCall(admin, {
       workspace_id,

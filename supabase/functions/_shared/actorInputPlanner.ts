@@ -55,6 +55,20 @@ export type ActorInputPlan = {
 };
 
 export type PlanArgs = {
+  /**
+   * ACCOUNTING SEAM, injected by whoever owns the run.
+   *
+   * `planActorInput` currently has NO production call site — it belonged to the
+   * 1,893-line legacy sourcing block deleted in the Mission cutover, and only
+   * tests reach it now. The seam is here anyway, because unreachability is
+   * fragile containment: whoever revives this gets metering by construction
+   * rather than a silent unmetered provider call.
+   *
+   * `generateJson` forwards into `generateText`, which emits telemetry ONLY
+   * through this callback.
+   */
+  onModelCall?: (telemetry: ModelCallTelemetry, ok: boolean) => void;
+  budget?: { check(): { allowed: boolean; exceeded: string | null } };
   user_request: string;
   actor_key: string;
   source_type: LeadSourceType | string;
@@ -333,6 +347,8 @@ export async function planActorInput(args: PlanArgs): Promise<PlanResult> {
         jsonMode: true,
         functionName: "actorInputPlanner",
         preferredProvider,
+        onModelCall: args.onModelCall,
+        budget: args.budget,
       });
     } catch { ai = null; }
     if (ai) { providerUsed = ai.provider; modelUsed = ai.model; }
@@ -381,6 +397,7 @@ import {
   resolveHiringSourceActor, type HiringSourceCapabilityId,
 } from "./hiringSourceCatalog.ts";
 import { canonicalJson as _canonicalJson, sha256Hex as _sha256Hex } from "./planHash.ts";
+import type { ModelCallTelemetry } from "./modelCostModel.ts";
 
 /** What a planner may ask for. Provider-neutral by construction. */
 export interface HiringSourceIntent {

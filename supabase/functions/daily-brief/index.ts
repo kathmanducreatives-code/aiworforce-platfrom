@@ -7,6 +7,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateText } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
+import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -248,6 +250,11 @@ ${sectionActions}`;
   // ---- Optional AI polish (formatting only, no fabrication) ----
   let finalMd = deterministicMd;
   let modelUsed = "deterministic";
+  // Bounds and reports this function's one model call. `generateText` emits
+  // telemetry ONLY through `onModelCall`, so without this the daily brief spent
+  // on every schedule and appeared in no ledger.
+  const modelCalls = new ModelCallCollector(resolveRunBudget());
+
   try {
     const facts = {
       summary, plans: planEnriched, tasks, approvals, activity,
@@ -277,6 +284,8 @@ ${sectionActions}`;
       maxTokens: 1400,
       functionName: "daily-brief",
       workspaceId,
+      onModelCall: modelCalls.sink,
+      budget: modelCalls,
     });
     if (ai.ok && ai.content && ai.content.includes("Today's Command Brief")) {
       finalMd = ai.content.trim();
@@ -284,6 +293,24 @@ ${sectionActions}`;
     }
   } catch (e) {
     console.warn("[daily-brief] AI polish failed, using deterministic markdown:", e);
+  }
+
+  // ── AND INTO THE LEDGER ──────────────────────────────────────────────────
+  //
+  // Outside the try/catch above, which swallows a failed polish: the call may
+  // have reached the provider and been billed before it failed, and recording
+  // only successful briefs would understate a repeatedly-failing schedule.
+  //
+  // No task or plan — a brief is a scheduled report, not a run — and both
+  // columns are nullable, so the workspace alone attributes the spend.
+  try {
+    const rows = await modelCalls.drain(createLedgerWriter(admin as never), {
+      workspace_id: workspaceId, task_id: null, plan_id: null,
+      logical_call_key: `daily-brief:${conversationId}:model`,
+    });
+    if (rows > 0) console.log("[daily-brief][model-ledger]", { workspaceId, rows });
+  } catch (e) {
+    console.warn("[daily-brief][model-ledger] drain failed:", e);
   }
 
   // ---- Persist assistant message ----

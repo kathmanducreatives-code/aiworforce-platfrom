@@ -6,6 +6,35 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
 import { mergeProfile, type StructuredBrainPatch } from "../_shared/companyBrainSchema.ts";
+import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+
+/**
+ * Bookkeeping must never fail the onboarding step it only describes.
+ *
+ * Both call sites here — a 1200-token profile analysis and a 600-token
+ * follow-up generation — reported nothing: `generateJson` forwards into
+ * `generateText`, which emits telemetry ONLY through `onModelCall`.
+ *
+ * Drained immediately after each call rather than once at the end, because both
+ * branches return straight after their call.
+ */
+async function drainSetupModelCalls(
+  collector: ModelCallCollector,
+  admin: unknown,
+  workspace_id: string,
+  label: string,
+): Promise<void> {
+  try {
+    const rows = await collector.drain(createLedgerWriter(admin as never), {
+      workspace_id, task_id: null, plan_id: null,
+      logical_call_key: `setup-company-brain:${label}:${workspace_id}:${Date.now()}:model`,
+    });
+    if (rows > 0) console.log("[setup-company-brain][model-ledger]", { workspace_id, label, rows });
+  } catch (e) {
+    console.warn("[setup-company-brain][model-ledger] drain failed:", e);
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +69,10 @@ Deno.serve(async (req) => {
 
   const action = String(body.action ?? "");
   const workspace_id = String(body.workspace_id ?? "");
+  // One per request. The two model call sites below are mutually exclusive
+  // branches on `action`, so a single collector attributes either to this
+  // workspace and bounds it the same way.
+  const modelCalls = new ModelCallCollector(resolveRunBudget());
   if (!workspace_id) return json({ error: "missing_workspace_id" }, 400);
 
   // Verify membership
@@ -170,7 +203,10 @@ Deno.serve(async (req) => {
         maxTokens: 1200,
         functionName: "setup-company-brain",
         workspaceId: workspace_id,
+        onModelCall: modelCalls.sink,
+        budget: modelCalls,
       });
+      await drainSetupModelCalls(modelCalls, admin, workspace_id, "analyze");
 
       phases.push({ agent: "pilot", label: "Mapping business model", status: ai.ok ? "ok" : "failed" });
 
@@ -197,7 +233,10 @@ Deno.serve(async (req) => {
         maxTokens: 600,
         functionName: "setup-company-brain",
         workspaceId: workspace_id,
+        onModelCall: modelCalls.sink,
+        budget: modelCalls,
       });
+      await drainSetupModelCalls(modelCalls, admin, workspace_id, "followups");
       const qs = (ai.ok && (ai.json as any)?.questions) || [
         "Who is your ideal customer or candidate right now?",
         "What outcome do you want ScreeningPilot to help with this month?",

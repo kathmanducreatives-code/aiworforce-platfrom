@@ -50,36 +50,27 @@ for await (const f of walk(FUNCTIONS)) FILES.push(f);
 const PROVIDER_MODULE = "_shared/aiProvider.ts";
 
 /**
- * KNOWN-UNMETERED CALL SITES, AND WHY THEY SURVIVE.
+ * KNOWN-UNMETERED CALL SITES.
  *
- * Every one of these spends real money that the workspace ceiling cannot see.
- * They are recorded rather than fixed because each needs a collector threaded
- * from whatever owns its run, and doing that blind — in the same change as a
- * content feature — is how a wrong `workspace_id` gets attributed to somebody
- * else's bill.
- *
- * THIS LIST MAY SHRINK AND MUST NEVER GROW. The number below is pinned, so a
- * new unmetered call site fails this test rather than appearing in a month's
- * invoice.
+ * EMPTY, and that is the point. It held eight files; every one now threads a
+ * collector from whatever owns its run. An entry here is money the workspace
+ * ceiling cannot see, so adding one is a deliberate, reviewable act — not a
+ * default a new call site can fall into.
  */
-const KNOWN_UNMETERED: Readonly<Record<string, string>> = Object.freeze({
-  "_shared/actorInputPlanner.ts": "Apify input planning; needs the lead run's collector",
-  "_shared/broadeningPlannerAdapter.ts": "ICP broadening; needs the lead run's collector",
-  "_shared/companyBrainResearch/generateBrainDraft.ts": "company brain draft; onboarding path",
-  "_shared/workbench/openerModel.ts": "Penn opener boundary; injected, so the seam belongs on ModelBoundary",
-  "daily-brief/index.ts": "scheduled brief; no user request to attribute to",
-  "generate-company-brain-draft/index.ts": "onboarding draft",
-  "orchestrate/index.ts": "planner call; orchestrate has no collector at all",
-  "setup-company-brain/index.ts": "onboarding, two call sites",
-});
+const KNOWN_UNMETERED: Readonly<Record<string, string>> = Object.freeze({});
 
 interface Site { path: string; line: number; fn: string; metered: boolean }
 
 /** Call sites of generateText / generateJson, with the option object they pass. */
 function callSites(path: string, src: string): Site[] {
   const out: Site[] = [];
-  for (const m of src.matchAll(/\b(generateText|generateJson)\s*\(\s*\{/g)) {
-    const start = m[0].length + m.index! - 1;
+  // BARE CALLS ONLY. `deps.generateJson({ system, user })` in
+  // companyBrainResearch/generateBrainDraft.ts is an INJECTED dependency with a
+  // different signature — that module imports no provider at all — and matching
+  // it put a file on this list that cannot make a provider call. A member
+  // expression is somebody else's seam, not aiProvider's.
+  for (const m of src.matchAll(/(^|[^.\w])(generateText|generateJson)\s*\(\s*\{/g)) {
+    const start = m.index! + m[0].length - 1;
     let depth = 0, i = start;
     for (; i < src.length; i++) {
       if (src[i] === "{") depth++;
@@ -89,7 +80,7 @@ function callSites(path: string, src: string): Site[] {
     out.push({
       path,
       line: src.slice(0, m.index!).split("\n").length,
-      fn: m[1],
+      fn: m[2],
       metered: block.includes("onModelCall"),
     });
   }
@@ -101,6 +92,35 @@ const SITES: Site[] = FILES
   .flatMap((f) => callSites(f.path, f.text));
 
 // ══════════ 1. the invariant ══════════════════════════════════════════════
+
+Deno.test("the detector actually finds call sites", () => {
+  // WITHOUT THIS THE INVARIANT IS VACUOUS. The regex was tightened once already
+  // — to stop `deps.generateJson(...)` counting as a provider call — and a
+  // tightening that matched nothing would turn every assertion below green.
+  assert(
+    SITES.length >= 13,
+    `expected at least 13 model call sites, found ${SITES.length} — the detector is broken`,
+  );
+  for (const f of ["run-agent/index.ts", "pilot-chat/index.ts", "orchestrate/index.ts"]) {
+    assert(SITES.some((s) => s.path === f), `no call site found in ${f}`);
+  }
+});
+
+Deno.test("a module with no provider import is NOT a call site", () => {
+  // companyBrainResearch/generateBrainDraft.ts calls `deps.generateJson({...})`
+  // — an injected dependency of a different signature — and imports no provider
+  // at all. It sat on the unmetered list for a call it cannot make.
+  const draft = FILES.find((f) => f.path === "_shared/companyBrainResearch/generateBrainDraft.ts");
+  assert(draft, "generateBrainDraft must exist");
+  assert(
+    !draft!.text.includes("aiProvider.ts"),
+    "premise: this module reaches no provider directly",
+  );
+  assertEquals(
+    SITES.filter((s) => s.path === "_shared/companyBrainResearch/generateBrainDraft.ts"), [],
+    "an injected dependency must not be counted as a provider call site",
+  );
+});
 
 Deno.test("THE INVARIANT: every model call site passes onModelCall, or is named", () => {
   const offenders = [...new Set(
@@ -115,10 +135,17 @@ Deno.test("THE INVARIANT: every model call site passes onModelCall, or is named"
   );
 });
 
-Deno.test("the known-unmetered list may shrink, never grow", () => {
+Deno.test("THE LIST IS EMPTY, and must stay empty", () => {
+  // It held eight files. Every one now threads a collector from whatever owns
+  // its run: run-lead-action -> leadActionExecutor -> makeOpenerModel for the
+  // opener boundary, and daily-brief, generate-company-brain-draft, orchestrate
+  // and setup-company-brain each create and drain their own. The two planners
+  // (actorInputPlanner, broadeningPlannerAdapter) have no production call site
+  // and were given seams anyway, so reviving them cannot reintroduce a silent
+  // unmetered call.
   assertEquals(
-    Object.keys(KNOWN_UNMETERED).length, 8,
-    "a new unmetered model call is a regression — wire it to a collector instead",
+    Object.keys(KNOWN_UNMETERED).length, 0,
+    "there is no longer any excuse for an unmetered model call — wire the collector",
   );
 });
 
@@ -176,6 +203,69 @@ Deno.test("and the generic path drains what it collects", () => {
   assert(
     errorAt < 0 || drainAt < errorAt,
     "the drain must happen before the error branch, or failed calls go unbilled",
+  );
+});
+
+// ══════════ 2b. every collector is drained ════════════════════════════════
+
+Deno.test("every function that collects also DRAINS to the ledger", () => {
+  // A collector that is never drained is telemetry that reaches nothing — the
+  // same failure one layer further on, and just as silent.
+  const OWNERS = [
+    "run-agent/index.ts",
+    "pilot-chat/index.ts",
+    "orchestrate/index.ts",
+    "daily-brief/index.ts",
+    "generate-company-brain-draft/index.ts",
+    "setup-company-brain/index.ts",
+    "run-lead-action/index.ts",
+  ];
+  for (const path of OWNERS) {
+    const f = FILES.find((x) => x.path === path);
+    assert(f, `${path} must exist`);
+    assert(
+      f!.text.includes("new ModelCallCollector("),
+      `${path} must create a collector`,
+    );
+    assert(
+      /\.drain\(/.test(f!.text),
+      `${path} collects model telemetry but never drains it to the ledger`,
+    );
+    assert(
+      f!.text.includes("createLedgerWriter("),
+      `${path} must drain through the ledger writer`,
+    );
+  }
+});
+
+Deno.test("THE INJECTED SEAMS: shared modules accept a collector, never invent one", () => {
+  // A library module must not create its own collector: it does not know the
+  // workspace or the task, and guessing is how spend lands on the wrong bill.
+  // It takes `onModelCall` from whoever owns the run.
+  const INJECTED = [
+    "_shared/workbench/openerModel.ts",
+    "_shared/actorInputPlanner.ts",
+    "_shared/broadeningPlannerAdapter.ts",
+  ];
+  for (const path of INJECTED) {
+    const f = FILES.find((x) => x.path === path);
+    assert(f, `${path} must exist`);
+    assert(f!.text.includes("onModelCall"), `${path} must accept the seam`);
+    assert(
+      !f!.text.includes("new ModelCallCollector("),
+      `${path} must NOT create its own collector — it cannot know whose spend this is`,
+    );
+  }
+  // And the one that is reachable must actually be threaded to it.
+  const exec = FILES.find((f) => f.path === "_shared/leadActionExecutor.ts")!;
+  assert(
+    /onModelCall: ctx\.onModelCall/.test(exec.text),
+    "leadActionExecutor must forward the seam into makeOpenerModel",
+  );
+  const owner = FILES.find((f) => f.path === "run-lead-action/index.ts")!;
+  assert(
+    /onModelCall: modelCalls\.sink/.test(owner.text),
+    "run-lead-action must supply the seam it owns",
   );
 });
 

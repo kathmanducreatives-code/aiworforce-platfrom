@@ -29,6 +29,8 @@ import { resolveOriginAwareSave } from "../_shared/companyBrainOriginSave.ts";
 import { buildActivationSuggestions } from "../_shared/companyBrainResearch/activationSuggestions.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "../_shared/companyBrainCompleteness.ts";
+import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -234,6 +236,14 @@ Deno.serve(async (req) => {
         existing_company_brain: await loadProfile(),
       };
 
+      // ── THE DRAFT'S MODEL CALL ENTERS THE LEDGER ─────────────────────────
+      //
+      // `logProviderCall` below is NOT accounting: it writes `activity_feed`,
+      // which carries no tokens and no cost, while the workspace ceiling sums
+      // `lead_model_calls`. This call is a 3000-token draft on every onboarding
+      // and reported nothing.
+      const modelCalls = new ModelCallCollector(resolveRunBudget());
+
       deps.generateJson = async ({ system, user }) => {
         const ai = await generateJson({
           taskType: "helper",
@@ -243,6 +253,8 @@ Deno.serve(async (req) => {
           maxTokens: 3000,
           functionName: "generate-company-brain-draft",
           workspaceId: workspace_id,
+          onModelCall: modelCalls.sink,
+          budget: modelCalls,
         });
         await logProviderCall(admin, {
           workspace_id, function_name: "generate-company-brain-draft", task_type: "helper",
@@ -252,6 +264,18 @@ Deno.serve(async (req) => {
       };
 
       const r = await generateBrainDraft(draftInput, deps);
+
+      // Drained regardless of the draft's outcome: a failed or unparseable
+      // generation has still been paid for.
+      try {
+        const rows = await modelCalls.drain(createLedgerWriter(admin as never), {
+          workspace_id, task_id: null, plan_id: null,
+          logical_call_key: `generate-company-brain-draft:${workspace_id}:${Date.now()}:model`,
+        });
+        if (rows > 0) console.log("[generate-company-brain-draft][model-ledger]", { workspace_id, rows });
+      } catch (e) {
+        console.warn("[generate-company-brain-draft][model-ledger] drain failed:", e);
+      }
 
       // Source-role safety + refresh review state. A draft extracted from a
       // website that CONTRADICTS the workspace's existing canonical seller
