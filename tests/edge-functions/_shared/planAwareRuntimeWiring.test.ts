@@ -16,7 +16,7 @@ const runAgentSrc = () => Deno.readTextFile(new URL("../../../supabase/functions
 
 Deno.test("8. run-agent supplies actionBudget to the company-first controller", async () => {
   const src = await runAgentSrc();
-  const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({"));
+  const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing({"));
   assert(call.includes("actionBudget: createPlanAwareActionBudget("),
     "the real call site must supply a budget through the binding");
   assert(call.includes("sequentialSources.planBudgetSnapshot"),
@@ -29,7 +29,7 @@ Deno.test("8. run-agent supplies actionBudget to the company-first controller", 
 
 Deno.test("8a. the budget is supplied only when the bridge is actually enabled", async () => {
   const src = await runAgentSrc();
-  const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({"));
+  const call = src.slice(src.indexOf("executeRunAgentCompanyFirstSourcing({"));
   assert(call.includes("sequentialSources.enabled"),
     "a disabled bridge must leave the pre-existing fixed limits in force");
 });

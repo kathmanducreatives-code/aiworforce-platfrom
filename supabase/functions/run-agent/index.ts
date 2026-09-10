@@ -42,7 +42,6 @@ import { compileLeadEntityIntent, applyMissionEntityAuthority, compileActorPlan,
 // verification live in _shared/compoundSourcingPipeline.ts (unit-tested offline).
 import { isCompanyFirstRequest } from "../_shared/runAgentCompoundBridge.ts";
 import { executeRunAgentCompanyFirstSourcing } from "../_shared/executeRunAgentCompanyFirstSourcing.ts";
-import { buildCompanyFirstRuntimeDeps } from "../_shared/buildCompanyFirstRuntimeDeps.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { compileEffectiveCompanyPolicy } from "../_shared/companyBrainEffectivePolicy.ts";
 // PHASE 2 — Claude-first INITIAL planning. Gated by CLAUDE_FIRST_LEAD_PLANNING
@@ -5247,12 +5246,7 @@ Deno.serve(async (req) => {
           );
           leadOwnership.enterStage("quota_loop");
         }
-        // EXTRACTED SEAM. The deps object is assembled by `buildCompanyFirstRuntimeDeps`
-        // so the V2 long-running worker can build the identical deps without copying
-        // this handler. Behaviour is unchanged: blocking, ownership and the
-        // `legacyBlockedCalls` counter stay here; the builder omits `actionBudget`,
-        // `bounds` and `executionBudget` when falsy, exactly like the prior spreads.
-        const cf = await executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({
+        const cf = await executeRunAgentCompanyFirstSourcing({
           intent: cfIntentPlanned, workspaceId: workspace_id, planId: plan_id ?? null, taskId: task.id,
           brainConstraints: brainEnforced ? effectivePolicy.constraints : null,
           brainPolicyHash: brainEnforced ? effectivePolicy.policyHash : null,
@@ -5294,11 +5288,8 @@ Deno.serve(async (req) => {
           // dropping actionBudget above, loopBound would come from the hard
           // provider ceiling instead of maxRounds and the loop would still run.
           ...(sourcingBlocked ? { bounds: { maxRounds: 0 } } : {}),
-          // V1: executionBudget intentionally omitted (edge default applies). The
-          // V2 worker supplies it to lift the ~125s ceiling; absent here ⇒ the
-          // produced deps are identical to the previous inline literal.
           log: (m, meta) => console.log("[run-agent][company-first]", m, meta),
-        }));
+        });
 
         // ══ COMBINED, DEDUPLICATED CONTACT QUOTA ═════════════════════════════
         // Both paths' PERSISTED CONTACT identities, unioned. The same person
