@@ -6754,6 +6754,23 @@ Deno.serve(async (req) => {
     console.log("[run-agent] anthropic preferred for", agent_slug, "but ANTHROPIC_API_KEY missing — falling back to default provider");
   }
 
+  // ── THE GENERIC AGENT PATH ENTERS THE MODEL LEDGER ───────────────────────
+  //
+  // This call had no `onModelCall`. `generateText` emits telemetry ONLY through
+  // that seam, so every generic agent execution — every Scribe draft, every
+  // Penn rewrite, every pilot step that lands here — reported nothing.
+  //
+  // `logProviderCall` below is not accounting: it writes `activity_feed`, which
+  // carries no tokens and no cost. The workspace spend ceiling sums
+  // `lead_model_calls` (see _shared/modelSpendCeiling.ts), so an unrecorded
+  // call is not "cheap", it is INVISIBLE — it cannot be budgeted, alerted on or
+  // attributed.
+  //
+  // This is the same defect the lead engine had before 8958550c and the
+  // strategist transport had before its seam was connected: the seam existed
+  // and nothing was passed to it.
+  const genericModelCalls = new ModelCallCollector(resolveRunBudget());
+
   const ai = await generateText({
     taskType: "agent_execution",
     systemPrompt,
@@ -6764,7 +6781,29 @@ Deno.serve(async (req) => {
     functionName: "run-agent",
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
+    onModelCall: genericModelCalls.sink,
   });
+
+  // DRAINED BEFORE THE ERROR BRANCH, deliberately: a failed or empty generation
+  // has already been paid for, and recording only successes would understate
+  // the bill exactly when something is looping and failing.
+  try {
+    const genericRows = await genericModelCalls.drain(
+      createLedgerWriter(supabase as never),
+      {
+        workspace_id, task_id: task.id, plan_id: plan_id ?? null,
+        logical_call_key: `${task.id}:model:agent_execution`,
+      },
+    );
+    if (genericRows > 0) {
+      console.log("[run-agent][model-ledger][generic]", {
+        task_id: task.id, agent_slug, rows: genericRows,
+      });
+    }
+  } catch (e) {
+    // Bookkeeping must never fail the run it only describes.
+    console.warn("[run-agent][model-ledger][generic] drain failed:", e);
+  }
 
   await logProviderCall(supabase, {
     workspace_id,

@@ -285,6 +285,14 @@ interface AgentResultCtx extends BaseCtx {
     engagement_queries?: string[];
     competitor_related?: boolean;
     related_signal_ids?: string[];
+    /**
+     * The `content_item` this generation is filling in.
+     *
+     * Present when the request came from the Content surface, which creates the
+     * draft row BEFORE asking for generation — so the user has something to
+     * return to whether or not the model ever answers.
+     */
+    content_item_id?: string;
   };
 }
 
@@ -1343,4 +1351,35 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
     body: cleaned.body,
     raw: cleaned.structured ? { ...raw, structured: cleaned.structured } : raw,
   });
+
+  // ── AND INTO THE OBJECT THE USER CAN ACTUALLY OPEN ───────────────────────
+  //
+  // `saved_outputs` is an append-only record of what a run produced. It has no
+  // status and no version child, so a draft written only there cannot be
+  // edited, reopened or approved — which is why Content produced nothing
+  // durable for its entire life even though this writer already existed.
+  //
+  // The Content surface creates the `content_item` first and passes its id, so
+  // generation FILLS IN a draft the user already has rather than creating a
+  // second thing beside it.
+  if (cl?.content_item_id) {
+    // SCOPED BY WORKSPACE, not by id alone. The id arrives from the client
+    // through `tool_input`, and this writer holds the service role — an
+    // unscoped update would let a forged id overwrite another tenant's draft.
+    const { error } = await ctx.admin
+      .from("content_item")
+      .update({
+        title: cleaned.title,
+        body: cleaned.body,
+        agent_slug: "scribe",
+        // APPROVAL-FIRST. A generated draft is the agent's proposal, never a
+        // finished post, so it lands where a human still has to look at it.
+        status: "in_review",
+      })
+      .eq("id", cl.content_item_id)
+      .eq("workspace_id", ctx.workspace_id);
+    if (error) {
+      console.warn("[memoryWriter] content_item update failed:", error.message);
+    }
+  }
 }

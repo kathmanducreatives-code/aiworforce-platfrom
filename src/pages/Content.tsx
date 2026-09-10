@@ -16,6 +16,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useContentItems } from '@/hooks/useContentItems';
 import type { ContentItem } from '@/lib/content/contentItems';
+import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { useIntegrationReadiness } from '@/hooks/useIntegrationReadiness';
 import { sendAgentCommand } from '@/lib/agentCommand';
@@ -80,6 +81,7 @@ export default function Content() {
   // content draft — nothing writes them — so this is the real list.
   const {
     items: contentItems, create: createContentDraft, save: saveContentDraft,
+    reload: reloadContentDrafts,
   } = useContentItems(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
@@ -368,6 +370,28 @@ export default function Content() {
         onSave={
           openDraftId && contentItems.some((it) => it.id === openDraftId)
             ? async ({ body }) => { await saveContentDraft(openDraftId, { body }); }
+            : undefined
+        }
+        onGenerate={
+          openDraftId && workspaceId && contentItems.some((it) => it.id === openDraftId)
+            ? async () => {
+              const item = contentItems.find((it) => it.id === openDraftId)!;
+              const res = await generateContentDraft({
+                contentItemId: item.id,
+                workspaceId,
+                // The brief the user picked when they created the draft. Falling
+                // back to the title keeps a hand-made draft generatable too.
+                instruction: (item.metadata?.brief as string | undefined)
+                  ?? `Write a ${item.format.replace(/_/g, ' ')} titled "${item.title ?? 'Untitled'}". Draft only.`,
+                format: item.format,
+                topic: (item.metadata?.topic as string | undefined) ?? item.title,
+                relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
+              });
+              if (!res.ok) throw new Error(res.error ?? 'Could not generate');
+              // Scribe wrote straight into the row, so re-read rather than
+              // trusting a response body — the server is the one writer.
+              await reloadContentDrafts();
+            }
             : undefined
         }
       />

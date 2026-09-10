@@ -1,8 +1,8 @@
 // Content draft detail drawer. Shows the source signal, core argument, hook
 // options, draft body, CTA, proof used, missing proof and approval status.
 // Read + approve only — nothing publishes from here.
-import { useEffect, useState } from "react";
-import { X, ExternalLink, ShieldAlert, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, ExternalLink, ShieldAlert, Loader2, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 export interface ContentDetail {
@@ -25,25 +25,54 @@ export interface ContentDetail {
  * an append-only record with nothing to save back to. A `content_item` is an
  * editable object, so the Content page passes a saver and gets an editor.
  */
-export default function ContentDetailDrawer({ detail, onClose, onSave }: {
+export default function ContentDetailDrawer({ detail, onClose, onSave, onGenerate }: {
   detail: ContentDetail | null;
   onClose: () => void;
   onSave?: (patch: { body: string }) => Promise<void>;
+  /**
+   * Ask Scribe to write this draft.
+   *
+   * EXPLICIT, never automatic on create. Generating whenever the create modal
+   * is used would spend a model call on every stray click, including the ones
+   * that were a mis-tap. The user asks, and pays, deliberately.
+   */
+  onGenerate?: () => Promise<void>;
 }) {
   const editable = typeof onSave === "function";
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [draftBody, setDraftBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  // Re-seed when a DIFFERENT draft opens, keyed on id rather than on `detail`:
-  // the parent rebuilds `detail` in a useMemo on every list refresh, and
+  // The body this editor was last seeded from. Not state — changing it must
+  // never itself cause a render.
+  const seeded = useRef("");
+
+  // A DIFFERENT draft opened: hard reset. Keyed on id rather than on `detail`,
+  // because the parent rebuilds `detail` in a useMemo on every list refresh and
   // depending on the object would wipe what the user has typed each time.
   useEffect(() => {
-    setDraftBody(detail?.body ?? "");
+    const incoming = detail?.body ?? "";
+    setDraftBody(incoming);
+    seeded.current = incoming;
     setSaveError(null);
     setSavedAt(null);
+    setGenError(null);
   }, [detail?.id]);
+
+  // THE SAME draft changed underneath us — which is what generation does: Scribe
+  // writes the row server-side and the parent re-reads it, so the id is
+  // unchanged and only the body moves. Without this the textarea would keep
+  // showing the empty draft and "Draft with Scribe" would look like it did
+  // nothing. Adopt ONLY when there is nothing unsaved to lose.
+  useEffect(() => {
+    const incoming = detail?.body ?? "";
+    if (incoming === seeded.current) return;
+    setDraftBody((current) => (current === seeded.current ? incoming : current));
+    seeded.current = incoming;
+  }, [detail?.body]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -134,7 +163,7 @@ export default function ContentDetailDrawer({ detail, onClose, onSave }: {
                         setSaving(false);
                       }
                     }}
-                    disabled={saving || draftBody === (detail.body ?? "")}
+                    disabled={saving || draftBody === seeded.current}
                     className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black disabled:bg-white/[0.04] disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
                   >
                     {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -145,6 +174,32 @@ export default function ContentDetailDrawer({ detail, onClose, onSave }: {
                   )}
                   {saveError && (
                     <span className="text-[12px] text-amber-300/90">{saveError}</span>
+                  )}
+                  {onGenerate && (
+                    <button
+                      onClick={async () => {
+                        if (generating) return;
+                        setGenerating(true); setGenError(null);
+                        try {
+                          await onGenerate();
+                        } catch (err) {
+                          setGenError(err instanceof Error ? err.message : "Could not generate");
+                        } finally {
+                          setGenerating(false);
+                        }
+                      }}
+                      disabled={generating}
+                      title="Scribe writes a draft here. Nothing publishes."
+                      className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9] disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {generating
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Sparkles className="h-3.5 w-3.5" />}
+                      {generating ? "Scribe is writing…" : "Draft with Scribe"}
+                    </button>
+                  )}
+                  {genError && (
+                    <span className="text-[12px] text-amber-300/90">{genError}</span>
                   )}
                 </div>
               </>
