@@ -120,7 +120,7 @@ import {
   createRunTerminalGuard, supabaseTerminalGuardDb,
 } from "../_shared/leadRunTerminalGuard.ts";
 import {
-  sealTerminalRecord, endingReasonFor, type TerminalRecord,
+  sealTerminalRecord, endingReasonFor, type TerminalRecord, type ExecutionDeadline,
 } from "../_shared/leadExecutionFinalizer.ts";
 import {
   readProviderResultItems, resolveResponseKind, structuredRowsLookIntact,
@@ -769,7 +769,29 @@ async function finalizeCompanyFirstPlan(
   }
 }
 
-Deno.serve(async (req) => {
+/**
+ * IN-PROCESS CALLER OPTIONS — supplied ONLY by the LeadMission V2 worker.
+ *
+ * The edge entry point (`Deno.serve` at the bottom of this file) passes nothing,
+ * so every field is undefined and V1 behaves exactly as before: the terminal
+ * guard builds its own default edge deadline and no callback runs.
+ *
+ *   deadline         Replaces the guard's edge deadline. The worker supplies a
+ *                    longer, REVOCABLE one. Revoking it makes the engine's
+ *                    existing reserve logic stop starting paid work and write a
+ *                    checkpoint — which is how a lost lease stops a run without
+ *                    this handler needing an abort hook of its own.
+ *   onExecutionBound Told which task and lineage this run executes on, once the
+ *                    lineage lease has been taken, so the worker can keep that
+ *                    task and lease alive. It may never throw into the run.
+ */
+export interface RunAgentRunOptions {
+  deadline?: ExecutionDeadline;
+  onExecutionBound?: (ids: { taskId: string; lineageId: string; holdsLease: boolean }) =>
+    void | Promise<void>;
+}
+
+async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
   // the workflow always reserves wall-clock to finish qualification/persistence/
@@ -840,6 +862,9 @@ Deno.serve(async (req) => {
       });
     },
   }, {
+    // V1 passes no deadline, so the guard builds its own edge default. Only the
+    // V2 worker supplies one; every deadline check downstream reads this object.
+    ...(inProcess.deadline ? { deadline: inProcess.deadline } : {}),
     log: (m, meta) => console.log("[run-agent][terminal-guard]", m, meta),
     onWriteError: (e) => console.error("[run-agent][terminal-guard][write-error]", String(e)),
   });
@@ -1267,6 +1292,18 @@ Deno.serve(async (req) => {
       console.error("[run-agent][lineage-lease] link failed", {
         task_id: task.id, lineage_id: lineageRootId, detail: linkErr.message,
       });
+    }
+  }
+
+  // V2 WORKER ONLY — undefined on the edge path. Told AFTER the lease gate and the
+  // lineage link and BEFORE any paid boundary, so what the worker renews is
+  // exactly what this run holds. A failing callback costs the worker its
+  // heartbeat target, never the run.
+  if (inProcess.onExecutionBound) {
+    try {
+      await inProcess.onExecutionBound({ taskId: task.id, lineageId: lineageRootId, holdsLease });
+    } catch (e) {
+      console.error("[run-agent][in-process] onExecutionBound failed", String(e));
     }
   }
 
@@ -7464,4 +7501,16 @@ Deno.serve(async (req) => {
   // that produced no Response at all is itself a defect worth reporting rather
   // than hiding behind an empty 200.
   return guardedResponse ?? json({ error: "run_agent_no_response" }, 500);
-});
+}
+
+export { handleRunAgent };
+
+// ── THE SERVER STARTS UNLESS AN IN-PROCESS CALLER IS IMPORTING THIS MODULE ──
+//
+// Same pattern, and the same reasoning, as pilot-chat: `import.meta.main` would
+// be the idiomatic guard, but if the edge runtime ever loaded this file as a
+// dependency rather than an entry point, run-agent would silently serve nothing.
+// An explicit opt-out that production never sets cannot fail that way. The
+// LeadMission V2 worker and the tests set RUN_AGENT_IMPORT_ONLY before import.
+// The edge path passes the request ONLY — no in-process options — so V1 is unchanged.
+if (!Deno.env.get("RUN_AGENT_IMPORT_ONLY")) Deno.serve((req) => handleRunAgent(req));
