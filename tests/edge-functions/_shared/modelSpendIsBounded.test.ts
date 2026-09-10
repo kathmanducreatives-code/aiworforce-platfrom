@@ -631,6 +631,104 @@ Deno.test("THE OTHER HALF: run-agent wires both layers too", async () => {
   }
 });
 
+Deno.test("LAYER 1 REACHES EVERY FUNCTION THAT SPENDS ON MODELS", async () => {
+  // It was `pilot-chat` only, then `pilot-chat` + `run-agent`. Metering the
+  // remaining four made them VISIBLE; it did not make them BOUNDED — an
+  // onboarding or brief loop still reported every call against a ceiling that
+  // never consulted it. All six now do.
+  const SPENDERS = [
+    "pilot-chat", "run-agent", "orchestrate",
+    "daily-brief", "generate-company-brain-draft", "setup-company-brain",
+  ];
+  for (const fn of SPENDERS) {
+    const src = await Deno.readTextFile(
+      new URL(`../../../supabase/functions/${fn}/index.ts`, import.meta.url),
+    );
+    assert(
+      src.includes("authorizeModelSpend("),
+      `${fn} makes model calls but never consults the workspace USD ceiling`,
+    );
+    assert(
+      src.includes("resolveSpendEnforcement()"),
+      `${fn} must honour MODEL_SPEND_ENFORCEMENT rather than always refusing or never refusing`,
+    );
+  }
+});
+
+Deno.test("THE CEILING IS NOT OVER-BROAD: free paths are not gated", async () => {
+  // A MODEL ceiling must not refuse work that spends nothing on models.
+  // Getting this wrong is how a ceiling becomes an outage and gets switched off.
+  const setup = await Deno.readTextFile(
+    new URL("../../../supabase/functions/setup-company-brain/index.ts", import.meta.url),
+  );
+  // Only `analyze` and `generate_followups` reach a model; the other five
+  // actions are pure writes. The gate is per-branch, not per-request.
+  assert(
+    setup.includes('refuseIfOverCeiling(admin, workspace_id, "analyze")') &&
+      setup.includes('refuseIfOverCeiling(admin, workspace_id, "followups")'),
+    "setup-company-brain must gate its two spending branches",
+  );
+  for (const free of ["save_basics", "save_structured", "save_sources", "finalize"]) {
+    const at = setup.indexOf(`action === "${free}"`);
+    assert(at > 0, `premise: ${free} still exists`);
+    const branch = setup.slice(at, at + 700);
+    assert(
+      !branch.includes("refuseIfOverCeiling"),
+      `${free} spends nothing on models and must not be refused by a model ceiling`,
+    );
+  }
+
+  // orchestrate's liveness probe must not fail on a spend ceiling.
+  const orch = await Deno.readTextFile(
+    new URL("../../../supabase/functions/orchestrate/index.ts", import.meta.url),
+  );
+  const pingAt = orch.indexOf("?.ping === true");
+  const ceilingAt = orch.indexOf("authorizeModelSpend(");
+  assert(pingAt > 0 && ceilingAt > pingAt, "ping must return before the ceiling is consulted");
+
+  // generate-company-brain-draft: the Apify/Firecrawl actions are credit-gated,
+  // not model-gated, and must not be double-gated here.
+  const draft = await Deno.readTextFile(
+    new URL("../../../supabase/functions/generate-company-brain-draft/index.ts", import.meta.url),
+  );
+  const draftAt = draft.indexOf('action === "draft"');
+  const ceil2 = draft.indexOf("authorizeModelSpend(");
+  assert(draftAt > 0 && ceil2 > draftAt, "the ceiling must sit inside the draft branch");
+  for (const free of ["research_founder", "research_company", "status"]) {
+    const at = draft.indexOf(`action === "${free}"`);
+    assert(at > 0, `premise: ${free} still exists`);
+    assert(
+      !draft.slice(at, at + 600).includes("authorizeModelSpend"),
+      `${free} makes no model call and must not be gated by the model ceiling`,
+    );
+  }
+});
+
+Deno.test("THE BRIEF DEGRADES INSTEAD OF DISAPPEARING", async () => {
+  // daily-brief is the one place the ceiling does not refuse. Its model call
+  // POLISHES `deterministicMd`, which is already complete from real rows, so a
+  // 429 would delete a working scheduled report to save half a cent — and a
+  // report that vanishes is how a ceiling gets turned off.
+  const src = await Deno.readTextFile(
+    new URL("../../../supabase/functions/daily-brief/index.ts", import.meta.url),
+  );
+  assert(src.includes("authorizeModelSpend("), "the ceiling must still be consulted");
+  assert(
+    !/return json\([^)]*MODEL_SPEND_REFUSED/.test(src),
+    "daily-brief must NOT 429 — the deterministic brief is still worth sending",
+  );
+  assert(src.includes("class SkipPolish"), "the skip must be distinguishable from a provider failure");
+  assert(
+    src.includes("if (!spend.allowed) throw new SkipPolish()"),
+    "an over-ceiling workspace must skip the polish, not lose the brief",
+  );
+  // And the log must not blame the provider for a ceiling decision.
+  assert(
+    src.includes("if (!(e instanceof SkipPolish))"),
+    "a skipped polish must not be logged as an AI failure",
+  );
+});
+
 Deno.test("chat wires both layers, and Layer 2 into the fallback chain", async () => {
   const src = await Deno.readTextFile(
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url),

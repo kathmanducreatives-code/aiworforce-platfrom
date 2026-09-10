@@ -8,7 +8,20 @@ import { generateText } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
-import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import {
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  describeSpend, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
+
+/**
+ * Skips the AI polish without pretending the provider failed.
+ *
+ * The polish sits inside a try/catch that degrades to `deterministicMd`, which
+ * is exactly the behaviour a refused call wants — so the ceiling reuses that
+ * path rather than duplicating it, and this marker keeps the log honest about
+ * which of the two happened.
+ */
+class SkipPolish extends Error {}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -255,7 +268,38 @@ ${sectionActions}`;
   // on every schedule and appeared in no ledger.
   const modelCalls = new ModelCallCollector(resolveRunBudget());
 
+  // ── LAYER 1: THE WORKSPACE USD CEILING ───────────────────────────────────
+  //
+  // IT DEGRADES, IT DOES NOT REFUSE — the only place in this codebase where the
+  // ceiling does that, and it is deliberate. The model call here POLISHES
+  // `deterministicMd`, which is already complete: every section is built from
+  // real rows above. A 429 would delete a working brief to save half a cent,
+  // and a scheduled report that vanishes is how a ceiling gets switched off.
+  //
+  // So an over-ceiling workspace still gets its brief, in the deterministic
+  // form, and spends nothing. Containment without an outage.
+  const spend = await authorizeModelSpend({
+    db: admin as unknown as SpendDb,
+    workspace_id: workspaceId,
+    mode: resolveSpendEnforcement(),
+    ...resolveCeiling(),
+  });
+  if (spend.over_ceiling || spend.reason === "query_failed") {
+    console.log("[daily-brief][model-spend]", describeSpend(spend));
+  }
+
+  if (!spend.allowed) {
+    // `modelUsed` stays "deterministic", which is what the persisted message
+    // honestly reports. Logged distinctly from a provider failure: "the ceiling
+    // stopped this" and "the model broke" are different operational facts and
+    // must not share one line.
+    console.log("[daily-brief] polish skipped — model spend ceiling reached", {
+      workspaceId, spent_usd: spend.spent_usd, ceiling_usd: spend.ceiling_usd,
+    });
+  }
+
   try {
+    if (!spend.allowed) throw new SkipPolish();
     const facts = {
       summary, plans: planEnriched, tasks, approvals, activity,
       outreach: { tasks: outreachTasks.length, approvals: outreachApprovals.length },
@@ -292,7 +336,11 @@ ${sectionActions}`;
       modelUsed = ai.model || "lovable-ai";
     }
   } catch (e) {
-    console.warn("[daily-brief] AI polish failed, using deterministic markdown:", e);
+    // A skipped polish is already logged above with its reason; only a real
+    // provider failure is a warning.
+    if (!(e instanceof SkipPolish)) {
+      console.warn("[daily-brief] AI polish failed, using deterministic markdown:", e);
+    }
   }
 
   // ── AND INTO THE LEDGER ──────────────────────────────────────────────────

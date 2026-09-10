@@ -7,7 +7,45 @@ import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
 import { mergeProfile, type StructuredBrainPatch } from "../_shared/companyBrainSchema.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
-import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import {
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
+/**
+ * LAYER 1, PER SPENDING BRANCH.
+ *
+ * Only `analyze` and `generate_followups` reach a model. The other five actions
+ * — save_basics, save_structured, save_sources, save_followups, finalize — are
+ * pure writes, and refusing a free save because of a MODEL ceiling would strand
+ * a user mid-onboarding over spend they are not incurring.
+ *
+ * Returns a 429 body when refused, and null when the call may proceed.
+ */
+async function refuseIfOverCeiling(
+  admin: unknown,
+  workspace_id: string,
+  label: string,
+): Promise<Response | null> {
+  const spend = await authorizeModelSpend({
+    db: admin as unknown as SpendDb,
+    workspace_id,
+    mode: resolveSpendEnforcement(),
+    ...resolveCeiling(),
+  });
+  if (spend.over_ceiling || spend.reason === "query_failed") {
+    console.log("[setup-company-brain][model-spend]", { label, ...describeSpend(spend) });
+  }
+  if (spend.allowed) return null;
+  return json({
+    ok: false,
+    error: MODEL_SPEND_REFUSED,
+    message:
+      `This workspace has reached its model spend ceiling of ` +
+      `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
+      `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+  }, 429);
+}
+
 
 /**
  * Bookkeeping must never fail the onboarding step it only describes.
@@ -192,6 +230,9 @@ Deno.serve(async (req) => {
       // LinkedIn analysis is not currently wired — keep it honest.
       phases.push({ agent: "scout", label: "LinkedIn company lookup", status: "skipped" });
 
+      const refused = await refuseIfOverCeiling(admin, workspace_id, "analyze");
+      if (refused) return refused;
+
       const ai = await generateJson({
         taskType: "company_brain_analyze",
         systemPrompt: "You produce a faithful structured company profile. Leave a field empty (null or '') if it is not supported by the user-provided input. NEVER invent facts.",
@@ -222,6 +263,9 @@ Deno.serve(async (req) => {
 
     if (action === "generate_followups") {
       const profile = await loadProfile();
+      const refusedFollowups = await refuseIfOverCeiling(admin, workspace_id, "followups");
+      if (refusedFollowups) return refusedFollowups;
+
       const ai = await generateJson({
         taskType: "company_brain_followups",
         systemPrompt: "You generate concise onboarding follow-up questions. Output JSON only.",

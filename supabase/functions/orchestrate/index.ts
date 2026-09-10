@@ -24,7 +24,10 @@ import {
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
-import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import {
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
 import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
@@ -703,6 +706,36 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!member) {
       return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
+    }
+
+    // ── LAYER 1: THE WORKSPACE USD CEILING ───────────────────────────────
+    //
+    // Placed AFTER the membership check, so it cannot be used to probe another
+    // workspace's spend, and BEFORE the planner call and the `task_plans`
+    // insert, so a refusal leaves no half-built plan behind.
+    //
+    // The `ping` health check returns far above this and is unaffected: it makes
+    // no model call, and a liveness probe that failed on a spend ceiling would
+    // read as an outage.
+    {
+      const spend = await authorizeModelSpend({
+        db: admin as unknown as SpendDb,
+        workspace_id,
+        mode: resolveSpendEnforcement(),
+        ...resolveCeiling(),
+      });
+      if (spend.over_ceiling || spend.reason === "query_failed") {
+        console.log("[orchestrate][model-spend]", describeSpend(spend));
+      }
+      if (!spend.allowed) {
+        return json({
+          error: MODEL_SPEND_REFUSED,
+          details:
+            `This workspace has reached its model spend ceiling of ` +
+            `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
+            `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+        }, 429);
+      }
     }
 
     // Best-effort company brain.

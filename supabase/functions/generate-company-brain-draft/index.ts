@@ -30,7 +30,10 @@ import { buildActivationSuggestions } from "../_shared/companyBrainResearch/acti
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "../_shared/companyBrainCompleteness.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
-import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import {
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
+} from "../_shared/modelSpendCeiling.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -243,6 +246,38 @@ Deno.serve(async (req) => {
       // `lead_model_calls`. This call is a 3000-token draft on every onboarding
       // and reported nothing.
       const modelCalls = new ModelCallCollector(resolveRunBudget());
+
+      // ── LAYER 1: THE WORKSPACE USD CEILING ─────────────────────────────
+      //
+      // ONLY on `draft`. The other actions here spend nothing on models:
+      // `research_founder` and `research_company` reach Apify and Firecrawl,
+      // which are gated by the CREDIT system (`PAID_TOOLS`), and `save_draft`,
+      // `activate` and `status` are pure writes and reads. Refusing those on a
+      // model ceiling would block an onboarding step over spend it is not
+      // causing, and would double-gate the two provider calls that already have
+      // their own reservation.
+      //
+      // Checked before the draft call and before its ledger drain, so a refusal
+      // costs nothing and records nothing.
+      const spend = await authorizeModelSpend({
+        db: admin as unknown as SpendDb,
+        workspace_id,
+        mode: resolveSpendEnforcement(),
+        ...resolveCeiling(),
+      });
+      if (spend.over_ceiling || spend.reason === "query_failed") {
+        console.log("[generate-company-brain-draft][model-spend]", describeSpend(spend));
+      }
+      if (!spend.allowed) {
+        return json({
+          ok: false,
+          error: MODEL_SPEND_REFUSED,
+          message:
+            `This workspace has reached its model spend ceiling of ` +
+            `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
+            `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+        }, 429);
+      }
 
       deps.generateJson = async ({ system, user }) => {
         const ai = await generateJson({
