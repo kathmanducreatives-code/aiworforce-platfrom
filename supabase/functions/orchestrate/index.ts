@@ -24,6 +24,8 @@ import {
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
+import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
+import { validateV2KickoffBody } from "../_shared/leadMissionV2Request.ts";
 import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
@@ -1590,11 +1592,7 @@ Return ONLY valid JSON, no prose, no markdown:
     // so the isolate is not torn down before the request is sent, and a
     // rejected handoff is now observed instead of resolving quietly into a
     // `.catch` that HTTP errors never reach.
-    invokeInBackground({
-      url: `${SUPABASE_URL}/functions/v1/run-agent`,
-      token: SUPABASE_SERVICE_ROLE_KEY,
-      log: (m, meta) => console.error("[orchestrate][kickoff]", m, meta),
-      body: {
+    const kickoffBody: Record<string, unknown> = {
         plan_id: taskPlan.id,
         step_index: 0,
         agent_slug: firstStep.agent_slug,
@@ -1629,7 +1627,39 @@ Return ONLY valid JSON, no prose, no markdown:
         // the step's `tool_input`, so the sidecar arrives whether or not the
         // branch that built this step happened to spread the original input.
         ...(bindingsCarrier ?? {}),
-      },
+    };
+
+    // ── LEADMISSION V2 ROUTE — THE SMALLEST POSSIBLE ──────────────────────────
+    //
+    // Two conditions, both required; V1 is what happens otherwise:
+    //
+    //   1. the workspace is named in LEAD_V2_WORKER_WORKSPACES, and
+    //   2. this kickoff really is an approved LeadMission step
+    //
+    // Condition 2 uses `validateV2KickoffBody` — the SAME validator
+    // `enqueue-lead-mission` applies — so orchestrate cannot hand the queue
+    // something the enqueue would reject, and the two can never disagree about
+    // what is eligible. A Content, monitoring, outreach or plain agent step fails
+    // it and goes to run-agent exactly as before.
+    //
+    // ONLY THE DESTINATION CHANGES. The body is the same object either way, so
+    // the worker replays byte-for-byte what the edge path would have sent.
+    const v2Route = resolveLeadExecutionEngine(workspace_id, (k) => Deno.env.get(k)) === "v2_worker"
+      && validateV2KickoffBody(kickoffBody).ok;
+    if (v2Route) {
+      console.log("[orchestrate][kickoff] routing to LeadMission V2 worker", {
+        plan_id: taskPlan.id, workspace_id,
+      });
+    }
+
+    invokeInBackground({
+      url: v2Route
+        ? `${SUPABASE_URL}/functions/v1/enqueue-lead-mission`
+        : `${SUPABASE_URL}/functions/v1/run-agent`,
+      token: SUPABASE_SERVICE_ROLE_KEY,
+      log: (m, meta) => console.error("[orchestrate][kickoff]", m, meta),
+      // enqueue takes the kickoff under `request`; run-agent takes it directly.
+      body: v2Route ? { request: kickoffBody } : kickoffBody,
       // A PLAN MUST NEVER SIT IN `executing` WITH NOTHING RUNNING.
       //
       // Nothing else writes to `task_plans` until run-agent takes ownership, so
