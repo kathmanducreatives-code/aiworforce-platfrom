@@ -13,7 +13,23 @@ const SOURCES = [
   { key: "url", icon: Link2, label: "From pasted URL", brief: "Scribe, draft a LinkedIn post from a URL — ask me for the URL, draft only." },
 ];
 
-export default function CreatePostModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * `onCreate` is OPTIONAL and ADDITIVE.
+ *
+ * Picking a source used to do exactly one thing: type an English brief into the
+ * chat. That still happens — Scribe is still asked. What is new is that a
+ * DRAFT OBJECT now exists first, so the user has something to return to whether
+ * or not the chat round trip ever produces anything.
+ *
+ * The brief is stored as metadata, never as the body: it is an instruction to
+ * an agent, not content, and putting it in the body would make every new draft
+ * open pre-filled with a sentence the user did not write.
+ */
+export default function CreatePostModal({ open, onClose, onCreate }: {
+  open: boolean;
+  onClose: () => void;
+  onCreate?: (input: { title: string; source: string; brief: string }) => Promise<void>;
+}) {
   return (
     <AnimatePresence>
       {open && (
@@ -45,7 +61,13 @@ export default function CreatePostModal({ open, onClose }: { open: boolean; onCl
               {SOURCES.map(({ key, icon: Icon, label, brief }) => (
                 <motion.button
                   key={key}
-                  onClick={() => { dispatchChat(brief); onClose(); }}
+                  onClick={async () => {
+                    // Persist first, so a failure to reach Pilot cannot also
+                    // lose the draft. Then ask Scribe, as before.
+                    if (onCreate) await onCreate({ title: label, source: key, brief });
+                    dispatchChat(brief);
+                    onClose();
+                  }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-border/70 bg-background/40 hover:border-primary/40 hover:bg-background/70 text-left transition active:scale-[0.98]"
                 >

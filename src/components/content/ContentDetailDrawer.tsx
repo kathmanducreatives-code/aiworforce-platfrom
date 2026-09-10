@@ -1,8 +1,8 @@
 // Content draft detail drawer. Shows the source signal, core argument, hook
 // options, draft body, CTA, proof used, missing proof and approval status.
 // Read + approve only — nothing publishes from here.
-import { useEffect } from "react";
-import { X, ExternalLink, ShieldAlert } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, ExternalLink, ShieldAlert, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 export interface ContentDetail {
@@ -19,7 +19,32 @@ export interface ContentDetail {
   missingProof?: string[];
 }
 
-export default function ContentDetailDrawer({ detail, onClose }: { detail: ContentDetail | null; onClose: () => void }) {
+/**
+ * `onSave` is OPTIONAL, and the drawer is read-only without it — which is what
+ * every caller that renders a `saved_outputs` row still wants, since those are
+ * an append-only record with nothing to save back to. A `content_item` is an
+ * editable object, so the Content page passes a saver and gets an editor.
+ */
+export default function ContentDetailDrawer({ detail, onClose, onSave }: {
+  detail: ContentDetail | null;
+  onClose: () => void;
+  onSave?: (patch: { body: string }) => Promise<void>;
+}) {
+  const editable = typeof onSave === "function";
+  const [draftBody, setDraftBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  // Re-seed when a DIFFERENT draft opens, keyed on id rather than on `detail`:
+  // the parent rebuilds `detail` in a useMemo on every list refresh, and
+  // depending on the object would wipe what the user has typed each time.
+  useEffect(() => {
+    setDraftBody(detail?.body ?? "");
+    setSaveError(null);
+    setSavedAt(null);
+  }, [detail?.id]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     if (detail) window.addEventListener("keydown", onKey);
@@ -83,7 +108,47 @@ export default function ContentDetailDrawer({ detail, onClose }: { detail: Conte
             </Section>
           )}
           <Section title="Draft body">
-            {detail.body ? (
+            {editable ? (
+              <>
+                <textarea
+                  value={draftBody}
+                  onChange={(e) => { setDraftBody(e.target.value); setSavedAt(null); }}
+                  rows={10}
+                  placeholder="Write your draft. It is saved to this workspace, not to the chat."
+                  className="w-full text-[14px] text-neutral-100 leading-relaxed rounded-lg border border-white/[0.06] bg-white/[0.015] p-3.5 outline-none focus:border-white/20 resize-y"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!onSave || saving) return;
+                      setSaving(true); setSaveError(null);
+                      try {
+                        await onSave({ body: draftBody });
+                        setSavedAt(Date.now());
+                      } catch (err) {
+                        // The work stays in the textarea. Losing an edit to a
+                        // failed write is the exact failure this whole slice exists
+                        // to end.
+                        setSaveError(err instanceof Error ? err.message : "Could not save");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={saving || draftBody === (detail.body ?? "")}
+                    className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black disabled:bg-white/[0.04] disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {saving ? "Saving…" : "Save draft"}
+                  </button>
+                  {savedAt && !saveError && (
+                    <span className="text-[12px] text-emerald-300/90">Saved</span>
+                  )}
+                  {saveError && (
+                    <span className="text-[12px] text-amber-300/90">{saveError}</span>
+                  )}
+                </div>
+              </>
+            ) : detail.body ? (
               <div className="text-[14px] text-neutral-100 leading-relaxed whitespace-pre-wrap rounded-lg border border-white/[0.06] bg-white/[0.015] p-3.5">{detail.body}</div>
             ) : (
               <p className="text-[13px] text-neutral-500 italic">No draft body yet — Scribe will draft it for your review.</p>

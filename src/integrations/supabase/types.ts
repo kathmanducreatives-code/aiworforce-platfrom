@@ -1795,6 +1795,117 @@ export type Database = {
           },
         ]
       }
+      content_item: {
+        Row: {
+          agent_slug: string | null
+          body: string
+          created_at: string
+          created_by: string | null
+          format: string
+          id: string
+          metadata: Json
+          source: string | null
+          source_signal_id: string | null
+          status: string
+          title: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          agent_slug?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          id?: string
+          metadata?: Json
+          source?: string | null
+          source_signal_id?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          agent_slug?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          id?: string
+          metadata?: Json
+          source?: string | null
+          source_signal_id?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_item_source_signal_id_fkey"
+            columns: ["source_signal_id"]
+            isOneToOne: false
+            referencedRelation: "signal_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_item_version: {
+        Row: {
+          body: string
+          content_item_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          title: string | null
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          body?: string
+          content_item_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          title?: string | null
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          content_item_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          title?: string | null
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_item_version_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_version_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           agent_slug: string | null

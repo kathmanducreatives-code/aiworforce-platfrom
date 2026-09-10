@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
+import { useContentItems } from '@/hooks/useContentItems';
+import type { ContentItem } from '@/lib/content/contentItems';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { useIntegrationReadiness } from '@/hooks/useIntegrationReadiness';
 import { sendAgentCommand } from '@/lib/agentCommand';
@@ -34,6 +36,34 @@ import scribeImg from '@/assets/agents/scribe.webp';
 const dispatch = (text: string) =>
   void sendAgentCommand(text, { success: 'Sent to your workforce', action_source: 'content_action' });
 
+/**
+ * A `content_item` rendered in the drafts list.
+ *
+ * The list already renders `saved_outputs`-shaped rows, and everything
+ * downstream — bucketing, status labels, the detail drawer — reads that shape.
+ * Adapting here means content items go through the SAME derivation as
+ * everything else rather than getting a parallel, special-cased path.
+ *
+ * `raw.status` carries the real lifecycle so `deriveDraftStatus` keeps working:
+ * 'approved' -> Approved, 'in_review' -> Needs review, 'draft' -> Draft ready.
+ */
+function contentItemAsOutput(item: ContentItem) {
+  return {
+    id: item.id,
+    type: 'content_draft',
+    title: item.title,
+    body: item.body,
+    created_at: item.created_at,
+    raw: {
+      subtype: item.format,
+      status: item.status,
+      source: item.source,
+      source_url: (item.metadata?.source_url as string | undefined) ?? null,
+      ...item.metadata,
+    } as Record<string, unknown>,
+  };
+}
+
 type ViewId = 'foryou' | 'trends' | 'comments' | 'plan';
 
 const VIEWS: { id: ViewId; label: string }[] = [
@@ -46,6 +76,11 @@ const VIEWS: { id: ViewId; label: string }[] = [
 export default function Content() {
   const { workspaceId } = useWorkspace();
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
+  // The drafts that actually persist. `savedOutputs` has never contained a
+  // content draft — nothing writes them — so this is the real list.
+  const {
+    items: contentItems, create: createContentDraft, save: saveContentDraft,
+  } = useContentItems(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
   const [view, setView] = useState<ViewId>('foryou');
@@ -58,7 +93,13 @@ export default function Content() {
 
   // ---- data bucketing (all real data) ---------------------------------------
 
-  const posts = useMemo(() => postDraftOutputs(savedOutputs), [savedOutputs]);
+  // Persisted content items first (newest work the user owns), then any legacy
+  // content-shaped saved_outputs. The second list is empty in every workspace
+  // observed, but reading it costs nothing and drops nothing if one appears.
+  const posts = useMemo(
+    () => [...contentItems.map(contentItemAsOutput), ...postDraftOutputs(savedOutputs)],
+    [contentItems, savedOutputs],
+  );
   const workflowRecaps = useMemo(() => workflowSummaryOutputs(savedOutputs), [savedOutputs]);
   const commentDraftsData = useMemo(() => [
     ...commentDraftRows(drafts).map((d) => ({
@@ -318,8 +359,30 @@ export default function Content() {
         <Sparkles className="h-4 w-4" /> Ask Mira
       </button>
 
-      <ContentDetailDrawer detail={openDetail} onClose={() => setOpenDraftId(null)} />
-      <CreatePostModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      {/* `onSave` is passed only when the open draft is a persisted content_item.
+          A legacy saved_outputs row has nothing to save back to — it is an
+          append-only record — so the drawer stays read-only for those. */}
+      <ContentDetailDrawer
+        detail={openDetail}
+        onClose={() => setOpenDraftId(null)}
+        onSave={
+          openDraftId && contentItems.some((it) => it.id === openDraftId)
+            ? async ({ body }) => { await saveContentDraft(openDraftId, { body }); }
+            : undefined
+        }
+      />
+      <CreatePostModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreate={async ({ title, source, brief }) => {
+          const item = await createContentDraft({
+            title, source, format: 'founder_post', body: '', metadata: { brief },
+          });
+          // Open the new draft immediately, so "create" lands the user in
+          // something they can write in rather than only in a chat message.
+          if (item) setOpenDraftId(item.id);
+        }}
+      />
     </div>
   );
 }
