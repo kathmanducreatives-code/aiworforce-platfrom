@@ -25,7 +25,7 @@
 // coverage is a number somebody can look at rather than an assumption.
 
 import { supabase } from "@/integrations/supabase/client";
-import { normalizeSignalRow, type RawSignalRow } from "@/lib/signalFeedModel";
+import { normalizeSignalRow, type RawSignalRow, type FeedSignal } from "@/lib/signalFeedModel";
 import {
   mergeSignalFeed, EVENT_COLUMNS, type RawSignalEventRow,
 } from "@/lib/signalEventProjection";

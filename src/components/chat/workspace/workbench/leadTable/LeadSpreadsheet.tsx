@@ -296,21 +296,25 @@ export default function LeadSpreadsheet({
                     // The link moves onto the name line, where it also sits
                     // closer to the thing it identifies.
                     <>
+                      {/* The person lives on `primary_decision_maker`; this read the
+                          fields one level up, where they do not exist, so all three
+                          rendered blank. `current_title` is the field's real name.
+                          Same access LeadResultsView already uses. */}
                       <div className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="text-[13px] text-[#F0F6FC] truncate">{dm.full_name}</span>
-                        {dm.linkedin_url && (
+                        <span className="text-[13px] text-[#F0F6FC] truncate">{dm.primary_decision_maker?.full_name}</span>
+                        {dm.primary_decision_maker?.linkedin_url && (
                           <a
-                            href={dm.linkedin_url}
+                            href={dm.primary_decision_maker.linkedin_url}
                             target="_blank" rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0 text-sky-300/80 hover:text-sky-200"
-                            aria-label={`${dm.full_name} on LinkedIn`}
+                            aria-label={`${dm.primary_decision_maker.full_name} on LinkedIn`}
                           >
                             <ExternalLink className="h-2.5 w-2.5" />
                           </a>
                         )}
                       </div>
-                      <div className="text-[12px] text-[#6e7681] truncate">{dm.title}</div>
+                      <div className="text-[12px] text-[#6e7681] truncate">{dm.primary_decision_maker?.current_title}</div>
                     </>
                   ) : (
                     <UnlockCell
@@ -390,7 +394,10 @@ export default function LeadSpreadsheet({
                       onClick={() => onOpen(r)}
                       className="text-left text-[12.5px] text-[#C9D1D9] line-clamp-2 hover:text-emerald-300 transition-colors leading-snug"
                     >
-                      {outreach.preview ?? outreachHints[r.id]?.opener ?? 'Draft ready'}
+                      {/* `opener` is what leadActionExecutor persists; there is no
+                          `preview` field, so this always fell through to the hint.
+                          `opener` is nullable, and `??` still falls through on null. */}
+                      {outreach.opener ?? outreachHints[r.id]?.opener ?? 'Draft ready'}
                     </button>
                   ) : (
                     <UnlockCell

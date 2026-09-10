@@ -21,7 +21,6 @@
 export interface MergeableMessage {
   id: string;
   created_at?: string | null;
-  [key: string]: unknown;
 }
 
 /**

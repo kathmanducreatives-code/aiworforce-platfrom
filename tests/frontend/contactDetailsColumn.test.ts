@@ -189,12 +189,23 @@ Deno.test("8. only rows with a resolved person are quoted for", () => {
   // Contact enrichment takes a person, so a row where nobody is resolved cannot
   // be charged: the action declines before reaching a provider. Counting it
   // would quote a price for work that cannot happen.
+  //
+  // THE FIXTURE USES THE FRONTEND VOCABULARY, because that is the only one that
+  // reaches `estimateCredits`. It is declared `rows: LeadTableRow[]`, and
+  // `LeadTableRow.contact_status` is derived in useLeadResults.ts as exactly
+  // 'email_found' | 'profile_found' | 'needs_contact'.
+  //
+  // This fixture previously used the BACKEND names ("profile_only",
+  // "public_email_found" — DMContactStatus in _shared/decisionMakers.ts), which
+  // no row here can ever carry. The `any[]` cast let that pass, and the
+  // production code carried the same wrong literal, so the estimate was
+  // permanently 0 while this test read green.
   // deno-lint-ignore no-explicit-any
   const rows: any[] = [
-    { contact_status: "profile_only" },
-    { contact_status: "profile_only" },
+    { contact_status: "profile_found" },
+    { contact_status: "profile_found" },
     { contact_status: "needs_contact" },
-    { contact_status: "public_email_found" },
+    { contact_status: "email_found" },
   ];
   assertEquals(estimateCredits("find_contact_details", rows), 2);
   assertEquals(estimateCredits("find_contact_details", []), 0);

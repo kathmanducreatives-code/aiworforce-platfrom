@@ -167,7 +167,14 @@ export default function LeadResultsView({
   const [tab, setTab] = useState<LeadTabId>('qualified');
   const [tabChosen, setTabChosen] = useState(false);
   const partition = useMemo(
-    () => partitionLeads(items.map((r) => ({ ...r, ...qualificationFromRow(r) }))),
+    // `contact_status` is RESTORED after the spread. qualificationFromRow only
+    // echoes it (`row.contact_status ?? null`) and its record types the field
+    // loosely as `string | null`, because that module also reads export and
+    // legacy rows. Spread last, that echo widened LeadTableRow's ContactStatus
+    // to string. The row is required here, so this is the identical value.
+    () => partitionLeads(items.map((r) => ({
+      ...r, ...qualificationFromRow(r), contact_status: r.contact_status,
+    }))),
     [items],
   );
   const notReached = useMemo(() => notReachedCompanies(evaluationRows), [evaluationRows]);
@@ -799,14 +806,21 @@ export default function LeadResultsView({
 }
 
 /** One shape for every action button, so the bar cannot drift row to row. */
-function ActionButton({ label, busyLabel, onClick, disabled, busy, primary }: {
+function ActionButton({ label, busyLabel, onClick, disabled, busy, primary, title }: {
   label: string; busyLabel?: string; onClick: () => void;
   disabled?: boolean; busy?: boolean; primary?: boolean;
+  /**
+   * Native tooltip. The "Draft outreach" caller already passed one — the
+   * approval notice stated where it applies rather than in a footer — but the
+   * prop was never declared or forwarded, so it was silently dropped.
+   */
+  title?: string;
 }) {
   const off = disabled || busy;
   return (
     <button
       onClick={onClick}
+      title={title}
       disabled={off}
       className={`h-9 px-3.5 rounded-lg text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors ${
         off

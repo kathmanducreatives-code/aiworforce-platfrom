@@ -44,6 +44,18 @@ export interface MissionLike {
     estimated_cost_units?: number;
     ok?: boolean;
     blocked_reasons?: string[];
+    /**
+     * WHAT THE RUN ESTABLISHES, mirroring `PreflightDryRun` in
+     * _shared/leadPaidExecutionPreflight.ts. The capability list says what will
+     * RUN; these say what will be PROVEN. WorkflowConfirmationCard already
+     * rendered all three — only this type lagged.
+     *
+     * Optional here, required there: pilot-chat carries the field as `unknown`
+     * and missions compiled before these existed have no such key.
+     */
+    proves?: Array<{ requirement: string; by_capability: string }>;
+    will_not_establish?: Array<{ requirement: string; status: string; why: string }>;
+    requires_unlock?: Array<{ requirement: string; why: string }>;
   };
 }
 

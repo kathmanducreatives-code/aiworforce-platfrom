@@ -184,9 +184,14 @@ export interface DBTask {
    * DATABASE LIFECYCLE only. `ready` means checkpointed and available for
    * continuation — it is NOT complete. Legacy rows may still carry `partial`,
    * `completed` or `done`, which the status adapter reads.
+   *
+   * `blocked` is a REFUSAL, not a failure: the step declined before reaching a
+   * provider (see leadActionOutcome.ts, which maps several refusal reasons onto
+   * it). It was missing here while ExecutionTaskRow already rendered it and
+   * DBRun.status already listed it; production carries such rows.
    */
   status: 'pending' | 'running' | 'ready' | 'awaiting_approval' | 'complete' | 'failed' | 'skipped'
-    | 'partial' | 'completed' | 'done';
+    | 'blocked' | 'partial' | 'completed' | 'done';
   input: any;
   output: any;
   payload?: any;

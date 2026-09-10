@@ -21,7 +21,13 @@ export function estimateCredits(action: LeadResultPanelAction, rows: LeadTableRo
     // reaching a provider. Counting it would quote a price for work that
     // cannot happen.
     case 'find_contact_details':
-      return rows.filter((r) => r.contact_status === 'profile_only').length;
+      // `profile_found` is the FRONTEND name for this state. The backend calls the
+      // same thing `profile_only` (DMContactStatus in _shared/decisionMakers.ts),
+      // and that literal was used here against the frontend union — a comparison
+      // that could never be true, so the estimate was always 0. The two
+      // vocabularies are deliberately separate; this field is derived locally in
+      // useLeadResults.ts from contacts.email / linkedin_url / contact_id.
+      return rows.filter((r) => r.contact_status === 'profile_found').length;
     case 'research_company':
       return rows.filter((r) => !!r.website && r.enrichment_status !== 'enriched').length;
     case 'draft_outreach':

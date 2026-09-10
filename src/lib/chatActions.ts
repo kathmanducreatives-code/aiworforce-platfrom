@@ -79,6 +79,7 @@ const ACTION_COMMAND: Record<LeadResultPanelAction, (n: number) => string> = {
   export_csv: () => `Export these leads as CSV.`,
   save_to_signal_feed: () => `Save these leads to the Signal Feed for later review.`,
   find_contacts: (n) => `Find decision-makers for the selected ${n} ${n === 1 ? 'account' : 'accounts'}.`,
+  find_contact_details: (n) => `Find contact details for the selected ${n} ${n === 1 ? 'person' : 'people'}.`,
   research_company: (n) => `Research company context for the selected ${n} ${n === 1 ? 'account' : 'accounts'} using Hawk + Firecrawl.`,
 };
 
@@ -131,6 +132,7 @@ export const NEXT_ACTION_LABEL: Record<NextActionId, string> = {
   export_csv: 'Export CSV',
   save_to_signal_feed: 'Save to Signal Feed',
   find_contacts: 'Find decision-makers',
+  find_contact_details: 'Find contact details',
   research_company: 'Research company',
 };
 
