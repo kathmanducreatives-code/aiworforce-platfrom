@@ -27,6 +27,7 @@ import {
 import { createExecutionDeadline } from "../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { queueStatusFor, terminalStatusOf } from "../supabase/functions/_shared/leadMissionV2Request.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
+import { newStatus, healthView, startHealthServer } from "./health.ts";
 
 const env = (k: string) => Deno.env.get(k);
 const num = (k: string, d: number) => { const v = Number(env(k)); return Number.isFinite(v) && v > 0 ? v : d; };
@@ -83,12 +84,34 @@ async function main() {
   // The gate. No DB claim unless V2 is enabled for at least one workspace.
   const gated = v2Enabled(env) && runner.ready;
 
+  // OBSERVABILITY ONLY. Counters are recorded around the existing claim; the
+  // claim itself, and every queue semantic, is untouched.
+  const status = newStatus();
+  let working = false;
+
   const claim = async (wid: string, lease: number): Promise<ClaimOutcome> => {
-    if (!gated) return { claimed: false, reason: "v2_disabled" };
+    status.polls++;
+    status.lastPollAt = Date.now();
+    if (!gated) {
+      status.lastPollReason = "v2_disabled";
+      return { claimed: false, reason: "v2_disabled" };
+    }
     const { data, error } = await db.rpc("claim_next_lead_mission", { p_worker_id: wid, p_lease_seconds: lease });
-    if (error) { log("[worker] claim error", error.message); return { claimed: false, reason: "claim_error" }; }
+    if (error) {
+      log("[worker] claim error", error.message);
+      status.lastErrorAt = Date.now();
+      status.lastError = `claim_error: ${error.message}`;
+      status.lastPollReason = "claim_error";
+      return { claimed: false, reason: "claim_error" };
+    }
     const row = firstRow(data);
-    if (!row || row.claimed !== true) return { claimed: false, reason: String(row?.reason ?? "no_eligible_mission") };
+    if (!row || row.claimed !== true) {
+      status.lastPollReason = String(row?.reason ?? "no_eligible_mission");
+      return { claimed: false, reason: String(row?.reason ?? "no_eligible_mission") };
+    }
+    status.claims++;
+    status.lastClaimAt = Date.now();
+    status.lastPollReason = "claimed";
     const mission: ClaimedMission = {
       queueId: String(row.queue_id),
       workspaceId: String(row.workspace_id),
@@ -127,16 +150,53 @@ async function main() {
     if (error) log("[worker] release error", error.message);
   };
 
-  const deps: WorkerDeps = { workerId, config: cfg, claim, heartbeatFor, runMission: runner.run, release, sleep, log };
+  // A claimed mission legitimately stops polling for as long as it runs, so the
+  // health view is told — otherwise a healthy 5-minute run reports `stalled`.
+  const runMission: WorkerDeps["runMission"] = async (...args) => {
+    working = true;
+    try { return await runner.run(...args); } finally { working = false; }
+  };
+
+  const deps: WorkerDeps = { workerId, config: cfg, claim, heartbeatFor, runMission, release, sleep, log };
 
   let stop = false;
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
-    try { Deno.addSignalListener(sig, () => { log(`[worker] ${sig} — draining`); stop = true; }); } catch { /* unsupported */ }
+    try {
+      Deno.addSignalListener(sig, () => {
+        // DRAIN, NEVER ABORT. `runWorkerLoop` reads this between ticks, so a
+        // mission already executing finishes and checkpoints on its own terms.
+        // Being killed mid-mission would also be safe — the lease lapses and the
+        // row is reclaimable — but it wastes work already paid for.
+        log(`[worker] ${sig} — draining`);
+        status.draining = true;
+        stop = true;
+      });
+    } catch { /* unsupported platform */ }
   }
+
+  // PORT is the platform's contract. Absent locally ⇒ no socket, no extra
+  // permission, behaviour identical to before.
+  const port = Number(env("PORT"));
+  const health = Number.isFinite(port) && port > 0
+    ? startHealthServer(port, () => healthView({
+      status, workerId, gated, idlePollMs: cfg.idlePollMs, working,
+      config: {
+        lease_seconds: cfg.leaseSeconds,
+        heartbeat_interval_ms: cfg.heartbeatIntervalMs,
+        mission_ceiling_ms: cfg.missionCeilingMs,
+        idle_poll_ms: cfg.idlePollMs,
+      },
+    }), log)
+    : null;
 
   log("[worker] starting", { workerId, gated, config: cfg });
   if (!gated) log("[worker] V2 disabled (no allowlisted workspace) — idling, will not claim any mission");
-  await runWorkerLoop(deps, () => stop);
+  try {
+    await runWorkerLoop(deps, () => stop);
+  } finally {
+    await health?.close();
+    log("[worker] stopped", { polls: status.polls, claims: status.claims });
+  }
 }
 
 if (import.meta.main) await main();
