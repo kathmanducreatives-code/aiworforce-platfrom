@@ -231,6 +231,23 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
         summary: doc.summary ?? null,
         metadata,
         extraction_goal,
+        // ── WHAT THIS COST, STATED BY THE CALL THAT MADE IT ────────────────
+        //
+        // `/scrape` reports no credits and no charge — its response carries
+        // only `success`, `data` and `warning` — so the count comes from the
+        // published per-page rule instead. The request above asks for markdown
+        // + summary, neither of which is surcharged, so this is the plain
+        // 1-credit case.
+        //
+        // `producedResult` is true because a document came back. A page that
+        // answered 404 and still returned content IS charged, which is why
+        // this keys on the document rather than on the page's health.
+        firecrawl_cost: {
+          credits: firecrawlCredits({
+            pages: 1, formats: ["markdown", "summary"], producedResult: true,
+          }),
+          basis: "published_rate" as const,
+        },
       },
     };
   }
@@ -261,6 +278,15 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
           markdown: truncate(d?.markdown, 6000),
           metadata: d?.metadata ?? {},
         })),
+        // Inline results carry no `creditsUsed`, so the published rule answers.
+        firecrawl_cost: {
+          credits: firecrawlCredits({
+            pages: (Array.isArray(docs) ? docs : []).length,
+            formats: ["markdown"],
+            producedResult: (Array.isArray(docs) ? docs : []).length > 0,
+          }),
+          basis: "published_rate" as const,
+        },
       },
     };
   }
@@ -277,12 +303,28 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
   }
 
   const docs = Array.isArray(status?.data) ? status.data : [];
+  // ── FIRECRAWL'S OWN COUNT, WHEN IT GIVES ONE ───────────────────────────────
+  //
+  // `/crawl/{id}` returns `creditsUsed`, unlike `/scrape`. It is still a CREDIT
+  // count and not a charge, so it cannot reach `provider_reported` — but it
+  // beats deriving the number from a page count, especially when a crawl ends
+  // `partial` and the pages returned are not the pages billed.
+  const reportedCredits = Number(status?.creditsUsed);
+  const crawlCost = Number.isFinite(reportedCredits) && reportedCredits >= 0
+    ? { credits: Math.floor(reportedCredits), basis: "provider_reported_credits" as const }
+    : {
+      credits: firecrawlCredits({
+        pages: docs.length, formats: ["markdown"], producedResult: docs.length > 0,
+      }),
+      basis: "published_rate" as const,
+    };
   return {
     ok: true,
     data: {
       url,
       source_url: url,
       extraction_goal,
+      firecrawl_cost: crawlCost,
       partial: status?.status !== "completed",
       pages: docs.slice(0, max_pages).map((d: any) => ({
         url: d?.metadata?.sourceURL ?? null,
@@ -299,6 +341,10 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
 import {
   priceProviderCall, type ProviderRunUsage,
 } from "./providerCostModel.ts";
+import {
+  firecrawlCredits, priceFirecrawlCall, type FirecrawlCreditBasis,
+} from "./firecrawlCostModel.ts";
+import type { ExecutionCost } from "./executionLedger.ts";
 import {
   authorizeProviderCall, settleProviderCall, resolveCreditEnforcement,
   CREDIT_REFUSED_ERROR, type CreditDb,
@@ -1930,6 +1976,36 @@ export async function runTool(
  * to the card table with `event_priced` when they are absent. The first live
  * run tells us which, and the ledger records it either way.
  */
+/**
+ * A Firecrawl cost, when the call stated one.
+ *
+ * EXPLICIT, not inferred from the result's shape. `execScrapeUrl` attaches
+ * `firecrawl_cost` on every path Firecrawl actually charges for; a call that
+ * produced no document attaches nothing, and returning null here lets the
+ * Apify pricing stand for every other tool.
+ *
+ * Returns `unknown` rather than zero when no per-credit rate is configured:
+ * "we spent nothing" and "we cannot price what we spent" are different answers,
+ * and the ledger already carries a record of the one time they were merged —
+ * 39 failed scrapes written as `event_priced` at $0.00.
+ */
+function firecrawlCost(d: Record<string, unknown>): ExecutionCost | null {
+  const raw = d.firecrawl_cost as
+    { credits?: unknown; basis?: unknown } | null | undefined;
+  if (!raw || typeof raw !== "object") return null;
+  const credits = Number(raw.credits);
+  if (!Number.isFinite(credits) || credits < 0) return null;
+  const basis = raw.basis === "provider_reported_credits"
+    ? "provider_reported_credits"
+    : "published_rate";
+  const priced = priceFirecrawlCall({ credits, basis: basis as FirecrawlCreditBasis });
+  return {
+    actual_usd: priced.actual_usd,
+    estimated_usd: priced.estimated_usd,
+    source: priced.source,
+  };
+}
+
 function outcomeFromToolResult(
   r: ToolResult,
   input: Record<string, unknown>,
@@ -1977,7 +2053,13 @@ function outcomeFromToolResult(
       // input (short and full company rows are a 2x difference), and the
       // provider's usage figures when it sends any. `started: !resumed` keeps a
       // reused run from being charged a second start fee it never paid.
-      cost: priceProviderCall({
+      // FIRECRAWL PRICES ITSELF, because it has no actor card to price from.
+      // `priceProviderCall` resolves cost through `hiringActorCard(actorKey)`,
+      // and a Firecrawl call arrives with no actor key at all — it matched no
+      // card, fell through to `unknown`, and 214 successful scrapes recorded no
+      // cost for three weeks. The call now states its own credit count and this
+      // converts it, so the fall-through is no longer the only answer.
+      cost: firecrawlCost(d) ?? priceProviderCall({
         actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
         itemCount: items ? items.length : null,
         input: (input.compiled_actor_input ?? input) as Record<string, unknown>,
@@ -2011,7 +2093,7 @@ function outcomeFromToolResult(
     // has already been charged its start fee, and a run left RUNNING is
     // explicitly "billable" per the branch that returns it. Pricing it at zero
     // would let the expensive failures disappear from the run's economics.
-    cost: priceProviderCall({
+    cost: firecrawlCost(d) ?? priceProviderCall({
       actorKey: String(d.selected_actor_key ?? d.actor_id ?? ""),
       // No rows arrived, so only the start charge applies.
       itemCount: 0,
