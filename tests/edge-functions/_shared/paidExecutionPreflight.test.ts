@@ -374,7 +374,7 @@ Deno.test("8. run-agent gates every paid boundary on the preflight", async () =>
   const gate = src.indexOf("assertPaidExecutionAllowed(paidPreflight)");
   const engine = src.indexOf("runCapabilityPlan({");
   const legacyRoute = src.indexOf("executeCompanyFirstRoute({");
-  const legacyLoop = src.indexOf("executeRunAgentCompanyFirstSourcing({");
+  const legacyLoop = src.indexOf("executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({");
   assert(gate > 0 && engine > 0 && legacyRoute > 0 && legacyLoop > 0);
   assert(gate < engine, "the gate must precede the capability engine");
   assert(gate < legacyRoute, "the gate must precede the legacy route executor");

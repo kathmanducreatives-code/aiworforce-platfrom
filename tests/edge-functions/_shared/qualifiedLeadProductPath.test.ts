@@ -56,7 +56,7 @@ Deno.test("B3b run-agent: the explicit quota survives resolution as EXPLICIT", (
 Deno.test("B3c run-agent: the company-first branch is wired to the entry helper", async () => {
   const src = await Deno.readTextFile(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
   assertStringIncludes(src, "isCompanyFirstRequest(routingEntityIntent)");
-  assertStringIncludes(src, "executeRunAgentCompanyFirstSourcing({");
+  assertStringIncludes(src, "executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({");
   assertStringIncludes(src, "body.requested_lead_count");
 });
 

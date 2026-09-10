@@ -198,7 +198,7 @@ Deno.test("12/14. run-agent loads persisted prior state before any provider call
   // now one of them for mission tasks, so it is checked alongside the other two.
   const lookup = src.indexOf("loadPriorContactIdentities(");
   const route = src.indexOf("executeCompanyFirstRoute({");
-  const legacy = src.indexOf("executeRunAgentCompanyFirstSourcing({");
+  const legacy = src.indexOf("executeRunAgentCompanyFirstSourcing(buildCompanyFirstRuntimeDeps({");
   const engine = src.indexOf("runCapabilityPlan({");
   assert(lookup > -1 && route > -1 && legacy > -1 && engine > -1);
   assert(lookup < route, "prior state must load before company-first discovery");
