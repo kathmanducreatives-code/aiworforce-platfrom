@@ -2,26 +2,30 @@
 // is injected, so the whole claim → heartbeat → run → release cycle is exercised
 // in a unit test with zero infrastructure (mirrors the rest of _shared).
 //
-// WHAT THE WORKER OWNS: the execution LIFECYCLE only — claim one mission, keep
-// its lease alive while work is in flight, run it, release. It owns no quota, no
-// qualification, no evidence, no money logic; those stay in the injected
-// `runMission` (the existing controller). The worker cannot decide what a company
-// is or whether to spend — it only decides when to start, renew and stop.
+// WHAT THE WORKER OWNS: the execution LIFECYCLE of one QUEUE ROW — claim it, keep
+// its lease (and, once bound, its task and lineage lease) alive while work is in
+// flight, run it, release. It owns no quota, no qualification, no evidence and no
+// money logic; those stay inside run-agent's handler, which `runMission` calls.
 //
 // THREE INVARIANTS THIS FILE ENFORCES:
 //   1. The lease is renewed CONCURRENTLY while runMission awaits a provider, by a
-//      heartbeat that runs independently of the batch loop (refinement 2).
-//   2. If the heartbeat loses ownership or the lineage is cancelled, no new paid
-//      work begins — the run is aborted via the signal runMission observes.
-//   3. The mission ceiling is NOT a worker kill. It is passed to runMission as
-//      executionBudgetMs so the EXISTING deadline machinery stops, checkpoints,
-//      and returns a truthful resumable reason (refinement 3).
+//      heartbeat that runs independently of anything the run is doing.
+//   2. If the heartbeat loses ownership or the mission/lineage is cancelled, the
+//      run is signalled — the runner revokes the run's deadline, so no new paid
+//      work begins and the engine checkpoints through its existing reserve logic.
+//   3. The mission ceiling is NOT a worker kill. It is the run's deadline budget,
+//      so the EXISTING deadline machinery stops, checkpoints and ends resumable.
 
 export interface ClaimedMission {
-  taskId: string;
+  queueId: string;
   workspaceId: string;
-  lineageId: string;
-  checkpointVersion: number;
+  /** Orchestrate's kickoff body, as queued. */
+  request: Record<string, unknown>;
+  /** Null until the handler has created the task (a first run). */
+  taskId: string | null;
+  lineageId: string | null;
+  attempts: number;
+  /** A previous run already bound a task — this run resumes it. */
   isResume: boolean;
   heldUntil: string | null;
 }
@@ -33,15 +37,15 @@ export type ClaimOutcome =
 export interface HeartbeatOutcome { ok: boolean; reason: string }
 
 export interface MissionRunControl {
-  /** Passed straight through to the controller's executionBudget. */
+  /** The run's deadline budget. */
   executionBudgetMs: number;
-  /** Aborted when the worker loses ownership or the lineage is cancelled. */
+  /** Aborted when the worker loses ownership or the mission/lineage is cancelled. */
   signal: AbortSignal;
 }
 
 export interface MissionOutcome {
   status: string;
-  /** true ⇒ the mission reached a terminal status; false ⇒ resumable. */
+  /** true ⇒ the run reached a terminal status; false ⇒ resumable. */
   terminal: boolean;
   error?: string;
 }
@@ -51,7 +55,7 @@ export interface ReleaseOutcome extends MissionOutcome {
   abortReason: string | null;
 }
 
-/** Renews the lease on a timer and reports loss. Default impl below; tests inject a fake. */
+/** Renews leases on a timer and reports loss. Default impl below; tests inject a fake. */
 export interface HeartbeatController {
   start(onLost: (reason: string) => void): void;
   stop(): void;
@@ -65,11 +69,11 @@ export interface WorkerConfig {
 }
 
 export const DEFAULT_WORKER_CONFIG: WorkerConfig = {
+  // Matches the lineage lease. Renewed every 60s: well inside it, and well inside
+  // the 5-minute quiet window `tasks_sweep_stuck_runs` treats as a dead run.
   leaseSeconds: 180,
-  heartbeatIntervalMs: 60_000, // renew at one third of the 180s lease
-  // Long-running is not unlimited. Conservative initial ceiling based on existing
-  // provider behaviour (a multi-round sourcing run rarely needs more than a few
-  // minutes of actual provider time). Overridable via LEAD_WORKER_MAX_RUNTIME_MS.
+  heartbeatIntervalMs: 60_000,
+  // See LEAD_WORKER_DEFAULT_RUNTIME_MS / _MAX_RUNTIME_CAP_MS in leadExecutionEngine.ts.
   missionCeilingMs: 300_000,
   idlePollMs: 5_000,
 };
@@ -86,13 +90,18 @@ export interface WorkerDeps {
   log?: (msg: string, meta?: unknown) => void;
 }
 
-/** Default heartbeat: renews via `heartbeat` every interval; calls onLost on first !ok. */
+/**
+ * Default heartbeat: renews via `heartbeat` every interval; calls onLost on the
+ * first !ok. The heartbeat is keyed on the QUEUE ROW — the database resolves the
+ * task and lineage bound to it, so it renews them without the worker needing to
+ * know their ids at the moment the run starts.
+ */
 export function makeHeartbeatController(args: {
   mission: ClaimedMission;
   workerId: string;
   leaseSeconds: number;
   intervalMs: number;
-  heartbeat: (taskId: string, workerId: string, leaseSeconds: number) => Promise<HeartbeatOutcome>;
+  heartbeat: (queueId: string, workerId: string, leaseSeconds: number) => Promise<HeartbeatOutcome>;
   sleep: (ms: number) => Promise<void>;
   log?: (msg: string, meta?: unknown) => void;
 }): HeartbeatController {
@@ -106,12 +115,12 @@ export function makeHeartbeatController(args: {
           if (!running) return;
           let r: HeartbeatOutcome;
           try {
-            r = await args.heartbeat(args.mission.taskId, args.workerId, args.leaseSeconds);
+            r = await args.heartbeat(args.mission.queueId, args.workerId, args.leaseSeconds);
           } catch (e) {
             r = { ok: false, reason: `heartbeat_error:${(e as Error)?.name ?? "err"}` };
           }
           if (!r.ok) {
-            args.log?.("[worker] lease lost", { task: args.mission.taskId, reason: r.reason });
+            args.log?.("[worker] lease lost", { queue: args.mission.queueId, reason: r.reason });
             running = false;
             onLost(r.reason);
             return;
@@ -123,7 +132,7 @@ export function makeHeartbeatController(args: {
   };
 }
 
-/** Run ONE already-claimed mission: heartbeat around it, abort on loss, release once. */
+/** Run ONE already-claimed mission: heartbeat around it, signal on loss, release once. */
 export async function runClaimedMission(
   deps: WorkerDeps,
   mission: ClaimedMission,
@@ -152,7 +161,7 @@ export async function runClaimedMission(
   };
   await deps.release(mission, release);
   deps.log?.("[worker] mission released", {
-    task: mission.taskId, status: release.status, terminal: release.terminal,
+    queue: mission.queueId, status: release.status, terminal: release.terminal,
     aborted: release.aborted, abortReason: release.abortReason,
   });
   return release;
@@ -162,7 +171,7 @@ export async function runClaimedMission(
 export async function workerTick(deps: WorkerDeps): Promise<{ claimed: boolean; reason?: string }> {
   const c = await deps.claim(deps.workerId, deps.config.leaseSeconds);
   if (!c.claimed) return { claimed: false, reason: c.reason };
-  deps.log?.("[worker] claimed mission", { task: c.mission.taskId, resume: c.mission.isResume });
+  deps.log?.("[worker] claimed mission", { queue: c.mission.queueId, resume: c.mission.isResume });
   await runClaimedMission(deps, c.mission);
   return { claimed: true };
 }

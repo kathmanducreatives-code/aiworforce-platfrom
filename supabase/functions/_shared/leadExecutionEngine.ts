@@ -15,6 +15,20 @@ export const LEAD_V2_WORKSPACES_ENV = "LEAD_V2_WORKER_WORKSPACES";
 /** The first production V2 canary runs one lead regardless of mission config. */
 export const V2_CANARY_FORCED_REQUESTED_LEAD_COUNT = 1;
 
+/**
+ * LONG-RUNNING IS NOT UNLIMITED.
+ *
+ * The default is five minutes of wall clock per worker run — already twice the
+ * edge limit, and ample for the canary's single lead. The HARD CAP is twenty
+ * minutes because `release-stale-credit-reservations` (every 10 min) refunds any
+ * credit reservation older than 30 minutes: a run allowed to exceed that would
+ * have reservations for calls still in flight released underneath it. A run
+ * that reaches its ceiling checkpoints and ends resumable; it is never killed.
+ */
+export const LEAD_WORKER_DEFAULT_RUNTIME_MS = 5 * 60_000;
+export const LEAD_WORKER_MAX_RUNTIME_CAP_MS = 20 * 60_000;
+export const LEAD_WORKER_MAX_RUNTIME_ENV = "LEAD_WORKER_MAX_RUNTIME_MS";
+
 export type EnvReader = (key: string) => string | undefined;
 
 function defaultReader(key: string): string | undefined {
@@ -46,4 +60,11 @@ export function resolveLeadExecutionEngine(
 ): LeadExecutionEngine {
   if (!workspaceId) return "v1_edge";
   return v2WorkspaceAllowlist(read).has(workspaceId) ? "v2_worker" : "v1_edge";
+}
+
+/** Any unusable value falls back to the default; anything larger is capped. */
+export function clampWorkerCeilingMs(v: number | string | null | undefined): number {
+  const n = typeof v === "string" ? Number(v) : v;
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return LEAD_WORKER_DEFAULT_RUNTIME_MS;
+  return Math.min(Math.floor(n), LEAD_WORKER_MAX_RUNTIME_CAP_MS);
 }

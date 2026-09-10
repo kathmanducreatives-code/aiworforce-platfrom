@@ -1,41 +1,100 @@
-// THE MISSION RUNNER SEAM — the ONE place real execution plugs in.
+// THE MISSION RUNNER — run-agent's own handler, in-process.
 //
-// The worker lifecycle (claim, heartbeat, ceiling, release) is complete and
-// tested. What is NOT yet wired is reconstructing run-agent's full runtime
-// context inside a worker process: the intent compile, Company Brain policy,
-// sequential sources, persistence adapters, broadening planner and the
-// classification binding that run-agent assembles before calling
-// `buildCompanyFirstRuntimeDeps`. That is a deliberate, separate step.
+// For each claimed queue row it replays orchestrate's kickoff body into
+// `handleRunAgent` with two in-process options:
+//   • a REVOCABLE deadline with the worker's budget, revoked when the heartbeat
+//     reports lost ownership or cancellation, so the engine stops starting paid
+//     work and checkpoints through its existing reserve logic;
+//   • `onExecutionBound`, which binds the task + lineage the handler just created
+//     onto the queue row, so the heartbeat renews exactly what the run holds.
 //
-// UNTIL THEN `ready` is false. The worker REFUSES TO CLAIM while the runner is
-// not ready (see worker/main.ts), so no mission is ever picked up and this stub
-// is never executed in production. If it somehow were, it performs NO paid work
-// and returns a resumable outcome — the mission is released back as `ready` and
-// simply waits, it is never corrupted or charged.
+// Everything that decides what a company is, what may be bought and what gets
+// delivered stays inside the handler, unchanged — lineage lease, checkpoints,
+// finalizer, ownership ledger, spend ceiling. This file only decides WHEN.
 //
-// STEP 3 will replace this file's `run` with real deps assembly:
-//   1. load the queued mission spec from tasks.result->'lead_mission_v2'
-//   2. build the real invokers / stateStore / durableIdempotency / planner
-//   3. deps = buildCompanyFirstRuntimeDeps({ ...those..., executionBudget: ceiling })
-//   4. return executeRunAgentCompanyFirstSourcing(deps) mapped to MissionOutcome
-// and set `ready = true`.
+// How the run ended is read from the task row afterwards, not inferred from the
+// HTTP response: the row is what the rest of the system treats as the truth.
 
+import type { RunAgentRunOptions } from "../supabase/functions/run-agent/index.ts";
 import type {
   ClaimedMission, MissionOutcome, MissionRunControl,
 } from "../supabase/functions/_shared/leadMissionWorkerCore.ts";
+import type { ExecutionDeadline } from "../supabase/functions/_shared/leadExecutionFinalizer.ts";
+import { revocableDeadline } from "../supabase/functions/_shared/revocableDeadline.ts";
+import {
+  forceCanaryLeadCount, mapRefusal, mapTaskOutcome, withResume, type TaskOutcomeRow,
+} from "../supabase/functions/_shared/leadMissionV2Request.ts";
 
 export interface LeadMissionRunner {
-  /** The worker will not claim any mission unless this is true. */
+  /** The worker claims nothing unless this is true. */
   ready: boolean;
   run: (mission: ClaimedMission, ctl: MissionRunControl) => Promise<MissionOutcome>;
 }
 
-export const LEAD_MISSION_RUNNER: LeadMissionRunner = {
-  ready: false,
-  run: (_mission, _ctl) =>
-    Promise.resolve({
-      status: "v2_runner_not_implemented",
-      terminal: false, // resumable — never mark a mission done without doing the work
-      error: "LeadMission V2 runner is not wired yet (Step 3); worker must not claim.",
-    }),
-};
+export interface LeadMissionRunnerDeps {
+  handler: (req: Request, inProcess: RunAgentRunOptions) => Promise<Response>;
+  /** Sent as the bearer: the handler's service-role path, as orchestrate and the sweeper use. */
+  serviceRoleKey: string;
+  /** Only used to build the Request URL; nothing is fetched over the network. */
+  functionsBaseUrl: string;
+  createDeadline: (budgetMs: number) => ExecutionDeadline;
+  bind: (queueId: string, taskId: string, lineageId: string) => Promise<boolean>;
+  readTaskOutcome: (taskId: string) => Promise<TaskOutcomeRow | null>;
+  log?: (msg: string, meta?: unknown) => void;
+}
+
+export function createLeadMissionRunner(d: LeadMissionRunnerDeps): LeadMissionRunner {
+  return {
+    ready: true,
+    async run(mission, ctl) {
+      const body = withResume(forceCanaryLeadCount(mission.request), mission.taskId);
+      const deadline = revocableDeadline(d.createDeadline(ctl.executionBudgetMs));
+      const onAbort = () => deadline.revoke("worker_lost_ownership_or_cancelled");
+      if (ctl.signal.aborted) onAbort();
+      else ctl.signal.addEventListener("abort", onAbort, { once: true });
+
+      let taskId: string | null = mission.taskId;
+      let res: Response;
+      try {
+        res = await d.handler(
+          new Request(`${d.functionsBaseUrl.replace(/\/+$/, "")}/run-agent`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${d.serviceRoleKey}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(body),
+          }),
+          {
+            deadline,
+            onExecutionBound: async ({ taskId: t, lineageId }) => {
+              taskId = t;
+              const bound = await d.bind(mission.queueId, t, lineageId);
+              // A refused bind means another task already belongs to this
+              // mission, or this worker no longer owns it. Start nothing paid.
+              if (!bound) deadline.revoke("bind_refused");
+            },
+          },
+        );
+      } finally {
+        ctl.signal.removeEventListener("abort", onAbort);
+      }
+
+      if (!taskId) {
+        try {
+          const j = await res.clone().json() as { task_id?: unknown };
+          if (typeof j.task_id === "string" && j.task_id) taskId = j.task_id;
+        } catch { /* not JSON — treated as a refusal below */ }
+      }
+      // Refused before any task existed: nothing ran, nothing was bought.
+      if (!taskId) return { ...mapRefusal(res.status), error: `handler_status_${res.status}` };
+
+      const outcome = mapTaskOutcome(await d.readTaskOutcome(taskId));
+      d.log?.("[worker][runner] run ended", {
+        queue: mission.queueId, task: taskId, http: res.status, ...outcome,
+        revoked: deadline.revokedReason,
+      });
+      return outcome;
+    },
+  };
+}

@@ -27,6 +27,7 @@
 // `eligibleForAutoResume` reads them rather than adding any of its own.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { excludeV2OwnedTasks, loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 import {
   eligibleForAutoResume, resumeRequestFor, STALE_AFTER_MS, MAX_RESUMABLE_AGE_MS,
   type StalledTaskRow,
@@ -283,10 +284,18 @@ Deno.serve(async (req) => {
   if (error) return json({ error: "tasks_unavailable", detail: error.message }, 500);
   const rows = ((data ?? []) as unknown) as StalledTaskRow[];
 
+  // ── LEADMISSION V2 ISOLATION ──────────────────────────────────────────────
+  // A task the V2 worker executes is resumed ONLY by that worker, which re-claims
+  // its own queue row. Two resumers on one task is how a round gets paid twice,
+  // and V1 finishing V2 missions would contaminate the V1/V2 comparison.
+  // Tolerant: with no queue table or no V2 rows this excludes nothing.
+  const v2Owned = await loadV2OwnedTaskIds(admin as never, rows.map((r) => r.id));
+  const sweepable = excludeV2OwnedTasks(rows, v2Owned);
+
   const considered: Array<Record<string, unknown>> = [];
   let dispatched = 0;
 
-  for (const row of rows) {
+  for (const row of sweepable) {
     // PAID WORK WAITING TO BE ADOPTED — the strongest reason to come back, and
     // the one `recoverPendingRuns` will turn into a `GET` rather than a second
     // POST once the slice runs.

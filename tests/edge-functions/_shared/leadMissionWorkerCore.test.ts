@@ -7,7 +7,8 @@ import {
 } from "../../../supabase/functions/_shared/leadMissionWorkerCore.ts";
 
 const mission: ClaimedMission = {
-  taskId: "t1", workspaceId: "ws-1", lineageId: "t1", checkpointVersion: 1, isResume: false, heldUntil: null,
+  queueId: "q1", workspaceId: "ws-1", request: { plan_id: "p" },
+  taskId: null, lineageId: null, attempts: 1, isResume: false, heldUntil: null,
 };
 const cfg = { leaseSeconds: 180, heartbeatIntervalMs: 60_000, missionCeilingMs: 123_456, idlePollMs: 5_000 };
 const noHb: HeartbeatController = { start() {}, stop() {} };
@@ -17,24 +18,23 @@ function baseDeps(over: Partial<WorkerDeps> = {}): WorkerDeps {
     workerId: "w1", config: cfg,
     claim: async () => ({ claimed: true, mission }),
     heartbeatFor: () => noHb,
-    runMission: async () => ({ status: "completed", terminal: true }),
+    runMission: async () => ({ status: "quota_met", terminal: true }),
     release: async () => {},
     sleep: async () => {},
     ...over,
   };
 }
 
-Deno.test("happy path: ceiling passed as executionBudgetMs; released exactly once; not aborted", async () => {
-  let ctlBudget = -1; let releases = 0;
+Deno.test("happy path: ceiling reaches the run as its budget; released exactly once; not aborted", async () => {
+  let budget = -1; let releases = 0;
   const deps = baseDeps({
-    runMission: async (_m, ctl) => { ctlBudget = ctl.executionBudgetMs; return { status: "completed", terminal: true }; },
+    runMission: async (_m, ctl) => { budget = ctl.executionBudgetMs; return { status: "quota_met", terminal: true }; },
     release: async () => { releases++; },
   });
   const r = await runClaimedMission(deps, mission);
-  assertEquals(ctlBudget, 123_456);
+  assertEquals(budget, 123_456);
   assertEquals(releases, 1);
   assertEquals(r.aborted, false);
-  assertEquals(r.status, "completed");
   assertEquals(r.terminal, true);
 });
 
@@ -43,35 +43,34 @@ Deno.test("ordering: heartbeat starts before run, stops before release", async (
   const hb: HeartbeatController = { start() { ev.push("hb_start"); }, stop() { ev.push("hb_stop"); } };
   const deps = baseDeps({
     heartbeatFor: () => hb,
-    runMission: async () => { ev.push("run"); return { status: "completed", terminal: true }; },
+    runMission: async () => { ev.push("run"); return { status: "quota_met", terminal: true }; },
     release: async () => { ev.push("release"); },
   });
   await runClaimedMission(deps, mission);
   assertEquals(ev, ["hb_start", "run", "hb_stop", "release"]);
 });
 
-Deno.test("ownership loss aborts the run; release records the reason", async () => {
+Deno.test("heartbeat loss signals the run; release records the reason", async () => {
   let onLost: ((r: string) => void) | null = null;
   const hb: HeartbeatController = { start(cb) { onLost = cb; }, stop() {} };
   const deps = baseDeps({
     heartbeatFor: () => hb,
     runMission: async (_m, ctl) => {
-      onLost!("lineage_cancelled");           // heartbeat reports the lineage was cancelled
+      onLost!("lineage_cancelled");
       await Promise.resolve();
-      return { status: ctl.signal.aborted ? "aborted_resumable" : "completed", terminal: false };
+      return { status: ctl.signal.aborted ? "continuation_required" : "quota_met", terminal: !ctl.signal.aborted };
     },
   });
   const r = await runClaimedMission(deps, mission);
   assert(r.aborted);
   assertEquals(r.abortReason, "lineage_cancelled");
-  assertEquals(r.status, "aborted_resumable");
   assertEquals(r.terminal, false);
 });
 
-Deno.test("runMission throwing still releases (resumable, not terminal)", async () => {
+Deno.test("a throwing run still releases, resumable", async () => {
   let released: unknown = null;
   const deps = baseDeps({
-    runMission: async () => { throw new Error("provider blew up"); },
+    runMission: async () => { throw new Error("boom"); },
     release: async (_m, o) => { released = o; },
   });
   const r = await runClaimedMission(deps, mission);
@@ -87,20 +86,21 @@ Deno.test("workerTick reports idle when nothing is claimable", async () => {
   assertEquals(t.reason, "no_eligible_mission");
 });
 
-Deno.test("heartbeat controller renews, then reports loss on first !ok", async () => {
+Deno.test("heartbeat controller renews by QUEUE ROW, then reports loss on first !ok", async () => {
   let lost: string | null = null;
-  let calls = 0;
+  const seen: string[] = [];
   let resolveDone!: () => void;
   const done = new Promise<void>((res) => { resolveDone = res; });
   const seq = [{ ok: true, reason: "renewed" }, { ok: false, reason: "ownership_lost" }];
   const ctl = makeHeartbeatController({
     mission, workerId: "w1", leaseSeconds: 180, intervalMs: 0,
-    heartbeat: async () => seq[Math.min(calls++, seq.length - 1)],
+    heartbeat: async (queueId) => { seen.push(queueId); return seq[Math.min(seen.length - 1, seq.length - 1)]; },
     sleep: () => Promise.resolve(),
   });
   ctl.start((r) => { lost = r; resolveDone(); });
   await done;
   ctl.stop();
   assertEquals(lost, "ownership_lost");
-  assert(calls >= 2, "must have renewed at least once before losing");
+  assert(seen.length >= 2, "must have renewed at least once before losing");
+  assert(seen.every((q) => q === "q1"), "the heartbeat is keyed on the queue row");
 });
