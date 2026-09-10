@@ -63,8 +63,45 @@ export interface GenerateContentDraftResult {
 export async function generateContentDraft(
   args: GenerateContentDraftArgs,
 ): Promise<GenerateContentDraftResult> {
+  // ── A ONE-STEP PLAN, BECAUSE run-agent'S CONTRACT REQUIRES ONE ───────────
+  //
+  // run-agent has two entry modes. The DIRECT mode legitimately carries no
+  // plan_id or step_index, but it is lead-specific (`isDirectLeadActionAttempt`)
+  // and now a tombstone — workbench lead actions answer 410 and point at
+  // `run-lead-action`. Everything else goes through the orchestrated gate,
+  // which requires plan_id, step_index, agent_slug, workspace_id and
+  // instruction, and returns `missing_required_fields` without them.
+  //
+  // So the plan is created here rather than faked. This is not fabricated
+  // orchestration metadata: a content generation genuinely IS one step, run by
+  // a known agent, against a known draft. Writing it down also means the run
+  // shows up wherever plans are listed, instead of being an invisible task.
+  const { data: plan, error: planError } = await supabase
+    .from('task_plans')
+    .insert({
+      workspace_id: args.workspaceId,
+      user_instruction: args.instruction,
+      goal: args.instruction,
+      plan_summary: `1 capability: ${args.format.replace(/_/g, ' ')} draft by scribe`,
+      status: 'executing',
+      current_step: 0,
+      steps: [{
+        step_index: 0,
+        agent_slug: 'scribe',
+        description: `Draft a ${args.format.replace(/_/g, ' ')}`,
+        metadata: { content_item_id: args.contentItemId },
+      }],
+    })
+    .select('id')
+    .single();
+  if (planError || !plan) {
+    return { ok: false, error: planError?.message ?? 'plan_create_failed' };
+  }
+
   const { data, error } = await supabase.functions.invoke('run-agent', {
     body: {
+      plan_id: (plan as { id: string }).id,
+      step_index: 0,
       workspace_id: args.workspaceId,
       // The decision recorded in CONTENT P1-2: scribe owns content. `penn` is
       // the outreach writer and persists to `outreach_drafts`, so addressing it

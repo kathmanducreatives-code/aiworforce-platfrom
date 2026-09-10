@@ -41,6 +41,33 @@ Deno.test("THE MISSING CALL: generation invokes run-agent as scribe", () => {
   );
 });
 
+Deno.test("THE 400 THIS ACTUALLY RETURNED: the orchestrated contract is satisfied", () => {
+  // Found by running it. run-agent has two entry modes. The DIRECT mode carries
+  // no plan_id/step_index but is lead-specific (`isDirectLeadActionAttempt`) and
+  // is now a tombstone — workbench lead actions answer 410. Everything else hits
+  // the orchestrated gate:
+  //
+  //   !plan_id || step_index === undefined || (!agent_slug && !agent_id) ||
+  //   !workspace_id || !instruction   ->   400 missing_required_fields
+  //
+  // The first attempt sent none of the plan fields and got exactly that, with a
+  // spinner and no draft. A one-step plan is created instead of faked, because a
+  // content generation genuinely is one step by a known agent.
+  assert(
+    /\.from\('task_plans'\)/.test(GEN),
+    "generation must create the plan run-agent's contract requires",
+  );
+  for (const field of ["plan_id:", "step_index: 0", "workspace_id:", "instruction:"]) {
+    assert(GEN.includes(field), `the run-agent body must carry ${field}`);
+  }
+  // And must not proceed to spend if the plan could not be created.
+  const planAt = GEN.indexOf(".from('task_plans')");
+  const guardAt = GEN.indexOf("plan_create_failed");
+  const invokeAt = GEN.indexOf("functions.invoke('run-agent'");
+  assert(planAt < guardAt && guardAt < invokeAt,
+    "a failed plan insert must return before invoking the model");
+});
+
 Deno.test("it names the draft it is filling in", () => {
   // Without `content_item_id` the writer falls back to saved_outputs only, and
   // the user's draft stays empty while a row appears somewhere they cannot see.
