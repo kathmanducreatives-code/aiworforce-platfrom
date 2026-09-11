@@ -1962,8 +1962,15 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // So the lead-shaped clarification is skipped for exactly that case —
       // and for nothing else: every other route still asks before guessing.
       const contentPlanForReferent = planCompose(understood.request);
+      // A CLIENT-SUPPLIED SIGNAL IS ALREADY RESOLVED. "Turn this signal into a
+      // post" pressed on a signal card carries the id in the action metadata,
+      // so there is no conversational referent to ask about — and asking
+      // "which company do you mean?" about a signal the user is looking at is
+      // the same wrong question in a different costume.
+      const clientNamedSignal = typeof actionMetadata?.signal_id === "string"
+        && actionMetadata.signal_id.length > 0;
       const referentBelongsToContent = contentPlanForReferent?.kind === "content"
-        && contentPlanForReferent.targets_existing_content;
+        && (contentPlanForReferent.targets_existing_content || clientNamedSignal);
 
       if (resolution.failures.length > 0 && !referentBelongsToContent) {
         // ── ASK, NEVER GUESS ─────────────────────────────────────────────
@@ -2725,6 +2732,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // post" answered with a brand-new post is how a user ends up with two
         // and trusts neither.
         let target: ContentReference | null = null;
+        let createdSignalId: string | null = null;
         if (objective !== "create") {
           const found = await resolveLatestContentItem(contentDb, workspaceId);
           if (!found.ok || !found.reference) {
@@ -2740,6 +2748,38 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
         // ── THE ROW, BEFORE THE MODEL ─────────────────────────────────────
         if (objective === "create") {
+          // ── WHICH SIGNAL, IF ANY ────────────────────────────────────────
+          //
+          // From the CLIENT's action metadata, never from the model. The
+          // surface that displayed the signal knows its id; the model would be
+          // guessing, and `source_signal_id` is a real foreign key used for
+          // attribution — a wrong one is worse than none.
+          //
+          // VERIFIED AGAINST THE WORKSPACE before it is trusted. It arrives
+          // from the browser, and this path holds the service role, so an
+          // unscoped id would let a forged one attach another tenant's signal.
+          let signalId: string | null = null;
+          let signalTitle: string | null = null;
+          const claimed = typeof actionMetadata?.signal_id === "string"
+            ? actionMetadata.signal_id : null;
+          if (claimed) {
+            const { data: sig } = await admin
+              .from("signal_events")
+              .select("id, title")
+              .eq("id", claimed)
+              .eq("workspace_id", workspaceId)
+              .maybeSingle();
+            if (sig) {
+              signalId = (sig as { id: string }).id;
+              signalTitle = (sig as { title?: string | null }).title ?? null;
+            } else {
+              // Named but not ours. The draft is still worth making; it is an
+              // idea, and saying so is more honest than attaching nothing while
+              // claiming a signal source.
+              console.warn("[pilot-chat][content] signal_id not in workspace", { claimed });
+            }
+          }
+
           const created = await createCanonicalContentItem(contentDb, {
             objective: "create",
             workspace_id: workspaceId,
@@ -2747,7 +2787,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             // reply to someone else's post; with no post referenced, this is a
             // post of our own.
             format: "linkedin_post",
-            source_type: "idea",
+            source_type: signalId ? "signal" : "idea",
+            source_signal_id: signalId,
+            source_signal_title: signalTitle,
             idea: message,
             created_by: null,
           });
@@ -2760,6 +2802,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               });
           }
           target = created.reference;
+          createdSignalId = signalId;
         }
 
         // ── AN IMAGE IS A DIFFERENT ENDPOINT AND A DIFFERENT SPEND ────────
@@ -2834,6 +2877,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               reference: target!,
               objective: objective === "regenerate_text" ? "regenerate_text" : "create",
               topic: target!.title,
+              // The real FK, so the draft's provenance and the Signal Feed
+              // agree about which signal produced it.
+              source_signal_id: createdSignalId,
             }),
             content_result: {
               content_item_id: target!.content_item_id,

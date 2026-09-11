@@ -216,3 +216,40 @@ Deno.test("16. a Content run still takes no lead lineage", async () => {
     "the lease must stay conditional — a Content run has no continuation to " +
     "fence and leaves a lineage nothing ever closes");
 });
+
+Deno.test("17. a signal is not something you can write outreach TO", () => {
+  // "Turn this signal into a LinkedIn post" refers back to a signal. Under the
+  // old rule — any back-reference means leads — this was outreach, and Pilot
+  // answered a content request with "I don't have any leads saved to write to
+  // yet." A signal cannot receive a message, so it is never outreach.
+  const plan = planCompose(composeRequest({
+    entity: "signal", refs: [{ kind: "prior_result", value: "this signal" }],
+  }));
+  assertEquals(plan?.kind, "content");
+  // And it CREATES. The thing referred back to is a signal, not a draft, so
+  // there is nothing to regenerate.
+  assertEquals(plan?.content_objective, "create");
+  assertEquals(plan?.targets_existing_content, false);
+});
+
+Deno.test("18. a company back-reference is still outreach, still gated", () => {
+  // The guard on the guard: narrowing outreach must not un-gate it. A company
+  // is written to through its people.
+  const plan = planCompose(composeRequest({
+    entity: "company", refs: [{ kind: "prior_result", value: "the top 5" }],
+  }));
+  assertEquals(plan?.kind, "outreach");
+  assertEquals(plan?.content_objective, null);
+});
+
+Deno.test("19. Pilot verifies a client-supplied signal id against the workspace", async () => {
+  const s = stripComments(await read("pilot-chat/index.ts"));
+  const i = s.indexOf("signal_events");
+  assert(i > 0, "Pilot must look the signal up rather than trusting the body");
+  const block = s.slice(i, i + 320);
+  assert(
+    block.includes('eq("workspace_id", workspaceId)'),
+    "the signal id arrives from the browser and this path holds the service " +
+    "role — an unscoped lookup lets a forged id attach another tenant's signal",
+  );
+});

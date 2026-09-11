@@ -120,18 +120,23 @@ export function planCompose(request: RequestV1): ComposePlan | null {
   // a draft, never at a person to write to.
   const subjectIsContent = part.subject.entity === "content";
   // A `saved_set` IS A COLLECTION OF ENTITIES — "my leads", "the companies I'm
-  // watching". It names people to write to whatever the subject says, so it
-  // still decides outreach on its own. Only the ambiguous `prior_result` case
-  // defers to the subject.
+  // watching". It names people to write to whatever the subject says.
   const namesHeldCollection = (part.subject.references ?? []).some(
     (r) => r.kind === "saved_set");
-  // A PERSON IS A RECIPIENT. Writing aimed at people — or at leads we already
-  // hold — is outreach, and outreach is approval-gated wherever it is served.
+  // ── ONLY SOMETHING THAT CAN RECEIVE A MESSAGE ────────────────────────────
+  //
+  // The test used to be "does this point at anything we hold?", which made
+  // every back-reference outreach. But a `signal` cannot receive outreach, and
+  // neither can a `content` draft — "turn this signal into a LinkedIn post"
+  // was classified as outreach and answered with "I don't have any leads saved
+  // to write to yet."
+  //
+  // A person can be written to, and a company is written to through its people.
+  // Nothing else can, so nothing else is outreach.
+  const canReceiveOutreach = part.subject.entity === "person"
+    || part.subject.entity === "company";
   const kind: ComposeKind =
-    part.subject.entity === "person"
-      || namesHeldCollection
-      || (targets_existing && !subjectIsContent)
-      ? "outreach" : "content";
+    canReceiveOutreach || namesHeldCollection ? "outreach" : "content";
 
   // ── DOES THIS MESSAGE MEAN CONTENT WE ALREADY HAVE? ──────────────────────
   //
@@ -143,8 +148,11 @@ export function planCompose(request: RequestV1): ComposePlan | null {
   // is equally true of "write me a LinkedIn post", which creates. Treating the
   // subject as proof that a draft already exists made every fresh request a
   // regeneration of whatever happened to be newest.
+  // AND THE THING REFERRED BACK TO MUST BE CONTENT. "Turn this signal into a
+  // post" refers back to a SIGNAL: it creates a draft, it does not regenerate
+  // one. Only a back-reference whose subject is content points at a draft.
   const refersBack = (part.subject.references ?? []).some((r) => r.kind === "prior_result");
-  const targets_existing_content = kind === "content" && refersBack;
+  const targets_existing_content = kind === "content" && refersBack && subjectIsContent;
 
   const medium: "text" | "image" = part.output.medium === "image" ? "image" : "text";
 
