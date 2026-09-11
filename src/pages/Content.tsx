@@ -6,7 +6,7 @@
 //
 // All data is real. Everything is approval-first. Backend unchanged.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, FileEdit, RefreshCw, ChevronRight,
@@ -17,6 +17,10 @@ import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useContentItems } from '@/hooks/useContentItems';
 import type { ContentItem } from '@/lib/content/contentItems';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
+import { listContentItemVersions, type ContentFormat } from '@/lib/content/contentItems';
+import { buildContentInstruction } from '@/lib/content/contentInstruction';
+import { toast } from 'sonner';
+import type { ContentVersionRow } from '@/components/content/ContentDetailDrawer';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { useIntegrationReadiness } from '@/hooks/useIntegrationReadiness';
 import { sendAgentCommand } from '@/lib/agentCommand';
@@ -24,10 +28,9 @@ import {
   postDraftOutputs, workflowSummaryOutputs,
   commentDraftOutputs, commentDraftRows,
 } from '@/lib/contentBuckets';
-import { buildTurnIntoCommand } from '@/lib/signalIdeaActions';
 import { deriveDraftStatus, DRAFT_STATUS_LABELS, deriveContentBrief, type ContentBriefSignal } from '@/lib/contentOps';
 import type { FeedSignal } from '@/lib/signalFeedModel';
-import CreatePostModal from '@/components/content/CreatePostModal';
+import ContentComposer, { type ComposerSubmission } from '@/components/content/ContentComposer';
 import ContentDetailDrawer from '@/components/content/ContentDetailDrawer';
 import ManualContentSource from '@/components/content/ManualContentSource';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
@@ -88,6 +91,7 @@ export default function Content() {
   const [view, setView] = useState<ViewId>('foryou');
   const [createOpen, setCreateOpen] = useState(false);
   const [openDraftId, setOpenDraftId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<ContentVersionRow[]>([]);
   const [miraCollapsed, setMiraCollapsed] = useState(false);
   const [miraContext, setMiraContext] = useState<string | null>(null);
   const [sourceIssuesOpen, setSourceIssuesOpen] = useState(false);
@@ -160,6 +164,48 @@ export default function Content() {
     comments: commentDraftsData.length,
     awaiting: (draftGroups['Needs review']?.length ?? 0) + commentDraftsData.filter((d) => !d.status?.includes('approve')).length,
   };
+
+  // THE BRIEF, BUILT FROM DATA. This is the one place an English sentence is
+  // still produced — but it is a prompt for Scribe, not a chat command, and it
+  // is stored on the row so a regeneration can reuse exactly it.
+  // SIGNAL -> CONTENT, TYPED. This used to be
+  // `dispatch(buildTurnIntoCommand(...))` — an English sentence thrown at Pilot
+  // that persisted nothing and returned nothing. It now takes the same path as
+  // the composer: a real signal-sourced draft, then Scribe.
+  const turnSignalInto = useCallback(async (kind: 'post' | 'comment', sg: FeedSignal) => {
+    if (!workspaceId) { toast.error('No workspace'); return; }
+    const format: ContentFormat = kind === 'comment' ? 'linkedin_comment' : 'linkedin_post';
+    const instruction = buildContentInstruction({
+      format, sourceType: 'signal', idea: '', signalTitle: sg.title,
+    });
+    const item = await createContentDraft({
+      title: sg.title, format, source: 'content_surface',
+      source_type: 'signal', source_signal_id: sg.id, body: '',
+      metadata: { brief: instruction, topic: sg.title },
+    });
+    if (!item) { toast.error('Could not create the draft'); return; }
+    setOpenDraftId(item.id);
+    const res = await generateContentDraft({
+      contentItemId: item.id, workspaceId, instruction, format,
+      topic: sg.title, relatedSignalIds: [sg.id],
+    });
+    // The draft exists either way; only the generation can fail, and saying so
+    // truthfully is what lets the user press Regenerate instead of wondering.
+    if (!res.ok) toast.error(res.error ?? 'Scribe could not write this draft');
+    await reloadContentDrafts();
+  }, [workspaceId, createContentDraft, reloadContentDrafts]);
+
+  const loadVersions = useCallback(async () => {
+    if (!openDraftId) { setVersions([]); return; }
+    const item = contentItems.find((it) => it.id === openDraftId);
+    const { versions: rows } = await listContentItemVersions(openDraftId);
+    setVersions(rows.map((v) => ({
+      id: v.id, version: v.version, body: v.body,
+      generation_source: v.generation_source,
+      created_at: v.created_at,
+      is_current: !!item && item.current_version_id === v.id,
+    })));
+  }, [openDraftId, contentItems]);
 
   const openDetail = useMemo(() => {
     if (!openDraftId) return null;
@@ -305,7 +351,7 @@ export default function Content() {
                     contentSignals={contentSignals}
                     loading={loading}
                     onOpenDraft={setOpenDraftId}
-                    onTurnInto={(kind, s) => dispatch(buildTurnIntoCommand(kind, { title: s.title, sourceUrl: s.source_url }))}
+                    onTurnInto={(kind, s) => { void turnSignalInto(kind, s); }}
                     onReviewComment={() => setView('comments')}
                     onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
                   />
@@ -314,7 +360,7 @@ export default function Content() {
                   <TrendsView
                     signals={contentSignals}
                     loading={loading}
-                    onTurnIntoPost={(s) => dispatch(buildTurnIntoCommand('post', { title: s.title, sourceUrl: s.source_url }))}
+                    onTurnIntoPost={(s) => { void turnSignalInto('post', s); }}
                     onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
                   />
                 )}
@@ -394,17 +440,68 @@ export default function Content() {
             }
             : undefined
         }
+        onRegenerate={
+          openDraftId && workspaceId && contentItems.some((it) => it.id === openDraftId)
+            ? async () => {
+              const item = contentItems.find((it) => it.id === openDraftId)!;
+              // THE ITEM'S OWN CONTEXT, not a fresh prompt. A regeneration is
+              // "write this again", so it reuses the brief the draft was made
+              // with and the signal it came from.
+              const res = await generateContentDraft({
+                contentItemId: item.id,
+                workspaceId,
+                instruction: (item.metadata?.brief as string | undefined)
+                  ?? `Rewrite this ${item.format.replace(/_/g, ' ')}. Draft only.`,
+                format: item.format,
+                topic: (item.metadata?.topic as string | undefined) ?? item.title,
+                relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
+                regenerate: true,
+              });
+              if (!res.ok) throw new Error(res.error ?? 'Could not regenerate');
+              await reloadContentDrafts();
+              await loadVersions();
+            }
+            : undefined
+        }
+        versions={versions}
+        onLoadVersions={openDraftId ? loadVersions : undefined}
       />
-      <CreatePostModal
+      {/* THE TYPED CREATION PATH. The draft row is created first, then Scribe is
+          asked — so a failed model call leaves the user a draft to retry rather
+          than a toast and nothing at all. */}
+      <ContentComposer
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={async ({ title, source, brief }) => {
+        signals={contentSignals.map((sg) => ({
+          id: sg.id, title: sg.title,
+          signal_type: sg.signal_type, account_name: sg.account_name,
+        }))}
+        onSubmit={async (input: ComposerSubmission) => {
+          if (!workspaceId) throw new Error('No workspace');
+          const instruction = buildContentInstruction(input);
           const item = await createContentDraft({
-            title, source, format: 'founder_post', body: '', metadata: { brief },
+            title: input.sourceType === 'signal'
+              ? (input.signalTitle ?? 'From a signal')
+              : input.idea.slice(0, 80),
+            format: input.format,
+            source: 'content_surface',
+            source_type: input.sourceType,
+            source_signal_id: input.signalId,
+            body: '',
+            metadata: { brief: instruction, topic: input.idea || input.signalTitle },
           });
-          // Open the new draft immediately, so "create" lands the user in
-          // something they can write in rather than only in a chat message.
-          if (item) setOpenDraftId(item.id);
+          if (!item) throw new Error('Could not create the draft');
+          setOpenDraftId(item.id);
+          const res = await generateContentDraft({
+            contentItemId: item.id,
+            workspaceId,
+            instruction,
+            format: input.format,
+            topic: input.idea || input.signalTitle,
+            relatedSignalIds: input.signalId ? [input.signalId] : [],
+          });
+          if (!res.ok) throw new Error(res.error ?? 'Scribe could not write this draft');
+          await reloadContentDrafts();
         }}
       />
     </div>

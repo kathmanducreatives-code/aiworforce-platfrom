@@ -1801,11 +1801,14 @@ export type Database = {
           body: string
           created_at: string
           created_by: string | null
+          current_version_id: string | null
           format: string
           id: string
+          last_generation_source: string
           metadata: Json
           source: string | null
           source_signal_id: string | null
+          source_type: string
           status: string
           title: string | null
           updated_at: string
@@ -1816,11 +1819,14 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          current_version_id?: string | null
           format?: string
           id?: string
+          last_generation_source?: string
           metadata?: Json
           source?: string | null
           source_signal_id?: string | null
+          source_type?: string
           status?: string
           title?: string | null
           updated_at?: string
@@ -1831,17 +1837,27 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          current_version_id?: string | null
           format?: string
           id?: string
+          last_generation_source?: string
           metadata?: Json
           source?: string | null
           source_signal_id?: string | null
+          source_type?: string
           status?: string
           title?: string | null
           updated_at?: string
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_item_current_version_id_fkey"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "content_item_version"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_item_source_signal_id_fkey"
             columns: ["source_signal_id"]
@@ -1864,7 +1880,11 @@ export type Database = {
           content_item_id: string
           created_at: string
           created_by: string | null
+          generation_source: string
           id: string
+          model: string | null
+          prompt_context: Json
+          task_id: string | null
           title: string | null
           version: number
           workspace_id: string
@@ -1874,7 +1894,11 @@ export type Database = {
           content_item_id: string
           created_at?: string
           created_by?: string | null
+          generation_source?: string
           id?: string
+          model?: string | null
+          prompt_context?: Json
+          task_id?: string | null
           title?: string | null
           version: number
           workspace_id: string
@@ -1884,7 +1908,11 @@ export type Database = {
           content_item_id?: string
           created_at?: string
           created_by?: string | null
+          generation_source?: string
           id?: string
+          model?: string | null
+          prompt_context?: Json
+          task_id?: string | null
           title?: string | null
           version?: number
           workspace_id?: string
@@ -4313,6 +4341,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "lead_lineages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_mission_queue: {
+        Row: {
+          attempts: number
+          claimed_by: string | null
+          created_at: string
+          id: string
+          last_outcome: Json | null
+          lease_expires_at: string | null
+          lineage_id: string | null
+          not_before: string | null
+          request: Json
+          status: string
+          task_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          last_outcome?: Json | null
+          lease_expires_at?: string | null
+          lineage_id?: string | null
+          not_before?: string | null
+          request: Json
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          last_outcome?: Json | null
+          lease_expires_at?: string | null
+          lineage_id?: string | null
+          not_before?: string | null
+          request?: Json
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_mission_queue_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -7589,6 +7673,25 @@ export type Database = {
           state_version: number
         }[]
       }
+      bind_lead_mission_execution: {
+        Args: {
+          p_lineage_id: string
+          p_queue_id: string
+          p_task_id: string
+          p_worker_id: string
+        }
+        Returns: {
+          bound: boolean
+          reason: string
+        }[]
+      }
+      cancel_lead_mission: {
+        Args: { p_queue_id: string; p_workspace_id: string }
+        Returns: {
+          cancelled: boolean
+          reason: string
+        }[]
+      }
       cancel_lineage: {
         Args: {
           p_lineage_id: string
@@ -7599,6 +7702,20 @@ export type Database = {
           cancelled: boolean
           prior_status: string
           reason: string
+        }[]
+      }
+      claim_next_lead_mission: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          claimed: boolean
+          held_until: string
+          lineage_id: string
+          queue_id: string
+          reason: string
+          request: Json
+          task_id: string
+          workspace_id: string
         }[]
       }
       claim_sourcing_continuation: {
@@ -7681,6 +7798,18 @@ export type Database = {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean
       }
+      heartbeat_lead_mission: {
+        Args: {
+          p_lease_seconds?: number
+          p_queue_id: string
+          p_worker_id: string
+        }
+        Returns: {
+          held_until: string
+          ok: boolean
+          reason: string
+        }[]
+      }
       increment_tokens: {
         Args: { amount: number; workspace_id_input: string }
         Returns: undefined
@@ -7697,6 +7826,18 @@ export type Database = {
       provision_workspace_for_user: {
         Args: { _user_id: string }
         Returns: string
+      }
+      release_lead_mission: {
+        Args: {
+          p_outcome?: Json
+          p_queue_id: string
+          p_status: string
+          p_worker_id: string
+        }
+        Returns: {
+          final_status: string
+          released: boolean
+        }[]
       }
       release_lineage_lease: {
         Args: {
@@ -7722,6 +7863,19 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: boolean
+      }
+      renew_lineage_lease: {
+        Args: {
+          p_holder_task_id: string
+          p_lease_seconds?: number
+          p_lineage_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          held_until: string
+          reason: string
+          renewed: boolean
+        }[]
       }
       seed_agents_for_workspace: {
         Args: { _workspace_id: string }

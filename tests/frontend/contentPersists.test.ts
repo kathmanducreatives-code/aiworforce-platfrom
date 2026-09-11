@@ -40,6 +40,9 @@ const CREATE_MODAL = await read("src/components/content/CreatePostModal.tsx");
 const DRAWER = await read("src/components/content/ContentDetailDrawer.tsx");
 const DRAFT_MODEL = await read("src/lib/contentDraftModel.ts");
 const MIGRATION = await read("supabase/migrations/20260910120000_content_item.sql");
+// The V1 migration REDEFINES the format and status CHECKs, so it — not the
+// original CREATE TABLE — is what the live database enforces.
+const V1 = await read("supabase/migrations/20260911120000_content_v1.sql");
 const VERSIONING = await read("supabase/migrations/20260910130000_content_item_versioning.sql");
 
 // ══════════ 1. the page reads the table ═══════════════════════════════════
@@ -101,25 +104,46 @@ function checkValues(sql: string, column: string): string[] {
   return [...m![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort();
 }
 
-Deno.test("THE CROSS-STACK TRAP: content format is the same vocabulary everywhere", () => {
+/** `CHECK (col in ('a','b'))` — the V1 migration's lowercase form. */
+function checkInValues(sql: string, column: string): string[] {
+  const m = new RegExp(`check \\(${column} in \\(([^)]+)\\)\\)`, "i").exec(sql);
+  assert(m, `CHECK on ${column} not found`);
+  return [...m![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort();
+}
+
+Deno.test("THE CROSS-STACK TRAP: content format is the same in TypeScript and SQL", () => {
   // `credits.ts` compared a frontend field against a BACKEND status name
   // ('profile_only' vs 'profile_found'). The comparison could never be true, so
   // a credit estimate read 0 forever and a test with an `any[]` fixture agreed.
-  // Content has the same hazard — a UI subtype, a TS union and a SQL CHECK — so
-  // the three are pinned to each other here.
-  const tsFormat = unionLiterals(ITEMS, "ContentFormat");
-  const uiSubtype = unionLiterals(DRAFT_MODEL, "ContentSubtype");
-  const sqlFormat = checkValues(MIGRATION, "format");
-  assertEquals(tsFormat, uiSubtype, "ContentFormat must equal ContentSubtype in contentDraftModel.ts");
-  assertEquals(tsFormat, sqlFormat, "ContentFormat must equal the format CHECK constraint");
+  // The TS union and the constraint the database enforces stay pinned.
+  assertEquals(
+    unionLiterals(ITEMS, "ContentFormat"),
+    checkInValues(V1, "format"),
+    "ContentFormat must equal the format CHECK the V1 migration installs",
+  );
+});
+
+Deno.test("ContentSubtype is DELIBERATELY a different vocabulary", () => {
+  // These were briefly pinned to each other, and that was wrong. `ContentSubtype`
+  // (founder_post | post_ideas | comment_draft | content) describes what
+  // `writeScribeContent` tags a `saved_outputs` row with — a different table for
+  // a different purpose. Forcing them to agree would make `content_item` carry
+  // two legacy names nothing writes and miss the two it needs.
+  const fmt = unionLiterals(ITEMS, "ContentFormat");
+  const sub = unionLiterals(DRAFT_MODEL, "ContentSubtype");
+  assertEquals(fmt, ["linkedin_comment", "linkedin_post"], "V1 makes exactly two things");
+  assert(
+    fmt.join() !== sub.join(),
+    "if these ever become equal, one of the two tables has been given the wrong vocabulary",
+  );
 });
 
 Deno.test("content status is the same vocabulary in TypeScript and SQL", () => {
-  assertEquals(
-    unionLiterals(ITEMS, "ContentStatus"),
-    checkValues(MIGRATION, "status"),
-    "ContentStatus must equal the status CHECK constraint",
-  );
+  const ts = unionLiterals(ITEMS, "ContentStatus");
+  assertEquals(ts, checkInValues(V1, "status"), "ContentStatus must equal the V1 status CHECK");
+  // Three states. `in_review` was removed because nothing transitioned out of
+  // it — V1 has no reviewer and no publishing.
+  assertEquals(ts, ["approved", "archived", "draft"]);
 });
 
 // ══════════ 3. versions belong to the database ════════════════════════════

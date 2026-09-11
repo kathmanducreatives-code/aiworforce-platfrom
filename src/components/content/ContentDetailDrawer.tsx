@@ -2,7 +2,7 @@
 // options, draft body, CTA, proof used, missing proof and approval status.
 // Read + approve only — nothing publishes from here.
 import { useEffect, useRef, useState } from "react";
-import { X, ExternalLink, ShieldAlert, Loader2, Sparkles } from "lucide-react";
+import { X, ExternalLink, ShieldAlert, Loader2, Sparkles, RefreshCw, History } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 export interface ContentDetail {
@@ -25,10 +25,40 @@ export interface ContentDetail {
  * an append-only record with nothing to save back to. A `content_item` is an
  * editable object, so the Content page passes a saver and gets an editor.
  */
-export default function ContentDetailDrawer({ detail, onClose, onSave, onGenerate }: {
+/** What produced a version, in words a person reads. */
+const LABEL: Record<string, string> = {
+  manual_edit: "edited by you",
+  scribe_generation: "written by Scribe",
+  scribe_regeneration: "rewritten by Scribe",
+};
+
+/** One past version, newest first. Read-only — history is not editable. */
+export interface ContentVersionRow {
+  id: string;
+  version: number;
+  body: string;
+  generation_source: string;
+  created_at: string;
+  is_current: boolean;
+}
+
+export default function ContentDetailDrawer({
+  detail, onClose, onSave, onGenerate, onRegenerate, versions, onLoadVersions,
+}: {
   detail: ContentDetail | null;
   onClose: () => void;
   onSave?: (patch: { body: string }) => Promise<void>;
+  /**
+   * Ask Scribe for a FRESH draft from the item's own source and context.
+   *
+   * Distinct from `onGenerate`, which fills an empty draft. Regenerating an
+   * existing one replaces the body and the trigger records version N+1, so the
+   * previous wording stays readable rather than being overwritten.
+   */
+  onRegenerate?: () => Promise<void>;
+  /** Past versions, newest first. Loaded on demand. */
+  versions?: ContentVersionRow[];
+  onLoadVersions?: () => Promise<void>;
   /**
    * Ask Scribe to write this draft.
    *
@@ -40,6 +70,9 @@ export default function ContentDetailDrawer({ detail, onClose, onSave, onGenerat
 }) {
   const editable = typeof onSave === "function";
   const [generating, setGenerating] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [draftBody, setDraftBody] = useState("");
   const [saving, setSaving] = useState(false);
@@ -198,6 +231,48 @@ export default function ContentDetailDrawer({ detail, onClose, onSave, onGenerat
                       {generating ? "Scribe is writing…" : "Draft with Scribe"}
                     </button>
                   )}
+                  {/* REGENERATE. Offered only once there is something to replace —
+                      on an empty draft "Draft with Scribe" is the same action
+                      under an honest name. */}
+                  {onRegenerate && (detail.body ?? "").trim().length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (regenerating) return;
+                        setRegenerating(true); setGenError(null);
+                        try {
+                          await onRegenerate();
+                        } catch (err) {
+                          setGenError(err instanceof Error ? err.message : "Could not regenerate");
+                        } finally {
+                          setRegenerating(false);
+                        }
+                      }}
+                      disabled={regenerating || generating}
+                      title="Scribe writes a new version. The current one is kept in history."
+                      className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9] disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {regenerating
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCw className="h-3.5 w-3.5" />}
+                      {regenerating ? "Rewriting…" : "Regenerate"}
+                    </button>
+                  )}
+                  {onLoadVersions && (
+                    <button
+                      onClick={async () => {
+                        const next = !historyOpen;
+                        setHistoryOpen(next);
+                        if (next) {
+                          setHistoryLoading(true);
+                          try { await onLoadVersions(); } finally { setHistoryLoading(false); }
+                        }
+                      }}
+                      className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9] transition-colors"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      {historyOpen ? "Hide history" : "History"}
+                    </button>
+                  )}
                   {genError && (
                     <span className="text-[12px] text-amber-300/90">{genError}</span>
                   )}
@@ -209,6 +284,50 @@ export default function ContentDetailDrawer({ detail, onClose, onSave, onGenerat
               <p className="text-[13px] text-neutral-500 italic">No draft body yet — Scribe will draft it for your review.</p>
             )}
           </Section>
+
+          {/* ── VERSION HISTORY ──────────────────────────────────────────────
+              Read-only, and deliberately so: a version is what the draft said
+              at a point in time, and an editable history is not a history.
+              Every entry names what produced it, which is the whole reason
+              `generation_source` is carried on the row. */}
+          {historyOpen && (
+            <Section title="History">
+              {historyLoading && (
+                <p className="text-[13px] text-neutral-500">Loading versions…</p>
+              )}
+              {!historyLoading && (versions ?? []).length === 0 && (
+                <p className="text-[13px] text-neutral-500 italic">No versions recorded yet.</p>
+              )}
+              <div className="space-y-2">
+                {(versions ?? []).map((v) => (
+                  <div
+                    key={v.id}
+                    className={`rounded-lg border p-3 ${
+                      v.is_current
+                        ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+                        : "border-white/[0.06] bg-white/[0.015]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[12px] font-semibold text-[#C9D1D9]">v{v.version}</span>
+                      {v.is_current && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-300">current</span>
+                      )}
+                      <span className="text-[11px] text-neutral-500">
+                        {LABEL[v.generation_source] ?? v.generation_source}
+                      </span>
+                      <span className="text-[11px] text-neutral-600 ml-auto">
+                        {new Date(v.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-[12.5px] text-neutral-300 leading-relaxed whitespace-pre-wrap line-clamp-4">
+                      {v.body || <span className="italic text-neutral-500">empty</span>}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
           {detail.cta && (<Section title="CTA"><p className="text-[14px] text-neutral-200">{detail.cta}</p></Section>)}
           <Section title="Proof used">
             {detail.proofUrl ? (

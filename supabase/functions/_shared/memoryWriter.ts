@@ -293,6 +293,13 @@ interface AgentResultCtx extends BaseCtx {
      * return to whether or not the model ever answers.
      */
     content_item_id?: string;
+    /**
+     * A REGENERATION, not a first draft. The only difference the database can
+     * see is the provenance recorded on the version — and that difference is
+     * exactly what a history view has to show, so the caller states it rather
+     * than the writer guessing from whether a body already existed.
+     */
+    regenerate?: boolean;
   };
 }
 
@@ -1366,15 +1373,43 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
     // SCOPED BY WORKSPACE, not by id alone. The id arrives from the client
     // through `tool_input`, and this writer holds the service role — an
     // unscoped update would let a forged id overwrite another tenant's draft.
+    //
+    // METADATA IS MERGED, NOT REPLACED. The row already carries the brief it was
+    // created with; overwriting the whole object would erase the only record of
+    // what this draft was asked to be — which is also what a regeneration reads.
+    const { data: existing } = await ctx.admin
+      .from("content_item")
+      .select("metadata")
+      .eq("id", cl.content_item_id)
+      .eq("workspace_id", ctx.workspace_id)
+      .maybeSingle();
+    const prior = (existing?.metadata && typeof existing.metadata === "object")
+      ? existing.metadata as Record<string, unknown>
+      : {};
+
     const { error } = await ctx.admin
       .from("content_item")
       .update({
         title: cleaned.title,
         body: cleaned.body,
         agent_slug: "scribe",
-        // APPROVAL-FIRST. A generated draft is the agent's proposal, never a
-        // finished post, so it lands where a human still has to look at it.
-        status: "in_review",
+        // The version trigger copies this onto the version row, which is how a
+        // first draft and a regeneration stay distinguishable in history.
+        last_generation_source: cl.regenerate ? "scribe_regeneration" : "scribe_generation",
+        // A generated draft is the agent's proposal. `draft` is the only
+        // pre-approval state V1 has; `in_review` was removed because nothing
+        // ever transitioned out of it.
+        status: "draft",
+        metadata: {
+          ...prior,
+          last_task_id: ctx.task_id ?? null,
+          last_prompt_context: {
+            topic: cl.topic ?? null,
+            subtype: cl.subtype ?? null,
+            source: cl.source ?? null,
+            related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
+          },
+        },
       })
       .eq("id", cl.content_item_id)
       .eq("workspace_id", ctx.workspace_id);

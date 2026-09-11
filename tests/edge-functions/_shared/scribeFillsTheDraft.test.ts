@@ -66,13 +66,46 @@ Deno.test("THE CROSS-TENANT GUARD: the update is scoped by workspace, not id alo
   );
 });
 
-Deno.test("generation is a proposal: it lands in review, never approved", () => {
+Deno.test("generation is a proposal: it lands in draft, never approved", () => {
   // The page's stated contract is approval-first. A generated draft is the
   // agent's suggestion; writing it straight to `approved` would let an
-  // unreviewed model output through the queue that exists to catch it.
+  // unreviewed model output through the review it exists to receive.
+  //
+  // It used to land in `in_review`. Content V1 removed that state — nothing
+  // ever transitioned out of it, because V1 has no reviewer and no publishing —
+  // so `draft` is now the only pre-approval state, and it carries the same
+  // meaning: a human has not accepted this yet.
   const upd = SCRIBE.slice(SCRIBE.indexOf('.from("content_item")'));
-  assert(upd.includes('status: "in_review"'), "a generated draft must land in review");
+  assert(upd.includes('status: "draft"'), "a generated draft must land unapproved");
   assert(!upd.includes('status: "approved"'), "generation must never approve its own output");
+  assert(
+    !upd.includes('status: "in_review"'),
+    "in_review is no longer a valid status — the CHECK constraint would reject it",
+  );
+});
+
+Deno.test("THE PROVENANCE: a generation is recorded as one", () => {
+  // The version trigger copies `last_generation_source` onto the version row,
+  // which is the only way history can tell a first draft, a regeneration and a
+  // hand edit apart.
+  const upd = SCRIBE.slice(SCRIBE.indexOf('.from("content_item")'));
+  assert(
+    upd.includes('last_generation_source: cl.regenerate ? "scribe_regeneration" : "scribe_generation"'),
+    "the writer must record which kind of generation this was",
+  );
+});
+
+Deno.test("metadata is MERGED, never replaced", () => {
+  // The row carries the brief it was created with, and a regeneration reads it
+  // back. Overwriting the whole jsonb would erase the only record of what the
+  // draft was asked to be — and make the second draft answer a different
+  // question from the first.
+  const upd = SCRIBE.slice(SCRIBE.indexOf('.from("content_item")'));
+  assert(upd.includes("...prior"), "the existing metadata must be spread into the update");
+  assert(
+    /\.select\("metadata"\)/.test(SCRIBE),
+    "which means it has to be read first",
+  );
 });
 
 Deno.test("filling a draft is opt-in, so other scribe paths are unaffected", () => {

@@ -17,16 +17,34 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-/** Lifecycle. Matches the CHECK constraint on `content_item.status`. */
-export type ContentStatus = 'draft' | 'in_review' | 'approved' | 'archived';
+/**
+ * Lifecycle. Matches the CHECK constraint on `content_item.status`.
+ *
+ * THREE STATES. `in_review` was removed: V1 has no reviewer and no publishing,
+ * so a state nothing transitions out of is a promise the product does not keep.
+ */
+export type ContentStatus = 'draft' | 'approved' | 'archived';
 
 /**
- * Matches `ContentSubtype` in src/lib/contentDraftModel.ts AND the CHECK
- * constraint on `content_item.format`. One vocabulary across the stack — a
- * second one is how `credits.ts` came to test a frontend field against a
- * backend name, a comparison that could never be true.
+ * The two things Content V1 makes. Matches the CHECK on `content_item.format`.
+ *
+ * DELIBERATELY NOT `ContentSubtype` from contentDraftModel.ts. That union
+ * (founder_post | post_ideas | comment_draft | content) describes what
+ * `writeScribeContent` tags a `saved_outputs` row with — a different table, for
+ * a different purpose. They were briefly pinned to each other; they are two
+ * vocabularies and forcing them to agree would mean `content_item` carrying two
+ * legacy names nothing writes and missing the two it needs.
+ *
+ * Extensible by design: adding a type is a CHECK change and one union member.
+ * V1 ships only what it actually supports.
  */
-export type ContentFormat = 'founder_post' | 'post_ideas' | 'comment_draft' | 'content';
+export type ContentFormat = 'linkedin_post' | 'linkedin_comment';
+
+/** How the item came to exist. Matches the CHECK on `content_item.source_type`. */
+export type ContentSourceType = 'idea' | 'signal';
+
+/** What produced a given version. Copied onto the version by the trigger. */
+export type GenerationSource = 'manual_edit' | 'scribe_generation' | 'scribe_regeneration';
 
 export interface ContentItem {
   id: string;
@@ -37,7 +55,11 @@ export interface ContentItem {
   title: string | null;
   body: string;
   source: string | null;
+  source_type: ContentSourceType;
   source_signal_id: string | null;
+  /** The live version. Maintained by the trigger; never written by a client. */
+  current_version_id: string | null;
+  last_generation_source: GenerationSource;
   agent_slug: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -50,6 +72,10 @@ export interface ContentItemVersion {
   version: number;
   title: string | null;
   body: string;
+  generation_source: GenerationSource;
+  model: string | null;
+  task_id: string | null;
+  prompt_context: Record<string, unknown>;
   created_at: string;
 }
 
@@ -61,12 +87,15 @@ export interface ContentItemVersion {
  * which it cannot parse, and every row silently degrades to
  * `GenericStringError`. Keep these on one line however long they get.
  */
-const ITEM_COLUMNS = 'id, workspace_id, created_by, status, format, title, body, source, source_signal_id, agent_slug, metadata, created_at, updated_at';
+const ITEM_COLUMNS = 'id, workspace_id, created_by, status, format, title, body, source, source_type, source_signal_id, current_version_id, last_generation_source, agent_slug, metadata, created_at, updated_at';
 
-const VERSION_COLUMNS = 'id, content_item_id, version, title, body, created_at';
+const VERSION_COLUMNS = 'id, content_item_id, version, title, body, generation_source, model, task_id, prompt_context, created_at';
 
-const STATUSES: ContentStatus[] = ['draft', 'in_review', 'approved', 'archived'];
-const FORMATS: ContentFormat[] = ['founder_post', 'post_ideas', 'comment_draft', 'content'];
+const STATUSES: ContentStatus[] = ['draft', 'approved', 'archived'];
+const FORMATS: ContentFormat[] = ['linkedin_post', 'linkedin_comment'];
+const SOURCE_TYPES: ContentSourceType[] = ['idea', 'signal'];
+const GENERATION_SOURCES: GenerationSource[] =
+  ['manual_edit', 'scribe_generation', 'scribe_regeneration'];
 
 /**
  * Narrow a database row to `ContentItem`.
@@ -85,11 +114,17 @@ function toItem(row: Record<string, unknown>): ContentItem {
     workspace_id: String(row.workspace_id),
     created_by: (row.created_by as string | null) ?? null,
     status: STATUSES.includes(status) ? status : 'draft',
-    format: FORMATS.includes(format) ? format : 'content',
+    format: FORMATS.includes(format) ? format : 'linkedin_post',
     title: (row.title as string | null) ?? null,
     body: (row.body as string | null) ?? '',
     source: (row.source as string | null) ?? null,
+    source_type: SOURCE_TYPES.includes(row.source_type as ContentSourceType)
+      ? row.source_type as ContentSourceType : 'idea',
     source_signal_id: (row.source_signal_id as string | null) ?? null,
+    current_version_id: (row.current_version_id as string | null) ?? null,
+    last_generation_source:
+      GENERATION_SOURCES.includes(row.last_generation_source as GenerationSource)
+        ? row.last_generation_source as GenerationSource : 'manual_edit',
     agent_slug: (row.agent_slug as string | null) ?? null,
     metadata: (row.metadata && typeof row.metadata === 'object')
       ? row.metadata as Record<string, unknown>
@@ -105,8 +140,15 @@ export interface CreateContentItemInput {
   title?: string | null;
   body?: string;
   format?: ContentFormat;
-  /** How it came to exist: 'manual', 'signal', 'content_engagement_loop'. */
+  /** Free-text provenance label, e.g. 'content_surface'. */
   source?: string | null;
+  /** Which of the two creation paths this was. */
+  source_type?: ContentSourceType;
+  /**
+   * The signal this was made from. REQUIRED when `source_type` is 'signal' —
+   * the database enforces it, so a signal-sourced draft can never lose track of
+   * what it was about.
+   */
   source_signal_id?: string | null;
   metadata?: Record<string, unknown>;
 }
@@ -127,8 +169,9 @@ export async function createContentItem(
       workspace_id: input.workspace_id,
       title: input.title ?? null,
       body: input.body ?? '',
-      format: input.format ?? 'content',
+      format: input.format ?? 'linkedin_post',
       source: input.source ?? null,
+      source_type: input.source_type ?? 'idea',
       source_signal_id: input.source_signal_id ?? null,
       metadata: (input.metadata ?? {}) as never,
     })
@@ -217,6 +260,13 @@ export async function listContentItemVersions(
         version: Number(row.version),
         title: (row.title as string | null) ?? null,
         body: (row.body as string | null) ?? '',
+        generation_source:
+          GENERATION_SOURCES.includes(row.generation_source as GenerationSource)
+            ? row.generation_source as GenerationSource : 'manual_edit',
+        model: (row.model as string | null) ?? null,
+        task_id: (row.task_id as string | null) ?? null,
+        prompt_context: (row.prompt_context && typeof row.prompt_context === 'object')
+          ? row.prompt_context as Record<string, unknown> : {},
         created_at: String(row.created_at),
       };
     }),

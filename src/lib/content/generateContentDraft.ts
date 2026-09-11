@@ -44,6 +44,15 @@ export interface GenerateContentDraftArgs {
   topic?: string | null;
   /** Signals the draft is grounded in, when it came from the feed. */
   relatedSignalIds?: string[];
+  /**
+   * A REGENERATION of an existing draft, not a first write.
+   *
+   * The only difference the database can see is the provenance recorded on the
+   * new version — and that is exactly what the history view shows, so the
+   * caller states it rather than the writer inferring it from whether a body
+   * already existed.
+   */
+  regenerate?: boolean;
 }
 
 export interface GenerateContentDraftResult {
@@ -116,6 +125,7 @@ export async function generateContentDraft(
           subtype: args.format,
           topic: args.topic ?? null,
           content_item_id: args.contentItemId,
+          regenerate: args.regenerate === true,
           related_signal_ids: args.relatedSignalIds ?? [],
         },
       },
