@@ -6,7 +6,7 @@
 //
 // All data is real. Everything is approval-first. Backend unchanged.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, FileEdit, RefreshCw, ChevronRight,
@@ -19,6 +19,9 @@ import type { ContentItem } from '@/lib/content/contentItems';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { listContentItemVersions, type ContentFormat } from '@/lib/content/contentItems';
 import { buildContentInstruction } from '@/lib/content/contentInstruction';
+import {
+  regenerateContentText, generateContentImage, getContentAssets, signedAssetUrl,
+} from '@/lib/content/contentService';
 import { toast } from 'sonner';
 import type { ContentVersionRow } from '@/components/content/ContentDetailDrawer';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
@@ -194,6 +197,30 @@ export default function Content() {
     if (!res.ok) toast.error(res.error ?? 'Scribe could not write this draft');
     await reloadContentDrafts();
   }, [workspaceId, createContentDraft, reloadContentDrafts]);
+
+  // ── THE CURRENT IMAGE ──────────────────────────────────────────────────
+  //
+  // Held as a SIGNED url, minted on open and never stored: `content-assets` is
+  // private because a draft is unpublished work, and a signature is short-lived
+  // by design. Caching one in state across sessions would just be a link that
+  // expires somewhere the user cannot see why.
+  const [assetUrl, setAssetUrl] = useState<string | null>(null);
+  const [assetCount, setAssetCount] = useState(0);
+
+  const loadAssets = useCallback(async () => {
+    if (!openDraftId) { setAssetUrl(null); setAssetCount(0); return; }
+    const { assets } = await getContentAssets(openDraftId);
+    const ready = assets.filter((a) => a.status === 'ready' && a.storage_path);
+    setAssetCount(ready.length);
+    const current = ready[0];
+    if (!current?.storage_path) { setAssetUrl(null); return; }
+    const { url } = await signedAssetUrl(current.storage_path);
+    setAssetUrl(url);
+  }, [openDraftId]);
+
+  // Opening a draft loads its image; closing clears it, so the next draft never
+  // flashes the previous one's picture.
+  useEffect(() => { void loadAssets(); }, [loadAssets]);
 
   const loadVersions = useCallback(async () => {
     if (!openDraftId) { setVersions([]); return; }
@@ -444,25 +471,31 @@ export default function Content() {
           openDraftId && workspaceId && contentItems.some((it) => it.id === openDraftId)
             ? async () => {
               const item = contentItems.find((it) => it.id === openDraftId)!;
-              // THE ITEM'S OWN CONTEXT, not a fresh prompt. A regeneration is
-              // "write this again", so it reuses the brief the draft was made
-              // with and the signal it came from.
-              const res = await generateContentDraft({
-                contentItemId: item.id,
-                workspaceId,
-                instruction: (item.metadata?.brief as string | undefined)
-                  ?? `Rewrite this ${item.format.replace(/_/g, ' ')}. Draft only.`,
-                format: item.format,
-                topic: (item.metadata?.topic as string | undefined) ?? item.title,
-                relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
-                regenerate: true,
-              });
+              // THROUGH THE SERVICE. This used to call `generateContentDraft`
+              // with a brief assembled here, which is precisely the drift the
+              // service exists to stop: the same action meant something
+              // slightly different in every surface that offered it.
+              const res = await regenerateContentText(workspaceId, item);
               if (!res.ok) throw new Error(res.error ?? 'Could not regenerate');
               await reloadContentDrafts();
               await loadVersions();
             }
             : undefined
         }
+        onGenerateImage={
+          openDraftId && workspaceId
+            ? async () => {
+              const res = await generateContentImage(workspaceId, openDraftId);
+              // TRUTHFUL. A refusal by the spend ceiling and a provider failure
+              // are different facts, and the service passes the server's own
+              // reason rather than flattening both to "something went wrong".
+              if (!res.ok) throw new Error(res.error ?? 'Could not generate an image');
+              await loadAssets();
+            }
+            : undefined
+        }
+        imageUrl={assetUrl}
+        imageCount={assetCount}
         versions={versions}
         onLoadVersions={openDraftId ? loadVersions : undefined}
       />

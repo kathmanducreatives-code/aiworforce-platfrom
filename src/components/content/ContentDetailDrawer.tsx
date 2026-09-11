@@ -2,7 +2,7 @@
 // options, draft body, CTA, proof used, missing proof and approval status.
 // Read + approve only — nothing publishes from here.
 import { useEffect, useRef, useState } from "react";
-import { X, ExternalLink, ShieldAlert, Loader2, Sparkles, RefreshCw, History } from "lucide-react";
+import { X, ExternalLink, ShieldAlert, Loader2, Sparkles, RefreshCw, History, Image as ImageIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 export interface ContentDetail {
@@ -44,6 +44,7 @@ export interface ContentVersionRow {
 
 export default function ContentDetailDrawer({
   detail, onClose, onSave, onGenerate, onRegenerate, versions, onLoadVersions,
+  onGenerateImage, imageUrl, imageCount,
 }: {
   detail: ContentDetail | null;
   onClose: () => void;
@@ -67,10 +68,23 @@ export default function ContentDetailDrawer({
    * that were a mis-tap. The user asks, and pays, deliberately.
    */
   onGenerate?: () => Promise<void>;
+  /**
+   * Ask for an illustration of the CURRENT text.
+   *
+   * A separate button and a separate spend on purpose. "Regenerate" rewrites
+   * copy and must never quietly buy a new picture, which is the single easiest
+   * way for one click to cost twice what the user expected.
+   */
+  onGenerateImage?: () => Promise<void>;
+  /** The current image, already signed. Null while there is none. */
+  imageUrl?: string | null;
+  /** How many images this draft has had. History is kept; only the pointer moves. */
+  imageCount?: number;
 }) {
   const editable = typeof onSave === "function";
   const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [imaging, setImaging] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -257,6 +271,37 @@ export default function ContentDetailDrawer({
                       {regenerating ? "Rewriting…" : "Regenerate"}
                     </button>
                   )}
+                  {/* IMAGE. Only once there is copy to illustrate — the server
+                      refuses an empty draft with `no_draft_to_illustrate`, and
+                      offering a button that is going to be refused is worse
+                      than not offering it. */}
+                  {onGenerateImage && (detail.body ?? "").trim().length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (imaging) return;
+                        setImaging(true); setGenError(null);
+                        try {
+                          await onGenerateImage();
+                        } catch (err) {
+                          setGenError(err instanceof Error ? err.message : "Could not generate an image");
+                        } finally {
+                          setImaging(false);
+                        }
+                      }}
+                      disabled={imaging || generating || regenerating}
+                      title={(imageCount ?? 0) > 0
+                        ? "Generate another image. The current one is kept."
+                        : "Generate an image for this draft."}
+                      className="h-8 px-3 rounded-lg text-[12.5px] font-medium inline-flex items-center gap-1.5 border border-white/[0.1] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-[#C9D1D9] disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {imaging
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <ImageIcon className="h-3.5 w-3.5" />}
+                      {imaging
+                        ? "Generating image…"
+                        : (imageCount ?? 0) > 0 ? "New image" : "Generate image"}
+                    </button>
+                  )}
                   {onLoadVersions && (
                     <button
                       onClick={async () => {
@@ -284,6 +329,27 @@ export default function ContentDetailDrawer({
               <p className="text-[13px] text-neutral-500 italic">No draft body yet — Scribe will draft it for your review.</p>
             )}
           </Section>
+
+          {/* ── THE IMAGE ────────────────────────────────────────────────────
+              Rendered from a SIGNED url the parent minted. The bucket is
+              private — a draft is unpublished work — so there is no public
+              link to fall back on, and an expired signature shows the alt
+              text rather than a broken-image glyph pretending to be the post. */}
+          {imageUrl && (
+            <Section title="Image">
+              <img
+                src={imageUrl}
+                alt="Generated illustration for this draft"
+                className="w-full max-w-md rounded-lg border border-white/[0.08]"
+                loading="lazy"
+              />
+              {(imageCount ?? 0) > 1 && (
+                <p className="mt-2 text-[12px] text-neutral-500">
+                  {imageCount} images generated. Earlier ones are kept.
+                </p>
+              )}
+            </Section>
+          )}
 
           {/* ── VERSION HISTORY ──────────────────────────────────────────────
               Read-only, and deliberately so: a version is what the draft said
