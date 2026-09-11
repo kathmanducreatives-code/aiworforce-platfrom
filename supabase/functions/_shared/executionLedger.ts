@@ -836,6 +836,18 @@ export async function recordModelCall(
     failure_message?: string | null;
     stage?: ExecutionStage;
     reason?: ExecutionReason;
+    /**
+     * The vendor that ran it. Defaults to `openai`, which every text caller
+     * uses and none of them passes.
+     *
+     * It exists because it is now possible to be WRONG. Text generation has one
+     * vendor here; image generation sits behind `ImageGenerationProvider`
+     * precisely so a second one can be added without touching Content, and a
+     * hardcoded `openai` would keep this column reading `openai` while the
+     * charge arrived from somewhere else. A provider column that cannot say who
+     * charged you is worse than no column, because it is believed.
+     */
+    provider_id?: string;
   },
 ): Promise<void> {
   if (!writer) return;
@@ -873,7 +885,7 @@ export async function recordModelCall(
     record_kind: "model_call",
     // The vendor that ran it. Honest, and distinct from `agentory_internal`,
     // which is what a stage result — an observation we made ourselves — uses.
-    provider_id: "openai",
+    provider_id: spec.provider_id ?? "openai",
     // `ExecutionStage` names the paid LEAD stages; none of them describes a
     // model call. The logical stage is `telemetry.role`, recorded below, and
     // claiming e.g. `company_discovery` here would put model rows into a funnel

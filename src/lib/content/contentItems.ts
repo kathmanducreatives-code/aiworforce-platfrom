@@ -224,7 +224,15 @@ export async function getContentItem(
  */
 export async function updateContentItem(
   id: string,
-  patch: { title?: string | null; body?: string; status?: ContentStatus },
+  patch: {
+    title?: string | null; body?: string; status?: ContentStatus;
+    /**
+     * Stated by the caller, never inferred. The trigger copies it onto the new
+     * version, and a `manual_edit` deliberately inherits no model or task — a
+     * person wrote that one.
+     */
+    last_generation_source?: GenerationSource;
+  },
 ): Promise<{ item: ContentItem | null; error: string | null }> {
   const { data, error } = await supabase
     .from('content_item')

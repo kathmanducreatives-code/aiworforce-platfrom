@@ -343,6 +343,7 @@ import { SOURCE_EXECUTION_KEY } from "../_shared/sourceExecutionState.ts";
 import { FUSION_STATE_KEY } from "../_shared/hiringEvidenceFusion.ts";
 import { SOURCE_FEEDBACK_KEY } from "../_shared/sourceFeedbackContract.ts";
 import { resolveRequestedLeadCount } from "../_shared/leadQuotaPolicy.ts";
+import { classifyAgentRun, runNeedsLineageLease } from "../_shared/agentRunKind.ts";
 // NOTE THE ABSENCE. `createBroadeningPlanner` (broadeningPlannerAdapter.ts) is
 // deliberately NOT imported: it reaches Gemini via Lovable and falls through to
 // Anthropic — Claude — whenever ANTHROPIC_API_KEY is set, which it is on TEST.
@@ -377,7 +378,7 @@ import {
 } from "../_shared/runOutcome.ts";
 import {
   LINEAGE_LEASE_VERSION, LEASE_REFUSAL_MESSAGE,
-  acquireLineageLease, decideLeaseGate, lineageLeaseEnforced, lineageRootOf,
+  acquireLineageLease, decideLeaseGate, lineageLeaseEnforced, lineageRootOf, LEASE_NOT_REQUIRED,
   releaseLineageLease, type RpcDb as LeaseRpcDb,
 } from "../_shared/lineageLease.ts";
 import {
@@ -1252,10 +1253,28 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     return task.id;
   })();
 
-  const leaseOutcome = await acquireLineageLease({
-    db: supabase as unknown as LeaseRpcDb,
-    lineageId: lineageRootId, workspaceId: workspace_id, holderTaskId: task.id,
+  // ── ONLY A LEAD RUN TAKES A LEAD LINEAGE ─────────────────────────────────
+  //
+  // This was unconditional, so every Scribe Content generation created a
+  // lineage with no path to a terminal state — measured: two canary runs, two
+  // rows left `status: running`, zero candidates, no lead work at all.
+  //
+  // The lineage IDENTIFIER above is still used: `logicalCallKey` keys provider
+  // and model idempotency on it, and for a Content run it is simply the task id.
+  // Only the row and its lease are skipped.
+  const runKind = classifyAgentRun({
+    agentSlug: agent_slug,
+    contentItemId: (tool_input_body?.content_loop as { content_item_id?: string } | undefined)
+      ?.content_item_id ?? null,
   });
+  const leaseOutcome = runNeedsLineageLease(runKind)
+    ? await acquireLineageLease({
+      db: supabase as unknown as LeaseRpcDb,
+      lineageId: lineageRootId, workspaceId: workspace_id, holderTaskId: task.id,
+    })
+    // A Content run holds no lineage, so the gate has nothing to refuse and
+    // proceeds exactly as it does when the migration is absent.
+    : LEASE_NOT_REQUIRED;
   const leaseGate = decideLeaseGate(leaseOutcome, lineageLeaseEnforced());
   console.log("[run-agent][lineage-lease]", {
     task_id: task.id, lineage_id: lineageRootId, ...leaseGate.observation,
@@ -7021,6 +7040,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         agent_slug,
         execution_mode: execution_mode_body,
         output_text: apiText,
+        // THE MODEL THAT WROTE IT. `content_item_version.model` was null on
+        // every row because this was never passed — the writer had no way to
+        // know, so provenance stopped at the task id.
+        model_used: ai.model ?? null,
+        provider_used: ai.provider ?? null,
         // Memory-driven draft_outreach carries the target lead ids so Penn
         // drafts link to the remembered leads (which live in a prior plan).
         lead_candidate_ids: Array.isArray(tool_input_body?.lead_candidate_ids)

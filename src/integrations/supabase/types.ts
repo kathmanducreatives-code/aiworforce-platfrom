@@ -1795,12 +1795,98 @@ export type Database = {
           },
         ]
       }
+      content_asset: {
+        Row: {
+          asset_type: string
+          content_item_id: string
+          content_version_id: string | null
+          created_at: string
+          created_by: string | null
+          failure_reason: string | null
+          generation_prompt: string | null
+          generation_source: string
+          height: number | null
+          id: string
+          metadata: Json
+          model: string | null
+          provider: string | null
+          status: string
+          storage_path: string | null
+          task_id: string | null
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          asset_type?: string
+          content_item_id: string
+          content_version_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          failure_reason?: string | null
+          generation_prompt?: string | null
+          generation_source?: string
+          height?: number | null
+          id?: string
+          metadata?: Json
+          model?: string | null
+          provider?: string | null
+          status?: string
+          storage_path?: string | null
+          task_id?: string | null
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          asset_type?: string
+          content_item_id?: string
+          content_version_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          failure_reason?: string | null
+          generation_prompt?: string | null
+          generation_source?: string
+          height?: number | null
+          id?: string
+          metadata?: Json
+          model?: string | null
+          provider?: string | null
+          status?: string
+          storage_path?: string | null
+          task_id?: string | null
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_asset_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_item"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_asset_content_version_id_fkey"
+            columns: ["content_version_id"]
+            isOneToOne: false
+            referencedRelation: "content_item_version"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_asset_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_item: {
         Row: {
           agent_slug: string | null
           body: string
           created_at: string
           created_by: string | null
+          current_asset_id: string | null
           current_version_id: string | null
           format: string
           id: string
@@ -1819,6 +1905,7 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          current_asset_id?: string | null
           current_version_id?: string | null
           format?: string
           id?: string
@@ -1837,6 +1924,7 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          current_asset_id?: string | null
           current_version_id?: string | null
           format?: string
           id?: string
@@ -1851,6 +1939,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_item_current_asset_id_fkey"
+            columns: ["current_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_asset"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_item_current_version_id_fkey"
             columns: ["current_version_id"]
@@ -1884,6 +1979,7 @@ export type Database = {
           id: string
           model: string | null
           prompt_context: Json
+          provider: string | null
           task_id: string | null
           title: string | null
           version: number
@@ -1898,6 +1994,7 @@ export type Database = {
           id?: string
           model?: string | null
           prompt_context?: Json
+          provider?: string | null
           task_id?: string | null
           title?: string | null
           version: number
@@ -1912,6 +2009,7 @@ export type Database = {
           id?: string
           model?: string | null
           prompt_context?: Json
+          provider?: string | null
           task_id?: string | null
           title?: string | null
           version?: number

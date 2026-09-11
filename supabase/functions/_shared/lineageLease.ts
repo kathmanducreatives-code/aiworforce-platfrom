@@ -125,7 +125,31 @@ export interface LeaseUnavailable {
   available: false;
 }
 
-export type LeaseOutcome = LeaseGranted | LeaseRefused | LeaseUnavailable;
+/**
+ * THIS RUN IS NOT A LEAD EXECUTION, so there is no lineage to lease.
+ *
+ * A first-class outcome rather than a cast at the call site. `run-agent` used
+ * to acquire a lease for every task including Scribe's, which left a lineage
+ * per Content generation with no path to a terminal state. Saying "not
+ * required" in the type is what stops that being re-introduced by someone
+ * simplifying the call site.
+ *
+ * It shares `available: false` with `LeaseUnavailable` deliberately: both mean
+ * "no lease exists and the run proceeds", which is exactly one branch in
+ * `decideLeaseGate`.
+ */
+export interface LeaseNotRequired {
+  acquired: false;
+  reason: "not_a_lead_run";
+  available: false;
+}
+
+export type LeaseOutcome = LeaseGranted | LeaseRefused | LeaseUnavailable | LeaseNotRequired;
+
+/** The outcome for a run that owns no lineage. */
+export const LEASE_NOT_REQUIRED: LeaseNotRequired = Object.freeze({
+  acquired: false, reason: "not_a_lead_run", available: false,
+});
 
 export interface RpcDb {
   rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;

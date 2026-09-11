@@ -62,6 +62,16 @@ const ACCOUNTED: Readonly<Record<string, string>> = Object.freeze({
     "endpoint constant only; delegates to the shared transport",
   "_shared/leadStrategy/adapters/lovableAi.ts":
     "endpoint constant only; delegates to the shared transport",
+  // Images bill per image rather than per token, so this seam reports through
+  // `onImageCall` instead of `ModelCallCollector`. The obligation is the same
+  // and is met the same way: `generate-content-image` turns every telemetry —
+  // success AND failure — into a `record_kind: 'model_call'` row via
+  // `recordModelCall`, and consults `authorizeModelSpend` before it spends.
+  // That row lands in `lead_model_calls`, which is the view the ceiling itself
+  // sums, so image spend both counts toward the ceiling and is stopped by it.
+  "_shared/imageProvider.ts":
+    "OpenAI images; emits via ImageProviderDeps.onImageCall on success and failure, " +
+    "ledgered as a model_call and gated by authorizeModelSpend in generate-content-image",
 });
 
 /**
@@ -78,6 +88,15 @@ const ACCOUNTED: Readonly<Record<string, string>> = Object.freeze({
  * rather than merely "not growing".
  */
 const KNOWN_UNMETERED: Readonly<Record<string, string>> = Object.freeze({});
+
+/** Code with comments removed. A name in prose is not a call site. */
+function stripComments(text: string): string {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((l) => (l.trim().startsWith("//") ? "" : l.replace(/\s\/\/.*$/, "")))
+    .join("\n");
+}
 
 /** A real call site, not a comment or a doc string. */
 function providerCallSites(text: string): string[] {
@@ -142,7 +161,21 @@ Deno.test("chat-respond is gone, and nothing references it", () => {
     "chat-respond was deleted: it had no caller, duplicated pilot-chat, had a " +
       "broken Gemini branch, and had no workspace to attribute spend to",
   );
-  const refs = FILES.filter((f) => f.text.includes("chat-respond")).map((f) => f.path);
+  // ── PROSE IS NOT A REFERENCE ───────────────────────────────────────────
+  //
+  // This scanned the raw text, so a COMMENT naming `chat-respond` failed the
+  // test. `imageProvider.ts` tripped it by listing the four historic bypasses
+  // in its own header — documenting the bug this file exists to prevent was
+  // enough to break it.
+  //
+  // That is this repo's most repeated test defect: a scan matching the comment
+  // that explains it. `providerCallSites` above already strips comments; this
+  // did not. A dangling reference is an IMPORT or a FETCH, never a sentence,
+  // and a test that cannot tell them apart pushes people to stop explaining
+  // things — the opposite of what it is for.
+  const refs = FILES
+    .filter((f) => stripComments(f.text).includes("chat-respond"))
+    .map((f) => f.path);
   assertEquals(refs, [], `dangling chat-respond references: ${refs.join(", ")}`);
 });
 
@@ -182,5 +215,28 @@ Deno.test("pilot-chat is the only chat entrypoint", () => {
   assertEquals(
     providerCallSites(orchestrate!.text), [],
     "orchestrate must delegate to the shared providers, never call one itself",
+  );
+});
+
+// ══════════ 3. the comment stripper does not blind the scan ═══════════════
+
+Deno.test("stripComments removes prose and keeps code", () => {
+  // A stripper that ate too much would make every scan above pass vacuously —
+  // which is a worse failure than the one it fixed, because it is silent.
+  const sample = [
+    '// import x from "./chat-respond.ts";',
+    '/* chat-respond lived here */',
+    'import y from "./chat-respond/index.ts";  // still a real import',
+    'const host = "api.openai.com";',
+  ].join("\n");
+  const out = stripComments(sample);
+
+  assert(out.includes('./chat-respond/index.ts'), "a real import must survive");
+  assert(out.includes("api.openai.com"), "a real endpoint must survive");
+  assert(!out.includes("lived here"), "block comments must go");
+  assert(!out.includes("still a real import"), "trailing comments must go");
+  assertEquals(
+    out.split("\n").filter((l) => l.includes("import x")).length, 0,
+    "a commented-out import is not a reference",
   );
 });

@@ -276,6 +276,9 @@ interface AgentResultCtx extends BaseCtx {
    * content_draft tagged with source/subtype/topic/audience/angle so the Signal
    * Feed can surface it as a founder post / post ideas / comment drafts.
    */
+  /** The model and provider that produced `output_text`, for provenance. */
+  model_used?: string | null;
+  provider_used?: string | null;
   content_loop?: {
     source?: string;
     subtype?: string;
@@ -1403,6 +1406,8 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
         metadata: {
           ...prior,
           last_task_id: ctx.task_id ?? null,
+          last_model: ctx.model_used ?? null,
+          last_provider: ctx.provider_used ?? null,
           last_prompt_context: {
             topic: cl.topic ?? null,
             subtype: cl.subtype ?? null,
