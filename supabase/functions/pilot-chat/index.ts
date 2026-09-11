@@ -1345,7 +1345,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
   // Card actions MUST carry the origin conversation_id. Refuse to silently
   // create a new conversation — that's the bug we're fixing.
-  if (actionSource && !conversationId) {
+  //
+  // A PAGE ENTRY POINT IS NOT A CARD. Mira, a Content-page button, a Signals
+  // copilot: each starts outside any conversation, exactly like a typed first
+  // message, and a typed first message already creates one. Refusing them made
+  // every page command with an `action_source` a 400 — and dropped its
+  // structured metadata (a signal's id included) before Pilot ever read it.
+  const isPageEntry = body?.entry === "page";
+  if (actionSource && !conversationId && !isPageEntry) {
     console.warn("[pilot-chat] card action missing conversation_id", { actionSource, workspaceId });
     return json({ error: "Action could not continue because conversation context was missing. Please retry." }, 400);
   }
@@ -1502,7 +1509,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       role: "user",
       content: message,
       metadata: actionSource
-        ? { action_source: actionSource, ...(actionMetadata ?? {}) }
+        ? { action_source: actionSource, ...(isPageEntry ? { entry: "page" } : {}), ...(actionMetadata ?? {}) }
         : {},
     })
     // THE ID IS READ, NOT DECORATION. The prior turns are loaded below to give
@@ -2801,6 +2808,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             source_type: signalId ? "signal" : "idea",
             source_signal_id: signalId,
             source_signal_title: signalTitle,
+            legacy_signal: signalHandoff.kind === "legacy_unlinked"
+              ? { id: signalHandoff.legacy_signal_id, title: signalHandoff.title }
+              : null,
             // A legacy signal has no FK, so its title IS the idea — never the
             // card's own generated sentence.
             idea: signalHandoff.kind === "legacy_unlinked"

@@ -17,17 +17,23 @@
 //
 // ZERO network, ZERO models, ZERO providers, ZERO database.
 
-import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const SHARED = new URL("../../../supabase/functions/_shared/", import.meta.url);
 const WRITER = await Deno.readTextFile(new URL("memoryWriter.ts", SHARED));
 
-/** The body of `writeScribeContent`, so neighbouring writers cannot satisfy these. */
+/**
+ * The Scribe writer FAMILY, so neighbouring writers cannot satisfy these:
+ * `writeScribeContent`, the one `fillContentItem` update every Content path
+ * shares, and the engagement-comment seam that creates items at write time.
+ */
 const SCRIBE = (() => {
-  const start = WRITER.indexOf("async function writeScribeContent");
-  assert(start > 0, "writeScribeContent must exist");
-  const end = WRITER.indexOf("\n}", start);
-  return WRITER.slice(start, end);
+  const body = (name: string) => {
+    const start = WRITER.indexOf(`async function ${name}`);
+    assert(start > 0, `${name} must exist`);
+    return WRITER.slice(start, WRITER.indexOf("\n}", start));
+  };
+  return ["writeScribeContent", "fillContentItem", "writeEngagementCommentItems"].map(body).join("\n");
 })();
 
 Deno.test("scribe is still the agent content dispatches to", () => {
@@ -59,11 +65,11 @@ Deno.test("THE CROSS-TENANT GUARD: the update is scoped by workspace, not id alo
   // would let a forged id overwrite another tenant's draft — the same class of
   // mistake as `ops_stuck_run_archive`, arriving from the other direction.
   const upd = SCRIBE.slice(SCRIBE.indexOf('.from("content_item")'));
-  assert(upd.includes(".eq(\"id\", cl.content_item_id)"), "must target the named draft");
-  assert(
-    upd.includes('.eq("workspace_id", ctx.workspace_id)'),
-    "must ALSO constrain workspace_id — the service role does not get RLS",
-  );
+  assert(upd.includes('.eq("id", itemId)'), "must target the named draft");
+  // EVERY id-targeted content_item statement is ALSO workspace-scoped.
+  const byId = upd.split('.eq("id", itemId)').length - 1;
+  const scoped = upd.split('.eq("id", itemId)\n    .eq("workspace_id", ctx.workspace_id)').length - 1;
+  assertEquals(scoped, byId, "must ALSO constrain workspace_id — the service role does not get RLS");
 });
 
 Deno.test("generation is a proposal: it lands in draft, never approved", () => {
@@ -109,9 +115,9 @@ Deno.test("metadata is MERGED, never replaced", () => {
 });
 
 Deno.test("filling a draft is opt-in, so other scribe paths are unaffected", () => {
-  // Guarded on the id being present. A scribe run from anywhere else — the
-  // content-engagement loop behind `orchestrate`, say — still writes
-  // saved_outputs only, and touches no content_item it was not given.
+  // Guarded on the id being present: a run fills only a content_item it was
+  // given. The engagement loop's comment step has none, so it CREATES its own
+  // items per post (`writeEngagementCommentItems`) rather than filling one.
   assert(
     /if \(cl\?\.content_item_id\)/.test(SCRIBE),
     "the content_item write must be guarded on an id actually being supplied",

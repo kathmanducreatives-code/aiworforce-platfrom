@@ -33,6 +33,7 @@ import {
 } from '@/lib/contentBuckets';
 import { deriveDraftStatus, DRAFT_STATUS_LABELS, deriveContentBrief, type ContentBriefSignal } from '@/lib/contentOps';
 import type { FeedSignal } from '@/lib/signalFeedModel';
+import { signalContentSource } from '@/lib/signalIdeaActions';
 import ContentComposer, { type ComposerSubmission } from '@/components/content/ContentComposer';
 import ContentDetailDrawer from '@/components/content/ContentDetailDrawer';
 import ManualContentSource from '@/components/content/ManualContentSource';
@@ -97,6 +98,10 @@ export default function Content() {
   const [versions, setVersions] = useState<ContentVersionRow[]>([]);
   const [miraCollapsed, setMiraCollapsed] = useState(false);
   const [miraContext, setMiraContext] = useState<string | null>(null);
+  // THE SIGNAL MIRA WAS ASKED ABOUT, when it was one. Sent with the message as
+  // metadata so Pilot can make a signal-sourced draft of THAT signal; a title in
+  // the context sentence is all the model would otherwise have to go on.
+  const [miraSignal, setMiraSignal] = useState<FeedSignal | null>(null);
   const [sourceIssuesOpen, setSourceIssuesOpen] = useState(false);
   const [miraImgFailed, setMiraImgFailed] = useState(false);
 
@@ -111,6 +116,13 @@ export default function Content() {
   );
   const workflowRecaps = useMemo(() => workflowSummaryOutputs(savedOutputs), [savedOutputs]);
   const commentDraftsData = useMemo(() => [
+    // CANONICAL FIRST. Engagement-loop comments are `content_item` rows now, one
+    // per post; `saved_outputs` comment rows are kept only for what older runs
+    // wrote before that, and are read, never written.
+    ...contentItems.filter((it) => it.format === 'linkedin_comment').map((it) => ({
+      id: it.id, title: it.title ?? 'Comment draft', status: it.status, date: it.created_at,
+      preview: it.body || undefined,
+    })),
     ...commentDraftRows(drafts).map((d) => ({
       id: d.id, title: d.subject ?? 'Comment draft', status: d.status, date: d.created_at,
       preview: d.body ?? undefined,
@@ -119,7 +131,7 @@ export default function Content() {
       id: o.id, title: o.title ?? 'Comment draft', status: (o.raw as any)?.status ?? 'draft', date: o.created_at,
       preview: o.body ?? undefined,
     })),
-  ], [drafts, savedOutputs]);
+  ], [contentItems, drafts, savedOutputs]);
 
   const contentSignals = useMemo(() => {
     const KEEP = ['news', 'funding', 'hiring', 'launch', 'product', 'post', 'engagement', 'competitor'];
@@ -178,19 +190,25 @@ export default function Content() {
   const turnSignalInto = useCallback(async (kind: 'post' | 'comment', sg: FeedSignal) => {
     if (!workspaceId) { toast.error('No workspace'); return; }
     const format: ContentFormat = kind === 'comment' ? 'linkedin_comment' : 'linkedin_post';
+    // ONLY A CANONICAL SIGNAL IS A SIGNAL SOURCE. A legacy-only feed row has no
+    // `signal_events` row for the FK to point at, so it becomes an idea about
+    // that signal, with where it came from kept on the row — never a fake FK.
+    const source = signalContentSource(sg);
     const instruction = buildContentInstruction({
-      format, sourceType: 'signal', idea: '', signalTitle: sg.title,
+      format, sourceType: source.source_type, idea: source.idea, signalTitle: sg.title,
     });
     const item = await createContentDraft({
       title: sg.title, format, source: 'content_surface',
-      source_type: 'signal', source_signal_id: sg.id, body: '',
-      metadata: { brief: instruction, topic: sg.title },
+      source_type: source.source_type, source_signal_id: source.source_signal_id, body: '',
+      metadata: { brief: instruction, topic: sg.title, ...source.metadata },
     });
     if (!item) { toast.error('Could not create the draft'); return; }
     setOpenDraftId(item.id);
     const res = await generateContentDraft({
       contentItemId: item.id, workspaceId, instruction, format,
-      topic: sg.title, relatedSignalIds: [sg.id],
+      topic: sg.title,
+      // Scribe's related signals are canonical ids only, like the FK.
+      relatedSignalIds: source.source_signal_id ? [source.source_signal_id] : [],
     });
     // The draft exists either way; only the generation can fail, and saying so
     // truthfully is what lets the user press Regenerate instead of wondering.
@@ -380,7 +398,7 @@ export default function Content() {
                     onOpenDraft={setOpenDraftId}
                     onTurnInto={(kind, s) => { void turnSignalInto(kind, s); }}
                     onReviewComment={() => setView('comments')}
-                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
                   />
                 )}
                 {view === 'trends' && (
@@ -388,7 +406,7 @@ export default function Content() {
                     signals={contentSignals}
                     loading={loading}
                     onTurnIntoPost={(s) => { void turnSignalInto('post', s); }}
-                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                    onAskMira={(ctx, sg) => { setMiraContext(ctx); setMiraSignal(sg ?? null); setMiraCollapsed(false); }}
                   />
                 )}
                 {view === 'comments' && (
@@ -398,7 +416,7 @@ export default function Content() {
                     loading={loading}
                     onDraft={(ctx) => dispatch(`Mira, refine this comment draft — draft only: ${ctx}`)}
                     onFindPosts={() => dispatch('Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only.')}
-                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraCollapsed(false); }}
+                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
                   />
                 )}
                 {view === 'plan' && (
@@ -422,7 +440,8 @@ export default function Content() {
           collapsed={miraCollapsed}
           onToggle={() => setMiraCollapsed((v) => !v)}
           contextLabel={miraContext}
-          onContextClear={() => setMiraContext(null)}
+          contextSignal={miraSignal}
+          onContextClear={() => { setMiraContext(null); setMiraSignal(null); }}
         />
       </div>
 
@@ -734,7 +753,7 @@ function TrendsView({ signals, loading, onTurnIntoPost, onAskMira }: {
   signals: FeedSignal[];
   loading: boolean;
   onTurnIntoPost: (s: FeedSignal) => void;
-  onAskMira: (ctx: string) => void;
+  onAskMira: (ctx: string, signal?: FeedSignal) => void;
 }) {
   if (loading) return <LoadingRow />;
   if (signals.length === 0) {
@@ -772,7 +791,7 @@ function TrendsView({ signals, loading, onTurnIntoPost, onAskMira }: {
               Create angle
             </button>
             <button
-              onClick={() => onAskMira(`Trend: ${s.title}`)}
+              onClick={() => onAskMira(`Trend: ${s.title}`, s)}
               className="shrink-0 rounded-md px-1.5 py-1 text-muted-foreground/40 opacity-0 transition-opacity hover:text-fuchsia-300 group-hover:opacity-100"
               aria-label="Ask Mira"
             >

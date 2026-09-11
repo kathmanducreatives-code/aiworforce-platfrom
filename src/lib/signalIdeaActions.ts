@@ -31,6 +31,50 @@ export function buildTurnIntoMetadata(
   };
 }
 
+/**
+ * THE SIGNAL THE USER IS LOOKING AT, as context for a message they type.
+ *
+ * Unlike `buildTurnIntoMetadata` this carries no intent: the user's own words
+ * decide what is wanted, and Pilot only acts on the id when the request is to
+ * write something. The id is verified server-side against the workspace.
+ */
+export function buildSignalContextMetadata(signal: { id: string }): Record<string, unknown> {
+  return { signal_id: signal.id };
+}
+
+/** Where a draft made from a feed signal says it came from. */
+export type SignalContentSource =
+  | { source_type: "signal"; source_signal_id: string; idea: string; metadata: Record<string, never> }
+  | {
+    source_type: "idea"; source_signal_id: null; idea: string;
+    metadata: { legacy_signal: { id: string; title: string | null; store: "signals" } };
+  };
+
+/**
+ * A FEED SIGNAL, AS A CONTENT SOURCE — truthfully.
+ *
+ * The feed is a union of canonical `signal_events` rows and legacy `signals`
+ * rows no canonical row covers. `content_item.source_signal_id` references
+ * `signal_events`, so only a canonical row may become a signal-sourced draft.
+ * A legacy-only signal becomes an idea about it, with its origin recorded under
+ * `metadata.legacy_signal` — the same key Pilot writes — rather than a legacy id
+ * placed in a column whose FK it would violate, or no trace of it at all.
+ */
+export function signalContentSource(
+  signal: { id: string; title: string | null; store?: "signal_events" | "signals" },
+): SignalContentSource {
+  if (signal.store === "signal_events") {
+    return { source_type: "signal", source_signal_id: signal.id, idea: "", metadata: {} };
+  }
+  const title = signal.title?.trim() || null;
+  return {
+    source_type: "idea",
+    source_signal_id: null,
+    idea: title ?? "An earlier signal",
+    metadata: { legacy_signal: { id: signal.id, title, store: "signals" } },
+  };
+}
+
 /** Draft-only command for turning a signal into a post or comment. */
 export function buildTurnIntoCommand(
   kind: "post" | "comment",

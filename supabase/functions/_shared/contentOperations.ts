@@ -60,6 +60,23 @@ export interface ContentRequest {
   /** The signal's real id. Never a title standing in for one. */
   source_signal_id?: string | null;
   source_signal_title?: string | null;
+  /**
+   * A LEGACY-ONLY signal the draft is about. It has no `signal_events` row, so
+   * it cannot be `source_signal_id`; it is recorded as provenance instead, under
+   * the same `metadata.legacy_signal` key the Content page writes.
+   */
+  legacy_signal?: { id: string; title: string | null } | null;
+  /**
+   * The LinkedIn post a comment answers, for an engagement-loop comment. Kept on
+   * the row so the draft says what it replies to, and a regeneration can too.
+   */
+  engagement_post?: { post_url: string | null; author: string | null } | null;
+  /**
+   * Which entrypoint made it. Defaults to `pilot_chat`; the engagement loop
+   * passes `content_engagement_loop`. They produce the same object, which is the
+   * point — but "who asked" is still a countable fact.
+   */
+  source?: "pilot_chat" | "content_engagement_loop";
   /** For every objective except `create`. */
   content_item_id?: string | null;
   created_by?: string | null;
@@ -146,12 +163,18 @@ export async function createCanonicalContentItem(
       // WHERE IT CAME FROM, honestly. `pilot_chat` is distinct from
       // `content_surface` so the two entrypoints stay countable — they produce
       // the same object, which is the point, but "who asked" is still a fact.
-      source: "pilot_chat",
+      source: req.source ?? "pilot_chat",
       source_type: req.source_type,
       source_signal_id: req.source_signal_id ?? null,
       body: "",
       created_by: req.created_by ?? null,
-      metadata: { brief, topic: idea || req.source_signal_title || null },
+      metadata: {
+        brief, topic: idea || req.source_signal_title || null,
+        ...(req.legacy_signal
+          ? { legacy_signal: { id: req.legacy_signal.id, title: req.legacy_signal.title, store: "signals" } }
+          : {}),
+        ...(req.engagement_post ? { engagement_post: req.engagement_post } : {}),
+      },
     })
     .select("id, title, body, format, status, current_version_id, current_asset_id, metadata")
     .single();

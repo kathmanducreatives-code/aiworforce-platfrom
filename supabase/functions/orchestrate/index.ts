@@ -979,7 +979,10 @@ Deno.serve(async (req) => {
       // 3) Scribe — thoughtful comments (Claude preferred), only if requested.
       if (loopInput.needsCommentDrafts) {
         const scribeComments = mkStep(steps.length, "scribe", "Draft thoughtful comments",
-          `Draft a short, human, non-pitchy LinkedIn comment for each top-ranked post related to: ${topic}. Add genuine value; ground each comment in the actual post text. No "great post!" filler, no link drops, no fake familiarity. These are drafts for manual review — nothing is auto-posted.`,
+          // PER POST, AS DATA. Each entry becomes its own canonical
+          // `linkedin_comment` draft (see `engagementCommentItems.ts`), so the
+          // post it answers must travel with it rather than be inferred later.
+          `Draft a short, human, non-pitchy LinkedIn comment for each top-ranked post related to: ${topic}. Add genuine value; ground each comment in the actual post text. No "great post!" filler, no link drops, no fake familiarity. These are drafts for manual review — nothing is auto-posted.\n\nReturn ONLY a JSON array, one object per post: [{"post_url": "<the post's URL exactly as given>", "author": "<post author name, or null>", "comment": "<the comment draft>"}].`,
           {
             tool_needed: "summarize_text",
             expected_output: "One thoughtful comment draft per top post, ready for manual review.",

@@ -102,7 +102,9 @@ export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
       verification_status: row.verification_status ?? null,
     },
   };
-  return normalizeSignalRow(asLegacyShape);
+  // Projected through the legacy shape, but it IS the canonical row — the one
+  // thing a `content_item.source_signal_id` can reference.
+  return { ...normalizeSignalRow(asLegacyShape), store: "signal_events" };
 }
 
 /**

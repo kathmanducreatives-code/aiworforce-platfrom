@@ -173,14 +173,19 @@ Deno.test("history is read-only", () => {
 
 // ══════════ 4. source provenance ══════════════════════════════════════════
 
-Deno.test("a signal-sourced draft KEEPS its signal", () => {
+Deno.test("a signal-sourced draft KEEPS its signal", async () => {
+  // Through `signalContentSource`, not `sg.id` directly: the feed is a union and
+  // a legacy-only row's id is not a `signal_events` id, so passing it straight
+  // through violated the FK. A CANONICAL signal still becomes source_type
+  // 'signal' with its own id — that is asserted here, from the helper itself.
   assert(
-    /source_type: 'signal'/.test(PAGE),
-    "the signal path must mark the item as signal-sourced",
+    /source_type: source\.source_type, source_signal_id: source\.source_signal_id/.test(PAGE),
+    "the signal path must persist the source the helper derived",
   );
+  const helper = await Deno.readTextFile(new URL("../../src/lib/signalIdeaActions.ts", import.meta.url));
   assert(
-    /source_signal_id: sg\.id/.test(PAGE),
-    "and must persist which signal it was",
+    /if \(signal\.store === "signal_events"\) \{\s*return \{ source_type: "signal", source_signal_id: signal\.id/.test(helper),
+    "and a canonical signal must persist which signal it was",
   );
   // The database refuses the incoherent combination.
   assert(

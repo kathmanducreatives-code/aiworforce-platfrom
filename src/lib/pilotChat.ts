@@ -17,6 +17,12 @@ export interface PilotChatInput {
   action_source?: string;
   /** Structured metadata that travels with the action (lead_request, post_lead_action, etc.). */
   metadata?: Record<string, unknown>;
+  /**
+   * `page` when the action started outside any conversation (a Content-page
+   * button, Mira, a Signals copilot). The backend then starts a conversation for
+   * it instead of refusing it as a card that lost its thread. Absent = card.
+   */
+  entry?: 'page' | 'card';
 }
 
 export interface ChatMessageRow {

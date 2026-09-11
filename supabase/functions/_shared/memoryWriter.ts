@@ -31,6 +31,11 @@ import {
 const ENGINE_OWNED_AUTHORITIES: ReadonlySet<string> = new Set(PERSISTENCE_AUTHORITIES);
 import { dualWritePeopleProfileV2, dualWriteHiringSignalV2 } from "./signalsV2DualWrite.ts";
 import { jobRecordToSignalEvent, type NormalizedJobLike } from "./jobsSignalAdapter.ts";
+import { createCanonicalContentItem, type ContentDb } from "./contentOperations.ts";
+import {
+  commentOpportunitiesFrom, commentItemIdea, commentItemTitle, resolveEngagementPostSource,
+  type EngagementLookupDb,
+} from "./engagementCommentItems.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -1351,6 +1356,19 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
         related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
       }
     : {};
+  // ── AN ENGAGEMENT COMMENT IS A CANONICAL DRAFT TOO, ONE PER POST ─────────
+  //
+  // The loop's comment step cannot carry a `content_item_id`: the posts it
+  // answers are only found at run time, by Scout. So THIS is the moment the
+  // specific opportunity exists — one canonical `linkedin_comment` is made per
+  // post that got a comment, with the shared `createCanonicalContentItem`, and
+  // filled by the same update every other draft uses, so the version trigger
+  // writes one version each. See `engagementCommentItems.ts`.
+  let canonicalIds: string[] = [];
+  if (cl && !cl.content_item_id && cl.subtype === "comment_draft") {
+    canonicalIds = await writeEngagementCommentItems(ctx, cleaned, cl);
+  }
+
   // ── ONE DRAFT, ONE ROW ───────────────────────────────────────────────────
   //
   // This insert used to be unconditional. When the run also filled a
@@ -1361,10 +1379,11 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
   // titles mirroring each other. The user saw the same post twice — once
   // editable, once read-only — and had no way to tell which was real.
   //
-  // So the canonical object wins when it exists. `saved_outputs` remains the
-  // landing place ONLY for runs that produce content with no item to fill,
-  // which is what an append-only record of a run's output is for.
-  if (!cl?.content_item_id) {
+  // So the canonical object wins when it exists. `saved_outputs` is written
+  // ONLY when no canonical row holds this output at all — engagement comments
+  // included, once they have items — and then only so a run whose canonical
+  // write failed does not lose what it produced.
+  if (!cl?.content_item_id && canonicalIds.length === 0) {
     await ctx.admin.from("saved_outputs").insert({
       workspace_id: ctx.workspace_id,
       conversation_id: ctx.conversation_id ?? null,
@@ -1388,53 +1407,122 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
   // generation FILLS IN a draft the user already has rather than creating a
   // second thing beside it.
   if (cl?.content_item_id) {
-    // SCOPED BY WORKSPACE, not by id alone. The id arrives from the client
-    // through `tool_input`, and this writer holds the service role — an
-    // unscoped update would let a forged id overwrite another tenant's draft.
-    //
-    // METADATA IS MERGED, NOT REPLACED. The row already carries the brief it was
-    // created with; overwriting the whole object would erase the only record of
-    // what this draft was asked to be — which is also what a regeneration reads.
-    const { data: existing } = await ctx.admin
-      .from("content_item")
-      .select("metadata")
-      .eq("id", cl.content_item_id)
-      .eq("workspace_id", ctx.workspace_id)
-      .maybeSingle();
-    const prior = (existing?.metadata && typeof existing.metadata === "object")
-      ? existing.metadata as Record<string, unknown>
-      : {};
+    await fillContentItem(ctx, cl.content_item_id, { title: cleaned.title, body: cleaned.body }, cl);
+  }
+}
 
-    const { error } = await ctx.admin
-      .from("content_item")
-      .update({
-        title: cleaned.title,
-        body: cleaned.body,
-        agent_slug: "scribe",
-        // The version trigger copies this onto the version row, which is how a
-        // first draft and a regeneration stay distinguishable in history.
-        last_generation_source: cl.regenerate ? "scribe_regeneration" : "scribe_generation",
-        // A generated draft is the agent's proposal. `draft` is the only
-        // pre-approval state V1 has; `in_review` was removed because nothing
-        // ever transitioned out of it.
-        status: "draft",
-        metadata: {
-          ...prior,
-          last_task_id: ctx.task_id ?? null,
-          last_model: ctx.model_used ?? null,
-          last_provider: ctx.provider_used ?? null,
-          last_prompt_context: {
-            topic: cl.topic ?? null,
-            subtype: cl.subtype ?? null,
-            source: cl.source ?? null,
-            related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
-          },
+/**
+ * Fill one canonical draft with what Scribe wrote. The ONE update every Content
+ * path uses — so the version trigger, the provenance and the metadata merge are
+ * identical whether the row came from the page, Pilot or the engagement loop.
+ */
+async function fillContentItem(
+  ctx: AgentResultCtx,
+  itemId: string,
+  draft: { title: string; body: string },
+  cl: NonNullable<AgentResultCtx["content_loop"]>,
+): Promise<boolean> {
+  // SCOPED BY WORKSPACE, not by id alone. The id arrives from the client
+  // through `tool_input`, and this writer holds the service role — an
+  // unscoped update would let a forged id overwrite another tenant's draft.
+  //
+  // METADATA IS MERGED, NOT REPLACED. The row already carries the brief it was
+  // created with; overwriting the whole object would erase the only record of
+  // what this draft was asked to be — which is also what a regeneration reads.
+  const { data: existing } = await ctx.admin
+    .from("content_item")
+    .select("metadata")
+    .eq("id", itemId)
+    .eq("workspace_id", ctx.workspace_id)
+    .maybeSingle();
+  const prior = (existing?.metadata && typeof existing.metadata === "object")
+    ? existing.metadata as Record<string, unknown>
+    : {};
+
+  const { error } = await ctx.admin
+    .from("content_item")
+    .update({
+      title: draft.title,
+      body: draft.body,
+      agent_slug: "scribe",
+      // The version trigger copies this onto the version row, which is how a
+      // first draft and a regeneration stay distinguishable in history.
+      last_generation_source: cl.regenerate ? "scribe_regeneration" : "scribe_generation",
+      // A generated draft is the agent's proposal. `draft` is the only
+      // pre-approval state V1 has; `in_review` was removed because nothing
+      // ever transitioned out of it.
+      status: "draft",
+      metadata: {
+        ...prior,
+        last_task_id: ctx.task_id ?? null,
+        last_model: ctx.model_used ?? null,
+        last_provider: ctx.provider_used ?? null,
+        last_prompt_context: {
+          topic: cl.topic ?? null,
+          subtype: cl.subtype ?? null,
+          source: cl.source ?? null,
+          related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
         },
-      })
-      .eq("id", cl.content_item_id)
-      .eq("workspace_id", ctx.workspace_id);
-    if (error) {
-      console.warn("[memoryWriter] content_item update failed:", error.message);
+      },
+    })
+    .eq("id", itemId)
+    .eq("workspace_id", ctx.workspace_id);
+  if (error) {
+    console.warn("[memoryWriter] content_item update failed:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * One canonical `linkedin_comment` per commented post. Returns the ids created
+ * AND filled; empty means nothing canonical holds this output, which is the
+ * only case the caller falls back to `saved_outputs`.
+ */
+async function writeEngagementCommentItems(
+  ctx: AgentResultCtx,
+  cleaned: { title: string; body: string; structured: Record<string, unknown> | null },
+  cl: NonNullable<AgentResultCtx["content_loop"]>,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const opp of commentOpportunitiesFrom(cleaned.structured, cleaned.body)) {
+    // ONE ITEM'S FAILURE IS ONE ITEM'S. A thrown error here would abort the
+    // whole writer — including the saved_outputs fallback — and the comments
+    // already paid for would be lost. Each opportunity stands alone.
+    try {
+      const src = await resolveEngagementPostSource(
+        ctx.admin as unknown as EngagementLookupDb, ctx.workspace_id, opp.post_url);
+      const created = await createCanonicalContentItem(ctx.admin as unknown as ContentDb, {
+        objective: "create",
+        workspace_id: ctx.workspace_id,
+        format: "linkedin_comment",
+        source: "content_engagement_loop",
+        // Only a canonical signal is a signal source; Scout's legacy rows are
+        // provenance, never a fake FK.
+        source_type: src.kind === "signal" ? "signal" : "idea",
+        source_signal_id: src.kind === "signal" ? src.signal_id : null,
+        source_signal_title: src.kind === "signal" ? src.title : null,
+        legacy_signal: src.kind === "legacy_unlinked" ? { id: src.legacy_signal_id, title: src.title } : null,
+        engagement_post: { post_url: opp.post_url, author: opp.author },
+        idea: commentItemIdea(opp, src, cl.topic ?? null),
+        created_by: null,
+      });
+      if (!created.ok || !created.reference) {
+        console.warn("[memoryWriter] engagement comment item not created:", created.error);
+        continue;
+      }
+      const filled = await fillContentItem(
+        ctx, created.reference.content_item_id,
+        { title: commentItemTitle(opp), body: opp.comment },
+        {
+          ...cl,
+          related_signal_ids: src.kind === "signal" ? [src.signal_id] : [],
+        },
+      );
+      if (filled) ids.push(created.reference.content_item_id);
+    } catch (e) {
+      console.warn("[memoryWriter] engagement comment item failed:", (e as Error)?.message ?? String(e));
     }
   }
+  return ids;
 }

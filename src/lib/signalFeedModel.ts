@@ -54,6 +54,13 @@ export interface FeedSignal {
   quality_badge: string;       // "Hiring signal" | "Needs verification" | "Legacy / Needs verification"
   why_text: string | null;     // why_it_matters, or an honest verification note — never blank
   show_by_default: boolean;     // verified signals only
+  /**
+   * WHICH TABLE THIS ROW IS. The feed is a union, and only a `signal_events`
+   * row is something `content_item.source_signal_id` can reference — a legacy
+   * `signals` id in that column would violate the FK. Absent means "not known
+   * to be canonical", which is treated exactly like legacy.
+   */
+  store?: "signal_events" | "signals";
 }
 
 export type SignalQuality = "verified" | "needs_verification" | "legacy";
@@ -124,7 +131,7 @@ export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
     raw,
   };
   const q = classifySignalQuality(base);
-  return { ...base, ...q };
+  return { ...base, ...q, store: "signals" };
 }
 
 // ---------- Signal quality (data-trust) classifier ----------

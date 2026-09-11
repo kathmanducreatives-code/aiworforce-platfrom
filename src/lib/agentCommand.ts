@@ -26,6 +26,9 @@ export async function sendAgentCommand(
     conversation_id: opts.conversation_id ?? null,
     action_source: opts.action_source,
     metadata: opts.metadata,
+    // A command sent with a conversation came from a card in that conversation;
+    // one sent without is a page entry point, which starts its own.
+    entry: opts.conversation_id ? "card" : "page",
   });
   if (ok) {
     if (opts.success) toast.success(opts.success);

@@ -153,6 +153,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           conversationIdOverride: cmd.conversation_id ?? null,
           actionSource: cmd.action_source ?? null,
           metadata: cmd.metadata,
+          pageEntry: cmd.entry === 'page',
         });
       });
     });
@@ -222,12 +223,17 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       conversationIdOverride?: string | null;
       actionSource?: string | null;
       metadata?: Record<string, unknown>;
+      /** Sent from a page, not from a card in a conversation — see `ChatCommandPayload.entry`. */
+      pageEntry?: boolean;
     },
   ) => {
     const text = (override ?? value).trim();
     if (!text || submitting) return;
 
-    const isCardAction = !!opts?.actionSource;
+    // A PAGE ENTRY POINT IS NOT A CARD. It still carries its `action_source` and
+    // metadata to Pilot, but it has no originating conversation to lose, so it
+    // starts a fresh one instead of being refused.
+    const isCardAction = !!opts?.actionSource && !opts?.pageEntry;
 
     // Resolve target agent slug
     const mentionMatch = text.match(/@(\w+)/);
@@ -247,7 +253,9 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     // the active view (which may have changed) and never silently create a
     // new conversation.
     const explicitOverride = opts?.conversationIdOverride ?? null;
-    const conversationId = isCardAction
+    const conversationId = isCardAction || opts?.pageEntry
+      // A page entry never borrows whichever thread happens to be open: its
+      // back-references ("this signal", "that post") must not resolve there.
       ? explicitOverride
       : (explicitOverride ?? (view.kind === 'chat' ? view.conversationId : null));
 
@@ -276,6 +284,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         conversation_id: conversationId,
         metadata: opts?.metadata,
         action_source: opts?.actionSource ?? undefined,
+        ...(opts?.pageEntry ? { entry: 'page' as const } : {}),
       });
       const newConvId = result?.conversation_id;
       if (!isCardAction && !conversationId && typeof newConvId === 'string' && newConvId) {

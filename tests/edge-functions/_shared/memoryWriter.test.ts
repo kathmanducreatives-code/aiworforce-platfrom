@@ -13,6 +13,8 @@ function makeFake() {
     saved_outputs: [],
     messages: [],
     approvals: [],
+    content_item: [],
+    signal_events: [],
   };
   function builder(name: string) {
     const state: any = { table: name, filters: [], _select: null };
@@ -384,8 +386,14 @@ Deno.test("writeMemoryFromAgentResult: Scribe content-loop comment_draft subtype
     output_text: "Comment 1\nComment 2",
     content_loop: { source: "content_engagement_loop", subtype: "comment_draft", topic: "AI SDRs" },
   });
-  assertEquals(tables.saved_outputs[0].raw.subtype, "comment_draft");
-  assertEquals(tables.saved_outputs[0].raw.source, "content_engagement_loop");
+  // CANONICAL, NOT A SHADOW. The comment batch used to land only in
+  // saved_outputs, read-only. It is now a `linkedin_comment` content_item —
+  // prose with no per-post structure is ONE item — and saved_outputs is empty.
+  const items = tables.content_item ?? [];
+  assertEquals(items.length, 1);
+  assertEquals(items[0].format, "linkedin_comment");
+  assertEquals(items[0].source, "content_engagement_loop");
+  assertEquals((tables.saved_outputs ?? []).length, 0);
 });
 
 Deno.test("writeMemoryFromAgentResult: Penn links drafts to explicit remembered lead ids", async () => {

@@ -10,6 +10,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, Send, Sparkles, X, PenLine, MessageSquare, BarChart3, Calendar, Lightbulb } from 'lucide-react';
 import { sendAgentCommand } from '@/lib/agentCommand';
+import { buildSignalContextMetadata } from '@/lib/signalIdeaActions';
 import scribeImg from '@/assets/agents/scribe.webp';
 
 // ---- canonical display names (UI only; backend slugs unchanged) ---------------
@@ -86,10 +87,12 @@ interface Props {
   collapsed: boolean;
   onToggle: () => void;
   contextLabel?: string | null;
+  /** The signal the context names, if any. Its id travels as metadata, never as text. */
+  contextSignal?: { id: string } | null;
   onContextClear?: () => void;
 }
 
-export function MiraCopilot({ collapsed, onToggle, contextLabel, onContextClear }: Props) {
+export function MiraCopilot({ collapsed, onToggle, contextLabel, contextSignal, onContextClear }: Props) {
   const [mode, setMode] = useState<MiraMode>('plan');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -119,6 +122,10 @@ export function MiraCopilot({ collapsed, onToggle, contextLabel, onContextClear 
     void sendAgentCommand(`${ctxPrefix}${trimmed}`, {
       success: 'Sent to Mira — she\'ll prepare a draft for your review.',
       action_source: 'content_copilot',
+      // WHICH SIGNAL, AS DATA. Pilot verifies it against the workspace and makes
+      // a signal-sourced draft of it; without it, only the title in the context
+      // sentence says which signal was meant.
+      ...(contextSignal ? { metadata: buildSignalContextMetadata(contextSignal) } : {}),
     });
 
     const ack: ChatMessage = {

@@ -19,6 +19,18 @@ export interface ChatCommandPayload {
   conversation_id?: string | null;
   action_source?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * WHERE THE COMMAND STARTED. The composer refuses an in-chat CARD action that
+   * has lost its conversation — acting in the wrong thread is worse than not
+   * acting. But a PAGE entry point (a Content-page button, Mira, a Signals
+   * copilot) has no conversation to lose; it starts one. Without this field
+   * every page command carrying an `action_source` was indistinguishable from a
+   * broken card and was dropped with "Action lost its chat context" — along with
+   * its structured metadata, so Pilot never saw it.
+   *
+   * Absent means `card`: the strict rule stays the default.
+   */
+  entry?: "page" | "card";
 }
 
 type Handler = (p: ChatCommandPayload) => void;

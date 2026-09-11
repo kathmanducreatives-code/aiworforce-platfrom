@@ -161,8 +161,9 @@ Deno.test("12. NO DUPLICATE ARTIFACT: a canonical draft writes no saved_output",
   assert(i > 0, "the saved_outputs content write must still exist for id-less runs");
   const before = s.slice(Math.max(0, i - 400), i);
   assert(
-    /if\s*\(!cl\?\.content_item_id\)/.test(before),
-    "the saved_outputs insert must be guarded on there being no content_item_id — " +
+    /if\s*\(!cl\?\.content_item_id\s*&&\s*canonicalIds\.length === 0\)/.test(before),
+    "the saved_outputs insert must be guarded on there being no content_item_id AND " +
+    "no canonical engagement-comment items — " +
     "unguarded, every canonical draft gets a read-only twin and the Content page " +
     "shows the same post twice",
   );
