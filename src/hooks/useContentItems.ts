@@ -56,7 +56,14 @@ export function useContentItems(workspaceId: string | null | undefined): UseCont
     id: string,
     patch: { title?: string | null; body?: string; status?: ContentStatus },
   ) => {
-    const { item, error: err } = await updateContentItem(id, patch);
+    // A PERSON'S EDIT IS RECORDED AS ONE. Without this the version trigger
+    // copied whatever `last_generation_source` the row still held — so an edit
+    // made after a Scribe draft was stamped `scribe_generation`, with Scribe's
+    // model and task: a version claiming a provenance it does not have.
+    const touchesCopy = patch.body !== undefined || patch.title !== undefined;
+    const { item, error: err } = await updateContentItem(id, touchesCopy
+      ? { ...patch, last_generation_source: 'manual_edit' }
+      : patch);
     // THROWS on failure, deliberately. The editor keeps the user's text and
     // shows the error; swallowing it here would let a failed save look
     // identical to a successful one, which is how an edit gets lost.

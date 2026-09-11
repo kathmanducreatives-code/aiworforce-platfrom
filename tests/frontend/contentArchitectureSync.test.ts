@@ -57,7 +57,7 @@ Deno.test("2. no Content surface calls the generation edge function directly", a
   const surfaces = [
     "pages/Content.tsx",
     "components/content/ContentComposer.tsx",
-    "components/content/ContentDetailDrawer.tsx",
+    "components/content/ContentStudioEditor.tsx",
   ];
   const offenders: string[] = [];
   for (const f of surfaces) {

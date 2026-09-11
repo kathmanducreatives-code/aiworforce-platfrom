@@ -25,7 +25,10 @@ import {
   listContentItemVersions,
   type ContentFormat, type ContentSourceType, type ContentStatus, type ContentItem,
 } from '@/lib/content/contentItems';
-import { buildContentInstruction } from '@/lib/content/contentInstruction';
+import {
+  buildContentInstruction, signalSubjectFrom,
+  type ContentBriefFields, type InstructionInput, type SignalSubject,
+} from '@/lib/content/contentInstruction';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
 
 /** What a caller asks for, wherever it is calling from. */
@@ -38,6 +41,9 @@ export interface ContentGenerationRequest {
   sourceSignalTitle?: string | null;
   /** The user's words. Required for an idea; an optional angle on a signal. */
   idea?: string;
+  /** Who the signal happened to. Absent on a signal means "someone other than us". */
+  sourceSignalSubject?: SignalSubject | null;
+  fields?: ContentBriefFields | null;
   existingContentItemId?: string | null;
   operation: ContentOperation;
 }
@@ -70,12 +76,15 @@ export async function createContent(req: ContentGenerationRequest): Promise<Cont
     return { ok: false, error: 'signal_source_requires_signal_id' };
   }
 
-  const instruction = buildContentInstruction({
+  const briefInput: InstructionInput = {
     format: req.contentType,
     sourceType: req.sourceType,
     idea: req.idea ?? '',
     signalTitle: req.sourceSignalTitle ?? null,
-  });
+    signalSubject: req.sourceSignalSubject ?? null,
+    fields: req.fields ?? null,
+  };
+  const instruction = buildContentInstruction(briefInput);
 
   const { item, error } = await createContentItem({
     workspace_id: req.workspaceId,
@@ -87,7 +96,7 @@ export async function createContent(req: ContentGenerationRequest): Promise<Cont
     source_type: req.sourceType,
     source_signal_id: req.sourceSignalId ?? null,
     body: '',
-    metadata: { brief: instruction, topic: req.idea || req.sourceSignalTitle },
+    metadata: { brief: instruction, brief_input: briefInput, topic: req.idea || req.sourceSignalTitle },
   });
   if (error || !item) return { ok: false, error: error ?? 'content_create_failed' };
 
@@ -116,19 +125,118 @@ export async function createContent(req: ContentGenerationRequest): Promise<Cont
 export async function regenerateContentText(
   workspaceId: string, item: ContentItem,
 ): Promise<ContentResult> {
+  return writeContentText(workspaceId, item, true);
+}
+
+/**
+ * The FIRST draft of an empty item — the same rebuilt brief as a regeneration,
+ * recorded honestly as a generation rather than a rewrite of nothing.
+ */
+export async function draftContentText(
+  workspaceId: string, item: ContentItem,
+): Promise<ContentResult> {
+  return writeContentText(workspaceId, item, false);
+}
+
+async function writeContentText(
+  workspaceId: string, item: ContentItem, regenerate: boolean,
+): Promise<ContentResult> {
+  // THE BRIEF IS REBUILT, NOT REPLAYED. From the typed input kept on the row,
+  // with the signal's ownership re-read from the signal itself — so a draft
+  // written before attribution existed stops claiming a competitor's launch the
+  // next time it is regenerated, and a Studio edit to the brief takes effect.
+  const brief = await currentBrief(item);
+  if (brief.changed) {
+    const merged = { ...(item.metadata ?? {}), brief: brief.text, brief_input: brief.input };
+    const { error } = await updateContentItem(item.id, { metadata: merged });
+    if (error) return { ok: false, item, error };
+  }
   const gen = await generateContentDraft({
     contentItemId: item.id,
     workspaceId,
-    instruction: (item.metadata?.brief as string | undefined)
-      ?? `Rewrite this ${item.format.replace(/_/g, ' ')}. Draft only.`,
+    instruction: brief.text,
     format: item.format,
     topic: (item.metadata?.topic as string | undefined) ?? item.title,
     relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
-    regenerate: true,
+    regenerate,
   });
   if (!gen.ok) return { ok: false, item, error: gen.error ?? 'regeneration_failed' };
   const fresh = await getContentItem(item.id);
   return { ok: true, item: fresh.item ?? item };
+}
+
+/** The source row's own relationship fields, for an item made from a canonical signal. */
+export async function signalForItem(signalId: string): Promise<{ title: string | null; subject: SignalSubject } | null> {
+  const { data, error } = await supabase
+    .from('signal_events')
+    .select('id, signal_type, subject_type, subject_key, normalized_value')
+    .eq('id', signalId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as {
+    signal_type?: string | null; subject_type?: string | null; subject_key?: string | null;
+    normalized_value?: Record<string, unknown> | null;
+  };
+  const nv = row.normalized_value ?? {};
+  const s = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  return {
+    title: s(nv.title),
+    subject: signalSubjectFrom({
+      subject_type: row.subject_type, subject_key: row.subject_key, signal_type: row.signal_type,
+      company_name: s(nv.company_name), competitor_name: s(nv.competitor_name),
+    }),
+  };
+}
+
+/**
+ * The typed brief input for an item: the one it was created with, or — for a
+ * row made before inputs were kept — the closest honest reconstruction from its
+ * own columns. Never invents a signal it does not reference.
+ */
+export function briefInputFor(item: ContentItem): InstructionInput {
+  const kept = item.metadata?.brief_input as InstructionInput | undefined;
+  if (kept && typeof kept === 'object' && kept.format && kept.sourceType) {
+    return { ...kept, format: item.format };
+  }
+  const legacy = item.metadata?.legacy_signal as { title?: string | null } | undefined;
+  return {
+    format: item.format,
+    sourceType: item.source_type,
+    idea: (item.metadata?.topic as string | undefined) ?? (item.source_type === 'idea' ? item.title ?? '' : ''),
+    signalTitle: legacy?.title ?? null,
+    // A legacy signal is someone else's news even without its id.
+    signalSubject: legacy ? { relationship: 'external', name: null } : null,
+    fields: null,
+  };
+}
+
+/** The brief to generate from now, and whether it differs from the stored one. */
+export async function currentBrief(
+  item: ContentItem, fields?: ContentBriefFields | null,
+): Promise<{ text: string; input: InstructionInput; changed: boolean }> {
+  const base = briefInputFor(item);
+  let input: InstructionInput = fields !== undefined ? { ...base, fields } : base;
+  if (item.source_type === 'signal' && item.source_signal_id) {
+    const sig = await signalForItem(item.source_signal_id);
+    if (sig) input = { ...input, signalTitle: sig.title ?? input.signalTitle, signalSubject: sig.subject };
+  }
+  const text = buildContentInstruction(input);
+  return { text, input, changed: text !== (item.metadata?.brief as string | undefined) };
+}
+
+/**
+ * Save the Studio's creative brief. Metadata only — the trigger writes versions
+ * for copy, not for the brief — and the next generation reads it.
+ */
+export async function saveContentBrief(
+  item: ContentItem, fields: ContentBriefFields,
+): Promise<ContentResult> {
+  const brief = await currentBrief(item, fields);
+  const { item: saved, error } = await updateContentItem(item.id, {
+    metadata: { ...(item.metadata ?? {}), brief: brief.text, brief_input: brief.input },
+  });
+  if (error || !saved) return { ok: false, error: error ?? 'save_failed' };
+  return { ok: true, item: saved };
 }
 
 /**
@@ -151,6 +259,23 @@ export async function saveContentEdit(
 export async function approveContent(itemId: string): Promise<ContentResult> {
   const { item, error } = await updateContentItem(itemId, { status: 'approved' });
   if (error || !item) return { ok: false, error: error ?? 'approve_failed' };
+  return { ok: true, item };
+}
+
+/**
+ * Archive — out of the working set, never deleted. Status only, so no version
+ * is written and every version and asset stays readable in History.
+ */
+export async function archiveContent(itemId: string): Promise<ContentResult> {
+  const { item, error } = await updateContentItem(itemId, { status: 'archived' });
+  if (error || !item) return { ok: false, error: error ?? 'archive_failed' };
+  return { ok: true, item };
+}
+
+/** Back to the working set, as a draft awaiting a decision again. */
+export async function restoreContent(itemId: string): Promise<ContentResult> {
+  const { item, error } = await updateContentItem(itemId, { status: 'draft' });
+  if (error || !item) return { ok: false, error: error ?? 'restore_failed' };
   return { ok: true, item };
 }
 

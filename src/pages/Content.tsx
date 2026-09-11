@@ -17,13 +17,16 @@ import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useContentItems } from '@/hooks/useContentItems';
 import type { ContentItem } from '@/lib/content/contentItems';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
-import { listContentItemVersions, type ContentFormat } from '@/lib/content/contentItems';
+import { listContentItemVersions, type ContentFormat, type ContentItemVersion } from '@/lib/content/contentItems';
 import { buildContentInstruction } from '@/lib/content/contentInstruction';
 import {
-  regenerateContentText, generateContentImage, getContentAssets, signedAssetUrl,
+  regenerateContentText, draftContentText, generateContentImage, getContentAssets, signedAssetUrl,
+  saveContentEdit, saveContentBrief, approveContent, archiveContent, restoreContent, signalForItem,
 } from '@/lib/content/contentService';
+import {
+  CONTENT_TYPE_LABEL, STATUS_LABEL, describeContentSource, relationshipLabel,
+} from '@/lib/content/contentStudioModel';
 import { toast } from 'sonner';
-import type { ContentVersionRow } from '@/components/content/ContentDetailDrawer';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { useIntegrationReadiness } from '@/hooks/useIntegrationReadiness';
 import { sendAgentCommand } from '@/lib/agentCommand';
@@ -35,7 +38,7 @@ import { deriveDraftStatus, DRAFT_STATUS_LABELS, deriveContentBrief, type Conten
 import type { FeedSignal } from '@/lib/signalFeedModel';
 import { signalContentSource } from '@/lib/signalIdeaActions';
 import ContentComposer, { type ComposerSubmission } from '@/components/content/ContentComposer';
-import ContentDetailDrawer from '@/components/content/ContentDetailDrawer';
+import ContentStudioEditor, { type StudioAsset } from '@/components/content/ContentStudioEditor';
 import ManualContentSource from '@/components/content/ManualContentSource';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
 import { MiraCopilot } from '@/components/content/MiraCopilot';
@@ -72,13 +75,22 @@ function contentItemAsOutput(item: ContentItem) {
   };
 }
 
-type ViewId = 'foryou' | 'trends' | 'comments' | 'plan';
+// THREE PLACES, ONE OBJECT. Sources is where a draft starts, the Studio is where
+// one draft is worked on, History is everything the workspace has made — every
+// one of them the same `content_item`, read through the same service.
+type ViewId = 'sources' | 'studio' | 'history';
+type SourceViewId = 'foryou' | 'trends' | 'comments';
 
 const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'sources', label: 'Sources' },
+  { id: 'studio', label: 'Content Studio' },
+  { id: 'history', label: 'History' },
+];
+
+const SOURCE_VIEWS: { id: SourceViewId; label: string }[] = [
   { id: 'foryou', label: 'For You' },
   { id: 'trends', label: 'Top 10 Trends' },
   { id: 'comments', label: 'Comment Opportunities' },
-  { id: 'plan', label: 'Plan & Drafts' },
 ];
 
 export default function Content() {
@@ -92,10 +104,11 @@ export default function Content() {
   } = useContentItems(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
-  const [view, setView] = useState<ViewId>('foryou');
+  const [view, setView] = useState<ViewId>('sources');
+  const [sourceView, setSourceView] = useState<SourceViewId>('foryou');
   const [createOpen, setCreateOpen] = useState(false);
   const [openDraftId, setOpenDraftId] = useState<string | null>(null);
-  const [versions, setVersions] = useState<ContentVersionRow[]>([]);
+  const [versions, setVersions] = useState<ContentItemVersion[]>([]);
   const [miraCollapsed, setMiraCollapsed] = useState(false);
   const [miraContext, setMiraContext] = useState<string | null>(null);
   // THE SIGNAL MIRA WAS ASKED ABOUT, when it was one. Sent with the message as
@@ -194,16 +207,21 @@ export default function Content() {
     // `signal_events` row for the FK to point at, so it becomes an idea about
     // that signal, with where it came from kept on the row — never a fake FK.
     const source = signalContentSource(sg);
-    const instruction = buildContentInstruction({
-      format, sourceType: source.source_type, idea: source.idea, signalTitle: sg.title,
-    });
+    // WHO IT HAPPENED TO travels with the brief — for a legacy signal too, whose
+    // row is `idea` only because it has no FK target. A competitor's launch is
+    // theirs; Company Brain says who WE are.
+    const briefInput = {
+      format, sourceType: source.source_type, idea: '', signalTitle: sg.title,
+      signalSubject: source.subject, fields: null,
+    };
+    const instruction = buildContentInstruction(briefInput);
     const item = await createContentDraft({
       title: sg.title, format, source: 'content_surface',
       source_type: source.source_type, source_signal_id: source.source_signal_id, body: '',
-      metadata: { brief: instruction, topic: sg.title, ...source.metadata },
+      metadata: { brief: instruction, brief_input: briefInput, topic: sg.title, ...source.metadata },
     });
     if (!item) { toast.error('Could not create the draft'); return; }
-    setOpenDraftId(item.id);
+    openInStudio(item.id);
     const res = await generateContentDraft({
       contentItemId: item.id, workspaceId, instruction, format,
       topic: sg.title,
@@ -216,56 +234,117 @@ export default function Content() {
     await reloadContentDrafts();
   }, [workspaceId, createContentDraft, reloadContentDrafts]);
 
-  // ── THE CURRENT IMAGE ──────────────────────────────────────────────────
+  // ── THE STUDIO'S VIEW OF ONE DRAFT ─────────────────────────────────────
   //
-  // Held as a SIGNED url, minted on open and never stored: `content-assets` is
-  // private because a draft is unpublished work, and a signature is short-lived
-  // by design. Caching one in state across sessions would just be a link that
-  // expires somewhere the user cannot see why.
-  const [assetUrl, setAssetUrl] = useState<string | null>(null);
-  const [assetCount, setAssetCount] = useState(0);
+  // Versions and assets are read for the open draft only, through the service.
+  // Images are shown from SIGNED urls minted here and never stored: the bucket
+  // is private because a draft is unpublished work, and a cached signature is
+  // just a link that expires where the user cannot see why.
+  const [studioAssets, setStudioAssets] = useState<StudioAsset[]>([]);
 
   const loadAssets = useCallback(async () => {
-    if (!openDraftId) { setAssetUrl(null); setAssetCount(0); return; }
+    if (!openDraftId) { setStudioAssets([]); return; }
     const { assets } = await getContentAssets(openDraftId);
-    const ready = assets.filter((a) => a.status === 'ready' && a.storage_path);
-    setAssetCount(ready.length);
-    const current = ready[0];
-    if (!current?.storage_path) { setAssetUrl(null); return; }
-    const { url } = await signedAssetUrl(current.storage_path);
-    setAssetUrl(url);
+    const signed = await Promise.all(assets.map(async (a) => ({
+      ...a,
+      url: a.status === 'ready' && a.storage_path ? (await signedAssetUrl(a.storage_path)).url : null,
+    })));
+    setStudioAssets(signed);
   }, [openDraftId]);
-
-  // Opening a draft loads its image; closing clears it, so the next draft never
-  // flashes the previous one's picture.
-  useEffect(() => { void loadAssets(); }, [loadAssets]);
 
   const loadVersions = useCallback(async () => {
     if (!openDraftId) { setVersions([]); return; }
-    const item = contentItems.find((it) => it.id === openDraftId);
     const { versions: rows } = await listContentItemVersions(openDraftId);
-    setVersions(rows.map((v) => ({
-      id: v.id, version: v.version, body: v.body,
-      generation_source: v.generation_source,
-      created_at: v.created_at,
-      is_current: !!item && item.current_version_id === v.id,
-    })));
-  }, [openDraftId, contentItems]);
+    setVersions(rows);
+  }, [openDraftId]);
 
-  const openDetail = useMemo(() => {
-    if (!openDraftId) return null;
-    const p = posts.find((x) => x.id === openDraftId);
-    if (!p) return null;
-    const raw = (p.raw ?? {}) as Record<string, any>;
-    const proofUrl = raw.source_url ?? raw.source_details?.funding_source_url ?? null;
-    return {
-      id: p.id, title: p.title ?? 'Untitled draft', format: 'LinkedIn post',
-      statusLabel: DRAFT_STATUS_LABELS[deriveDraftStatus(raw.status ?? 'draft', Boolean(proofUrl))],
-      sourceSignal: raw.source ?? null, coreArgument: null, hookOptions: [],
-      body: p.body ?? null, cta: null, proofUrl,
-      missingProof: proofUrl ? [] : ['Source proof URL'],
-    } as NonNullable<React.ComponentProps<typeof ContentDetailDrawer>['detail']>;
-  }, [openDraftId, posts]);
+  // Opening a draft loads its history; closing clears it, so the next draft
+  // never flashes the previous one's picture or versions.
+  useEffect(() => { void loadAssets(); void loadVersions(); }, [loadAssets, loadVersions]);
+
+  const openInStudio = useCallback((id: string) => {
+    setOpenDraftId(id);
+    setView('studio');
+  }, []);
+
+  const studioItem = useMemo(
+    () => (openDraftId ? contentItems.find((it) => it.id === openDraftId) ?? null : null),
+    [openDraftId, contentItems],
+  );
+
+  // A LEGACY saved_outputs draft is an append-only record with nothing to save
+  // back to, so it opens read-only; every action needs a real content_item.
+  const legacyOpen = useMemo(
+    () => (openDraftId && !contentItems.some((it) => it.id === openDraftId)
+      ? posts.find((p) => p.id === openDraftId) ?? null : null),
+    [openDraftId, contentItems, posts],
+  );
+
+  // WHOSE NEWS IT IS, read from the signal row for the open draft — the same
+  // read a regeneration makes, so the Studio never shows a draft as ours when
+  // its source says otherwise, including drafts made before attribution existed.
+  const [studioSignal, setStudioSignal] = useState<Awaited<ReturnType<typeof signalForItem>>>(null);
+  useEffect(() => {
+    let live = true;
+    const id = studioItem?.source_type === 'signal' ? studioItem.source_signal_id : null;
+    if (!id) { setStudioSignal(null); return; }
+    void signalForItem(id).then((s) => { if (live) setStudioSignal(s); });
+    return () => { live = false; };
+  }, [studioItem?.source_type, studioItem?.source_signal_id]);
+
+  /** After any write: re-read the row, its versions and its assets — the server is the writer. */
+  const refreshStudio = useCallback(async () => {
+    await reloadContentDrafts();
+    await loadVersions();
+    await loadAssets();
+  }, [reloadContentDrafts, loadVersions, loadAssets]);
+
+  // EVERY STUDIO ACTION GOES THROUGH THE SERVICE, and throws its real reason so
+  // the editor can show it — a refusal by the spend ceiling and a provider
+  // failure are different facts.
+  const studioHandlers = studioItem && workspaceId ? {
+    onSave: async ({ body, fields }: { body?: string; fields?: import('@/lib/content/contentInstruction').ContentBriefFields }) => {
+      if (fields) {
+        const r = await saveContentBrief(studioItem, fields);
+        if (!r.ok) throw new Error(r.error ?? 'Could not save the brief');
+      }
+      if (body !== undefined) {
+        // A person's edit: a new version, recorded as `manual_edit`, no model.
+        const r = await saveContentEdit(studioItem.id, { body });
+        if (!r.ok) throw new Error(r.error ?? 'Could not save');
+      }
+      await refreshStudio();
+    },
+    onWriteText: async () => {
+      // Text only. The image pointer is not touched, so the picture stays.
+      const res = (studioItem.body ?? '').trim()
+        ? await regenerateContentText(workspaceId, studioItem)
+        : await draftContentText(workspaceId, studioItem);
+      if (!res.ok) throw new Error(res.error ?? 'Scribe could not write this draft');
+      await refreshStudio();
+    },
+    onImage: async () => {
+      // Image only. A new asset and a moved pointer; the text is not touched.
+      const res = await generateContentImage(workspaceId, studioItem.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not generate an image');
+      await refreshStudio();
+    },
+    onApprove: async () => {
+      const res = await approveContent(studioItem.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not approve');
+      await refreshStudio();
+    },
+    onArchive: async () => {
+      const res = await archiveContent(studioItem.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not archive');
+      await refreshStudio();
+    },
+    onRestore: async () => {
+      const res = await restoreContent(studioItem.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not restore');
+      await refreshStudio();
+    },
+  } : null;
 
   // ---- render ----------------------------------------------------------------
 
@@ -388,44 +467,84 @@ export default function Content() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                {view === 'foryou' && (
-                  <ForYouView
-                    brief={brief}
-                    posts={posts}
-                    commentDrafts={commentDraftsData}
-                    contentSignals={contentSignals}
-                    loading={loading}
-                    onOpenDraft={setOpenDraftId}
-                    onTurnInto={(kind, s) => { void turnSignalInto(kind, s); }}
-                    onReviewComment={() => setView('comments')}
-                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
-                  />
+                {view === 'sources' && (
+                  <div>
+                    <div className="mb-4 flex flex-wrap gap-1.5">
+                      {SOURCE_VIEWS.map((sv) => (
+                        <button key={sv.id} onClick={() => setSourceView(sv.id)}
+                          className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+                            sourceView === sv.id
+                              ? 'border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-200'
+                              : 'border-border/20 text-muted-foreground/65 hover:text-foreground/85'
+                          }`}>
+                          {sv.label}
+                        </button>
+                      ))}
+                      <button onClick={() => setCreateOpen(true)}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border/25 px-3 py-1.5 text-[12.5px] font-medium text-foreground/85 hover:border-border/45">
+                        <PenLine className="h-3.5 w-3.5" /> Start from an idea
+                      </button>
+                    </div>
+                    {sourceView === 'foryou' && (
+                      <ForYouView
+                        brief={brief}
+                        posts={posts}
+                        commentDrafts={commentDraftsData}
+                        contentSignals={contentSignals}
+                        loading={loading}
+                        onOpenDraft={openInStudio}
+                        onTurnInto={(kind, s) => { void turnSignalInto(kind, s); }}
+                        onReviewComment={() => setSourceView('comments')}
+                        onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
+                      />
+                    )}
+                    {sourceView === 'trends' && (
+                      <TrendsView
+                        signals={contentSignals}
+                        loading={loading}
+                        onTurnIntoPost={(s) => { void turnSignalInto('post', s); }}
+                        onAskMira={(ctx, sg) => { setMiraContext(ctx); setMiraSignal(sg ?? null); setMiraCollapsed(false); }}
+                      />
+                    )}
+                    {sourceView === 'comments' && (
+                      <CommentsView
+                        commentDrafts={commentDraftsData}
+                        commentDiscoveryReady={commentDiscoveryReady}
+                        loading={loading}
+                        onOpen={(id) => { if (contentItems.some((it) => it.id === id)) openInStudio(id); }}
+                        onDraft={(ctx) => dispatch(`Mira, refine this comment draft — draft only: ${ctx}`)}
+                        onFindPosts={() => dispatch('Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only.')}
+                        onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
+                      />
+                    )}
+                  </div>
                 )}
-                {view === 'trends' && (
-                  <TrendsView
-                    signals={contentSignals}
-                    loading={loading}
-                    onTurnIntoPost={(s) => { void turnSignalInto('post', s); }}
-                    onAskMira={(ctx, sg) => { setMiraContext(ctx); setMiraSignal(sg ?? null); setMiraCollapsed(false); }}
-                  />
+                {view === 'studio' && (
+                  <StudioView
+                    items={contentItems.filter((it) => it.status !== 'archived')}
+                    openId={openDraftId}
+                    onOpen={openInStudio}
+                    onCreate={() => setCreateOpen(true)}
+                    legacy={legacyOpen}
+                  >
+                    {studioItem && studioHandlers && (
+                      <ContentStudioEditor
+                        item={studioItem}
+                        versions={versions}
+                        assets={studioAssets}
+                        signal={studioSignal}
+                        {...studioHandlers}
+                      />
+                    )}
+                  </StudioView>
                 )}
-                {view === 'comments' && (
-                  <CommentsView
-                    commentDrafts={commentDraftsData}
-                    commentDiscoveryReady={commentDiscoveryReady}
-                    loading={loading}
-                    onDraft={(ctx) => dispatch(`Mira, refine this comment draft — draft only: ${ctx}`)}
-                    onFindPosts={() => dispatch('Lyra, find 5 LinkedIn posts from ICP accounts to engage with — Mira will draft comments, drafts only.')}
-                    onAskMira={(ctx) => { setMiraContext(ctx); setMiraSignal(null); setMiraCollapsed(false); }}
-                  />
-                )}
-                {view === 'plan' && (
-                  <PlanView
-                    draftGroups={draftGroups}
+                {view === 'history' && (
+                  <HistoryView
+                    items={contentItems}
+                    earlier={postDraftOutputs(savedOutputs)}
                     workflowRecaps={workflowRecaps}
                     loading={loading}
-                    onOpenDraft={setOpenDraftId}
-                    onCreate={() => setCreateOpen(true)}
+                    onOpen={openInStudio}
                   />
                 )}
               </motion.div>
@@ -453,71 +572,6 @@ export default function Content() {
         <Sparkles className="h-4 w-4" /> Ask Mira
       </button>
 
-      {/* `onSave` is passed only when the open draft is a persisted content_item.
-          A legacy saved_outputs row has nothing to save back to — it is an
-          append-only record — so the drawer stays read-only for those. */}
-      <ContentDetailDrawer
-        detail={openDetail}
-        onClose={() => setOpenDraftId(null)}
-        onSave={
-          openDraftId && contentItems.some((it) => it.id === openDraftId)
-            ? async ({ body }) => { await saveContentDraft(openDraftId, { body }); }
-            : undefined
-        }
-        onGenerate={
-          openDraftId && workspaceId && contentItems.some((it) => it.id === openDraftId)
-            ? async () => {
-              const item = contentItems.find((it) => it.id === openDraftId)!;
-              const res = await generateContentDraft({
-                contentItemId: item.id,
-                workspaceId,
-                // The brief the user picked when they created the draft. Falling
-                // back to the title keeps a hand-made draft generatable too.
-                instruction: (item.metadata?.brief as string | undefined)
-                  ?? `Write a ${item.format.replace(/_/g, ' ')} titled "${item.title ?? 'Untitled'}". Draft only.`,
-                format: item.format,
-                topic: (item.metadata?.topic as string | undefined) ?? item.title,
-                relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
-              });
-              if (!res.ok) throw new Error(res.error ?? 'Could not generate');
-              // Scribe wrote straight into the row, so re-read rather than
-              // trusting a response body — the server is the one writer.
-              await reloadContentDrafts();
-            }
-            : undefined
-        }
-        onRegenerate={
-          openDraftId && workspaceId && contentItems.some((it) => it.id === openDraftId)
-            ? async () => {
-              const item = contentItems.find((it) => it.id === openDraftId)!;
-              // THROUGH THE SERVICE. This used to call `generateContentDraft`
-              // with a brief assembled here, which is precisely the drift the
-              // service exists to stop: the same action meant something
-              // slightly different in every surface that offered it.
-              const res = await regenerateContentText(workspaceId, item);
-              if (!res.ok) throw new Error(res.error ?? 'Could not regenerate');
-              await reloadContentDrafts();
-              await loadVersions();
-            }
-            : undefined
-        }
-        onGenerateImage={
-          openDraftId && workspaceId
-            ? async () => {
-              const res = await generateContentImage(workspaceId, openDraftId);
-              // TRUTHFUL. A refusal by the spend ceiling and a provider failure
-              // are different facts, and the service passes the server's own
-              // reason rather than flattening both to "something went wrong".
-              if (!res.ok) throw new Error(res.error ?? 'Could not generate an image');
-              await loadAssets();
-            }
-            : undefined
-        }
-        imageUrl={assetUrl}
-        imageCount={assetCount}
-        versions={versions}
-        onLoadVersions={openDraftId ? loadVersions : undefined}
-      />
       {/* THE TYPED CREATION PATH. The draft row is created first, then Scribe is
           asked — so a failed model call leaves the user a draft to retry rather
           than a toast and nothing at all. */}
@@ -530,27 +584,43 @@ export default function Content() {
         }))}
         onSubmit={async (input: ComposerSubmission) => {
           if (!workspaceId) throw new Error('No workspace');
-          const instruction = buildContentInstruction(input);
+          // THE SAME TRUTHFUL SOURCE AS A SIGNAL CARD. The composer lists feed
+          // signals, and a legacy-only one has no `signal_events` row — its id
+          // in `source_signal_id` violated the FK. Its subject travels either way.
+          const picked = input.signalId ? contentSignals.find((sg) => sg.id === input.signalId) ?? null : null;
+          const source = picked ? signalContentSource(picked) : null;
+          const briefInput = {
+            format: input.format,
+            sourceType: source ? source.source_type : input.sourceType,
+            idea: input.idea,
+            signalTitle: input.signalTitle ?? null,
+            signalSubject: source?.subject ?? null,
+            fields: null,
+          };
+          const instruction = buildContentInstruction(briefInput);
           const item = await createContentDraft({
             title: input.sourceType === 'signal'
               ? (input.signalTitle ?? 'From a signal')
               : input.idea.slice(0, 80),
             format: input.format,
             source: 'content_surface',
-            source_type: input.sourceType,
-            source_signal_id: input.signalId,
+            source_type: briefInput.sourceType,
+            source_signal_id: source ? source.source_signal_id : null,
             body: '',
-            metadata: { brief: instruction, topic: input.idea || input.signalTitle },
+            metadata: {
+              brief: instruction, brief_input: briefInput,
+              topic: input.idea || input.signalTitle, ...(source?.metadata ?? {}),
+            },
           });
           if (!item) throw new Error('Could not create the draft');
-          setOpenDraftId(item.id);
+          openInStudio(item.id);
           const res = await generateContentDraft({
             contentItemId: item.id,
             workspaceId,
             instruction,
             format: input.format,
             topic: input.idea || input.signalTitle,
-            relatedSignalIds: input.signalId ? [input.signalId] : [],
+            relatedSignalIds: source?.source_signal_id ? [source.source_signal_id] : [],
           });
           if (!res.ok) throw new Error(res.error ?? 'Scribe could not write this draft');
           await reloadContentDrafts();
@@ -806,10 +876,12 @@ function TrendsView({ signals, loading, onTurnIntoPost, onAskMira }: {
 
 // ============================================================ Comments View ===
 
-function CommentsView({ commentDrafts, commentDiscoveryReady, loading, onDraft, onFindPosts, onAskMira }: {
+function CommentsView({ commentDrafts, commentDiscoveryReady, loading, onOpen, onDraft, onFindPosts, onAskMira }: {
   commentDrafts: { id: string; title: string; status: string | null; date: string | null; preview?: string }[];
   commentDiscoveryReady: boolean;
   loading: boolean;
+  /** Opens a canonical comment draft in the Studio. Older read-only rows ignore it. */
+  onOpen: (id: string) => void;
   onDraft: (ctx: string) => void;
   onFindPosts: () => void;
   onAskMira: (ctx: string) => void;
@@ -855,7 +927,7 @@ function CommentsView({ commentDrafts, commentDiscoveryReady, loading, onDraft, 
             <div key={c.id} className="group rounded-xl border border-border/10 bg-card/[0.08] px-4 py-3 transition-colors hover:border-border/25">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium text-foreground/90">{c.title}</p>
+                  <button onClick={() => onOpen(c.id)} className="text-left text-[14px] font-medium text-foreground/90 hover:text-fuchsia-200">{c.title}</button>
                   {c.preview && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground/70">{c.preview}</p>}
                   <span className="mt-1.5 inline-block text-[11px] text-muted-foreground/45">
                     {DRAFT_STATUS_LABELS[deriveDraftStatus(c.status)] ?? 'Draft'}
@@ -884,106 +956,139 @@ function CommentsView({ commentDrafts, commentDiscoveryReady, loading, onDraft, 
   );
 }
 
-// ============================================================ Plan View ======
+// ============================================================ Content Studio ===
 
-function PlanView({ draftGroups, workflowRecaps, loading, onOpenDraft, onCreate }: {
-  draftGroups: Record<string, ReturnType<typeof postDraftOutputs>>;
-  workflowRecaps: ReturnType<typeof workflowSummaryOutputs>;
-  loading: boolean;
-  onOpenDraft: (id: string) => void;
+type StudioListItem = { id: string; title: string | null; status: string; format: string; updated_at: string;
+  body: string; source: string | null; source_type: string; source_signal_id: string | null;
+  current_version_id: string | null; metadata: Record<string, unknown> | null };
+
+function StudioView({ items, openId, onOpen, onCreate, legacy, children }: {
+  items: StudioListItem[];
+  openId: string | null;
+  onOpen: (id: string) => void;
   onCreate: () => void;
+  legacy: ReturnType<typeof postDraftOutputs>[number] | null;
+  children: React.ReactNode;
 }) {
-  const [subtab, setSubtab] = useState<'upcoming' | 'drafts'>('drafts');
-  const allDrafts = Object.values(draftGroups).flat();
-
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setSubtab('upcoming')}
-          className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${subtab === 'upcoming' ? 'bg-fuchsia-500/10 text-fuchsia-300' : 'text-muted-foreground/60 hover:text-foreground'}`}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setSubtab('drafts')}
-          className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${subtab === 'drafts' ? 'bg-fuchsia-500/10 text-fuchsia-300' : 'text-muted-foreground/60 hover:text-foreground'}`}
-        >
-          Drafts
-        </button>
-        <button
-          onClick={onCreate}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card/20 px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <PenLine className="h-3.5 w-3.5" /> New post
-        </button>
-      </div>
-
-      {subtab === 'upcoming' && (
-        <div className="space-y-4">
-          {workflowRecaps.length > 0 && (
-            <div>
-              <SectionLabel>Recent workflow recaps</SectionLabel>
-              <div className="space-y-2.5">
-                {workflowRecaps.slice(0, 5).map((w) => {
-                  const raw = (w.raw ?? {}) as any;
-                  return (
-                    <div key={w.id} className="rounded-xl border border-border/10 bg-card/[0.08] px-4 py-3">
-                      <p className="text-[14px] font-medium text-foreground/90">{w.title ?? 'Workflow recap'}</p>
-                      {w.body && <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground/60">{w.body}</p>}
-                      <span className="mt-1.5 inline-block text-[11px] text-muted-foreground/45">From {raw.source ?? 'Pilot'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <ManualContentSource />
+    <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className="space-y-1.5">
+        <div className="mb-2 flex items-center justify-between">
+          <SectionLabel>Working drafts</SectionLabel>
+          <button onClick={onCreate} className="text-[12px] text-fuchsia-300/80 hover:text-fuchsia-200">+ New</button>
         </div>
-      )}
-
-      {subtab === 'drafts' && (
-        <div className="space-y-5">
-          {allDrafts.length === 0 && !loading ? (
-            <EmptyPanel
-              title="No drafts yet"
-              subtext="Mira prepares LinkedIn posts from your signals and Company Brain. All drafts need your approval before publishing."
-              action={{ label: 'Create post', onClick: onCreate }}
-            />
-          ) : (
-            Object.entries(draftGroups).map(([group, items]) =>
-              items.length === 0 ? null : (
-                <div key={group}>
-                  <SectionLabel>
-                    {group} <span className="ml-1 text-muted-foreground/40">({items.length})</span>
-                  </SectionLabel>
-                  <div className="overflow-hidden rounded-xl border border-border/10 bg-card/[0.08]">
-                    {items.map((p) => {
-                      const raw = (p.raw ?? {}) as Record<string, any>;
-                      const st = DRAFT_STATUS_LABELS[deriveDraftStatus(raw.status ?? 'draft', Boolean(raw.source_url))];
-                      return (
-                        <QueueRow
-                          key={p.id}
-                          day={p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
-                          format={(raw.subtype as string) ?? 'LinkedIn post'}
-                          title={p.title ?? 'Untitled'}
-                          status={st}
-                          onClick={() => onOpenDraft(p.id)}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )
-            )
-          )}
-        </div>
-      )}
+        {items.length === 0 && (
+          <p className="text-[13px] text-muted-foreground/60">No drafts yet. Start one from Sources.</p>
+        )}
+        {items.map((it) => {
+          const src = describeContentSource(it);
+          return (
+            <button key={it.id} onClick={() => onOpen(it.id)}
+              className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                it.id === openId ? 'border-fuchsia-400/30 bg-fuchsia-500/[0.07]' : 'border-border/15 hover:border-border/35'
+              }`}>
+              <p className="truncate text-[13px] font-medium text-foreground/90">{it.title || 'Untitled draft'}</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground/60">
+                {STATUS_LABEL[it.status] ?? it.status} · {CONTENT_TYPE_LABEL[it.format] ?? it.format} · {src.label}
+              </p>
+            </button>
+          );
+        })}
+      </aside>
+      <main className="min-w-0">
+        {children ?? (legacy ? (
+          <div className="rounded-xl border border-border/15 bg-card/[0.08] p-4">
+            <SectionLabel>Earlier draft (read-only)</SectionLabel>
+            <p className="mt-2 text-[14px] font-medium text-foreground/90">{legacy.title ?? 'Untitled'}</p>
+            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground/85">{legacy.body}</p>
+            <p className="mt-3 text-[12px] text-muted-foreground/55">Written before drafts were versioned. It can be read, not edited.</p>
+          </div>
+        ) : (
+          <EmptyPanel
+            title="Pick a draft to work on"
+            subtext="Open one from the list, turn a signal into a post from Sources, or start from your own idea."
+            action={{ label: 'Start from an idea', onClick: onCreate }}
+          />
+        ))}
+      </main>
     </div>
   );
 }
 
-// ============================================================ Shared UI ======
+// ================================================================== History ===
+
+function HistoryView({ items, earlier, workflowRecaps, loading, onOpen }: {
+  items: StudioListItem[];
+  earlier: ReturnType<typeof postDraftOutputs>;
+  workflowRecaps: ReturnType<typeof workflowSummaryOutputs>;
+  loading: boolean;
+  onOpen: (id: string) => void;
+}) {
+  if (loading) return <LoadingRow />;
+  // Every status, archived included — archiving takes a draft out of the
+  // working set, never out of the record.
+  const groups: Array<[string, StudioListItem[]]> = (['draft', 'approved', 'archived'] as const)
+    .map((st) => [STATUS_LABEL[st], items.filter((it) => it.status === st)] as [string, StudioListItem[]]);
+  // `earlier` holds legacy saved_outputs drafts only; canonical rows are never there.
+  const legacyOnly = earlier.filter((e) => !items.some((it) => it.id === e.id));
+  return (
+    <div className="space-y-6">
+      {groups.map(([label, rows]) => (
+        <section key={label}>
+          <SectionLabel>{label} · {rows.length}</SectionLabel>
+          {rows.length === 0 ? (
+            <p className="mt-2 text-[13px] text-muted-foreground/55">None.</p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {rows.map((it) => {
+                const src = describeContentSource(it);
+                const about = relationshipLabel(src.subject);
+                return (
+                  <li key={it.id}>
+                    <button onClick={() => onOpen(it.id)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-border/15 px-3 py-2 text-left hover:border-border/35">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-foreground/90">{it.title || 'Untitled draft'}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground/60">
+                          {CONTENT_TYPE_LABEL[it.format] ?? it.format} · {src.label}{about ? ` · ${about}` : ''}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground/50">{new Date(it.updated_at).toLocaleDateString()}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ))}
+      {legacyOnly.length > 0 && (
+        <section>
+          <SectionLabel>Earlier, read-only · {legacyOnly.length}</SectionLabel>
+          <ul className="mt-2 space-y-1.5">
+            {legacyOnly.map((e) => (
+              <li key={e.id}>
+                <button onClick={() => onOpen(e.id)} className="w-full truncate rounded-lg border border-border/10 px-3 py-2 text-left text-[13px] text-muted-foreground/75 hover:border-border/30">
+                  {e.title ?? 'Untitled'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {workflowRecaps.length > 0 && (
+        <section>
+          <SectionLabel>Workflow recaps</SectionLabel>
+          <ul className="mt-2 space-y-1">
+            {workflowRecaps.slice(0, 5).map((w) => (
+              <li key={w.id} className="truncate text-[12.5px] text-muted-foreground/70">{w.title ?? 'Workflow summary'}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (

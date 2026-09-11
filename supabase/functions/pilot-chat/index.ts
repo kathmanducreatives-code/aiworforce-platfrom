@@ -2808,14 +2808,16 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             source_type: signalId ? "signal" : "idea",
             source_signal_id: signalId,
             source_signal_title: signalTitle,
+            // WHO IT HAPPENED TO, from the verified row: a competitor's launch
+            // must never be written as ours.
+            signal_subject: namesSignal(signalHandoff) ? signalHandoff.subject : null,
             legacy_signal: signalHandoff.kind === "legacy_unlinked"
               ? { id: signalHandoff.legacy_signal_id, title: signalHandoff.title }
               : null,
-            // A legacy signal has no FK, so its title IS the idea — never the
-            // card's own generated sentence.
-            idea: signalHandoff.kind === "legacy_unlinked"
-              ? [signalTitle, angle].filter(Boolean).join(" — ") || message
-              : angle,
+            // The user's angle only. A legacy signal's title travels as its
+            // own field, with its subject, so the brief still says whose news
+            // it is — never the card's own generated sentence as the idea.
+            idea: angle,
             created_by: null,
           });
           if (!created.ok || !created.reference) {

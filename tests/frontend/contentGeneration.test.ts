@@ -24,7 +24,7 @@ const read = (p: string) => Deno.readTextFile(new URL(p, ROOT));
 
 const GEN = await read("src/lib/content/generateContentDraft.ts");
 const PAGE = await read("src/pages/Content.tsx");
-const DRAWER = await read("src/components/content/ContentDetailDrawer.tsx");
+const DRAWER = await read("src/components/content/ContentStudioEditor.tsx");
 const CREATE_MODAL = await read("src/components/content/CreatePostModal.tsx");
 
 // ══════════ 1. it asks the right agent, for the right draft ═══════════════
@@ -111,8 +111,8 @@ Deno.test("generation is explicit, never automatic on create", () => {
     "CreatePostModal must not generate — creating a draft must stay free",
   );
   assert(
-    /onGenerate/.test(DRAWER),
-    "the drawer must expose an explicit generate control",
+    /onWriteText/.test(DRAWER),
+    "the Studio must expose an explicit write control — Scribe is asked, never assumed",
   );
   assert(
     /generateContentDraft\(/.test(PAGE),
@@ -128,7 +128,7 @@ Deno.test("THE BUG THAT WOULD LOOK LIKE NOTHING HAPPENED", () => {
   // `detail?.id`, so without a second effect the textarea keeps showing the
   // empty draft and "Draft with Scribe" appears to do nothing at all.
   assert(
-    /\}, \[detail\?\.body\]\);/.test(DRAWER),
+    /\}, \[item\.body\]\);/.test(DRAWER),
     "the editor must react to the body changing under the same draft",
   );
   // ...and must not do it by clobbering unsaved typing.
@@ -143,7 +143,7 @@ Deno.test("THE BUG THAT WOULD LOOK LIKE NOTHING HAPPENED", () => {
 });
 
 Deno.test("the generate control reports failure instead of silently resolving", () => {
-  assert(/genError/.test(DRAWER), "a failed generation must surface an error");
+  assert(/setError\(err instanceof Error \? err\.message/.test(DRAWER), "a failed generation must surface an error");
   assert(
     /if \(!res\.ok\) throw new Error/.test(PAGE),
     "the page must propagate a refusal to the control that asked for it",

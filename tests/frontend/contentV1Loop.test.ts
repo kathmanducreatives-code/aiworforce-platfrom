@@ -39,7 +39,7 @@ function code(src: string): string {
 
 const PAGE = await read("src/pages/Content.tsx");
 const COMPOSER = await read("src/components/content/ContentComposer.tsx");
-const DRAWER = await read("src/components/content/ContentDetailDrawer.tsx");
+const DRAWER = await read("src/components/content/ContentStudioEditor.tsx");
 const GEN = await read("src/lib/content/generateContentDraft.ts");
 const ITEMS = await read("src/lib/content/contentItems.ts");
 const WRITER = await read("supabase/functions/_shared/memoryWriter.ts");
@@ -164,7 +164,7 @@ Deno.test("a regeneration is DISTINGUISHABLE from a first draft and from an edit
 Deno.test("history is read-only", () => {
   // A version is what the draft said at a point in time. An editable history is
   // not a history — there is deliberately no UPDATE or DELETE policy.
-  assert(DRAWER.includes("ContentVersionRow"), "the drawer renders versions");
+  assert(DRAWER.includes("versions: ContentItemVersion[]"), "the Studio renders versions");
   assert(
     !/updateContentItemVersion|deleteVersion/.test(ITEMS),
     "there must be no writer for a version row",

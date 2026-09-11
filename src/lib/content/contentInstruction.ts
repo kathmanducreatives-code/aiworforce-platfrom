@@ -16,7 +16,11 @@
 
 export {
   buildContentInstruction,
+  signalSubjectFrom,
   type InstructionFormat,
   type InstructionSource,
   type InstructionInput,
+  type SignalSubject,
+  type SignalRelationship,
+  type ContentBriefFields,
 } from '../../../supabase/functions/_shared/contentInstruction';

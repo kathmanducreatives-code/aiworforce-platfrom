@@ -54,10 +54,11 @@ function fakeDb(tables: Record<string, Row[]>, opts: { failOn?: string } = {}) {
 
 const TABLES = {
   signal_events: [
-    { id: SIG, workspace_id: WS, normalized_value: { title: "Acme is hiring 3 SDRs" } },
+    { id: SIG, workspace_id: WS, signal_type: "competitor_activity", subject_type: "competitor", subject_key: "outreach",
+      normalized_value: { title: "Acme is hiring 3 SDRs" } },
     { id: MAPPED, workspace_id: WS, legacy_signal_id: LEGACY + "-x", normalized_value: {} },
   ],
-  signals: [{ id: LEGACY, workspace_id: WS, title: "Old radar signal" }],
+  signals: [{ id: LEGACY, workspace_id: WS, title: "Old radar signal", signal_type: "competitor", raw: {} }],
 };
 
 // ══════════ 1. verification ═════════════════════════════════════════════════
@@ -72,8 +73,11 @@ Deno.test("no signal named: no query at all", async () => {
 
 Deno.test("a canonical signal in this workspace resolves, with the feed's title", async () => {
   const { db, queries } = fakeDb(TABLES);
-  assertEquals(await resolveSignalHandoff(db, WS, SIG),
-    { kind: "signal", signal_id: SIG, title: "Acme is hiring 3 SDRs" });
+  assertEquals(await resolveSignalHandoff(db, WS, SIG), {
+    kind: "signal", signal_id: SIG, title: "Acme is hiring 3 SDRs",
+    // WHO IT HAPPENED TO, from the row's own relationship fields.
+    subject: { relationship: "competitor", name: "Outreach" },
+  });
   // Scoped, and never asking for a column signal_events does not have.
   assertEquals(queries[0], { table: "signal_events", filters: { id: SIG, workspace_id: WS } });
 });
@@ -95,15 +99,17 @@ Deno.test("a forged / non-uuid id is refused before any query", async () => {
 
 Deno.test("a legacy-only signal is real but unlinked; a mapped legacy id takes its canonical id", async () => {
   const { db } = fakeDb(TABLES);
-  assertEquals(await resolveSignalHandoff(db, WS, LEGACY),
-    { kind: "legacy_unlinked", legacy_signal_id: LEGACY, title: "Old radar signal" });
+  assertEquals(await resolveSignalHandoff(db, WS, LEGACY), {
+    kind: "legacy_unlinked", legacy_signal_id: LEGACY, title: "Old radar signal",
+    subject: { relationship: "competitor", name: null },
+  });
 
   const mapped = fakeDb({
     signal_events: [{ id: MAPPED, workspace_id: WS, legacy_signal_id: LEGACY, normalized_value: { title: "Mapped" } }],
     signals: [{ id: LEGACY, workspace_id: WS, title: "Old" }],
   });
   assertEquals(await resolveSignalHandoff(mapped.db, WS, LEGACY),
-    { kind: "signal", signal_id: MAPPED, title: "Mapped" });
+    { kind: "signal", signal_id: MAPPED, title: "Mapped", subject: { relationship: "external", name: null } });
 });
 
 Deno.test("a failed lookup refuses honestly rather than guessing", async () => {
@@ -130,7 +136,9 @@ function compose(entity: string, refs: Array<{ kind: "named" | "saved_set" | "pr
     authority: {}, provenance: {},
   } as unknown as RequestV1;
 }
-const LINKED: SignalHandoff = { kind: "signal", signal_id: SIG, title: "Acme is hiring 3 SDRs" };
+const LINKED: SignalHandoff = {
+  kind: "signal", signal_id: SIG, title: "Acme is hiring 3 SDRs", subject: { relationship: "competitor", name: "Outreach" },
+};
 const THIS = [{ kind: "prior_result" as const, value: "this signal" }];
 
 Deno.test("'turn this signal into a post' — every subject Chat Brain might pick — creates content", () => {

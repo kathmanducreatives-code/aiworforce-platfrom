@@ -37,7 +37,7 @@ const PAGE = await read("src/pages/Content.tsx");
 const ITEMS = await read("src/lib/content/contentItems.ts");
 const HOOK = await read("src/hooks/useContentItems.ts");
 const CREATE_MODAL = await read("src/components/content/CreatePostModal.tsx");
-const DRAWER = await read("src/components/content/ContentDetailDrawer.tsx");
+const DRAWER = await read("src/components/content/ContentStudioEditor.tsx");
 const DRAFT_MODEL = await read("src/lib/contentDraftModel.ts");
 const MIGRATION = await read("supabase/migrations/20260910120000_content_item.sql");
 // The V1 migration REDEFINES the format and status CHECKs, so it — not the
@@ -76,16 +76,18 @@ Deno.test("creation PERSISTS, and does so before it dispatches", () => {
 });
 
 Deno.test("a persisted draft is editable; an append-only row is not", () => {
-  assert(DRAWER.includes("onSave"), "the drawer must support saving");
+  assert(DRAWER.includes("onSave"), "the Studio must support saving");
+  // The editor (and so every action) is mounted ONLY for a real content_item;
+  // a saved_outputs row has nothing to save back to and opens read-only.
   assert(
-    DRAWER.includes("const editable = typeof onSave === \"function\""),
-    "editability must be driven by whether a saver was supplied",
+    /contentItems\.find\(\(it\) => it\.id === openDraftId\)/.test(PAGE),
+    "the Studio item must be a persisted content_item",
   );
-  // saved_outputs rows have nothing to save back to, so they must stay read-only.
   assert(
-    /contentItems\.some\(\(it\) => it\.id === openDraftId\)/.test(PAGE),
-    "onSave must be passed ONLY for rows that are real content items",
+    /!contentItems\.some\(\(it\) => it\.id === openDraftId\)/.test(PAGE),
+    "anything else must be recognised as a read-only legacy row",
   );
+  assert(/\{studioItem && studioHandlers && \(/.test(PAGE), "no editor without a real item and its handlers");
 });
 
 // ══════════ 2. one vocabulary, TypeScript and SQL ═════════════════════════

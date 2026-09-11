@@ -28,7 +28,9 @@
 // beyond the brief, or the spend — `run-agent` already owns all four, and a
 // second opinion on any of them is a second product.
 
-import { buildContentInstruction } from "./contentInstruction.ts";
+import {
+  buildContentInstruction, type ContentBriefFields, type InstructionInput, type SignalSubject,
+} from "./contentInstruction.ts";
 
 export const CONTENT_OPERATIONS_VERSION = "content-operations-v1" as const;
 
@@ -60,6 +62,14 @@ export interface ContentRequest {
   /** The signal's real id. Never a title standing in for one. */
   source_signal_id?: string | null;
   source_signal_title?: string | null;
+  /**
+   * WHO THE SIGNAL HAPPENED TO — competitor, another company, a market — read
+   * from the source row. It is what stops a competitor's launch being written
+   * as ours. Absent on a signal means "someone other than us".
+   */
+  signal_subject?: SignalSubject | null;
+  /** The Studio's creative brief: audience, objective, angle, CTA. */
+  fields?: ContentBriefFields | null;
   /**
    * A LEGACY-ONLY signal the draft is about. It has no `signal_events` row, so
    * it cannot be `source_signal_id`; it is recorded as provenance instead, under
@@ -139,20 +149,29 @@ export async function createCanonicalContentItem(
     return { ok: false, reference: null, error: "signal_source_requires_signal_id" };
   }
   const idea = (req.idea ?? "").trim();
-  if (req.source_type === "idea" && !idea) {
+  // A legacy signal is its own subject; it needs no idea text to be about something.
+  if (req.source_type === "idea" && !idea && !req.legacy_signal) {
     return { ok: false, reference: null, error: "idea_source_requires_text" };
   }
 
-  const brief = buildContentInstruction({
+  // THE TYPED INPUT IS KEPT, not only the sentence it renders to: a
+  // regeneration or a Studio edit rebuilds the brief from these fields, so
+  // attribution and the creative brief survive every later operation.
+  const briefInput: InstructionInput = {
     format: req.format,
     sourceType: req.source_type,
     idea,
-    signalTitle: req.source_signal_title ?? null,
-  });
+    signalTitle: req.source_signal_title ?? req.legacy_signal?.title ?? null,
+    // A legacy signal is still someone else's news: its subject travels even
+    // though its id cannot. Unknown -> "someone other than us", never us.
+    signalSubject: req.signal_subject ?? (req.legacy_signal ? { relationship: "external", name: null } : null),
+    fields: req.fields ?? null,
+  };
+  const brief = buildContentInstruction(briefInput);
 
   const title = req.source_type === "signal"
     ? (req.source_signal_title ?? "From a signal")
-    : idea.slice(0, 80);
+    : (req.legacy_signal?.title ?? idea).slice(0, 80);
 
   const { data, error } = await db
     .from("content_item")
@@ -169,7 +188,7 @@ export async function createCanonicalContentItem(
       body: "",
       created_by: req.created_by ?? null,
       metadata: {
-        brief, topic: idea || req.source_signal_title || null,
+        brief, brief_input: briefInput, topic: idea || req.source_signal_title || null,
         ...(req.legacy_signal
           ? { legacy_signal: { id: req.legacy_signal.id, title: req.legacy_signal.title, store: "signals" } }
           : {}),

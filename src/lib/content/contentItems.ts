@@ -59,6 +59,8 @@ export interface ContentItem {
   source_signal_id: string | null;
   /** The live version. Maintained by the trigger; never written by a client. */
   current_version_id: string | null;
+  /** The image the draft shows now. Earlier assets stay; only this pointer moves. */
+  current_asset_id: string | null;
   last_generation_source: GenerationSource;
   agent_slug: string | null;
   metadata: Record<string, unknown>;
@@ -74,6 +76,7 @@ export interface ContentItemVersion {
   body: string;
   generation_source: GenerationSource;
   model: string | null;
+  provider: string | null;
   task_id: string | null;
   prompt_context: Record<string, unknown>;
   created_at: string;
@@ -87,9 +90,9 @@ export interface ContentItemVersion {
  * which it cannot parse, and every row silently degrades to
  * `GenericStringError`. Keep these on one line however long they get.
  */
-const ITEM_COLUMNS = 'id, workspace_id, created_by, status, format, title, body, source, source_type, source_signal_id, current_version_id, last_generation_source, agent_slug, metadata, created_at, updated_at';
+const ITEM_COLUMNS = 'id, workspace_id, created_by, status, format, title, body, source, source_type, source_signal_id, current_version_id, current_asset_id, last_generation_source, agent_slug, metadata, created_at, updated_at';
 
-const VERSION_COLUMNS = 'id, content_item_id, version, title, body, generation_source, model, task_id, prompt_context, created_at';
+const VERSION_COLUMNS = 'id, content_item_id, version, title, body, generation_source, model, provider, task_id, prompt_context, created_at';
 
 const STATUSES: ContentStatus[] = ['draft', 'approved', 'archived'];
 const FORMATS: ContentFormat[] = ['linkedin_post', 'linkedin_comment'];
@@ -122,6 +125,7 @@ function toItem(row: Record<string, unknown>): ContentItem {
       ? row.source_type as ContentSourceType : 'idea',
     source_signal_id: (row.source_signal_id as string | null) ?? null,
     current_version_id: (row.current_version_id as string | null) ?? null,
+    current_asset_id: (row.current_asset_id as string | null) ?? null,
     last_generation_source:
       GENERATION_SOURCES.includes(row.last_generation_source as GenerationSource)
         ? row.last_generation_source as GenerationSource : 'manual_edit',
@@ -232,11 +236,17 @@ export async function updateContentItem(
      * person wrote that one.
      */
     last_generation_source?: GenerationSource;
+    /**
+     * REPLACES the column. Callers merge first (see `contentService`), because
+     * the row's brief and provenance live here and a partial object would erase
+     * them.
+     */
+    metadata?: Record<string, unknown>;
   },
 ): Promise<{ item: ContentItem | null; error: string | null }> {
   const { data, error } = await supabase
     .from('content_item')
-    .update(patch)
+    .update(patch as never)
     .eq('id', id)
     .select(ITEM_COLUMNS)
     .single();
@@ -272,6 +282,7 @@ export async function listContentItemVersions(
           GENERATION_SOURCES.includes(row.generation_source as GenerationSource)
             ? row.generation_source as GenerationSource : 'manual_edit',
         model: (row.model as string | null) ?? null,
+        provider: (row.provider as string | null) ?? null,
         task_id: (row.task_id as string | null) ?? null,
         prompt_context: (row.prompt_context && typeof row.prompt_context === 'object')
           ? row.prompt_context as Record<string, unknown> : {},

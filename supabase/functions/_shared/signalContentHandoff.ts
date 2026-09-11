@@ -38,6 +38,7 @@
 import type { RequestV1 } from "./requestV1.ts";
 import type { ContentFormat } from "./contentOperations.ts";
 import type { ContentObjective as PlanObjective } from "./composeSurface.ts";
+import { signalSubjectFrom, type SignalSubject } from "./contentInstruction.ts";
 
 export const SIGNAL_CONTENT_HANDOFF_VERSION = "signal-content-handoff-v1" as const;
 
@@ -50,9 +51,9 @@ export type SignalHandoff =
   /** No signal was named. Everything behaves exactly as before. */
   | { kind: "none" }
   /** A canonical signal in this workspace. The only case with a real FK. */
-  | { kind: "signal"; signal_id: string; title: string | null }
+  | { kind: "signal"; signal_id: string; title: string | null; subject: SignalSubject }
   /** A pre-dual-write signal in this workspace. Real, but it has no FK target. */
-  | { kind: "legacy_unlinked"; legacy_signal_id: string; title: string | null }
+  | { kind: "legacy_unlinked"; legacy_signal_id: string; title: string | null; subject: SignalSubject }
   /** Named, but not a signal of this workspace — or not an id at all. */
   | { kind: "refused"; reason: "invalid_signal_id" | "signal_not_in_workspace" | "signal_lookup_failed" };
 
@@ -85,6 +86,22 @@ export function canonicalSignalTitle(row: { normalized_value?: unknown }): strin
   return str(nv.title);
 }
 
+const CANONICAL_COLUMNS = "id, signal_type, subject_type, subject_key, normalized_value";
+interface CanonicalRow {
+  id: string; signal_type?: string | null; subject_type?: string | null; subject_key?: string | null;
+  normalized_value?: unknown;
+}
+
+/** Who a canonical signal happened to — its own relationship fields, never its prose. */
+export function canonicalSubject(row: CanonicalRow): SignalSubject {
+  const nv = (row.normalized_value ?? {}) as Record<string, unknown>;
+  return signalSubjectFrom({
+    subject_type: row.subject_type ?? null, subject_key: row.subject_key ?? null,
+    signal_type: row.signal_type ?? null,
+    company_name: str(nv.company_name), competitor_name: str(nv.competitor_name),
+  });
+}
+
 /**
  * Which signal the client named, checked against THIS workspace.
  *
@@ -104,31 +121,38 @@ export async function resolveSignalHandoff(
   }
   try {
     const canonical = await db.from("signal_events")
-      .select("id, normalized_value")
+      .select(CANONICAL_COLUMNS)
       .eq("id", claimed).eq("workspace_id", workspaceId).maybeSingle();
     if (canonical.error) return { kind: "refused", reason: "signal_lookup_failed" };
     if (canonical.data) {
-      const row = canonical.data as { id: string; normalized_value?: unknown };
-      return { kind: "signal", signal_id: row.id, title: canonicalSignalTitle(row) };
+      const row = canonical.data as CanonicalRow;
+      return { kind: "signal", signal_id: row.id, title: canonicalSignalTitle(row), subject: canonicalSubject(row) };
     }
 
     // A legacy card whose row HAS since been mapped. The canonical id is the one
     // the FK accepts, so that is the one the draft carries.
     const mapped = await db.from("signal_events")
-      .select("id, normalized_value")
+      .select(CANONICAL_COLUMNS)
       .eq("legacy_signal_id", claimed).eq("workspace_id", workspaceId).maybeSingle();
     if (!mapped.error && mapped.data) {
-      const row = mapped.data as { id: string; normalized_value?: unknown };
-      return { kind: "signal", signal_id: row.id, title: canonicalSignalTitle(row) };
+      const row = mapped.data as CanonicalRow;
+      return { kind: "signal", signal_id: row.id, title: canonicalSignalTitle(row), subject: canonicalSubject(row) };
     }
 
     const legacy = await db.from("signals")
-      .select("id, title")
+      .select("id, title, signal_type, raw")
       .eq("id", claimed).eq("workspace_id", workspaceId).maybeSingle();
     if (legacy.error) return { kind: "refused", reason: "signal_lookup_failed" };
     if (legacy.data) {
-      const row = legacy.data as { id: string; title?: unknown };
-      return { kind: "legacy_unlinked", legacy_signal_id: row.id, title: str(row.title) };
+      const row = legacy.data as { id: string; title?: unknown; signal_type?: string | null; raw?: Record<string, unknown> | null };
+      const raw = row.raw ?? {};
+      return {
+        kind: "legacy_unlinked", legacy_signal_id: row.id, title: str(row.title),
+        subject: signalSubjectFrom({
+          signal_type: row.signal_type ?? null,
+          competitor_name: str(raw.competitor_name), company_name: str(raw.company_name) ?? str(raw.company),
+        }),
+      };
     }
     return { kind: "refused", reason: "signal_not_in_workspace" };
   } catch {

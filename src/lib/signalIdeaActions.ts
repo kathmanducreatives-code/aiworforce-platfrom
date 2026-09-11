@@ -3,6 +3,10 @@
 // NOT depend on the chat), while turn-into-post/comment builds a draft-only Pilot
 // command. Nothing here ever instructs auto-posting.
 
+import {
+  signalSubjectFrom, type SignalSubject,
+} from "../../supabase/functions/_shared/contentInstruction.ts";
+
 export type SignalIdeaAction = "save" | "ignore";
 export type IdeaReviewStatus = "saved" | "ignored";
 
@@ -42,11 +46,35 @@ export function buildSignalContextMetadata(signal: { id: string }): Record<strin
   return { signal_id: signal.id };
 }
 
+/**
+ * WHO A FEED SIGNAL HAPPENED TO, from the relationship fields the projection
+ * carries (`raw.subject_type` / `raw.subject_key` for a canonical row, the
+ * competitor and account names either kind may have). The shared rule decides —
+ * the same `signalSubjectFrom` Pilot uses — so the page and chat can never
+ * disagree about whose news it is.
+ */
+export function feedSignalSubject(signal: {
+  signal_type?: string | null; competitor_name?: string | null; account_name?: string | null;
+  raw?: Record<string, unknown> | null;
+}): SignalSubject {
+  const raw = signal.raw ?? {};
+  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return signalSubjectFrom({
+    subject_type: s(raw.subject_type), subject_key: s(raw.subject_key),
+    signal_type: signal.signal_type ?? null,
+    company_name: s(raw.company_name), competitor_name: signal.competitor_name ?? null,
+    account_name: signal.account_name ?? null,
+  });
+}
+
 /** Where a draft made from a feed signal says it came from. */
 export type SignalContentSource =
-  | { source_type: "signal"; source_signal_id: string; idea: string; metadata: Record<string, never> }
   | {
-    source_type: "idea"; source_signal_id: null; idea: string;
+    source_type: "signal"; source_signal_id: string; idea: string; subject: SignalSubject;
+    metadata: Record<string, never>;
+  }
+  | {
+    source_type: "idea"; source_signal_id: null; idea: string; subject: SignalSubject;
     metadata: { legacy_signal: { id: string; title: string | null; store: "signals" } };
   };
 
@@ -61,16 +89,22 @@ export type SignalContentSource =
  * placed in a column whose FK it would violate, or no trace of it at all.
  */
 export function signalContentSource(
-  signal: { id: string; title: string | null; store?: "signal_events" | "signals" },
+  signal: {
+    id: string; title: string | null; store?: "signal_events" | "signals";
+    signal_type?: string | null; competitor_name?: string | null; account_name?: string | null;
+    raw?: Record<string, unknown> | null;
+  },
 ): SignalContentSource {
+  const subject = feedSignalSubject(signal);
   if (signal.store === "signal_events") {
-    return { source_type: "signal", source_signal_id: signal.id, idea: "", metadata: {} };
+    return { source_type: "signal", source_signal_id: signal.id, idea: "", subject, metadata: {} };
   }
   const title = signal.title?.trim() || null;
   return {
     source_type: "idea",
     source_signal_id: null,
     idea: title ?? "An earlier signal",
+    subject,
     metadata: { legacy_signal: { id: signal.id, title, store: "signals" } },
   };
 }
