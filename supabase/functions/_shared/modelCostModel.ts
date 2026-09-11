@@ -150,6 +150,125 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze(
   },
 });
 
+// ── IMAGE MODELS ────────────────────────────────────────────────────────────
+//
+// GPT image models bill by TOKEN, in three classes a text price cannot express:
+// text input (the prompt), image input (reference images — none today) and
+// image output (the picture). Their own table, so a text rate can never be
+// applied to an image token or the other way round.
+//
+// DIRECTLY BILLED. `imageProvider` calls api.openai.com with OPENAI_API_KEY —
+// no gateway between us and the vendor — so OpenAI's published rate IS the
+// billing basis, the same reason `claude-haiku-4-5-20251001` may be priced and
+// the gateway models may not.
+//
+// All three current models are listed, deliberately: `canonicalImageModelId`
+// matches the longest known prefix, and with only `gpt-image-1` here a
+// `gpt-image-1-mini` call would bill at 5x its rate and `gpt-image-1.5` at the
+// wrong image rates.
+
+/** USD per 1,000,000 tokens, per class. */
+export interface ImageModelPrice {
+  text_input_per_1m: number;
+  cached_text_input_per_1m: number;
+  image_input_per_1m: number;
+  cached_image_input_per_1m: number;
+  image_output_per_1m: number;
+  billed_by: "openai";
+  price_source: string;
+  effective: string;
+}
+
+const OPENAI_IMAGE_PRICE_SOURCE =
+  "OpenAI published API pricing, developers.openai.com/api/docs/pricing (Standard, per 1M tokens)";
+
+export const IMAGE_MODEL_PRICES: Readonly<Record<string, ImageModelPrice>> = Object.freeze({
+  "gpt-image-1": {
+    text_input_per_1m: 5.00, cached_text_input_per_1m: 1.25,
+    image_input_per_1m: 10.00, cached_image_input_per_1m: 2.50,
+    image_output_per_1m: 40.00,
+    billed_by: "openai", price_source: OPENAI_IMAGE_PRICE_SOURCE, effective: "2026-09-11",
+  },
+  "gpt-image-1-mini": {
+    text_input_per_1m: 2.00, cached_text_input_per_1m: 0.20,
+    image_input_per_1m: 2.50, cached_image_input_per_1m: 0.25,
+    image_output_per_1m: 8.00,
+    billed_by: "openai", price_source: OPENAI_IMAGE_PRICE_SOURCE, effective: "2026-09-11",
+  },
+  "gpt-image-1.5": {
+    text_input_per_1m: 5.00, cached_text_input_per_1m: 1.25,
+    image_input_per_1m: 8.00, cached_image_input_per_1m: 2.00,
+    image_output_per_1m: 32.00,
+    billed_by: "openai", price_source: OPENAI_IMAGE_PRICE_SOURCE, effective: "2026-09-11",
+  },
+});
+
+export function canonicalImageModelId(model: string): string {
+  const bare = String(model ?? "").trim().replace(/^[a-z0-9_-]+[/:]/i, "");
+  if (IMAGE_MODEL_PRICES[bare]) return bare;
+  const match = Object.keys(IMAGE_MODEL_PRICES)
+    .filter((id) => bare.startsWith(id))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ?? bare;
+}
+
+/** Token counts from an images response, split by class as the provider reports them. */
+export interface ImageModelUsage {
+  input_tokens: number | null;
+  text_input_tokens: number | null;
+  image_input_tokens: number | null;
+  output_tokens: number | null;
+}
+
+/**
+ * Read `usage` off an images response.
+ *
+ * Absent usage is reported as nulls — "the provider told us nothing" — which
+ * `priceImageCall` refuses to turn into a price, exactly as `priceModelCall`
+ * refuses to turn a missing count into a free call.
+ */
+export function readImageUsage(raw: unknown): ImageModelUsage {
+  const u = (raw && typeof raw === "object"
+    ? (raw as { usage?: Record<string, unknown> }).usage
+    : null) ?? {};
+  const d = (u.input_tokens_details ?? {}) as Record<string, unknown>;
+  return {
+    input_tokens: nonNeg(u.input_tokens),
+    text_input_tokens: nonNeg(d.text_tokens),
+    image_input_tokens: nonNeg(d.image_tokens),
+    output_tokens: nonNeg(u.output_tokens),
+  };
+}
+
+/**
+ * What this image call cost, from the provider's own counts.
+ *
+ * Input the provider did not attribute to text or image is priced at the IMAGE
+ * rate — the higher of the two. For a ceiling, overstating a few prompt tokens
+ * is the safe direction; understating a reference image is not. Prompts are
+ * text today, so a provider that splits the counts is priced exactly.
+ */
+export function priceImageCall(i: {
+  model: string;
+  usage: ImageModelUsage;
+}): ExecutionCost & { model_id: string } {
+  const model_id = canonicalImageModelId(i.model);
+  const price = IMAGE_MODEL_PRICES[model_id];
+  if (!price || (i.usage.input_tokens == null && i.usage.output_tokens == null)) {
+    return { actual_usd: null, estimated_usd: null, source: "unknown", model_id };
+  }
+  const input = i.usage.input_tokens ?? 0;
+  const text = Math.min(i.usage.text_input_tokens ?? 0, input);
+  const image = Math.min(i.usage.image_input_tokens ?? 0, Math.max(0, input - text));
+  const unattributed = Math.max(0, input - text - image);
+  const output = i.usage.output_tokens ?? 0;
+  const usd =
+    (text / 1_000_000) * price.text_input_per_1m +
+    ((image + unattributed) / 1_000_000) * price.image_input_per_1m +
+    (output / 1_000_000) * price.image_output_per_1m;
+  return { actual_usd: null, estimated_usd: round6(usd), source: "event_priced", model_id };
+}
+
 /**
  * Strip the vendor prefix and any dated suffix from a model id.
  *

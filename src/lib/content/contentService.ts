@@ -30,6 +30,7 @@ import {
   type ContentBriefFields, type InstructionInput, type SignalSubject,
 } from '@/lib/content/contentInstruction';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
+import { functionErrorDetail } from '@/lib/content/functionError';
 
 /** What a caller asks for, wherever it is calling from. */
 export interface ContentGenerationRequest {
@@ -293,7 +294,14 @@ export async function generateContentImage(
   const { data, error } = await supabase.functions.invoke('generate-content-image', {
     body: { workspace_id: workspaceId, content_item_id: contentItemId },
   });
-  if (error) return { ok: false, error: error.message ?? 'image_generation_failed' };
+  if (error) {
+    // THE SERVER'S REASON, NOT THE TRANSPORT'S. supabase-js reports every
+    // non-2xx as "Edge Function returned a non-2xx status code"; the function's
+    // own `{ error, detail }` — "workspace model spend ceiling reached", "no
+    // credits remaining" — rides on `error.context`. Read it, or the user is
+    // told nothing about why no image arrived.
+    return { ok: false, error: (await functionErrorDetail(error)) ?? error.message ?? 'image_generation_failed' };
+  }
   const res = data as { ok?: boolean; asset_id?: string; error?: string; detail?: string } | null;
   if (!res || res.ok !== true) {
     return { ok: false, error: res?.detail ?? res?.error ?? 'image_generation_failed' };

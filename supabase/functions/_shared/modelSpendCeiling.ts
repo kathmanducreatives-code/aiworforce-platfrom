@@ -182,8 +182,16 @@ export async function authorizeModelSpend(i: {
     // free — the same distinction `priceModelCall` draws and for the same
     // reason: during a provider outage every row reports no usage, and reading
     // that as $0 would show an untouched bill while nothing worked.
-    const actual = Number(r["actual_cost_usd"]);
-    const est = Number(r["estimated_cost_usd"]);
+    //
+    // NULL IS ABSENT, NOT ZERO. `Number(null)` is 0, which is finite — so a row
+    // with no reported charge read as a reported charge of $0 and its estimate
+    // was never consulted. Every model row is like that (the database refuses
+    // `actual_cost_usd` from anything but `provider_reported`, and no provider
+    // reports one), so the meter summed $0 for all of them. Measured in
+    // production, 2026-09-11: 269 rows in 30 days, estimates $0.687354, meter $0.
+    const num = (v: unknown) => (v === null || v === undefined || v === "" ? NaN : Number(v));
+    const actual = num(r["actual_cost_usd"]);
+    const est = num(r["estimated_cost_usd"]);
     const v = Number.isFinite(actual) ? actual : Number.isFinite(est) ? est : null;
     if (v === null || r["cost_source"] === "unknown") unpriced++;
     if (v !== null) spent += v;
