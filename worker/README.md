@@ -22,6 +22,43 @@ before a worker is running is not**: `orchestrate` would route approved missions
 to a queue nothing drains, and lead sourcing for that workspace would stop
 silently.
 
+## Deployment status — build/deploy phase COMPLETE
+
+Hosted on **Railway** as a long-running Deno container. The runtime is proven;
+what remains is a provider question, not an infrastructure one.
+
+Proven in the hosted instance, V2 disabled throughout:
+
+| | |
+|---|---|
+| `/health` | `ok: true` |
+| uptime | ~12 min continuous |
+| polls | 140 — matches the 5s cadence with no gaps, so one process, no restart |
+| claims | 0, `last_poll_reason: v2_disabled` on every poll |
+| errors | none |
+| config | 180s lease · 60s heartbeat · 300s mission ceiling · 5s poll — all defaults, no overrides |
+
+Zero paid work while hosted and disabled. `lead_execution_calls`,
+`lead_model_calls`, `credit_transactions` and `lead_mission_queue` were all
+unchanged across the run. That is structural rather than lucky: with the
+allowlist empty the gate short-circuits *before* the claim RPC, so there is no
+database call to make and nothing to spend.
+
+### What is NOT done
+
+- `LEAD_V2_WORKER_WORKSPACES` is unset. V2 is disabled and no mission has ever
+  been routed to the worker.
+- No production canary has run.
+- **The canary is blocked on Apify, not on the worker.** The token is valid
+  (`users/me` 200) but the account is `plan: FREE`, `isPaying: false`, with a
+  $5/month cap, while both HarvestAPI actors the lead engine needs are
+  `pricingModel: PAY_PER_EVENT`. Readable actor metadata does not prove a paid
+  run is permitted, and that combination is exactly what produced the
+  historical account-level 403. Resolve the plan before enabling the allowlist.
+- Before the canary the worker still needs the provider and spend variables in
+  the environment contract below. Missing spend variables are the dangerous
+  case: the worker would run UNBOUNDED while the Edge path stays capped.
+
 ## Build
 
 Built from the **repository root**, because the worker imports `run-agent` and
@@ -63,12 +100,35 @@ Discovered from code, not invented. Nothing here has a default that spends money
 ### Providers — needed only to EXECUTE a mission
 
 With the allowlist empty the worker claims nothing and touches none of these.
-They are required before the first canary, and are the same values the
-`run-agent` Edge Function already holds.
+Copy the values from the `run-agent` Edge Function's secrets; they are the
+proven V1 configuration.
 
-`APIFY_API_TOKEN`, `FIRECRAWL_API_KEY`, `ANTHROPIC_API_KEY`,
-`LOVABLE_API_KEY`, `RESEND_API_KEY`, `SOURCE_PLANNER_PROVIDER`,
-`EVIDENCE_ENRICHMENT`
+**Required before the canary** — all four confirmed live-working by
+`tool-availability`:
+
+| Variable | Why |
+|---|---|
+| `APIFY_API_TOKEN` | sourcing; the mission cannot source without it |
+| `FIRECRAWL_API_KEY` | evidence / P4 |
+| `LOVABLE_API_KEY` | the gateway — primary for scout/hawk/aria planning |
+| `ANTHROPIC_API_KEY` | aiProvider's direct Anthropic transport |
+
+**Parity flags** — non-secret, but the VALUES must match production or the
+V1/V2 comparison means nothing: `LEAD_CREDIT_ENFORCEMENT`,
+`LINEAGE_LEASE_ENFORCED`, `EVIDENCE_ENRICHMENT`, `SIGNALS_V2`.
+`LINEAGE_LEASE_ENFORCED` matters most — it defaults to FALSE, so if production
+enforces and the worker does not, the worker's lease fence is weaker than V1's.
+
+**NOT required, with the reason** — checked by reachability, not assumed:
+
+| Variable | Why not |
+|---|---|
+| `OPENAI_API_KEY` | every GPT strategist flag is unset in production (`GPT_LEAD_STRATEGY`, `*_WORKSPACES`, `GPT_LEAD_MISSION_COMPILER`, `LEAD_STRATEGIST_PROVIDER`), so that path is off and V1 runs without it |
+| `RESEND_API_KEY` | only `execSendEmail` reads it; lead sourcing sends no email |
+| `PERPLEXITY_API_KEY` | retired — zero references in the lead path |
+| `SOURCE_PLANNER_PROVIDER` | unset in production; has a default |
+| `SUPABASE_DB_URL`, `SUPABASE_JWKS`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SECRET_KEYS` | zero references in `run-agent` or `_shared`; Supabase-platform values the worker never reads |
+| ~40 `APIFY_ACTOR_*` / `APIFY_ENABLE_*` | **leave unset for parity.** Production sets none, which is why `apify_people` and `apify_comments` report `enabled: false`. Setting them would give the worker capabilities V1 does not have. |
 
 ### Spend control — inherited, and worth setting deliberately
 
