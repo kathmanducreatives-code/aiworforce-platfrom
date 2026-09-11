@@ -21,8 +21,9 @@
 // from the request, and it is made on WHO the writing is aimed at rather than
 // on the words used:
 //
-//   compose + a person, or a reference to leads   -> outreach  (Penn, gated)
-//   compose + content and nobody to send it to    -> content   (Scribe)
+//   compose + a person, a held company pointed
+//             back at, or a saved set of leads    -> outreach  (Penn, gated)
+//   compose + anything with nobody to send it to  -> content   (Scribe)
 //
 // `draftOutreachRe` used to make this call — /\b(draft|write|send)\s+
 // (outreach|emails?|messages?)\b/ over the raw sentence — which meant "write
@@ -123,18 +124,23 @@ export function planCompose(request: RequestV1): ComposePlan | null {
   // watching". It names people to write to whatever the subject says.
   const namesHeldCollection = (part.subject.references ?? []).some(
     (r) => r.kind === "saved_set");
+  const refersBack = (part.subject.references ?? []).some((r) => r.kind === "prior_result");
   // ── ONLY SOMETHING THAT CAN RECEIVE A MESSAGE ────────────────────────────
   //
-  // The test used to be "does this point at anything we hold?", which made
+  // The test used to be "does this point back at anything we hold?", which made
   // every back-reference outreach. But a `signal` cannot receive outreach, and
   // neither can a `content` draft — "turn this signal into a LinkedIn post"
   // was classified as outreach and answered with "I don't have any leads saved
   // to write to yet."
   //
-  // A person can be written to, and a company is written to through its people.
-  // Nothing else can, so nothing else is outreach.
+  // A person can be written to. A company is written to through its people —
+  // but only a company WE HOLD, pointed back at: "draft outreach to the top 5".
+  // A company merely named is a topic: "write a LinkedIn post about Stripe" has
+  // nobody to send it to, and routing it to Penn would put a post behind the
+  // send-approval gate. Nothing else can receive a message, so nothing else is
+  // outreach.
   const canReceiveOutreach = part.subject.entity === "person"
-    || part.subject.entity === "company";
+    || (part.subject.entity === "company" && refersBack);
   const kind: ComposeKind =
     canReceiveOutreach || namesHeldCollection ? "outreach" : "content";
 
@@ -151,7 +157,6 @@ export function planCompose(request: RequestV1): ComposePlan | null {
   // AND THE THING REFERRED BACK TO MUST BE CONTENT. "Turn this signal into a
   // post" refers back to a SIGNAL: it creates a draft, it does not regenerate
   // one. Only a back-reference whose subject is content points at a draft.
-  const refersBack = (part.subject.references ?? []).some((r) => r.kind === "prior_result");
   const targets_existing_content = kind === "content" && refersBack && subjectIsContent;
 
   const medium: "text" | "image" = part.output.medium === "image" ? "image" : "text";

@@ -46,7 +46,7 @@ import RadarSourceStrip from "./RadarSourceStrip";
 import SignalDetailDrawer from "./SignalDetailDrawer";
 import type { SignalActionHandlers } from "./SignalActionBar";
 import { computeSourceStatuses } from "@/lib/radarSources";
-import { buildTurnIntoCommand } from "@/lib/signalIdeaActions";
+import { buildTurnIntoCommand, buildTurnIntoMetadata } from "@/lib/signalIdeaActions";
 import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
@@ -363,8 +363,8 @@ export default function SignalFeed() {
   const [openSignalId, setOpenSignalId] = useState<string | null>(null);
   const openSignal = useMemo(() => reviewed.find((s) => s.id === openSignalId) ?? null, [reviewed, openSignalId]);
   const drawerHandlers: SignalActionHandlers = openSignal ? {
-    onTurnIntoPost: () => { void sendAgentCommand(buildTurnIntoCommand("post", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
-    onTurnIntoComment: () => { void sendAgentCommand(buildTurnIntoCommand("comment", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
+    onTurnIntoPost: () => { void sendAgentCommand(buildTurnIntoCommand("post", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action", metadata: buildTurnIntoMetadata("post", openSignal) }); },
+    onTurnIntoComment: () => { void sendAgentCommand(buildTurnIntoCommand("comment", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action", metadata: buildTurnIntoMetadata("comment", openSignal) }); },
     onSaveIdea: () => void handleSetReview(openSignal.id, "saved"),
     onMarkReviewed: () => void handleSetReview(openSignal.id, "reviewed"),
     onIgnore: () => void handleSetReview(openSignal.id, "ignored"),

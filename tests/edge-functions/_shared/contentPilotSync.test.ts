@@ -182,9 +182,15 @@ Deno.test("13. every content_loop producer supplies an item id", async () => {
 });
 
 Deno.test("14. the deleted orphans stay deleted", async () => {
-  // Both had zero importers: no static import, no lazy import, no route entry,
+  // Each had zero importers: no static import, no lazy import, no route entry,
   // no test. Restoring one needs a caller AND a path through ContentService.
-  for (const p of ["ContentPromptBox", "ContentLoopPreview"]) {
+  // The Phase F six dispatched English sentences at Pilot, or rendered
+  // `saved_outputs` drafts read-only — both shapes the canonical path replaced.
+  for (const p of [
+    "ContentPromptBox", "ContentLoopPreview",
+    "CommentOpportunityCard", "ContentBrief", "ContentDraftCard",
+    "ContentOpportunityCard", "DraftApprovalQueue", "SignalToContentCard",
+  ]) {
     const hits: string[] = [];
     for await (const e of Deno.readDir(new URL("../../../src/components/content/", import.meta.url))) {
       if (e.name.startsWith(p)) hits.push(e.name);
@@ -217,6 +223,9 @@ Deno.test("16. a Content run still takes no lead lineage", async () => {
     "fence and leaves a lineage nothing ever closes");
 });
 
+
+// ══════════ 4. a signal handed to Pilot ══════════════════════════════════════
+
 Deno.test("17. a signal is not something you can write outreach TO", () => {
   // "Turn this signal into a LinkedIn post" refers back to a signal. Under the
   // old rule — any back-reference means leads — this was outreach, and Pilot
@@ -232,9 +241,9 @@ Deno.test("17. a signal is not something you can write outreach TO", () => {
   assertEquals(plan?.targets_existing_content, false);
 });
 
-Deno.test("18. a company back-reference is still outreach, still gated", () => {
+Deno.test("18. a held company pointed back at is still outreach, still gated", () => {
   // The guard on the guard: narrowing outreach must not un-gate it. A company
-  // is written to through its people.
+  // we hold is written to through its people.
   const plan = planCompose(composeRequest({
     entity: "company", refs: [{ kind: "prior_result", value: "the top 5" }],
   }));
@@ -242,14 +251,78 @@ Deno.test("18. a company back-reference is still outreach, still gated", () => {
   assertEquals(plan?.content_objective, null);
 });
 
-Deno.test("19. Pilot verifies a client-supplied signal id against the workspace", async () => {
+Deno.test("18b. a company merely NAMED is a topic, not a recipient", () => {
+  // The checkpoint's first cut made every `company` subject outreach, so
+  // "write a LinkedIn post about Stripe" went to Penn's send-approval path.
+  const plan = planCompose(composeRequest({
+    entity: "company", refs: [{ kind: "named", value: "Stripe" }],
+  }));
+  assertEquals(plan?.kind, "content");
+  assertEquals(plan?.content_objective, "create");
+});
+
+Deno.test("18c. a person and a saved set of leads are still outreach", () => {
+  assertEquals(planCompose(composeRequest({ entity: "person" }))?.kind, "outreach");
+  assertEquals(planCompose(composeRequest({
+    entity: "content", refs: [{ kind: "saved_set", value: "my leads" }],
+  }))?.kind, "outreach");
+});
+
+Deno.test("19. the signal id is verified in the shared module, scoped by workspace, before routing", async () => {
+  const mod = stripComments(await read("_shared/signalContentHandoff.ts"));
+  for (const table of ['from("signal_events")', 'from("signals")']) {
+    const i = mod.indexOf(table);
+    assert(i > 0, `the handoff must look ${table} up rather than trusting the body`);
+  }
+  // Every lookup is workspace-scoped: the id arrives from the browser and this
+  // path holds the service role.
+  const lookups = mod.split(".maybeSingle()").length - 1;
+  const scoped = mod.split('eq("workspace_id", workspaceId)').length - 1;
+  assertEquals(scoped, lookups, "every signal lookup must be scoped to the workspace");
+  // `signal_events` has no `title` column. The checkpoint selected one, which
+  // made every lookup fail and every signal draft silently an idea.
+  assert(!/from\("signal_events"\)\s*\.select\("[^"]*\btitle\b/.test(mod),
+    "signal_events has no title column — read normalized_value.title");
+
   const s = stripComments(await read("pilot-chat/index.ts"));
-  const i = s.indexOf("signal_events");
-  assert(i > 0, "Pilot must look the signal up rather than trusting the body");
-  const block = s.slice(i, i + 320);
-  assert(
-    block.includes('eq("workspace_id", workspaceId)'),
-    "the signal id arrives from the browser and this path holds the service " +
-    "role — an unscoped lookup lets a forged id attach another tenant's signal",
-  );
+  const verify = s.indexOf("resolveSignalHandoff(");
+  const anchor = s.indexOf("anchorComposeToSignal(");
+  const referents = s.indexOf("resolveReferents(understood.request");
+  const route = s.indexOf("brainRoute = routeRequest(");
+  assert(verify > 0 && anchor > verify, "verify, then anchor");
+  assert(anchor < referents && anchor < route,
+    "the request must be anchored before lead referents and the router read it");
+  // The id comes from the client's metadata — never a model `resolved_key`.
+  assert(s.includes("resolveSignalHandoff(\n          admin as unknown as SignalLookupDb, workspaceId, actionMetadata?.signal_id)"),
+    "the claimed id is body.metadata.signal_id");
+  // No second, unverified reading of the id anywhere in Pilot.
+  assertEquals(s.split("actionMetadata?.signal_id").length - 1, 1,
+    "Pilot reads the client's signal id in exactly one place, the verified one");
+});
+
+Deno.test("20. the canonical draft carries the VERIFIED signal, not a claimed one", async () => {
+  const s = stripComments(await read("pilot-chat/index.ts"));
+  const create = s.indexOf("createCanonicalContentItem(contentDb");
+  assert(create > 0);
+  const block = s.slice(create - 900, create + 1200);
+  assert(block.includes('signalHandoff.kind === "signal" ? signalHandoff.signal_id : null'),
+    "only a canonical, verified signal becomes source_signal_id");
+  assert(block.includes('source_type: signalId ? "signal" : "idea"'));
+  assert(block.includes("source_signal_id: signalId"));
+  // And the same id reaches Scribe's typed tool input.
+  assert(s.includes("source_signal_id: createdSignalId"));
+  // A handoff always creates: the objective is decided with the handoff.
+  assert(s.includes("contentObjectiveForHandoff(plan.content_objective, signalHandoff)"));
+});
+
+Deno.test("21. a refused signal stops before any draft or model call", async () => {
+  const s = stripComments(await read("pilot-chat/index.ts"));
+  const refused = s.indexOf('signalHandoff.kind === "refused"');
+  assert(refused > 0);
+  const route = s.indexOf("brainRoute = routeRequest(");
+  const create = s.indexOf("createCanonicalContentItem(contentDb");
+  assert(refused < route && refused < create,
+    "an unverified signal must be refused before routing, row creation or delegation");
+  assert(s.slice(refused, refused + 500).includes("return await replyAndReturn("),
+    "the refusal returns — it does not fall through to an idea draft");
 });

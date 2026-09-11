@@ -11,6 +11,26 @@ export function ideaReviewStatus(action: SignalIdeaAction): IdeaReviewStatus {
   return action === "save" ? "saved" : "ignored";
 }
 
+/**
+ * WHICH SIGNAL, AS DATA — sent alongside the command, never inside it.
+ *
+ * The sentence is for the conversation; this is what Pilot acts on. The
+ * signal's real id travels in the action metadata so the draft is created with
+ * `source_type='signal'` and a real `source_signal_id`, verified by the backend
+ * against the workspace. A title in a sentence cannot do that: the model would
+ * have to guess which signal it meant.
+ */
+export function buildTurnIntoMetadata(
+  kind: "post" | "comment",
+  signal: { id: string },
+): Record<string, unknown> {
+  return {
+    intent: "signal_to_content",
+    signal_id: signal.id,
+    content_format: kind === "comment" ? "linkedin_comment" : "linkedin_post",
+  };
+}
+
 /** Draft-only command for turning a signal into a post or comment. */
 export function buildTurnIntoCommand(
   kind: "post" | "comment",

@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { ideaReviewStatus, buildTurnIntoCommand } from "./signalIdeaActions.ts";
+import { ideaReviewStatus, buildTurnIntoCommand, buildTurnIntoMetadata } from "./signalIdeaActions.ts";
 
 Deno.test("Save persists 'saved' review status", () => {
   assertEquals(ideaReviewStatus("save"), "saved");
@@ -22,4 +22,10 @@ Deno.test("no auto-post / auto-send language exists in the command", () => {
   for (const cmd of [post, comment]) {
     assert(!/auto-?post|publish|post it now|auto-?send|send it|auto-?comment/i.test(cmd), cmd);
   }
+});
+
+Deno.test("turn-into metadata carries the signal's real id and the format, as data", () => {
+  const post = buildTurnIntoMetadata("post", { id: "sig-1" });
+  assertEquals(post, { intent: "signal_to_content", signal_id: "sig-1", content_format: "linkedin_post" });
+  assertEquals(buildTurnIntoMetadata("comment", { id: "sig-1" }).content_format, "linkedin_comment");
 });

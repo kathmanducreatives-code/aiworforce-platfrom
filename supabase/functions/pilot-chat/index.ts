@@ -68,6 +68,11 @@ import {
   createCanonicalContentItem, loadContentReference, resolveLatestContentItem,
   buildContentToolInput, type ContentDb, type ContentReference,
 } from "../_shared/contentOperations.ts";
+import {
+  resolveSignalHandoff, anchorComposeToSignal, namesSignal, contentObjectiveForHandoff,
+  contentFormatForHandoff, contentAngleForHandoff, signalHandoffRefusalMessage,
+  type SignalHandoff, type SignalLookupDb,
+} from "../_shared/signalContentHandoff.ts";
 import { bindRoute, type BindingOutcome } from "../_shared/chatBrainBinding.ts";
 import {
   planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
@@ -1760,6 +1765,11 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   let brainRoute: Route | null = null;
   let brainBinding: BindingOutcome | null = null;
   /**
+   * THE SIGNAL A CARD HANDED US, VERIFIED — or `none`. Set once, before routing,
+   * from `body.metadata.signal_id` and the workspace; never from the model.
+   */
+  let signalHandoff: SignalHandoff = { kind: "none" };
+  /**
    * WHICH REAL COMPANIES THIS TURN'S REFERENTS RESOLVED TO.
    *
    * Produced by `resolveReferents` below and read by everything downstream that
@@ -1918,6 +1928,32 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     }, { readEnv: readEnvSafe });
 
     if (understood.ok) {
+      // ══ A SIGNAL THE USER IS LOOKING AT ══════════════════════════════════
+      //
+      // BEFORE referents, BEFORE the router. A signal card's "Turn into post"
+      // carries the signal's id in the action metadata. It is verified against
+      // this workspace here — see `signalContentHandoff.ts` — and a compose
+      // request is then anchored to it, so "this signal" is never resolved
+      // against lead referents, never read as "regenerate the newest draft",
+      // and never routed to outreach.
+      //
+      // Only a compose request is anchored or refused. The metadata on any
+      // other request is ignored exactly as it was before.
+      if (understood.request.parts.some((p) => p.objective === "compose")) {
+        signalHandoff = await resolveSignalHandoff(
+          admin as unknown as SignalLookupDb, workspaceId, actionMetadata?.signal_id);
+        if (signalHandoff.kind === "refused") {
+          console.warn("[pilot-chat][signal-handoff] refused", {
+            reason: signalHandoff.reason, workspace_id: workspaceId,
+          });
+          return await replyAndReturn(signalHandoffRefusalMessage(signalHandoff.reason), {
+            followup: "signal_handoff_refused", reason: signalHandoff.reason,
+            chat_brain: { route: "compose", kind: "content", served: false },
+          });
+        }
+        understood.request = anchorComposeToSignal(understood.request, signalHandoff);
+      }
+
       // ══ PHASE E — WHICH REAL ENTITY THE REQUEST POINTS AT ═══════════════
       //
       // BEFORE THE ROUTER, AND THEREFORE BEFORE ANY SPEND. A reference that
@@ -1961,16 +1997,11 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // workspace's content, in `resolveLatestContentItem`, scoped and typed.
       // So the lead-shaped clarification is skipped for exactly that case —
       // and for nothing else: every other route still asks before guessing.
+      // (A signal handed over by a card is not a referent at all by this point:
+      // `anchorComposeToSignal` above has already turned it into a named one.)
       const contentPlanForReferent = planCompose(understood.request);
-      // A CLIENT-SUPPLIED SIGNAL IS ALREADY RESOLVED. "Turn this signal into a
-      // post" pressed on a signal card carries the id in the action metadata,
-      // so there is no conversational referent to ask about — and asking
-      // "which company do you mean?" about a signal the user is looking at is
-      // the same wrong question in a different costume.
-      const clientNamedSignal = typeof actionMetadata?.signal_id === "string"
-        && actionMetadata.signal_id.length > 0;
       const referentBelongsToContent = contentPlanForReferent?.kind === "content"
-        && (contentPlanForReferent.targets_existing_content || clientNamedSignal);
+        && contentPlanForReferent.targets_existing_content;
 
       if (resolution.failures.length > 0 && !referentBelongsToContent) {
         // ── ASK, NEVER GUESS ─────────────────────────────────────────────
@@ -2723,7 +2754,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // workspace, the source identity, the permissions and the spend; the
         // model owns only what the user meant.
         const contentDb = admin as unknown as ContentDb;
-        const objective = plan.content_objective ?? "create";
+        // A handed-over signal always makes ITS draft: there is no draft of it
+        // to regenerate or illustrate, and the newest one is unrelated work.
+        const objective = contentObjectiveForHandoff(plan.content_objective, signalHandoff);
 
         // ── WHICH DRAFT? ──────────────────────────────────────────────────
         //
@@ -2750,47 +2783,29 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         if (objective === "create") {
           // ── WHICH SIGNAL, IF ANY ────────────────────────────────────────
           //
-          // From the CLIENT's action metadata, never from the model. The
-          // surface that displayed the signal knows its id; the model would be
-          // guessing, and `source_signal_id` is a real foreign key used for
-          // attribution — a wrong one is worse than none.
-          //
-          // VERIFIED AGAINST THE WORKSPACE before it is trusted. It arrives
-          // from the browser, and this path holds the service role, so an
-          // unscoped id would let a forged one attach another tenant's signal.
-          let signalId: string | null = null;
-          let signalTitle: string | null = null;
-          const claimed = typeof actionMetadata?.signal_id === "string"
-            ? actionMetadata.signal_id : null;
-          if (claimed) {
-            const { data: sig } = await admin
-              .from("signal_events")
-              .select("id, title")
-              .eq("id", claimed)
-              .eq("workspace_id", workspaceId)
-              .maybeSingle();
-            if (sig) {
-              signalId = (sig as { id: string }).id;
-              signalTitle = (sig as { title?: string | null }).title ?? null;
-            } else {
-              // Named but not ours. The draft is still worth making; it is an
-              // idea, and saying so is more honest than attaching nothing while
-              // claiming a signal source.
-              console.warn("[pilot-chat][content] signal_id not in workspace", { claimed });
-            }
-          }
+          // The handoff verified before routing: from the CLIENT's metadata,
+          // scoped to this workspace, never from the model. Only a canonical
+          // signal has a row `source_signal_id` can reference; a legacy-only
+          // one is drafted as an idea about it, with its title as the subject.
+          const signalId = signalHandoff.kind === "signal" ? signalHandoff.signal_id : null;
+          const signalTitle = namesSignal(signalHandoff) ? signalHandoff.title : null;
+          const angle = contentAngleForHandoff(message, actionMetadata, signalHandoff);
 
           const created = await createCanonicalContentItem(contentDb, {
             objective: "create",
             workspace_id: workspaceId,
             // Only the two formats Content actually supports. A comment is a
-            // reply to someone else's post; with no post referenced, this is a
-            // post of our own.
-            format: "linkedin_post",
+            // reply to someone else's post, so it is made only when a signal
+            // card asked for one; otherwise this is a post of our own.
+            format: contentFormatForHandoff(actionMetadata, signalHandoff),
             source_type: signalId ? "signal" : "idea",
             source_signal_id: signalId,
             source_signal_title: signalTitle,
-            idea: message,
+            // A legacy signal has no FK, so its title IS the idea — never the
+            // card's own generated sentence.
+            idea: signalHandoff.kind === "legacy_unlinked"
+              ? [signalTitle, angle].filter(Boolean).join(" — ") || message
+              : angle,
             created_by: null,
           });
           if (!created.ok || !created.reference) {
@@ -2885,6 +2900,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               content_item_id: target!.content_item_id,
               content_type: target!.content_type,
               objective,
+              // WHAT THE HANDOFF RESOLVED TO, recorded rather than implied: a
+              // linked signal, a legacy one drafted without a link, or none.
+              signal_link: signalHandoff.kind,
+              source_signal_id: createdSignalId,
             },
           } as unknown as ToolInput,
           modelUsed: "chat-brain", providerUsed: "openai",
