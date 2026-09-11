@@ -115,6 +115,11 @@ FILTERS narrow a population: industry, business_model, geography, employee_count
 OUTPUT shape: records (a list of entities), events (signal activity), answer (prose), artifact (content).
 count is the number they asked for, or null if they named none. Never invent a number.
 
+medium  What they want produced. "text" for anything written - a post, a comment, a rewrite.
+        "image" ONLY when they ask for a picture, image, visual, graphic or illustration
+        ("make an image for that post", "add a visual"). Text is the default; an image
+        costs more, so say image only when they actually asked for one.
+
 AMBIGUITY: anything you could not settle.
 blocking = true when acting on the wrong reading could target the wrong entity or spend money wrongly - an unresolved "them", "that one", "the second company". Refusing to guess is correct; guessing is not.
 blocking = false when the vagueness only makes a result set wider or narrower.
@@ -227,11 +232,12 @@ const RESPONSE_SCHEMA = {
             },
             output: {
               type: "object", additionalProperties: false,
-              required: ["shape", "count", "completeness"],
+              required: ["shape", "count", "completeness", "medium"],
               properties: {
                 shape: { type: "string", enum: ["records", "events", "answer", "artifact"] },
                 count: { type: ["number", "null"] },
                 completeness: { type: "string", enum: ["sample", "all"] },
+                medium: { type: "string", enum: ["text", "image"] },
               },
             },
             depends_on: strList,

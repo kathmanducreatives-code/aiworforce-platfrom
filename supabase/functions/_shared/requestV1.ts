@@ -273,6 +273,23 @@ export interface RequestOutput {
    * for a page of held rows.
    */
   completeness?: "sample" | "all";
+  /**
+   * TEXT OR A PICTURE.
+   *
+   * `shape: "artifact"` says the user wants content produced; it cannot say
+   * WHICH MEDIUM, so "make an image for that post" and "rewrite that post"
+   * arrived identical. Content can now generate both, at different cost, from
+   * different providers — so the difference had to become expressible, and the
+   * only honest place is the layer that reads the user's sentence.
+   *
+   * Deriving it from keywords further down was the alternative, and it is the
+   * thing the objective router exists to stop: a regex over the raw message,
+   * re-guessing an intent the semantic layer had already been asked for.
+   *
+   * OPTIONAL, defaulting to "text". Every request that predates this field
+   * means text, and no lead path reads it at all.
+   */
+  medium?: "text" | "image";
 }
 
 /**

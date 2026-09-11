@@ -1351,16 +1351,31 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
         related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
       }
     : {};
-  await ctx.admin.from("saved_outputs").insert({
-    workspace_id: ctx.workspace_id,
-    conversation_id: ctx.conversation_id ?? null,
-    plan_id: ctx.plan_id ?? null,
-    task_id: ctx.task_id ?? null,
-    type: "content_draft",
-    title: cleaned.title,
-    body: cleaned.body,
-    raw: cleaned.structured ? { ...raw, structured: cleaned.structured } : raw,
-  });
+  // ── ONE DRAFT, ONE ROW ───────────────────────────────────────────────────
+  //
+  // This insert used to be unconditional. When the run also filled a
+  // `content_item` — which is every run the Content surface and Pilot now start
+  // — the workspace got TWO records of one draft, and the Content page merges
+  // `content_item` rows with content-shaped `saved_outputs` rows into a single
+  // list. Measured in production: 2 canonical items, 3 `content_draft` rows,
+  // titles mirroring each other. The user saw the same post twice — once
+  // editable, once read-only — and had no way to tell which was real.
+  //
+  // So the canonical object wins when it exists. `saved_outputs` remains the
+  // landing place ONLY for runs that produce content with no item to fill,
+  // which is what an append-only record of a run's output is for.
+  if (!cl?.content_item_id) {
+    await ctx.admin.from("saved_outputs").insert({
+      workspace_id: ctx.workspace_id,
+      conversation_id: ctx.conversation_id ?? null,
+      plan_id: ctx.plan_id ?? null,
+      task_id: ctx.task_id ?? null,
+      type: "content_draft",
+      title: cleaned.title,
+      body: cleaned.body,
+      raw: cleaned.structured ? { ...raw, structured: cleaned.structured } : raw,
+    });
+  }
 
   // ── AND INTO THE OBJECT THE USER CAN ACTUALLY OPEN ───────────────────────
   //

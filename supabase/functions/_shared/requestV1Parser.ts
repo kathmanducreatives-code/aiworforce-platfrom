@@ -167,6 +167,10 @@ function readOutput(
     // ABSENT MEANS `sample` — the bounded page every read returned before this
     // field existed. Only an explicit "all" widens anything.
     completeness: str(o.completeness) === "all" ? "all" : "sample",
+    // ABSENT MEANS TEXT. An image is the expensive, explicit case, so it is the
+    // one that must be stated — defaulting the other way would let a malformed
+    // or older payload buy a picture nobody asked for.
+    medium: str(o.medium) === "image" ? "image" : "text",
   };
 }
 

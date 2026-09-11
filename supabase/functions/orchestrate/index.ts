@@ -4,6 +4,9 @@
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createCanonicalContentItem, type ContentDb,
+} from "../_shared/contentOperations.ts";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission } from "../_shared/qualifiedLeadRouting.ts";
 import { invokeInBackground, describeFailure } from "../_shared/backgroundInvoke.ts";
 import {
@@ -660,9 +663,32 @@ Deno.serve(async (req) => {
     // workspaces that have deliberately not adopted the compiler — there it is
     // the intended behaviour, not error recovery.
     const orchestrateIntelligence = getLeadIntelligenceCapabilities(workspace_id);
+
+    // ── A CONTENT REQUEST HAS NO LEAD MISSION, AND NEEDS NONE ───────────────
+    //
+    // The gate below refuses any request that arrives without a compiled
+    // `LeadMissionV1`. That is right for lead work — run-agent must never spend
+    // on sourcing without one — but it was applied to EVERY request, and a
+    // Scribe draft is not lead work: it reaches no sourcing provider, buys no
+    // contacts and has no target population to compile.
+    //
+    // Live, on the first Pilot content canary: Pilot created the canonical
+    // draft, called orchestrate, and got `mission_not_compiled` 422. The user's
+    // post never got written because a lead safety check asked a content
+    // request for a lead mission it could not have.
+    //
+    // NARROW ON PURPOSE. Only `content_creation`, which plans exactly one
+    // Scribe step and no provider calls. `content_engagement_loop` also
+    // searches LinkedIn, so it keeps the gate.
+    const isPureContentRequest = tool_input?.intent === "content_creation";
+
     let lead_mission: unknown;
     if (isLeadMissionV1(suppliedMission)) {
       lead_mission = suppliedMission;
+    } else if (isPureContentRequest) {
+      // No mission, and no substitute invented for one. Nothing downstream may
+      // read this as authority to source.
+      lead_mission = null;
     } else if (orchestrateIntelligence.mode === "new_architecture") {
       console.error("[orchestrate][mission-not-compiled]", {
         workspace_id,
@@ -872,6 +898,32 @@ Deno.serve(async (req) => {
           success_criteria: "Draft produced; grounded; nothing auto-posted.",
           planner_source: "fallback",
         });
+      // ── THE LAST SHADOW DISPATCH ──────────────────────────────────────
+      //
+      // This `content_loop` carried no `content_item_id`, so the post Scribe
+      // wrote here landed in `saved_outputs` and never became a draft the user
+      // could open, edit, version, approve or illustrate. It is the same defect
+      // Pilot had, in the one remaining place that still produces content
+      // without going through the canonical row.
+      //
+      // The row is created FIRST, exactly as everywhere else, so a failed
+      // generation leaves a retryable draft rather than nothing. A failure to
+      // create it is not fatal to the loop — the engagement search is still
+      // worth running — so the step degrades to the old behaviour rather than
+      // taking the plan down.
+      const loopContent = await createCanonicalContentItem(
+        admin as unknown as ContentDb,
+        {
+          objective: "create",
+          workspace_id,
+          format: "linkedin_post",
+          source_type: "idea",
+          idea: topic,
+        },
+      );
+      if (!loopContent.ok) {
+        console.warn("[orchestrate][content-loop] canonical item not created", loopContent.error);
+      }
       (scribePost as Step & { metadata?: Record<string, unknown> }).metadata = {
         tool_input: {
           ...tool_input,
@@ -883,6 +935,9 @@ Deno.serve(async (req) => {
             angle: loopPlan.post_brief.angle,
             engagement_queries: loopPlan.engagement_queries,
             competitor_related: isCompetitor,
+            // The field that makes the result canonical. Absent when the row
+            // could not be created, which keeps the old path as the fallback.
+            content_item_id: loopContent.reference?.content_item_id ?? undefined,
           },
         },
       };

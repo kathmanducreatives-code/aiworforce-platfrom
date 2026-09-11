@@ -64,6 +64,10 @@ import {
   conversationFact, workspaceFact,
 } from "../_shared/groundedFacts.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
+import {
+  createCanonicalContentItem, loadContentReference, resolveLatestContentItem,
+  buildContentToolInput, type ContentDb, type ContentReference,
+} from "../_shared/contentOperations.ts";
 import { bindRoute, type BindingOutcome } from "../_shared/chatBrainBinding.ts";
 import {
   planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
@@ -1941,7 +1945,27 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // here so every surface downstream reports it the same way.
       partialReferents = resolution.partial.flatMap((x) => x.labels);
 
-      if (resolution.failures.length > 0) {
+      // ── A CONTENT REFERENT IS NOT A COMPANY REFERENT ───────────────────
+      //
+      // `resolveReferents` resolves a back-reference against LEAD prior results
+      // — companies we listed in this conversation — because until Content had
+      // persisted objects, that was the only thing "that one" could mean.
+      //
+      // Live, on the image canary: "Generate an image for that post." returned
+      // "I don't have an earlier result to point back to — which company do you
+      // mean?" The post existed, in `content_item`, written by Pilot ninety
+      // seconds earlier. The question was unanswerable because it was the wrong
+      // question.
+      //
+      // A compose-content request resolves its own referent against the
+      // workspace's content, in `resolveLatestContentItem`, scoped and typed.
+      // So the lead-shaped clarification is skipped for exactly that case —
+      // and for nothing else: every other route still asks before guessing.
+      const contentPlanForReferent = planCompose(understood.request);
+      const referentBelongsToContent = contentPlanForReferent?.kind === "content"
+        && contentPlanForReferent.targets_existing_content;
+
+      if (resolution.failures.length > 0 && !referentBelongsToContent) {
         // ── ASK, NEVER GUESS ─────────────────────────────────────────────
         //
         // Two prior companies and "check them" is a genuine ambiguity, and the
@@ -1993,7 +2017,31 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       composeIntentForFollowUp = planCompose(understood.request)?.kind ?? null;
       brainConfidence = understood.request.confidence;
 
-      brainRoute = routeRequest(understood.request, {
+      // ── "WHICH POST?" IS ANSWERABLE, SO IT IS NOT BLOCKING ─────────────
+      //
+      // The router stops on a blocking ambiguity before any surface is chosen,
+      // which is right: acting on the wrong reading can spend money on the
+      // wrong entity. But Chat Brain marks `subject.references` blocking for
+      // "that post" too, and the Content surface CAN answer it — deterministic,
+      // scoped to the workspace, newest first, in `resolveLatestContentItem`.
+      //
+      // Live: after Pilot wrote a post, "Generate an image for that post."
+      // returned "Which post should the image be generated for?" — about the
+      // only post in the workspace, which Pilot had written ninety seconds
+      // earlier.
+      //
+      // Narrow to the reference ambiguity on a compose-CONTENT request. Every
+      // other ambiguity, on every other route, still blocks; and the reply
+      // names the draft it resolved to, so a wrong guess is visible at once.
+      const requestForRouting = referentBelongsToContent
+        ? {
+          ...understood.request,
+          ambiguity: understood.request.ambiguity.filter(
+            (a) => !(a.blocking && String(a.field ?? "").startsWith("subject.references"))),
+        }
+        : understood.request;
+
+      brainRoute = routeRequest(requestForRouting, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
         spendAllowed: true,
@@ -2647,22 +2695,151 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           });
         }
 
-        // CONTENT: no recipient, no approval gate, no sourcing tools.
+        // ══ CONTENT: THE CANONICAL OBJECT, NOT A CHAT-ONLY DRAFT ═══════════
+        //
+        // ── WHAT THIS REPLACES ────────────────────────────────────────────
+        //
+        // This branch used to hand `instruction: message` — the user's raw
+        // sentence — to orchestrate, which built its own English prompt and a
+        // `content_loop` with NO `content_item_id`. `writeScribeContent` fills
+        // a `content_item` only when it receives one, so every draft that
+        // started in chat landed in `saved_outputs` and nowhere else.
+        //
+        // `saved_outputs` has no status and no version child. That is why the
+        // Content page renders those rows read-only, and why a user could not
+        // edit, approve, version or illustrate anything Pilot wrote for them.
+        // The "Pilot draft vs Content-page draft" split was never two features
+        // — it was one feature with a missing row.
+        //
+        // Now Pilot creates the SAME row the Content page creates, hands Scribe
+        // the id, and returns references to what was persisted. Code owns the
+        // workspace, the source identity, the permissions and the spend; the
+        // model owns only what the user meant.
+        const contentDb = admin as unknown as ContentDb;
+        const objective = plan.content_objective ?? "create";
+
+        // ── WHICH DRAFT? ──────────────────────────────────────────────────
+        //
+        // Only for objectives that act on one. A failure to resolve is
+        // REPORTED, never repaired by creating a new draft — "regenerate that
+        // post" answered with a brand-new post is how a user ends up with two
+        // and trusts neither.
+        let target: ContentReference | null = null;
+        if (objective !== "create") {
+          const found = await resolveLatestContentItem(contentDb, workspaceId);
+          if (!found.ok || !found.reference) {
+            return await replyAndReturn(
+              "I don't have a content draft saved in this workspace yet. Ask me to write one first — for example \"write a LinkedIn post about why AI workforces beat disconnected tools\" — and I'll keep it so you can regenerate it or add an image next.",
+              {
+                followup: "no_content", reason: "content_reference_unresolved",
+                chat_brain: { route: "compose", kind: "content", objective, served: false },
+              });
+          }
+          target = found.reference;
+        }
+
+        // ── THE ROW, BEFORE THE MODEL ─────────────────────────────────────
+        if (objective === "create") {
+          const created = await createCanonicalContentItem(contentDb, {
+            objective: "create",
+            workspace_id: workspaceId,
+            // Only the two formats Content actually supports. A comment is a
+            // reply to someone else's post; with no post referenced, this is a
+            // post of our own.
+            format: "linkedin_post",
+            source_type: "idea",
+            idea: message,
+            created_by: null,
+          });
+          if (!created.ok || !created.reference) {
+            return await replyAndReturn(
+              "I couldn't create that draft. Nothing was generated and nothing was charged — try again and I'll keep the draft this time.",
+              {
+                followup: "content_create_failed", reason: created.error,
+                chat_brain: { route: "compose", kind: "content", objective, served: false },
+              });
+          }
+          target = created.reference;
+        }
+
+        // ── AN IMAGE IS A DIFFERENT ENDPOINT AND A DIFFERENT SPEND ────────
+        //
+        // `generate-content-image` owns the provider, the ceiling and the
+        // ledger. Pilot asks it; it does not reimplement any of the three.
+        if (objective === "generate_image" && target) {
+          const imgRes = await fetch(`${SUPABASE_URL}/functions/v1/generate-content-image`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+            },
+            body: JSON.stringify({
+              workspace_id: workspaceId, content_item_id: target.content_item_id,
+            }),
+          });
+          const imgBody = await imgRes.json().catch(() => ({}));
+          if (!imgRes.ok || imgBody?.ok !== true) {
+            // THE SERVER'S OWN REASON. A spend-ceiling refusal and a provider
+            // failure are different facts and the user is told which.
+            const detail = String(imgBody?.detail ?? imgBody?.error ?? "unknown");
+            return await replyAndReturn(
+              `I couldn't generate the image: ${detail}. The post itself is untouched.`,
+              {
+                followup: "content_image_failed", reason: detail,
+                content_item_id: target.content_item_id,
+                chat_brain: { route: "compose", kind: "content", objective, served: false },
+              });
+          }
+          const after = await loadContentReference(contentDb, workspaceId, target.content_item_id);
+          const ref = after.reference ?? target;
+          return await replyAndReturn(
+            `Done — I generated an image for "${ref.title ?? "your draft"}". It's on the draft in Content, and the text is unchanged.`,
+            {
+              // REFERENCES TO PERSISTED ROWS, never a reconstruction of the
+              // result from a model message. Supabase is the source of truth.
+              content_result: {
+                content_item_id: ref.content_item_id,
+                current_version_id: ref.current_version_id,
+                content_type: ref.content_type,
+                status: ref.status,
+                asset_id: String(imgBody.asset_id ?? ref.current_asset_id ?? ""),
+                objective,
+              },
+              chat_brain: { route: "compose", kind: "content", objective, served: true },
+            });
+        }
+
+        // ── TEXT: SCRIBE FILLS THE DRAFT THAT ALREADY EXISTS ──────────────
+        //
+        // The typed tool input carries `content_item_id`, which is the entire
+        // mechanism by which the result is canonical. The instruction is the
+        // brief STORED ON THE ROW, so a regeneration answers the same question
+        // the first draft answered.
         return await delegateToOrchestrate({
           admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
           conversationId, workspaceId,
-          instruction: message,
+          instruction: target!.brief,
           missionOrigin: "chat_brain_compose_content",
           toolInput: {
             intent: "content_creation",
             tool_name: null, selected_actor_key: null, source_type: null,
             query: message, role_keywords: [], location: null,
-            max_results: plan.count ?? 1,
+            max_results: 1,
             needs_enrichment: false, needs_outreach: false,
             execution_mode: "fast",
             confidence: understood.request.confidence,
             missing_fields: [],
-            reason: "chat brain: content with no recipient",
+            reason: `chat brain: content ${objective}`,
+            ...buildContentToolInput({
+              reference: target!,
+              objective: objective === "regenerate_text" ? "regenerate_text" : "create",
+              topic: target!.title,
+            }),
+            content_result: {
+              content_item_id: target!.content_item_id,
+              content_type: target!.content_type,
+              objective,
+            },
           } as unknown as ToolInput,
           modelUsed: "chat-brain", providerUsed: "openai",
         });

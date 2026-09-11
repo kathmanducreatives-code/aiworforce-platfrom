@@ -53,8 +53,39 @@ Deno.test("1. writing aimed at people is outreach", () => {
   assertEquals(
     planCompose(compose("content", [{ kind: "saved_set", value: "my leads" }]))!.kind,
     "outreach");
+  // A `saved_set` names a collection of entities — people to write to — so it
+  // decides outreach on its own, whatever the subject says.
   assertEquals(
-    planCompose(compose("content", [{ kind: "prior_result", value: "the top 5" }]))!.kind,
+    planCompose(compose("company", [{ kind: "prior_result", value: "the top 5" }]))!.kind,
+    "outreach");
+});
+
+Deno.test("1b. a back-reference to CONTENT is not a reference to leads", () => {
+  // ── WHY THIS ASSERTION CHANGED ─────────────────────────────────────────
+  //
+  // This used to read `compose("content", [prior_result])` -> outreach, on the
+  // reasoning that any back-reference points at leads. That was true when
+  // Content had no persisted objects: there was nothing else a `prior_result`
+  // could mean.
+  //
+  // Content drafts are now rows with versions and assets, and "regenerate that
+  // post" is exactly a compose part whose subject is content and whose
+  // reference points back at one. Under the old rule it routed to OUTREACH —
+  // so Pilot answered a request to rewrite a post with "I don't have any leads
+  // saved in this conversation to write to yet."
+  //
+  // The subject settles the ambiguous case. `saved_set` and a person subject
+  // still mean outreach, so nothing that was approval-gated stopped being so.
+  assertEquals(
+    planCompose(compose("content", [{ kind: "prior_result", value: "that post" }]))!.kind,
+    "content");
+  assertEquals(
+    planCompose(compose("content", [{ kind: "prior_result", value: "that post" }]))!
+      .content_objective,
+    "regenerate_text");
+  // The collection form is untouched: still outreach, still gated.
+  assertEquals(
+    planCompose(compose("content", [{ kind: "saved_set", value: "my leads" }]))!.kind,
     "outreach");
 });
 
