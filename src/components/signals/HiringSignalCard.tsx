@@ -4,6 +4,7 @@
 // appears when the backend gate allows it (verified contact-grade + decision maker).
 import { Building2, ExternalLink, MapPin, CalendarDays } from "lucide-react";
 import { hiringCardVM, DECISION_LABEL, type RawSignal } from "@/lib/radarCardPresenter";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 const DECISION_STYLE: Record<string, string> = {
   contact: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
@@ -20,7 +21,7 @@ const FAMILY_STYLE: Record<string, string> = {
 export default function HiringSignalCard({ signal }: { signal: RawSignal }) {
   const vm = hiringCardVM(signal);
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {/* Exact role is never buried — it leads the card. */}
@@ -50,7 +51,7 @@ export default function HiringSignalCard({ signal }: { signal: RawSignal }) {
           <span className="text-[12px] text-amber-300">Verify source — no job URL yet</span>
         )}
         {vm.can_draft_outreach ? (
-          <button className="ml-auto text-[12px] font-semibold px-2.5 py-1 rounded-md border border-border bg-background/50 hover:bg-muted/40">Draft outreach</button>
+          <button className="ml-auto text-[12px] font-medium px-2.5 py-1 rounded-md border border-primary/35 bg-primary/[0.1] text-primary transition-colors hover:border-primary/50 hover:bg-primary/[0.16]">Draft outreach</button>
         ) : (
           <span className="ml-auto text-[11px] text-muted-foreground">Outreach available after verification</span>
         )}

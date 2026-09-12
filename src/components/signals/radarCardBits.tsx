@@ -37,7 +37,7 @@ export function RadarActionBar({ state, onAction }: { state: SignalActionState; 
         <button
           key={a}
           onClick={() => onAction?.(a)}
-          className={`text-[12px] font-semibold px-2.5 py-1 rounded-md border transition ${a === "draft_outreach" ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20" : "border-border bg-background/50 text-foreground/90 hover:bg-muted/40"}`}
+          className={`text-[12px] font-medium px-2.5 py-1 rounded-md border transition-colors ${a === "draft_outreach" ? "border-primary/35 bg-primary/[0.1] text-primary hover:bg-primary/[0.16] hover:border-primary/50" : "border-white/10 bg-white/[0.02] text-foreground/85 hover:border-white/20 hover:bg-white/[0.05] hover:text-foreground"}`}
         >
           {ACTION_LABEL[a]}
         </button>

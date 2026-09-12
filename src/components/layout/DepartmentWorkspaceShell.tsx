@@ -9,6 +9,7 @@
 import { type ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { METRIC_LABEL, METRIC_STRIP, METRIC_VALUE, PRIMARY_ACTION, SECONDARY_ACTION } from '@/components/layout/workspaceStyles';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { MessageSquare } from 'lucide-react';
 
@@ -103,7 +104,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
             {/* Agent chip + actions */}
             <div className="flex shrink-0 flex-col items-end gap-2">
               <div
-                className="flex items-center gap-2.5 rounded-xl border bg-card/30 px-2.5 py-1.5"
+                className="flex items-center gap-2.5 rounded-xl border bg-[rgba(12,16,15,0.6)] px-2.5 py-1.5 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.9)] backdrop-blur-xl"
                 style={{ borderColor: `${accent}26` }}
               >
                 <div
@@ -153,7 +154,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                     <button
                       onClick={secondaryAction.onClick}
                       disabled={secondaryAction.disabled || secondaryAction.loading}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-card/25 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-all hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.97]"
+                      className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12.5px] transition-all duration-200', SECONDARY_ACTION)}
                     >
                       {secondaryAction.icon}
                       {secondaryAction.label}
@@ -163,12 +164,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                     <button
                       onClick={primaryAction.onClick}
                       disabled={primaryAction.disabled || primaryAction.loading}
-                      style={{
-                        background: `${accent}1F`,
-                        borderColor: `${accent}55`,
-                        color: accent,
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.97]"
+                      className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-3.5 text-[12.5px] transition-all duration-200', PRIMARY_ACTION)}
                     >
                       {primaryAction.icon}
                       {primaryAction.label}
@@ -181,11 +177,14 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
 
           {/* Metric strip */}
           {metrics.length > 0 && (
-            <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-white/[0.06] bg-card/25 px-4 py-3">
+            <div className={cn('mb-5', METRIC_STRIP)}>
               {metrics.map((m, i) => (
-                <div key={m.label + i} className="flex items-baseline gap-1.5">
-                  <span className="text-[18px] font-semibold tabular-nums text-foreground">{m.value}</span>
-                  <span className="text-[12px] uppercase tracking-wide text-muted-foreground/70">{m.label}</span>
+                <div
+                  key={m.label + i}
+                  className={cn('flex min-w-0 flex-1 flex-col justify-center gap-1.5 px-4 py-3', i !== 0 && 'border-l border-white/[0.05]')}
+                >
+                  <span className={cn(METRIC_LABEL, 'truncate')}>{m.label}</span>
+                  <span className={METRIC_VALUE}>{m.value}</span>
                 </div>
               ))}
             </div>
@@ -196,7 +195,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
             <nav
               role="tablist"
               aria-label="Department views"
-              className="mb-3 flex gap-0.5 border-b border-border/15"
+              className="mb-3 flex gap-0.5 border-b border-white/[0.06]"
             >
               {tabs.map((t) => {
                 const isActive = t.id === activeTab;
@@ -227,7 +226,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                       <motion.div
                         layoutId="dept-tab-underline"
                         className="absolute inset-x-2 -bottom-px h-[2px] rounded-full motion-reduce:transition-none"
-                        style={{ background: `${accent}CC` }}
+                        style={{ background: `${accent}CC`, boxShadow: `0 0 12px ${accent}80` }}
                         transition={{ duration: 0.18, ease: 'easeOut' }}
                       />
                     )}

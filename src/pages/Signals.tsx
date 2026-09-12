@@ -18,6 +18,7 @@ import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { deriveRadarBrief, type BriefSignal } from '@/lib/radarBrief';
 import { resolveAgent } from '@/lib/agentResolver';
 import { getDeptTheme } from '@/lib/departmentTheme';
+import { AmbientBackdrop } from '@/components/layout/AmbientBackdrop';
 import type { FeedSignal } from '@/lib/signalFeedModel';
 import { toast } from 'sonner';
 
@@ -141,6 +142,7 @@ export default function Signals() {
 
   return (
     <>
+      <AmbientBackdrop variant="signals" />
       <DepartmentWorkspaceShell
         eyebrow="Growth · Signals"
         title="Company Brain Radar"

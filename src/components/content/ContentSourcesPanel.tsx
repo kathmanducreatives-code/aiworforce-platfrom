@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Plus, Info, Search, Archive } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ACCENT, ROW_IDLE, ROW_SELECTED } from "@/components/content/studioStyles";
+import { GLASS_CARD, GLASS_RAISED } from "@/components/layout/workspaceStyles";
 import type { ContentItem } from "@/lib/content/contentItems";
 import {
   CONTENT_TYPE_LABEL, STATUS_LABEL, describeContentSource, sourceCardOf, type SourceSignalLike,
@@ -105,7 +106,7 @@ export default function ContentSourcesPanel({
           <div className="space-y-2">
             {nav === "ideas" && (
               <button onClick={onNewIdea}
-                className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.03]">
+                className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/[0.09] bg-[rgba(10,13,12,0.45)] px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.03]">
                 <Plus className="h-3.5 w-3.5" /> Start from your own idea
               </button>
             )}
@@ -153,9 +154,7 @@ export default function ContentSourcesPanel({
 function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLike; selected: boolean; onSelect: () => void }) {
   const c = sourceCardOf(signal);
   return (
-    <div className={`group rounded-xl border px-3.5 py-3 transition-colors ${
-      selected ? ROW_SELECTED : "border-white/[0.05] bg-white/[0.02] hover:border-white/10 hover:bg-emerald-500/[0.03]"
-    }`}>
+    <div className={`group rounded-xl px-3.5 py-3 ${selected ? `border transition-colors ${ROW_SELECTED}` : GLASS_CARD}`}>
       <button onClick={onSelect} className="block w-full text-left" aria-pressed={selected}>
         <p className="line-clamp-2 text-[13.5px] font-medium leading-snug text-foreground/95">{c.title}</p>
         <p className="mt-1 truncate text-[11.5px] text-muted-foreground/60">
@@ -173,7 +172,7 @@ function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLi
                 <Info className="h-3 w-3" /> Why this?
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 border-white/[0.08] bg-[#0a0a0a]/90 text-[12.5px] backdrop-blur-xl">
+            <PopoverContent align="start" className={`w-72 text-[12.5px] ${GLASS_RAISED}`}>
               <ul className="space-y-1.5 text-muted-foreground">
                 {c.why.map((w, i) => <li key={i}>{w}</li>)}
               </ul>

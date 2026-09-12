@@ -49,7 +49,7 @@ export default function ScribePanel({
 
   if (collapsed) {
     return (
-      <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-2 border-l border-white/[0.06] bg-[#050505]/80 py-4 backdrop-blur-xl">
+      <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-2 border-l border-white/[0.06] bg-[rgba(8,11,10,0.62)] py-4 backdrop-blur-2xl">
         <button onClick={onToggle} aria-label="Open Scribe panel" title="Open Scribe"
           className="rounded-lg p-2 text-muted-foreground/70 hover:bg-white/[0.05] hover:text-foreground">
           <PanelRightOpen className="h-4 w-4" />
@@ -77,7 +77,7 @@ export default function ScribePanel({
   };
 
   return (
-    <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl" aria-label="Scribe panel">
+    <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/[0.06] bg-[rgba(8,11,10,0.62)] backdrop-blur-2xl" aria-label="Scribe panel">
       {/* identity + tabs */}
       <div className="flex items-center gap-3 px-4 pb-3 pt-4">
         <img src={scribeImg} alt="" className="h-8 w-8 rounded-full border border-emerald-500/25 object-cover" />

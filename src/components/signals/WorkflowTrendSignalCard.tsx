@@ -3,12 +3,13 @@
 import { trendCardVM, type RawSignal } from "@/lib/radarCardPresenter";
 import { DecisionBadge, RadarActionBar, actionStateFromRaw } from "./radarCardBits";
 import { ExternalLink } from "lucide-react";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 export default function WorkflowTrendSignalCard({ signal }: { signal: RawSignal }) {
   const vm = trendCardVM(signal);
   const state = actionStateFromRaw({ decision: vm.decision, raw: signal.raw ?? {}, hasCompany: false, hasEvidence: vm.evidence_urls.length > 0 });
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold text-foreground">{vm.workflow ?? "Workflow trend"}</p>

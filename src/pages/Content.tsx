@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, PanelLeft, FileText, Sparkles } from 'lucide-react';
+import { Plus, PanelLeft, FileText, Sparkles, PenLine } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useContentItems } from '@/hooks/useContentItems';
@@ -46,6 +46,8 @@ import ContentSourcesPanel, { type SourceNav, type CommentSource } from '@/compo
 import ScribePanel from '@/components/content/ScribePanel';
 import SourcePreview from '@/components/content/SourcePreview';
 import { ACCENT, PRIMARY_BUTTON, SECONDARY_BUTTON } from '@/components/content/studioStyles';
+import { AmbientBackdrop } from '@/components/layout/AmbientBackdrop';
+import { METRIC_LABEL } from '@/components/layout/workspaceStyles';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
 
 const dispatch = (text: string) =>
@@ -333,15 +335,16 @@ export default function Content() {
   // ---- render ----------------------------------------------------------------
 
   return (
-    <div className="flex h-[calc(100vh-49px)] min-h-[560px] flex-col overflow-hidden">
+    <div className="relative flex h-[calc(100vh-49px)] min-h-[560px] flex-col overflow-hidden">
+      <AmbientBackdrop variant="content" />
       {/* ── header: compact ─────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-[#050505]/40 px-5 py-4 backdrop-blur-xl lg:px-7">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-[rgba(5,7,6,0.35)] px-5 py-4 backdrop-blur-xl lg:px-7">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Content</h1>
           <p className="mt-0.5 truncate text-[13px] text-muted-foreground/70">Create and refine content with Scribe.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <dl className="hidden items-center gap-4 rounded-lg border border-white/[0.06] bg-card/25 px-3.5 py-1.5 text-[12px] text-muted-foreground/65 md:flex">
+          <dl className="hidden items-stretch overflow-hidden rounded-xl border border-white/[0.06] bg-[rgba(12,16,15,0.55)] backdrop-blur-xl md:flex">
             <Stat label="trends" value={stats.trends} />
             <Stat label="drafts" value={stats.drafts} />
             <Stat label="awaiting review" value={stats.awaiting} />
@@ -369,7 +372,7 @@ export default function Content() {
 
       <div className="flex min-h-0 flex-1">
         {/* ── SOURCES ─────────────────────────────────────────────────── */}
-        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-white/[0.06] lg:bg-card/25 lg:backdrop-blur-xl`}>
+        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-white/[0.06] lg:bg-[rgba(10,13,12,0.45)] lg:backdrop-blur-xl`}>
           <ContentSourcesPanel
             nav={nav}
             onNav={setNav}
@@ -441,7 +444,7 @@ export default function Content() {
         {scribeOverlay && (
           <div className="fixed inset-0 z-40 hidden lg:block xl:hidden" onClick={() => setScribeOverlay(false)}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-            <div className="absolute right-0 top-0 h-full bg-[#050505] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute right-0 top-0 h-full bg-[rgba(8,11,10,0.92)] shadow-[-30px_0_80px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl" onClick={(e) => e.stopPropagation()}>
               <ScribePanel
                 collapsed={false}
                 onToggle={() => setScribeOverlay(false)}
@@ -532,9 +535,9 @@ export default function Content() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-baseline gap-1">
-      <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
-      <dt>{label}</dt>
+    <div className="flex flex-col-reverse justify-center gap-1 px-3.5 py-1.5 [&+&]:border-l [&+&]:border-white/[0.05]">
+      <dd className="text-[15px] font-semibold leading-none tabular-nums text-foreground">{value}</dd>
+      <dt className={METRIC_LABEL}>{label}</dt>
     </div>
   );
 }
@@ -542,6 +545,9 @@ function Stat({ label, value }: { label: string; value: number }) {
 function EmptyStudio({ onNew, onSources }: { onNew: () => void; onSources: () => void }) {
   return (
     <div className="flex min-h-[420px] flex-col items-start justify-center">
+      <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.16),rgba(16,185,129,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_30px_-10px_rgba(16,185,129,0.55)]">
+        <PenLine className="h-5 w-5 text-emerald-300" />
+      </div>
       <p className={`text-[12px] font-medium ${ACCENT.accentText}`}>Content Studio</p>
       <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.01em] text-foreground">Pick something to work on</h2>
       <p className="mt-2 max-w-[46ch] text-[14px] leading-relaxed text-muted-foreground/70">

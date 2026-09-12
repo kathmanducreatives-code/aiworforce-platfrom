@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Loader2, FileText, MessageSquare, ArrowUp, ExternalLink } from "lucide-react";
 import { sourceCardOf, type SourceSignalLike } from "@/lib/content/contentStudioModel";
 import { FIELD, PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/content/studioStyles";
+import { GLASS_PANEL } from "@/components/layout/workspaceStyles";
 
 export default function SourcePreview({ signal, onCreate, onAskPilot }: {
   signal: SourceSignalLike;
@@ -43,7 +44,7 @@ export default function SourcePreview({ signal, onCreate, onAskPilot }: {
       )}
       {c.context && <p className="mt-5 text-[14.5px] leading-[1.7] text-foreground/85">{c.context}</p>}
       {c.angle && (
-        <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 backdrop-blur-xl">
+        <div className={`mt-5 rounded-xl px-4 py-3 shadow-[inset_2px_0_0_rgba(16,185,129,0.6)] ${GLASS_PANEL}`}>
           <p className="text-[12px] font-medium text-muted-foreground/70">Recommended angle</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-foreground/85">{c.angle}</p>
         </div>

@@ -1,6 +1,7 @@
 // Competitor card. Shows the class (direct/adjacent/replacement) + detected change.
 import { competitorCardVM, type RawSignal } from "@/lib/radarCardPresenter";
 import { DecisionBadge, EvidenceLink, RadarActionBar, actionStateFromRaw } from "./radarCardBits";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 const CLASS_STYLE: Record<string, string> = {
   direct: "border-rose-500/30 text-rose-300",
@@ -12,7 +13,7 @@ export default function CompetitorSignalCard({ signal }: { signal: RawSignal }) 
   const vm = competitorCardVM(signal);
   const state = actionStateFromRaw({ decision: vm.decision, raw: signal.raw ?? {}, hasCompany: !!vm.competitor, hasEvidence: !!vm.evidence_url });
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold text-foreground">{vm.competitor ?? "Competitor"}</p>

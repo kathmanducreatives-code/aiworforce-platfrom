@@ -4,6 +4,7 @@
 import { type RawSignal } from "@/lib/radarCardPresenter";
 import { DecisionBadge, EvidenceLink } from "./radarCardBits";
 import { AlertCircle } from "lucide-react";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 function s(v: unknown): string | null { const t = typeof v === "string" ? v.trim() : ""; return t || null; }
 
@@ -18,7 +19,7 @@ export default function DecisionMakerSignalCard({ signal }: { signal: RawSignal 
   const decision = (["contact", "watch", "needs_review", "skip"].includes(String(raw["canonical_decision"])) ? String(raw["canonical_decision"]) : "needs_review") as "contact" | "watch" | "needs_review" | "skip";
 
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold text-foreground">{name ?? "Person"}</p>

@@ -2,13 +2,14 @@
 // fabricated. Funding alone is usually Watch.
 import { fundingCardVM, type RawSignal } from "@/lib/radarCardPresenter";
 import { DecisionBadge, EvidenceLink, RadarActionBar, actionStateFromRaw } from "./radarCardBits";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 export default function FundingSignalCard({ signal }: { signal: RawSignal }) {
   const vm = fundingCardVM(signal);
   const state = actionStateFromRaw({ decision: vm.decision, raw: signal.raw ?? {}, hasCompany: !!vm.company, hasEvidence: !!vm.evidence_url });
   const facts = [vm.round, vm.amount, vm.announced_date].filter(Boolean) as string[];
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold text-foreground">{vm.company ?? "Company"}</p>

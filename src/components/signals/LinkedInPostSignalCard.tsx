@@ -2,12 +2,13 @@
 // never fabricates "viral".
 import { postCardVM, type RawSignal } from "@/lib/radarCardPresenter";
 import { DecisionBadge, EvidenceLink, RadarActionBar, actionStateFromRaw } from "./radarCardBits";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 
 export default function LinkedInPostSignalCard({ signal }: { signal: RawSignal }) {
   const vm = postCardVM(signal);
   const state = actionStateFromRaw({ decision: vm.decision, raw: signal.raw ?? {}, hasCompany: !!vm.company, hasEvidence: !!vm.evidence_url });
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
+    <div className={`${GLASS_CARD} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[14px] font-semibold text-foreground">{vm.author ?? "Author"}{vm.company ? ` · ${vm.company}` : ""}</p>
