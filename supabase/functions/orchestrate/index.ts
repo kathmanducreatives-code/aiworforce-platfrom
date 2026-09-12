@@ -30,7 +30,7 @@ import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedg
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { validateV2KickoffBody } from "../_shared/leadMissionV2Request.ts";
 import {
-  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import {
@@ -752,16 +752,14 @@ Deno.serve(async (req) => {
         mode: resolveSpendEnforcement(),
         ...resolveCeiling(),
       });
-      if (spend.over_ceiling || spend.reason === "query_failed") {
+      if (!spend.allowed || spend.reason !== "under_ceiling") {
         console.log("[orchestrate][model-spend]", describeSpend(spend));
       }
       if (!spend.allowed) {
         return json({
           error: MODEL_SPEND_REFUSED,
-          details:
-            `This workspace has reached its model spend ceiling of ` +
-            `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
-            `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+          reason: spend.reason,
+          details: spendRefusalMessage(spend),
         }, 429);
       }
     }

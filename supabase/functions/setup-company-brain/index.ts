@@ -8,7 +8,7 @@ import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
 import { mergeProfile, type StructuredBrainPatch } from "../_shared/companyBrainSchema.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import {
-  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 /**
@@ -32,17 +32,15 @@ async function refuseIfOverCeiling(
     mode: resolveSpendEnforcement(),
     ...resolveCeiling(),
   });
-  if (spend.over_ceiling || spend.reason === "query_failed") {
+  if (!spend.allowed || spend.reason !== "under_ceiling") {
     console.log("[setup-company-brain][model-spend]", { label, ...describeSpend(spend) });
   }
   if (spend.allowed) return null;
   return json({
     ok: false,
     error: MODEL_SPEND_REFUSED,
-    message:
-      `This workspace has reached its model spend ceiling of ` +
-      `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
-      `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+    reason: spend.reason,
+    message: spendRefusalMessage(spend),
   }, 429);
 }
 

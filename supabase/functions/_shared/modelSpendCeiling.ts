@@ -74,17 +74,43 @@ export function resolveSpendEnforcement(read?: EnvReader): SpendEnforcementMode 
 export const DEFAULT_CEILING_USD = 25;
 export const DEFAULT_PERIOD_DAYS = 1;
 
-function positiveNumber(raw: string | undefined, fallback: number): number {
+function positiveNumber(raw: string | undefined): number | null {
   const n = Number(String(raw ?? "").trim());
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function resolveCeiling(read?: EnvReader): { ceiling_usd: number; period_days: number } {
+export interface CeilingConfig {
+  ceiling_usd: number;
+  period_days: number;
+  /**
+   * Null when both values were configured and valid. Otherwise which one was
+   * missing or unusable — and the numbers above are the defaults, which
+   * `observe` may use and `enforce` must NOT (see `authorizeModelSpend`).
+   */
+  config_error: string | null;
+}
+
+/**
+ * THE CONFIGURED BOUND, and whether it really was configured.
+ *
+ * A missing or unusable value used to fall back to the default silently. For
+ * `observe` that is still right: it only reports. For `enforce` it is not — a
+ * typo in the ceiling would quietly become $25 a day, a bound nobody chose. So
+ * the fallback is reported as `config_error`, and enforcement refuses on it.
+ */
+export function resolveCeiling(read?: EnvReader): CeilingConfig {
   const r = read ?? ((k: string) => (globalThis as { Deno?: { env: { get(k: string): string | undefined } } })
     .Deno?.env.get(k));
+  const ceiling = positiveNumber(r(MODEL_SPEND_CEILING_ENV));
+  const period = positiveNumber(r(MODEL_SPEND_PERIOD_ENV));
+  const problems = [
+    ceiling === null ? `${MODEL_SPEND_CEILING_ENV} missing or not a positive number` : null,
+    period === null ? `${MODEL_SPEND_PERIOD_ENV} missing or not a positive number` : null,
+  ].filter(Boolean);
   return {
-    ceiling_usd: positiveNumber(r(MODEL_SPEND_CEILING_ENV), DEFAULT_CEILING_USD),
-    period_days: positiveNumber(r(MODEL_SPEND_PERIOD_ENV), DEFAULT_PERIOD_DAYS),
+    ceiling_usd: ceiling ?? DEFAULT_CEILING_USD,
+    period_days: period ?? DEFAULT_PERIOD_DAYS,
+    config_error: problems.length ? problems.join("; ") : null,
   };
 }
 
@@ -107,7 +133,7 @@ export interface SpendVerdict {
    */
   unpriced_calls: number;
   /** Machine-readable, never prose. */
-  reason: "under_ceiling" | "over_ceiling" | "query_failed" | "no_workspace";
+  reason: "under_ceiling" | "over_ceiling" | "query_failed" | "no_workspace" | "ceiling_misconfigured";
   detail: string | null;
 }
 
@@ -126,11 +152,24 @@ export interface SpendDb {
  * Sum the period's model spend and say whether another call is allowed.
  *
  * NEVER THROWS. A ceiling that can fail a run by being unreachable is a new
- * outage surface. An unreadable meter degrades to `query_failed`, which
- * `observe` permits — and which `enforce` ALSO permits, deliberately: refusing
- * on a failed read would let one bad query take chat down, and the credit
- * reservations on Apify and Firecrawl still bound the expensive half of the
- * bill. The failure is reported so it can be alarmed on.
+ * outage surface, so every failure becomes a verdict with a reason, never an
+ * exception.
+ *
+ * ── ENFORCE FAILS CLOSED ─────────────────────────────────────────────────────
+ *
+ * `observe` permits whatever it cannot measure; that is what it is for. `enforce`
+ * used to permit it too — an unreadable meter, a call with no workspace, a
+ * ceiling that fell back to a default — on the theory that the Apify and
+ * Firecrawl credit reservations still bounded the expensive half of the bill.
+ * But "enforced" has to mean the bound holds when something is wrong, and those
+ * are exactly the moments it did not. So in `enforce`:
+ *
+ *   meter query fails ............ refuse   (reason: query_failed)
+ *   no workspace to meter ........ refuse   (reason: no_workspace)
+ *   ceiling/period not configured  refuse   (reason: ceiling_misconfigured)
+ *
+ * Every caller already requires a workspace before it gets here, so the
+ * no-workspace refusal only ever catches spend that nothing could attribute.
  */
 export async function authorizeModelSpend(i: {
   db: SpendDb;
@@ -138,19 +177,29 @@ export async function authorizeModelSpend(i: {
   mode: SpendEnforcementMode;
   ceiling_usd?: number;
   period_days?: number;
+  /** From `resolveCeiling`: non-null when the ceiling was not really configured. */
+  config_error?: string | null;
   now?: number;
 }): Promise<SpendVerdict> {
   const ceiling_usd = i.ceiling_usd ?? DEFAULT_CEILING_USD;
   const period_days = i.period_days ?? DEFAULT_PERIOD_DAYS;
+  const enforce = i.mode === "enforce";
   const base = {
     mode: i.mode, ceiling_usd, period_days, spent_usd: 0, unpriced_calls: 0,
   };
 
+  // A bound nobody configured is not a bound. Checked first: nothing about the
+  // meter matters if the number it is compared against was never chosen.
+  if (i.config_error) {
+    return {
+      ...base, allowed: !enforce, over_ceiling: false, reason: "ceiling_misconfigured",
+      detail: i.config_error.slice(0, 200),
+    };
+  }
+
   // A call with no workspace cannot be attributed, so it cannot be metered.
-  // Permitted and reported: refusing here would break taskless internal paths
-  // for a reason that is about bookkeeping, not spend.
   if (!i.workspace_id) {
-    return { ...base, allowed: true, over_ceiling: false, reason: "no_workspace", detail: null };
+    return { ...base, allowed: !enforce, over_ceiling: false, reason: "no_workspace", detail: null };
   }
 
   const since = new Date((i.now ?? Date.now()) - period_days * 86_400_000).toISOString();
@@ -163,14 +212,14 @@ export async function authorizeModelSpend(i: {
       .gte("started_at", since);
     if (error) {
       return {
-        ...base, allowed: true, over_ceiling: false, reason: "query_failed",
+        ...base, allowed: !enforce, over_ceiling: false, reason: "query_failed",
         detail: String((error as { message?: unknown })?.message ?? error).slice(0, 200),
       };
     }
     rows = Array.isArray(data) ? data as Array<Record<string, unknown>> : [];
   } catch (e) {
     return {
-      ...base, allowed: true, over_ceiling: false, reason: "query_failed",
+      ...base, allowed: !enforce, over_ceiling: false, reason: "query_failed",
       detail: String(e).slice(0, 200),
     };
   }
@@ -210,6 +259,28 @@ export async function authorizeModelSpend(i: {
     reason: over ? "over_ceiling" : "under_ceiling",
     detail: null,
   };
+}
+
+/**
+ * What a refused caller tells the user. Says WHY: "you reached your ceiling"
+ * for a meter that could not be read would be a false statement about spend.
+ */
+export function spendRefusalMessage(v: SpendVerdict): string {
+  switch (v.reason) {
+    case "over_ceiling":
+      return `This workspace has reached its model spend ceiling of $${v.ceiling_usd} over ` +
+        `${v.period_days} day(s). Spent so far: $${v.spent_usd.toFixed(4)}.`;
+    case "query_failed":
+      return "Model spend could not be verified against this workspace's ceiling, so the " +
+        "request was refused rather than run unmetered. Try again shortly.";
+    case "no_workspace":
+      return "Model spend with no workspace cannot be metered, so it was refused.";
+    case "ceiling_misconfigured":
+      return "The model spend ceiling is not configured correctly, so model spend is refused " +
+        "until it is fixed.";
+    default:
+      return "Model spend was refused.";
+  }
 }
 
 /** What a caller should log. Never includes a prompt or a key. */

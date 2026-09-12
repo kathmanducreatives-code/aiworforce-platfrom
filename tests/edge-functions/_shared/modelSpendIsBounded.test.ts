@@ -16,7 +16,7 @@
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
+  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
   DEFAULT_CEILING_USD, DEFAULT_PERIOD_DAYS,
   MODEL_SPEND_ENFORCEMENT_ENV, MODEL_SPEND_CEILING_ENV, MODEL_SPEND_PERIOD_ENV,
   resolveRunBudget, RUN_MAX_CALLS_ENV, RUN_MAX_INPUT_ENV, RUN_MAX_OUTPUT_ENV, RUN_MAX_TOTAL_ENV,
@@ -94,23 +94,25 @@ Deno.test("observe reports the same verdict and permits the call", async () => {
 
 // ══════════ the failure modes a meter really has ══════════════════════════
 
-Deno.test("an unreadable meter permits, in BOTH modes, and says so", async () => {
-  // Refusing on a failed read would let one bad query take chat down. The
-  // expensive half of the bill is still bounded by the credit reservations on
-  // Apify and Firecrawl, so failing open here is the smaller risk — but it must
-  // be reported, never silent.
-  for (const mode of ["observe", "enforce"] as const) {
+// ENFORCE FAILS CLOSED. Each of these used to be permitted in `enforce` too, on
+// the theory that credit reservations still bounded the expensive half of the
+// bill. An enforced ceiling has to hold precisely when something is wrong, so
+// `enforce` now refuses what it cannot measure; `observe` still permits it.
+
+Deno.test("an unreadable meter: observe permits, ENFORCE REFUSES, both say why", async () => {
+  for (const [mode, allowed] of [["observe", true], ["enforce", false]] as const) {
     const v = await authorizeModelSpend({
       db: dbOf({ error: { message: "connection reset" } }),
       workspace_id: "w", mode, ceiling_usd: 25,
     });
-    assertEquals(v.allowed, true, `${mode} must not fail closed on an unreadable meter`);
+    assertEquals(v.allowed, allowed, `${mode}: unreadable meter`);
     assertEquals(v.reason, "query_failed");
+    assertEquals(v.over_ceiling, false, "not being able to read spend is not a claim about spend");
     assert(v.detail?.includes("connection reset"), "and must say why");
   }
 });
 
-Deno.test("a throwing db is a failed read, not an exception", async () => {
+Deno.test("a throwing db is a failed read, not an exception — and enforce refuses it", async () => {
   const throwing: SpendDb = {
     from: () => ({
       select: () => ({ eq: () => ({ gte: () => { throw new Error("boom"); } }) }),
@@ -120,15 +122,50 @@ Deno.test("a throwing db is a failed read, not an exception", async () => {
     db: throwing, workspace_id: "w", mode: "enforce", ceiling_usd: 1,
   });
   assertEquals(v.reason, "query_failed");
-  assertEquals(v.allowed, true);
+  assertEquals(v.allowed, false);
+  const o = await authorizeModelSpend({ db: throwing, workspace_id: "w", mode: "observe", ceiling_usd: 1 });
+  assertEquals(o.allowed, true, "observe still cannot break anything");
 });
 
-Deno.test("no workspace is permitted and reported, not metered", async () => {
-  const v = await authorizeModelSpend({
-    db: dbOf([]), workspace_id: null, mode: "enforce", ceiling_usd: 0.01,
-  });
-  assertEquals(v.reason, "no_workspace");
-  assertEquals(v.allowed, true, "an internal taskless path must not be broken by bookkeeping");
+Deno.test("no workspace: observe permits, ENFORCE REFUSES — unattributable spend is unmetered spend", async () => {
+  for (const [mode, allowed] of [["observe", true], ["enforce", false]] as const) {
+    for (const ws of [null, undefined, ""]) {
+      const v = await authorizeModelSpend({ db: dbOf([]), workspace_id: ws, mode, ceiling_usd: 5 });
+      assertEquals(v.reason, "no_workspace");
+      assertEquals(v.allowed, allowed, `${mode} with workspace ${JSON.stringify(ws)}`);
+    }
+  }
+});
+
+Deno.test("a misconfigured ceiling: observe permits on the default, ENFORCE REFUSES", async () => {
+  const cfg = resolveCeiling((k) => k === MODEL_SPEND_CEILING_ENV ? "abc" : k === MODEL_SPEND_PERIOD_ENV ? "1" : undefined);
+  assert(cfg.config_error?.includes(MODEL_SPEND_CEILING_ENV));
+  const e = await authorizeModelSpend({ db: dbOf([]), workspace_id: "w", mode: "enforce", ...cfg });
+  assertEquals([e.allowed, e.reason], [false, "ceiling_misconfigured"]);
+  assert(e.detail?.includes(MODEL_SPEND_CEILING_ENV), "and names the variable");
+  const o = await authorizeModelSpend({ db: dbOf([]), workspace_id: "w", mode: "observe", ...cfg });
+  assertEquals([o.allowed, o.reason], [true, "ceiling_misconfigured"]);
+  // Checked before the meter: even a workspace with no spend is refused.
+  const unset = resolveCeiling(() => undefined);
+  const u = await authorizeModelSpend({ db: dbOf([]), workspace_id: "w", mode: "enforce", ...unset });
+  assertEquals([u.allowed, u.reason], [false, "ceiling_misconfigured"]);
+});
+
+Deno.test("the production configuration ($5 / 1 day, enforce) meters normally and refuses at $5", async () => {
+  const cfg = resolveCeiling((k) => ({ [MODEL_SPEND_CEILING_ENV]: "5.00", [MODEL_SPEND_PERIOD_ENV]: "1" } as Record<string, string>)[k]);
+  assertEquals(cfg, { ceiling_usd: 5, period_days: 1, config_error: null });
+  const under = await authorizeModelSpend({ db: dbOf([priced(4.99)]), workspace_id: "w", mode: "enforce", ...cfg });
+  assertEquals([under.allowed, under.reason], [true, "under_ceiling"]);
+  const at = await authorizeModelSpend({ db: dbOf([priced(5)]), workspace_id: "w", mode: "enforce", ...cfg });
+  assertEquals([at.allowed, at.reason], [false, "over_ceiling"]);
+});
+
+Deno.test("a refusal says WHY — never 'you reached your ceiling' for a meter it could not read", async () => {
+  const failed = await authorizeModelSpend({ db: dbOf({ error: { message: "x" } }), workspace_id: "w", mode: "enforce", ceiling_usd: 5 });
+  assert(!spendRefusalMessage(failed).includes("reached"), spendRefusalMessage(failed));
+  assert(spendRefusalMessage(failed).includes("could not be verified"));
+  const over = await authorizeModelSpend({ db: dbOf([priced(9)]), workspace_id: "w", mode: "enforce", ceiling_usd: 5 });
+  assert(spendRefusalMessage(over).includes("reached its model spend ceiling of $5"));
 });
 
 // ══════════ an unpriced call is not a free call ═══════════════════════════
@@ -207,16 +244,20 @@ Deno.test("enforcement is OFF unless explicitly turned on", async () => {
   assertEquals(v.allowed, true);
 });
 
-Deno.test("the ceiling is configurable, and a bad value falls back", () => {
-  assertEquals(resolveCeiling(() => undefined),
-    { ceiling_usd: DEFAULT_CEILING_USD, period_days: DEFAULT_PERIOD_DAYS });
+Deno.test("the ceiling is configurable; a bad value falls back AND is reported", () => {
+  const unset = resolveCeiling(() => undefined);
+  assertEquals([unset.ceiling_usd, unset.period_days], [DEFAULT_CEILING_USD, DEFAULT_PERIOD_DAYS]);
+  assert(unset.config_error, "an unset ceiling is not a configured one");
   assertEquals(
     resolveCeiling((k) => k === MODEL_SPEND_CEILING_ENV ? "5" : k === MODEL_SPEND_PERIOD_ENV ? "7" : undefined),
-    { ceiling_usd: 5, period_days: 7 },
+    { ceiling_usd: 5, period_days: 7, config_error: null },
   );
-  // A misconfigured ceiling must not become "unlimited" or "nothing".
+  // A misconfigured ceiling must not become "unlimited" or "nothing" — and
+  // the fallback is never silent, so enforce can refuse on it.
   for (const bad of ["0", "-1", "abc", ""]) {
-    assertEquals(resolveCeiling(() => bad).ceiling_usd, DEFAULT_CEILING_USD, `"${bad}" must fall back`);
+    const c = resolveCeiling(() => bad);
+    assertEquals(c.ceiling_usd, DEFAULT_CEILING_USD, `"${bad}" must fall back`);
+    assert(c.config_error, `"${bad}" must be reported`);
   }
 });
 

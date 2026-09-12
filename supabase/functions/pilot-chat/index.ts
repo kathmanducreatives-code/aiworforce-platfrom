@@ -4,7 +4,7 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import {
-  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
+  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
   MODEL_SPEND_REFUSED, resolveRunBudget, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -1422,16 +1422,14 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     mode: resolveSpendEnforcement(),
     ...resolveCeiling(),
   });
-  if (spend.over_ceiling || spend.reason === "query_failed") {
+  if (!spend.allowed || spend.reason !== "under_ceiling") {
     console.log("[pilot-chat][model-spend]", describeSpend(spend));
   }
   if (!spend.allowed) {
     return json({
       error: MODEL_SPEND_REFUSED,
-      detail:
-        `This workspace has reached its model spend ceiling of ` +
-        `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
-        `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+      reason: spend.reason,
+      detail: spendRefusalMessage(spend),
     }, 429);
   }
 

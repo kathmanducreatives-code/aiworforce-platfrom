@@ -353,7 +353,7 @@ import { classifyAgentRun, runNeedsLineageLease } from "../_shared/agentRunKind.
 import { createLeadStrategyPlanner, isGptBroadeningAuthorized, deterministicOnlyBroadeningPlanner } from "../_shared/leadStrategyOwner.ts";
 import { createLeadStrategistProvider } from "../_shared/leadStrategy/factory.ts";
 import {
-  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling,
+  resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import { projectStrategyMissionSemantics } from "../_shared/leadStrategyContract.ts";
@@ -1034,17 +1034,15 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       mode: resolveSpendEnforcement(),
       ...resolveCeiling(),
     });
-    if (spend.over_ceiling || spend.reason === "query_failed") {
+    if (!spend.allowed || spend.over_ceiling || spend.reason !== "under_ceiling") {
       console.log("[run-agent][model-spend]", describeSpend(spend));
     }
     if (!spend.allowed) {
       return json({
         success: false,
         error: MODEL_SPEND_REFUSED,
-        message:
-          `This workspace has reached its model spend ceiling of ` +
-          `$${spend.ceiling_usd} over ${spend.period_days} day(s). ` +
-          `Spent so far: $${spend.spent_usd.toFixed(4)}.`,
+        reason: spend.reason,
+        message: spendRefusalMessage(spend),
       }, 429);
     }
   }

@@ -26,7 +26,7 @@ import {
 } from "../_shared/imageProvider.ts";
 import { createLedgerWriter, recordModelCall, type LedgerDb } from "../_shared/executionLedger.ts";
 import {
-  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend,
+  authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, describeSpend, spendRefusalMessage,
   MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
 import { buildVisualPrompt } from "../_shared/contentVisualBrief.ts";
@@ -124,11 +124,11 @@ Deno.serve(async (req) => {
     mode: resolveSpendEnforcement(),
     ...resolveCeiling(),
   });
-  if (spend.over_ceiling || spend.reason === "query_failed") {
+  if (!spend.allowed || spend.reason !== "under_ceiling") {
     console.log("[generate-content-image][model-spend]", describeSpend(spend));
   }
   if (!spend.allowed) {
-    return json({ error: MODEL_SPEND_REFUSED, detail: "workspace model spend ceiling reached" }, 429);
+    return json({ error: MODEL_SPEND_REFUSED, reason: spend.reason, detail: spendRefusalMessage(spend) }, 429);
   }
 
   // ── the pending row, before any spend ────────────────────────────────────
