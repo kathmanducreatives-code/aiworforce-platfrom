@@ -308,7 +308,7 @@ Deno.test("run-agent gives Scribe content runs the strategist's brain, once, beh
 });
 
 Deno.test("the migration is additive: derived columns, checked values, post-vs-reply coherence", async () => {
-  const m = await read("supabase/migrations/20260912160000_content_format_model.sql");
+  const m = await read("supabase/migrations-held/20260912160000_content_format_model.sql");
   assert(m.includes("add column if not exists content_format text\n    generated always as"));
   assert(m.includes("add column if not exists platform text\n    generated always as"));
   assert(m.includes("check ((content_format = 'comment') = (format = 'linkedin_comment'))"));

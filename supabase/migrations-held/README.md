@@ -36,6 +36,17 @@ To enable V2: review this file, apply it to production deliberately, move it
 back into `supabase/migrations/`, then follow the enablement steps (allowlist a
 single internal workspace, deploy the worker, add the orchestrate diversion).
 
+## `20260912160000_content_format_model.sql`
+
+Generated columns `content_item.platform` and `content_item.content_format`,
+derived from `metadata` (where Scribe's writer records the format it chose),
+with CHECKs on their values and the post-vs-reply coherence rule.
+
+**Additive and safe, but not yet applied.** No code writes these columns, so
+the Content format model works identically with or without them; applying
+this only adds queryable, constraint-checked columns. Apply it deliberately,
+then move it back into `supabase/migrations/`.
+
 ## Tests
 
 `tests/infra/` still reads these files — the baseline's structure, the V2
