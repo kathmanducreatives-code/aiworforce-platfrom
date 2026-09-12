@@ -30,15 +30,21 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 
 const ROOT = new URL("../../", import.meta.url);
 
+// The baseline and the V2 queue are HELD (supabase/migrations-held/): kept out
+// of the production-synced directory, still part of the DECLARED schema. A
+// table the code references and only a held migration creates is a feature
+// waiting on that migration — which `enqueue-lead-mission` states and tolerates.
 const BASELINE = await Deno.readTextFile(
-  new URL("supabase/migrations/20260816120000_baseline_schema.sql", ROOT),
+  new URL("supabase/migrations-held/20260816120000_baseline_schema.sql", ROOT),
 );
 // Migrations added after the baseline count too — the schema is their sum.
 async function laterMigrations(): Promise<string> {
   let out = "";
-  for await (const e of Deno.readDir(new URL("supabase/migrations/", ROOT))) {
-    if (e.name.endsWith(".sql") && e.name !== "20260816120000_baseline_schema.sql") {
-      out += await Deno.readTextFile(new URL(`supabase/migrations/${e.name}`, ROOT));
+  for (const dir of ["supabase/migrations/", "supabase/migrations-held/"]) {
+    for await (const e of Deno.readDir(new URL(dir, ROOT))) {
+      if (e.name.endsWith(".sql") && e.name !== "20260816120000_baseline_schema.sql") {
+        out += await Deno.readTextFile(new URL(`${dir}${e.name}`, ROOT));
+      }
     }
   }
   return out;

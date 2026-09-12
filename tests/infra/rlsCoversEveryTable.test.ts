@@ -30,12 +30,17 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const MIGRATIONS = new URL("../../supabase/migrations/", import.meta.url);
+// HELD migrations (baseline, V2 queue) are not applied from the synced
+// directory, but every table they create must still enable RLS.
+const HELD = new URL("../../supabase/migrations-held/", import.meta.url);
 
 async function migrationSql(): Promise<{ name: string; sql: string }[]> {
   const out: { name: string; sql: string }[] = [];
-  for await (const e of Deno.readDir(MIGRATIONS)) {
-    if (!e.name.endsWith(".sql")) continue;
-    out.push({ name: e.name, sql: await Deno.readTextFile(new URL(e.name, MIGRATIONS)) });
+  for (const dir of [MIGRATIONS, HELD]) {
+    for await (const e of Deno.readDir(dir)) {
+      if (!e.name.endsWith(".sql")) continue;
+      out.push({ name: e.name, sql: await Deno.readTextFile(new URL(e.name, dir)) });
+    }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }

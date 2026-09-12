@@ -33,12 +33,14 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 
 const ROOT = new URL("../../", import.meta.url);
 
-/** Every migration that currently defines the schema. */
+/** Every migration that defines the schema — held ones included: holding a file moves it, it does not exempt it. */
 async function activeSchema(): Promise<string> {
   let sql = "";
-  for await (const e of Deno.readDir(new URL("supabase/migrations/", ROOT))) {
-    if (e.name.endsWith(".sql")) {
-      sql += "\n" + await Deno.readTextFile(new URL(`supabase/migrations/${e.name}`, ROOT));
+  for (const dir of ["supabase/migrations/", "supabase/migrations-held/"]) {
+    for await (const e of Deno.readDir(new URL(dir, ROOT))) {
+      if (e.name.endsWith(".sql")) {
+        sql += "\n" + await Deno.readTextFile(new URL(`${dir}${e.name}`, ROOT));
+      }
     }
   }
   return sql;

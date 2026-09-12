@@ -20,24 +20,34 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const BASELINE = await Deno.readTextFile(
-  new URL("../../supabase/migrations/20260816120000_baseline_schema.sql", import.meta.url),
+  // HELD out of supabase/migrations/ (the production-synced directory): it is for
+  // fresh databases only. See supabase/migrations-held/README.md.
+  new URL("../../supabase/migrations-held/20260816120000_baseline_schema.sql", import.meta.url),
 );
 
 const count = (re: RegExp) => (BASELINE.match(re) ?? []).length;
 
-Deno.test("the baseline is the only migration", async () => {
-  // A second file here is not automatically wrong — new migrations belong after
-  // the baseline. What would be wrong is the ARCHIVE creeping back, so this
-  // asserts the baseline is present and that the unreplayable chain has not
-  // returned alongside it.
-  const dir = new URL("../../supabase/migrations/", import.meta.url);
-  const names: string[] = [];
-  for await (const e of Deno.readDir(dir)) if (e.name.endsWith(".sql")) names.push(e.name);
-  assert(names.includes("20260816120000_baseline_schema.sql"), "the baseline must be present");
-  assert(
-    !names.includes("20260526000000_baseline_from_prod.sql"),
-    "the old incomplete baseline must stay archived — it carries no RLS policies",
-  );
+Deno.test("the baseline is HELD — present for fresh databases, absent from the production-synced directory", async () => {
+  // `supabase/migrations/` is synced to the production-connected repository.
+  // The baseline must never be replayed against production — later hardening
+  // dropped policies and revoked grants this dump still contains — so it lives
+  // in `migrations-held/`. What would still be wrong is the ARCHIVE creeping
+  // back, or the old policy-less baseline returning.
+  const list = async (rel: string) => {
+    const names: string[] = [];
+    for await (const e of Deno.readDir(new URL(rel, import.meta.url))) if (e.name.endsWith(".sql")) names.push(e.name);
+    return names;
+  };
+  const held = await list("../../supabase/migrations-held/");
+  const active = await list("../../supabase/migrations/");
+  assert(held.includes("20260816120000_baseline_schema.sql"), "the baseline must be kept, held");
+  assert(!active.includes("20260816120000_baseline_schema.sql"), "the baseline must not sit in the synced directory");
+  for (const names of [held, active]) {
+    assert(
+      !names.includes("20260526000000_baseline_from_prod.sql"),
+      "the old incomplete baseline must stay archived — it carries no RLS policies",
+    );
+  }
 });
 
 Deno.test("it creates every class of object, not just tables", () => {
