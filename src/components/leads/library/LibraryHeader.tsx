@@ -27,7 +27,7 @@ export function LibraryHeader({ onAddLead, onImport, onExport, onCreateList }: P
         <Button
           size="sm"
           variant="ghost"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+          className="h-8 w-8 p-0"
           onClick={onImport}
           title="Import CSV"
           aria-label="Import"
@@ -37,7 +37,7 @@ export function LibraryHeader({ onAddLead, onImport, onExport, onCreateList }: P
         <Button
           size="sm"
           variant="ghost"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+          className="h-8 w-8 p-0"
           onClick={onExport}
           title="Export CSV"
           aria-label="Export"
@@ -47,14 +47,14 @@ export function LibraryHeader({ onAddLead, onImport, onExport, onCreateList }: P
         <Button
           size="sm"
           variant="outline"
-          className="h-8 text-xs border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20"
+          className="h-8 text-xs"
           onClick={onAddLead}
         >
           <Plus className="h-3.5 w-3.5 mr-1" /> Add lead
         </Button>
         <Button
           size="sm"
-          className="h-8 text-xs bg-primary/90 hover:bg-primary text-primary-foreground border-0"
+          className="h-8 text-xs"
           onClick={onCreateList}
         >
           <FolderPlus className="h-3.5 w-3.5 mr-1" /> Create list

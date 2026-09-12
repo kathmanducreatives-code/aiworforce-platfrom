@@ -60,14 +60,14 @@ const PageHeader = ({ title, subtitle, breadcrumbs, primaryAction, secondaryActi
                 <div className="flex items-center gap-2">
                     {secondaryActions?.map((action, i) => (
                         <Button key={i} variant={action.variant || 'outline'} size="sm" onClick={action.onClick}
-                            className="gap-1.5 rounded-lg border-border hover:border-primary/40 hover:bg-primary/5 transition-all">
+                            className="gap-1.5">
                             {action.icon}
                             {action.label}
                         </Button>
                     ))}
                     {primaryAction && (
                         <Button size="sm" onClick={primaryAction.onClick}
-                            className="gap-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all">
+                            className="gap-1.5">
                             {primaryAction.icon}
                             {primaryAction.label}
                         </Button>

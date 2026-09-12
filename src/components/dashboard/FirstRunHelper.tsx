@@ -212,7 +212,7 @@ export default function FirstRunHelper() {
             type="button"
             disabled={running}
             onClick={handleRunFirstWorkflow}
-            className="h-11 px-5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:bg-emerald-500/50 text-neutral-950 text-[14px] font-bold flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(16,185,129,0.25)] transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="ag-btn ag-btn-primary rounded-lg font-medium h-11 px-5 text-[14px] flex items-center justify-center gap-2 transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 disabled:cursor-not-allowed"
           >
             {running ? (
               <>

@@ -8,6 +8,7 @@ import CommandDock from "./dock/CommandDock";
 import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import RouteErrorBoundary from "./RouteErrorBoundary";
+import { AmbientBackdrop } from "./layout/AmbientBackdrop";
 import WorkspaceGate from "./WorkspaceGate";
 import OnboardingGate from "./OnboardingGate";
 import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
@@ -51,6 +52,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   return (
     <ChatWorkspaceProvider>
       <div className="min-h-screen w-full bg-transparent relative">
+        {/* The room light behind every working page (pages may bring their own). */}
+        <AmbientBackdrop variant="app" />
         {/* Command Palette (global) */}
         <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
 

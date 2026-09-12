@@ -44,7 +44,7 @@ export function MetricStrip({
     <div
       className={cn(
         "flex items-stretch h-[72px] rounded-xl overflow-hidden",
-        "bg-[rgba(12,16,15,0.55)] backdrop-blur-xl border border-white/[0.06]",
+        "ag-glass",
         className,
       )}
     >

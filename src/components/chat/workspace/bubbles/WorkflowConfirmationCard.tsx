@@ -400,7 +400,7 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
               );
             })}
             <div className="flex justify-end pt-1">
-              <Button size="sm" onClick={() => setIsEditing(false)} className="h-7 bg-emerald-500 text-black font-semibold text-[12px] hover:bg-emerald-400">
+              <Button size="sm" onClick={() => setIsEditing(false)} className="ag-btn ag-btn-primary rounded-lg font-medium h-7 text-[12px]">
                 Apply changes
               </Button>
             </div>

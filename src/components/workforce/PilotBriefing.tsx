@@ -129,7 +129,7 @@ export default function PilotBriefing({ totals }: Props) {
                 </li>
               ))}
             </ul>
-            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-emerald-500/25 bg-emerald-500/[0.06]">
+            <div className="mt-4 inline-flex items-center gap-2.5 rounded-lg bg-[var(--ag-fill)] px-3 py-1.5 shadow-[inset_0_0_0_1px_var(--ag-line),inset_2px_0_0_rgb(var(--ag-emerald)/0.8)]">
               <span className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Next move</span>
               <span className="text-[14.5px] text-neutral-100">{next.label}</span>
             </div>
@@ -139,21 +139,21 @@ export default function PilotBriefing({ totals }: Props) {
         <div className="flex flex-wrap lg:flex-col gap-2 lg:min-w-[200px]">
           <button
             onClick={() => navigate(next.route)}
-            className="inline-flex items-center justify-between gap-2 h-10 px-4 rounded-md text-[14px] font-semibold text-black bg-emerald-400 hover:bg-emerald-300 transition-colors"
+            className="ag-btn ag-btn-primary inline-flex items-center justify-between gap-2 h-10 px-4 rounded-lg text-[14px] font-medium"
           >
             {next.primary}
             <ArrowRight className="h-4 w-4" />
           </button>
           <button
             onClick={() => navigate('/signals')}
-            className="inline-flex items-center justify-between gap-2 h-10 px-4 rounded-md text-[14px] text-neutral-200 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] transition-colors"
+            className="ag-btn ag-btn-secondary inline-flex items-center justify-between gap-2 h-10 px-4 rounded-lg text-[14px]"
           >
             Signal feed
             <ArrowRight className="h-4 w-4 opacity-60" />
           </button>
           <button
             onClick={askPilot}
-            className="inline-flex items-center justify-between gap-2 h-10 px-4 rounded-md text-[14px] text-neutral-200 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] transition-colors"
+            className="ag-btn ag-btn-secondary inline-flex items-center justify-between gap-2 h-10 px-4 rounded-lg text-[14px]"
           >
             Ask Pilot
             <MessageCircle className="h-4 w-4 opacity-60" />

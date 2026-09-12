@@ -195,7 +195,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
             <nav
               role="tablist"
               aria-label="Department views"
-              className="mb-3 flex gap-0.5 border-b border-white/[0.06]"
+              className="mb-3 flex gap-0.5 border-b border-[var(--ag-line)]"
             >
               {tabs.map((t) => {
                 const isActive = t.id === activeTab;
@@ -206,17 +206,14 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                     aria-selected={isActive}
                     onClick={() => onTabChange?.(t.id)}
                     className={cn(
-                      'relative px-3.5 py-2 text-[13.5px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0',
-                      isActive ? 'text-foreground' : 'text-muted-foreground/60 hover:text-foreground/85',
+                      'ag-tab-line px-3.5 py-2 text-[13.5px] font-medium focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-400/60',
                     )}
-                    style={isActive ? { color: accent } : undefined}
                   >
                     <span className="inline-flex items-center gap-1.5">
                       {t.label}
                       {t.badge !== undefined && (
                         <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
-                          style={{ background: `${accent}1A`, color: accent }}
+                          className="ag-badge-accent rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
                         >
                           {t.badge}
                         </span>
@@ -225,8 +222,7 @@ export default function DepartmentWorkspaceShell<T extends string = string>({
                     {isActive && (
                       <motion.div
                         layoutId="dept-tab-underline"
-                        className="absolute inset-x-2 -bottom-px h-[2px] rounded-full motion-reduce:transition-none"
-                        style={{ background: `${accent}CC`, boxShadow: `0 0 12px ${accent}80` }}
+                        className="ag-tab-underline absolute inset-x-2 -bottom-px h-[2px] rounded-full motion-reduce:transition-none"
                         transition={{ duration: 0.18, ease: 'easeOut' }}
                       />
                     )}

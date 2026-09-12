@@ -6,7 +6,7 @@ import { Search, SlidersHorizontal, ChevronDown, Check, Eye } from 'lucide-react
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ReviewFilter } from '@/lib/signalReviewModel';
-import { GLASS_CHIP, GLASS_INPUT, GLASS_PANEL, GLASS_RAISED } from '@/components/layout/workspaceStyles';
+import { GLASS_CHIP, GLASS_INPUT, GLASS_PANEL } from '@/components/layout/workspaceStyles';
 
 export type SecondaryCategory =
   | 'all'
@@ -74,14 +74,14 @@ export default function SignalsFilters({
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="end" className={cn('w-56 p-1', GLASS_RAISED)}>
+          <PopoverContent align="end" className="w-56 p-1">
             {SECONDARY_OPTIONS.map((o) => (
               <button
                 key={o.id}
                 onClick={() => onSecondaryChange(o.id)}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.05]',
-                  secondary === o.id ? 'bg-white/[0.04] text-foreground' : 'text-muted-foreground',
+                  'ag-menu-item flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[13px] hover:bg-[var(--ag-fill-hover)]',
+                  secondary === o.id ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
                 {o.label}
@@ -93,6 +93,7 @@ export default function SignalsFilters({
 
         <button
           onClick={() => onShowUnverifiedChange(!showUnverified)}
+          aria-pressed={showUnverified}
           className={cn(
             'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]',
             showUnverified
@@ -106,7 +107,8 @@ export default function SignalsFilters({
 
         <button
           onClick={() => setExpanded((v) => !v)}
-          className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]', GLASS_CHIP, expanded && 'border-white/20 text-foreground')}
+          className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]', GLASS_CHIP)}
+          data-active={expanded || undefined}
           aria-expanded={expanded}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />

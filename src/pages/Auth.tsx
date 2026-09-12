@@ -185,7 +185,7 @@ const Auth = () => {
               )}
               <Button
                 type="submit"
-                className="h-11 w-full bg-emerald-500 text-white hover:bg-emerald-400"
+                className="h-11 w-full"
                 disabled={loading}
               >
                 {loading ? 'Please wait...'

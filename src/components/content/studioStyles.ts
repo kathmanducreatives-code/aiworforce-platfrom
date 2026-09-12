@@ -1,22 +1,20 @@
-// THE CONTENT PAGE WEARS THE LEADS LOOK — IT DOES NOT HAVE ITS OWN.
+// THE CONTENT PAGE WEARS THE AGENTORY DESIGN SYSTEM — IT DOES NOT HAVE ITS OWN.
 //
-// Actions and surfaces come from the shared workspace styles (the Lead Library's
-// premium tokens); the accent is the Growth department's emerald, the one Signals
-// renders with. What is here is only what the Studio's lists and fields add.
+// Actions, surfaces, rows and fields are the shared `.ag-*` classes (via
+// workspaceStyles); the accent is the Growth department's emerald. Nothing here
+// defines a colour of its own.
 
 import { getDeptTheme } from "@/lib/departmentTheme";
-import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/components/layout/workspaceStyles";
+import { PRIMARY_ACTION, SECONDARY_ACTION, SELECTED } from "@/components/layout/workspaceStyles";
 
 export const ACCENT = getDeptTheme("growth");
 
 export const PRIMARY_BUTTON = PRIMARY_ACTION;
 export const SECONDARY_BUTTON = SECONDARY_ACTION;
 
-/** A list row / card at rest, and when it is the one selected. */
-export const ROW_IDLE = "border-transparent hover:border-white/[0.07] hover:bg-[linear-gradient(90deg,rgba(16,185,129,0.05),transparent_70%)]";
-export const ROW_SELECTED =
-  "border-emerald-500/25 bg-[linear-gradient(90deg,rgba(16,185,129,0.10),rgba(16,185,129,0.02))] shadow-[inset_2px_0_0_rgba(16,185,129,0.8),0_8px_24px_-16px_rgba(16,185,129,0.5)]";
+/** A list row at rest (a quiet fill on hover), and the one selected. */
+export const ROW_IDLE = "border-transparent hover:bg-[var(--ag-fill)]";
+export const ROW_SELECTED = SELECTED;
 
-/** Inputs: glass well, emerald focus ring. */
-export const FIELD =
-  "border border-white/[0.07] bg-[rgba(10,13,12,0.55)] backdrop-blur-xl transition focus-within:border-emerald-500/35 focus-within:ring-1 focus-within:ring-primary/30";
+/** A field wrapper (input + button inside): the shared well, focus ring on focus-within. */
+export const FIELD = "ag-field";

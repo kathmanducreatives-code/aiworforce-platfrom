@@ -28,7 +28,7 @@ export default function InsufficientCreditsCard({ needed, balance, onClose }: Pr
       <div className="flex items-center gap-2">
         <Button
           size="sm"
-          className="bg-emerald-600 hover:bg-emerald-500"
+          className=""
           onClick={() => { onClose?.(); navigate('/settings/billing'); }}
         >
           <Sparkles className="h-3.5 w-3.5 mr-1.5" /> See plans

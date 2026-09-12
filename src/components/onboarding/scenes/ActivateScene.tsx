@@ -54,7 +54,7 @@ export function ActivateScene({
           <div className="flex flex-col gap-3">
             <Button
               size="lg" onClick={onActivate} disabled={busy === 'activate'}
-              className="h-12 w-full gap-2 bg-primary text-primary-foreground shadow-[0_0_32px_hsl(var(--primary)/0.45)] transition-shadow hover:bg-primary/90 hover:shadow-[0_0_44px_hsl(var(--primary)/0.6)]"
+              className="h-12 w-full gap-2"
             >
               {busy === 'activate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
               Activate Company Brain

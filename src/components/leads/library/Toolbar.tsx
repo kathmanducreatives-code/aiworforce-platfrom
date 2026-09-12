@@ -2,7 +2,6 @@ import { X, Search, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import type { LeadRow } from "@/lib/leadLibrary/types";
 import { EMPTY_FILTERS, type Filters } from "./FilterBar";
 import {
@@ -87,17 +86,14 @@ export function Toolbar({ tab, onTab, rows, filters, onFilters, onSaveView, sort
     <div className="space-y-2">
       {/* Row 1: tabs + sort + save */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+        <div className="ag-segmented" role="tablist" aria-label="Library views">
           {TABS.map((t) => (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
               onClick={() => onTab(t.id)}
-              className={cn(
-                "px-3 h-7 text-[12px] rounded-md transition-colors",
-                tab === t.id
-                  ? "bg-white/[0.06] text-foreground shadow-[inset_0_-2px_0_rgba(16,185,129,0.7)]"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              className="ag-seg-item px-3 h-7 text-[12px] font-medium"
             >
               {t.label}
             </button>
@@ -106,7 +102,7 @@ export function Toolbar({ tab, onTab, rows, filters, onFilters, onSaveView, sort
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground uppercase tracking-wider">Sort</span>
           <Select value={sort} onValueChange={(v) => onSort(v as SortKey)}>
-            <SelectTrigger className="h-7 w-[160px] bg-black/25 border-white/10 text-[11.5px]">
+            <SelectTrigger className="h-7 w-[160px] text-[11.5px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -134,7 +130,7 @@ export function Toolbar({ tab, onTab, rows, filters, onFilters, onSaveView, sort
             value={filters.q}
             onChange={(e) => set("q", e.target.value)}
             placeholder="Search account, buyer, why-now…"
-            className="h-8 pl-8 bg-black/25 border-white/10 focus-visible:ring-primary/30 text-xs"
+            className="h-8 pl-8 text-xs"
           />
         </div>
         <FilterSelect value={filters.decision} onChange={(v) => set("decision", v as Filters["decision"])} label="Any decision" options={DECISION_OPTS as [string, string][]} />
@@ -182,7 +178,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[140px] bg-black/25 border-white/10 text-[11.5px] hover:bg-white/[0.03]">
+      <SelectTrigger className="h-8 w-[140px] text-[11.5px]">
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>

@@ -479,7 +479,7 @@ export const CreateICPDialog = ({ open, onOpenChange, onSuccess }: CreateICPDial
                             <Button
                                 onClick={handleLaunch}
                                 disabled={isLaunching || !formData.candidate_requirements}
-                                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 shadow-[var(--shadow-glow)] hover:shadow-[0_0_30px_hsl(var(--primary)/0.4)] min-w-[150px] font-semibold transition-all duration-300"
+                                className="gap-2 min-w-[150px] duration-300"
                             >
                                 {isLaunching ? (
                                     <>
@@ -498,7 +498,7 @@ export const CreateICPDialog = ({ open, onOpenChange, onSuccess }: CreateICPDial
                         <Button
                             onClick={handleNextStep}
                             disabled={!canProceed() || isLoading}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-[var(--shadow-glow)] hover:shadow-[0_0_25px_hsl(var(--primary)/0.3)] transition-all duration-300"
+                            className="duration-300"
                         >
                             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Next <ChevronRight className="w-4 h-4 ml-1" /></>}
                         </Button>

@@ -183,7 +183,7 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
         <Button
           type="submit"
           disabled={isLoading}
-          className="w-full h-10 lg:h-11 text-sm lg:text-base font-medium bg-primary hover:bg-primary/90 shadow-sm hover:shadow-md transition-all duration-200"
+          className="w-full h-10 lg:h-11 text-sm lg:text-base font-medium"
         >
           {isLoading ? (
             <div className="flex items-center gap-2">

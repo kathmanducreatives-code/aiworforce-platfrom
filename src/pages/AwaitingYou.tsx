@@ -87,7 +87,7 @@ export default function AwaitingYou() {
                     </button>
                     <button
                       onClick={() => decide(item.id, 'approve')}
-                      className="flex items-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                      className="ag-btn ag-btn-primary rounded-lg font-medium flex items-center gap-1.5 text-xs py-2 px-3"
                     >
                       <Check className="h-3 w-3" />
                       Approve

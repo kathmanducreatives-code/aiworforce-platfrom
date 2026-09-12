@@ -438,7 +438,7 @@ const ResumeUpload = () => {
                 <Button variant="outline" onClick={() => setShowRecruitmentNameDialog(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleRecruitmentNameSubmit} className="bg-gradient-primary">
+                <Button onClick={handleRecruitmentNameSubmit} className="">
                   Continue
                 </Button>
               </DialogFooter>
@@ -465,7 +465,7 @@ const ResumeUpload = () => {
                 <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
                   Cancel
                 </Button>
-                <Button onClick={analyzeResumes} className="bg-gradient-primary">
+                <Button onClick={analyzeResumes} className="">
                   Confirm Analysis
                 </Button>
               </DialogFooter>

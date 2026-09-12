@@ -18,7 +18,7 @@ export function AtlasStrip({ rows, className }: Props) {
     <div
       className={cn(
         "flex items-center gap-3 h-[72px] px-3.5 rounded-xl",
-        "bg-[rgba(12,16,15,0.6)] backdrop-blur-xl border border-white/[0.06]",
+        "ag-glass",
         "max-w-[420px]",
         className,
       )}

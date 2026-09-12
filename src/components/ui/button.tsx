@@ -4,27 +4,28 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Agentory buttons. The look lives in the design-system layer (index.css,
+// `.ag-btn-*`): primary is deep emerald lit from above with a restrained glow,
+// outline/secondary are quiet glass, ghost is text until hovered. One button,
+// everywhere — call sites choose a variant, not a colour.
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "ag-btn inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-[-0.005em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400/60 disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,255,133,0.2)] hover:shadow-[0_0_20px_rgba(0,255,133,0.4)] hover:scale-105 transition-all border border-transparent",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg rounded-xl",
-        outline:
-          "border-2 border-primary/20 bg-transparent text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(0,255,133,0.1)] transition-all rounded-xl",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-xl",
-        ghost: "hover:bg-accent/10 hover:text-accent rounded-xl",
+        default: "ag-btn-primary",
+        destructive: "ag-btn-destructive",
+        outline: "ag-btn-secondary",
+        secondary: "ag-btn-secondary",
+        ghost: "ag-btn-ghost",
         link: "text-primary underline-offset-4 hover:underline",
-        accent: "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,255,133,0.2)] hover:shadow-[0_0_20px_rgba(0,255,133,0.4)] hover:scale-105 transition-all rounded-xl",
+        accent: "ag-btn-primary",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-xl px-3",
-        lg: "h-11 rounded-xl px-8",
-        icon: "h-10 w-10",
+        default: "h-9 px-4",
+        sm: "h-8 px-3 text-[13px]",
+        lg: "h-10 px-5",
+        icon: "h-9 w-9",
       },
     },
     defaultVariants: {

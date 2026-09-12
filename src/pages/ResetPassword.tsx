@@ -87,7 +87,7 @@ const ResetPassword = () => {
                   className="h-11 border-white/15 bg-white/[0.04] text-white"
                 />
               </div>
-              <Button type="submit" disabled={loading} className="h-11 w-full bg-emerald-500 text-white hover:bg-emerald-400">
+              <Button type="submit" disabled={loading} className="h-11 w-full">
                 {loading ? 'Updating…' : 'Update password'}
               </Button>
             </form>

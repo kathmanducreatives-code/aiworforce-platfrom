@@ -1,10 +1,10 @@
-// Shared visual tokens for the Lead Library workspace. Restrained glass,
-// one teal accent, consistent radii/borders.
+// Shared visual tokens for the Lead Library workspace. The surfaces are the
+// app-wide design system (index.css, "AGENTORY DESIGN SYSTEM"); one teal accent.
 
 export const surfaceBase =
-  "bg-[rgba(10,13,12,0.55)] backdrop-blur-xl border border-white/[0.06]";
+  "ag-glass";
 export const surfaceRaised =
-  "bg-[rgba(14,18,17,0.72)] backdrop-blur-2xl border border-white/[0.07]";
+  "ag-raised";
 export const surfaceHover = "hover:bg-white/[0.03]";
 export const borderSubtle = "border-white/[0.06]";
 export const borderActive = "border-primary/40";

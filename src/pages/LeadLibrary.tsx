@@ -143,7 +143,7 @@ export default function LeadLibrary() {
         />
 
         {tab === "all" && (
-          <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden bg-[rgba(10,13,12,0.55)] backdrop-blur-xl border border-white/[0.06]">
+          <div className="ag-glass flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden">
             {isLoading ? (
               <div className="p-4"><PremiumSkeleton /></div>
             ) : error ? (
@@ -239,7 +239,7 @@ function EmptyState({ hasRows, onReset }: { hasRows: boolean; onReset: () => voi
         {hasRows && (
           <button
             onClick={onReset}
-            className="mt-3 inline-flex items-center h-8 px-3 rounded-md text-[12px] text-primary bg-primary/[0.08] border border-primary/25 hover:bg-primary/[0.14]"
+            className="ag-btn ag-btn-secondary mt-3 inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-medium"
           >
             Clear filters
           </button>

@@ -66,7 +66,7 @@ export default function RunSummaryHero({ summary, cta }: Props) {
         {cta && (
           <button
             onClick={cta.onClick}
-            className="shrink-0 h-9 px-4 rounded-lg text-[13.5px] font-medium inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black transition-colors"
+            className="ag-btn ag-btn-primary rounded-lg font-medium shrink-0 h-9 px-4 text-[13.5px] inline-flex items-center gap-1.5"
           >
             {cta.label}
             <ArrowRight className="h-3.5 w-3.5" />

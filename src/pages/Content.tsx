@@ -344,7 +344,7 @@ export default function Content() {
           <p className="mt-0.5 truncate text-[13px] text-muted-foreground/70">Create and refine content with Scribe.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <dl className="hidden items-stretch overflow-hidden rounded-xl border border-white/[0.06] bg-[rgba(12,16,15,0.55)] backdrop-blur-xl md:flex">
+          <dl className="ag-glass hidden items-stretch overflow-hidden rounded-xl md:flex">
             <Stat label="trends" value={stats.trends} />
             <Stat label="drafts" value={stats.drafts} />
             <Stat label="awaiting review" value={stats.awaiting} />
@@ -361,18 +361,16 @@ export default function Content() {
       <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-4 lg:hidden" role="tablist" aria-label="Content areas">
         {([['sources', 'Sources', PanelLeft], ['studio', 'Studio', FileText], ['scribe', 'Scribe', Sparkles]] as const).map(([id, label, Icon]) => (
           <button key={id} role="tab" aria-selected={pane === id} onClick={() => setPane(id)}
-            className={`relative inline-flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12.5px] font-medium ${
-              pane === id ? ACCENT.accentText : 'text-muted-foreground/65'
-            }`}>
+            className="ag-tab-line inline-flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12.5px] font-medium">
             <Icon className="h-3.5 w-3.5" /> {label}
-            {pane === id && <span className="absolute inset-x-4 -bottom-px h-[2px] rounded-full bg-emerald-500/80" aria-hidden />}
+            {pane === id && <span className="ag-tab-underline absolute inset-x-4 -bottom-px h-[2px] rounded-full" aria-hidden />}
           </button>
         ))}
       </div>
 
       <div className="flex min-h-0 flex-1">
         {/* ── SOURCES ─────────────────────────────────────────────────── */}
-        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-white/[0.06] lg:bg-[rgba(10,13,12,0.45)] lg:backdrop-blur-xl`}>
+        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-[var(--ag-line)] lg:bg-[var(--ag-surface)] lg:backdrop-blur-xl`}>
           <ContentSourcesPanel
             nav={nav}
             onNav={setNav}

@@ -211,7 +211,7 @@ export default function GuideCard({
           <button
             type="button"
             onClick={onNext}
-            className="h-8 px-3 rounded-md text-[12.5px] font-semibold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.35)] flex items-center gap-1 transition-all"
+            className="ag-btn ag-btn-primary rounded-lg font-medium h-8 px-3 text-[12.5px] flex items-center gap-1"
           >
             {isLast ? 'Run recommended workflow' : 'Next'} <ArrowRight className="h-3 w-3" />
           </button>

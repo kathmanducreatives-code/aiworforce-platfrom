@@ -157,7 +157,7 @@ export default function ContentStudioEditor({
 
       {/* ── version preview banner ──────────────────────────────────────── */}
       {previewing && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-[rgba(10,13,12,0.6)] px-4 py-2.5 text-[13px] shadow-[inset_2px_0_0_rgba(16,185,129,0.7)] backdrop-blur-xl">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 ag-glass rounded-xl border-emerald-500/20 px-4 py-2.5 text-[13px] shadow-[inset_2px_0_0_rgba(16,185,129,0.7)] backdrop-blur-xl">
           <span className="inline-flex items-center gap-2 text-foreground/85">
             <Eye className="h-3.5 w-3.5" />
             Viewing v{preview!.version} · {versionLabel(preview!)} — not the current version
@@ -210,7 +210,7 @@ export default function ContentStudioEditor({
           rows={14}
           placeholder="Write your draft, or ask Scribe to draft it. It is saved to this workspace — never posted."
           aria-label="Draft"
-          className={`w-full resize-y rounded-2xl border border-white/[0.07] bg-[rgba(10,13,12,0.55)] px-6 py-5 text-[15px] leading-[1.75] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_70px_-40px_rgba(0,0,0,0.95)] outline-none backdrop-blur-xl transition-[border-color,box-shadow] duration-200 hover:border-white/[0.1] focus:border-emerald-500/35 focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_0_4px_rgba(16,185,129,0.07),0_30px_70px_-40px_rgba(16,185,129,0.35)] ${
+          className={`w-full resize-y ag-glass rounded-2xl px-6 py-5 text-[15px] leading-[1.75] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_70px_-40px_rgba(0,0,0,0.95)] outline-none backdrop-blur-xl transition-[border-color,box-shadow] duration-200 hover:border-white/[0.1] focus:border-emerald-500/35 focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_0_4px_rgba(16,185,129,0.07),0_30px_70px_-40px_rgba(16,185,129,0.35)] ${
             previewing ? "text-foreground/70" : "text-foreground/95"
           }`}
         />
@@ -227,7 +227,7 @@ export default function ContentStudioEditor({
             <img src={current.url} alt="Current image for this draft" loading="lazy"
               className="mt-3 w-full max-w-[420px] rounded-xl border border-white/[0.07] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.95)]" />
           ) : (
-            <div className="mt-3 flex max-w-[420px] items-center justify-between gap-3 rounded-xl border border-dashed border-white/[0.09] bg-[rgba(10,13,12,0.45)] px-4 py-5 backdrop-blur-xl">
+            <div className="mt-3 flex max-w-[420px] items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--ag-line-strong)] bg-[var(--ag-fill)] px-4 py-5 backdrop-blur-xl">
               <span className="text-[13px] text-muted-foreground/65">No visual yet.</span>
               <ActionButton onClick={() => run("image", onImage, "Image ready. The text is unchanged.")}
                 disabled={!actions.image.enabled} busy={busy === "image"} icon={ImageIcon} title={actions.image.reason ?? undefined}>

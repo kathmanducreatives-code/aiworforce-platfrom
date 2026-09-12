@@ -96,7 +96,7 @@ export default function DeployScreen({ form, submitting, onDeploy, onBack }: Pro
             <Button
               onClick={onDeploy}
               disabled={submitting}
-              className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-background font-bold text-base shadow-[0_0_30px_-5px_rgba(16,185,129,0.6)]"
+              className="w-full h-12 text-base"
             >
               {submitting ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deploying…</>

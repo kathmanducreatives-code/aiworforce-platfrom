@@ -60,7 +60,7 @@ const FilterBar = ({
                             <DropdownMenuItem
                                 key={option.value}
                                 onClick={() => onSortChange(option.value)}
-                                className={cn(option.value === currentSort && 'bg-primary/10 text-primary')}
+                                className={cn(option.value === currentSort && 'text-foreground bg-[var(--ag-fill-active)]')}
                             >
                                 {option.label}
                             </DropdownMenuItem>
@@ -75,7 +75,7 @@ const FilterBar = ({
                     <SlidersHorizontal className="h-3.5 w-3.5" />
                     Filters
                     {filterCount > 0 && (
-                        <span className="ml-1 text-xs bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center">
+                        <span className="ml-1 text-[10px] font-semibold tabular-nums bg-[rgb(var(--ag-emerald-ink))] text-white rounded-full w-4 h-4 flex items-center justify-center">
                             {filterCount}
                         </span>
                     )}

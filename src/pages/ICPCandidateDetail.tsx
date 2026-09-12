@@ -411,7 +411,7 @@ const ICPCandidateDetail = () => {
                   {!profile.email && (
                     <Button
                       size="sm"
-                      className="h-9 text-xs bg-primary text-primary-foreground hover:bg-gradient-to-r hover:from-[#059467] hover:to-[#14b8a5] transition-all duration-200 rounded-lg"
+                      className="h-9 text-xs rounded-lg"
                       onClick={handleRevealEmail}
                       disabled={revealingEmail}
                     >

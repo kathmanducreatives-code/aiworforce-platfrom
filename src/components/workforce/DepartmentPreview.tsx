@@ -56,9 +56,9 @@ export default function DepartmentPreview({ agentId, totals, brainComplete }: Pr
         </div>
 
         {/* Stats — inline KPI row, no individual card chrome */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.05] rounded-lg overflow-hidden border border-white/[0.06]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden rounded-xl border border-[var(--ag-line)] bg-[var(--ag-line)] shadow-[inset_0_1px_0_var(--ag-sheen)]">
           {stats.map((s) => (
-            <div key={s.label} className="px-4 py-4 bg-[#0a0a0a]">
+            <div key={s.label} className="px-4 py-4 bg-[rgb(10_13_12/0.88)]">
               <div className="eyebrow">{s.label}</div>
               <div className={cn('text-[26px] font-semibold num mt-2 leading-none tracking-tight', toneClass[s.tone ?? 'default'])}>
                 {s.value}
@@ -74,19 +74,9 @@ export default function DepartmentPreview({ agentId, totals, brainComplete }: Pr
               key={a.label}
               onClick={() => navigate(a.route)}
               className={cn(
-                'group inline-flex items-center justify-between gap-2 px-4 h-10 rounded-md text-[14px] font-semibold transition-colors',
-                a.primary
-                  ? 'text-black'
-                  : 'text-neutral-200 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] hover:text-white',
+                'ag-btn group inline-flex items-center justify-between gap-2 px-4 h-10 rounded-lg text-[14px] font-medium',
+                a.primary ? 'ag-btn-primary' : 'ag-btn-secondary',
               )}
-              style={
-                a.primary
-                  ? {
-                      background: cfg.ringHex,
-                      border: `1px solid ${cfg.ringHex}`,
-                    }
-                  : undefined
-              }
             >
               <span>{a.label}</span>
               <ArrowUpRight className="h-4 w-4 opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />

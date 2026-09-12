@@ -44,7 +44,7 @@ export default function AskPilotAboutPage({ className, variant = 'chip' }: AskPi
 
   const base = 'inline-flex items-center gap-1.5 text-[12.5px] font-medium transition-colors';
   const style = variant === 'chip'
-    ? 'h-8 px-3 rounded-full border border-emerald-500/25 bg-emerald-500/[0.05] text-emerald-200 hover:bg-emerald-500/10 hover:border-emerald-500/40'
+    ? 'ag-btn ag-btn-secondary h-8 px-3 rounded-lg [&>svg]:text-emerald-300/90'
     : 'text-neutral-400 hover:text-emerald-300';
 
   return (

@@ -45,8 +45,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
           <button
             onClick={onRunScan}
             disabled={scanning}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition-all hover:brightness-110 disabled:opacity-60 active:scale-[0.97]"
-            style={{ background: `${accentHex}1F`, borderColor: `${accentHex}55`, color: accentHex }}
+            className="ag-btn ag-btn-secondary inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-medium disabled:opacity-45 [&>svg]:text-emerald-300"
           >
             {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
             {scanning ? 'Scanning…' : 'Run radar scan'}
@@ -72,8 +71,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
           </div>
           <button
             onClick={onReview}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition-all hover:brightness-110 active:scale-[0.97]"
-            style={{ background: `${accentHex}1F`, borderColor: `${accentHex}55`, color: accentHex }}
+            className="ag-btn ag-btn-secondary inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-medium"
           >
             Review signals
             <ChevronRight className="h-4 w-4" />

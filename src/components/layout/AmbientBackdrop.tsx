@@ -8,8 +8,10 @@
 //   leads    light from the top right, over the command surface
 //   signals  the same room with a radar: faint range rings where the light is
 //   content  a quiet spotlight over the centre column, where the writing is
+//   app      every other page: MainLayout mounts it once, so no working page is
+//            flat black. A page that brings its own variant paints over it.
 
-type Variant = "leads" | "signals" | "content";
+type Variant = "leads" | "signals" | "content" | "app";
 
 const BASE = "linear-gradient(180deg,#050706 0%,#020403 100%)";
 
@@ -23,6 +25,9 @@ const LIGHT: Record<Variant, string> = {
   content:
     "radial-gradient(1000px 520px at 50% -14%,rgba(16,185,129,0.10),transparent 62%)," +
     "radial-gradient(760px 480px at 105% 108%,rgba(6,95,70,0.11),transparent 55%)",
+  app:
+    "radial-gradient(1100px 560px at 92% -12%,rgba(16,185,129,0.085),transparent 60%)," +
+    "radial-gradient(900px 520px at -8% 108%,rgba(6,95,70,0.10),transparent 55%)",
 };
 
 const GRID: Record<Variant, { opacity: string; mask: string }> = {
@@ -30,12 +35,14 @@ const GRID: Record<Variant, { opacity: string; mask: string }> = {
   signals: { opacity: "opacity-[0.05]", mask: "radial-gradient(1100px 560px at 65% 0%, black, transparent 78%)" },
   // Writing wants less texture: the grid is there, barely.
   content: { opacity: "opacity-[0.035]", mask: "radial-gradient(1000px 480px at 50% 0%, black, transparent 75%)" },
+  app: { opacity: "opacity-[0.045]", mask: "radial-gradient(1100px 560px at 60% 0%, black, transparent 78%)" },
 };
 
 const BLOB: Record<Variant, string> = {
   leads: "-top-32 right-[10%] h-[420px] w-[420px] bg-emerald-500/[0.09]",
   signals: "-top-40 right-[22%] h-[440px] w-[440px] bg-emerald-500/[0.08]",
   content: "-top-48 left-1/2 h-[380px] w-[560px] -translate-x-1/2 bg-emerald-500/[0.07]",
+  app: "-top-36 right-[12%] h-[400px] w-[400px] bg-emerald-500/[0.07]",
 };
 
 export function AmbientBackdrop({ variant }: { variant: Variant }) {

@@ -363,7 +363,7 @@ const ICPResultsPage = () => {
                         <Button variant="outline" className="h-9 border-border/40 gap-2 hidden sm:flex" onClick={handleShare}>
                             <Share2 className="w-4 h-4" /> Share
                         </Button>
-                        <Button className="h-9 bg-primary text-primary-foreground hover:bg-primary/90 gap-2 shadow-[var(--shadow-glow)]" onClick={handleExportCSV}>
+                        <Button className="h-9 gap-2" onClick={handleExportCSV}>
                             <Download className="w-4 h-4" /> Export CSV
                         </Button>
                     </div>
@@ -526,7 +526,7 @@ const ICPResultsPage = () => {
                                         <div className="flex items-center">
                                             <Button
                                                 onClick={handleFindEmails}
-                                                className="h-9 rounded-r-none gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[var(--shadow-glow)]"
+                                                className="h-9 rounded-r-none gap-2"
                                             >
                                                 <Sparkles className="w-4 h-4" />
                                                 Find Emails
@@ -577,7 +577,7 @@ const ICPResultsPage = () => {
                                                 </div>
                                                 <Button
                                                     onClick={handleFindEmails}
-                                                    className="w-full h-8 gap-2 bg-primary text-primary-foreground text-xs"
+                                                    className="w-full h-8 gap-2 text-xs"
                                                 >
                                                     <Mail className="w-3.5 h-3.5" />
                                                     Start Finding
@@ -651,7 +651,7 @@ const ICPResultsPage = () => {
                                         <div className="flex items-center">
                                             <Button
                                                 onClick={handleFindEmails}
-                                                className="h-9 rounded-r-none gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[var(--shadow-glow)]"
+                                                className="h-9 rounded-r-none gap-2"
                                             >
                                                 <Sparkles className="w-4 h-4" />
                                                 Find Emails
@@ -694,7 +694,7 @@ const ICPResultsPage = () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                                <Button onClick={handleFindEmails} className="w-full h-8 gap-2 bg-primary text-primary-foreground text-xs">
+                                                <Button onClick={handleFindEmails} className="w-full h-8 gap-2 text-xs">
                                                     <Mail className="w-3.5 h-3.5" /> Start Finding
                                                 </Button>
                                             </div>

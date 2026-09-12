@@ -78,13 +78,14 @@ html, body {
 }
 
 /* === Premium card surface (v4 polish) === */
+/* The app's card: the design system's glass (see AGENTORY DESIGN SYSTEM). */
 .card-premium {
-  background: rgba(255,255,255,0.025);
-  border: 1px solid rgba(255,255,255,0.08);
+  background-color: var(--ag-surface, rgba(12,16,15,0.58));
+  border: 1px solid var(--ag-line, rgba(255,255,255,0.065));
   border-radius: var(--radius-card);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255,255,255,0.04),
-    0 8px 24px -16px rgba(0,0,0,0.6);
+  box-shadow: inset 0 1px 0 0 var(--ag-sheen, rgba(255,255,255,0.045)), var(--ag-shadow, 0 18px 48px -28px rgba(0,0,0,0.9));
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
 }
 .card-premium-recommended {
   border-color: rgba(16,185,129,0.32);
@@ -107,29 +108,31 @@ html, body {
    .glass-quiet    ambient panels (popovers, hover layers)
    .glass-surface  floating intelligence surfaces (command dock, modals)
    .glass-loud     focal AI surfaces (active modal, expanded dock)            */
+/* These three now draw from the design system's surfaces (ag-glass / ag-raised /
+   ag-float) so every generation of glass in the app is the same material. */
 .glass-quiet {
-  background: rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.06));
+  background-color: var(--ag-surface, rgba(12,16,15,0.58));
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--ag-line, rgba(255, 255, 255, 0.065));
 }
 
 .glass-surface {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.06));
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  background-color: var(--ag-surface-raised, rgba(15,19,18,0.8));
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid var(--ag-line, rgba(255, 255, 255, 0.065));
+  box-shadow: inset 0 1px 0 0 var(--ag-sheen, rgba(255, 255, 255, 0.045)), 0 18px 48px -28px rgba(0, 0, 0, 0.9);
 }
 
 .glass-loud {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
-  border: 1px solid var(--hairline-strong, rgba(255, 255, 255, 0.10));
+  background-color: var(--ag-surface-float, rgba(11,14,13,0.9));
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 1px solid var(--ag-line-strong, rgba(255, 255, 255, 0.11));
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
-    0 24px 64px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 0 var(--ag-sheen, rgba(255, 255, 255, 0.045)),
+    0 30px 90px -20px rgba(0, 0, 0, 0.9);
 }
 
 /* Emerald focus rim — apply to glass surfaces that should bloom on focus */
@@ -2272,4 +2275,384 @@ section[id] {
      so the composition box stayed the same height. */
   #demo-recruiting .look-mockup .candidate-card { padding-top: 0.5rem; padding-bottom: 0.5rem; }
   #demo-recruiting .look-mockup > div > div:first-child { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+}
+
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   AGENTORY DESIGN SYSTEM — the one visual language for the working product.
+
+   Materials, not colours: dark translucent surfaces over an ambient room light,
+   hairlines instead of borders, a faint inner sheen on the top edge, depth from
+   soft shadow. Emerald is LIGHT — the primary action, the active mark, a focus
+   ring, the glow of the room — never paint for a whole component.
+
+   The shadcn primitives in components/ui are built from these classes, so a
+   Button, Card, Tabs, Input, Select, Dialog, Popover or Badge anywhere in the
+   app is the same object. Hand-built surfaces use the same classes (see
+   components/layout/workspaceStyles.ts). Utilities still win: these live in the
+   components layer, so a call site's own className keeps its say.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-theme="dark"] {
+  --ag-emerald: 16 185 129;                  /* the light */
+  --ag-emerald-ink: 10 133 93;               /* primary fill: 4.6:1 under white text */
+  --ag-surface: rgb(12 16 15 / 0.58);        /* glass panel */
+  --ag-surface-raised: rgb(15 19 18 / 0.80); /* a surface above a surface */
+  --ag-surface-float: rgb(11 14 13 / 0.90);  /* modals, menus, popovers */
+  --ag-line: rgb(255 255 255 / 0.065);       /* hairline */
+  --ag-line-strong: rgb(255 255 255 / 0.11);
+  --ag-sheen: rgb(255 255 255 / 0.045);      /* inner top highlight */
+  --ag-fill: rgb(255 255 255 / 0.035);       /* quiet control fill */
+  --ag-fill-hover: rgb(255 255 255 / 0.065);
+  --ag-fill-active: rgb(255 255 255 / 0.085);
+  --ag-well: rgb(0 0 0 / 0.28);              /* inputs sit IN the surface */
+  --ag-shadow: 0 1px 1px rgb(0 0 0 / 0.25), 0 18px 48px -28px rgb(0 0 0 / 0.9);
+  --ag-shadow-float: 0 30px 90px -20px rgb(0 0 0 / 0.9), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  --ag-text: 237 237 237;
+  --ag-text-muted: 156 163 175;
+}
+
+[data-theme="light"] {
+  --ag-emerald: 5 150 105;
+  --ag-emerald-ink: 4 120 87;
+  --ag-surface: rgb(255 255 255 / 0.72);
+  --ag-surface-raised: rgb(255 255 255 / 0.9);
+  --ag-surface-float: rgb(255 255 255 / 0.96);
+  --ag-line: rgb(15 23 20 / 0.08);
+  --ag-line-strong: rgb(15 23 20 / 0.14);
+  --ag-sheen: rgb(255 255 255 / 0.9);
+  --ag-fill: rgb(15 23 20 / 0.035);
+  --ag-fill-hover: rgb(15 23 20 / 0.06);
+  --ag-fill-active: rgb(15 23 20 / 0.08);
+  --ag-well: rgb(255 255 255 / 0.85);
+  --ag-shadow: 0 1px 2px rgb(15 23 20 / 0.05), 0 12px 32px -20px rgb(15 23 20 / 0.18);
+  --ag-shadow-float: 0 24px 64px -20px rgb(15 23 20 / 0.25), 0 8px 20px -12px rgb(15 23 20 / 0.12);
+  --ag-text: 20 20 20;
+  --ag-text-muted: 100 100 100;
+}
+
+@layer components {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  .ag-glass {
+    background-color: var(--ag-surface);
+    border: 1px solid var(--ag-line);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), var(--ag-shadow);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+  }
+  .ag-raised {
+    background-color: var(--ag-surface-raised);
+    border: 1px solid var(--ag-line);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), 0 1px 1px rgb(0 0 0 / 0.3), 0 24px 60px -30px rgb(0 0 0 / 0.95);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+  }
+  .ag-float {
+    background-color: var(--ag-surface-float);
+    border: 1px solid var(--ag-line-strong);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), var(--ag-shadow-float);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+  }
+  /* A card you can act on: the hairline lifts, a trace of the room light falls on it. */
+  .ag-interactive {
+    transition: border-color 180ms ease, background-image 180ms ease, box-shadow 220ms ease, transform 180ms ease;
+  }
+  .ag-interactive:hover {
+    border-color: var(--ag-line-strong);
+    background-image: linear-gradient(180deg, rgb(var(--ag-emerald) / 0.04), transparent 65%);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), 0 1px 1px rgb(0 0 0 / 0.25), 0 22px 50px -30px rgb(var(--ag-emerald) / 0.28);
+  }
+  /* The one selected thing in a list: lit from its leading edge. */
+  .ag-selected {
+    border-color: rgb(var(--ag-emerald) / 0.26);
+    background-image: linear-gradient(90deg, rgb(var(--ag-emerald) / 0.10), rgb(var(--ag-emerald) / 0.02) 70%);
+    box-shadow: inset 2px 0 0 rgb(var(--ag-emerald) / 0.85), inset 0 1px 0 var(--ag-sheen), 0 10px 30px -18px rgb(var(--ag-emerald) / 0.45);
+  }
+  /* A floating surface's top edge catches the light. */
+  .ag-edge-light {
+    position: relative;
+  }
+  .ag-edge-light::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0 12% auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(var(--ag-emerald) / 0.45), transparent);
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────── */
+  .ag-btn {
+    transition: background-color 150ms ease, box-shadow 220ms ease, color 150ms ease, transform 100ms ease, filter 150ms ease;
+  }
+  .ag-btn:active:not(:disabled) {
+    transform: translateY(0.5px);
+  }
+  /* Primary: deep emerald, lit from above, a restrained glow. Tactile, not neon. */
+  .ag-btn-primary {
+    color: #fff;
+    background-color: rgb(var(--ag-emerald-ink));
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 58%);
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.18);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 0 0 1px rgb(255 255 255 / 0.05),
+      0 0 0 1px rgb(4 100 70 / 0.9),
+      0 1px 2px rgb(0 0 0 / 0.4),
+      0 6px 20px -8px rgb(var(--ag-emerald) / 0.55);
+  }
+  .ag-btn-primary:hover:not(:disabled) {
+    background-color: rgb(11 142 99);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.26),
+      inset 0 0 0 1px rgb(255 255 255 / 0.07),
+      0 0 0 1px rgb(4 110 77 / 0.95),
+      0 1px 2px rgb(0 0 0 / 0.4),
+      0 10px 30px -8px rgb(var(--ag-emerald) / 0.7);
+  }
+  .ag-btn-primary:active:not(:disabled) {
+    background-color: rgb(9 122 85);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(4 100 70 / 0.95), 0 4px 14px -8px rgb(var(--ag-emerald) / 0.5);
+  }
+  /* Secondary: quiet glass. A fill and a hairline, neutral text. */
+  .ag-btn-secondary {
+    color: rgb(var(--ag-text) / 0.9);
+    background-color: var(--ag-fill);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px var(--ag-line-strong);
+  }
+  .ag-btn-secondary:hover:not(:disabled) {
+    color: rgb(var(--ag-text));
+    background-color: var(--ag-fill-hover);
+    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  }
+  [data-theme="light"] .ag-btn-secondary:hover:not(:disabled) {
+    box-shadow: inset 0 1px 0 var(--ag-sheen), inset 0 0 0 1px rgb(15 23 20 / 0.2);
+  }
+  .ag-btn-ghost {
+    color: rgb(var(--ag-text-muted));
+  }
+  .ag-btn-ghost:hover:not(:disabled) {
+    color: rgb(var(--ag-text));
+    background-color: var(--ag-fill-hover);
+  }
+  .ag-btn-destructive {
+    color: rgb(254 202 202);
+    background-color: rgb(239 68 68 / 0.12);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), inset 0 0 0 1px rgb(239 68 68 / 0.3);
+  }
+  .ag-btn-destructive:hover:not(:disabled) {
+    color: rgb(254 226 226);
+    background-color: rgb(239 68 68 / 0.18);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), inset 0 0 0 1px rgb(239 68 68 / 0.45), 0 8px 24px -12px rgb(239 68 68 / 0.45);
+  }
+  [data-theme="light"] .ag-btn-destructive { color: rgb(185 28 28); }
+  [data-theme="light"] .ag-btn-destructive:hover:not(:disabled) { color: rgb(153 27 27); }
+
+  /* ── Fields: inputs, selects and textareas sit IN the surface ─────────── */
+  .ag-field {
+    background-color: var(--ag-well);
+    border: 1px solid var(--ag-line-strong);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.22);
+    transition: border-color 150ms ease, box-shadow 180ms ease, background-color 150ms ease;
+  }
+  .ag-field:hover:not(:disabled):not(:focus-visible):not(:focus-within) {
+    border-color: rgb(255 255 255 / 0.15);
+  }
+  [data-theme="light"] .ag-field:hover:not(:disabled):not(:focus-visible):not(:focus-within) {
+    border-color: rgb(15 23 20 / 0.2);
+  }
+  .ag-field:focus-visible,
+  .ag-field:focus-within,
+  .ag-field[data-state="open"] {
+    outline: none;
+    border-color: rgb(var(--ag-emerald) / 0.5);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.18), 0 0 0 3px rgb(var(--ag-emerald) / 0.13);
+  }
+
+  /* ── Segmented control (Radix Tabs, view switchers) ───────────────────── */
+  .ag-segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background-color: rgb(0 0 0 / 0.26);
+    box-shadow: inset 0 0 0 1px var(--ag-line), inset 0 1px 2px rgb(0 0 0 / 0.3);
+  }
+  [data-theme="light"] .ag-segmented { background-color: rgb(15 23 20 / 0.05); box-shadow: inset 0 0 0 1px var(--ag-line); }
+  .ag-seg-item {
+    position: relative;
+    border-radius: 7px;
+    color: rgb(var(--ag-text-muted));
+    transition: color 150ms ease, background-color 150ms ease, box-shadow 200ms ease;
+  }
+  .ag-seg-item:hover:not(:disabled) { color: rgb(var(--ag-text)); }
+  /* Selected: a raised glass key with a line of light under it — not a green box. */
+  .ag-seg-item[data-state="active"],
+  .ag-seg-item[aria-selected="true"],
+  .ag-seg-item[aria-pressed="true"],
+  .ag-seg-item[aria-current="page"],
+  .ag-seg-item[data-active="true"] {
+    color: rgb(var(--ag-text));
+    background-color: rgb(255 255 255 / 0.075);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 3px rgb(0 0 0 / 0.5);
+  }
+  [data-theme="light"] .ag-seg-item[data-state="active"],
+  [data-theme="light"] .ag-seg-item[aria-selected="true"],
+  [data-theme="light"] .ag-seg-item[aria-pressed="true"],
+  [data-theme="light"] .ag-seg-item[aria-current="page"],
+  [data-theme="light"] .ag-seg-item[data-active="true"] {
+    background-color: #fff;
+    box-shadow: 0 0 0 1px rgb(15 23 20 / 0.08), 0 1px 3px rgb(15 23 20 / 0.12);
+  }
+  .ag-seg-item[data-state="active"]::after,
+  .ag-seg-item[aria-selected="true"]::after,
+  .ag-seg-item[aria-pressed="true"]::after,
+  .ag-seg-item[aria-current="page"]::after,
+  .ag-seg-item[data-active="true"]::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    left: 30%;
+    right: 30%;
+    bottom: -1px;
+    height: 1px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, transparent, rgb(var(--ag-emerald) / 0.9), transparent);
+    box-shadow: 0 0 8px rgb(var(--ag-emerald) / 0.7);
+  }
+
+  /* ── Line tabs (a page's primary views) ───────────────────────────────── */
+  .ag-tab-line {
+    position: relative;
+    color: rgb(var(--ag-text-muted));
+    transition: color 150ms ease;
+  }
+  .ag-tab-line:hover:not(:disabled) { color: rgb(var(--ag-text) / 0.9); }
+  .ag-tab-line[data-state="active"],
+  .ag-tab-line[aria-selected="true"],
+  .ag-tab-line[aria-current="page"] { color: rgb(var(--ag-text)); }
+  .ag-tab-underline {
+    background: linear-gradient(90deg, rgb(var(--ag-emerald) / 0.2), rgb(var(--ag-emerald) / 0.95) 50%, rgb(var(--ag-emerald) / 0.2));
+    box-shadow: 0 0 10px rgb(var(--ag-emerald) / 0.55), 0 0 2px rgb(var(--ag-emerald) / 0.8);
+  }
+
+  /* ── Chips: filters and toggles ───────────────────────────────────────── */
+  .ag-chip {
+    color: rgb(var(--ag-text-muted));
+    background-color: var(--ag-fill);
+    box-shadow: inset 0 0 0 1px var(--ag-line-strong);
+    transition: color 150ms ease, background-color 150ms ease, box-shadow 180ms ease;
+  }
+  .ag-chip:hover:not(:disabled) {
+    color: rgb(var(--ag-text));
+    background-color: var(--ag-fill-hover);
+  }
+  .ag-chip[aria-pressed="true"],
+  .ag-chip[data-active="true"],
+  .ag-chip[data-state="on"] {
+    color: rgb(167 243 208);
+    background-color: rgb(var(--ag-emerald) / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(var(--ag-emerald) / 0.3), 0 0 16px -6px rgb(var(--ag-emerald) / 0.45);
+  }
+  [data-theme="light"] .ag-chip[aria-pressed="true"],
+  [data-theme="light"] .ag-chip[data-active="true"],
+  [data-theme="light"] .ag-chip[data-state="on"] { color: rgb(4 120 87); }
+
+  /* ── Badges: quiet status marks ───────────────────────────────────────── */
+  .ag-badge-accent {
+    color: rgb(110 231 183);
+    background-color: rgb(var(--ag-emerald) / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(var(--ag-emerald) / 0.22);
+  }
+  .ag-badge-neutral {
+    color: rgb(var(--ag-text) / 0.8);
+    background-color: var(--ag-fill-hover);
+    box-shadow: inset 0 0 0 1px var(--ag-line);
+  }
+  .ag-badge-outline {
+    color: rgb(var(--ag-text-muted));
+    box-shadow: inset 0 0 0 1px var(--ag-line-strong);
+  }
+  .ag-badge-danger {
+    color: rgb(252 165 165);
+    background-color: rgb(239 68 68 / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(239 68 68 / 0.25);
+  }
+  [data-theme="light"] .ag-badge-accent { color: rgb(4 120 87); }
+  [data-theme="light"] .ag-badge-danger { color: rgb(185 28 28); }
+
+  /* ── Menu rows (select, dropdown, command) ────────────────────────────── */
+  .ag-menu-item {
+    border-radius: 7px;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+  .ag-menu-item:focus,
+  .ag-menu-item[data-highlighted],
+  .ag-menu-item[aria-selected="true"] {
+    background-color: var(--ag-fill-active);
+    color: rgb(var(--ag-text));
+  }
+
+  /* ── Empty-state mark: an object in the room light, not a grey box ───── */
+  .ag-empty-mark {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    color: rgb(110 231 183 / 0.9);
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgb(var(--ag-emerald) / 0.16), transparent 60%),
+      var(--ag-surface-raised);
+    border: 1px solid rgb(var(--ag-emerald) / 0.18);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 14px 36px -14px rgb(var(--ag-emerald) / 0.45);
+  }
+  .ag-empty-mark::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: -18px;
+    z-index: -1;
+    border-radius: 999px;
+    background: radial-gradient(closest-side, rgb(var(--ag-emerald) / 0.14), transparent);
+    filter: blur(6px);
+  }
+  [data-theme="light"] .ag-empty-mark { color: rgb(4 120 87); }
+
+  /* ── Selectable option tiles (radio-like choices) ─────────────────────── */
+  .ag-option {
+    background-color: var(--ag-fill);
+    box-shadow: inset 0 0 0 1px var(--ag-line-strong), inset 0 1px 0 var(--ag-sheen);
+    transition: background-color 150ms ease, box-shadow 200ms ease, color 150ms ease;
+  }
+  .ag-option:hover:not(:disabled) {
+    background-color: var(--ag-fill-hover);
+  }
+  /* Chosen: the tile is lit from above and its edge catches the light — no green box. */
+  .ag-option[aria-pressed="true"],
+  .ag-option[aria-checked="true"],
+  .ag-option[data-state="checked"],
+  .ag-option[data-active="true"] {
+    background-color: var(--ag-fill-hover);
+    background-image: radial-gradient(120% 90% at 50% 0%, rgb(var(--ag-emerald) / 0.13), transparent 70%);
+    box-shadow: inset 0 0 0 1px rgb(var(--ag-emerald) / 0.34), inset 0 1px 0 rgb(255 255 255 / 0.06), 0 10px 28px -16px rgb(var(--ag-emerald) / 0.5);
+  }
+
+  /* ── Modal scrim ─────────────────────────────────────────────────────── */
+  .ag-overlay {
+    background-color: rgb(0 0 0 / 0.55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  [data-theme="light"] .ag-overlay { background-color: rgb(15 23 20 / 0.28); }
+
+  /* Focus: one ring everywhere, the room light around the thing. */
+  .ag-focus:focus-visible {
+    outline: 2px solid rgb(var(--ag-emerald) / 0.6);
+    outline-offset: 2px;
+  }
 }

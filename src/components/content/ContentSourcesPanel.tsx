@@ -12,7 +12,7 @@ import { useState } from "react";
 import { Plus, Info, Search, Archive } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ACCENT, ROW_IDLE, ROW_SELECTED } from "@/components/content/studioStyles";
-import { GLASS_CARD, GLASS_RAISED } from "@/components/layout/workspaceStyles";
+import { GLASS_CARD } from "@/components/layout/workspaceStyles";
 import type { ContentItem } from "@/lib/content/contentItems";
 import {
   CONTENT_TYPE_LABEL, STATUS_LABEL, describeContentSource, sourceCardOf, type SourceSignalLike,
@@ -55,14 +55,10 @@ export default function ContentSourcesPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <nav className="flex flex-wrap gap-1 px-1" aria-label="Sources">
+      <nav className="ag-segmented mx-1 flex-wrap" aria-label="Sources">
         {NAV.map((n) => (
           <button key={n.id} onClick={() => onNav(n.id)} aria-current={nav === n.id ? "page" : undefined}
-            className={`rounded-md border px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
-              nav === n.id
-                ? `${ACCENT.accentBorder} ${ACCENT.accentBg} ${ACCENT.accentText}`
-                : "border-transparent text-muted-foreground/65 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground/90"
-            }`}>
+            className="ag-seg-item h-7 px-2.5 text-[12.5px] font-medium">
             {n.label}
           </button>
         ))}
@@ -106,7 +102,7 @@ export default function ContentSourcesPanel({
           <div className="space-y-2">
             {nav === "ideas" && (
               <button onClick={onNewIdea}
-                className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/[0.09] bg-[rgba(10,13,12,0.45)] px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.03]">
+                className="flex w-full items-center gap-2 rounded-xl border border-dashed border-[var(--ag-line-strong)] bg-[var(--ag-fill)] px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.03]">
                 <Plus className="h-3.5 w-3.5" /> Start from your own idea
               </button>
             )}
@@ -172,7 +168,7 @@ function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLi
                 <Info className="h-3 w-3" /> Why this?
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className={`w-72 text-[12.5px] ${GLASS_RAISED}`}>
+            <PopoverContent align="start" className="w-72 text-[12.5px]">
               <ul className="space-y-1.5 text-muted-foreground">
                 {c.why.map((w, i) => <li key={i}>{w}</li>)}
               </ul>

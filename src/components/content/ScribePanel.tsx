@@ -90,14 +90,12 @@ export default function ScribePanel({
           <PanelRightClose className="h-4 w-4" />
         </button>
       </div>
-      <div className="mx-4 flex gap-1 border-b border-white/[0.06]" role="tablist">
+      <div className="mx-4 flex gap-1 border-b border-[var(--ag-line)]" role="tablist">
         {(["scribe", "history"] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`relative flex-1 py-2 text-[12.5px] font-medium transition-colors ${
-              tab === t ? ACCENT.accentText : "text-muted-foreground/60 hover:text-foreground/85"
-            }`}>
+            className="ag-tab-line flex-1 py-2 text-[12.5px] font-medium">
             {t === "scribe" ? "Scribe" : `History${versions.length ? ` · ${versions.length}` : ""}`}
-            {tab === t && <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-emerald-500/80" aria-hidden />}
+            {tab === t && <span className="ag-tab-underline absolute inset-x-3 -bottom-px h-[2px] rounded-full" aria-hidden />}
           </button>
         ))}
       </div>

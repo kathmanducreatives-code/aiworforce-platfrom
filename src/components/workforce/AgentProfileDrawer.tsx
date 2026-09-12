@@ -59,7 +59,7 @@ export default function AgentProfileDrawer({ open, onClose, state }: Props) {
             {state.nextAction.route && (
               <button
                 onClick={() => { navigate(state.nextAction.route!); onClose(); }}
-                className="inline-flex items-center justify-between gap-2 h-10 px-4 rounded-lg text-[13px] font-medium text-black bg-gradient-to-b from-emerald-300 to-emerald-500 hover:from-emerald-200 hover:to-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.30)]"
+                className="ag-btn ag-btn-primary rounded-lg font-medium inline-flex items-center justify-between gap-2 h-10 px-4 text-[13px]"
               >
                 <span>{state.nextAction.label}</span>
                 <ArrowRight className="h-4 w-4" />

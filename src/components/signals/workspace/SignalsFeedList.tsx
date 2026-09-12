@@ -27,7 +27,7 @@ export default function SignalsFeedList({ signals, loading, emptyLabel, accentHe
   if (!signals.length) {
     return (
       <div
-        className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.09] bg-[rgba(10,13,12,0.45)] py-12 text-center backdrop-blur-xl"
+        className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--ag-line-strong)] bg-[var(--ag-fill)] py-12 text-center"
       >
         <span
           className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border"

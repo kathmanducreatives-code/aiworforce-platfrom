@@ -22,7 +22,7 @@ const BulkActionBar = ({ selectedCount, onClearSelection, actions, className }: 
 
     return (
         <div className={cn(
-            'sticky top-0 z-30 flex items-center gap-3 px-4 py-2.5 mb-4 rounded-xl border border-primary/20 bg-primary/5 backdrop-blur-xl',
+            'ag-raised ag-edge-light sticky top-0 z-30 flex items-center gap-3 px-4 py-2.5 mb-4 rounded-xl',
             'animate-in slide-in-from-top-2 duration-200',
             className
         )}>
@@ -39,10 +39,7 @@ const BulkActionBar = ({ selectedCount, onClearSelection, actions, className }: 
                         size="sm"
                         variant={action.variant === 'destructive' ? 'destructive' : action.variant === 'outline' ? 'outline' : 'default'}
                         onClick={action.onClick}
-                        className={cn(
-                            'gap-1.5 rounded-lg text-xs h-7',
-                            action.variant !== 'destructive' && action.variant !== 'outline' && 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                        )}
+                        className="gap-1.5 text-xs h-7"
                     >
                         {action.icon}
                         {action.label}

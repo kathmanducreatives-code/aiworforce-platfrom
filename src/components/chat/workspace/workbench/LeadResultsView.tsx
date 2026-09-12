@@ -973,7 +973,7 @@ function ConfirmDialog({ action, rows, credits, onCancel, onConfirm }: { action:
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={onConfirm}
-              className="flex items-center gap-1.5 text-[13px] font-bold px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-colors shadow-[0_0_16px_rgba(16,185,129,0.15)]"
+              className="ag-btn ag-btn-primary rounded-lg font-medium flex items-center gap-1.5 text-[13px] px-4 py-2"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
               Start

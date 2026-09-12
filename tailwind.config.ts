@@ -55,6 +55,8 @@ export default {
 				'border-active': 'rgba(16, 185, 129, 0.30)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
+				/* Surfaces carry a trace of green in the black (the Lead Library's
+				   rgb(10,13,12)), so every card, menu and fill sits in the same room light.
 				/* Map shadcn semantic names to Deep Space layers (kept as literals
 				   so light-theme HSL vars still drive the actual painted color via
 				   hsl(var(--background)) in body styles — these literals are the
@@ -62,8 +64,8 @@ export default {
 				background: '#050505',
 				foreground: '#EDEDED',
 				'text-tertiary': '#6B7280',
-				'surface-elevated': '#101010',
-				'surface-hover': '#161616',
+				'surface-elevated': '#0F1312',
+				'surface-hover': '#151A19',
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',
 					'200': 'rgba(16, 185, 129, 0.2)',
@@ -73,11 +75,11 @@ export default {
 					dark: '#059669'
 				},
 				secondary: {
-					DEFAULT: '#0A0A0A',
+					DEFAULT: '#0A0D0C',
 					foreground: '#EDEDED'
 				},
 				accent: {
-					DEFAULT: '#161616',
+					DEFAULT: '#151A19',
 					foreground: '#EDEDED',
 					secondary: 'rgba(16, 185, 129, 0.08)'
 				},
@@ -86,15 +88,15 @@ export default {
 					foreground: '#FFFFFF'
 				},
 				muted: {
-					DEFAULT: '#161616',
+					DEFAULT: '#141918',
 					foreground: '#9CA3AF'
 				},
 				popover: {
-					DEFAULT: '#101010',
+					DEFAULT: '#0E1211',
 					foreground: '#EDEDED'
 				},
 				card: {
-					DEFAULT: '#101010',
+					DEFAULT: '#0D1110',
 					foreground: '#EDEDED'
 				},
 				sidebar: {

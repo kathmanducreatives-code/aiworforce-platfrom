@@ -189,7 +189,7 @@ export const ProfileDetailModal = ({ profile, deepSearchResult, revealedEmail, o
                             Save
                         </Button>
                         {!displayEmail && !isNotFound && (
-                            <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg">
+                            <Button size="sm" className="h-8 text-xs rounded-lg">
                                 <Mail className="w-3.5 h-3.5 mr-1.5" />
                                 Reveal Email
                             </Button>
