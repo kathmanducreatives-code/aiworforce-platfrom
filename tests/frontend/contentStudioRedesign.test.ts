@@ -85,7 +85,8 @@ Deno.test("the rule lives ONCE, in the shared layout — no page carries collaps
 
 Deno.test("Scribe's contextual actions are typed revisions, plus the visual", () => {
   assertEquals(SCRIBE_ACTIONS.map((a) => a.label),
-    ["Improve hook", "Make more concise", "Change angle", "Give 3 alternatives", "Generate visual"]);
+    ["Improve hook", "Make more concise", "Change angle", "Make more provocative", "Make more educational",
+      "Give 3 alternatives", "Generate visual"]);
   assertEquals(SCRIBE_ACTIONS.filter((a) => a.revision === null).map((a) => a.id), ["visual"]);
 });
 

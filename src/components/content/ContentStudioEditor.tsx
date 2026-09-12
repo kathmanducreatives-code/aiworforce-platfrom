@@ -1,8 +1,10 @@
 // CONTENT STUDIO — THE DRAFT, AND ONLY WHAT SERVES IT.
 //
-// The centre of the page. One content object: its strategy (audience,
-// objective, angle, CTA), its hook, the draft, its visual, and the actions that
-// move it towards approval. History and Scribe live in the side panel; they are
+// The centre of the page. One content object: what Scribe decided (format,
+// audience, angle — and why), the structure it made, the caption, its visual,
+// and the actions that move it towards approval. The decision is SHOWN, with
+// "Change format" and "Change angle", instead of having been asked for up
+// front; the old strategy fields remain as optional overrides. History and Scribe live in the side panel; they are
 // context for this, not competitors with it.
 //
 // It owns no data. The row, its versions and its current image arrive as props
@@ -13,15 +15,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2, Sparkles, RefreshCw, Image as ImageIcon, Check, Archive, RotateCcw, Save,
-  ChevronDown, MoreHorizontal, Eye, ExternalLink,
+  ChevronDown, MoreHorizontal, Eye, ExternalLink, Shapes, Compass, AlertTriangle,
 } from "lucide-react";
 import type { ContentItem, ContentItemVersion } from "@/lib/content/contentItems";
 import type { ContentAssetRow } from "@/lib/content/contentService";
 import type { ContentBriefFields, SignalSubject } from "@/lib/content/contentInstruction";
 import {
   briefFieldsOf, deriveHook, describeContentSource, studioActions, versionLabel,
-  CONTENT_TYPE_LABEL, STATUS_LABEL,
+  studioStrategyOf, artifactOf, reviewFlagsOf, switchableFormats, REVIEW_FLAG_TEXT, STATUS_LABEL,
 } from "@/lib/content/contentStudioModel";
+import { FORMAT_SPECS, type ContentFormatKind } from "../../../supabase/functions/_shared/contentFormats";
+import ContentArtifactView from "@/components/content/ContentArtifactView";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -35,11 +39,12 @@ export interface StudioAsset extends ContentAssetRow {
   url: string | null;
 }
 
-type Busy = null | "save" | "text" | "image" | "approve" | "archive" | "restore";
+type Busy = null | "save" | "text" | "image" | "approve" | "archive" | "restore" | "format" | "angle";
 
 export default function ContentStudioEditor({
   item, versions, assets, signal, preview, onExitPreview,
   onSave, onWriteText, onImage, onApprove, onArchive, onRestore, onDirtyChange,
+  onChangeFormat, onChangeAngle,
 }: {
   item: ContentItem;
   versions: ContentItemVersion[];
@@ -57,10 +62,16 @@ export default function ContentStudioEditor({
   onRestore: () => Promise<void>;
   /** Lets the page (and Scribe) know an unsaved edit exists, so nothing overwrites it. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Override Scribe's format choice — a new version. `auto` hands it back to Scribe. */
+  onChangeFormat?: (format: ContentFormatKind | "auto") => Promise<void>;
+  /** Give Scribe an angle to write from — a new version. */
+  onChangeAngle?: (angle: string) => Promise<void>;
 }) {
   const [draftBody, setDraftBody] = useState(item.body ?? "");
   const [fields, setFields] = useState(() => briefFieldsOf(item));
   const [strategyOpen, setStrategyOpen] = useState(false);
+  const [angleOpen, setAngleOpen] = useState(false);
+  const [angleDraft, setAngleDraft] = useState("");
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -78,6 +89,8 @@ export default function ContentStudioEditor({
     setFields(f);
     seededFields.current = f;
     setStrategyOpen(false);
+    setAngleOpen(false);
+    setAngleDraft("");
     setError(null);
     setNotice(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,13 +114,20 @@ export default function ContentStudioEditor({
   const current = assets.find((a) => a.id === item.current_asset_id) ?? readyAssets[0] ?? null;
   const previewing = !!preview && preview.id !== item.current_version_id;
   const shownBody = previewing ? preview!.body : draftBody;
-  const hook = deriveHook(shownBody);
+  const strategy = studioStrategyOf(item);
+  // A version snapshot carries its own structure; the live item carries the current one.
+  const artifact = previewing ? artifactOf(preview!.prompt_context as Record<string, unknown>) : artifactOf(item.metadata);
+  const flags = previewing ? [] : reviewFlagsOf(item);
+  const hook = (!previewing && strategy.hook) || deriveHook(shownBody);
+  const formats = switchableFormats(item);
+  const visualFormat = FORMAT_SPECS[strategy.format].visual !== "none";
   const actions = studioActions({
     status: item.status, body: draftBody, dirtyBody, dirtyBrief,
     assetCount: readyAssets.length, busy: busy !== null || previewing,
   });
   const versionNo = (id: string | null) => versions.find((v) => v.id === id)?.version ?? null;
   const strategySummary = [fields.audience, fields.objective, fields.angle].filter(Boolean).join(" · ");
+  const decided = !!(strategy.reason || strategy.audience || strategy.angle);
 
   const run = async (kind: Exclude<Busy, null>, fn: () => Promise<void>, done?: string) => {
     if (busy) return;
@@ -137,7 +157,7 @@ export default function ContentStudioEditor({
     <article className="flex min-h-full flex-col">
       {/* ── meta: type, status, source, whose news ─────────────────────── */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground/70">
-        <span>{CONTENT_TYPE_LABEL[item.format] ?? item.format}</span>
+        <span>{strategy.label} · LinkedIn</span>
         <Dot />
         <StatusText status={item.status} />
         {versionNo(item.current_version_id) !== null && (<><Dot /><span>v{versionNo(item.current_version_id)}</span></>)}
@@ -166,27 +186,101 @@ export default function ContentStudioEditor({
         </div>
       )}
 
-      {/* ── strategy: compact until opened ──────────────────────────────── */}
+      {/* ── what the writer flagged: needs a human look before approval ── */}
+      {flags.length > 0 && (
+        <div className="mt-4 space-y-1.5" role="status">
+          {flags.map((f) => (
+            <p key={f} className="flex items-start gap-2 rounded-lg bg-amber-500/[0.07] px-3 py-2 text-[12.5px] text-amber-200/90 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.22)]">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {REVIEW_FLAG_TEXT[f] ?? f}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* ── what Scribe decided — shown, never asked for first ─────────── */}
       {!previewing && (
-        <section className="mt-6">
+        <section className="mt-5 ag-glass rounded-xl px-4 py-3.5" aria-label="Scribe's strategy">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-muted-foreground/70">{decided ? "Scribe chose" : "Format"}</p>
+              <p className="mt-0.5 text-[15px] font-semibold text-foreground">
+                {strategy.label}
+                {strategy.audience && <span className="font-normal text-muted-foreground"> · for {strategy.audience}</span>}
+              </p>
+              {strategy.angle && <p className="mt-1 text-[13px] text-foreground/85"><span className="text-muted-foreground/70">Angle: </span>{strategy.angle}</p>}
+              {strategy.reason && <p className="mt-1 text-[12.5px] text-muted-foreground/75">{strategy.reason}</p>}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+              {formats.length > 0 && onChangeFormat && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button disabled={busy !== null || item.status === "archived" || dirtyBody}
+                      title={dirtyBody ? "Save your edit first" : undefined}
+                      className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] ${SECONDARY_BUTTON}`}>
+                      {busy === "format" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shapes className="h-3.5 w-3.5" />}
+                      Change format
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60">
+                    <DropdownMenuItem onSelect={() => run("format", () => onChangeFormat("auto"), "Scribe chose the format again. The previous version is kept.")}>
+                      Auto — let Scribe decide
+                    </DropdownMenuItem>
+                    {formats.map((f) => (
+                      <DropdownMenuItem key={f} disabled={f === strategy.format}
+                        onSelect={() => run("format", () => onChangeFormat(f), `Remade as a ${FORMAT_SPECS[f].label.toLowerCase()}. The previous version is kept.`)}>
+                        {FORMAT_SPECS[f].label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {onChangeAngle && (
+                <button onClick={() => setAngleOpen((v) => !v)}
+                  disabled={busy !== null || item.status === "archived" || dirtyBody}
+                  title={dirtyBody ? "Save your edit first" : undefined} aria-expanded={angleOpen}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] ${SECONDARY_BUTTON}`}>
+                  {busy === "angle" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Compass className="h-3.5 w-3.5" />}
+                  Change angle
+                </button>
+              )}
+            </div>
+          </div>
+          {angleOpen && onChangeAngle && (
+            <form className="mt-3 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const a = angleDraft.trim();
+                if (!a) return;
+                void run("angle", async () => { await onChangeAngle(a); setAngleOpen(false); setAngleDraft(""); },
+                  "Scribe rewrote it from your angle. The previous version is kept.");
+              }}>
+              <input value={angleDraft} onChange={(e) => setAngleDraft(e.target.value)} autoFocus
+                placeholder='e.g. "coordination beats more AI tools"' aria-label="New angle"
+                className="ag-field h-8 min-w-0 flex-1 rounded-lg px-3 text-[13px] text-foreground placeholder:text-muted-foreground/50" />
+              <button type="submit" disabled={!angleDraft.trim() || busy !== null}
+                className={`inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] ${PRIMARY_BUTTON}`}>Rewrite</button>
+            </form>
+          )}
+
+          {/* The user's own overrides — optional, never a setup step. */}
           <button onClick={() => setStrategyOpen((v) => !v)} aria-expanded={strategyOpen}
-            className="flex w-full items-center justify-between gap-3 text-left">
-            <span className="flex min-w-0 items-baseline gap-3">
-              <span className="shrink-0 text-[12px] font-medium text-muted-foreground/70">Strategy</span>
-              <span className="truncate text-[13px] text-muted-foreground/80">
-                {strategySummary || "Audience, objective, angle and call to action"}
+            className="mt-3 flex w-full items-center justify-between gap-3 border-t border-[var(--ag-line)] pt-2.5 text-left">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0 text-[12px] font-medium text-muted-foreground/70">Your overrides</span>
+              <span className="truncate text-[12.5px] text-muted-foreground/70">
+                {strategySummary || "Optional — audience, objective, angle, call to action"}
               </span>
             </span>
             <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform ${strategyOpen ? "rotate-180" : ""}`} />
           </button>
           {strategyOpen && (
-            <div className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            <div className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
               <Field label="Audience" value={fields.audience} onChange={(v) => setFields({ ...fields, audience: v })} placeholder="Who is this for?" />
               <Field label="Objective" value={fields.objective} onChange={(v) => setFields({ ...fields, objective: v })} placeholder="What should it achieve?" />
               <Field label="Angle" value={fields.angle} onChange={(v) => setFields({ ...fields, angle: v })} placeholder="Our point of view" />
               <Field label="Call to action" value={fields.cta} onChange={(v) => setFields({ ...fields, cta: v })} placeholder="What should a reader do?" />
               <p className="text-[12px] text-muted-foreground/55 sm:col-span-2">
-                Scribe writes as us — the Company Brain says who we are. Saved strategy is used the next time Scribe writes.
+                Leave these empty and Scribe decides from the Company Brain. Saved overrides are used the next time Scribe writes.
               </p>
             </div>
           )}
@@ -201,8 +295,16 @@ export default function ContentStudioEditor({
         </p>
       </section>
 
+      {/* ── the structure Scribe made, in its own shape ──────────────────── */}
+      {artifact && artifact.format !== "text" && artifact.format !== "comment" && (
+        <ContentArtifactView artifact={artifact} />
+      )}
+
       {/* ── the draft — the thing this page exists for ──────────────────── */}
       <section className="mt-5">
+        {artifact && FORMAT_SPECS[artifact.format].visual === "required" && (
+          <p className="mb-2 text-[12px] font-medium text-muted-foreground/70">Caption</p>
+        )}
         <textarea
           value={shownBody}
           readOnly={previewing || item.status === "archived"}
@@ -223,6 +325,11 @@ export default function ContentStudioEditor({
             <p className="text-[12px] font-medium text-muted-foreground/70">Visual</p>
             {readyAssets.length > 1 && <span className="text-[12px] text-muted-foreground/55">{readyAssets.length} images · earlier ones kept</span>}
           </div>
+          {visualFormat && strategy.visual_direction && (
+            <p className="mt-1.5 text-[12.5px] text-muted-foreground/75">
+              <span className="text-foreground/70">Scribe's visual brief · </span>{strategy.visual_direction}
+            </p>
+          )}
           {current?.url ? (
             <img src={current.url} alt="Current image for this draft" loading="lazy"
               className="mt-3 w-full max-w-[420px] rounded-xl border border-white/[0.07] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.95)]" />

@@ -75,13 +75,17 @@ Deno.test("Ask Pilot about a selected signal carries that signal's id as metadat
 
 Deno.test("the Content page derives the source from the signal's store, never passes a raw feed id as the FK", async () => {
   const page = code(await read("src/pages/Content.tsx"));
-  const i = page.indexOf("const turnSignalInto = useCallback(");
+  // Signal cards and the composer share `startDraft`; the FK rule lives there.
+  const i = page.indexOf("const startDraft = useCallback(");
   assert(i > 0);
-  const fn = page.slice(i, page.indexOf("}, [workspaceId", i));
-  assert(fn.includes("const source = signalContentSource(sg);"));
-  assert(fn.includes("source_signal_id: source.source_signal_id"));
-  assert(!/source_signal_id:\s*sg\.id/.test(fn), "a legacy signals id in source_signal_id violates the FK");
-  assert(!/relatedSignalIds:\s*\[sg\.id\]/.test(fn), "Scribe's related signals are canonical ids only");
+  const fn = page.slice(i, page.indexOf("const turnSignalInto", i));
+  assert(fn.includes("const source = i.signal ? signalContentSource(i.signal) : null;"));
+  assert(fn.includes("source_signal_id: source ? source.source_signal_id : null"));
+  assert(!/source_signal_id:\s*(sg|i\.signal)\.id/.test(fn), "a legacy signals id in source_signal_id violates the FK");
+  assert(!/relatedSignalIds:\s*\[(sg|i\.signal)\.id\]/.test(fn), "Scribe's related signals are canonical ids only");
+  assert(fn.includes("relatedSignalIds: source?.source_signal_id ? [source.source_signal_id] : []"));
+  const turn = page.slice(page.indexOf("const turnSignalInto = useCallback("), page.indexOf("}, [startDraft]"));
+  assert(turn.includes("startDraft("), "the signal card goes through that helper");
 });
 
 Deno.test("the feed marks which table each row came from", () => {

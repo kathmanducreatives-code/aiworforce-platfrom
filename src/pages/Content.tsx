@@ -27,9 +27,13 @@ import { useContentItems } from '@/hooks/useContentItems';
 import type { ContentItem } from '@/lib/content/contentItems';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { listContentItemVersions, type ContentFormat, type ContentItemVersion } from '@/lib/content/contentItems';
-import { buildContentInstruction, type ContentBriefFields } from '@/lib/content/contentInstruction';
+import {
+  buildContentInstruction, type ContentBriefFields, type InstructionInput, type MarketContextSignal,
+} from '@/lib/content/contentInstruction';
+import type { ContentFormatKind } from '../../supabase/functions/_shared/contentFormats';
 import {
   regenerateContentText, draftContentText, reviseContentText, generateContentImage, getContentAssets, signedAssetUrl,
+  changeContentFormat, changeContentAngle,
   saveContentEdit, saveContentBrief, approveContent, archiveContent, restoreContent, signalForItem,
 } from '@/lib/content/contentService';
 import { forYou } from '@/lib/content/contentStudioModel';
@@ -174,38 +178,84 @@ export default function Content() {
     setPane('studio');
   }, [setOpenDraftId]);
 
-  // SIGNAL -> CONTENT, TYPED: the canonical row first, then Scribe.
-  const turnSignalInto = useCallback(async (kind: 'post' | 'comment', sg: FeedSignal) => {
-    if (!workspaceId) { toast.error('No workspace'); return; }
-    const format: ContentFormat = kind === 'comment' ? 'linkedin_comment' : 'linkedin_post';
+  // ── ONE WAY TO START A DRAFT ───────────────────────────────────────────
+  //
+  // The composer and a signal card both land here: the typed brief (goal or
+  // signal, who it happened to, market context, the Company Brain switch, and a
+  // format that is Auto unless the user forced one), the canonical row first,
+  // then Scribe. Scribe decides the strategy and the format; the page never
+  // asks for them.
+  const startDraft = useCallback(async (i: {
+    surface: ContentFormat;
+    idea: string;
+    signal: FeedSignal | null;
+    contentFormat?: ContentFormatKind | 'auto';
+    useMarketSignals?: boolean;
+    useCompanyBrain?: boolean;
+  }): Promise<{ ok: boolean; error?: string }> => {
+    if (!workspaceId) return { ok: false, error: 'No workspace' };
     // ONLY A CANONICAL SIGNAL IS A SIGNAL SOURCE. A legacy-only feed row has no
     // `signal_events` row for the FK to point at, so it becomes an idea about
     // that signal, with where it came from kept on the row — never a fake FK.
-    const source = signalContentSource(sg);
-    // WHO IT HAPPENED TO travels with the brief — for a legacy signal too. A
-    // competitor's launch is theirs; Company Brain says who WE are.
-    const briefInput = {
-      format, sourceType: source.source_type, idea: '', signalTitle: sg.title,
-      signalSubject: source.subject, fields: null,
+    const source = i.signal ? signalContentSource(i.signal) : null;
+    // MARKET CONTEXT is other companies' news, each with its own owner — never
+    // the signal the draft is about, never more than a few.
+    const marketSignals: MarketContextSignal[] = i.useMarketSignals && !i.signal
+      ? forYouSignals.slice(0, 3).map((sg) => {
+        const subject = signalContentSource(sg).subject;
+        return { title: sg.title, relationship: subject?.relationship ?? 'external', name: subject?.name ?? null };
+      })
+      : [];
+    const briefInput: InstructionInput = {
+      format: i.surface,
+      sourceType: source ? source.source_type : 'idea',
+      idea: i.idea,
+      signalTitle: i.signal?.title ?? null,
+      // WHO IT HAPPENED TO travels with the brief — for a legacy signal too.
+      signalSubject: source?.subject ?? null,
+      fields: null,
+      contentFormat: i.contentFormat ?? 'auto',
+      marketSignals,
+      useCompanyBrain: i.useCompanyBrain !== false,
     };
     const instruction = buildContentInstruction(briefInput);
     const item = await createContentDraft({
-      title: sg.title, format, source: 'content_surface',
-      source_type: source.source_type, source_signal_id: source.source_signal_id, body: '',
-      metadata: { brief: instruction, brief_input: briefInput, topic: sg.title, ...source.metadata },
+      title: i.signal ? i.signal.title : (i.idea.slice(0, 80) || 'New content'),
+      format: i.surface,
+      source: 'content_surface',
+      source_type: briefInput.sourceType,
+      source_signal_id: source ? source.source_signal_id : null,
+      body: '',
+      metadata: {
+        brief: instruction, brief_input: briefInput,
+        topic: i.idea || i.signal?.title || null, ...(source?.metadata ?? {}),
+      },
     });
-    if (!item) { toast.error('Could not create the draft'); return; }
+    if (!item) return { ok: false, error: 'Could not create the draft' };
     openInStudio(item.id);
+    const forced = briefInput.contentFormat && briefInput.contentFormat !== 'auto' ? briefInput.contentFormat : null;
     const res = await generateContentDraft({
-      contentItemId: item.id, workspaceId, instruction, format,
-      topic: sg.title,
+      contentItemId: item.id, workspaceId, instruction, format: i.surface,
+      topic: i.idea || i.signal?.title || null,
       // Scribe's related signals are canonical ids only, like the FK.
-      relatedSignalIds: source.source_signal_id ? [source.source_signal_id] : [],
+      relatedSignalIds: source?.source_signal_id ? [source.source_signal_id] : [],
+      contentFormat: forced,
+      useCompanyBrain: briefInput.useCompanyBrain !== false,
     });
-    // The draft exists either way; only the generation can fail.
-    if (!res.ok) toast.error(res.error ?? 'Scribe could not write this draft');
     await reloadContentDrafts();
-  }, [workspaceId, createContentDraft, reloadContentDrafts, openInStudio]);
+    // The draft exists either way; only the generation can fail.
+    return res.ok ? { ok: true } : { ok: false, error: res.error ?? 'Scribe could not write this draft' };
+  }, [workspaceId, createContentDraft, reloadContentDrafts, openInStudio, forYouSignals]);
+
+  // SIGNAL -> CONTENT: Scribe decides what it becomes. A comment is only ever a
+  // reply, so it stays an explicit, separate choice.
+  const turnSignalInto = useCallback(async (kind: 'post' | 'comment', sg: FeedSignal) => {
+    const res = await startDraft({
+      surface: kind === 'comment' ? 'linkedin_comment' : 'linkedin_post',
+      idea: '', signal: sg,
+    });
+    if (!res.ok) toast.error(res.error ?? 'Scribe could not write this draft');
+  }, [startDraft]);
 
   // ── THE OPEN DRAFT ────────────────────────────────────────────────────
   //
@@ -284,6 +334,17 @@ export default function Content() {
         ? await regenerateContentText(workspaceId, studioItem)
         : await draftContentText(workspaceId, studioItem);
       if (!res.ok) throw new Error(res.error ?? 'Scribe could not write this draft');
+      await refreshStudio();
+    },
+    // Scribe's decision, overridden by the user — a new version either way.
+    onChangeFormat: async (format: ContentFormatKind | 'auto') => {
+      const res = await changeContentFormat(workspaceId, studioItem, format);
+      if (!res.ok) throw new Error(res.error ?? 'Scribe could not remake this draft');
+      await refreshStudio();
+    },
+    onChangeAngle: async (angle: string) => {
+      const res = await changeContentAngle(workspaceId, studioItem, angle);
+      if (!res.ok) throw new Error(res.error ?? 'Scribe could not rewrite this draft');
       await refreshStudio();
     },
     onImage: async () => {
@@ -485,46 +546,16 @@ export default function Content() {
           signal_type: sg.signal_type, account_name: sg.account_name,
         }))}
         onSubmit={async (input: ComposerSubmission) => {
-          if (!workspaceId) throw new Error('No workspace');
-          // THE SAME TRUTHFUL SOURCE AS A SIGNAL CARD — a legacy-only feed id
-          // never reaches the FK; its subject travels either way.
           const picked = input.signalId ? contentSignals.find((sg) => sg.id === input.signalId) ?? null : null;
-          const source = picked ? signalContentSource(picked) : null;
-          const briefInput = {
-            format: input.format,
-            sourceType: source ? source.source_type : input.sourceType,
+          const res = await startDraft({
+            surface: 'linkedin_post',
             idea: input.idea,
-            signalTitle: input.signalTitle ?? null,
-            signalSubject: source?.subject ?? null,
-            fields: null,
-          };
-          const instruction = buildContentInstruction(briefInput);
-          const item = await createContentDraft({
-            title: input.sourceType === 'signal'
-              ? (input.signalTitle ?? 'From a signal')
-              : input.idea.slice(0, 80),
-            format: input.format,
-            source: 'content_surface',
-            source_type: briefInput.sourceType,
-            source_signal_id: source ? source.source_signal_id : null,
-            body: '',
-            metadata: {
-              brief: instruction, brief_input: briefInput,
-              topic: input.idea || input.signalTitle, ...(source?.metadata ?? {}),
-            },
-          });
-          if (!item) throw new Error('Could not create the draft');
-          openInStudio(item.id);
-          const res = await generateContentDraft({
-            contentItemId: item.id,
-            workspaceId,
-            instruction,
-            format: input.format,
-            topic: input.idea || input.signalTitle,
-            relatedSignalIds: source?.source_signal_id ? [source.source_signal_id] : [],
+            signal: picked,
+            contentFormat: input.format,
+            useMarketSignals: input.useMarketSignals,
+            useCompanyBrain: input.useCompanyBrain,
           });
           if (!res.ok) throw new Error(res.error ?? 'Scribe could not write this draft');
-          await reloadContentDrafts();
         }}
       />
     </div>

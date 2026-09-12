@@ -1884,6 +1884,7 @@ export type Database = {
         Row: {
           agent_slug: string | null
           body: string
+          content_format: string
           created_at: string
           created_by: string | null
           current_asset_id: string | null
@@ -1892,6 +1893,7 @@ export type Database = {
           id: string
           last_generation_source: string
           metadata: Json
+          platform: string
           source: string | null
           source_signal_id: string | null
           source_type: string

@@ -29,7 +29,22 @@
 //             nothing says otherwise the subject is "someone other than us" —
 //             never, by default, us.
 //
+// ── AND SCRIBE DECIDES WHAT TO MAKE ─────────────────────────────────────────
+//
+// The brief no longer asks the user to have made the creative decisions. It
+// states the goal (or the signal), says what the Company Brain is for, and asks
+// Scribe — as a content strategist — to decide the objective, audience,
+// insight, angle, hook, FORMAT (text, carousel, meme, …), structure, visual
+// direction and CTA, then return them as structured JSON (`contentFormats.ts`).
+// A user's explicit choices ("Change format", an angle) arrive as OVERRIDES
+// and are honoured; everything else is Scribe's call.
+//
 // PURE. No network, no React.
+
+import {
+  ARTIFACT_SHAPES, FORMAT_SPECS, formatPrior, formatsForSurface,
+  type ContentFormatKind, type SourceRelationship,
+} from "./contentFormats.ts";
 
 export type InstructionFormat = "linkedin_post" | "linkedin_comment";
 export type InstructionSource = "idea" | "signal";
@@ -59,7 +74,15 @@ export interface ContentBriefFields {
   cta?: string | null;
 }
 
+/** A recent market signal offered as context — somebody else's news, always. */
+export interface MarketContextSignal {
+  title: string;
+  relationship: SignalRelationship;
+  name: string | null;
+}
+
 export interface InstructionInput {
+  /** The SURFACE: a post or a reply. The shape within it is Scribe's decision. */
   format: InstructionFormat;
   sourceType: InstructionSource;
   /** The user's own words. Required for an idea, optional angle for a signal. */
@@ -67,7 +90,14 @@ export interface InstructionInput {
   signalTitle: string | null;
   /** Who a signal happened to. Absent on a signal means `external`, never us. */
   signalSubject?: SignalSubject | null;
+  /** The user's explicit creative choices. Overrides; never required. */
   fields?: ContentBriefFields | null;
+  /** "Change format": the one shape to produce. Absent or `auto` ⇒ Scribe decides. */
+  contentFormat?: ContentFormatKind | "auto" | null;
+  /** "Use current market signals": recent signals Scribe may draw on. */
+  marketSignals?: MarketContextSignal[] | null;
+  /** "Use Company Brain". Absent ⇒ on. Off ⇒ only who is writing is used. */
+  useCompanyBrain?: boolean | null;
 }
 
 const WHAT: Record<InstructionFormat, string> = {
@@ -165,6 +195,77 @@ function fieldLines(f: ContentBriefFields | null | undefined, angleFromIdea: str
   return out;
 }
 
+const RELATIONSHIP_OF: Record<SignalRelationship, SourceRelationship> = {
+  competitor: "competitor", external_company: "external_company", market: "market", external: "external",
+};
+
+function marketContextLines(signals: MarketContextSignal[] | null | undefined): string[] {
+  const list = (signals ?? []).filter((m) => str(m.title)).slice(0, 5);
+  if (!list.length) return [];
+  const who: Record<SignalRelationship, (n: string | null) => string> = {
+    competitor: (n) => `${n ?? "a competitor"} (competitor)`,
+    external_company: (n) => n ?? "another company",
+    market: () => "market-wide",
+    external: () => "someone other than us",
+  };
+  return [
+    "",
+    "MARKET CONTEXT — recent signals you may draw on. Every one is somebody else's news, never ours:",
+    ...list.map((m) => `- "${m.title.trim()}" — ${who[m.relationship](m.name)}`),
+    "Use one only if it genuinely sharpens the point; never force it in.",
+  ];
+}
+
+/**
+ * THE STRATEGIST'S BRIEF, after the source: what to decide and what to return.
+ * Separated from the source lines on purpose — the attribution above is the
+ * part that must never change, and this is the part that will.
+ */
+function decisionBlock(i: InstructionInput, aboutSignal: boolean): string[] {
+  const surface = i.format === "linkedin_comment" ? "linkedin_comment" : "linkedin_post";
+  const allowed = formatsForSurface(surface);
+  const forced = i.contentFormat && i.contentFormat !== "auto" && allowed.includes(i.contentFormat)
+    ? i.contentFormat : (surface === "linkedin_comment" ? "comment" as const : null);
+  const useBrain = i.useCompanyBrain !== false;
+  const relationship: SourceRelationship = aboutSignal
+    ? RELATIONSHIP_OF[(i.signalSubject ?? { relationship: "external" as const }).relationship]
+    : "none";
+
+  const formatLines = forced
+    ? [`FORMAT: ${FORMAT_SPECS[forced].label} — fixed${surface === "linkedin_comment" ? " (this is a reply to a post)" : " by the user"}. Produce exactly this format.`]
+    : (() => {
+      const prior = formatPrior({ goal: i.idea, signalTitle: i.signalTitle, relationship });
+      return [
+        "FORMAT — choose the one that best serves the point, and say why:",
+        ...allowed.map((f) => `- ${f}: ${FORMAT_SPECS[f].label}. ${FORMAT_SPECS[f].use_when}`),
+        `First read: this leans toward "${prior.format}" (${prior.reason}). Choose it only if it truly serves the point.`,
+      ];
+    })();
+
+  return [
+    "",
+    "YOU ARE THE CONTENT STRATEGIST. Decide what this should be before writing it.",
+    useBrain
+      ? "- COMPANY BRAIN (in your context) = who we are and what we believe: what we sell, to whom, their pains, our differentiation, our voice and the claims we can make. Use it."
+      : "- The user switched the Company Brain off for this draft: use only who is writing, nothing else from it.",
+    aboutSignal
+      ? "- THE SOURCE (above) = what happened in the market. Keep it semantically separate from the Company Brain: combine them into our point of view on their news."
+      : "- THE GOAL (above) = what we want to talk about.",
+    "- Decide: objective, audience, core insight, angle, hook, format, structure, visual direction, CTA.",
+    "- Only make claims the Company Brain supports. Never invent customers, numbers or results.",
+    ...marketContextLines(i.marketSignals),
+    "",
+    ...formatLines,
+    "",
+    "RETURN ONLY ONE JSON OBJECT — no prose, no markdown fences:",
+    `{"strategy":{"content_format":"…","format_reason":"one sentence","objective":"…","audience":"…","source":"…",` +
+      `"source_owner":"…|null","relationship_to_company":"${relationship}","core_insight":"…","angle":"…","hook":"…",` +
+      `"visual_direction":"…|null","cta":"…|null"},"artifact":<the artifact for that format>}`,
+    "Artifact shapes:",
+    ...(forced ? [forced] : allowed).map((f) => `- ${f}: ${ARTIFACT_SHAPES[f]}`),
+  ];
+}
+
 /**
  * DRAFT ONLY, every time. The product is approval-first and nothing here can
  * publish, so the instruction says so rather than leaving it implied.
@@ -187,13 +288,15 @@ export function buildContentInstruction(i: InstructionInput): string {
       author,
       "",
       ...sourceBlock(title, subject),
-      ...(() => { const l = fieldLines(i.fields, idea || null); return l.length ? ["", ...l] : []; })(),
+      ...(() => { const l = fieldLines(i.fields, idea || null); return l.length ? ["", "YOUR CHOICES (the user's — honour them):", ...l] : []; })(),
+      ...decisionBlock(i, true),
     ].join("\n");
   }
   return [
     `Scribe, write ${what} about: ${idea}. Draft only.`,
     "",
     author,
-    ...(() => { const l = fieldLines(i.fields, null); return l.length ? ["", ...l] : []; })(),
+    ...(() => { const l = fieldLines(i.fields, null); return l.length ? ["", "YOUR CHOICES (the user's — honour them):", ...l] : []; })(),
+    ...decisionBlock(i, false),
   ].join("\n");
 }

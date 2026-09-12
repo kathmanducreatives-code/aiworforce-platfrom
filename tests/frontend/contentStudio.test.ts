@@ -116,10 +116,15 @@ Deno.test("every Studio action goes through the Content service — the page wri
 
 Deno.test("signal drafts from the page carry ownership; the composer no longer passes a raw feed id", async () => {
   const page = code(await read("src/pages/Content.tsx"));
-  const turn = page.slice(page.indexOf("const turnSignalInto"), page.indexOf("}, [workspaceId, createContentDraft"));
-  assert(turn.includes("signalSubject: source.subject") && turn.includes("brief_input: briefInput"));
+  // Both the signal card and the composer go through ONE helper, `startDraft`,
+  // which derives the source from the signal's store and carries its subject.
+  const start = page.slice(page.indexOf("const startDraft"), page.indexOf("const turnSignalInto"));
+  assert(start.includes("signalContentSource(i.signal)"), "the source comes from the signal's store");
+  assert(start.includes("signalSubject: source?.subject ?? null") && start.includes("brief_input: briefInput"));
+  const turn = page.slice(page.indexOf("const turnSignalInto"), page.indexOf("}, [startDraft]"));
+  assert(turn.includes("startDraft("), "a signal card starts a draft through the one helper");
   const submit = page.slice(page.indexOf("onSubmit={async (input: ComposerSubmission)"));
-  assert(submit.includes("signalContentSource(picked)"));
+  assert(submit.includes("startDraft("), "and so does the composer");
   assert(!/source_signal_id:\s*input\.signalId/.test(submit), "a legacy feed id in the FK column violated it");
   // The feed projection's relationship fields decide, via the shared rule.
   const canonical = { id: "e", title: "Outreach release", store: "signal_events" as const, signal_type: "competitor", raw: { subject_type: "competitor", subject_key: "outreach" }, competitor_name: "outreach" };

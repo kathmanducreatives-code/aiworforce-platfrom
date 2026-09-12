@@ -85,7 +85,8 @@ Deno.test("the composer sends TYPED fields, not prose", () => {
 Deno.test("THE DRAFT EXISTS BEFORE THE MODEL IS ASKED", () => {
   // If generation fails, the user still has the draft and can regenerate.
   // Creating it afterwards means a failure leaves a toast and no trace.
-  const submit = PAGE.slice(PAGE.indexOf("onSubmit={async (input: ComposerSubmission)"));
+  // Every creation route goes through `startDraft`; the order is checked there.
+  const submit = PAGE.slice(PAGE.indexOf("const startDraft"), PAGE.indexOf("const turnSignalInto"));
   const create = submit.indexOf("createContentDraft(");
   const generate = submit.indexOf("generateContentDraft(");
   assert(create > 0 && generate > 0, "both steps must be present");
@@ -179,7 +180,8 @@ Deno.test("a signal-sourced draft KEEPS its signal", async () => {
   // through violated the FK. A CANONICAL signal still becomes source_type
   // 'signal' with its own id — that is asserted here, from the helper itself.
   assert(
-    /source_type: source\.source_type, source_signal_id: source\.source_signal_id/.test(PAGE),
+    /source_type: briefInput\.sourceType,\s*source_signal_id: source \? source\.source_signal_id : null/.test(PAGE)
+      && /sourceType: source \? source\.source_type : 'idea'/.test(PAGE),
     "the signal path must persist the source the helper derived",
   );
   const helper = await Deno.readTextFile(new URL("../../src/lib/signalIdeaActions.ts", import.meta.url));

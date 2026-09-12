@@ -60,6 +60,13 @@ export interface GenerateContentDraftArgs {
    * say what was asked, not just that Scribe rewrote it.
    */
   revision?: string | null;
+  /**
+   * "Change format": the one format Scribe must produce. Null ⇒ Scribe chooses.
+   * The writer refuses a plan that ignores it.
+   */
+  contentFormat?: string | null;
+  /** "Use Company Brain". False ⇒ run-agent gives Scribe only who is writing. */
+  useCompanyBrain?: boolean;
 }
 
 export interface GenerateContentDraftResult {
@@ -135,6 +142,8 @@ export async function generateContentDraft(
           regenerate: args.regenerate === true,
           related_signal_ids: args.relatedSignalIds ?? [],
           revision: args.revision ?? null,
+          content_format: args.contentFormat ?? null,
+          use_company_brain: args.useCompanyBrain !== false,
         },
       },
     },

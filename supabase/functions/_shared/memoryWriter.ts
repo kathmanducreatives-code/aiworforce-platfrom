@@ -33,6 +33,11 @@ import { dualWritePeopleProfileV2, dualWriteHiringSignalV2 } from "./signalsV2Du
 import { jobRecordToSignalEvent, type NormalizedJobLike } from "./jobsSignalAdapter.ts";
 import { createCanonicalContentItem, type ContentDb } from "./contentOperations.ts";
 import {
+  validateScribePlan, artifactBody, artifactTitle, visualBriefOf, salvageBody, isContentFormatKind,
+  CONTENT_FORMATS_VERSION,
+  type ContentArtifact, type ContentStrategy, type ContentSurface, type SourceRelationship,
+} from "./contentFormats.ts";
+import {
   commentOpportunitiesFrom, commentItemIdea, commentItemTitle, resolveEngagementPostSource,
   type EngagementLookupDb,
 } from "./engagementCommentItems.ts";
@@ -295,6 +300,10 @@ interface AgentResultCtx extends BaseCtx {
     related_signal_ids?: string[];
     /** A typed revision request from the Scribe panel, recorded on the version. */
     revision?: string | null;
+    /** "Change format": the one format Scribe must produce. Absent ⇒ Scribe chose. */
+    content_format?: string | null;
+    /** "Use Company Brain". Read by run-agent when it builds Scribe's context. */
+    use_company_brain?: boolean;
     /**
      * The `content_item` this generation is filling in.
      *
@@ -1409,8 +1418,72 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
   // generation FILLS IN a draft the user already has rather than creating a
   // second thing beside it.
   if (cl?.content_item_id) {
-    await fillContentItem(ctx, cl.content_item_id, { title: cleaned.title, body: cleaned.body }, cl);
+    const planned = await planFromScribe(ctx, cl.content_item_id, cleaned, cl);
+    await fillContentItem(ctx, cl.content_item_id, planned.draft, cl, planned.plan);
   }
+}
+
+const RELATIONSHIPS: Record<string, SourceRelationship> = {
+  competitor: "competitor", external_company: "external_company", market: "market", external: "external",
+};
+
+/** What Scribe decided and made, ready to persist — or why it could not be used. */
+interface PersistablePlan {
+  strategy: ContentStrategy | null;
+  artifact: ContentArtifact | null;
+  /** Shown in the Studio: a draft that needs a human look before approval. */
+  review_flags: string[];
+  violations: string[];
+}
+
+/**
+ * SCRIBE'S PLAN, VALIDATED against the draft it fills.
+ *
+ * The surface (post or reply) and whose news the source is come from the ROW,
+ * not the model: a reply cannot become a carousel, and a competitor's launch
+ * cannot be relabelled ours by the output that was asked not to. A forced
+ * format is honoured or the plan is not used.
+ *
+ * A plan that fails is never stored as raw JSON: the draft gets readable text
+ * (the old path, or what can be salvaged from the plan), with the reason kept.
+ */
+async function planFromScribe(
+  ctx: AgentResultCtx,
+  itemId: string,
+  cleaned: { title: string; body: string; structured: Record<string, unknown> | null },
+  cl: NonNullable<AgentResultCtx["content_loop"]>,
+): Promise<{ draft: { title: string; body: string }; plan: PersistablePlan | null }> {
+  if (!cleaned.structured || !("artifact" in cleaned.structured || "strategy" in cleaned.structured)) {
+    return { draft: { title: cleaned.title, body: cleaned.body }, plan: null };
+  }
+  const { data: row } = await ctx.admin
+    .from("content_item")
+    .select("format, metadata")
+    .eq("id", itemId)
+    .eq("workspace_id", ctx.workspace_id)
+    .maybeSingle();
+  const surface: ContentSurface = (row as { format?: string } | null)?.format === "linkedin_comment"
+    ? "linkedin_comment" : "linkedin_post";
+  const briefInput = ((row as { metadata?: Record<string, unknown> } | null)?.metadata?.brief_input ?? {}) as
+    { signalSubject?: { relationship?: string } | null; sourceType?: string };
+  const rel = briefInput.signalSubject?.relationship;
+  const relationship: SourceRelationship = rel && RELATIONSHIPS[rel] ? RELATIONSHIPS[rel]
+    : (briefInput.sourceType === "signal" ? "external" : "none");
+  const forced = isContentFormatKind(cl.content_format) ? cl.content_format : null;
+
+  const v = validateScribePlan(cleaned.structured, { surface, forcedFormat: forced, relationship });
+  if (v.strategy && v.artifact) {
+    return {
+      draft: { title: artifactTitle(v.artifact, v.strategy), body: artifactBody(v.artifact) },
+      plan: { strategy: v.strategy, artifact: v.artifact, review_flags: v.ok ? [] : v.violations, violations: v.violations },
+    };
+  }
+  console.warn("[memoryWriter] scribe plan rejected:", v.violations.join(","));
+  const body = salvageBody(cleaned.structured) ?? (cleaned.body.trim().startsWith("{") ? "" : cleaned.body);
+  return {
+    draft: { title: body ? (body.split("\n").find((l) => l.trim()) ?? "Content draft").slice(0, 120) : cleaned.title, body },
+    plan: { strategy: null, artifact: null, review_flags: ["plan_unusable"], violations: v.violations },
+  };
 }
 
 /**
@@ -1423,6 +1496,7 @@ async function fillContentItem(
   itemId: string,
   draft: { title: string; body: string },
   cl: NonNullable<AgentResultCtx["content_loop"]>,
+  plan: PersistablePlan | null = null,
 ): Promise<boolean> {
   // SCOPED BY WORKSPACE, not by id alone. The id arrives from the client
   // through `tool_input`, and this writer holds the service role — an
@@ -1456,6 +1530,26 @@ async function fillContentItem(
       status: "draft",
       metadata: {
         ...prior,
+        // ── WHAT SCRIBE DECIDED, AND WHAT IT MADE ─────────────────────────
+        //
+        // The CURRENT strategy and artifact live on the item, so a manual
+        // edit of the caption keeps the structure beside it. Each Scribe
+        // version also snapshots them through `last_prompt_context` below.
+        // `content_format`/`platform` drive the generated columns; the
+        // visual brief is what `generate-content-image` already prefers.
+        ...(plan?.strategy && plan.artifact
+          ? {
+            platform: "linkedin",
+            content_format: plan.artifact.format,
+            content_strategy: plan.strategy,
+            content_artifact: plan.artifact,
+            visual_brief: visualBriefOf(plan.artifact) ?? plan.strategy.visual_direction ?? null,
+            content_formats_version: CONTENT_FORMATS_VERSION,
+          }
+          // An unusable plan must not leave the PREVIOUS structure beside new
+          // text — a carousel's slides next to a caption about something else.
+          : plan ? { content_format: null, content_strategy: null, content_artifact: null, visual_brief: null } : {}),
+        content_review_flags: plan ? plan.review_flags : [],
         last_task_id: ctx.task_id ?? null,
         last_model: ctx.model_used ?? null,
         last_provider: ctx.provider_used ?? null,
@@ -1467,6 +1561,12 @@ async function fillContentItem(
           // What the person asked Scribe to change, when it was a revision.
           // The trigger copies this onto the version, so history can show it.
           revision: typeof cl.revision === "string" && cl.revision.trim() ? cl.revision.trim().slice(0, 300) : null,
+          // The version's own record of the decision and the structure — so
+          // History can show "v3 was a carousel, v4 a text post".
+          ...(plan?.strategy && plan.artifact
+            ? { content_format: plan.artifact.format, strategy: plan.strategy, artifact: plan.artifact }
+            : {}),
+          ...(plan && plan.violations.length ? { plan_violations: plan.violations } : {}),
         },
       },
     })

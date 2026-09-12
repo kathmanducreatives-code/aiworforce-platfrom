@@ -9,7 +9,7 @@
 // action metadata and Pilot verifies it against the workspace.
 
 import { useState } from "react";
-import { Loader2, FileText, MessageSquare, ArrowUp, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, MessageSquare, ArrowUp, ExternalLink } from "lucide-react";
 import { sourceCardOf, type SourceSignalLike } from "@/lib/content/contentStudioModel";
 import { FIELD, PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/content/studioStyles";
 import { GLASS_PANEL } from "@/components/layout/workspaceStyles";
@@ -59,15 +59,16 @@ export default function SourcePreview({ signal, onCreate, onAskPilot }: {
       <div className="mt-8 flex flex-wrap gap-2">
         <button onClick={() => run("post", () => onCreate("post"))} disabled={!!busy}
           className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13.5px] transition-colors ${PRIMARY_BUTTON}`}>
-          {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Create post
+          {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Create content
         </button>
         <button onClick={() => run("comment", () => onCreate("comment"))} disabled={!!busy}
           className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13.5px] font-medium transition-colors ${SECONDARY_BUTTON}`}>
-          {busy === "comment" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Create comment
+          {busy === "comment" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Write a reply instead
         </button>
       </div>
       <p className="mt-3 text-[12px] text-muted-foreground/55">
-        Scribe drafts it in the Studio for your review. Nothing is ever posted.
+        Scribe reads this against your Company Brain and decides the angle and format — a post, a carousel, a meme —
+        then drafts it in the Studio for your review. Nothing is ever posted.
       </p>
 
       <form className="mt-10 max-w-[560px]"

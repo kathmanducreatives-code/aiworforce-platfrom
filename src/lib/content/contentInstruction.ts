@@ -23,4 +23,5 @@ export {
   type SignalSubject,
   type SignalRelationship,
   type ContentBriefFields,
+  type MarketContextSignal,
 } from '../../../supabase/functions/_shared/contentInstruction';

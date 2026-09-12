@@ -23,6 +23,7 @@ import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import {
   isDirectLeadActionAttempt,
@@ -1381,7 +1382,48 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // Inject a compact, labeled brain summary (not the raw JSON). We omit
   // companyBrain from getAgentorySystemPrompt so it doesn't add its own
   // JSON-trimmed block, then append the labeled summary once.
-  const brainBlock = renderBrainForAgent(brain, brainOnboardingCompleted);
+  //
+  // ── SCRIBE, WRITING CONTENT, READS THE BRAIN AS A STRATEGIST ──────────────
+  //
+  // The generic block is identity: enough to find leads, too little to decide
+  // what to publish. A Content run gets the strategist's reading instead —
+  // beliefs, pains, proof points and claims to avoid, voice rules, competitors
+  // marked as NOT us, and our recent content so the next piece is new. Replaces
+  // the generic block rather than adding to it, so the brain appears once. The
+  // same onboarding gate applies: an unfinished brain is not injected.
+  const contentLoop = (agent_slug === "scribe" && tool_input_body?.content_loop
+    && typeof tool_input_body.content_loop === "object")
+    ? tool_input_body.content_loop as { content_item_id?: string; use_company_brain?: boolean }
+    : null;
+  let brainBlock = renderBrainForAgent(brain, brainOnboardingCompleted);
+  if (contentLoop) {
+    let recent: RecentContent[] = [];
+    try {
+      let q = supabase.from("content_item")
+        .select("id, title, metadata")
+        .eq("workspace_id", workspace_id)
+        .neq("status", "archived")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (contentLoop.content_item_id) q = q.neq("id", contentLoop.content_item_id);
+      const { data } = await q;
+      recent = ((data ?? []) as Array<{ title: string | null; metadata: Record<string, unknown> | null }>)
+        .filter((r) => r.title)
+        .map((r) => {
+          const strat = (r.metadata?.content_strategy ?? null) as { angle?: string } | null;
+          return {
+            title: String(r.title),
+            content_format: typeof r.metadata?.content_format === "string" ? r.metadata.content_format as string : null,
+            angle: typeof strat?.angle === "string" ? strat.angle : null,
+          };
+        });
+    } catch { /* recent content is context, never a reason to fail the draft */ }
+    brainBlock = renderContentBrain(brainOnboardingCompleted ? brain : null, {
+      onboardingCompleted: brainOnboardingCompleted,
+      useCompanyBrain: contentLoop.use_company_brain !== false,
+      recent,
+    });
+  }
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
     currentAgent: agent_slug ?? agent.slug ?? undefined,

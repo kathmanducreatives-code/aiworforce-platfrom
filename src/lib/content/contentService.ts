@@ -27,11 +27,12 @@ import {
 } from '@/lib/content/contentItems';
 import {
   buildContentInstruction, signalSubjectFrom,
-  type ContentBriefFields, type InstructionInput, type SignalSubject,
+  type ContentBriefFields, type InstructionInput, type MarketContextSignal, type SignalSubject,
 } from '@/lib/content/contentInstruction';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { functionErrorDetail } from '@/lib/content/functionError';
-import { revisionInstruction } from '@/lib/content/contentStudioModel';
+import { revisionInstruction, formatChangeRevision } from '@/lib/content/contentStudioModel';
+import { isContentFormatKind, type ContentFormatKind } from '../../../supabase/functions/_shared/contentFormats';
 
 /** What a caller asks for, wherever it is calling from. */
 export interface ContentGenerationRequest {
@@ -46,6 +47,12 @@ export interface ContentGenerationRequest {
   /** Who the signal happened to. Absent on a signal means "someone other than us". */
   sourceSignalSubject?: SignalSubject | null;
   fields?: ContentBriefFields | null;
+  /** Absent or 'auto' ⇒ Scribe chooses the format. A kind ⇒ the user's override. */
+  contentFormat?: ContentFormatKind | 'auto' | null;
+  /** "Use current market signals": recent signals offered to Scribe as context. */
+  marketSignals?: MarketContextSignal[] | null;
+  /** "Use Company Brain". Absent ⇒ on. */
+  useCompanyBrain?: boolean | null;
   existingContentItemId?: string | null;
   operation: ContentOperation;
 }
@@ -85,6 +92,9 @@ export async function createContent(req: ContentGenerationRequest): Promise<Cont
     signalTitle: req.sourceSignalTitle ?? null,
     signalSubject: req.sourceSignalSubject ?? null,
     fields: req.fields ?? null,
+    contentFormat: req.contentFormat ?? 'auto',
+    marketSignals: req.marketSignals ?? null,
+    useCompanyBrain: req.useCompanyBrain !== false,
   };
   const instruction = buildContentInstruction(briefInput);
 
@@ -109,6 +119,7 @@ export async function createContent(req: ContentGenerationRequest): Promise<Cont
     format: req.contentType,
     topic: req.idea || req.sourceSignalTitle,
     relatedSignalIds: req.sourceSignalId ? [req.sourceSignalId] : [],
+    ...draftOptions(briefInput),
   });
   // The draft is real either way. Only the generation failed, and saying so
   // truthfully is what lets the user press Regenerate.
@@ -156,6 +167,56 @@ export async function reviseContentText(
   return writeContentText(workspaceId, item, true, ask);
 }
 
+/**
+ * "CHANGE FORMAT" — the user's override of Scribe's choice, as a new version.
+ *
+ * Stored on the brief input, so every later regeneration keeps the chosen
+ * format until the user sets it back to Auto; sent as a forced format the
+ * writer will not let Scribe ignore.
+ */
+export async function changeContentFormat(
+  workspaceId: string, item: ContentItem, format: ContentFormatKind | 'auto',
+): Promise<ContentResult> {
+  if (item.format === 'linkedin_comment') return { ok: false, item, error: 'a_reply_stays_a_reply' };
+  const input = { ...briefInputFor(item), contentFormat: format };
+  const saved = await persistBriefInput(item, input);
+  if (!saved.ok || !saved.item) return saved;
+  if (format === 'auto') return writeContentText(workspaceId, saved.item, true);
+  return writeContentText(workspaceId, saved.item, true, formatChangeRevision(format));
+}
+
+/** "CHANGE ANGLE" — kept as the user's angle override, then written from it. */
+export async function changeContentAngle(
+  workspaceId: string, item: ContentItem, angle: string,
+): Promise<ContentResult> {
+  const a = angle.trim();
+  if (!a) return { ok: false, item, error: 'empty_angle' };
+  const base = briefInputFor(item);
+  const input = { ...base, fields: { ...(base.fields ?? {}), angle: a } };
+  const saved = await persistBriefInput(item, input);
+  if (!saved.ok || !saved.item) return saved;
+  return writeContentText(workspaceId, saved.item, true,
+    `Rewrite it from this angle: ${a}. Choose the format that serves the new angle best.`);
+}
+
+async function persistBriefInput(item: ContentItem, input: InstructionInput): Promise<ContentResult> {
+  const text = buildContentInstruction(input);
+  const { item: saved, error } = await updateContentItem(item.id, {
+    metadata: { ...(item.metadata ?? {}), brief: text, brief_input: input },
+  });
+  if (error || !saved) return { ok: false, item, error: error ?? 'save_failed' };
+  return { ok: true, item: saved };
+}
+
+/** What the run-agent request carries from the brief: a forced format and the brain switch. */
+function draftOptions(input: InstructionInput): { contentFormat: ContentFormatKind | null; useCompanyBrain: boolean } {
+  const f = input.contentFormat;
+  return {
+    contentFormat: f && f !== 'auto' && isContentFormatKind(f) ? f : null,
+    useCompanyBrain: input.useCompanyBrain !== false,
+  };
+}
+
 async function writeContentText(
   workspaceId: string, item: ContentItem, regenerate: boolean, revision?: string,
 ): Promise<ContentResult> {
@@ -169,15 +230,22 @@ async function writeContentText(
     const { error } = await updateContentItem(item.id, { metadata: merged });
     if (error) return { ok: false, item, error };
   }
+  // A structured draft is revised AS STRUCTURE: Scribe sees the slides or the
+  // panels it made, not just the caption, and returns the whole plan again.
+  const artifact = item.metadata?.content_artifact;
+  const currentDraft = artifact && typeof artifact === 'object'
+    ? JSON.stringify({ strategy: item.metadata?.content_strategy ?? null, artifact })
+    : (item.body ?? '');
   const gen = await generateContentDraft({
     contentItemId: item.id,
     workspaceId,
-    instruction: revision ? revisionInstruction(brief.text, revision, item.body ?? '') : brief.text,
+    instruction: revision ? revisionInstruction(brief.text, revision, currentDraft) : brief.text,
     format: item.format,
     topic: (item.metadata?.topic as string | undefined) ?? item.title,
     relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
     regenerate,
     revision: revision ?? null,
+    ...draftOptions(brief.input),
   });
   if (!gen.ok) return { ok: false, item, error: gen.error ?? 'regeneration_failed' };
   const fresh = await getContentItem(item.id);

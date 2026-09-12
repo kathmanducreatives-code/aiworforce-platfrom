@@ -11,6 +11,10 @@
 import {
   signalSubjectFrom, type ContentBriefFields, type SignalRelationship, type SignalSubject,
 } from "../../../supabase/functions/_shared/contentInstruction.ts";
+import {
+  FORMAT_SPECS, formatLabel, isContentFormatKind, normalizeArtifact,
+  type ContentArtifact, type ContentFormatKind, type ContentStrategy,
+} from "../../../supabase/functions/_shared/contentFormats.ts";
 
 /** The minimum of a `content_item` the Studio reads. */
 export interface StudioItem {
@@ -140,6 +144,79 @@ export const CONTENT_TYPE_LABEL: Record<string, string> = {
   linkedin_comment: "LinkedIn comment",
 };
 
+// ── WHAT SCRIBE DECIDED ─────────────────────────────────────────────────────
+//
+// The strategy and the structured artifact Scribe returned, read back from the
+// row. The Studio shows the decision ("Scribe chose: Carousel · for SaaS
+// founders · Angle: …") instead of having asked the user to make it first.
+
+export interface StudioStrategy {
+  format: ContentFormatKind;
+  label: string;
+  /** Can the Studio render this format fully today, or only its structure? */
+  renderer: "native" | "brief_only";
+  reason: string | null;
+  audience: string | null;
+  objective: string | null;
+  angle: string | null;
+  hook: string | null;
+  core_insight: string | null;
+  cta: string | null;
+  visual_direction: string | null;
+}
+
+/** The current decision on an item, or the format its surface implies for an older row. */
+export function studioStrategyOf(item: StudioItem): StudioStrategy {
+  const meta = item.metadata ?? {};
+  const st = obj(meta.content_strategy) as Partial<ContentStrategy> | null;
+  const stored = meta.content_format;
+  const format: ContentFormatKind = isContentFormatKind(stored) ? stored
+    : item.format === "linkedin_comment" ? "comment" : "text";
+  return {
+    format,
+    label: formatLabel(format),
+    renderer: FORMAT_SPECS[format].renderer,
+    reason: str(st?.format_reason),
+    audience: str(st?.audience),
+    objective: str(st?.objective),
+    angle: str(st?.angle),
+    hook: str(st?.hook),
+    core_insight: str(st?.core_insight),
+    cta: str(st?.cta),
+    visual_direction: str(st?.visual_direction),
+  };
+}
+
+/** The structured artifact on an item or a version snapshot. Null for a plain-text draft. */
+export function artifactOf(meta: Record<string, unknown> | null | undefined): ContentArtifact | null {
+  const raw = obj(meta?.content_artifact) ?? obj(meta?.artifact);
+  if (!raw || !isContentFormatKind(raw.format)) return null;
+  return normalizeArtifact(raw, raw.format);
+}
+
+/** Flags the writer raised: a draft that needs a human look before approval. */
+export function reviewFlagsOf(item: StudioItem): string[] {
+  const f = item.metadata?.content_review_flags;
+  return Array.isArray(f) ? f.filter((x): x is string => typeof x === "string") : [];
+}
+
+export const REVIEW_FLAG_TEXT: Record<string, string> = {
+  claims_someone_elses_news: "Scribe wrote this as if their news were ours. Regenerate, or fix the wording before approving.",
+  plan_unusable: "Scribe's plan came back incomplete, so only the text was kept. Regenerate to get the full structure.",
+};
+
+/** The formats a draft can be switched to — a reply stays a reply. */
+export function switchableFormats(item: StudioItem): ContentFormatKind[] {
+  if (item.format === "linkedin_comment") return [];
+  return (Object.keys(FORMAT_SPECS) as ContentFormatKind[]).filter((f) => f !== "comment");
+}
+
+/** The revision "Change format" sends, alongside the forced format itself. */
+export function formatChangeRevision(format: ContentFormatKind): string {
+  return `Remake this as a ${FORMAT_SPECS[format].label.toLowerCase()}. Keep the core insight and whose news it is; ` +
+    `rebuild the structure for the new format.`;
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
   approved: "Approved",
@@ -197,7 +274,8 @@ export { signalSubjectFrom };
 // written, and the request is recorded on it. "Generate visual" is the image
 // operation. None of them is a chat message thrown at Pilot.
 
-export type ScribeActionId = "improve_hook" | "concise" | "change_angle" | "alternatives" | "visual";
+export type ScribeActionId =
+  | "improve_hook" | "concise" | "change_angle" | "provocative" | "educational" | "alternatives" | "visual";
 
 export const SCRIBE_ACTIONS: ReadonlyArray<{ id: ScribeActionId; label: string; revision: string | null }> = [
   { id: "improve_hook", label: "Improve hook",
@@ -206,6 +284,10 @@ export const SCRIBE_ACTIONS: ReadonlyArray<{ id: ScribeActionId; label: string; 
     revision: "Make the draft more concise — cut roughly a third while keeping the point and the voice." },
   { id: "change_angle", label: "Change angle",
     revision: "Rewrite the draft from a clearly different angle than the current one, same facts." },
+  { id: "provocative", label: "Make more provocative",
+    revision: "Make it more provocative: a sharper, more contrarian point of view that is still true and still ours. No clickbait, never attack a person or company." },
+  { id: "educational", label: "Make more educational",
+    revision: "Make it more educational: teach one concrete thing the audience can apply today, with a specific example." },
   { id: "alternatives", label: "Give 3 alternatives",
     revision: "Start with three alternative hooks labelled A, B and C, then the full draft using option A." },
   { id: "visual", label: "Generate visual", revision: null },
@@ -213,7 +295,10 @@ export const SCRIBE_ACTIONS: ReadonlyArray<{ id: ScribeActionId; label: string; 
 
 /** How a version reads in history — with what was asked, when it was a revision. */
 export function versionLabel(v: { generation_source: string; prompt_context?: Record<string, unknown> | null }): string {
-  const base = GENERATION_LABEL[v.generation_source] ?? v.generation_source;
+  const made = GENERATION_LABEL[v.generation_source] ?? v.generation_source;
+  // "v3 was a carousel, v4 a text post" — the format Scribe chose for that version.
+  const fmt = v.prompt_context?.content_format;
+  const base = isContentFormatKind(fmt) && fmt !== "text" && fmt !== "comment" ? `${made} · ${formatLabel(fmt)}` : made;
   const ask = str(v.prompt_context?.revision);
   if (!ask) return base;
   const known = SCRIBE_ACTIONS.find((a) => a.revision === ask);
@@ -311,6 +396,7 @@ export function revisionInstruction(brief: string, revision: string, currentDraf
     "",
     "REVISION REQUEST — apply it to the current draft below. Keep who is writing and whose news it is exactly as stated above.",
     revision.trim(),
+    "Return the full JSON object again, in the shape specified above.",
     "",
     "CURRENT DRAFT:",
     currentDraft.trim(),
