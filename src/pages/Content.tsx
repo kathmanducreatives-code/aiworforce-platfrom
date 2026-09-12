@@ -45,6 +45,7 @@ import ContentStudioEditor, { type StudioAsset } from '@/components/content/Cont
 import ContentSourcesPanel, { type SourceNav, type CommentSource } from '@/components/content/ContentSourcesPanel';
 import ScribePanel from '@/components/content/ScribePanel';
 import SourcePreview from '@/components/content/SourcePreview';
+import { ACCENT, PRIMARY_BUTTON, SECONDARY_BUTTON } from '@/components/content/studioStyles';
 import { classifyProviderState } from '@/components/signals/ProviderBadge';
 
 const dispatch = (text: string) =>
@@ -334,40 +335,41 @@ export default function Content() {
   return (
     <div className="flex h-[calc(100vh-49px)] min-h-[560px] flex-col overflow-hidden">
       {/* ── header: compact ─────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.05] px-5 py-4 lg:px-7">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-[#050505]/40 px-5 py-4 backdrop-blur-xl lg:px-7">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Content</h1>
           <p className="mt-0.5 truncate text-[13px] text-muted-foreground/70">Create and refine content with Scribe.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <dl className="hidden items-center gap-4 text-[12px] text-muted-foreground/60 md:flex">
+          <dl className="hidden items-center gap-4 rounded-lg border border-white/[0.06] bg-card/25 px-3.5 py-1.5 text-[12px] text-muted-foreground/65 md:flex">
             <Stat label="trends" value={stats.trends} />
             <Stat label="drafts" value={stats.drafts} />
             <Stat label="awaiting review" value={stats.awaiting} />
             <Stat label="approved" value={stats.approved} />
           </dl>
           <button onClick={() => setCreateOpen(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-500 px-3 text-[13px] font-medium text-white hover:bg-violet-400">
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] transition-colors ${PRIMARY_BUTTON}`}>
             <Plus className="h-4 w-4" /> New content
           </button>
         </div>
       </header>
 
       {/* ── small screens: one area at a time ──────────────────────────── */}
-      <div className="flex shrink-0 gap-1 border-b border-white/[0.05] px-4 py-2 lg:hidden" role="tablist" aria-label="Content areas">
+      <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-4 lg:hidden" role="tablist" aria-label="Content areas">
         {([['sources', 'Sources', PanelLeft], ['studio', 'Studio', FileText], ['scribe', 'Scribe', Sparkles]] as const).map(([id, label, Icon]) => (
           <button key={id} role="tab" aria-selected={pane === id} onClick={() => setPane(id)}
-            className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[12.5px] font-medium ${
-              pane === id ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground/65'
+            className={`relative inline-flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12.5px] font-medium ${
+              pane === id ? ACCENT.accentText : 'text-muted-foreground/65'
             }`}>
             <Icon className="h-3.5 w-3.5" /> {label}
+            {pane === id && <span className="absolute inset-x-4 -bottom-px h-[2px] rounded-full bg-emerald-500/80" aria-hidden />}
           </button>
         ))}
       </div>
 
       <div className="flex min-h-0 flex-1">
         {/* ── SOURCES ─────────────────────────────────────────────────── */}
-        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-white/[0.05]`}>
+        <aside className={`${pane === 'sources' ? 'flex' : 'hidden'} w-full min-w-0 flex-col px-3 py-4 lg:flex lg:w-[284px] lg:shrink-0 lg:border-r lg:border-white/[0.06] lg:bg-card/25 lg:backdrop-blur-xl`}>
           <ContentSourcesPanel
             nav={nav}
             onNav={setNav}
@@ -433,13 +435,13 @@ export default function Content() {
         <div className="hidden min-h-0 xl:flex">{scribe}</div>
         {/* medium screens: a drawer over the Studio */}
         <button onClick={() => setScribeOverlay(true)} aria-label="Open Scribe"
-          className="fixed bottom-28 right-5 z-30 hidden items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 py-2 text-[12.5px] font-medium text-foreground backdrop-blur-md lg:inline-flex xl:hidden">
+          className={`fixed bottom-28 right-5 z-30 hidden items-center gap-1.5 rounded-full border ${ACCENT.accentBorder} bg-[#050505]/80 px-3.5 py-2 text-[12.5px] font-medium ${ACCENT.accentText} shadow-[0_0_22px_-10px_rgba(16,185,129,0.6)] backdrop-blur-xl lg:inline-flex xl:hidden`}>
           <Sparkles className="h-3.5 w-3.5" /> Scribe
         </button>
         {scribeOverlay && (
           <div className="fixed inset-0 z-40 hidden lg:block xl:hidden" onClick={() => setScribeOverlay(false)}>
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="absolute right-0 top-0 h-full bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="absolute right-0 top-0 h-full bg-[#050505] shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <ScribePanel
                 collapsed={false}
                 onToggle={() => setScribeOverlay(false)}
@@ -531,7 +533,7 @@ export default function Content() {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-baseline gap-1">
-      <dd className="font-medium tabular-nums text-foreground/85">{value}</dd>
+      <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
       <dt>{label}</dt>
     </div>
   );
@@ -540,16 +542,16 @@ function Stat({ label, value }: { label: string; value: number }) {
 function EmptyStudio({ onNew, onSources }: { onNew: () => void; onSources: () => void }) {
   return (
     <div className="flex min-h-[420px] flex-col items-start justify-center">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">Content Studio</p>
+      <p className={`text-[12px] font-medium ${ACCENT.accentText}`}>Content Studio</p>
       <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.01em] text-foreground">Pick something to work on</h2>
       <p className="mt-2 max-w-[46ch] text-[14px] leading-relaxed text-muted-foreground/70">
         Open a draft, choose a source from For You or Trends, or start from your own idea. Scribe drafts it here for your review.
       </p>
       <div className="mt-6 flex gap-2">
-        <button onClick={onNew} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-violet-500 px-4 text-[13.5px] font-medium text-white hover:bg-violet-400">
+        <button onClick={onNew} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-[13.5px] transition-colors ${PRIMARY_BUTTON}`}>
           <Plus className="h-4 w-4" /> New content
         </button>
-        <button onClick={onSources} className="inline-flex h-9 items-center rounded-lg bg-white/[0.05] px-4 text-[13.5px] font-medium text-foreground/90 hover:bg-white/[0.09]">
+        <button onClick={onSources} className={`inline-flex h-9 items-center rounded-lg px-4 text-[13.5px] font-medium transition-colors ${SECONDARY_BUTTON}`}>
           Browse sources
         </button>
       </div>

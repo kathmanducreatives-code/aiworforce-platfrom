@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Plus, Info, Search, Archive } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ACCENT, ROW_IDLE, ROW_SELECTED } from "@/components/content/studioStyles";
 import type { ContentItem } from "@/lib/content/contentItems";
 import {
   CONTENT_TYPE_LABEL, STATUS_LABEL, describeContentSource, sourceCardOf, type SourceSignalLike,
@@ -56,8 +57,10 @@ export default function ContentSourcesPanel({
       <nav className="flex flex-wrap gap-1 px-1" aria-label="Sources">
         {NAV.map((n) => (
           <button key={n.id} onClick={() => onNav(n.id)} aria-current={nav === n.id ? "page" : undefined}
-            className={`rounded-md px-2.5 py-1.5 text-[12.5px] font-medium transition-colors ${
-              nav === n.id ? "bg-white/[0.08] text-foreground" : "text-muted-foreground/65 hover:text-foreground/90"
+            className={`rounded-md border px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+              nav === n.id
+                ? `${ACCENT.accentBorder} ${ACCENT.accentBg} ${ACCENT.accentText}`
+                : "border-transparent text-muted-foreground/65 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground/90"
             }`}>
             {n.label}
           </button>
@@ -76,8 +79,8 @@ export default function ContentSourcesPanel({
                 return (
                   <li key={it.id}>
                     <button onClick={() => onOpenItem(it.id)} aria-current={it.id === openId ? "true" : undefined}
-                      className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
-                        it.id === openId ? "bg-white/[0.07]" : "hover:bg-white/[0.035]"
+                      className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                        it.id === openId ? ROW_SELECTED : ROW_IDLE
                       }`}>
                       <span className="flex items-center gap-2">
                         <StatusDot status={it.status} />
@@ -102,7 +105,7 @@ export default function ContentSourcesPanel({
           <div className="space-y-2">
             {nav === "ideas" && (
               <button onClick={onNewIdea}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 hover:bg-white/[0.04]">
+                className="flex w-full items-center gap-2 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-left text-[13px] font-medium text-foreground/90 transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.03]">
                 <Plus className="h-3.5 w-3.5" /> Start from your own idea
               </button>
             )}
@@ -127,8 +130,8 @@ export default function ContentSourcesPanel({
             {comments.map((c) => (
               <button key={c.id} onClick={() => c.canonical && onOpenItem(c.id)} disabled={!c.canonical}
                 title={c.canonical ? undefined : "Written before drafts were versioned — read-only"}
-                className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
-                  c.id === openId ? "bg-white/[0.07]" : "hover:bg-white/[0.035]"
+                className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                  c.id === openId ? ROW_SELECTED : ROW_IDLE
                 } disabled:cursor-default disabled:opacity-70`}>
                 <span className="block truncate text-[13px] font-medium text-foreground/90">{c.title}</span>
                 {c.preview && <span className="mt-0.5 line-clamp-2 block text-[12px] text-muted-foreground/60">{c.preview}</span>}
@@ -150,7 +153,9 @@ export default function ContentSourcesPanel({
 function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLike; selected: boolean; onSelect: () => void }) {
   const c = sourceCardOf(signal);
   return (
-    <div className={`group rounded-xl px-3.5 py-3 transition-colors ${selected ? "bg-white/[0.07]" : "hover:bg-white/[0.035]"}`}>
+    <div className={`group rounded-xl border px-3.5 py-3 transition-colors ${
+      selected ? ROW_SELECTED : "border-white/[0.05] bg-white/[0.02] hover:border-white/10 hover:bg-emerald-500/[0.03]"
+    }`}>
       <button onClick={onSelect} className="block w-full text-left" aria-pressed={selected}>
         <p className="line-clamp-2 text-[13.5px] font-medium leading-snug text-foreground/95">{c.title}</p>
         <p className="mt-1 truncate text-[11.5px] text-muted-foreground/60">
@@ -160,7 +165,7 @@ function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLi
         {c.angle && <p className="mt-1.5 line-clamp-2 text-[12.5px] text-foreground/75"><span className="text-muted-foreground/55">Angle · </span>{c.angle}</p>}
       </button>
       <div className="mt-2 flex items-center gap-3">
-        <button onClick={onSelect} className="text-[12.5px] font-medium text-foreground hover:underline">Open in Studio</button>
+        <button onClick={onSelect} className={`text-[12.5px] font-medium ${ACCENT.accentText} hover:brightness-110`}>Open in Studio</button>
         {c.why.length > 0 && (
           <Popover>
             <PopoverTrigger asChild>
@@ -168,7 +173,7 @@ function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLi
                 <Info className="h-3 w-3" /> Why this?
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 text-[12.5px]">
+            <PopoverContent align="start" className="w-72 border-white/[0.08] bg-[#0a0a0a]/90 text-[12.5px] backdrop-blur-xl">
               <ul className="space-y-1.5 text-muted-foreground">
                 {c.why.map((w, i) => <li key={i}>{w}</li>)}
               </ul>
@@ -181,6 +186,6 @@ function SourceCardView({ signal, selected, onSelect }: { signal: SourceSignalLi
 }
 
 function StatusDot({ status }: { status: string }) {
-  const cls = status === "approved" ? "bg-emerald-400/80" : status === "archived" ? "bg-white/20" : "bg-violet-400/80";
+  const cls = status === "approved" ? "bg-emerald-400/80" : status === "archived" ? "bg-white/20" : "bg-white/45";
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cls}`} aria-hidden />;
 }

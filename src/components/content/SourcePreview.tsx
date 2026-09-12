@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Loader2, FileText, MessageSquare, ArrowUp, ExternalLink } from "lucide-react";
 import { sourceCardOf, type SourceSignalLike } from "@/lib/content/contentStudioModel";
+import { FIELD, PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/content/studioStyles";
 
 export default function SourcePreview({ signal, onCreate, onAskPilot }: {
   signal: SourceSignalLike;
@@ -42,8 +43,8 @@ export default function SourcePreview({ signal, onCreate, onAskPilot }: {
       )}
       {c.context && <p className="mt-5 text-[14.5px] leading-[1.7] text-foreground/85">{c.context}</p>}
       {c.angle && (
-        <div className="mt-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">Recommended angle</p>
+        <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 backdrop-blur-xl">
+          <p className="text-[12px] font-medium text-muted-foreground/70">Recommended angle</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-foreground/85">{c.angle}</p>
         </div>
       )}
@@ -56,11 +57,11 @@ export default function SourcePreview({ signal, onCreate, onAskPilot }: {
 
       <div className="mt-8 flex flex-wrap gap-2">
         <button onClick={() => run("post", () => onCreate("post"))} disabled={!!busy}
-          className="inline-flex h-9 items-center gap-2 rounded-lg bg-violet-500 px-4 text-[13.5px] font-medium text-white hover:bg-violet-400 disabled:opacity-60">
+          className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13.5px] transition-colors ${PRIMARY_BUTTON}`}>
           {busy === "post" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Create post
         </button>
         <button onClick={() => run("comment", () => onCreate("comment"))} disabled={!!busy}
-          className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/[0.05] px-4 text-[13.5px] font-medium text-foreground/90 hover:bg-white/[0.09] disabled:opacity-60">
+          className={`inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13.5px] font-medium transition-colors ${SECONDARY_BUTTON}`}>
           {busy === "comment" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Create comment
         </button>
       </div>
@@ -76,12 +77,12 @@ export default function SourcePreview({ signal, onCreate, onAskPilot }: {
           void run("ask", async () => { await onAskPilot(t); setAsk(""); setSent(true); });
         }}>
         <label className="text-[12px] text-muted-foreground/60" htmlFor="ask-pilot">Ask Pilot about this signal</label>
-        <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-1.5 ring-1 ring-white/[0.06] focus-within:ring-white/[0.14]">
+        <div className={`mt-1.5 flex items-center gap-2 rounded-xl px-3 py-1.5 ${FIELD}`}>
           <input id="ask-pilot" value={ask} onChange={(e) => { setAsk(e.target.value); setSent(false); }}
             placeholder="e.g. What does this mean for our positioning?"
             className="min-w-0 flex-1 bg-transparent py-1 text-[13px] text-foreground/90 outline-none placeholder:text-muted-foreground/40" />
           <button type="submit" disabled={!ask.trim() || !!busy} aria-label="Send to Pilot"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/[0.08] text-foreground disabled:text-muted-foreground/40">
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] text-foreground/85 hover:bg-white/[0.07] disabled:text-muted-foreground/40">
             {busy === "ask" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
           </button>
         </div>

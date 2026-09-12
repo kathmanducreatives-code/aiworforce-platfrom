@@ -25,6 +25,9 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/content/studioStyles";
+
+// The Leads/Signals look, shared with the rest of the Content page — see studioStyles.
 
 export interface StudioAsset extends ContentAssetRow {
   /** A short-lived signed URL, minted by the page. Null for a failed asset. */
@@ -140,7 +143,7 @@ export default function ContentStudioEditor({
         <Dot />
         <span className="min-w-0 truncate">{source.label}{source.about ? ` — ${source.about}` : ""}</span>
         {source.subject && source.kind !== "idea" && (
-          <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-muted-foreground/80">
+          <span className="rounded-md border border-white/[0.06] bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-muted-foreground/85">
             About: {subjectText(source.subject)} — not us
           </span>
         )}
@@ -153,7 +156,7 @@ export default function ContentStudioEditor({
 
       {/* ── version preview banner ──────────────────────────────────────── */}
       {previewing && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.04] px-3.5 py-2.5 text-[13px]">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-[13px] backdrop-blur-xl">
           <span className="inline-flex items-center gap-2 text-foreground/85">
             <Eye className="h-3.5 w-3.5" />
             Viewing v{preview!.version} · {versionLabel(preview!)} — not the current version
@@ -168,7 +171,7 @@ export default function ContentStudioEditor({
           <button onClick={() => setStrategyOpen((v) => !v)} aria-expanded={strategyOpen}
             className="flex w-full items-center justify-between gap-3 text-left">
             <span className="flex min-w-0 items-baseline gap-3">
-              <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">Strategy</span>
+              <span className="shrink-0 text-[12px] font-medium text-muted-foreground/70">Strategy</span>
               <span className="truncate text-[13px] text-muted-foreground/80">
                 {strategySummary || "Audience, objective, angle and call to action"}
               </span>
@@ -191,7 +194,7 @@ export default function ContentStudioEditor({
 
       {/* ── hook ────────────────────────────────────────────────────────── */}
       <section className="mt-7">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">Hook</p>
+        <p className="text-[12px] font-medium text-muted-foreground/70">Hook</p>
         <p className="mt-2 text-[19px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
           {hook ?? <span className="font-normal text-muted-foreground/50">The draft's opening line appears here.</span>}
         </p>
@@ -206,7 +209,7 @@ export default function ContentStudioEditor({
           rows={14}
           placeholder="Write your draft, or ask Scribe to draft it. It is saved to this workspace — never posted."
           aria-label="Draft"
-          className={`w-full resize-y rounded-xl bg-white/[0.025] px-5 py-4 text-[15px] leading-[1.7] outline-none ring-1 ring-white/[0.06] transition focus:ring-white/[0.14] ${
+          className={`w-full resize-y rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-[15px] leading-[1.7] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] outline-none backdrop-blur-xl transition focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20 ${
             previewing ? "text-foreground/70" : "text-foreground/95"
           }`}
         />
@@ -216,14 +219,14 @@ export default function ContentStudioEditor({
       {!previewing && (
         <section className="mt-6">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">Visual</p>
+            <p className="text-[12px] font-medium text-muted-foreground/70">Visual</p>
             {readyAssets.length > 1 && <span className="text-[12px] text-muted-foreground/55">{readyAssets.length} images · earlier ones kept</span>}
           </div>
           {current?.url ? (
             <img src={current.url} alt="Current image for this draft" loading="lazy"
-              className="mt-3 w-full max-w-[420px] rounded-xl ring-1 ring-white/[0.06]" />
+              className="mt-3 w-full max-w-[420px] rounded-xl border border-white/[0.06]" />
           ) : (
-            <div className="mt-3 flex max-w-[420px] items-center justify-between gap-3 rounded-xl bg-white/[0.02] px-4 py-5 ring-1 ring-white/[0.05]">
+            <div className="mt-3 flex max-w-[420px] items-center justify-between gap-3 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-5">
               <span className="text-[13px] text-muted-foreground/65">No visual yet.</span>
               <ActionButton onClick={() => run("image", onImage, "Image ready. The text is unchanged.")}
                 disabled={!actions.image.enabled} busy={busy === "image"} icon={ImageIcon} title={actions.image.reason ?? undefined}>
@@ -258,7 +261,7 @@ export default function ContentStudioEditor({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button aria-label="More actions" className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/70 hover:bg-white/[0.05] hover:text-foreground">
+            <button aria-label="More actions" className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground/70 hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-foreground">
               <MoreHorizontal className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
@@ -307,7 +310,7 @@ function Field({ label, value, onChange, placeholder }: {
     <label className="block">
       <span className="text-[12px] text-muted-foreground/65">{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="mt-1.5 w-full rounded-lg bg-white/[0.03] px-3 py-2 text-[13.5px] text-foreground/90 outline-none ring-1 ring-white/[0.06] placeholder:text-muted-foreground/40 focus:ring-white/[0.14]" />
+        className="mt-1.5 w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[13.5px] text-foreground/90 outline-none placeholder:text-muted-foreground/40 focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20" />
     </label>
   );
 }
@@ -320,8 +323,8 @@ function ActionButton({ children, onClick, disabled, busy, icon: Icon, primary, 
     <button onClick={onClick} disabled={disabled} title={title}
       className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed ${
         primary
-          ? "bg-violet-500 text-white hover:bg-violet-400 disabled:bg-white/[0.06] disabled:text-muted-foreground/50"
-          : "bg-white/[0.05] text-foreground/90 hover:bg-white/[0.09] disabled:bg-transparent disabled:text-muted-foreground/40"
+          ? PRIMARY_BUTTON
+          : SECONDARY_BUTTON
       }`}>
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
       {children}
