@@ -87,7 +87,7 @@ Deno.test("a persisted draft is editable; an append-only row is not", () => {
     /!contentItems\.some\(\(it\) => it\.id === openDraftId\)/.test(PAGE),
     "anything else must be recognised as a read-only legacy row",
   );
-  assert(/\{studioItem && studioHandlers && \(/.test(PAGE), "no editor without a real item and its handlers");
+  assert(/\{studioItem && studioHandlers \? \(/.test(PAGE), "no editor without a real item and its handlers");
 });
 
 // ══════════ 2. one vocabulary, TypeScript and SQL ═════════════════════════

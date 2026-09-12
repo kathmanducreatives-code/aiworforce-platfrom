@@ -77,18 +77,23 @@ Deno.test("an image needs copy; the second one is a regeneration; archived draft
 
 // ══════════ 3. the mounted page ═════════════════════════════════════════════
 
-Deno.test("the MOUNTED page is Sources | Content Studio | History, and the drawer is gone", async () => {
+Deno.test("the MOUNTED page is Sources | Studio | Scribe/History, and the old surfaces are gone", async () => {
   const page = code(await read("src/pages/Content.tsx"));
-  for (const label of ["{ id: 'sources', label: 'Sources' }", "{ id: 'studio', label: 'Content Studio' }", "{ id: 'history', label: 'History' }"]) {
-    assert(page.includes(label), label);
+  for (const c of ["<ContentSourcesPanel", "<ContentStudioEditor", "<ScribePanel", "<SourcePreview", "<ContentComposer"]) {
+    assert(page.includes(c), `${c} is rendered by the routed page`);
   }
-  assert(page.includes("<ContentStudioEditor"), "the Studio editor is rendered by the routed page");
-  assert(!page.includes("ContentDetailDrawer"), "the slide-over it replaced is not mounted");
+  // History is contextual to the open draft (Scribe panel), not a top-level page.
+  assert(!/id: 'history', label: 'History'/.test(page), "no top-level History view");
+  for (const gone of ["ContentDetailDrawer", "MiraCopilot", "ManualContentSource", "ForYouView", "TrendsView", "PlanView"]) {
+    assert(!page.includes(gone), `${gone} is not mounted`);
+  }
   const app = await read("src/App.tsx");
   assert(app.includes('lazy(() => import("./pages/Content"))') && app.includes('path="/content"'), "and that page is the routed one");
-  let drawerExists = true;
-  try { await Deno.stat(new URL("src/components/content/ContentDetailDrawer.tsx", ROOT)); } catch { drawerExists = false; }
-  assert(!drawerExists, "no orphan left behind");
+  for (const f of ["ContentDetailDrawer", "MiraCopilot", "ManualContentSource"]) {
+    let exists = true;
+    try { await Deno.stat(new URL(`src/components/content/${f}.tsx`, ROOT)); } catch { exists = false; }
+    assert(!exists, `${f}: no orphan left behind`);
+  }
 });
 
 Deno.test("every Studio action goes through the Content service — the page writes nothing itself", async () => {
@@ -102,8 +107,11 @@ Deno.test("every Studio action goes through the Content service — the page wri
     "archiveContent(studioItem.id)", "restoreContent(studioItem.id)",
   ]) assert(handlers.includes(call), call);
   assert(!/supabase\s*\.from\(/.test(handlers) && !/functions\.invoke\(/.test(handlers));
-  // History includes archived: archiving leaves the working set, not the record.
-  assert(page.includes("(['draft', 'approved', 'archived'] as const)"));
+  // Scribe's revisions take the same service path.
+  assert(page.includes("reviseContentText(workspaceId, studioItem, revision)"));
+  // Archived drafts stay reachable: archiving leaves the working set, not the record.
+  const sources = code(await read("src/components/content/ContentSourcesPanel.tsx"));
+  assert(sources.includes('showArchived || it.status !== "archived"'));
 });
 
 Deno.test("signal drafts from the page carry ownership; the composer no longer passes a raw feed id", async () => {

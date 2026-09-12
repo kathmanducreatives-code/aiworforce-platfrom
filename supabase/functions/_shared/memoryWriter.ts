@@ -293,6 +293,8 @@ interface AgentResultCtx extends BaseCtx {
     engagement_queries?: string[];
     competitor_related?: boolean;
     related_signal_ids?: string[];
+    /** A typed revision request from the Scribe panel, recorded on the version. */
+    revision?: string | null;
     /**
      * The `content_item` this generation is filling in.
      *
@@ -1462,6 +1464,9 @@ async function fillContentItem(
           subtype: cl.subtype ?? null,
           source: cl.source ?? null,
           related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
+          // What the person asked Scribe to change, when it was a revision.
+          // The trigger copies this onto the version, so history can show it.
+          revision: typeof cl.revision === "string" && cl.revision.trim() ? cl.revision.trim().slice(0, 300) : null,
         },
       },
     })

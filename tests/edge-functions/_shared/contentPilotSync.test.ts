@@ -191,6 +191,9 @@ Deno.test("14. the deleted orphans stay deleted", async () => {
     "ContentPromptBox", "ContentLoopPreview",
     "CommentOpportunityCard", "ContentBrief", "ContentDraftCard",
     "ContentOpportunityCard", "DraftApprovalQueue", "SignalToContentCard",
+    // The Studio redesign: the outreach persona's panel (Mira) and a second,
+    // English-dispatch idea source — both replaced by canonical Scribe/composer.
+    "MiraCopilot", "ManualContentSource",
   ]) {
     const hits: string[] = [];
     for await (const e of Deno.readDir(new URL("../../../src/components/content/", import.meta.url))) {

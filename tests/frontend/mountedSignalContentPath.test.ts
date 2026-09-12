@@ -57,16 +57,18 @@ Deno.test("pilot-chat refuses a card without its conversation — but not a page
   assert(/entry\?:\s*'page'\s*\|\s*'card'/.test(client));
 });
 
-// ══════════ 2. Mira carries the signal as data ══════════════════════════════
+// ══════════ 2. asking Pilot about a signal carries its id as data ══════════
 
-Deno.test("Ask Mira on a trend carries that signal's id as metadata", async () => {
+Deno.test("Ask Pilot about a selected signal carries that signal's id as metadata", async () => {
+  // Mira was the outreach persona borrowed by the Content page; the chat path it
+  // carried lives on in the Studio's source preview, with the same contract.
   const page = code(await read("src/pages/Content.tsx"));
-  assert(page.includes("onClick={() => onAskMira(`Trend: ${s.title}`, s)}"), "the trend row hands Mira the signal itself");
-  assert(page.includes("contextSignal={miraSignal}"));
-  assert(page.includes("onContextClear={() => { setMiraContext(null); setMiraSignal(null); }}"),
-    "clearing the context clears the signal — a stale id must not ride along on the next message");
-  const mira = code(await read("src/components/content/MiraCopilot.tsx"));
-  assert(mira.includes("...(contextSignal ? { metadata: buildSignalContextMetadata(contextSignal) } : {})"));
+  const i = page.indexOf("onAskPilot={async (text) => {");
+  assert(i > 0, "the source preview offers Ask Pilot");
+  const block = page.slice(i, page.indexOf("}}", i));
+  assert(block.includes("metadata: buildSignalContextMetadata(selectedSignal)"), "the id travels as data");
+  assert(block.includes("action_source: 'content_copilot'"));
+  assert(!page.includes("MiraCopilot"));
 });
 
 // ══════════ 3. a legacy-only signal is never a fake FK ═════════════════════

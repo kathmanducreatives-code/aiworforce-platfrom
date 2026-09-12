@@ -32,6 +32,7 @@
 // for its whole life.
 
 import { supabase } from '@/integrations/supabase/client';
+import { functionErrorDetail } from '@/lib/content/functionError';
 import type { ContentFormat } from '@/lib/content/contentItems';
 
 export interface GenerateContentDraftArgs {
@@ -53,6 +54,12 @@ export interface GenerateContentDraftArgs {
    * already existed.
    */
   regenerate?: boolean;
+  /**
+   * A typed REVISION REQUEST — "make it more concise", "improve the hook" — from
+   * the Scribe panel. Recorded on the new version's provenance so history can
+   * say what was asked, not just that Scribe rewrote it.
+   */
+  revision?: string | null;
 }
 
 export interface GenerateContentDraftResult {
@@ -127,12 +134,14 @@ export async function generateContentDraft(
           content_item_id: args.contentItemId,
           regenerate: args.regenerate === true,
           related_signal_ids: args.relatedSignalIds ?? [],
+          revision: args.revision ?? null,
         },
       },
     },
   });
 
-  if (error) return { ok: false, error: error.message ?? 'generation_failed' };
+  // The function's own reason, not supabase-js's "non-2xx" — see functionError.
+  if (error) return { ok: false, error: (await functionErrorDetail(error)) ?? error.message ?? 'generation_failed' };
 
   const res = data as { success?: boolean; error?: string; message?: string } | null;
   // run-agent answers 200 with `success: false` for refusals — an unidentified

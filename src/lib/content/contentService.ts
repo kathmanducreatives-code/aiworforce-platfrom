@@ -31,6 +31,7 @@ import {
 } from '@/lib/content/contentInstruction';
 import { generateContentDraft } from '@/lib/content/generateContentDraft';
 import { functionErrorDetail } from '@/lib/content/functionError';
+import { revisionInstruction } from '@/lib/content/contentStudioModel';
 
 /** What a caller asks for, wherever it is calling from. */
 export interface ContentGenerationRequest {
@@ -139,8 +140,24 @@ export async function draftContentText(
   return writeContentText(workspaceId, item, false);
 }
 
+/**
+ * A REVISION the person asked Scribe for — "make it more concise", "improve the
+ * hook" — applied to the CURRENT draft. The same one generation path as every
+ * other write: the draft's stored brief (so who is writing and whose news it is
+ * never change), then the request and the text it applies to. A new version;
+ * the previous one stays in history, and the request is recorded on it.
+ */
+export async function reviseContentText(
+  workspaceId: string, item: ContentItem, revision: string,
+): Promise<ContentResult> {
+  const ask = revision.trim();
+  if (!ask) return { ok: false, item, error: 'empty_revision' };
+  if (!(item.body ?? '').trim()) return { ok: false, item, error: 'nothing_to_revise' };
+  return writeContentText(workspaceId, item, true, ask);
+}
+
 async function writeContentText(
-  workspaceId: string, item: ContentItem, regenerate: boolean,
+  workspaceId: string, item: ContentItem, regenerate: boolean, revision?: string,
 ): Promise<ContentResult> {
   // THE BRIEF IS REBUILT, NOT REPLAYED. From the typed input kept on the row,
   // with the signal's ownership re-read from the signal itself — so a draft
@@ -155,11 +172,12 @@ async function writeContentText(
   const gen = await generateContentDraft({
     contentItemId: item.id,
     workspaceId,
-    instruction: brief.text,
+    instruction: revision ? revisionInstruction(brief.text, revision, item.body ?? '') : brief.text,
     format: item.format,
     topic: (item.metadata?.topic as string | undefined) ?? item.title,
     relatedSignalIds: item.source_signal_id ? [item.source_signal_id] : [],
     regenerate,
+    revision: revision ?? null,
   });
   if (!gen.ok) return { ok: false, item, error: gen.error ?? 'regeneration_failed' };
   const fresh = await getContentItem(item.id);

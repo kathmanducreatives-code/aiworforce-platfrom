@@ -14,24 +14,39 @@ import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
 import ProductTour from "./tour/ProductTour";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { collapsedFor, readPrefs, withToggle, writePrefs } from "@/lib/sidebarPolicy";
+
+// The session's manual sidebar choices. sessionStorage, so a new session starts
+// from the route defaults again; guarded, because storage can be blocked.
+const sessionStore = (() => {
+  try { return typeof window !== "undefined" ? window.sessionStorage : null; } catch { return null; }
+})();
 
 interface MainLayoutProps {
   children: ReactNode;
 }
 
-const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search'];
-
 const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useIsMobile();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // ONE RULE, FROM THE ROUTE (see `sidebarPolicy`): the Dashboard opens
+  // expanded, every working page opens compact, and a manual toggle is kept for
+  // that kind of page for the rest of the session. Seeded from the current path
+  // so the first paint is already right — no expand-then-collapse jump.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => collapsedFor(location.pathname, readPrefs(sessionStore)),
+  );
   const [commandOpen, setCommandOpen] = useState(false);
 
   useEffect(() => {
-    if (DATA_HEAVY_ROUTES.includes(location.pathname)) {
-      setIsSidebarCollapsed(true);
-    }
+    setIsSidebarCollapsed(collapsedFor(location.pathname, readPrefs(sessionStore)));
   }, [location.pathname]);
+
+  const toggleSidebar = () => {
+    const next = !isSidebarCollapsed;
+    writePrefs(sessionStore, withToggle(location.pathname, readPrefs(sessionStore), next));
+    setIsSidebarCollapsed(next);
+  };
 
   return (
     <ChatWorkspaceProvider>
@@ -43,7 +58,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         {!isMobile && (
           <Sidebar
             collapsed={isSidebarCollapsed}
-            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onToggle={toggleSidebar}
             onOpenCommandPalette={() => setCommandOpen(true)}
           />
         )}
@@ -54,7 +69,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         )}
 
         <main
-          className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+          className={`min-h-screen overflow-auto transition-[margin] duration-200 ease-out relative z-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
             isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-[68px]' : 'ml-[260px]'
           }`}
         >

@@ -188,3 +188,131 @@ export function studioActions(i: {
 
 /** Re-exported so the page does not need a second import for the subject rule. */
 export { signalSubjectFrom };
+
+// ── SCRIBE, IN CONTEXT ──────────────────────────────────────────────────────
+//
+// The Scribe panel's actions are about THIS draft. Each text action is a typed
+// revision request on the one generation path (`reviseContentText`): Scribe
+// rewrites from the draft's stored brief plus the request, a new version is
+// written, and the request is recorded on it. "Generate visual" is the image
+// operation. None of them is a chat message thrown at Pilot.
+
+export type ScribeActionId = "improve_hook" | "concise" | "change_angle" | "alternatives" | "visual";
+
+export const SCRIBE_ACTIONS: ReadonlyArray<{ id: ScribeActionId; label: string; revision: string | null }> = [
+  { id: "improve_hook", label: "Improve hook",
+    revision: "Rewrite only the opening line into a sharper hook. Keep the rest of the draft as it is." },
+  { id: "concise", label: "Make more concise",
+    revision: "Make the draft more concise — cut roughly a third while keeping the point and the voice." },
+  { id: "change_angle", label: "Change angle",
+    revision: "Rewrite the draft from a clearly different angle than the current one, same facts." },
+  { id: "alternatives", label: "Give 3 alternatives",
+    revision: "Start with three alternative hooks labelled A, B and C, then the full draft using option A." },
+  { id: "visual", label: "Generate visual", revision: null },
+];
+
+/** How a version reads in history — with what was asked, when it was a revision. */
+export function versionLabel(v: { generation_source: string; prompt_context?: Record<string, unknown> | null }): string {
+  const base = GENERATION_LABEL[v.generation_source] ?? v.generation_source;
+  const ask = str(v.prompt_context?.revision);
+  if (!ask) return base;
+  const known = SCRIBE_ACTIONS.find((a) => a.revision === ask);
+  return `${base} · ${known ? known.label : `“${ask.slice(0, 60)}${ask.length > 60 ? "…" : ""}”`}`;
+}
+
+// ── SOURCES ─────────────────────────────────────────────────────────────────
+//
+// A source card says what a person needs to decide — what it is, whose it is,
+// why it matters, what angle to take, how relevant — and nothing else. Which
+// agent found or ranked it is real provenance but not a decision input, so it
+// lives behind "Why this?" instead of on every card.
+
+export interface SourceSignalLike {
+  id: string;
+  title: string | null;
+  signal_type?: string | null;
+  signal_label?: string | null;
+  description?: string | null;
+  why_text?: string | null;
+  reason?: string | null;
+  next_action?: string | null;
+  fit_score?: number | null;
+  account_name?: string | null;
+  competitor_name?: string | null;
+  source?: string | null;
+  source_url?: string | null;
+  created_at?: string | null;
+  quality_badge?: string | null;
+  store?: "signal_events" | "signals";
+  raw?: Record<string, unknown> | null;
+}
+
+export interface SourceCard {
+  id: string;
+  title: string;
+  /** Whose it is — the company or competitor, when the row names one. */
+  company: string | null;
+  context: string | null;
+  angle: string | null;
+  /** 0–99, from the ranking. Null when nothing ranked it. */
+  relevance: number | null;
+  /** Relationship to us, from the row's own fields. */
+  about: string | null;
+  /** Provenance for "Why this?" — who found it, how it was ranked, where from. */
+  why: string[];
+}
+
+export function sourceCardOf(s: SourceSignalLike): SourceCard {
+  const raw = s.raw ?? {};
+  const subject = signalSubjectFrom({
+    subject_type: str(raw.subject_type), subject_key: str(raw.subject_key),
+    signal_type: s.signal_type ?? null, company_name: str(raw.company_name),
+    competitor_name: s.competitor_name ?? null, account_name: s.account_name ?? null,
+  });
+  const context = str(s.description) ?? str(s.why_text);
+  const angle = str(s.reason) ?? str(s.next_action);
+  const score = typeof s.fit_score === "number" && s.fit_score > 0 ? Math.min(99, Math.round(s.fit_score)) : null;
+  const why = [
+    str(raw.origin) ? `Collected by ${str(raw.origin)}` : null,
+    str(s.signal_type) ? `Type: ${String(s.signal_type).replace(/_/g, " ")}` : null,
+    score !== null ? `Ranked ${score}/99 against your ICP` : null,
+    str(s.quality_badge),
+    str(s.source) ? `Source: ${str(s.source)}` : null,
+    s.store === "signals" ? "Earlier signal — drafted as an idea, not linked" : null,
+    str(s.why_text) && str(s.why_text) !== context ? str(s.why_text) : null,
+  ].filter((x): x is string => !!x);
+  return {
+    id: s.id,
+    title: str(s.title) ?? "Untitled signal",
+    company: subject.name,
+    context: context && context !== angle ? context : context,
+    angle: angle && angle !== context ? angle : null,
+    relevance: score,
+    about: relationshipLabel(subject),
+    why,
+  };
+}
+
+/** For You: the strongest few, by relevance, then recency. */
+export function forYou<T extends SourceSignalLike>(signals: readonly T[], n = 5): T[] {
+  return [...signals]
+    .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0) || String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+    .slice(0, n);
+}
+
+/**
+ * The instruction for a Scribe revision: the draft's own brief first — so who
+ * is writing and whose news it is never change — then the request, then the
+ * draft it applies to. One generation path; this only composes its input.
+ */
+export function revisionInstruction(brief: string, revision: string, currentDraft: string): string {
+  return [
+    brief,
+    "",
+    "REVISION REQUEST — apply it to the current draft below. Keep who is writing and whose news it is exactly as stated above.",
+    revision.trim(),
+    "",
+    "CURRENT DRAFT:",
+    currentDraft.trim(),
+  ].join("\n");
+}
