@@ -53,6 +53,11 @@ export default function WorkforceAgentCard({ agent, visual, loading, onProfile, 
     });
   }
   const status = loading ? 'Loading workspace' : agent.status === 'blocked' ? 'Setup needed' : agent.status === 'awaiting' ? 'Needs review' : agent.todayOutput;
+  const attention = !loading && (agent.status === 'blocked' || agent.status === 'awaiting');
+  // VISUAL FIRST: at rest a card is the portrait and the name. The role and the
+  // two actions are revealed on hover or keyboard focus; the profile (top right)
+  // stays available on touch. Status is still announced to screen readers, and
+  // a small dot marks an agent that needs you — nothing else is always on.
   return <article ref={host} className="team-agent" data-visual-state={visual?.base ?? 'idle'} onPointerMove={move} onPointerLeave={reset} onPointerCancel={reset} aria-label={`${meta.name} — ${meta.role}`}>
     <div className="team-agent__surface">
       <AgentVisual ref={face} agentId={agent.id} state={visual} surface="home" trackRef={host}
@@ -61,11 +66,12 @@ export default function WorkforceAgentCard({ agent, visual, loading, onProfile, 
       <div className="team-agent__reflection" />
       <button className="team-agent__profile" onClick={acknowledged(onProfile)} aria-label={`View ${meta.name}'s profile`}><ArrowUpRight size={16} /></button>
       <div className="team-agent__body">
-        <span className="team-agent__specialty">{meta.role.replace('AI ', '')}</span>
-        <h2>{meta.name}</h2>
-        <p>{meta.blurb}</p>
-        <div className="team-agent__status" data-attention={agent.status === 'blocked' || agent.status === 'awaiting'}><span />{status}</div>
-        <div className="team-agent__actions"><button onClick={acknowledged(onAction)} title={agent.nextAction.label}><span className="team-agent__action-label">{agent.nextAction.label}</span><ArrowUpRight size={14} className="shrink-0" /></button><button onClick={acknowledged(onChat)} aria-label={`Chat with ${meta.name}`}><MessageCircle size={16} /></button></div>
+        <h2>{meta.name}{attention && <span className="team-agent__attention" title={status} aria-hidden />}</h2>
+        <span className="sr-only">{status}</span>
+        <div className="team-agent__reveal">
+          <span className="team-agent__specialty">{meta.role.replace('AI ', '')}</span>
+          <div className="team-agent__actions"><button onClick={acknowledged(onAction)} title={agent.nextAction.label}><span className="team-agent__action-label">{agent.nextAction.label}</span><ArrowUpRight size={14} className="shrink-0" /></button><button onClick={acknowledged(onChat)} aria-label={`Chat with ${meta.name}`}><MessageCircle size={16} /></button></div>
+        </div>
       </div>
     </div>
   </article>;
