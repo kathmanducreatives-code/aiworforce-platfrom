@@ -25,10 +25,10 @@
 // in a normal build — every product surface rendered her as a broken image.
 // She now imports a real local asset like Atlas, Mira and Orion do.
 import pilotImg from '@/assets/agents/pilot.webp';
-import atlasImg from '@/assets/agents/public/atlas.webp';
-import miraImg from '@/assets/agents/public/mira.webp';
-import orionImg from '@/assets/agents/public/orion.webp';
-import lyraImg from '@/assets/agents/public/lyra.webp';
+import atlasImg from '@/assets/agents/public/atlas-cinematic.webp';
+import miraImg from '@/assets/agents/public/mira-cinematic.webp';
+import orionImg from '@/assets/agents/public/orion-cinematic.webp';
+import lyraImg from '@/assets/agents/public/lyra-cinematic.webp';
 import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
 
 export type PublicAgentId = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion';

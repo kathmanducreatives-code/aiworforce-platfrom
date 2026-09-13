@@ -97,7 +97,7 @@ export function useWorkforceState(workspaceId: string | null) {
         statusText: 'Monitoring competitors',
         todayOutput: `${competitorSignals} competitor note${competitorSignals === 1 ? '' : 's'}`,
         context: 'Surfaces fresh competitor conversations and launches.',
-        nextAction: { label: 'View research', route: '/competitors' },
+        nextAction: { label: 'View research', route: '/signals' },
         badgeCount: competitorSignals,
       },
       scribe: {

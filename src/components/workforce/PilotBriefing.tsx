@@ -8,9 +8,15 @@ import { listRecentRuns, type RecentRun } from '@/lib/workflows/recentRuns';
 
 interface Props {
   totals: { signals: number; outreachDrafts: number; approvals: number; contentDrafts: number };
+  /**
+   * The dashboard's panel form: the same briefing, next move and actions, sized
+   * to sit beside Recent activity and the review queue instead of taking a
+   * full-width band of its own.
+   */
+  compact?: boolean;
 }
 
-export default function PilotBriefing({ totals }: Props) {
+export default function PilotBriefing({ totals, compact = false }: Props) {
   const navigate = useNavigate();
   const { data: brain } = useCompanyBrain();
 
@@ -57,6 +63,53 @@ export default function PilotBriefing({ totals }: Props) {
   const askPilot = () => {
     window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text: 'Pilot, give me my briefing for today.' } }));
   };
+
+  if (compact) {
+    const title = runningRun
+      ? `Orchestrating ${runningRun.workflowTitle}…`
+      : brain?.onboarding_completed && founderName
+        ? `Welcome back, ${founderName}.`
+        : `${lines.length} update${lines.length === 1 ? '' : 's'} today`;
+    return (
+      <section className="team-panel flex flex-col" aria-label="Pilot briefing">
+        <div className="team-panel-header">
+          <h2 className="flex items-center gap-2">
+            <AgentAvatar id="pilot" size={22} status={runningRun ? 'working' : totals.approvals > 0 ? 'awaiting' : 'working'} active />
+            Pilot briefing
+          </h2>
+          <button onClick={askPilot} className="inline-flex items-center gap-1">Ask Pilot <MessageCircle className="h-3 w-3" /></button>
+        </div>
+        <p className="flex items-center gap-2 text-[13.5px] font-medium text-foreground/90 leading-snug">
+          {runningRun && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-400" />}
+          <span className="min-w-0 truncate">{title}</span>
+        </p>
+        {!runningRun && (
+          <ul className="mt-1.5 space-y-1">
+            {lines.slice(0, 3).map((l, i) => (
+              <li key={i} className="flex items-start gap-2 text-[12px] leading-snug text-neutral-300">
+                <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-emerald-400/80" />
+                <span className="min-w-0">{l}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-auto flex items-center justify-between gap-3 pt-3">
+          <span className="min-w-0 truncate text-[11.5px] text-neutral-400">
+            <span className="font-semibold uppercase tracking-[0.12em] text-emerald-300/90">Next</span> · {runningRun ? 'Workbench opens when it finishes.' : next.label}
+          </span>
+          {!runningRun && (
+            <button
+              onClick={() => navigate(next.route)}
+              className="ag-btn ag-btn-primary inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium"
+            >
+              {next.primary}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   // If a workflow is running, display progress indicators
   if (runningRun) {

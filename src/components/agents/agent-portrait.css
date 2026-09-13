@@ -1,0 +1,47 @@
+.ag-portrait {
+  --portrait-rx: 0deg;
+  --portrait-ry: 0deg;
+  --portrait-x: 50%;
+  --portrait-y: 38%;
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #0c1512;
+  vertical-align: middle;
+  perspective: 650px;
+  isolation: isolate;
+}
+.ag-portrait--squircle { border-radius: 22%; }
+.ag-portrait__lens {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: inherit;
+  transform: rotateX(var(--portrait-rx)) rotateY(var(--portrait-ry));
+  transition: transform 360ms cubic-bezier(.2,.7,.25,1), box-shadow 260ms ease;
+}
+.ag-portrait--ring .ag-portrait__lens { box-shadow: inset 0 0 0 1px #ffffff18, 0 0 0 1px #75bc9c36; }
+.ag-portrait__image { width: 100%; height: 100%; object-fit: cover; object-position: center 38%; }
+.ag-portrait__initial { color: #aed4c2; font-size: 1em; font-weight: 600; }
+.ag-portrait__shade { position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 -8px 14px -12px #000b, inset 0 1px 0 #ffffff20; pointer-events: none; }
+.ag-portrait__light { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at var(--portrait-x) var(--portrait-y), #e1fff226, #7ad8af08 40%, transparent 68%); transition: opacity 260ms ease; }
+.ag-portrait[data-active] .ag-portrait__lens { box-shadow: 0 0 0 1px #7acbab80, 0 4px 18px -10px #36b98880; }
+button:focus-visible .ag-portrait--interactive .ag-portrait__light,
+a:focus-visible .ag-portrait--interactive .ag-portrait__light { opacity: .8; }
+@media (hover: hover) and (pointer: fine) {
+  .ag-portrait--interactive:hover .ag-portrait__light,
+  button:hover .ag-portrait--interactive .ag-portrait__light,
+  a:hover .ag-portrait--interactive .ag-portrait__light { opacity: 1; }
+  .ag-portrait--interactive:hover .ag-portrait__lens { box-shadow: 0 0 0 1px #8dcfb080, 0 6px 20px -12px #3eb98566; }
+  .ag-portrait[data-tracking] .ag-portrait__lens { transition-duration: 100ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-portrait__lens { transform: none !important; transition: none; }
+  .ag-portrait__light { transition: none; background-position: center; }
+}
