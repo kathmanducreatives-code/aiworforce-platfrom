@@ -8,6 +8,8 @@ import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentProfileDrawer from '@/components/workforce/AgentProfileDrawer';
 import AgentPortrait from '@/components/agents/AgentPortrait';
 import WorkforceAgentCard from '@/components/dashboard/WorkforceAgentCard';
+import { useAgentVisualStates } from '@/hooks/useAgentVisualStates';
+import { visualAgentKey } from '@/lib/agent3d/visualState';
 import InlineCommandBar from '@/components/workforce/InlineCommandBar';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { prepareChatDraft } from '@/lib/chatDraft';
@@ -24,6 +26,8 @@ import type { AgentId } from '@/components/workforce/agents';
 const Dashboard = () => {
   const { workspaceId } = useWorkspace();
   const { agents, timeline, totals, brainComplete, loading } = useWorkforceState(workspaceId);
+  // Live execution truth for the agents' visuals — separate from the count-based copy above.
+  const { states: visualStates } = useAgentVisualStates(workspaceId);
   const [selectedId, setSelectedId] = useState<AgentId>('pilot');
   const [profileId, setProfileId] = useState<AgentId | null>(null);
   const chat = useChatWorkspace();
@@ -77,7 +81,7 @@ const Dashboard = () => {
 
         <div data-tour="dashboard-main">
           <section className="team-gallery" aria-label="Your AI workforce">
-            {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
+            {(['scout', 'aria', 'penn', 'scribe'] as AgentId[]).map(id => <WorkforceAgentCard key={id} agent={agents[id]} visual={visualStates[visualAgentKey(id)!]} loading={loading} onProfile={() => { setSelectedId(id); setProfileId(id); }} onChat={() => talk(id)} onAction={() => { const action = agents[id].nextAction; if (action.route) navigate(action.route); else talk(id); }} />)}
           </section>
           <InlineCommandBar />
           <div className="team-lower">
