@@ -32,8 +32,11 @@ export interface DeviceEnv {
   degraded: boolean;
 }
 
-/** Surfaces that may show a model at all. Inline avatars never do. */
-export const MODEL_SURFACES: readonly VisualSurface[] = ['home', 'agent'];
+/**
+ * Surfaces that may show a model at all. Phase 2 is the homepage only; agent
+ * pages join once the pilot has proved itself. Inline avatars never do.
+ */
+export const MODEL_SURFACES: readonly VisualSurface[] = ['home'];
 export const MIN_DEVICE_MEMORY_GB = 4;
 export const MIN_CORES = 4;
 /** Below this the gallery is two columns; portraits read better than small models. */

@@ -34,10 +34,13 @@ export interface AgentRendererProps {
 export type AgentRendererModule = { default: ComponentType<AgentRendererProps> };
 
 /**
- * One loader per model format. EMPTY IN PHASE 1 — with no loader, every
- * surface renders its portrait and no 3D code exists in the build.
+ * One loader per model format, each a dynamic import so three.js stays in its
+ * own chunk. A loader is only ever called for an agent whose registry entry
+ * has a valid manifest on a surface that passed every capability check — with
+ * no manifest (today, every agent), nothing here is fetched.
  *
- * Phase 2 adds exactly one line, e.g.
- *   glb: () => import('./GltfAgentRenderer'),
+ * `vrm` has no renderer yet; a VRM manifest therefore falls back to the portrait.
  */
-export const RENDERER_LOADERS: Partial<Record<ModelFormat, () => Promise<AgentRendererModule>>> = {};
+export const RENDERER_LOADERS: Partial<Record<ModelFormat, () => Promise<AgentRendererModule>>> = {
+  glb: () => import('./GltfAgentRenderer'),
+};

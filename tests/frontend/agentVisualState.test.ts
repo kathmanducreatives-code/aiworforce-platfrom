@@ -210,8 +210,15 @@ Deno.test("the dashboard hands cards the live visual state, and the card keeps i
   const card = read("src/components/dashboard/WorkforceAgentCard.tsx");
   assert(/<AgentVisual[^>]*surface="home"/.test(card));
   assert(/fallback=\{<img className="team-agent__portrait" src=\{profile\?\.avatar\}/.test(card));
-  // The visible copy is untouched by the new state: it still reads the legacy fields only.
-  assertFalse(/visual\?\.reason|visual\.reason/.test(card));
+});
+
+Deno.test("the card's attention dot and announced status rest on the visual state, not on counts", () => {
+  const card = read("src/components/dashboard/WorkforceAgentCard.tsx").replace(/\/\/.*$/gm, "");
+  assert(/const base = visual\?\.base \?\? 'idle'/.test(card));
+  assert(/const attention = !loading && \(base === 'awaiting' \|\| base === 'blocked'\)/.test(card));
+  assert(/const status = loading \? 'Loading workspace' : visual\?\.reason/.test(card));
+  assertFalse(/agent\.status/.test(card), "the count-based status must not drive any claim on the card");
+  assertFalse(/agent\.todayOutput/.test(card), "counts are not announced as status");
 });
 
 // ── fallback system ───────────────────────────────────────────────────────
@@ -221,23 +228,37 @@ const CAPABLE: DeviceEnv = {
   viewportWidth: 1440, disabledByUser: false, degraded: false,
 };
 
-Deno.test("Phase 1: no agent has a model, no renderer exists, and every surface renders the portrait", () => {
+Deno.test("no model is fabricated: every registry entry is empty, so every surface renders the portrait", () => {
   for (const k of VISUAL_AGENT_KEYS) {
     assertEquals(AGENT_3D_REGISTRY[k].model, null, k);
     assertEquals(modelFor(k), null, k);
-    assertEquals(chooseRenderTier({ surface: "home", hasModel: !!modelFor(k), hasRenderer: false, env: CAPABLE, probeWebGL2: () => true }), { tier: "portrait", reason: "no-model" });
+    assertEquals(chooseRenderTier({ surface: "home", hasModel: !!modelFor(k), hasRenderer: true, env: CAPABLE, probeWebGL2: () => true }), { tier: "portrait", reason: "no-model" });
   }
-  assert(/export const RENDERER_LOADERS:[^\n]*>\s*=\s*\{\s*\};/.test(read("src/components/agent3d/rendererContract.ts")), "no renderer loaders yet");
+});
+
+Deno.test("the glb renderer is a lazy chunk, and the only module in the app that imports three.js", () => {
+  const contract = read("src/components/agent3d/rendererContract.ts");
+  assert(/glb:\s*\(\)\s*=>\s*import\('\.\/GltfAgentRenderer'\)/.test(contract), "glb loads through a dynamic import");
+  const importers: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of Deno.readDirSync(new URL(`../../${dir}`, import.meta.url))) {
+      const p = `${dir}/${e.name}`;
+      if (e.isDirectory) walk(p);
+      else if (/\.(ts|tsx)$/.test(e.name) && /from ['"]three(\/|['"])/.test(read(p))) importers.push(p);
+    }
+  };
+  walk("src");
+  assertEquals(importers, ["src/components/agent3d/GltfAgentRenderer.tsx"]);
+  assertFalse(/import .*GltfAgentRenderer/.test(read("src/components/agent3d/AgentVisual.tsx")), "never imported statically");
   const pkg = JSON.parse(read("package.json"));
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  assertFalse(Object.keys(deps).some((d) => d === "three" || d.startsWith("@react-three/") || d === "@pixiv/three-vrm"), "no 3D dependencies in Phase 1");
+  assertFalse(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).some((d) => d.startsWith("@react-three/")), "plain three.js, no React Three Fiber");
 });
 
 Deno.test("every capability gate falls back to the portrait, with its reason", () => {
   const decide = (env: Partial<DeviceEnv>, surface: "home" | "agent" | "inline" = "home") =>
     chooseRenderTier({ surface, hasModel: true, hasRenderer: true, env: { ...CAPABLE, ...env }, probeWebGL2: () => true });
   assertEquals(decide({}), { tier: "model" });
-  assertEquals(decide({}, "agent"), { tier: "model" });
+  assertEquals(decide({}, "agent"), { tier: "portrait", reason: "surface" }, "Phase 2 is homepage-only");
   assertEquals(decide({}, "inline"), { tier: "portrait", reason: "surface" });
   assertEquals(decide({ reducedMotion: true }), { tier: "portrait", reason: "reduced-motion" });
   assertEquals(decide({ saveData: true }), { tier: "portrait", reason: "save-data" });

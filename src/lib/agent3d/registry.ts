@@ -23,8 +23,11 @@ export interface AgentModelManifest {
   url: string;
   /** Measured file size. The loader refuses anything over `MODEL_BUDGET_BYTES`. */
   bytes: number;
-  /** Bone names the gaze controller drives. The head is required; eyes are optional. */
-  rig: { head: string; neck?: string; eyeLeft?: string; eyeRight?: string };
+  /**
+   * Bone names the animator drives. The head is required; neck and eyes share
+   * the gaze; the chest carries procedural breathing when there is no idle clip.
+   */
+  rig: { head: string; neck?: string; eyeLeft?: string; eyeRight?: string; chest?: string };
   /** Morph targets (ARKit-52 naming) for procedural blinks. Optional. */
   expressions?: { blinkLeft?: string; blinkRight?: string };
   /**
@@ -53,6 +56,11 @@ export const GAZE_LIMITS = Object.freeze({ maxYawDeg: 12, maxPitchDeg: 8 });
 
 export const AGENT_3D_REGISTRY: Readonly<Record<VisualAgentKey, Agent3DEntry>> = Object.freeze({
   pilot: { key: 'pilot', model: null },
+  // LYRA — the Phase 2 pilot. Empty until her rigged model exists; when it does:
+  //   model: { format: 'glb', url: '/agents/3d/lyra.glb', bytes: <measured>,
+  //            rig: { head, neck, eyeLeft, eyeRight, chest }, expressions: { blinkLeft, blinkRight },
+  //            clips: { idle, thinking, working, awaiting }, gestures: { acknowledge, completed },
+  //            framing: { target: [x, y, z], distance, fovDeg } },
   lyra: { key: 'lyra', model: null },
   atlas: { key: 'atlas', model: null },
   mira: { key: 'mira', model: null },

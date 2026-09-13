@@ -52,8 +52,12 @@ export default function WorkforceAgentCard({ agent, visual, loading, onProfile, 
       el.style.setProperty('--team-py', `${-y * 4}px`);
     });
   }
-  const status = loading ? 'Loading workspace' : agent.status === 'blocked' ? 'Setup needed' : agent.status === 'awaiting' ? 'Needs review' : agent.todayOutput;
-  const attention = !loading && (agent.status === 'blocked' || agent.status === 'awaiting');
+  // The dot and the announced status are claims about right now, so they rest on
+  // the same live truth as the visual (useAgentVisualStates) — never on the
+  // count-based `agent.status`, which calls an agent busy because it has outputs.
+  const base = visual?.base ?? 'idle';
+  const attention = !loading && (base === 'awaiting' || base === 'blocked');
+  const status = loading ? 'Loading workspace' : visual?.reason ?? 'No live work';
   // VISUAL FIRST: at rest a card is the portrait and the name. The role and the
   // two actions are revealed on hover or keyboard focus; the profile (top right)
   // stays available on touch. Status is still announced to screen readers, and
