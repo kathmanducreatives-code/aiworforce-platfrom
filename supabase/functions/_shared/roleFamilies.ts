@@ -51,6 +51,19 @@ export const ROLE_FAMILY_ALIASES: Record<Exclude<RoleFamily, null | "custom">, s
   marketing_growth: [
     "Growth Marketer", "Product Marketing", "Content Marketing", "Demand Gen",
     "Lifecycle Marketing", "Performance Marketing", "Growth Marketing", "Brand Marketing",
+    // ── THE PEOPLE WHO DO THOSE JOBS, NOT ONLY THE DISCIPLINES ──────────────
+    //
+    // Titles are matched by substring, so "Product Marketing" never matched a
+    // "Founding Product Marketer" and "Growth Marketing" never matched a
+    // "Growth Lead". Lead V2 run 4250f181 asked for companies hiring their
+    // first growth marketer and marked Lab0 (Founding Product Marketer) and
+    // SafetyKit (Growth Lead) as having no qualifying role. These are the
+    // marketer and growth-leadership forms of the same family — nothing outside
+    // marketing/growth is added, so SDR/AE and engineering titles stay out.
+    "Product Marketer", "Content Marketer", "Lifecycle Marketer", "Performance Marketer",
+    "Founding Marketer", "Marketing Generalist", "Demand Generation",
+    "Growth Lead", "Head of Growth", "Growth Manager",
+    "Head of Marketing", "Marketing Lead",
   ],
   engineering: [
     "Software Engineer", "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",

@@ -717,8 +717,10 @@ Deno.test("run-agent wires the projection to the canonical writer, once", () => 
     "and persist through the canonical writer, not a new one",
   );
   // The two views come off the same companies, so they cannot disagree.
+  // (Plus earlier attempts' companies, rebuilt by the engine's restore — the
+  // current slice's copy always leads.)
   assert(
-    /projectEvaluationRows\(capabilityRun\.companies\.map\(/.test(RUN),
+    /projectEvaluationRows\(\[\s*\.\.\.capabilityRun\.companies, \.\.\.priorAttemptCompanies,/.test(RUN),
     "the Workbench projection reads the same source",
   );
   assert(

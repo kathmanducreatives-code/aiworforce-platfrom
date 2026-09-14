@@ -255,8 +255,10 @@ Deno.test("wiring: run-agent passes the VERIFIED service-role flag to the resolv
     "resolveTaskUserId must receive bearerIsServiceRole",
   );
   // The flag must come from the Authorization bearer, never the request body.
+  // VERIFIED, not string-compared (Lead V2 run 4250f181): our own key passes
+  // offline; any other claimed service credential is put to Supabase Auth.
   assert(
-    /bearerIsServiceRole\s*=\s*!!bearer\s*&&\s*bearer\s*===\s*serviceRoleKey/.test(RUN_AGENT_SRC),
+    /bearerIsServiceRole\s*=\s*await isServiceRoleBearer\(bearer,/.test(RUN_AGENT_SRC),
     "bearerIsServiceRole must be derived from the Authorization bearer",
   );
   assert(

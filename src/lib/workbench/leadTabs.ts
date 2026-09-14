@@ -217,6 +217,15 @@ const IN_REVIEW_STATUS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Statuses the run reached AFTER the free prequalification pass. `evaluated`
+ * is deliberately absent: a company that stopped there with an exclusion was
+ * ruled out by that pass, and still reads as such.
+ */
+const STILL_BEING_WORKED: ReadonlySet<string> = new Set([
+  'shortlisted', 'identity_unresolved', 'verifying', 'held_for_evidence',
+]);
+
+/**
  * The one bucket this row belongs in.
  *
  * Order is the whole design: an acceptance outranks a rejection, a stated
@@ -229,10 +238,21 @@ export function bucketFor(row: EvaluationRow & QualificationRecord): LeadBucket 
   // companies were ruled out on headcount before anyone looked further; that is
   // a result the user is entitled to see, not an absence.
   if (row.status === 'not_qualified') return 'rejected';
+  // ── STILL BEING WORKED IS NOT RULED OUT ────────────────────────────────────
+  //
+  // A prequalification `exclusion` is a note from the free first pass, not a
+  // verdict. Lead V2 run 4250f181 investigated Lab0 despite an
+  // `insufficient_commercial` note, then stopped at identity resolution —
+  // and the Workbench showed it, and seven others like it, as "ruled out".
+  // A company the run went on to shortlist, look up or verify has outgrown that
+  // note; only a stated rejection or an exclusion that STOPPED it may say
+  // "ruled out".
+  if (STILL_BEING_WORKED.has(row.status)) return 'in_review';
+  if (row.status === 'deferred') return 'not_reached';
   if (row.shortlist_exclusion || row.exclusion) return 'rejected';
   // The engine's own answer to "would resuming continue this company?".
   if (row.resumable) return 'not_reached';
-  if (row.status === 'not_investigated' || row.status === 'deferred') return 'not_reached';
+  if (row.status === 'not_investigated') return 'not_reached';
   if (IN_REVIEW_STATUS.has(row.status)) return 'in_review';
   return 'unclassified';
 }

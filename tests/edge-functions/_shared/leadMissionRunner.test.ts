@@ -46,7 +46,15 @@ Deno.test("replays the kickoff with the service bearer, the forced quota, and no
   assertEquals(cap.body!.requested_lead_count, 1);
   assertEquals((cap.body!.tool_input as Record<string, unknown>).requested_lead_count, 1);
   assertFalse("resume_task_id" in cap.body!);
-  assertEquals(out, { status: "quota_met", terminal: true });
+  assertEquals(out, { status: "quota_met", terminal: true, taskId: "task-1" });
+});
+
+Deno.test("the queue owns continuation: the handler is told never to self-dispatch", async () => {
+  // Run 4250f181: the handler's own HTTP continuation hit 401 five times while
+  // the queue re-claimed the same mission. Only one of them may continue it.
+  const cap: Captured = {};
+  await createLeadMissionRunner(deps({}, cap)).run(fresh, ctl());
+  assertEquals(cap.opts!.continuationOwner, "v2_queue");
 });
 
 Deno.test("the run gets the worker's budget as its deadline, not the edge default", async () => {
@@ -85,7 +93,7 @@ Deno.test("lost ownership revokes the run's deadline — no room to start paid w
   const out = await run.run(fresh, ctl(300_000, ac.signal));
   assertEquals(cap.remainingAtBind, 0);
   assert(cap.opts!.deadline!.expired());
-  assertEquals(out, { status: "continuation_required", terminal: false });
+  assertEquals(out, { status: "continuation_required", terminal: false, taskId: "task-1" });
 });
 
 Deno.test("a refused bind also revokes the deadline", async () => {
@@ -106,5 +114,5 @@ Deno.test("the outcome is read from the task row, not the HTTP response", async 
   const out = await createLeadMissionRunner(deps({
     readTaskOutcome: async () => ({ status: "failed", terminal_status: "provider_error" }),
   })).run(fresh, ctl());
-  assertEquals(out, { status: "failed:provider_error", terminal: true });
+  assertEquals(out, { status: "failed:provider_error", terminal: true, taskId: "task-1" });
 });

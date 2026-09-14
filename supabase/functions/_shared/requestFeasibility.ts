@@ -117,6 +117,11 @@ export interface FeasibilityReport {
   requirements: RequirementAssessment[];
   /** The requested output, graded. */
   outputs: RequirementAssessment[];
+  /**
+   * Hard company constraints (today: funding stage), graded by whether a
+   * scheduled source can establish them. Disclosed, never blocking.
+   */
+  constraints?: RequirementAssessment[];
   /** The BLOCKING subset. Empty means paid work may start. */
   refusals: FeasibilityRefusal[];
   /**
@@ -349,6 +354,42 @@ export function assessRequestFeasibility(
     }
   }
 
+  // ── A HARD STAGE CONSTRAINT IS PROVEN BY FUNDING EVIDENCE, OR NOT AT ALL ─
+  //
+  // Run 4250f181 asked for seed-stage startups and discovered from the YC
+  // directory, which has no funding field: a batch is an accelerator cohort,
+  // not a round. Nothing scheduled could establish "seed-stage", and nothing
+  // said so. The constraint stays hard — this only states, before any spend,
+  // that the discovery source does not prove it. Graded apart from the signal
+  // requirements, so it can never turn a provable request into a refusal.
+  const stageValue = (() => {
+    const st = (mission.hard_constraints as Record<string, unknown> | undefined)?.stage;
+    const v = st && typeof st === "object" ? (st as { value?: unknown }).value : st;
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  })();
+  if (stageValue) {
+    const by = steps.find((s) => stepProves(s, "funding", "company", cohort));
+    report.constraints = [by
+      ? {
+        requirement: `stage:${stageValue}`, status: "satisfied", by_capability: by.capability,
+        message: `Funding stage is established by ${by.capability}.`,
+        detail: { constraint: "stage", value: stageValue, mission_cohort: cohort },
+      }
+      : {
+        requirement: `stage:${stageValue}`, status: "unsupported",
+        message:
+          `"${stageValue}" is a hard constraint on funding stage, and no scheduled source ` +
+          `establishes funding stage` +
+          (cohort === "y_combinator" ? " — a YC batch is an accelerator cohort, not a funding round" : "") +
+          `. It is never assumed from the discovery source; a company is held unless its ` +
+          `own evidence shows the stage.`,
+        detail: {
+          constraint: "stage", value: stageValue, mission_cohort: cohort,
+          scheduled: steps.map((s) => s.capability),
+        },
+      }];
+  }
+
   // ── decide what BLOCKS ───────────────────────────────────────────────────
   //
   // Narrow on purpose. A gap is a thing to disclose; only two states make the
@@ -376,7 +417,7 @@ export function assessRequestFeasibility(
     }
   }
 
-  report.declared_gaps = [...signalReqs, ...report.outputs]
+  report.declared_gaps = [...signalReqs, ...report.outputs, ...(report.constraints ?? [])]
     .filter((r) => r.status !== "satisfied")
     .map((r) => `${r.requirement} (${r.status})`);
   report.ok = report.refusals.length === 0;

@@ -338,7 +338,7 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
 
 // ---------- Tool: source_with_apify (Apify) ----------
 
-import {
+import { apifyEventPrices,
   priceProviderCall, type ProviderRunUsage,
 } from "./providerCostModel.ts";
 import {
@@ -1335,6 +1335,10 @@ async function execSourceWithApify(
         usageTotalUsd: finalRun?.usageTotalUsd ?? null,
         usage: finalRun?.usage ? { totalUsd: finalRun.usage.totalUsd ?? null } : null,
         stats: finalRun?.stats ? { computeUnits: finalRun.stats.computeUnits ?? null } : null,
+        // THE RUN'S OWN EVENT COUNTS AND PRICES. `usageTotalUsd` settles after
+        // SUCCEEDED; these let the ledger price what the run actually did.
+        chargedEventCounts: finalRun?.chargedEventCounts ?? null,
+        eventPrices: apifyEventPrices(finalRun?.pricingInfo),
       },
         // ONE CONTRACT, TWO NAMES. `company_items` is what the structured branch
         // has always been authoritative on; `items` is what every consumer
@@ -1422,6 +1426,10 @@ async function execSourceWithApify(
         usageTotalUsd: finalRun?.usageTotalUsd ?? null,
         usage: finalRun?.usage ? { totalUsd: finalRun.usage.totalUsd ?? null } : null,
         stats: finalRun?.stats ? { computeUnits: finalRun.stats.computeUnits ?? null } : null,
+        // THE RUN'S OWN EVENT COUNTS AND PRICES. `usageTotalUsd` settles after
+        // SUCCEEDED; these let the ledger price what the run actually did.
+        chargedEventCounts: finalRun?.chargedEventCounts ?? null,
+        eventPrices: apifyEventPrices(finalRun?.pricingInfo),
       },
       items,
       // ── THE DATASET, UNTOUCHED, BESIDE THE PROJECTION ───────────────────

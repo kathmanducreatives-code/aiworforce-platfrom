@@ -45,16 +45,67 @@ export function validateV2KickoffBody(b: unknown): KickoffValidation {
   return { ok: true };
 }
 
+/**
+ * Where the number of leads a run executes came from.
+ *
+ * Lead V2 run 4250f181 was asked for 3 and executed 1: the canary override
+ * rewrote the body's `requested_lead_count`, and every surface then showed a
+ * different one of the two numbers with nothing saying which. The mission and
+ * its hash are never touched; this is the record of the difference.
+ */
+export interface LeadQuotaProvenance {
+  /** What the user asked for — the Mission's own count, when it stated one. */
+  mission_requested: number | null;
+  /** What this run actually works toward. */
+  execution_quota: number;
+  source: "v2_canary" | "explicit" | "mission" | "default";
+}
+
+const BODY_PROVENANCE_KEY = "lead_quota_provenance";
+
 /** Returns a copy; never mutates the input. The mission is intentionally untouched. */
 export function forceCanaryLeadCount(
   b: KickoffBody,
   n: number = V2_CANARY_FORCED_REQUESTED_LEAD_COUNT,
 ): KickoffBody {
-  const out: KickoffBody = { ...b, requested_lead_count: n };
-  if (b.tool_input && typeof b.tool_input === "object" && !Array.isArray(b.tool_input)) {
-    out.tool_input = { ...(b.tool_input as Record<string, unknown>), requested_lead_count: n };
-  }
+  const tool = b.tool_input && typeof b.tool_input === "object" && !Array.isArray(b.tool_input)
+    ? b.tool_input as Record<string, unknown>
+    : null;
+  // WHAT WAS ASKED, BEFORE THE CANARY OVERRODE IT — read, never rewritten.
+  const asked = b.requested_lead_count ?? tool?.requested_lead_count ?? null;
+  const out: KickoffBody = {
+    ...b,
+    requested_lead_count: n,
+    [BODY_PROVENANCE_KEY]: {
+      source: "v2_canary", execution_quota: n,
+      requested_before_canary: typeof asked === "number" ? asked : null,
+    },
+  };
+  if (tool) out.tool_input = { ...tool, requested_lead_count: n };
   return out;
+}
+
+/**
+ * The one statement of requested vs executed quota, for the result.
+ *
+ * `missionRequested` is the persisted Mission's `requested_count`; the body's
+ * canary marker says whether the executed number was forced.
+ */
+export function leadQuotaProvenance(
+  body: KickoffBody,
+  missionRequested: number | null | undefined,
+  executed: number,
+): LeadQuotaProvenance {
+  const marker = body[BODY_PROVENANCE_KEY] as { source?: unknown; requested_before_canary?: unknown } | undefined;
+  const mission = typeof missionRequested === "number" ? missionRequested : null;
+  if (marker?.source === "v2_canary") {
+    const before = typeof marker.requested_before_canary === "number" ? marker.requested_before_canary : null;
+    return { mission_requested: mission ?? before, execution_quota: executed, source: "v2_canary" };
+  }
+  const explicit = body.requested_lead_count ??
+    (body.tool_input as Record<string, unknown> | undefined)?.requested_lead_count;
+  const source = explicit != null && explicit !== mission ? "explicit" : mission != null ? "mission" : "default";
+  return { mission_requested: mission, execution_quota: executed, source };
 }
 
 export function withResume(b: KickoffBody, taskId: string | null): KickoffBody {

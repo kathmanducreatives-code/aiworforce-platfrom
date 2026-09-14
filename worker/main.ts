@@ -25,7 +25,11 @@ import {
   v2Enabled, clampWorkerCeilingMs, LEAD_WORKER_MAX_RUNTIME_ENV,
 } from "../supabase/functions/_shared/leadExecutionEngine.ts";
 import { createExecutionDeadline } from "../supabase/functions/_shared/leadExecutionFinalizer.ts";
-import { queueStatusFor, terminalStatusOf } from "../supabase/functions/_shared/leadMissionV2Request.ts";
+import { terminalStatusOf } from "../supabase/functions/_shared/leadMissionV2Request.ts";
+import {
+  applyTerminalPatch, finalQueueStatus, isTerminalQueueStatus, planTerminalReconciliation,
+  terminalReasonFor, terminalViolations, type TerminalRows,
+} from "../supabase/functions/_shared/leadMissionTerminal.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { newStatus, healthView, startHealthServer } from "./health.ts";
 
@@ -137,17 +141,75 @@ async function main() {
     },
   });
 
+  // ── ONE TERMINAL TRANSITION ──────────────────────────────────────────────
+  //
+  // When the queue ends a mission, the task, the lineage and the plan end with
+  // it. Run 4250f181 finished `queue failed / task ready / lineage active /
+  // plan partial` because the queue decided alone. See leadMissionTerminal.ts.
+  const reconcileTerminal = async (
+    queueStatus: "complete" | "failed" | "cancelled", reason: string,
+    ids: { taskId: string | null; lineageId: string | null; planId: string | null },
+  ) => {
+    const rows: TerminalRows = { task: null, lineage: null, plan: null };
+    if (ids.taskId) {
+      const { data } = await db.from("tasks").select("status, result").eq("id", ids.taskId).maybeSingle();
+      if (data) rows.task = data as TerminalRows["task"];
+    }
+    if (ids.lineageId) {
+      const { data } = await db.from("lead_lineages").select("status").eq("lineage_id", ids.lineageId).maybeSingle();
+      if (data) rows.lineage = data as TerminalRows["lineage"];
+    }
+    if (ids.planId) {
+      const { data } = await db.from("task_plans").select("status").eq("id", ids.planId).maybeSingle();
+      if (data) rows.plan = data as TerminalRows["plan"];
+    }
+    const patch = planTerminalReconciliation(queueStatus, reason, rows, new Date().toISOString());
+    if (patch.violations.length === 0) return;
+    if (patch.task && ids.taskId) {
+      const { error } = await db.from("tasks").update(patch.task).eq("id", ids.taskId);
+      if (error) log("[worker] terminal reconcile: task write failed", error.message);
+    }
+    if (patch.lineage && ids.lineageId) {
+      const { error } = await db.from("lead_lineages").update({
+        ...patch.lineage, lease_holder: null, lease_expires_at: null, updated_at: new Date().toISOString(),
+      }).eq("lineage_id", ids.lineageId);
+      if (error) log("[worker] terminal reconcile: lineage write failed", error.message);
+    }
+    if (patch.plan && ids.planId) {
+      const { error } = await db.from("task_plans").update(patch.plan).eq("id", ids.planId);
+      if (error) log("[worker] terminal reconcile: plan write failed", error.message);
+    }
+    log("[worker] terminal state reconciled", {
+      queue_status: queueStatus, reason, before: patch.violations,
+      after: terminalViolations(queueStatus, applyTerminalPatch(rows, patch)),
+    });
+  };
+
   const release = async (mission: ClaimedMission, outcome: ReleaseOutcome) => {
-    const { error } = await db.rpc("release_lead_mission", {
+    const stated = finalQueueStatus(outcome, mission.attempts);
+    const { data: released, error } = await db.rpc("release_lead_mission", {
       p_queue_id: mission.queueId, p_worker_id: workerId,
-      p_status: queueStatusFor(outcome),
+      p_status: stated,
       p_outcome: {
         status: outcome.status, terminal: outcome.terminal, error: outcome.error ?? null,
         aborted: outcome.aborted, abort_reason: outcome.abortReason, worker_id: workerId,
         ceiling_ms: cfg.missionCeilingMs,
       },
     });
-    if (error) log("[worker] release error", error.message);
+    if (error) { log("[worker] release error", error.message); return; }
+    const finalStatus = String(firstRow(released)?.final_status ?? stated);
+    if (isTerminalQueueStatus(finalStatus)) {
+      const taskId = outcome.taskId ?? mission.taskId;
+      try {
+        await reconcileTerminal(finalStatus, terminalReasonFor(outcome, mission.attempts), {
+          taskId,
+          lineageId: mission.lineageId ?? taskId,
+          planId: typeof mission.request.plan_id === "string" ? mission.request.plan_id : null,
+        });
+      } catch (e) {
+        log("[worker] terminal reconcile failed", String((e as Error)?.message ?? e));
+      }
+    }
   };
 
   // A claimed mission legitimately stops polling for as long as it runs, so the

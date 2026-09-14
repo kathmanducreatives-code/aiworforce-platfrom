@@ -51,6 +51,28 @@ export interface ProviderRunUsage {
   usageTotalUsd?: unknown;
   usage?: { totalUsd?: unknown } | null;
   stats?: { computeUnits?: unknown } | null;
+  /** Apify's own per-event charge counts for this run (`chargedEventCounts`). */
+  chargedEventCounts?: Record<string, unknown> | null;
+  /** The run's OWN published event prices, from `pricingInfo` — see `apifyEventPrices`. */
+  eventPrices?: Record<string, unknown> | null;
+}
+
+/**
+ * `event → USD` from an Apify run document's `pricingInfo`. The prices the
+ * provider itself published FOR THIS RUN, so they are provider-reported, not an
+ * estimate from our catalogue. Null when the run carries no pay-per-event table.
+ */
+export function apifyEventPrices(pricingInfo: unknown): Record<string, number> | null {
+  const events = (pricingInfo as {
+    pricingPerEvent?: { actorChargeEvents?: Record<string, { eventPriceUsd?: unknown }> };
+  } | null | undefined)?.pricingPerEvent?.actorChargeEvents;
+  if (!events || typeof events !== "object") return null;
+  const out: Record<string, number> = {};
+  for (const [name, ev] of Object.entries(events)) {
+    const p = money(ev?.eventPriceUsd);
+    if (p !== null) out[name] = p;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** A finite, non-negative number, or null. Zero is a real price; NaN is not. */
@@ -193,9 +215,42 @@ export function priceProviderCall(i: PriceProviderCallInput): ExecutionCost {
   // populates either, this branch simply never fires and the ledger will show
   // `event_priced` on every row — which is itself the answer to "does the run
   // object carry a charge?", recorded rather than assumed.
+  //
+  // ── AND APIFY SETTLES LATE ──────────────────────────────────────────────
+  //
+  // Lead V2 run 4250f181 recorded $0.059 for twenty runs Apify billed $0.355.
+  // The run document read at SUCCEEDED carried a `usageTotalUsd` that held only
+  // the start fee — $0.001 for a LinkedIn search that returned 3 rows and cost
+  // $0.007, $0.008 for a memo23 call that returned 10 and cost $0.018. Every
+  // per-result event was charged after that read.
+  //
+  // Three figures, ALL from the provider, and the largest is the truth: the
+  // usage total; the charged event counts at the run's own published prices;
+  // and the run's own start price plus its result price times the rows it
+  // actually returned — the minimum Apify bills for those rows. The MAX, never
+  // the sum: a settled document makes all three agree.
   const reported = money(i.run?.usageTotalUsd) ?? money(i.run?.usage?.totalUsd);
-  if (reported !== null) {
-    return { actual_usd: round4(reported), estimated_usd: null, source: "provider_reported" };
+  const prices = i.run?.eventPrices && typeof i.run.eventPrices === "object"
+    ? i.run.eventPrices as Record<string, unknown> : null;
+  let eventsUsd: number | null = null;
+  if (prices && i.run?.chargedEventCounts && typeof i.run.chargedEventCounts === "object") {
+    eventsUsd = 0;
+    for (const [name, count] of Object.entries(i.run.chargedEventCounts)) {
+      const p = money(prices[name]); const n = money(count);
+      if (p !== null && n !== null) eventsUsd += p * n;
+    }
+  }
+  let itemsUsd: number | null = null;
+  const itemRows = Math.max(0, Math.trunc(Number(i.itemCount ?? 0)) || 0);
+  if (prices) {
+    const start = money(prices["apify-actor-start"]) ?? money(prices["actor-start"]) ?? 0;
+    const event = resultEventName(i.actorKey, i.input);
+    const perRow = (event ? money(prices[event]) : null) ?? money(prices["apify-default-dataset-item"]);
+    if (perRow !== null || itemRows === 0) itemsUsd = start + itemRows * (perRow ?? 0);
+  }
+  if (reported !== null || eventsUsd !== null) {
+    const actual = Math.max(reported ?? 0, eventsUsd ?? 0, itemsUsd ?? 0);
+    return { actual_usd: round4(actual), estimated_usd: null, source: "provider_reported" };
   }
 
   const card = hiringActorCard(i.actorKey);

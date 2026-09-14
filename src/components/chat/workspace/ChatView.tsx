@@ -252,7 +252,8 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     }}
                   />
                 )}
-                {meta && meta.kind === 'run_checkpoint' && meta.task_id && meta.plan_id && (
+                {meta && meta.kind === 'run_checkpoint' && meta.task_id && meta.plan_id
+                  && meta.continuation_owner !== 'v2_queue' && (
                   <ResumeRunCard
                     taskId={String(meta.task_id)}
                     planId={String(meta.plan_id)}

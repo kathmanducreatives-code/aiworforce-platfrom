@@ -11,6 +11,7 @@
 // Nothing here re-implements a provider normalizer, an Actor input compiler, an
 // identity resolver or the Company Brain gate. Those are correct, tested, and
 // the source of the evidence discipline this engine depends on. The engine
+import { YC_MEMO23_MAX_SIZES } from "./hiringActorCatalog.ts";
 import { normalizeCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import {
   completionIsProvisional, repairPrematureCompletions,
@@ -367,6 +368,12 @@ export interface ProviderAttempt {
      * `pending_runs`.
      */
     | "run_adopted"
+    /**
+     * This lineage already bought this discovery question (same queries,
+     * batches, regions, role and industries). The top of the same result set
+     * would come back again; see `memo23QueryFamily`. Costs nothing.
+     */
+    | "skipped_repeat_query"
     /**
      * The call SUCCEEDED and some rows it returned were not usable candidates.
      * Not a failure and not a skip — it is the difference between the row count
@@ -730,6 +737,16 @@ export interface CapabilityExecutionState {
    * rWikfnKgnp5DazDYr (dataset KmurtcXfCOhGcBmH4) — started, charged, never read.
    * A resume adopts the run id instead of starting a second Actor.
    */
+  /**
+   * RUNS THIS LINEAGE ALREADY FINISHED, rebuilt from the ledger each slice by
+   * `recoverCompletedRuns`. A call with the same provider and input re-reads
+   * that run instead of buying it again (run 4250f181 bought one twice).
+   */
+  completed_runs?: Array<{
+    provider: string; run_id: string; dataset_id: string | null; input_fingerprint: string;
+  }>;
+  /** memo23 discovery questions this lineage has already bought — see `memo23QueryFamily`. */
+  discovery_query_families?: string[];
   pending_runs: Array<{
     /**
      * NULL when the entry was rebuilt from `lead_execution_calls` by
@@ -1038,40 +1055,57 @@ export const IDENTITY_SEARCH_OP = deadlineOperationFor(
 export const IDENTITY_SEARCH_MAX_ITEMS = 15;
 
 /**
- * Which retrieval depth the identity search buys.
+ * Which retrieval depth the identity search buys: `full`.
  *
- * ── THE STAGED FLOW WAS ALREADY HALF-BUILT ──────────────────────────────────
+ * ── `short` CANNOT PRODUCE AN IDENTITY ─────────────────────────────────────
  *
- * `full` costs $0.004 a row against `short`'s $0.002, and the only two fields
- * it adds are `employeeCount` and `industries`. Those are precisely the two
- * fields this actor's own card says must NOT be trusted from a search:
+ * This was `short`, on the belief that every field the stage reads is returned
+ * in both modes. Production disproved it. Lead V2 run 4250f181 bought 13 short
+ * searches; all 108 rows carried `_meta, followers, id, industry, linkedinUrl,
+ * location, logo, name, summary, universalName` — no `website`, no
+ * `description`. `resolveIdentityAgainstLookups` verifies only on a website
+ * domain, so a correct name hit could reach `ambiguous` at best: 13 attempted,
+ * 0 resolved, and nothing downstream (enrichment, hiring verification,
+ * evaluation) ever ran. The actor benchmark's field matrix lists `website` as a
+ * direct `full` output (experiments/hiring-actor-benchmark-2026-08-01).
  *
- *   company_search_size_filters_wrong_field
- *     "companySize filters employeeCountRange, which contradicts employeeCount
- *      by up to 23x." — mitigation: "Only enriched employeeCount may satisfy a
- *      size gate."
- *   company_search_industry_unreliable
- *     "industryIds:['4'] returned TechCrunch, Entrepreneur Media and Swooped."
- *      — mitigation: "Provider industry is never proof. Enrichment supplies the
- *      authoritative industry id."
+ * The execution plan asked for `full` as well; the merge policy lets execution
+ * own `scraperMode`, and execution now agrees with it.
  *
- * And `apify_linkedin_company_details` — which already runs, on the resolved
- * winner, batched — lists `best_for: ["authoritative exact employeeCount",
- * "authoritative industry id + hierarchy", ... "correcting company-search's
- * unreliable filters"]`.
- *
- * So `full` on the SEARCH bought, for fifteen candidates, the two fields it is
- * documented as getting wrong, which are then bought properly for the one
- * winner by the stage whose job that is. The short → winner → full-details flow
- * is not a new architecture: it is what these two stages already were, once the
- * search stops doing the enrichment stage's work fourteen times over.
- *
- * A CONSTANT AND NOT A KNOB. Recorded on every match decision instead, so the
- * comparison between modes is made from run data rather than from this comment
- * — the provider returns different results for identical queries, so no single
- * run can settle it and only accumulated evidence can.
+ * `full` also returns `employeeCount` and `industries`, which the card says not
+ * to trust from a search. Nothing here trusts them: size and industry are still
+ * settled by `company_enrichment`. The extra $0.002 a row buys the one field
+ * identity cannot be proved without.
  */
-export const SEARCH_SCRAPER_MODE: "short" | "full" = "short";
+export const SEARCH_SCRAPER_MODE: "short" | "full" = "full";
+
+/**
+ * The QUESTION a memo23 discovery call asks, independent of how it is phrased.
+ *
+ * Queries, batches, regions, role, industries and the hiring flag decide which
+ * companies come back; memo23 has no page cursor, so asking the same question
+ * again returns the top of the same result set. Size bounds are deliberately
+ * NOT part of the key: loosening a minimum re-reads the same leaders (run
+ * 4250f181: `minEmployeeSize` 5+ → 1+ returned the identical ten companies).
+ * Absent `batch` / `industries` are memo23's own defaults, so they are spelled
+ * out — the same question must not look new because a default went unstated.
+ */
+export function memo23QueryFamily(input: Record<string, unknown>): string {
+  const list = (v: unknown, dflt: string[] = []) => {
+    const a = Array.isArray(v) ? v : v === undefined || v === null || v === "" ? [] : [v];
+    const out = a.map((x) => String(x).trim().toLowerCase()).filter(Boolean).sort();
+    return out.length ? out : dflt.map((d) => d.toLowerCase());
+  };
+  return JSON.stringify({
+    q: list(input.queries),
+    b: list(input.batch, ["All Batches"]),
+    r: list(input.regions),
+    i: list(input.industries, ["All industries"]),
+    role: String(input.role ?? "").trim().toLowerCase(),
+    hiring: input.isHiring === true,
+    mode: String(input.mode ?? "companies"),
+  });
+}
 
 /**
  * The `locations` filter for an identity search, or nothing.
@@ -1183,7 +1217,7 @@ export const HIRING_JOBS_PER_BATCH_COMPANY = 10;
 export const HIRING_JOB_TITLES: string[] = hiringSearchTitles(null);
 
 export function identitySearchLocations(mission: LeadMissionV1): string[] {
-  if (!mission?.geography_is_hard) return [];
+  if (!missionGeographyIsHard(mission)) return [];
   const seen = new Set<string>();
   for (const raw of mission.company_profile?.locations ?? []) {
     const norm = normalizeLocationName(raw);
@@ -1191,6 +1225,47 @@ export function identitySearchLocations(mission: LeadMissionV1): string[] {
   }
   // The compiler validates a maximum of 20; keep this side of it by construction.
   return [...seen].slice(0, 20);
+}
+
+/**
+ * Did the Mission make geography HARD?
+ *
+ * TWO CARRIERS, ONE ANSWER. The legacy boolean `geography_is_hard`, and the
+ * compiled Mission's own `hard_constraints["company_profile.locations"]`. Lead
+ * V2 run 4250f181 carried only the second — "stated explicitly in the user's
+ * query" — and this function read only the first, so a US-only mission sent
+ * every identity search worldwide and got back Hamburg, Portland and Casablanca.
+ */
+export function missionGeographyIsHard(mission: LeadMissionV1 | null | undefined): boolean {
+  if (!mission) return false;
+  if (mission.geography_is_hard === true) return true;
+  const hc = (mission.hard_constraints ?? {}) as Record<string, unknown>;
+  const loc = hc["company_profile.locations"];
+  return !!loc && typeof loc === "object" &&
+    (mission.company_profile?.locations ?? []).length > 0;
+}
+
+/**
+ * The exact LinkedIn company-search input for one identity lookup.
+ *
+ * ONE PLACE, so the live call, the dry run and the tests describe the same
+ * search: the company's NAME (never its domain — that belongs in match
+ * verification), `full` rows so a website can confirm the domain, and the
+ * Mission's hard geography as a provider filter.
+ */
+export function buildIdentitySearchInput(
+  company: { company?: { company_name?: string | null }; prequalified?: PrequalifiedCompany | null },
+  mission: LeadMissionV1,
+) {
+  const locations = identitySearchLocations(mission);
+  return compileHarvestCompanySearchInput({
+    searchQuery: company.prequalified
+      ? linkedInSearchQueryFor(company.prequalified)
+      : (company.company?.company_name ?? ""),
+    scraperMode: SEARCH_SCRAPER_MODE,
+    maxItems: IDENTITY_SEARCH_MAX_ITEMS,
+    ...(locations.length ? { locations } : {}),
+  });
 }
 
 /** What the provider did, before any matching rule was consulted. */
@@ -1255,6 +1330,14 @@ export function recordMatchDecisions(
     /** `short` or `full` — the depth this search was bought at. */
     retrieval_mode?: string;
   }>,
+  opts: {
+    /**
+     * THE RESOLVER'S VERDICT, when the caller has it. The company counts as
+     * accepted only if its identity became actionable — never because one
+     * candidate passed a matcher the resolver then overruled.
+     */
+    authoritativeVerified?: boolean;
+  } = {},
 ): void {
   if (decisions.length === 0) return;
   const d = state.identity_match_diagnostics ?? {
@@ -1284,7 +1367,7 @@ export function recordMatchDecisions(
     d.accepted_rank_histogram[bucket] = (d.accepted_rank_histogram[bucket] ?? 0) + 1;
   }
 
-  const accepted = decisions.some((x) => x.accepted);
+  const accepted = opts.authoritativeVerified ?? decisions.some((x) => x.accepted);
   d.companies_judged++;
   if (accepted) d.companies_accepted++;
   else d.companies_rejected++;
@@ -3258,16 +3341,28 @@ export async function runCapabilityPlan(
       (r) => (r.capability === capability || r.capability === null) &&
         r.provider === provider &&
         !!r.input_fingerprint && r.input_fingerprint === thisFingerprint);
+    // ── A RUN THIS LINEAGE ALREADY FINISHED IS RE-READ, NOT RE-BOUGHT ──────
+    //
+    // Same provider, same input: the answer is in a dataset already paid for.
+    // Reading it is a GET; asking again is a second Actor start. Run 4250f181
+    // bought memo23 input 7dfd89de twice, one slice apart.
+    const completedMatch = !inFlight && thisFingerprint
+      ? (opts.state?.completed_runs ?? []).find((r) =>
+        r.provider === provider && r.input_fingerprint === thisFingerprint)
+      : undefined;
     // `capabilityId` is what lets `guardedInvoker` enforce per-capability
     // containment rather than the plan-wide union.
     // FROM HERE ON THIS CALL IS A RE-READ, NOT A PURCHASE. Recorded before
     // `invoke` so every outcome of an adopted call — ok, empty, error — is
     // uncharged, rather than only the one that happens to succeed.
     if (inFlight) adoptedRunId = inFlight.run_id;
+    else if (completedMatch) adoptedRunId = completedMatch.run_id;
     const outbound = {
       ...call,
       capabilityId: capability,
-      ...(inFlight ? { resumeRunId: inFlight.run_id } : {}),
+      ...(inFlight
+        ? { resumeRunId: inFlight.run_id }
+        : completedMatch ? { resumeRunId: completedMatch.run_id } : {}),
     } as typeof call;
     const startedAt = Date.now();
     try {
@@ -3328,6 +3423,18 @@ export async function runCapabilityPlan(
           run_id: inFlight.run_id,
           dataset_id: inFlight.dataset_id ?? null,
           provider, capability, rows: rows.length,
+        });
+      } else if (completedMatch) {
+        state.provider_attempts.push({
+          capability, provider,
+          attempt: state.provider_attempts
+            .filter((a) => a.capability === capability && a.provider === provider).length + 1,
+          outcome: "run_adopted", rows: rows.length, cost_units: 0,
+          reason: `re-read completed run ${completedMatch.run_id}; ${rows.length} row(s) without a second charge`,
+          ...(attemptFingerprint ? { input_fingerprint: attemptFingerprint } : {}),
+        });
+        log("provider_completed_run_reused", {
+          capability, provider, run_id: completedMatch.run_id, rows: rows.length,
         });
       }
       // THE ESTIMATE LEARNS FROM REALITY. memo23 took 24s on task c8a6e53d; a
@@ -4381,12 +4488,32 @@ export async function runCapabilityPlan(
             // rather than a search term: it bounds what the run may spend and is
             // clamped again by the validator against the actor's published limit.
             // Everything describing WHAT to look for now comes from `sel.input`.
+            // ── A SIZE CEILING THE STRATEGY MAY NOT LIFT ─────────────────────
+            //
+            // Run 4250f181's third attempt widened `maxEmployeeSize` to "1000+"
+            // for a seed-stage mission whose Company Brain capped size at 150,
+            // and bought ten rows led by YC's largest graduates. The ceiling is
+            // the smallest enum at or above the resolved bound, so no company
+            // inside the bound is ever filtered out — only the drift past it.
+            const sizeBound = resolveEmployeeBounds(qualificationCtx, {
+              employee_min: opts.brain?.employee_min ?? null,
+              employee_max: opts.brain?.employee_max ?? null,
+            });
+            const chosenMax = (sel.input as Record<string, unknown> | undefined)?.maxEmployeeSize;
+            const maxEmployeeSize = clampMemo23MaxSize(chosenMax, memo23MaxSizeCeiling(sizeBound.max));
+            if (maxEmployeeSize !== (chosenMax ?? null)) {
+              log("discovery_size_clamped", {
+                provider, chosen: chosenMax ?? null, clamped_to: maxEmployeeSize,
+                bound: sizeBound.max, bound_source: sizeBound.source,
+              });
+            }
             const compiled = compileMemo23YcInput({
               maxItems: maxCandidates,
               // THE STRATEGY'S CHOICES, over the defaults above. Only fields this
               // Actor's schema accepts survive validation, so nothing here can be
               // a key memo23 does not have.
               ...sel.input,
+              ...(maxEmployeeSize ? { maxEmployeeSize } : {}),
               // AND THESE ARE NOT THE STRATEGY'S TO CHOOSE.
               //
               // `scrapeOpenJobs` feeds the free prequalification pass, the hiring
@@ -4400,7 +4527,36 @@ export async function runCapabilityPlan(
               scrapeFounderDetails: false,
               enrichEmails: false,
             });
-            for (const r of await callProvider(cap, provider, compiled)) {
+            // ── THE SAME QUESTION IS NOT ASKED TWICE IN ONE LINEAGE ──────────
+            //
+            // memo23 has no page cursor: the same queries, batches, regions,
+            // role and industries return the top of the same result set, however
+            // the size bounds are phrased. Run 4250f181's final slice asked
+            // ["B2B SaaS","business software"] again — attempt 1's question with
+            // a looser minimum size — and got attempt 1's ten companies back.
+            // A NEW question (different queries, batches or industries) still
+            // runs: that is adaptive sourcing, and it is untouched.
+            const family = compiled.ok
+              ? memo23QueryFamily((compiled as unknown as { input: Record<string, unknown> }).input)
+              : null;
+            if (family && (state.discovery_query_families ?? []).includes(family)) {
+              state.provider_attempts.push({
+                capability: cap, provider,
+                attempt: state.provider_attempts
+                  .filter((x) => x.capability === cap && x.provider === provider).length + 1,
+                outcome: "skipped_repeat_query", rows: 0, cost_units: 0,
+                reason: "this lineage already bought this discovery question; its rows are in the pool",
+              });
+              log("discovery_repeat_query_skipped", { provider, family });
+              continue;
+            }
+            const familyRows = await callProvider(cap, provider, compiled);
+            const lastAttempt = state.provider_attempts[state.provider_attempts.length - 1];
+            if (family && lastAttempt?.provider === provider &&
+                PAGE_COMMITTING_OUTCOMES.has(String(lastAttempt.outcome))) {
+              state.discovery_query_families = [...(state.discovery_query_families ?? []), family];
+            }
+            for (const r of familyRows) {
               const c = normalizeMemo23Company(r);
               rawYcRows.push(r as YcCompanyInput);
               // The prequalification key is derived by the PREQUALIFICATION module
@@ -5494,51 +5650,14 @@ export async function runCapabilityPlan(
       /** Resolve one company. Never more than `CONCURRENCY` of these in flight. */
       const resolveOne = async (c: EngineCompany): Promise<void> => {
         let lookups: Array<{ name: string | null; linkedinUrl: string | null; website: string | null }> = [];
+        // Recorded AFTER the resolver has spoken, so the diagnostics can only
+        // ever report the verdict the run acted on.
+        let matchRecord: Parameters<typeof recordMatchDecisions>[2] | null = null;
         // ALREADY IDENTIFIED IS NOT WORTH PAYING FOR. memo23 has no LinkedIn
         // field, but a resumed run or another provider may have supplied one.
         if (!c.company.linkedin_company_url && c.company.company_name) {
-          const locations = identitySearchLocations(opts.mission);
-          const compiled = compileHarvestCompanySearchInput({
-            // Name plus domain. `linkedInSearchQueryFor` owns this so the dry run
-            // and the live call cannot describe different searches.
-            searchQuery: c.prequalified
-              ? linkedInSearchQueryFor(c.prequalified)
-              : c.company.company_name,
-            // ── `short`, BECAUSE THIS STAGE NEVER READS THE EXPENSIVE FIELD ──
-            //
-            // This said `full` is required: "`short` returns employeeCount ===
-            // null, and an unverifiable size cannot settle a 10-150 gate." The
-            // reasoning is sound and it belongs to a different stage. THIS one
-            // reads exactly five fields out of the result — `name`,
-            // `linkedinUrl` and `website` into `lookups`, plus `description`
-            // and `location` for `acceptLinkedInMatch`. `employeeCount` is
-            // never read, never carried, and cannot reach the size gate: three
-            // fields leave this branch.
-            //
-            // Per the actor's own verified card, only `employeeCount` and
-            // `industries` are full-mode-only. Every field this stage consumes
-            // is returned in both modes. And the size gate is settled where it
-            // always was — by `company_enrichment`, whose card note says so
-            // outright: "Use enrichment, not full mode, when headcount must be
-            // trusted."
-            //
-            // The cost is no longer marginal. `full-company` is $0.004 a result
-            // against `short-company`'s $0.002, and since raising maxItems to
-            // 15 that is 15 results on every one of ~23 identity calls per run
-            // — the single largest paid line in the pipeline, doubled for a
-            // number nothing here looks at.
-            scraperMode: SEARCH_SCRAPER_MODE,
-            maxItems: IDENTITY_SEARCH_MAX_ITEMS,
-            // ── THE GEOGRAPHY THE MISSION ALREADY DECLARED HARD ──────────
-            //
-            // A supported filter, validated by `compileHarvestCompanySearchInput`
-            // and shown in the actor's own verified example, that this call has
-            // never sent. Run a5332734 refused `Trata Soluções Acústicas`
-            // (trataacustica.com.br) as a match for the YC company Trata — a
-            // Brazilian acoustics firm that a US filter would not have returned
-            // in the first place.
-            ...(locations.length ? { locations } : {}),
-          });
+          // Name, `full` rows, hard geography — see `buildIdentitySearchInput`.
+          const compiled = buildIdentitySearchInput(c, opts.mission);
           // SCOPED TO THE COMPANY, so the resume guard can refuse it. Lossless:
           // a company this run already resolved carries its URL back in through
           // `restoreFromResume` and never reaches this branch, and a company a
@@ -5602,7 +5721,7 @@ export async function runCapabilityPlan(
             }));
             lookups = decisions.filter((d) => d.candidate.accepted).map((d) => d.lookup);
             if (before > 0) {
-              recordMatchDecisions(state, c, decisions.map((d, rank) => ({
+              matchRecord = decisions.map((d, rank) => ({
                 code: d.candidate.code,
                 accepted: d.candidate.accepted,
                 candidate_name: d.lookup.name,
@@ -5619,7 +5738,7 @@ export async function runCapabilityPlan(
                 // returns different results for identical queries, so a single
                 // run cannot settle it either way.
                 retrieval_mode: SEARCH_SCRAPER_MODE,
-              })));
+              }));
             }
             if (before > 0 && lookups.length === 0) {
               c.record.missing_evidence.push("linkedin_match_rejected_weak");
@@ -5633,6 +5752,10 @@ export async function runCapabilityPlan(
           canonical_domain: c.company.canonical_domain ?? null,
           linkedin_company_url: c.company.linkedin_company_url ?? null,
         }, lookups);
+        if (matchRecord) {
+          recordMatchDecisions(state, c, matchRecord,
+            { authoritativeVerified: identityIsActionable(c.identity) });
+        }
         if (identityIsActionable(c.identity)) resolved++;
         else {
           unresolved++;
@@ -9699,4 +9822,33 @@ export function compileFirstProviderCall(
   // Other entry providers are not engine-driven yet; the preflight records the
   // provider and leaves validation to the capability that owns it.
   return { provider, compiled: null };
+}
+
+// ── memo23 SIZE CEILING ─────────────────────────────────────────────────────
+
+/** Numeric value of a memo23 size enum; "1000+" is no ceiling at all. */
+function memo23SizeValue(v: string): number {
+  return v === "1000+" ? Number.POSITIVE_INFINITY : Number.parseInt(v, 10);
+}
+
+/**
+ * The smallest memo23 `maxEmployeeSize` at or above `max`, or null when there
+ * is no bound. Rounding UP is what keeps every in-bound company in the result.
+ */
+export function memo23MaxSizeCeiling(max: number | null | undefined): string | null {
+  if (typeof max !== "number" || !Number.isFinite(max) || max <= 0) return null;
+  const ladder = YC_MEMO23_MAX_SIZES.filter((v) => v !== "1+");
+  return ladder.find((v) => memo23SizeValue(v) >= max) ?? null;
+}
+
+/**
+ * The strategy's `maxEmployeeSize`, never above the ceiling. An absent choice
+ * means "no ceiling" to memo23, so it is replaced by the ceiling too.
+ */
+export function clampMemo23MaxSize(chosen: unknown, ceiling: string | null): string | null {
+  const pick = typeof chosen === "string" && (YC_MEMO23_MAX_SIZES as readonly string[]).includes(chosen)
+    ? chosen : null;
+  if (!ceiling) return pick;
+  if (!pick || memo23SizeValue(pick) > memo23SizeValue(ceiling)) return ceiling;
+  return pick;
 }

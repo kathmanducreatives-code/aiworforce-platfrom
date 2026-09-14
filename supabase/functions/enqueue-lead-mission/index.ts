@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
+import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
 import {
   forceCanaryLeadCount, validateV2KickoffBody, type KickoffBody,
 } from "../_shared/leadMissionV2Request.ts";
@@ -34,7 +35,10 @@ Deno.serve(async (req) => {
 
   const authz = req.headers.get("Authorization") ?? "";
   const token = authz.startsWith("Bearer ") ? authz.slice(7).trim() : "";
-  if (token !== SERVICE_KEY) return json({ error: "Unauthorized" }, 401);
+  // Verified, not string-compared — see serviceRoleAuth.ts.
+  if (!(await isServiceRoleBearer(token, {
+    envServiceKey: SERVICE_KEY, supabaseUrl: SUPABASE_URL, fetch: (u, i) => fetch(u, i),
+  }))) return json({ error: "Unauthorized" }, 401);
 
   let payload: { request?: unknown } = {};
   try { payload = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }

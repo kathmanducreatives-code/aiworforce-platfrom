@@ -223,3 +223,65 @@ export const LIFECYCLE_LABEL: Readonly<Record<WorkbenchLifecycle, string>> = Obj
   not_qualified: 'Not qualified',
   contact_ready: 'Contact-ready',
 });
+
+/**
+ * THE SIX NUMBERS A LEAD RUN OWES THE USER, each counted once.
+ *
+ * Lead V2 run 4250f181 rendered "10 reviewed / 8 ruled out" for a mission that
+ * had discovered 33 companies, triaged 20 out, and was still trying to confirm
+ * the identity of eight — none of which had been ruled out. These are counted
+ * from the same rows the tabs use, and no count borrows another's meaning.
+ *
+ *   discovered          every company the run holds, qualified included
+ *   triaged_out         set aside by triage before any money was spent
+ *   investigating       shortlisted, being verified, or waiting on evidence
+ *   identity_unresolved looked up, not yet confirmed — pending, not rejected
+ *   verified            identity confirmed and carried on to verification
+ *   qualified           passed — passed in from the lead table, never derived
+ */
+export interface WorkbenchFunnelCounts {
+  discovered: number;
+  triaged_out: number;
+  investigating: number;
+  identity_unresolved: number;
+  verified: number;
+  qualified: number;
+}
+
+const INVESTIGATING: ReadonlySet<WorkbenchLifecycle> = new Set([
+  'shortlisted', 'verifying', 'held_for_evidence', 'deferred',
+]);
+
+export function workbenchFunnelCounts(
+  rows: readonly EvaluationRow[],
+  qualified: number,
+): WorkbenchFunnelCounts {
+  const q = Math.max(0, Math.trunc(qualified));
+  const triagedOut = (r: EvaluationRow) =>
+    r.shortlist_exclusion === 'triage_irrelevant' ||
+    (r.status === 'not_investigated' && r.triage_relevance === 'irrelevant');
+  return {
+    discovered: rows.length + q,
+    triaged_out: rows.filter(triagedOut).length,
+    investigating: rows.filter((r) => INVESTIGATING.has(r.status)).length,
+    identity_unresolved: rows.filter((r) => r.status === 'identity_unresolved').length,
+    // Past identity: verifying, held, or judged by the evaluator — plus every
+    // qualified company, which had to pass through all of it.
+    verified: rows.filter((r) =>
+      r.status === 'verifying' || r.status === 'held_for_evidence' ||
+      (r.status === 'not_qualified' && r.decision_source === 'gpt_evaluation')).length + q,
+    qualified: q,
+  };
+}
+
+/** One line, in pipeline order. Zeroes are shown: "0 verified" is an answer. */
+export function funnelCaption(c: WorkbenchFunnelCounts): string {
+  return [
+    `${c.discovered} discovered`,
+    `${c.triaged_out} triaged out`,
+    `${c.investigating} investigating`,
+    `${c.identity_unresolved} identity unresolved`,
+    `${c.verified} verified`,
+    `${c.qualified} qualified`,
+  ].join(' · ');
+}

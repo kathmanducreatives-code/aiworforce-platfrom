@@ -67,6 +67,9 @@ export function createLeadMissionRunner(d: LeadMissionRunnerDeps): LeadMissionRu
           }),
           {
             deadline,
+            // The queue re-claims a resumable mission; the handler must never
+            // self-dispatch a second executor over HTTP (run 4250f181: 401 ×5).
+            continuationOwner: "v2_queue",
             onExecutionBound: async ({ taskId: t, lineageId }) => {
               taskId = t;
               const bound = await d.bind(mission.queueId, t, lineageId);
@@ -87,14 +90,14 @@ export function createLeadMissionRunner(d: LeadMissionRunnerDeps): LeadMissionRu
         } catch { /* not JSON — treated as a refusal below */ }
       }
       // Refused before any task existed: nothing ran, nothing was bought.
-      if (!taskId) return { ...mapRefusal(res.status), error: `handler_status_${res.status}` };
+      if (!taskId) return { ...mapRefusal(res.status), error: `handler_status_${res.status}`, taskId: null };
 
       const outcome = mapTaskOutcome(await d.readTaskOutcome(taskId));
       d.log?.("[worker][runner] run ended", {
         queue: mission.queueId, task: taskId, http: res.status, ...outcome,
         revoked: deadline.revokedReason,
       });
-      return outcome;
+      return { ...outcome, taskId };
     },
   };
 }

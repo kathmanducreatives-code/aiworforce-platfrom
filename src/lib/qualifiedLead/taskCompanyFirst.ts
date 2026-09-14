@@ -60,6 +60,12 @@ export function companyFirstResponseFromTask(task: TaskLike | null | undefined):
     continuation_token: continuation?.continuation_token ?? null,
     next_round: continuation?.next_round ?? null,
     checkpoint_at: continuation?.checkpoint_at ?? null,
+    // `v2_queue`: the Lead V2 worker continues this itself — no Continue button.
+    continuation_owner: (companyFirst.continuation_owner as string | undefined) ?? null,
+    // Requested vs executed quota — see `leadQuotaProvenance` in run-agent.
+    mission_requested_leads:
+      (obj(companyFirst.lead_quota_provenance)?.mission_requested as number | null | undefined) ?? null,
+    quota_source: (obj(companyFirst.lead_quota_provenance)?.source as string | undefined) ?? null,
     rounds_completed: companyFirst.rounds_attempted ?? null,
     requested_leads: quota?.requested_leads ?? null,
     eligible_leads: quota?.eligible_leads ?? null,

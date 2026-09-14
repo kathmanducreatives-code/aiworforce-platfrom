@@ -790,8 +790,12 @@ Deno.test("containment: the Workbench result is written from the projections, no
   ]) {
     assert(RUN_AGENT.includes(key), `the persisted result must be built from ${key}`);
   }
+  // The engine's own companies — this slice's, then earlier attempts' rebuilt
+  // by the engine's own `restoreWorkingSet` (Lead V2 run 4250f181 showed 10 of
+  // the lineage's 33). Never a hand-built list.
   assert(
-    /projectEvaluationRows\(capabilityRun\.companies\.map\(/.test(RUN_AGENT),
+    /projectEvaluationRows\(\[\s*\.\.\.capabilityRun\.companies, \.\.\.priorAttemptCompanies,\s*\]\.map\(/.test(RUN_AGENT),
     "evaluation rows must be projected from the engine's own companies",
   );
+  assert(RUN_AGENT.includes("const priorAttemptCompanies = restoreWorkingSet("));
 });

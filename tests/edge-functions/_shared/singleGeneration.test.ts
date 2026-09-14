@@ -36,7 +36,9 @@ Deno.test("IT IS REFUSED FOR A NON-SERVICE-ROLE CALLER", () => {
 });
 
 Deno.test("it suppresses ONLY the self-dispatch", () => {
-  assert(/if \(autoDecision\.continue && !deferToSweeper && !singleGeneration\) \{/.test(code),
+  // `!queueOwnsContinuation` (Lead V2): inside the worker the queue re-claims the
+  // mission, so the self-dispatch is skipped there too — still ONLY the dispatch.
+  assert(/if \(autoDecision\.continue && !deferToSweeper && !singleGeneration && !queueOwnsContinuation\) \{/.test(code),
     "the dispatch is the only thing gated");
   // Everything before it — the checkpoint, the result write, the lease release —
   // must be untouched, or a single-generation run is not the same run.

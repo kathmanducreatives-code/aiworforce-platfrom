@@ -4,6 +4,7 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
 import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
@@ -25,6 +26,8 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
+import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
+import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 import {
   isDirectLeadActionAttempt,
   validateDirectLeadActionRequest,
@@ -106,7 +109,7 @@ import {
 } from "../_shared/leadMissionRuntime.ts";
 import {
   CAPABILITY_EXECUTION_STATE_VERSION, compileFirstProviderCall, finalizedProgress,
-  missionFunnelFor,
+  missionFunnelFor, restoreWorkingSet,
   runCapabilityPlan, summariseEvaluationPaths, toPortfolioCandidates, toRouteResultShape,
   type CapabilityExecutionState, type CapabilityRunResult,
 } from "../_shared/leadCapabilityEngine.ts";
@@ -114,7 +117,7 @@ import {
   assertPaidExecutionAllowed, buildPaidExecutionPreflight,
 } from "../_shared/leadPaidExecutionPreflight.ts";
 import {
-  mergePendingRuns, recoverPendingRuns, type LedgerStartedRow,
+  mergePendingRuns, recoverCompletedRuns, recoverPendingRuns, type LedgerStartedRow,
 } from "../_shared/pendingRunRecovery.ts";
 import { LEAD_EXECUTION_CALLS_TABLE } from "../_shared/executionLedger.ts";
 import {
@@ -789,6 +792,13 @@ async function finalizeCompanyFirstPlan(
  */
 export interface RunAgentRunOptions {
   deadline?: ExecutionDeadline;
+  /**
+   * WHO CONTINUES THIS LINEAGE. `v2_queue`: the Lead V2 worker's queue re-claims
+   * a resumable mission, so this handler must NOT self-dispatch the next slice
+   * over HTTP. Doing both would start a second executor on the edge — with the
+   * edge's own provider keys — beside the queue's re-claim.
+   */
+  continuationOwner?: "v2_queue";
   onExecutionBound?: (ids: { taskId: string; lineageId: string; holdsLease: boolean }) =>
     void | Promise<void>;
 }
@@ -982,8 +992,15 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
+    // VERIFIED, NOT STRING-COMPARED. Our own key passes offline; any other
+    // bearer that claims to be a service credential is put to Supabase Auth,
+    // which accepts only this project's service credentials. The Railway
+    // worker's key is valid and different, and was refused here (run 4250f181).
+    bearerIsServiceRole = await isServiceRoleBearer(bearer, {
+      envServiceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      supabaseUrl: Deno.env.get("SUPABASE_URL"),
+      fetch: (u, i) => fetch(u, i),
+    });
 
     let isMember = false;
     if (!bearerIsServiceRole) {
@@ -1113,6 +1130,20 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     const decision = decideResume(existing as ResumableTaskRow | null, workspace_id, resume_task_id);
     if (!decision.ok) {
       return json({ success: false, error: "continuation_refused", reason: decision.reason, message: RESUME_REFUSAL_MESSAGE[decision.reason] }, 409);
+    }
+    // ── A TASK THE V2 QUEUE OWNS IS CONTINUED BY THE QUEUE ─────────────────
+    //
+    // A Continue from the chat or the Workbench would otherwise run a slice on
+    // the edge — with the edge's own provider keys — while the queue waits to
+    // re-claim the same lineage. Only the worker itself may resume it.
+    if (inProcess.continuationOwner !== "v2_queue") {
+      const v2Owned = await loadV2OwnedTaskIds(supabase as never, [resume_task_id]);
+      if (v2Owned.has(resume_task_id)) {
+        return json({
+          success: false, error: "continuation_refused", reason: "v2_queue_owned",
+          message: "The Lead V2 worker continues this mission automatically.",
+        }, 409);
+      }
     }
 
     // SERVER-SIDE CONCURRENCY CONTROL. Frontend double-click guarding cannot see
@@ -1797,6 +1828,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             ?? quotaMission?.requested_count) as number | null | undefined,
           isLeadSourcingWorkflow: true,
         });
+        // REQUESTED VS EXECUTED, stated once. See `leadQuotaProvenance`.
+        const quotaProvenance = leadQuotaProvenance(
+          body as Record<string, unknown>,
+          (quotaMission as { requested_count?: number | null } | null)?.requested_count ?? null,
+          quota.requestedLeadCount,
+        );
 
         // ══ ROUND-TO-ROUND BROADENING OWNER — EXPLICITLY AUTHORIZED ══════════
         //
@@ -2630,6 +2667,34 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // query is scoped to this task AND this workspace — the same ownership
         // gate `loadLeadResumeRecords` uses — so a run can only ever be adopted
         // by the lineage that paid for it.
+        // ── AND THE RUNS IT ALREADY FINISHED ─────────────────────────────────
+        //
+        // Offered to the engine for adoption by exact provider + input, so a
+        // resumed slice re-reads a finished dataset instead of buying it again.
+        const completedRunRows = await (async () => {
+          try {
+            const { data, error } = await (supabase as any)
+              .from(LEAD_EXECUTION_CALLS_TABLE)
+              .select("capability, provider_id, provider_run_id, dataset_id, " +
+                "status, request_input, started_at, created_at")
+              .eq("task_id", leadResumeParentTaskId)
+              .eq("workspace_id", workspace_id)
+              .in("status", ["succeeded", "empty"])
+              .not("provider_run_id", "is", null)
+              .order("started_at", { ascending: true })
+              .limit(200) as unknown as { data: LedgerStartedRow[] | null; error: unknown };
+            if (error) {
+              console.error("[run-agent][completed-run-recovery] read failed", String(error));
+              return [];
+            }
+            return data ?? [];
+          } catch (e) {
+            console.error("[run-agent][completed-run-recovery] threw", String(e));
+            return [];
+          }
+        })();
+        const recoveredCompletedRuns = recoverCompletedRuns(completedRunRows);
+
         const startedRunRows = await (async () => {
           try {
             // deno-lint-ignore no-explicit-any
@@ -3471,6 +3536,16 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         : resume.refusal === "nothing_left_to_do"
                           ? "every step it was asked to do is already accounted for"
                           : "the saved state is not complete enough to carry forward";
+                      // ── THE V2 QUEUE CONTINUES THIS, NOT A BUTTON ───────────
+                      //
+                      // Inside the Lead V2 worker the queue re-claims a paused
+                      // mission on its own. Offering Continue as well would let
+                      // one click start a second executor on the edge beside it.
+                      const queueOwned = inProcess.continuationOwner === "v2_queue";
+                      const v2Notice =
+                        `This run reached its time limit partway through, so I've saved where it ` +
+                        `got to${foundLine}. ${checkpointSpend} The Lead V2 worker picks it up ` +
+                        `automatically — there is nothing to click.`;
                       if (!already) {
                         await supabase.from("messages").insert({
                           conversation_id: convId,
@@ -3502,7 +3577,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                           // What is true and worth saying is that the work is
                           // kept and that continuing reuses it. What was spent
                           // comes from the ledger.
-                          content: resume.resumable
+                          content: queueOwned ? v2Notice : resume.resumable
                             ? `This run hit its time limit partway through, so I've saved where it ` +
                               `got to${foundLine}. ${checkpointSpend} ` +
                               `Use Continue below to pick it up from here — it reuses the work ` +
@@ -3520,8 +3595,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                             // verdict the sentence above was written from, so a
                             // renderer never offers Continue on a checkpoint the
                             // gate will refuse.
-                            resumable: resume.resumable,
-                            resume_refusal: resume.refusal,
+                            resumable: queueOwned ? false : resume.resumable,
+                            resume_refusal: queueOwned ? "v2_queue_owned" : resume.refusal,
+                            continuation_owner: queueOwned ? "v2_queue" : null,
                             restorable_companies: resume.restorable_companies,
                             // WHAT THE BUTTON NEEDS. `continue-workflow` takes
                             // exactly these two ids and derives everything else
@@ -3549,7 +3625,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                           // rewritten is exactly when the numbers have moved, so
                           // this is the last place that should be quoting a
                           // constant about money.
-                          content: resume.resumable
+                          content: queueOwned ? v2Notice : resume.resumable
                             ? `This run hit its time limit partway through, so I've saved ` +
                               `where it got to${foundLine}. ${checkpointSpend} ` +
                               `Use Continue below to pick it up from here — it ` +
@@ -3560,8 +3636,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                           metadata: {
                             ...((already as { metadata?: Record<string, unknown> })
                               .metadata ?? {}),
-                            resumable: resume.resumable,
-                            resume_refusal: resume.refusal,
+                            resumable: queueOwned ? false : resume.resumable,
+                            resume_refusal: queueOwned ? "v2_queue_owned" : resume.refusal,
+                            continuation_owner: queueOwned ? "v2_queue" : null,
                             restorable_companies: resume.restorable_companies,
                           },
                         }).eq("id", (already as { id: string }).id);
@@ -3662,11 +3739,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 //
                 // There is work to do whenever there is something to ADD or
                 // something to REMOVE.
+                const withCompleted = recoveredCompletedRuns.length > 0
+                  ? { ...restored, completed_runs: recoveredCompletedRuns } as typeof restored
+                  : restored;
                 if (recoveredPendingRuns.length === 0 && resolvedRunIds.size === 0) {
-                  return restored;
+                  return withCompleted;
                 }
                 return {
-                  ...restored,
+                  ...withCompleted,
                   // THE SAME RESOLVED SET ON BOTH SIDES. A run the ledger has
                   // settled must not survive in the checkpoint either — see
                   // `mergePendingRuns`.
@@ -3994,7 +4074,21 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               shortfall: portfolio.shortfall.opportunities,
             });
 
-            const evaluation = projectEvaluationRows(capabilityRun.companies.map((c) => ({
+            // ── EVERY ATTEMPT, NOT ONLY THIS SLICE ──────────────────────────
+            //
+            // Lead V2 run 4250f181 held 33 companies in its lineage checkpoint
+            // after five attempts; the Workbench showed the last slice's 10,
+            // so 23 companies the mission had paid to discover, triage and
+            // look up vanished from the user's view. Companies an earlier
+            // attempt carried and this slice did not touch are projected from
+            // the lineage records exactly as a restore would rebuild them —
+            // this slice's own copy of a company always wins.
+            const sliceKeys = new Set(capabilityRun.companies.map((c) => c.key));
+            const priorAttemptCompanies = restoreWorkingSet(
+              leadResumeRecords.filter((r) => !sliceKeys.has(r.company_key)));
+            const evaluation = projectEvaluationRows([
+              ...capabilityRun.companies, ...priorAttemptCompanies,
+            ].map((c) => ({
               key: c.key,
               shortlisted: c.shortlisted,
               // THE AUTHORITATIVE FIELDS, enrichment first. Without these the
@@ -5723,7 +5817,18 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               : {}),
             output: `Company-first sourcing (${cf.status}): ${cf.quota.eligible_leads}/${cf.quota.requested_leads} eligible leads across ${cf.rounds_attempted} round(s); ${cf.counts.verifiedCompanies} verified companies. ${cf.terminal_reason}`,
             executed_sourcing_mode: "company_first",
-            company_first: cf,
+            // Carried INSIDE `company_first` too: the browser's task projection
+            // reads that block and not arbitrary result keys.
+            company_first: {
+              ...cf,
+              ...(inProcess.continuationOwner ? { continuation_owner: inProcess.continuationOwner } : {}),
+              lead_quota_provenance: quotaProvenance,
+            },
+            // WHAT WAS ASKED AND WHAT THIS RUN EXECUTES — two numbers, both shown.
+            lead_quota_provenance: quotaProvenance,
+            // WHO CONTINUES A PAUSED SLICE. `v2_queue`: the Lead V2 worker does,
+            // on its own — so no surface may offer a Continue button for it.
+            continuation_owner: inProcess.continuationOwner ?? null,
             // ── WRITTEN BEFORE ANYTHING IS DISPATCHED ────────────────────────
             //
             // The successor is fired further down and immediately begins writing
@@ -6132,7 +6237,13 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             detail: autoDecision.detail,
           });
         }
-        if (autoDecision.continue && !deferToSweeper && !singleGeneration) {
+        const queueOwnsContinuation = inProcess.continuationOwner === "v2_queue";
+        if (queueOwnsContinuation && autoDecision.continue) {
+          console.log("[run-agent][auto-continuation] handed to the V2 queue", {
+            task_id: task.id, reason: autoDecision.reason, detail: autoDecision.detail,
+          });
+        }
+        if (autoDecision.continue && !deferToSweeper && !singleGeneration && !queueOwnsContinuation) {
           dispatchOutcome = await dispatchContinuation({
             resumeTaskId: task.id,
             workspaceId: workspace_id,
@@ -6188,7 +6299,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // Otherwise the task claims it is continuing and nothing ever arrives —
         // which is indistinguishable, to the user, from the bug this replaces.
         const effectivelyContinuing = autoDecision.continue &&
-          dispatchOutcome?.dispatched === true;
+          (dispatchOutcome?.dispatched === true || queueOwnsContinuation);
         const finalProgress: LineageProgress = {
           ...progress,
           stopped_reason: effectivelyContinuing

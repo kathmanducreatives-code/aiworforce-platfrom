@@ -48,6 +48,18 @@ export interface CompanyFirstResponse {
   rounds_completed?: number | null;
   next_round?: number | null;
   checkpoint_at?: string | null;
+  /**
+   * `v2_queue` when the Lead V2 worker continues this run by itself. A Continue
+   * button would start a second executor beside it, so none is offered.
+   */
+  continuation_owner?: string | null;
+  /**
+   * What the user asked for, when this run executes a different number. A V2
+   * canary works toward 1 lead of a mission that asked for 3; both numbers are
+   * true and the view says which is which.
+   */
+  mission_requested_leads?: number | null;
+  quota_source?: string | null;
 }
 
 export interface ContinuationView {
@@ -98,6 +110,13 @@ export function buildContinuationView(res: CompanyFirstResponse | null | undefin
   const token = res?.continuation_token ?? null;
 
   const progressLine = `${eligible} of ${requested} CONTACT-ready ${requested === 1 ? 'lead' : 'leads'}`;
+  // REQUESTED VS EXECUTED. Shown only when they differ, and never by replacing
+  // one number with the other.
+  const asked = res?.mission_requested_leads;
+  const quotaNote = typeof asked === 'number' && asked !== requested
+    ? `${res?.quota_source === 'v2_canary' ? 'Test run: ' : ''}working toward ${requested} of the ${asked} ${asked === 1 ? 'lead' : 'leads'} you asked for`
+    : null;
+  const withQuota = (ls: string[]) => (quotaNote ? [...ls, quotaNote] : ls);
   const remainingLine = `${remaining} remaining`;
 
   if (status === 'continuation_required') {
@@ -109,26 +128,27 @@ export function buildContinuationView(res: CompanyFirstResponse | null | undefin
     // as resumable. A row that has been failed or skipped is not continuable
     // however the outcome reads.
     const rowResumable = res?.row_status == null || !TERMINAL_ROW_STATUSES.includes(String(res.row_status));
-    const canContinue = !!token && rowResumable;
+    const queueOwned = res?.continuation_owner === 'v2_queue';
+    const canContinue = !!token && rowResumable && !queueOwned;
     return {
       status,
       canContinue,
       continuationToken: token,
       nextRound: res?.next_round ?? null,
       checkpointAt: res?.checkpoint_at ?? null,
-      lines: [
+      lines: withQuota([
         rounds > 0 ? `Round ${rounds} complete` : STATUS_HEADLINE[status],
         progressLine,
         remainingLine,
-        'More sourcing is required',
-      ],
+        queueOwned ? 'Continuing automatically' : 'More sourcing is required',
+      ]),
       actionLabel: canContinue ? 'Continue sourcing' : null,
     };
   }
 
-  const lines = status === 'completed'
+  const lines = withQuota(status === 'completed'
     ? [STATUS_HEADLINE.completed, progressLine]
-    : [STATUS_HEADLINE[status] ?? 'Stopped', progressLine, remainingLine];
+    : [STATUS_HEADLINE[status] ?? 'Stopped', progressLine, remainingLine]);
 
   return {
     status,

@@ -11,6 +11,7 @@
 import { ArrowRight, Loader2 } from 'lucide-react';
 import type { RunSummary } from '@/lib/workbench/runSummary';
 import { summaryCaption, summaryHeadline } from '@/lib/workbench/runSummary';
+import { funnelCaption, type WorkbenchFunnelCounts } from '@/lib/workbench/evaluationRows';
 
 interface Props {
   summary: RunSummary;
@@ -24,9 +25,14 @@ interface Props {
    * show. An action that cannot run does not need prime space to say so.
    */
   cta?: { label: string; onClick: () => void } | null;
+  /**
+   * Where every company the run holds stands, across every attempt. Null when
+   * the run carries no evaluation rows.
+   */
+  funnel?: WorkbenchFunnelCounts | null;
 }
 
-export default function RunSummaryHero({ summary, cta }: Props) {
+export default function RunSummaryHero({ summary, cta, funnel }: Props) {
   const n = summary.qualified.value;
   const none = n === 0;
 
@@ -53,6 +59,11 @@ export default function RunSummaryHero({ summary, cta }: Props) {
           <p className="mt-1.5 text-[13.5px] text-[#8b949e]">
             {summaryCaption(summary)}
           </p>
+          {funnel && funnel.discovered > 0 && (
+            <p className="mt-1 text-[12.5px] text-[#8b949e] tabular-nums">
+              {funnelCaption(funnel)}
+            </p>
+          )}
 
           {/* SHORTFALL, stated plainly and only when true. The old UI had two
               separate shortfall lines in two different components. */}

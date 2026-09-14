@@ -48,6 +48,7 @@ import {
 import type { PortfolioView } from '@/lib/workbench/portfolioView';
 import type { WorkbenchProgress } from '@/lib/workbench/workbenchProgress';
 import type { EvaluationRow } from '@/lib/workbench/evaluationRows';
+import { workbenchFunnelCounts } from '@/lib/workbench/evaluationRows';
 import RunSummaryHero from './RunSummaryHero';
 import RunDetails from './RunDetails';
 
@@ -517,6 +518,9 @@ export default function LeadResultsView({
           "not yet". */}
       <RunSummaryHero
         summary={summary}
+        funnel={evaluationRows.length > 0
+          ? workbenchFunnelCounts(evaluationRows, partition.qualified.length)
+          : null}
         cta={isRecommendationDispatchable(recommendation) ? {
           label: recommendation.label,
           onClick: onRunRecommendation,

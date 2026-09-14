@@ -496,7 +496,12 @@ export interface CandidateMatch {
   location?: string | null;
 }
 
-export type MatchStrength = "domain_exact" | "name_plus_evidence" | "rejected_weak";
+/**
+ * `corroborated_unconfirmed`: the name matched and something else agreed (the
+ * LinkedIn slug, the description), but no WEBSITE confirmed the domain. Recorded
+ * as evidence, never accepted as an identity — see `acceptLinkedInMatch`.
+ */
+export type MatchStrength = "domain_exact" | "corroborated_unconfirmed" | "rejected_weak";
 
 /**
  * WHICH PATH DECIDED, as a stable key.
@@ -510,10 +515,11 @@ export type MatchStrength = "domain_exact" | "name_plus_evidence" | "rejected_we
  *
  * These are the axis a run can be measured along:
  *
- *   domain_exact                       LinkedIn's own website matched ours
- *   name_and_slug                      names equal, slug agrees with our domain
- *   name_and_prose                     names equal, description/location carries the domain
- *   name_and_one_liner                 names equal, the YC one-liner is echoed
+ *   domain_exact                       LinkedIn's own website matched ours — the ONLY accepting code
+ *   domain_mismatch                    LinkedIn's website names a DIFFERENT domain — refused
+ *   name_and_slug                      names equal, slug agrees with our domain, no website — evidence only
+ *   name_and_prose                     names equal, description/location carries the domain, no website — evidence only
+ *   name_and_one_liner                 names equal, the YC one-liner is echoed, no website — evidence only
  *   name_matched_nothing_corroborated  names equal and NOTHING else agreed
  *   no_name_or_domain_match            the name gate refused before any of that
  *
@@ -523,6 +529,7 @@ export type MatchStrength = "domain_exact" | "name_plus_evidence" | "rejected_we
  */
 export type MatchOutcomeCode =
   | "domain_exact"
+  | "domain_mismatch"
   | "name_and_slug"
   | "name_and_prose"
   | "name_and_one_liner"
@@ -581,6 +588,16 @@ export function acceptLinkedInMatch(
     };
   }
   const sameName = normalizeCompanyName(candidate.name) === normalizeCompanyName(company.name);
+  // ── A WEBSITE THAT NAMES ANOTHER DOMAIN IS EVIDENCE AGAINST ──────────────
+  //
+  // The candidate told us where it lives, and it is not where our company
+  // lives. No name, slug or description can outvote that.
+  if (sameName && company.canonical_domain && candDomain && candDomain !== company.canonical_domain) {
+    return {
+      accepted: false, strength: "rejected_weak", code: "domain_mismatch",
+      reason: `name matches but the LinkedIn website is ${candDomain}, not ${company.canonical_domain}`,
+    };
+  }
   if (sameName) {
     // ── WHAT MAY CORROBORATE A NAME ─────────────────────────────────────
     //
@@ -613,6 +630,21 @@ export function acceptLinkedInMatch(
     const domainToken = identityToken(company.canonical_domain?.split(".")[0] ?? "");
     const hayToken = identityToken(`${candidate.description} ${candidate.location}`);
 
+    // ── ONE AUTHORITY: CORROBORATION IS EVIDENCE, NOT AN IDENTITY ─────────
+    //
+    // These three paths used to ACCEPT, while the resolver that actually
+    // decides identity (`resolveIdentityAgainstLookups`) required a website
+    // domain and refused the same candidates. Lead V2 run 4250f181 logged
+    // "11 accepted" and "0 resolved" in one line. There can be one answer, and
+    // it is the stricter one: in that same run LinkedIn returned "Every Inc."
+    // (slug `everyinc`, a New York media company) for every.io — the slug
+    // agrees with the domain token by prefix, the names normalise equal, and
+    // this branch would have attached the wrong company. A website is what
+    // tells two companies with one name apart; the identity search now buys
+    // `full` rows precisely so that it has one.
+    //
+    // The codes stay, so the diagnostics still say which evidence was present.
+    //
     // ── THE SIGNAL THAT WAS SITTING UNUSED ──────────────────────────────
     //
     // `candidate.linkedinUrl` is on `CandidateMatch` and was never read. Its
@@ -625,23 +657,24 @@ export function acceptLinkedInMatch(
     const slug = linkedInSlugToken(candidate.linkedinUrl);
     if (tokensAgree(slug, domainToken)) {
       return {
-        accepted: true, strength: "name_plus_evidence", code: "name_and_slug",
-        reason: `name matches and the LinkedIn slug "${slug}" agrees with domain "${domainToken}"`,
+        accepted: false, strength: "corroborated_unconfirmed", code: "name_and_slug",
+        reason: `name matches and the LinkedIn slug "${slug}" agrees with domain "${domainToken}", ` +
+          "but no website confirms the domain",
       };
     }
     // Prose, compared as tokens so "Retell AI" contains "retellai".
     if (domainToken.length > 3 && hayToken.includes(domainToken)) {
       return {
-        accepted: true, strength: "name_plus_evidence", code: "name_and_prose",
-        reason: "name matches and description/location corroborates",
+        accepted: false, strength: "corroborated_unconfirmed", code: "name_and_prose",
+        reason: "name matches and description/location corroborates, but no website confirms the domain",
       };
     }
     if (company.one_liner) {
       const onelinerToken = identityToken(company.one_liner).slice(0, 24);
       if (onelinerToken.length >= 16 && hayToken.includes(onelinerToken)) {
         return {
-          accepted: true, strength: "name_plus_evidence", code: "name_and_one_liner",
-          reason: "name matches and the company description corroborates",
+          accepted: false, strength: "corroborated_unconfirmed", code: "name_and_one_liner",
+          reason: "name matches and the company description corroborates, but no website confirms the domain",
         };
       }
     }

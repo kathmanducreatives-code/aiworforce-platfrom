@@ -216,3 +216,50 @@ export function mergePendingRuns<T extends { run_id: string }>(
     ...recovered.filter((r) => !have.has(r.run_id) && !resolvedRunIds.has(r.run_id)),
   ];
 }
+
+// ── COMPLETED RUNS: RE-READ, NEVER RE-BOUGHT ─────────────────────────────────
+//
+// `recoverPendingRuns` rebuilds runs that STARTED and never settled. A run that
+// settled was invisible to the next slice, so a resumed slice asking the same
+// question bought it again: Lead V2 run 4250f181 paid for the identical
+// memo23 discovery input twice (run dTKjqhRdrXbraA7Ur, then poa6rBspq8ChD8flC —
+// the ledger even recorded it as `attempt_number: 2` of one logical call).
+//
+// These are offered to the engine for ADOPTION by exact provider + input
+// fingerprint: the engine re-reads the finished run's dataset — a GET on a run
+// already paid for — instead of starting a second one.
+
+export interface RecoveredCompletedRun {
+  provider: string;
+  run_id: string;
+  dataset_id: string | null;
+  input_fingerprint: string;
+}
+
+const COMPLETED_STATUSES = new Set(["succeeded", "empty"]);
+
+export function recoverCompletedRuns(rows: readonly LedgerStartedRow[]): RecoveredCompletedRun[] {
+  const out: RecoveredCompletedRun[] = [];
+  const seenRuns = new Set<string>();
+  const seenFingerprints = new Set<string>();
+  for (const r of rows) {
+    if (!COMPLETED_STATUSES.has(String(r.status ?? ""))) continue;
+    const runId = typeof r.provider_run_id === "string" ? r.provider_run_id.trim() : "";
+    if (!runId || seenRuns.has(runId)) continue;
+    const provider = typeof r.capability === "string" ? r.capability.trim() : "";
+    if (!provider) continue;
+    const actorInput = (r.request_input ?? {})["input"];
+    if (actorInput === undefined || actorInput === null) continue;
+    const fingerprint = inputFingerprint(actorInput);
+    const key = `${provider}:${fingerprint}`;
+    if (seenFingerprints.has(key)) continue;
+    seenRuns.add(runId);
+    seenFingerprints.add(key);
+    out.push({
+      provider, run_id: runId,
+      dataset_id: typeof r.dataset_id === "string" && r.dataset_id ? r.dataset_id : null,
+      input_fingerprint: fingerprint,
+    });
+  }
+  return out;
+}

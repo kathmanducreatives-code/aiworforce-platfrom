@@ -54,24 +54,38 @@ const company = (over: Partial<PrequalifiedCompany> = {}): PrequalifiedCompany =
 
 // ═══ 1. EVERY PATH NAMES ITSELF ════════════════════════════════════════════
 
-Deno.test("1. the four accepting paths each report their own code", () => {
+Deno.test("1. every path reports its own code, and only a website domain accepts", () => {
   const c = company();
 
-  assertEquals(acceptLinkedInMatch(c, { website: "https://getcrux.ai" }).code,
-    "domain_exact");
+  const exact = acceptLinkedInMatch(c, { website: "https://getcrux.ai" });
+  assertEquals(exact.code, "domain_exact");
+  assert(exact.accepted);
 
-  assertEquals(acceptLinkedInMatch(c, {
-    name: "GetCrux", linkedinUrl: "https://www.linkedin.com/company/getcruxai",
-  }).code, "name_and_slug");
-
-  assertEquals(acceptLinkedInMatch(c, {
-    name: "GetCrux", description: "GetCrux builds video analytics",
-  }).code, "name_and_prose");
-
-  assertEquals(acceptLinkedInMatch(
+  // CORROBORATION IS EVIDENCE, NOT AN IDENTITY (Lead V2 run 4250f181): the
+  // codes still say what agreed, but none of them accepts without a website.
+  for (const [cand, code] of [
+    [{ name: "GetCrux", linkedinUrl: "https://www.linkedin.com/company/getcruxai" }, "name_and_slug"],
+    [{ name: "GetCrux", description: "GetCrux builds video analytics" }, "name_and_prose"],
+  ] as const) {
+    const v = acceptLinkedInMatch(c, cand);
+    assertEquals(v.code, code);
+    assertEquals(v.accepted, false, `${code} must not be an identity on its own`);
+    assertEquals(v.strength, "corroborated_unconfirmed");
+  }
+  const oneLiner = acceptLinkedInMatch(
     company({ one_liner: "AI powered video intelligence for marketers" }),
     { name: "GetCrux", description: "AI powered video intelligence for marketers, globally" },
-  ).code, "name_and_one_liner");
+  );
+  assertEquals(oneLiner.code, "name_and_one_liner");
+  assertEquals(oneLiner.accepted, false);
+
+  // A website that names ANOTHER domain is evidence against, whatever else agrees.
+  const contradicted = acceptLinkedInMatch(c, {
+    name: "GetCrux", website: "https://getcrux.com",
+    linkedinUrl: "https://www.linkedin.com/company/getcruxai",
+  });
+  assertEquals(contradicted.code, "domain_mismatch");
+  assertEquals(contradicted.accepted, false);
 });
 
 Deno.test("2. the two REFUSING paths are told apart", () => {
@@ -120,17 +134,24 @@ Deno.test("3. run 958c86bc's rejected nine, reconstructed", () => {
   }
 });
 
-Deno.test("4. GetCrux is the clincher: the corroboration would have passed", () => {
+Deno.test("4. GetCrux: the slug corroborates, and the website is what confirms", () => {
   // It resolved in run b7a9e112 to linkedin.com/company/getcruxai. The slug
   // token agrees with the domain token by the file's own `tokensAgree` rule.
   assertEquals(linkedInSlugToken("https://www.linkedin.com/company/getcruxai"), "getcruxai");
   assert("getcruxai".startsWith("getcrux"), "the evidence itself is sound");
 
   const c = company();
-  // With the name equal, that evidence is accepted.
-  assertEquals(acceptLinkedInMatch(c, {
+  // With the name equal, the slug is recorded as corroboration — not accepted.
+  const slugOnly = acceptLinkedInMatch(c, {
     name: "GetCrux", linkedinUrl: "https://www.linkedin.com/company/getcruxai",
-  }).code, "name_and_slug");
+  });
+  assertEquals(slugOnly.code, "name_and_slug");
+  assertEquals(slugOnly.accepted, false);
+  // The same row as `full` mode returns it — with its website — is an identity.
+  assert(acceptLinkedInMatch(c, {
+    name: "GetCrux", linkedinUrl: "https://www.linkedin.com/company/getcruxai",
+    website: "https://www.getcrux.ai/",
+  }).accepted);
 
   // With the name one token different, the SAME evidence is never reached.
   assertEquals(acceptLinkedInMatch(c, {
@@ -215,6 +236,14 @@ Deno.test("9. a HARD geography reaches the search; a soft one does not", () => {
   } as never as Parameters<typeof identitySearchLocations>[0];
   assertEquals(identitySearchLocations(soft), [],
     "a soft geography is a ranking preference; turning it into a provider filter narrows a search the user did not");
+
+  // THE COMPILED MISSION'S OWN CARRIER. Run 4250f181's mission declared the US
+  // hard only in `hard_constraints` and sent every search worldwide.
+  const compiled = {
+    company_profile: { locations: ["United States"] },
+    hard_constraints: { "company_profile.locations": { value: ["United States"], operator: "in" } },
+  } as never as Parameters<typeof identitySearchLocations>[0];
+  assertEquals(identitySearchLocations(compiled), ["United States"]);
 });
 
 Deno.test("10. the abbreviations a model emits are normalised, others pass through", () => {
@@ -323,19 +352,18 @@ async function runIdentity() {
   return { run, calls };
 }
 
-Deno.test("14. the identity search asks for SHORT mode", async () => {
+Deno.test("14. the identity search asks for FULL mode", async () => {
   const { calls } = await runIdentity();
   assert(calls.length > 0, "the identity search must have run");
   for (const input of calls) {
-    assertEquals(input.scraperMode, "short",
-      "full doubles the per-result price for `employeeCount`, which this stage never reads");
+    assertEquals(input.scraperMode, "full",
+      "short rows carry no website, and the resolver verifies only on a website domain (run 4250f181)");
     assertEquals(input.maxItems, IDENTITY_SEARCH_MAX_ITEMS);
   }
 });
 
-Deno.test("15. and resolves an identity from a short-mode row", async () => {
-  // The proof that dropping `full` costs nothing: a row with employeeCount null
-  // and no `industries` still carries everything the match needs.
+Deno.test("15. and resolves an identity from a row that carries its website", async () => {
+  // The website is what `full` adds that identity cannot do without.
   const { run } = await runIdentity();
   const c = run.companies.find((x) => x.key === "godela.ai");
   assert(c, "the company survived to identity resolution");
@@ -352,9 +380,9 @@ Deno.test("16. the stage still reads only mode-independent fields", () => {
   const branch = src.slice(
     src.indexOf("lookups = found.map("),
     src.indexOf("c.identity = resolveIdentityAgainstLookups("));
-  for (const full_mode_only of ["employeeCount", "industries"]) {
-    assert(!branch.includes(full_mode_only),
-      `the identity branch reads "${full_mode_only}", which SHORT mode does not return`);
+  for (const untrusted of ["employeeCount", "industries"]) {
+    assert(!branch.includes(untrusted),
+      `the identity branch reads "${untrusted}", which the card says a search cannot be trusted for`);
   }
   for (const needed of ["name", "linkedinUrl", "website", "description", "location"]) {
     assert(branch.includes(needed), `"${needed}" is what this stage actually consumes`);
@@ -396,8 +424,9 @@ Deno.test("17. the two fields `full` adds are the two the card says not to trust
     "the enrichment card says outright that it exists to correct the search");
 });
 
-Deno.test("18. the search is bought SHORT, and the price gap is real", () => {
-  assertEquals(SEARCH_SCRAPER_MODE, "short");
+Deno.test("18. the search is bought FULL, and the price gap is known", () => {
+  assertEquals(SEARCH_SCRAPER_MODE, "full",
+    "short cannot produce a verified identity — no website on the row");
   const c = hiringActorCard("apify_linkedin_company_search")!.cost_model;
   assertEquals(c.events_usd!["short-company"], 0.002);
   assertEquals(c.events_usd!["full-company"], 0.004);

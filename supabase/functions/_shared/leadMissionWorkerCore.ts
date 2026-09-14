@@ -48,6 +48,8 @@ export interface MissionOutcome {
   /** true ⇒ the run reached a terminal status; false ⇒ resumable. */
   terminal: boolean;
   error?: string;
+  /** The task the handler ran, when one exists — what a terminal release reconciles. */
+  taskId?: string | null;
 }
 
 export interface ReleaseOutcome extends MissionOutcome {

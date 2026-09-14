@@ -207,12 +207,12 @@ Deno.test("8. a bare name match is rejected; domain or corroboration required", 
   assert(exact.accepted);
   assertEquals(exact.strength, "domain_exact");
 
-  // Name plus corroborating evidence.
+  // Name plus corroborating prose, but no website: evidence, not an identity.
   const supported = acceptLinkedInMatch(apollo, {
     name: "Apollo", website: null, description: "apollographql developer platform",
   });
-  assert(supported.accepted);
-  assertEquals(supported.strength, "name_plus_evidence");
+  assertFalse(supported.accepted);
+  assertEquals(supported.strength, "corroborated_unconfirmed");
 
   assertFalse(acceptLinkedInMatch(apollo, { name: "Something Else" }).accepted);
 });
@@ -262,7 +262,7 @@ const co = (name: string, domain: string, oneLiner = "") => ({
   name, canonical_domain: domain, one_liner: oneLiner,
 } as never);
 
-Deno.test("M1. THE FIVE THAT WERE LOST: slug and domain agree, so the name stands", () => {
+Deno.test("M1. THE FIVE: slug and domain agree — recorded as evidence; a website confirms", () => {
   // Every pair here is a real company from the run, with the LinkedIn slug it
   // actually uses. All five were rejected before this change.
   const cases: Array<[string, string, string]> = [
@@ -276,8 +276,15 @@ Deno.test("M1. THE FIVE THAT WERE LOST: slug and domain agree, so the name stand
     const r = acceptLinkedInMatch(co(name, domain), {
       name, linkedinUrl, website: null, description: "AI startup", location: "San Francisco, CA",
     });
-    assert(r.accepted, `${name}: ${r.reason}`);
-    assertEquals(r.strength, "name_plus_evidence");
+    // ONE AUTHORITY (run 4250f181): without a website the resolver cannot
+    // verify, so the matcher may not claim it did.
+    assertFalse(r.accepted, `${name}: ${r.reason}`);
+    assertEquals(r.code, "name_and_slug");
+    assertEquals(r.strength, "corroborated_unconfirmed");
+    // The same company as a full-mode row, website included, is an identity.
+    assert(acceptLinkedInMatch(co(name, domain), {
+      name, linkedinUrl, website: `https://${domain}`,
+    }).accepted, name);
   }
 });
 
@@ -290,7 +297,11 @@ Deno.test("M2. the slugs that actually resolved keep resolving", () => {
     ["Reacher", "reacherapp.com", "https://www.linkedin.com/company/reacher"], // domain longer
   ];
   for (const [name, domain, url] of cases) {
-    assert(acceptLinkedInMatch(co(name, domain), { name, linkedinUrl: url }).accepted, name);
+    const slugOnly = acceptLinkedInMatch(co(name, domain), { name, linkedinUrl: url });
+    assertEquals(slugOnly.code, "name_and_slug", name);
+    assertFalse(slugOnly.accepted, `${name}: a slug is corroboration, not confirmation`);
+    assert(acceptLinkedInMatch(co(name, domain),
+      { name, linkedinUrl: url, website: `https://www.${domain}/` }).accepted, name);
   }
 });
 
@@ -341,7 +352,8 @@ Deno.test("M6. prose corroboration is compared as tokens, and domain still wins"
     name: "Retell AI", linkedinUrl: null,
     description: "Retell AI builds voice agents", location: "San Francisco",
   });
-  assert(prose.accepted, prose.reason);
+  assertEquals(prose.code, "name_and_prose");
+  assertFalse(prose.accepted, "prose corroborates; only a website confirms");
 
   // An exact domain is still the strongest and is still checked first.
   const exact = acceptLinkedInMatch(co("Retell AI", "retellai.com"), {

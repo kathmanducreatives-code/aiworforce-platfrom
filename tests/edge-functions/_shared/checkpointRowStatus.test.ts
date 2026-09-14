@@ -91,7 +91,9 @@ Deno.test("4b. and it only PROMISES a resume the gate will honour", () => {
   // WIDENED. The card now reads the ledger before composing itself, and that
   // pushed `assessCheckpointResume` out of a 4200-character window. The
   // property is unchanged; the block containing it grew.
-  const notice = SRC.slice(Math.max(0, i - 6000), i);
+  // WIDENED AGAIN for the Lead V2 queue-owned notice, which sits in the same
+  // block and says the worker continues automatically.
+  const notice = SRC.slice(Math.max(0, i - 9000), i);
   assert(notice.includes("assessCheckpointResume("),
     "the wording must be derived from the same verdict `continue-workflow` uses");
   assert(notice.includes("resume.resumable"),
@@ -148,13 +150,19 @@ Deno.test("6. the checkpoint carries the ids a resume needs, and no typing instr
   // message saying nothing extra would be charged.
   const i = SRC.indexOf('kind: "run_checkpoint"');
   assert(i > 0);
-  const notice = SRC.slice(Math.max(0, i - 3000), i + 900);
+  // +1200: the metadata now also states `continuation_owner` (Lead V2).
+  const notice = SRC.slice(Math.max(0, i - 3000), i + 1200);
 
   // THE SENTENCE ITSELF, not the comment explaining why it changed — that
   // comment quotes the old wording on purpose, and matching the whole region
   // would make the history of the fix look like the fix being absent.
-  const from = SRC.indexOf("content: resume.resumable", Math.max(0, i - 4200));
+  // A Lead V2 queue-owned checkpoint gets its own notice first (the worker
+  // continues it — no button); every other checkpoint branches on the verdict.
+  const from = SRC.indexOf("content: queueOwned ? v2Notice : resume.resumable", Math.max(0, i - 4200));
   assert(from > 0, "the notice's wording must depend on whether a resume is possible");
+  const v2 = SRC.slice(SRC.indexOf("const v2Notice ="), SRC.indexOf("if (!already)", SRC.indexOf("const v2Notice =")));
+  assertEquals(v2.includes("Use Continue"), false,
+    "a mission the V2 queue continues must not invite a Continue click");
   const sentence = SRC.slice(from, SRC.indexOf("agent_slug:", from));
   assertEquals(/say "continue"/.test(sentence), false,
     "the notice must not instruct the user to type a word nothing interprets");
