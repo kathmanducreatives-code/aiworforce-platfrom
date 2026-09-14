@@ -1008,6 +1008,13 @@ export interface ModelBudgetVerdict {
 
 export class ModelCallCollector {
   private readonly calls: Array<{ telemetry: ModelCallTelemetry; ok: boolean }> = [];
+  /**
+   * Calls already drained by THIS collector. A second drain in the same run —
+   * the failure-path flush after the success-path drain — continues the
+   * sequence instead of restarting it, so its keys never collide with rows the
+   * first drain wrote.
+   */
+  private drained = 0;
 
   /**
    * @param budget Bounds for UNPRICED calls. Omitted, nothing is bounded here
@@ -1091,12 +1098,14 @@ export class ModelCallCollector {
     },
   ): Promise<number> {
     const pending = this.calls.splice(0, this.calls.length);
+    const offset = this.drained;
+    this.drained += pending.length;
     if (!writer) return 0;
     let written = 0;
     for (const [i, c] of pending.entries()) {
       await recordModelCall(writer, {
         ...spec,
-        logical_call_key: `${spec.logical_call_key}:${c.telemetry.role}:${i + 1}`,
+        logical_call_key: `${spec.logical_call_key}:${c.telemetry.role}:${offset + i + 1}`,
         telemetry: c.telemetry,
         ok: c.ok,
         failure_code: c.ok ? null : c.telemetry.fallback_reason,
@@ -1104,6 +1113,57 @@ export class ModelCallCollector {
       written++;
     }
     return written;
+  }
+}
+
+// ── MODEL SPEND IS DURABLE ON EVERY EXIT ─────────────────────────────────────
+//
+// run-agent drained its collector in exactly one place, deep in the success
+// path. The same-mission rerun of Lead V2 run 4250f181 (task 9144eaa4) made two
+// planner calls (~$0.065) and then threw `ExecutionPlanBlockedError`: neither
+// call reached `lead_model_calls`, so the daily spend ceiling — which sums that
+// view — never saw them. A run that fails after spending was free to the meter.
+//
+// Armed once the collector and the task exist; flushed after the run settles,
+// however it settled. `drain` empties the collector before writing, so a flush
+// after the success-path drain writes only calls made after it, and a second
+// flush writes nothing — exactly once, never twice.
+
+export interface ModelDrainSpec {
+  workspace_id: string;
+  task_id?: string | null;
+  plan_id?: string | null;
+  logical_call_key: string;
+}
+
+export class PendingModelDrain {
+  private armed: {
+    collector: ModelCallCollector;
+    writer: LedgerWriter | null | undefined;
+    spec: () => ModelDrainSpec | null;
+  } | null = null;
+
+  /** `spec` is read at flush time: the task may not exist yet when this is armed. */
+  arm(
+    collector: ModelCallCollector,
+    writer: LedgerWriter | null | undefined,
+    spec: () => ModelDrainSpec | null,
+  ): void {
+    this.armed = { collector, writer, spec };
+  }
+
+  /** Write whatever the collector still holds. Never throws: bookkeeping must not fail a run. */
+  async flush(): Promise<number> {
+    const a = this.armed;
+    if (!a || a.collector.length === 0) return 0;
+    const spec = a.spec();
+    if (!spec) return 0;
+    try {
+      return await a.collector.drain(a.writer, spec);
+    } catch (e) {
+      console.error("[execution-ledger] model drain on exit failed", String(e).slice(0, 200));
+      return 0;
+    }
   }
 }
 

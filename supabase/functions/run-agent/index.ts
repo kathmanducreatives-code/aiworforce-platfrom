@@ -4,6 +4,7 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
@@ -893,6 +894,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // file's own history is the argument: the transport defect survived because a
   // real change was invisible among mechanical ones. The guarded region ends at
   // the matching marker immediately above this handler's closing brace.
+  // ── MODEL SPEND REACHES THE LEDGER ON EVERY EXIT ──────────────────────────
+  // Armed where the collector is created; flushed below once the run settles.
+  // See `PendingModelDrain`.
+  const pendingModelDrain = new PendingModelDrain();
   const guardedResponse = await terminalGuard.run(async () => {
 
   let body: any;
@@ -1873,6 +1878,13 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // touches it, so moving it up is free; the drain after the run still
         // sees the same object.
         const modelCalls = new ModelCallCollector(resolveRunBudget());
+        pendingModelDrain.arm(
+          modelCalls, createLedgerWriter(supabase as never),
+          () => task && workspace_id
+            ? { workspace_id, task_id: task.id, plan_id: plan_id ?? null,
+                logical_call_key: `${task.id}:model` }
+            : null,
+        );
 
         const broadeningPlanner = gptBroadeningAuthorized
           ? createLeadStrategyPlanner({
@@ -7675,6 +7687,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // The fallback exists because the guard's signature admits `undefined`; a run
   // that produced no Response at all is itself a defect worth reporting rather
   // than hiding behind an empty 200.
+  // SUCCEEDED, FAILED OR THREW: every model call this run made is ledgered.
+  const modelRowsOnExit = await pendingModelDrain.flush();
+  if (modelRowsOnExit > 0) {
+    console.log("[run-agent][model-ledger][on-exit]", { rows: modelRowsOnExit });
+  }
   return guardedResponse ?? json({ error: "run_agent_no_response" }, 500);
 }
 
