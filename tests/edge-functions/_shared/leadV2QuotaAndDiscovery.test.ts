@@ -109,9 +109,20 @@ Deno.test("seed-stage is graded unsupported for a YC-discovery plan, disclosed, 
   }
 });
 
-Deno.test("the discovery planner is told memo23 cannot prove stage", () => {
+Deno.test("stage unprovability is disclosed by feasibility, never announced to the planner", () => {
+  // A note telling the execution planner that memo23 "CANNOT ESTABLISH FUNDING
+  // STAGE" reached a prompt whose rules say to return an EMPTY plan when no
+  // actor can establish what the request needs. The same-mission rerun of
+  // 4250f181 (task 9144eaa4) died `no_valid_step` twice. Replaying the real
+  // planner: pre-fix payload 5 steps; that note 0; a softened rewording 5 then
+  // 0. Any unprovability statement is a coin-flip veto, so the planner-facing
+  // contract carries none — the stage gap is graded by `assessRequestFeasibility`
+  // and the constraint is judged from evidence by qualification.
   const src = read("../../../supabase/functions/_shared/actorInputContracts.ts");
-  assert(src.includes("THIS ACTOR CANNOT ESTABLISH FUNDING STAGE."));
+  for (const veto of [/CANNOT ESTABLISH FUNDING STAGE/i, /FUNDING STAGE IS NOT A FILTER/i,
+    /stage constraint stays hard/i]) {
+    assertFalse(veto.test(src), `planner-facing contract must not say ${veto}`);
+  }
 });
 
 // ═══ WORKBENCH: EVERY ATTEMPT ══════════════════════════════════════════════
