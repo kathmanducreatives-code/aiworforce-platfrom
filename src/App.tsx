@@ -125,7 +125,7 @@ const App = () => (
                     } />
 
                     <Route path="/onboarding/company-brain" element={
-                      <ProtectedRoute>
+                      <ProtectedRoute requireOnboarding={false}>
                         <OnboardingCompanyBrain />
                       </ProtectedRoute>
                     } />

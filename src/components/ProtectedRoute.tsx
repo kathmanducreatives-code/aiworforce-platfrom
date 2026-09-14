@@ -1,22 +1,33 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { decideRouteGuard } from '@/lib/routeGuard';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  /**
+   * False only for the onboarding route itself, so an onboarding-incomplete
+   * user isn't gate-redirected to the very page they're already on.
+   */
+  requireOnboarding?: boolean;
 }
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
+const ProtectedRoute = ({ children, requireOnboarding = true }: ProtectedRouteProps) => {
+  const { user, loading: authLoading } = useAuth();
+  const { data: companyBrain, loading: onboardingLoading } = useCompanyBrain();
+  const location = useLocation();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    }
-  }, [user, loading, navigate]);
+  const decision = decideRouteGuard({
+    authLoading,
+    user,
+    requireOnboarding,
+    onboardingLoading,
+    onboardingCompleted: companyBrain ? companyBrain.onboarding_completed : null,
+    pathname: location.pathname,
+    search: location.search,
+  });
 
-  if (loading) {
+  if (decision.type === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
@@ -24,8 +35,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  if (!user) {
-    return null;
+  if (decision.type === 'redirect') {
+    return <Navigate to={decision.to} replace />;
   }
 
   return <>{children}</>;

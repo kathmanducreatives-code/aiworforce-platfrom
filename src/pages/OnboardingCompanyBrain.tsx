@@ -10,12 +10,13 @@
 // Radar scan is triggered.
 
 import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { companyBrainKey } from '@/hooks/useCompanyBrain';
+import { safeReturnPath } from '@/lib/routeGuard';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,10 @@ export default function OnboardingCompanyBrain() {
   const { workspaceId } = useWorkspace();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Recovered: return to wherever ProtectedRoute gated the user FROM,
+  // instead of always landing on /dashboard once onboarding is done.
+  const returnPath = safeReturnPath(searchParams.get('next')) ?? '/dashboard';
 
   const [scene, setScene] = useState<SceneId>('founder_name');
 
@@ -223,7 +228,7 @@ export default function OnboardingCompanyBrain() {
         // `await` before navigating: refetching after the route change would
         // race the gate and reintroduce the same bounce, just less often.
         await queryClient.invalidateQueries({ queryKey: companyBrainKey(workspaceId) });
-        setTimeout(() => navigate('/dashboard'), 900);
+        setTimeout(() => navigate(returnPath), 900);
       }
     } catch {
       setError({ title: 'Save failed', body: 'Nothing was lost — try again.' });
