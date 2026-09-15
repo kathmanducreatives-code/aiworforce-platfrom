@@ -33,7 +33,7 @@
 // the day either changed — which is how `known_company_resolution` sat in the
 // graph, carded and unrunnable, for the whole of Phase 3.
 
-import { buildCapabilityGraph } from "./leadCapabilityGraph.ts";
+import { buildMonitoringCapabilityGraph } from "./monitoringRetrievalPort.ts";
 import { compileMonitoringMission, type MonitoringSubjectKind } from "./monitoringMission.ts";
 import { isEngineDriven } from "./leadResearchPlaybooks.ts";
 import { provingCapabilities } from "./signalQualification.ts";
@@ -95,7 +95,7 @@ export function signalCollectability(
 
   let scheduled: string[];
   try {
-    scheduled = buildCapabilityGraph(compiled.mission as never).steps
+    scheduled = buildMonitoringCapabilityGraph(compiled.mission as never).steps
       .map((s) => String(s.capability));
   } catch (e) {
     return {

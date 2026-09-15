@@ -1,0 +1,15 @@
+{
+ "created_at": "2026-09-14T06:29:16.067956+00:00",
+ "current_state": null,
+ "generation": 1,
+ "last_progress_at": null,
+ "lease_expires_at": null,
+ "lease_holder": null,
+ "lineage_id": "9144eaa4-ff19-48e7-943c-65696d3daa49",
+ "mission_hash": null,
+ "state_version": 0,
+ "status": "terminal",
+ "terminal_reason": "failed:unhandled_exception",
+ "updated_at": "2026-09-14T06:29:34.784+00:00",
+ "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+}

@@ -174,7 +174,8 @@ Deno.test("the plan a mission produces is derived, not planned", async () => {
   const i = src.indexOf("const approvedMission = isLeadMissionV1(lead_mission)");
   assert(i > 0, "orchestrate must recognise an approved mission");
   const branch = src.slice(i, i + 2400);
-  assert(branch.includes("buildCapabilityGraph(approvedMission)"),
+  // P0: the call now also carries the workspace's executability gate.
+  assert(/buildCapabilityGraph\(approvedMission\b/.test(branch),
     "the plan must come from the graph Stage 1 previewed and the engine executes");
   assert(branch.includes("lead_mission: approvedMission"),
     "and the mission must be attached to the step, or run-agent cannot find it");

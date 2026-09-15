@@ -47,6 +47,18 @@ the Content format model works identically with or without them; applying
 this only adds queryable, constraint-checked columns. Apply it deliberately,
 then move it back into `supabase/migrations/`.
 
+## `20260915120000_sweep_skips_v2_queue_tasks.sql`
+
+Lead V2 P0. Redefines `tasks_sweep_stuck_runs` so it never flips a task an
+active `lead_mission_queue` row owns (`queued`/`running`/`resumable`) from
+`running` to `ready` — the queue recovers those through its own lease expiry.
+Nothing else in the function changes.
+
+**Depends on `20260910140000_lead_mission_v2_claim.sql`** (the table it reads).
+Apply only after that one, deliberately. Until then the live sweeper is
+unchanged; the V2 heartbeat keeps `tasks.updated_at` fresh, which is what keeps
+a live V2 run out of the sweeper today.
+
 ## Tests
 
 `tests/infra/` still reads these files — the baseline's structure, the V2

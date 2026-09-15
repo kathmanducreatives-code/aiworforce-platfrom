@@ -26,6 +26,10 @@
 //
 // PURE. No network, provider, model or database access.
 
+import {
+  capabilityExecutability, isCapabilityExecutable,
+  type ExecutabilityGateMode, type ExecutabilityState,
+} from "./capabilityExecutability.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import { evidenceCoversPopulation, evidenceProducedBy } from "./actorEvidenceCapability.ts";
 import { isMonitoringMission } from "./monitoringMission.ts";
@@ -673,6 +677,30 @@ export interface CapabilityPlan {
    * invisible.
    */
   routing_advisories: string[];
+  /**
+   * P0 — present ONLY when the executability gate is enforced (Lead V2
+   * workspaces). Lists capabilities this mission would have used that the
+   * engine cannot execute yet, so they were not scheduled. Absent in legacy
+   * mode, which keeps V1 and Signals monitoring plans byte-identical.
+   */
+  executability?: { mode: "enforce"; unexecutable: UnexecutableCapability[] };
+}
+
+/** A capability the gate kept out of the plan, and why. */
+export interface UnexecutableCapability {
+  capability: CapabilityId;
+  role: "entry" | "verification";
+  state: ExecutabilityState;
+  reason: string;
+}
+
+export interface CapabilityGraphOptions {
+  /**
+   * `enforce`: never enter or schedule a capability the engine cannot execute
+   * (see `capabilityExecutability.ts`). `legacy` (default): today's behaviour,
+   * unchanged — used by V1 and by Signals monitoring.
+   */
+  executability?: ExecutabilityGateMode;
 }
 
 function step(
@@ -769,8 +797,28 @@ function withAdmissibleProviders(
   });
 }
 
-export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
+export function buildCapabilityGraph(
+  mission: LeadMissionV1, opts: CapabilityGraphOptions = {},
+): CapabilityPlan {
   const steps: CapabilityStep[] = [];
+  // ── P0: SUPPORTED IS NOT THE SAME AS EXECUTABLE ────────────────────────────
+  //
+  // `isCapabilitySupported` only says nobody refuted a capability's evidence
+  // claim. With the gate enforced, a capability must ALSO be executable by the
+  // engine to be entered or scheduled; what the gate keeps out is recorded and
+  // reported instead of producing a silent empty run. In legacy mode `usable`
+  // is exactly `isCapabilitySupported`, so the plan is unchanged.
+  const enforceExecutability = opts.executability === "enforce";
+  const unexecutable: UnexecutableCapability[] = [];
+  const usable = (id: CapabilityId, role: UnexecutableCapability["role"]): boolean => {
+    if (!isCapabilitySupported(id)) return false;
+    if (!enforceExecutability || isCapabilityExecutable(id)) return true;
+    if (!unexecutable.some((u) => u.capability === id)) {
+      const e = capabilityExecutability(id);
+      unexecutable.push({ capability: id, role, state: e.state, reason: e.reason });
+    }
+    return false;
+  };
   const known = mission.company_profile.known_companies ?? [];
   const wantsPeople = mission.requested_output === "contact_ready_leads" ||
     mission.target_entity === "person";
@@ -880,19 +928,19 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
   // entry and proves funding as a qualifier over the pool it finds.
   } else if (
     hasSignal(mission, "funding") &&
-    isCapabilitySupported("funding_signal_discovery") &&
     ((mission.strategies ?? []).length === 0 ||
-      (mission.strategies ?? []).includes("funding"))
+      (mission.strategies ?? []).includes("funding")) &&
+    usable("funding_signal_discovery", "entry")
   ) {
     entry = "funding_signal_discovery";
     entryReason = "the mission requires a funding signal";
-  } else if (hasSignal(mission, "expansion") && isCapabilitySupported("expansion_signal_discovery")) {
+  } else if (hasSignal(mission, "expansion") && usable("expansion_signal_discovery", "entry")) {
     entry = "expansion_signal_discovery";
     entryReason = "the mission requires an expansion signal";
   } else if (
     hasSignal(mission, "product_launch") &&
-    isCapabilitySupported("product_launch_discovery") &&
-    (mission.strategies ?? []).length === 0
+    (mission.strategies ?? []).length === 0 &&
+    usable("product_launch_discovery", "entry")
   ) {
     // Same rule as funding and expansion: a signal may choose the entry only
     // when it is genuinely the research shape. A mission that declared a
@@ -1001,7 +1049,7 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     // weak step, it is a false one — it would let a job posting's location
     // stand as proof that a company entered a new market. Not scheduled; the
     // gap is reported in `routing_advisories` instead.
-    if (hasSignal(mission, "expansion") && isCapabilitySupported("expansion_signal_verification")) {
+    if (hasSignal(mission, "expansion") && usable("expansion_signal_verification", "verification")) {
       steps.push(step("expansion_signal_verification", order++, "the mission requires a verified expansion signal"));
     }
 
@@ -1022,7 +1070,7 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     // Each is gated on `isCapabilitySupported` for the same reason the expansion
     // branch above is: a verification step whose provider cannot produce the
     // evidence is not a weak step, it is a false one.
-    if (hasSignal(mission, "technology") && isCapabilitySupported("technology_verification")) {
+    if (hasSignal(mission, "technology") && usable("technology_verification", "verification")) {
       steps.push(step("technology_verification", order++,
         "the mission requires evidence of the company's technology stack"));
     }
@@ -1031,12 +1079,12 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     // would answer a question about a founder with a question about their
     // employer's marketing.
     if (hasSignalSubject(mission, "post", "company") &&
-        isCapabilitySupported("company_post_verification")) {
+        usable("company_post_verification", "verification")) {
       steps.push(step("company_post_verification", order++,
         "the mission requires evidence from the company's own posts"));
     }
     if (hasSignal(mission, "product_launch") &&
-        isCapabilitySupported("product_launch_verification")) {
+        usable("product_launch_verification", "verification")) {
       steps.push(step("product_launch_verification", order++,
         "the mission requires a verified product-launch signal"));
     }
@@ -1233,6 +1281,17 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     );
   }
 
+  // P0: every capability the gate kept out is stated, never silently dropped.
+  for (const u of unexecutable) {
+    routing_advisories.push(
+      `${u.capability} is not executable yet (${u.state}): ${u.reason}. It was not ` +
+      (u.role === "entry"
+        ? "used as the entry; discovery proceeds on the company profile, and this " +
+          "signal is not proven by searching for it first."
+        : "scheduled; this signal is not verified by this plan."),
+    );
+  }
+
   return {
     version: CAPABILITY_GRAPH_VERSION,
     steps: admissibleSteps,
@@ -1243,6 +1302,7 @@ export function buildCapabilityGraph(mission: LeadMissionV1): CapabilityPlan {
     offered_capabilities,
     routing_reason: entryReason,
     routing_advisories,
+    ...(enforceExecutability ? { executability: { mode: "enforce" as const, unexecutable } } : {}),
   };
 }
 

@@ -1,0 +1,156 @@
+{
+ "attempts": 5,
+ "claimed_by": null,
+ "created_at": "2026-09-14T07:14:51.292337+00:00",
+ "id": "1e52d43c-7351-4777-ab93-20c80e32ff26",
+ "last_outcome": {
+  "abort_reason": null,
+  "aborted": false,
+  "ceiling_ms": 300000,
+  "error": null,
+  "status": "continuation_required",
+  "terminal": false,
+  "worker_id": "16063f06-d582-40df-af44-d6067734bf50"
+ },
+ "lease_expires_at": null,
+ "lineage_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+ "not_before": null,
+ "request": {
+  "agent_slug": "scout",
+  "execution_mode": "fast",
+  "input": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+  "instruction": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+  "lead_quota_provenance": {
+   "execution_quota": 1,
+   "requested_before_canary": null,
+   "source": "v2_canary"
+  },
+  "lead_routing": null,
+  "needs_approval": false,
+  "plan_id": "8fbc66e8-17b7-4651-8690-44b9ceb56f7a",
+  "requested_lead_count": 1,
+  "step_index": 0,
+  "tool_input": {
+   "lead_mission": {
+    "company_profile": {
+     "business_models": [],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "verticals": [
+      "b2b saas (founder-led or small teams)"
+     ]
+    },
+    "confidence": 0.99,
+    "decision_makers": {
+     "current_employment_required": false,
+     "roles": []
+    },
+    "directives": {
+     "adjacent_signals": [],
+     "allowed_broadening": {
+      "company_types": [],
+      "employee_range": {
+       "max": null,
+       "min": null
+      },
+      "geographies": [],
+      "role_families": []
+     },
+     "disallowed_broadening": [],
+     "evaluation_instructions": "",
+     "excluded_signals": [],
+     "execution_preference": "balanced",
+     "founder_unlock_recommended": false,
+     "preferred_signals": [
+      "hiring"
+     ],
+     "requested_contact_ready_count": null,
+     "required_evidence": [],
+     "source_strategy": []
+    },
+    "field_provenance": {
+     "company_profile.business_models": "gpt_inference",
+     "company_profile.locations": "explicit_user_request",
+     "company_profile.stages": "explicit_user_request",
+     "company_profile.verticals": "explicit_user_request",
+     "decision_makers.roles": "gpt_inference",
+     "requested_count": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request"
+    },
+    "hard_constraints": {
+     "company_profile.locations": {
+      "operator": "in",
+      "reason": "stated explicitly in the user's query",
+      "value": [
+       "United States"
+      ]
+     },
+     "stage": {
+      "operator": "eq",
+      "reason": "stated in the request",
+      "value": "seed"
+     }
+    },
+    "lead_intelligence_contract_version": "v1",
+    "mission_type": "company_research",
+    "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+    "planner_runtime": {
+     "build_timestamp": "2026-08-29T10:44:33.276Z",
+     "dirty": false,
+     "function": "lead-mission-compiler",
+     "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+     "git_short": "046b61b0",
+     "lead_intelligence_contract_version": "v1",
+     "role": "planner"
+    },
+    "prohibited_capabilities": [
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment"
+    ],
+    "requested_count": 3,
+    "requested_output": "qualified_companies",
+    "required_capabilities": [],
+    "required_signal_terms": [
+     "growth marketer"
+    ],
+    "required_signals": [
+     {
+      "event": "hiring",
+      "phrase": "hiring growth marketer",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketer"
+       ]
+      },
+      "role_families": [
+       "marketing_growth"
+      ],
+      "subject": "company",
+      "type": "hiring"
+     }
+    ],
+    "soft_preferences": {},
+    "target_entity": "company",
+    "version": "lead-mission-v1"
+   },
+   "requested_lead_count": 1
+  },
+  "tool_needed": "source_with_apify",
+  "user_id": "[user]",
+  "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+ },
+ "status": "failed",
+ "task_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+ "updated_at": "2026-09-14T07:37:45.252681+00:00",
+ "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+}

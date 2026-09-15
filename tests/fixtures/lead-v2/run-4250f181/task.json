@@ -1,0 +1,5024 @@
+{
+ "agent_slug": "scout",
+ "created_at": "2026-09-13T16:04:16.980716+00:00",
+ "id": "4250f181-b6ae-467a-bc46-1abd39ddeccb",
+ "result": {
+  "auto_continuation": {
+   "continuing": false,
+   "decision": "replenishment_required",
+   "detail": "every discovered candidate has been investigated and 0 of 1 qualified; discovery routes remain, so the next slice widens the pool rather than ending the request 1 short",
+   "dispatch": {
+    "continuation_index": 5,
+    "detail": "the next slice was refused with HTTP 401: unauthorized",
+    "dispatched": false,
+    "error_code": "unauthorized",
+    "plan_id": "d5f25001-abec-492e-b657-1be7722f43c5",
+    "reason": "rejected",
+    "response_body": "{\"error\":\"unauthorized\"}",
+    "status": 401,
+    "task_id": "4250f181-b6ae-467a-bc46-1abd39ddeccb"
+   },
+   "user_message": null,
+   "version": "lead-auto-continuation-v1"
+  },
+  "capability_execution_state": {
+   "accumulated_cost_units": 20,
+   "binding_fingerprint": null,
+   "company_keys": [
+    "lab0.ai",
+    "gojiberry.ai",
+    "fuseai.com",
+    "propelauth.com",
+    "safetykit.com",
+    "every.io",
+    "nango.dev",
+    "pasito.ai",
+    "furtherai.com",
+    "poly.app"
+   ],
+   "completed_capabilities": [
+    "startup_company_discovery"
+   ],
+   "contact_identities": [],
+   "current_capability": null,
+   "discovery_source_state": {
+    "admitted": 33,
+    "available_admitted": 1,
+    "exhausted": false,
+    "pages_taken": {
+     "apify_yc_companies_memo23": 1
+    },
+    "pool_target": 8,
+    "raw_rows": 33,
+    "sources_attempted": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_memo23"
+    ],
+    "stop_reason": "pass_limit"
+   },
+   "discovery_strategy": {
+    "actors": [
+     {
+      "actor_key": "apify_yc_companies_memo23",
+      "dropped_filters": [],
+      "input": {
+       "isHiring": true,
+       "maxEmployeeSize": "250",
+       "maxItems": 10,
+       "minEmployeeSize": "1+",
+       "mode": "companies",
+       "queries": [
+        "B2B SaaS",
+        "B2B software as a service"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "role": "marketing",
+       "scrapeOpenJobs": true
+      },
+      "input_fields": [
+       "isHiring",
+       "maxEmployeeSize",
+       "maxItems",
+       "minEmployeeSize",
+       "mode",
+       "queries",
+       "regions",
+       "role",
+       "scrapeOpenJobs"
+      ],
+      "rationale": "Discover US YC startup candidates that are currently hiring for marketing-related roles, while returning the open-job titles and URLs needed to assess growth-marketer fit.",
+      "requires_enrichment": true,
+      "role": "primary"
+     },
+     {
+      "actor_key": "apify_yc_companies_memo23",
+      "dropped_filters": [],
+      "input": {
+       "isHiring": true,
+       "maxEmployeeSize": "250",
+       "maxItems": 10,
+       "minEmployeeSize": "1+",
+       "mode": "jobs",
+       "queries": [
+        "B2B SaaS",
+        "business software"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "role": "marketing",
+       "scrapeOpenJobs": true
+      },
+      "input_fields": [
+       "isHiring",
+       "maxEmployeeSize",
+       "maxItems",
+       "minEmployeeSize",
+       "mode",
+       "queries",
+       "regions",
+       "role",
+       "scrapeOpenJobs"
+      ],
+      "rationale": "Primary source for startup-cohort discovery with embedded hiring evidence. The marketing role filter improves precision for growth-marketing hiring, while B2B SaaS queries and US geography target the requested cohort. Open jobs are scraped so qualification can reject companies whose hiring signal lacks a named relevant role.",
+      "requires_enrichment": true,
+      "role": "primary"
+     }
+    ],
+    "all_require_enrichment": true,
+    "blocked": 0,
+    "model_chosen": true,
+    "repaired": 0,
+    "source": "model_validated",
+    "version": "lead-discovery-strategy-v1",
+    "violations": []
+   },
+   "entry_capability": "startup_company_discovery",
+   "execution_plan": {
+    "amended_after_discovery": true,
+    "amended_reasoning": "",
+    "reasoning": "",
+    "source": "model_validated",
+    "steps": [
+     {
+      "actor_key": "apify_yc_companies_memo23",
+      "capability": "startup_company_discovery",
+      "depends_on": [],
+      "input": {
+       "batch": [
+        "All Batches"
+       ],
+       "industries": [
+        "B2B"
+       ],
+       "isHiring": true,
+       "maxEmployeeSize": "250",
+       "maxItems": 100,
+       "minEmployeeSize": "1+",
+       "mode": "companies",
+       "queries": [
+        "B2B SaaS",
+        "B2B software as a service",
+        "SaaS"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "role": "marketing",
+       "scrapeOpenJobs": true,
+       "topCompany": false
+      },
+      "purpose": "Discover US YC startup candidates matching the B2B SaaS concept, with current hiring status and named marketing-related open-job evidence included in the same result.",
+      "step": 1
+     },
+     {
+      "actor_key": "apify_linkedin_company_search",
+      "capability": "company_identity_resolution",
+      "depends_on": [],
+      "input": {
+       "locations": [
+        "United States"
+       ],
+       "maxItems": 100,
+       "scraperMode": "full",
+       "searchQuery": "<company names from step 0>"
+      },
+      "purpose": "Resolve each discovered candidate to a canonical real company and LinkedIn company URL, removing non-company or ambiguous YC rows before enrichment.",
+      "step": 2
+     },
+     {
+      "actor_key": "apify_linkedin_company_details",
+      "capability": "company_enrichment",
+      "depends_on": [
+       1
+      ],
+      "input": {
+       "companies": [
+        "<LinkedIn company URLs from step 1>"
+       ]
+      },
+      "purpose": "Fetch authoritative company details for the resolved candidates, including exact employee count, industry hierarchy, locations, description, and canonical LinkedIn identity for final qualification.",
+      "step": 3
+     },
+     {
+      "actor_key": null,
+      "capability": "company_brain_qualification",
+      "depends_on": [
+       2
+      ],
+      "input": {},
+      "purpose": "Qualify and rank the enriched companies against the explicit mission and Company Brain: US B2B SaaS fit, early/seed-stage evidence, current growth-marketing job evidence from step 0, small-team context supporting the \u201cfirst\u201d interpretation, and exclusion of mature or unsuitable companies.",
+      "step": 4
+     },
+     {
+      "actor_key": null,
+      "capability": "persistence",
+      "depends_on": [
+       3
+      ],
+      "input": {},
+      "purpose": "Persist the final three qualified companies and their supporting identity, enrichment, stage, and hiring evidence.",
+      "step": 5
+     }
+    ],
+    "version": "lead-execution-plan-v1",
+    "violations": []
+   },
+   "fallback_reason": null,
+   "identity_match_diagnostics": {
+    "accepted_rank_histogram": {
+     "0": 8,
+     "2": 2,
+     "9": 1
+    },
+    "by_code": {
+     "name_and_slug": 23,
+     "name_matched_nothing_corroborated": 6,
+     "no_name_or_domain_match": 79
+    },
+    "companies_accepted": 11,
+    "companies_judged": 12,
+    "companies_rejected": 1,
+    "rejected_samples": [
+     {
+      "candidate_domain": null,
+      "candidate_name": "WOZ",
+      "candidate_slug": "hiwoz",
+      "code": "name_matched_nothing_corroborated",
+      "company_domain": "wozcode.com",
+      "company_key": "wozcode.com",
+      "company_name": "Woz",
+      "rank": 4
+     }
+    ],
+    "retrieval_modes": {
+     "short": 108
+    },
+    "retrieval_outcomes": {
+     "candidates_returned": 12,
+     "no_candidates": 14
+    },
+    "version": "identity-match-diagnostics-v1"
+   },
+   "investigation_capacity": {
+    "capacity": 5,
+    "concurrency": 4,
+    "enrichment_batch_size": 10,
+    "enrichment_call_ms": 12000,
+    "hiring_batch_size": 3,
+    "hiring_call_ms": 80000,
+    "identity_call_ms": 12000,
+    "per_company_ms": 42867,
+    "qualification_ms": 12000,
+    "remaining_ms": 239320,
+    "reserve_ms": 18000,
+    "usable_ms": 221320
+   },
+   "investigation_ranking": [
+    "fuseai.com",
+    "lab0.ai",
+    "safetykit.com",
+    "pasito.ai",
+    "furtherai.com",
+    "gojiberry.ai",
+    "nango.dev",
+    "every.io"
+   ],
+   "investigation_selected": 13,
+   "investigation_slices": [
+    {
+     "carried": 0,
+     "excluded": 2,
+     "investigated": 0,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 8
+    },
+    {
+     "carried": 0,
+     "excluded": 8,
+     "investigated": 0,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 2
+    },
+    {
+     "carried": 0,
+     "excluded": 9,
+     "investigated": 5,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 2
+    },
+    {
+     "carried": 0,
+     "excluded": 9,
+     "investigated": 0,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 1
+    },
+    {
+     "carried": 0,
+     "excluded": 2,
+     "investigated": 8,
+     "pass": 1,
+     "reason": "no_capacity",
+     "remaining": 0,
+     "selected": 0
+    }
+   ],
+   "mission_hash": "42e4dec364bd4cd326e06036531895caf9f5693a28edc48dbfc7f5e14b5ee723",
+   "mission_output": {
+    "companies": [
+     {
+      "company_key": "lab0.ai",
+      "company_name": "Lab0",
+      "qualified": false
+     },
+     {
+      "company_key": "gojiberry.ai",
+      "company_name": "Gojiberry AI",
+      "qualified": false
+     },
+     {
+      "company_key": "fuseai.com",
+      "company_name": "Fuse AI",
+      "qualified": false
+     },
+     {
+      "company_key": "propelauth.com",
+      "company_name": "PropelAuth",
+      "qualified": false
+     },
+     {
+      "company_key": "safetykit.com",
+      "company_name": "SafetyKit",
+      "qualified": false
+     },
+     {
+      "company_key": "every.io",
+      "company_name": "Every",
+      "qualified": false
+     },
+     {
+      "company_key": "nango.dev",
+      "company_name": "Nango",
+      "qualified": false
+     },
+     {
+      "company_key": "pasito.ai",
+      "company_name": "Pasito",
+      "qualified": false
+     },
+     {
+      "company_key": "furtherai.com",
+      "company_name": "FurtherAI",
+      "qualified": false
+     },
+     {
+      "company_key": "poly.app",
+      "company_name": "Poly",
+      "qualified": false
+     }
+    ],
+    "people": "[stripped:people]",
+    "requested_entity": "company",
+    "returned_entity": "company",
+    "rows_are_the_answer": true,
+    "substitution": {
+     "accounts_pending": 0,
+     "message": null,
+     "occurred": false,
+     "reason": null,
+     "unlock_capability": null,
+     "unlock_credits": null
+    },
+    "version": "mission-output-contract-v1"
+   },
+   "pending_capabilities": [
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+   ],
+   "pending_runs": [],
+   "prequalification": {
+    "any_open_role_satisfies_signal": false,
+    "artifacts_excluded": 0,
+    "companies": [
+     {
+      "best_tier": "A",
+      "canonical_domain": "fuseai.com",
+      "commercial_jobs": [
+       "Head of Growth Marketing"
+      ],
+      "company_key": "fuseai.com",
+      "eligible": true,
+      "exclusion": null,
+      "name": "Fuse AI",
+      "reasons": [
+       "1 Tier-A commercial role(s)",
+       "team size 12 inside the target range",
+       "YC industry B2B"
+      ],
+      "score": 140,
+      "size_status": "in_range",
+      "strongest_signal": "Head of Growth Marketing",
+      "team_size": 12
+     },
+     {
+      "best_tier": "A",
+      "canonical_domain": "pasito.ai",
+      "commercial_jobs": [
+       "Product Marketing Manager"
+      ],
+      "company_key": "pasito.ai",
+      "eligible": true,
+      "exclusion": null,
+      "name": "Pasito",
+      "reasons": [
+       "1 Tier-A commercial role(s)",
+       "team size 20 inside the target range"
+      ],
+      "score": 130,
+      "size_status": "in_range",
+      "strongest_signal": "Product Marketing Manager",
+      "team_size": 20
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "every.io",
+      "commercial_jobs": [],
+      "company_key": "every.io",
+      "eligible": false,
+      "exclusion": "insufficient_commercial",
+      "name": "Every",
+      "reasons": [
+       "team size 12 inside the target range",
+       "YC industry B2B"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 12
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "furtherai.com",
+      "commercial_jobs": [],
+      "company_key": "furtherai.com",
+      "eligible": false,
+      "exclusion": "technical_only",
+      "name": "FurtherAI",
+      "reasons": [
+       "team size 36 inside the target range",
+       "YC industry B2B",
+       "6 technical role(s) only \u2014 not commercial evidence"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 36
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "gojiberry.ai",
+      "commercial_jobs": [],
+      "company_key": "gojiberry.ai",
+      "eligible": false,
+      "exclusion": "insufficient_commercial",
+      "name": "Gojiberry AI",
+      "reasons": [
+       "team size 7 inside the target range",
+       "YC industry B2B"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 7
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "lab0.ai",
+      "commercial_jobs": [],
+      "company_key": "lab0.ai",
+      "eligible": false,
+      "exclusion": "insufficient_commercial",
+      "name": "Lab0",
+      "reasons": [
+       "team size 5 inside the target range",
+       "YC industry B2B"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 5
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "nango.dev",
+      "commercial_jobs": [],
+      "company_key": "nango.dev",
+      "eligible": false,
+      "exclusion": "technical_only",
+      "name": "Nango",
+      "reasons": [
+       "team size 6 inside the target range",
+       "YC industry B2B",
+       "1 technical role(s) only \u2014 not commercial evidence"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 6
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "propelauth.com",
+      "commercial_jobs": [],
+      "company_key": "propelauth.com",
+      "eligible": false,
+      "exclusion": "technical_only",
+      "name": "PropelAuth",
+      "reasons": [
+       "team size 5 inside the target range",
+       "YC industry B2B",
+       "2 technical role(s) only \u2014 not commercial evidence"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 5
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "safetykit.com",
+      "commercial_jobs": [],
+      "company_key": "safetykit.com",
+      "eligible": false,
+      "exclusion": "technical_only",
+      "name": "SafetyKit",
+      "reasons": [
+       "team size 10 inside the target range",
+       "YC industry B2B",
+       "1 technical role(s) only \u2014 not commercial evidence"
+      ],
+      "score": 40,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 10
+     },
+     {
+      "best_tier": null,
+      "canonical_domain": "poly.app",
+      "commercial_jobs": [],
+      "company_key": "poly.app",
+      "eligible": false,
+      "exclusion": "technical_only",
+      "name": "Poly",
+      "reasons": [
+       "team size 3 inside the target range",
+       "5 technical role(s) only \u2014 not commercial evidence"
+      ],
+      "score": 30,
+      "size_status": "in_range",
+      "strongest_signal": null,
+      "team_size": 3
+     }
+    ],
+    "companies_with_commercial_roles": 2,
+    "companies_with_open_roles": 9,
+    "companies_with_technical_roles": 7,
+    "eligible_companies": 2,
+    "employee_size_excluded": 0,
+    "generic_scored": 0,
+    "generic_version": "generic-prequalification-v1",
+    "generic_with_description": 0,
+    "generic_with_trusted_size": 0,
+    "open_jobs_evaluated": 44,
+    "technical_only_companies": 5,
+    "technical_roles_satisfy_signal": false,
+    "total_rows": 20,
+    "unique_companies": 10,
+    "version": "commercial-prequalification-v1"
+   },
+   "progress": {
+    "accounts_found": 10,
+    "awaiting_external_run": false,
+    "companies_enriched": 0,
+    "decision_makers_verified": 0,
+    "eligible_opportunities": 2,
+    "evaluated": 10,
+    "exclusion_reasons": {
+     "insufficient_commercial": 3,
+     "technical_only": 5
+    },
+    "hiring_verified": 0,
+    "identity_resolved": 0,
+    "identity_unresolved": 8,
+    "in_progress": true,
+    "open_jobs_evaluated": 44,
+    "qualified_companies": 0,
+    "shortlisted": 8,
+    "stage": "qualified"
+   },
+   "provider_attempts": [
+    {
+     "attempt": 1,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "3d4e4b66",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 1,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "d4d2494d",
+     "outcome": "empty",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 0
+    },
+    {
+     "attempt": 2,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "e9347a0a",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 3
+    },
+    {
+     "attempt": 3,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "a4246a55",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 3
+    },
+    {
+     "attempt": 4,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "c39eb9a9",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 8
+    },
+    {
+     "attempt": 5,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "3f324241",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 6,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6e285793",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 14
+    },
+    {
+     "attempt": 7,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "1bcb8ee6",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 8,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "fa4c7180",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 2,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "71724ec",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 9,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "891a7198",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 8
+    },
+    {
+     "attempt": 10,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "2ad5f15b",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 3
+    },
+    {
+     "attempt": 3,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "71724ec",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 4,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "ce332682",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 11,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "891a7198",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 12,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "2ad5f15b",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 13,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "a4246a55",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 14,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "d4d2494d",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 15,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "6e285793",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 16,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6aa1ae56",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 17,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "22eea724",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 5,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "21b3f6d",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 18,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "18304c8",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 8
+    },
+    {
+     "attempt": 6,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "87ab90c5",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 7,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "59fd0bb5",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 19,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "a4246a55",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 20,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "d4d2494d",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 21,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "6e285793",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 22,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "e9347a0a",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 23,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "3f324241",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 24,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "c39eb9a9",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 25,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "1bcb8ee6",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 26,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "fa4c7180",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    }
+   ],
+   "qualified_company_keys": [],
+   "shortlist_decision": {
+    "budget": {
+     "budget": 10,
+     "cap": 100,
+     "pool_size": 10,
+     "requested_count": 3,
+     "source": "default",
+     "version": "lead-investigation-budget-v1"
+    },
+    "counts": {
+     "hard_excluded": 0,
+     "ineligible": 0,
+     "irrelevant": 2,
+     "no_triage": 0,
+     "ranked": 8,
+     "relevant": 4,
+     "selected": 8,
+     "uncertain": 4
+    },
+    "gpt_budget": {
+     "cap": 500,
+     "evaluation_budget": 10,
+     "pool_size": 10,
+     "read_budget": 10,
+     "source": "pool_bound",
+     "version": "lead-investigation-budget-v1"
+    },
+    "ranking": [
+     "fuseai.com",
+     "lab0.ai",
+     "safetykit.com",
+     "pasito.ai",
+     "furtherai.com",
+     "gojiberry.ai",
+     "nango.dev",
+     "every.io"
+    ],
+    "time_capacity": {
+     "capacity": 5,
+     "concurrency": 4,
+     "enrichment_batch_size": 10,
+     "enrichment_call_ms": 12000,
+     "hiring_batch_size": 3,
+     "hiring_call_ms": 80000,
+     "identity_call_ms": 12000,
+     "per_company_ms": 42867,
+     "qualification_ms": 12000,
+     "remaining_ms": 260208,
+     "reserve_ms": 18000,
+     "usable_ms": 242208
+    },
+    "untriaged_policy": "rank"
+   },
+   "signal_coverage": {
+    "fully_covered": true,
+    "required_actors": [
+     "apify_yc_companies_memo23",
+     "apify_linkedin_job_search"
+    ],
+    "runnable_actors": [
+     "apify_yc_companies_memo23",
+     "apify_linkedin_company_search",
+     "apify_linkedin_job_search"
+    ],
+    "signals": [
+     {
+      "actors": [
+       "apify_yc_companies_memo23",
+       "apify_linkedin_job_search"
+      ],
+      "scenarios": [
+       "hiring_engineers"
+      ],
+      "signal": "hiring",
+      "status": "covered"
+     }
+    ]
+   },
+   "terminal_reason": null,
+   "triage": {
+    "batches_available": 1,
+    "batches_made": 1,
+    "irrelevant": 2,
+    "relevant": 4,
+    "total": 10,
+    "uncertain": 4
+   },
+   "unknown_company_keys": [],
+   "version": "capability-execution-state-v1"
+  },
+  "capability_graph": {
+   "allowed_providers": [
+    "apify_yc_companies_memo23",
+    "apify_yc_companies_solidcode",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details",
+    "apify_linkedin_job_search"
+   ],
+   "entry_capability": "startup_company_discovery",
+   "estimated_cost_units": 7,
+   "prohibited": [
+    "general_company_discovery",
+    "known_company_resolution",
+    "job_discovery",
+    "funding_signal_discovery",
+    "expansion_signal_discovery",
+    "product_launch_discovery",
+    "expansion_signal_verification",
+    "company_post_verification",
+    "product_launch_verification",
+    "technology_verification",
+    "founder_discovery",
+    "employer_verification",
+    "contact_enrichment",
+    "job_deduplication"
+   ],
+   "steps": [
+    {
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 0,
+     "providers": [
+      "apify_yc_companies_memo23",
+      "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"
+     ],
+     "reason": "the mission targets startups"
+    },
+    {
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 1,
+     "providers": [
+      "apify_linkedin_company_search"
+     ],
+     "reason": "candidates need a canonical identity before enrichment"
+    },
+    {
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 2,
+     "providers": [
+      "apify_linkedin_company_details"
+     ],
+     "reason": "qualification requires enriched evidence, never discovery-time fields"
+    },
+    {
+     "capability": "hiring_verification",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 3,
+     "providers": [
+      "apify_linkedin_job_search"
+     ],
+     "reason": "the mission requires a verified hiring signal"
+    },
+    {
+     "capability": "company_brain_qualification",
+     "cost_units": 0,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 4,
+     "providers": [],
+     "reason": "companies are qualified against the Company Brain"
+    },
+    {
+     "capability": "persistence",
+     "cost_units": 0,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 5,
+     "providers": [],
+     "reason": "results are persisted to the Workbench"
+    }
+   ],
+   "version": "lead-capability-graph-v1"
+  },
+  "capability_outcomes": [
+   {
+    "capability": "startup_company_discovery",
+    "evidence_satisfied": true,
+    "providers_used": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_memo23"
+    ],
+    "reason": null,
+    "rows": 10,
+    "status": "complete"
+   },
+   {
+    "capability": "company_identity_resolution",
+    "evidence_satisfied": false,
+    "providers_used": [
+     "apify_linkedin_company_search"
+    ],
+    "reason": "no company reached an actionable identity",
+    "rows": 0,
+    "status": "complete"
+   },
+   {
+    "capability": "company_enrichment",
+    "evidence_satisfied": false,
+    "providers_used": [
+     "apify_linkedin_company_details"
+    ],
+    "reason": "no company was enriched; qualification will hold them as unknown",
+    "rows": 0,
+    "status": "complete"
+   },
+   {
+    "capability": "hiring_verification",
+    "evidence_satisfied": false,
+    "providers_used": [],
+    "reason": "the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it",
+    "rows": 0,
+    "status": "skipped_no_input"
+   },
+   {
+    "capability": "company_brain_qualification",
+    "evidence_satisfied": false,
+    "providers_used": [],
+    "reason": "no company reached the Company Brain: none of the 10 companies carried a hiring assessment \u2014 nothing was evaluated, nothing was rejected",
+    "rows": 0,
+    "status": "complete"
+   },
+   {
+    "capability": "persistence",
+    "evidence_satisfied": true,
+    "providers_used": [],
+    "reason": null,
+    "rows": 0,
+    "status": "complete"
+   }
+  ],
+  "company_brain_observability": {
+   "companies": []
+  },
+  "company_brain_policy": {
+   "brain_version": null,
+   "enforced": true,
+   "hard_constraints": [
+    "employee_count",
+    "industry",
+    "business_model"
+   ],
+   "policy_hash": "b3259dcdb63dff5b19b4137e8813a3efcbae561f17ac32705b06229f35c678af",
+   "policy_version": "company-brain-effective-policy-1.0.0",
+   "rejected_broadening": [],
+   "size": {
+    "confirmation_required": false,
+    "mapping_id": null,
+    "mapping_version": "company-size-semantics-1.0.0",
+    "max": 150,
+    "min": 1,
+    "source": "explicit_numeric"
+   },
+   "unknown_evidence": "research"
+  },
+  "company_first": {
+   "bottlenecks": [],
+   "budget_consumed": 0,
+   "continuation": {
+    "checkpoint_at": "2026-09-13T16:20:24.237Z",
+    "continuation_token": null,
+    "next_action": "finalize",
+    "next_round": null,
+    "required": false,
+    "resumed_from_round": 1
+   },
+   "counts": {
+    "candidates": 0,
+    "contact": 0,
+    "needsReview": 0,
+    "persisted": 0,
+    "rawJobs": 0,
+    "reject": 0,
+    "verifiedCompanies": 0,
+    "watch": 0
+   },
+   "diagnostics": {
+    "budgetStopped": false,
+    "jobsInvoked": false,
+    "peopleCalls": 0
+   },
+   "executed_sourcing_mode": "company_first",
+   "expansions_attempted": [],
+   "idempotency": [],
+   "items": [],
+   "plan_sources": [],
+   "planner_metadata": [],
+   "provider_calls": 0,
+   "quota": {
+    "eligible_leads": 0,
+    "quota_policy": "contact_only",
+    "remaining_leads": 1,
+    "requested_count_source": "explicit",
+    "requested_leads": 1
+   },
+   "rounds": [],
+   "rounds_attempted": 0,
+   "routing": {
+    "company_first": true,
+    "execution_mode": "company_first",
+    "job_search_spec": {
+     "company_vertical": "saas",
+     "compilation_status": "insufficient",
+     "keyword_queries": [],
+     "location": "United States"
+    },
+    "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+    "requested_person_role": null
+   },
+   "semantic_classification": {
+    "budget_exhausted": false,
+    "calls_allowed": 10,
+    "calls_made": 0,
+    "calls_remaining": 10,
+    "companies_classified": 0,
+    "skipped": {}
+   },
+   "stage_funnel": {
+    "candidates_discovered": 0,
+    "company_fit_evaluated": 0,
+    "company_fit_pass": 0,
+    "company_fit_pending": 0,
+    "company_fit_reject": 0,
+    "contact_ready": 0,
+    "enrichment_complete": 0,
+    "enrichment_pending": 0,
+    "founder_mismatch": 0,
+    "founder_searched": 0,
+    "founder_verified": 0,
+    "hiring_checked": 0,
+    "hiring_not_verified": 0,
+    "hiring_verified": 0,
+    "identity_pending": 0,
+    "qualified_companies": 0,
+    "quota_counted": 0
+   },
+   "status": "round_limit_reached",
+   "terminal_reason": "the legacy sourcing loop is disabled for this run; the capability engine owns sourcing and this loop reports no rounds of its own",
+   "writeBoundary": {
+    "invariantViolation": null,
+    "normalizedJobs": 0,
+    "peopleResults": 0,
+    "persistedRecords": 0,
+    "persistenceAttempts": 0,
+    "providerSideWrites": 0,
+    "qualifiedCandidates": 0,
+    "rawProviderItems": 0,
+    "rejectedCandidates": 0,
+    "verifiedCompanies": 0
+   }
+  },
+  "company_first_state": {
+   "actual_cost": 0,
+   "attempted_strategy_hashes": [],
+   "attempted_titles": [],
+   "candidate_diagnostics": [],
+   "checkpoint_at": "2026-09-13T16:20:24.237Z",
+   "completed_calls": [],
+   "completed_rounds": [],
+   "current_round": 1,
+   "eligible_leads": 0,
+   "estimated_cost": 0,
+   "next_action": "start_round",
+   "persisted_lead_keys": [],
+   "planner_metadata": [],
+   "quota_policy": "contact_only",
+   "remaining_leads": 1,
+   "requested_lead_count": 1,
+   "seen_company_keys": [],
+   "seen_job_urls": [],
+   "seen_lead_keys": [],
+   "task_id": "4250f181-b6ae-467a-bc46-1abd39ddeccb",
+   "terminal_reason": null,
+   "terminal_status": null,
+   "version": "company-first-state-1.0.0",
+   "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+  },
+  "discovery_strategy": {
+   "actors": [
+    {
+     "actor_key": "apify_yc_companies_memo23",
+     "dropped_filters": [],
+     "input": {
+      "isHiring": true,
+      "maxEmployeeSize": "250",
+      "maxItems": 10,
+      "minEmployeeSize": "1+",
+      "mode": "companies",
+      "queries": [
+       "B2B SaaS",
+       "B2B software as a service"
+      ],
+      "regions": [
+       "United States of America"
+      ],
+      "role": "marketing",
+      "scrapeOpenJobs": true
+     },
+     "input_fields": [
+      "isHiring",
+      "maxEmployeeSize",
+      "maxItems",
+      "minEmployeeSize",
+      "mode",
+      "queries",
+      "regions",
+      "role",
+      "scrapeOpenJobs"
+     ],
+     "rationale": "Discover US YC startup candidates that are currently hiring for marketing-related roles, while returning the open-job titles and URLs needed to assess growth-marketer fit.",
+     "requires_enrichment": true,
+     "role": "primary"
+    },
+    {
+     "actor_key": "apify_yc_companies_memo23",
+     "dropped_filters": [],
+     "input": {
+      "isHiring": true,
+      "maxEmployeeSize": "250",
+      "maxItems": 10,
+      "minEmployeeSize": "1+",
+      "mode": "jobs",
+      "queries": [
+       "B2B SaaS",
+       "business software"
+      ],
+      "regions": [
+       "United States of America"
+      ],
+      "role": "marketing",
+      "scrapeOpenJobs": true
+     },
+     "input_fields": [
+      "isHiring",
+      "maxEmployeeSize",
+      "maxItems",
+      "minEmployeeSize",
+      "mode",
+      "queries",
+      "regions",
+      "role",
+      "scrapeOpenJobs"
+     ],
+     "rationale": "Primary source for startup-cohort discovery with embedded hiring evidence. The marketing role filter improves precision for growth-marketing hiring, while B2B SaaS queries and US geography target the requested cohort. Open jobs are scraped so qualification can reject companies whose hiring signal lacks a named relevant role.",
+     "requires_enrichment": true,
+     "role": "primary"
+    }
+   ],
+   "all_require_enrichment": true,
+   "blocked": 0,
+   "model_chosen": true,
+   "repaired": 0,
+   "source": "model_validated",
+   "version": "lead-discovery-strategy-v1",
+   "violations": []
+  },
+  "evaluation_paths": {
+   "companies": [
+    {
+     "brain_outcome": null,
+     "company_key": "lab0.ai",
+     "company_name": "Lab0",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "gojiberry.ai",
+     "company_name": "Gojiberry AI",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "fuseai.com",
+     "company_name": "Fuse AI",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "propelauth.com",
+     "company_name": "PropelAuth",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "safetykit.com",
+     "company_name": "SafetyKit",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "every.io",
+     "company_name": "Every",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "nango.dev",
+     "company_name": "Nango",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "pasito.ai",
+     "company_name": "Pasito",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "furtherai.com",
+     "company_name": "FurtherAI",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    },
+    {
+     "brain_outcome": null,
+     "company_key": "poly.app",
+     "company_name": "Poly",
+     "decision": null,
+     "decision_source": "not_evaluated",
+     "evaluation_path": "not_reached",
+     "grounded": false,
+     "icp_fit": null,
+     "match_score": null,
+     "mission_fit": null,
+     "verdict": null
+    }
+   ],
+   "counts": {
+    "fabricated_pass": 0,
+    "fabricated_reject": 0,
+    "model_evaluated": 0,
+    "model_unavailable": 0,
+    "not_reached": 10,
+    "restored_decision": 0
+   },
+   "decided_by_model": 0,
+   "decided_without_model": 0,
+   "reached_evaluation": 0,
+   "version": "evaluation-path-telemetry-v1"
+  },
+  "executed_sourcing_mode": "company_first",
+  "field_provenance": {
+   "company_profile.business_models": "gpt_inference",
+   "company_profile.locations": "explicit_user_request",
+   "company_profile.stages": "explicit_user_request",
+   "company_profile.verticals": "explicit_user_request",
+   "decision_makers.roles": "gpt_inference",
+   "requested_count": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "target_entity": "explicit_user_request"
+  },
+  "grounded_brain_diagnostics": {
+   "companies": [],
+   "enablement": {
+    "enabled": true,
+    "mode": "shadow",
+    "model": "openai/gpt-5.6-luna",
+    "reason": "enabled",
+    "threshold": 0.6
+   },
+   "mode": "shadow",
+   "shadow_comparison": []
+  },
+  "headcount_snapshots": {
+   "observed": 0,
+   "written": 0
+  },
+  "hiring_route": {
+   "drift": [],
+   "enrichment_required": true,
+   "executed_route": null,
+   "executed_source_order": [],
+   "fallback_reason": null,
+   "repairs": [
+    "source_not_in_route_dropped:apify_linkedin_company_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details",
+    "source_not_in_route_dropped:apify_linkedin_job_search"
+   ],
+   "requested_route": "startup_company_first",
+   "requested_source_order": [],
+   "validated_route": "startup_company_first",
+   "validated_source_order": [
+    "apify_yc_companies_memo23",
+    "apify_yc_companies_solidcode"
+   ]
+  },
+  "investigation_budget": {
+   "budget": {
+    "budget": 10,
+    "cap": 100,
+    "pool_size": 10,
+    "requested_count": 3,
+    "source": "default",
+    "version": "lead-investigation-budget-v1"
+   },
+   "counts": {
+    "hard_excluded": 0,
+    "ineligible": 0,
+    "irrelevant": 2,
+    "no_triage": 0,
+    "ranked": 8,
+    "relevant": 4,
+    "selected": 8,
+    "uncertain": 4
+   },
+   "gpt_budget": {
+    "cap": 500,
+    "evaluation_budget": 10,
+    "pool_size": 10,
+    "read_budget": 10,
+    "source": "pool_bound",
+    "version": "lead-investigation-budget-v1"
+   },
+   "ranking": [
+    "fuseai.com",
+    "lab0.ai",
+    "safetykit.com",
+    "pasito.ai",
+    "furtherai.com",
+    "gojiberry.ai",
+    "nango.dev",
+    "every.io"
+   ],
+   "time_capacity": {
+    "capacity": 5,
+    "concurrency": 4,
+    "enrichment_batch_size": 10,
+    "enrichment_call_ms": 12000,
+    "hiring_batch_size": 3,
+    "hiring_call_ms": 80000,
+    "identity_call_ms": 12000,
+    "per_company_ms": 42867,
+    "qualification_ms": 12000,
+    "remaining_ms": 260208,
+    "reserve_ms": 18000,
+    "usable_ms": 242208
+   },
+   "untriaged_policy": "rank"
+  },
+  "investigation_capacity": {
+   "capacity": 5,
+   "concurrency": 4,
+   "enrichment_batch_size": 10,
+   "enrichment_call_ms": 12000,
+   "hiring_batch_size": 3,
+   "hiring_call_ms": 80000,
+   "identity_call_ms": 12000,
+   "per_company_ms": 42867,
+   "qualification_ms": 12000,
+   "remaining_ms": 239320,
+   "reserve_ms": 18000,
+   "usable_ms": 221320
+  },
+  "lead_entity_intent": {
+   "clarification_required": false,
+   "company_categories": [
+    "B2B SaaS"
+   ],
+   "company_gate_required": true,
+   "confidence": 0.9,
+   "evidence_spans": [
+    {
+     "evidence": [
+      "startups"
+     ],
+     "field": "target_entity",
+     "value": "company"
+    },
+    {
+     "evidence": [
+      "hiring"
+     ],
+     "field": "signal",
+     "value": "hiring"
+    }
+   ],
+   "execution_mode": "company_first",
+   "freshness": "recent_signal",
+   "geographies": [
+    "United States"
+   ],
+   "hard_constraints": [],
+   "hiring_signal_required": true,
+   "job_search_spec": {
+    "company_vertical": "saas",
+    "compilation_status": "insufficient",
+    "country": "US",
+    "insufficient_reason": "no_hiring_role_phrase",
+    "job_families": [],
+    "keyword_queries": [],
+    "location": "United States",
+    "no_broadening_requested": true,
+    "original_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+    "requested_person_roles": []
+   },
+   "original_user_instruction": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+   "output_type": "qualified_companies",
+   "person_roles": [],
+   "requested_count": 3,
+   "requested_person_role": null,
+   "signals": [
+    {
+     "evidence": [
+      "hiring"
+     ],
+     "type": "hiring"
+    }
+   ],
+   "soft_constraints": [
+    "signal:hiring"
+   ],
+   "target_entity": "company",
+   "version": 1
+  },
+  "lead_library_persistence": {
+   "persisted": 0,
+   "planned": 0,
+   "results": [],
+   "skipped": [],
+   "version": "lead-mission-persistence-projection-v1"
+  },
+  "lead_lineage_progress": {
+   "barren_slices": 4,
+   "brain_decided": 0,
+   "continuations_used": 5,
+   "cost_units_used": 20,
+   "investigation_authorisations": 13,
+   "qualified_high_water": 0,
+   "stopped_detail": "the next slice could not be started: the next slice was refused with HTTP 401: unauthorized",
+   "stopped_reason": "dispatch_failed",
+   "unique_companies_investigated": 8,
+   "version": "lead-auto-continuation-v1"
+  },
+  "lead_mission": {
+   "company_profile": {
+    "business_models": [],
+    "locations": [
+     "United States"
+    ],
+    "stages": [
+     "startup"
+    ],
+    "verticals": [
+     "b2b saas (founder-led or small teams)"
+    ]
+   },
+   "confidence": 0.99,
+   "decision_makers": {
+    "current_employment_required": false,
+    "roles": []
+   },
+   "directives": {
+    "adjacent_signals": [],
+    "allowed_broadening": {
+     "company_types": [],
+     "employee_range": {
+      "max": null,
+      "min": null
+     },
+     "geographies": [],
+     "role_families": []
+    },
+    "disallowed_broadening": [],
+    "evaluation_instructions": "",
+    "excluded_signals": [],
+    "execution_preference": "balanced",
+    "founder_unlock_recommended": false,
+    "preferred_signals": [
+     "hiring"
+    ],
+    "requested_contact_ready_count": null,
+    "required_evidence": [],
+    "source_strategy": []
+   },
+   "field_provenance": {
+    "company_profile.business_models": "gpt_inference",
+    "company_profile.locations": "explicit_user_request",
+    "company_profile.stages": "explicit_user_request",
+    "company_profile.verticals": "explicit_user_request",
+    "decision_makers.roles": "gpt_inference",
+    "requested_count": "explicit_user_request",
+    "requested_output": "explicit_user_request",
+    "required_signals": "explicit_user_request",
+    "target_entity": "explicit_user_request"
+   },
+   "hard_constraints": {
+    "company_profile.locations": {
+     "operator": "in",
+     "reason": "stated explicitly in the user's query",
+     "value": [
+      "United States"
+     ]
+    },
+    "stage": {
+     "operator": "eq",
+     "reason": "stated in the request",
+     "value": "seed-stage"
+    }
+   },
+   "lead_intelligence_contract_version": "v1",
+   "mission_type": "company_research",
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+   "planner_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "lead-mission-compiler",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "planner"
+   },
+   "prohibited_capabilities": [
+    "founder_discovery",
+    "employer_verification",
+    "contact_enrichment"
+   ],
+   "requested_count": 3,
+   "requested_output": "qualified_companies",
+   "required_capabilities": [],
+   "required_signal_terms": [
+    "growth marketer"
+   ],
+   "required_signals": [
+    {
+     "event": "hiring",
+     "phrase": "hiring growth marketer",
+     "qualifier": {
+      "role_families": [
+       "marketing_growth"
+      ],
+      "role_terms": [
+       "growth marketer"
+      ]
+     },
+     "role_families": [
+      "marketing_growth"
+     ],
+     "subject": "company",
+     "type": "hiring"
+    }
+   ],
+   "soft_preferences": {},
+   "target_entity": "company",
+   "version": "lead-mission-v1"
+  },
+  "lead_mission_version": "lead-mission-v1",
+  "lead_resume_checkpoint": {
+   "checkpoint_reason": "all_work_complete",
+   "companies": [
+    {
+     "brain": "not_started",
+     "company_key": "lab0.ai",
+     "company_name": "Lab0",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|lab0.ai|company_identity_resolution|apify_linkedin_company_search|v2:1a92c08541e7293dbb5fbb1d"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "lab0.ai",
+       "company_name": "Lab0",
+       "company_type": null,
+       "description": "Enterprise software implementation is broken,  and it has been for decades. \r\nEvery rollout, whether it's a traditional ERP or a new AI system, requires months of manual integration, configuration, and tuning done by armies of system integrators and forward-deployed engineers. \r\nLab0 builds agentic systems that automate this layer, compressing months-long implementations into weeks.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:5",
+       "external_source_id": "yc_memo23:31424",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 31424
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Spring 2026",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B",
+        "yc_team_size_self_reported": 5,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://lab0.ai"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "lab0.ai",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 1,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "lab0.ai",
+      "prequalified": {
+       "batch": "Spring 2026",
+       "best_tier": null,
+       "canonical_domain": "lab0.ai",
+       "company_key": "lab0.ai",
+       "eligible": false,
+       "exclusion": "insufficient_commercial",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "other",
+         "title": "Founding Product Marketer (AI-native)"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA",
+       "name": "Lab0",
+       "one_liner": "AI FDEs to make your B2B SaaS Go Live in Days, not Months",
+       "reasons": [
+        "team size 5 inside the target range",
+        "YC industry B2B"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 5,
+       "technical": 0,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "31424",
+       "yc_url": "https://www.ycombinator.com/companies/lab0"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "lab0.ai",
+       "confidence": 0.9,
+       "matched_roles": [
+        "Founding Product Marketer (AI-native)"
+       ],
+       "reasons": [
+        "Small US-based company describing a B2B SaaS product and hiring a Founding Product Marketer, which strongly matches an early-stage first-marketing-hire signal."
+       ],
+       "relevance": "relevant",
+       "signal_strength": 88
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Lab0",
+        "company_source_id": "yc_memo23:31424",
+        "description": null,
+        "job_id": "yc_memo23:109013",
+        "job_url": "https://www.ycombinator.com/companies/lab0/jobs/BEZKXau-founding-product-marketer-ai-native",
+        "location": "Bengaluru, KA, IN / Bengaluru, Karnataka, IN",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Founding Product Marketer (AI-native)",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "gojiberry.ai",
+     "company_name": "Gojiberry AI",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|gojiberry.ai|company_identity_resolution|apify_linkedin_company_search|v2:3b9ad8831aa8fdd38312acb4"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "gojiberry.ai",
+       "company_name": "Gojiberry AI",
+       "company_type": null,
+       "description": "Gojiberry is building the AI GTM team for B2B companies.\r\n\r\nWe start with outbound: Gojiberry finds buyers showing intent, enriches them, reaches out, follows up, handles replies, and books qualified meetings.\r\n\r\nCompanies use Gojiberry to replace the old way of doing outbound: buying tools, hiring SDRs & agencies, testing lists, writing messages, and guessing what works. Gojiberry turns it into one AI team that finds buyers and books meetings.\r\n\r\nEvery campaign makes Gojiberry smarter. It learns which buyers convert, which signals matter, which messages get replies, and which actions create revenue. Over time, Gojiberry uses what works across similar companies and industries to help every new customer get better results from day one.\r\n\r\nLong term, Gojiberry will become the system that finds every revenue opportunity and acts on it: outbound leads, website visitors, inbound leads, old CRM leads, replies, meetings, CRM updates, new campaign ideas, and account expansion.\r\n\r\nThe goal is to make every B2B company able to run a high-performing GTM team without hiring one.\r\n\r\nWe grew from $0 to $2.5M ARR in 10 months, are growing 30% MoM, profitable, and used by 2,000+ customers.\r\n\r\nCust\u2026[truncated]",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:7",
+       "external_source_id": "yc_memo23:31426",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA; Remote",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 31426
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Spring 2026",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B -> Sales",
+        "yc_team_size_self_reported": 7,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://www.gojiberry.ai"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "gojiberry.ai",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 5,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "gojiberry.ai",
+      "prequalified": {
+       "batch": "Spring 2026",
+       "best_tier": null,
+       "canonical_domain": "gojiberry.ai",
+       "company_key": "gojiberry.ai",
+       "eligible": false,
+       "exclusion": "insufficient_commercial",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "other",
+         "title": "Sales Development Representative"
+        },
+        {
+         "tier": "other",
+         "title": "Sales Development Representative"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA; Remote",
+       "name": "Gojiberry AI",
+       "one_liner": "AI Go-To-Market agents for B2B teams",
+       "reasons": [
+        "team size 7 inside the target range",
+        "YC industry B2B"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 7,
+       "technical": 0,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "31426",
+       "yc_url": "https://www.ycombinator.com/companies/gojiberry-ai"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "gojiberry.ai",
+       "confidence": 0.68,
+       "matched_roles": [],
+       "reasons": [
+        "Small US-based company serving B2B teams, but current openings are sales development roles rather than marketing; B2B SaaS positioning and growth-marketing intent are not sufficiently clear."
+       ],
+       "relevance": "uncertain",
+       "signal_strength": 42
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Gojiberry AI",
+        "company_source_id": "yc_memo23:31426",
+        "description": null,
+        "job_id": "yc_memo23:104629",
+        "job_url": "https://www.ycombinator.com/companies/gojiberry-ai/jobs/YHYS3Nx-sales-development-representative",
+        "location": "Remote",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Sales Development Representative",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Gojiberry AI",
+        "company_source_id": "yc_memo23:31426",
+        "description": null,
+        "job_id": "yc_memo23:102875",
+        "job_url": "https://www.ycombinator.com/companies/gojiberry-ai/jobs/jJIinfX-sales-development-representative",
+        "location": "Remote",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Sales Development Representative",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "fuseai.com",
+     "company_name": "Fuse AI",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|fuseai.com|company_identity_resolution|apify_linkedin_company_search|v2:7cb405772529e8b36dde74e6"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "fuseai.com",
+       "company_name": "Fuse AI",
+       "company_type": null,
+       "description": "FuseAI is the AI-native sales platform for modern revenue teams.\r\n\r\nBuilt for high-performance outbound, FuseAI consolidates your entire GTM stack - data, enrichment, multi-channel automation, real-time buying signals, and AI-driven execution  into one seamless system.\r\n\r\nWith powerful integrations and intelligent workflows, FuseAI doesn\u2019t just help you run campaigns. It turns every signal into pipeline, and every rep into a top performer.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:12",
+       "external_source_id": "yc_memo23:30301",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 30301
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Winter 2025",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B -> Sales",
+        "yc_team_size_self_reported": 12,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://fuseai.com"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "fuseai.com",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 0,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "fuseai.com",
+      "prequalified": {
+       "batch": "Winter 2025",
+       "best_tier": "A",
+       "canonical_domain": "fuseai.com",
+       "company_key": "fuseai.com",
+       "eligible": true,
+       "exclusion": null,
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "A",
+         "title": "Head of Growth Marketing"
+        },
+        {
+         "tier": "other",
+         "title": "Growth & Operations Summer Associate"
+        },
+        {
+         "tier": "technical",
+         "title": "Senior Frontend Engineer"
+        },
+        {
+         "tier": "technical",
+         "title": "Senior Software Engineer"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA",
+       "name": "Fuse AI",
+       "one_liner": "Agentic Sales Platform",
+       "reasons": [
+        "1 Tier-A commercial role(s)",
+        "team size 12 inside the target range",
+        "YC industry B2B"
+       ],
+       "score": 140,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": "Head of Growth Marketing",
+       "team_size": 12,
+       "technical": 2,
+       "tier_a": 1,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "30301",
+       "yc_url": "https://www.ycombinator.com/companies/fuse-ai"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "fuseai.com",
+       "confidence": 0.93,
+       "matched_roles": [
+        "Head of Growth Marketing",
+        "Growth & Operations Summer Associate"
+       ],
+       "reasons": [
+        "Small US-based company with an agentic sales platform and a Head of Growth Marketing opening, a direct and strong match to the requested hiring signal."
+       ],
+       "relevance": "relevant",
+       "signal_strength": 95
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Fuse AI",
+        "company_source_id": "yc_memo23:30301",
+        "description": null,
+        "job_id": "yc_memo23:100377",
+        "job_url": "https://www.ycombinator.com/companies/fuse-ai/jobs/O8rfux6-head-of-growth-marketing",
+        "location": "San Francisco, CA, US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Head of Growth Marketing",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Fuse AI",
+        "company_source_id": "yc_memo23:30301",
+        "description": null,
+        "job_id": "yc_memo23:80392",
+        "job_url": "https://www.ycombinator.com/companies/fuse-ai/jobs/8ulCBUf-growth-operations-summer-associate",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Growth & Operations Summer Associate",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Fuse AI",
+        "company_source_id": "yc_memo23:30301",
+        "description": null,
+        "job_id": "yc_memo23:80138",
+        "job_url": "https://www.ycombinator.com/companies/fuse-ai/jobs/AS9hfmv-senior-frontend-engineer",
+        "location": "Remote",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Senior Frontend Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Fuse AI",
+        "company_source_id": "yc_memo23:30301",
+        "description": null,
+        "job_id": "yc_memo23:75354",
+        "job_url": "https://www.ycombinator.com/companies/fuse-ai/jobs/hbFIiUp-senior-software-engineer",
+        "location": "San Francisco, CA, US / Remote (IN; BR; AR)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Senior Software Engineer",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "propelauth.com",
+     "company_name": "PropelAuth",
+     "completed_operations": [],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "not_started",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "propelauth.com",
+       "company_name": "PropelAuth",
+       "company_type": null,
+       "description": "PropelAuth provides the right level of authentication for all stages of a company. New startups can use our hosted pre-built UIs which provide the simplest possible integration. Out of the box, our customers immediately have the same auth experience as large tech companies like Slack. As those startups grow, they can use our APIs and component libraries to pull aspects of the experience into their product.\r\n\r\nMore than just authentication, we will also provide useful functions tied to a \"user\" or \"organization\", like analytics, billing/subscriptions, referral programs, etc.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:5",
+       "external_source_id": "yc_memo23:25946",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA; Remote",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 25946
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Winter 2022",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B -> Engineering, Product and Design",
+        "yc_team_size_self_reported": 5,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://www.propelauth.com"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": null,
+      "investigation_rank": 9007199254740991,
+      "investigation_state": "excluded_permanently",
+      "mission_evaluation": null,
+      "prequal_key": "propelauth.com",
+      "prequalified": {
+       "batch": "Winter 2022",
+       "best_tier": null,
+       "canonical_domain": "propelauth.com",
+       "company_key": "propelauth.com",
+       "eligible": false,
+       "exclusion": "technical_only",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "technical",
+         "title": "Fullstack Engineer"
+        },
+        {
+         "tier": "other",
+         "title": "Support Engineer"
+        },
+        {
+         "tier": "technical",
+         "title": "Backend Engineer"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA; Remote",
+       "name": "PropelAuth",
+       "one_liner": "Team-based authentication for B2B SaaS",
+       "reasons": [
+        "team size 5 inside the target range",
+        "YC industry B2B",
+        "2 technical role(s) only \u2014 not commercial evidence"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 5,
+       "technical": 2,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "25946",
+       "yc_url": "https://www.ycombinator.com/companies/propelauth"
+      },
+      "shortlisted": false,
+      "triage": {
+       "company_key": "propelauth.com",
+       "confidence": 0.98,
+       "matched_roles": [],
+       "reasons": [
+        "US-based B2B SaaS company, but its listed openings are exclusively engineering and support roles with no apparent marketing or growth hiring."
+       ],
+       "relevance": "irrelevant",
+       "signal_strength": 5
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "PropelAuth",
+        "company_source_id": "yc_memo23:25946",
+        "description": null,
+        "job_id": "yc_memo23:105458",
+        "job_url": "https://www.ycombinator.com/companies/propelauth/jobs/gHlDUgm-fullstack-engineer",
+        "location": "US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Fullstack Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "PropelAuth",
+        "company_source_id": "yc_memo23:25946",
+        "description": null,
+        "job_id": "yc_memo23:105457",
+        "job_url": "https://www.ycombinator.com/companies/propelauth/jobs/oubM4C4-support-engineer",
+        "location": "US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Support Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "PropelAuth",
+        "company_source_id": "yc_memo23:25946",
+        "description": null,
+        "job_id": "yc_memo23:105456",
+        "job_url": "https://www.ycombinator.com/companies/propelauth/jobs/8W9NMOq-backend-engineer",
+        "location": "US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Backend Engineer",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "safetykit.com",
+     "company_name": "SafetyKit",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|safetykit.com|company_identity_resolution|apify_linkedin_company_search|v2:3691087b49d3bd0bdf2c6316"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "safetykit.com",
+       "company_name": "SafetyKit",
+       "company_type": null,
+       "description": "SafetyKit's AI agents do the dirty work for big tech and finance companies so humans don't have to.\r\n\r\nToday companies rely on armies of low-paid outsourced humans to protect their platforms from fraud, harassment, and crime. It\u2019s super important work, but the jobs are difficult and sometimes traumatizing, and it\u2019s impossible to keep up. Our mission is to end this manual toil.\r\n\r\nWe learned this domain first-hand at Stripe and Airbnb, where first we built software for human reviewers, and then built models to replace them.\r\n\r\nWe\u2019re a group of engineers from Stripe, Meta, Netflix, MIT, and Princeton that love language models and unironically love B2B SaaS. We know the economy is going to be rearranged over the next 4 years and we want to be in the driver\u2019s seat.\r\n\r\nWe build vertical AI that works and have some of the world\u2019s largest companies as paying customers. Patreon, Eventbrite, Upwork, Character.ai, Substack, Faire, along with a $10B+ marketplace, a $100B+ payments company, and more rely on SafetyKit in production.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:10",
+       "external_source_id": "yc_memo23:29000",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 29000
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Summer 2023",
+        "yc_stage": "Growth",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B",
+        "yc_team_size_self_reported": 10,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://www.safetykit.com"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "safetykit.com",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 2,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "safetykit.com",
+      "prequalified": {
+       "batch": "Summer 2023",
+       "best_tier": null,
+       "canonical_domain": "safetykit.com",
+       "company_key": "safetykit.com",
+       "eligible": false,
+       "exclusion": "technical_only",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "other",
+         "title": "Account Executive"
+        },
+        {
+         "tier": "other",
+         "title": "Growth Lead"
+        },
+        {
+         "tier": "other",
+         "title": "Business Development Representative (BDR)"
+        },
+        {
+         "tier": "technical",
+         "title": "Full Stack Engineer, Intern Summer 2026"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA",
+       "name": "SafetyKit",
+       "one_liner": "AI agents for risk, compliance, and safety",
+       "reasons": [
+        "team size 10 inside the target range",
+        "YC industry B2B",
+        "1 technical role(s) only \u2014 not commercial evidence"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 10,
+       "technical": 1,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "29000",
+       "yc_url": "https://www.ycombinator.com/companies/safetykit"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "safetykit.com",
+       "confidence": 0.84,
+       "matched_roles": [
+        "Growth Lead"
+       ],
+       "reasons": [
+        "Small US-based B2B software company with a Growth Lead opening, directly aligned with hiring an early growth marketer."
+       ],
+       "relevance": "relevant",
+       "signal_strength": 82
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "SafetyKit",
+        "company_source_id": "yc_memo23:29000",
+        "description": null,
+        "job_id": "yc_memo23:89716",
+        "job_url": "https://www.ycombinator.com/companies/safetykit/jobs/HBtkq9l-account-executive",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Account Executive",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "SafetyKit",
+        "company_source_id": "yc_memo23:29000",
+        "description": null,
+        "job_id": "yc_memo23:88981",
+        "job_url": "https://www.ycombinator.com/companies/safetykit/jobs/fg68qhB-growth-lead",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Growth Lead",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "SafetyKit",
+        "company_source_id": "yc_memo23:29000",
+        "description": null,
+        "job_id": "yc_memo23:88979",
+        "job_url": "https://www.ycombinator.com/companies/safetykit/jobs/7FWTRS8-business-development-representative-bdr",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Business Development Representative (BDR)",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "SafetyKit",
+        "company_source_id": "yc_memo23:29000",
+        "description": null,
+        "job_id": "yc_memo23:75704",
+        "job_url": "https://www.ycombinator.com/companies/safetykit/jobs/eQpUzRD-full-stack-engineer-intern-summer-2026",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Full Stack Engineer, Intern Summer 2026",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "every.io",
+     "company_name": "Every",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|every.io|company_identity_resolution|apify_linkedin_company_search|v2:3b4f1215c60a43dddc890026"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "every.io",
+       "company_name": "Every",
+       "company_type": null,
+       "description": "Setup your entire back-office in one place.\r\n- Banking: Bank Accounts, Corporate Cards, Payments, Treasury\r\n- Bookkeeping & Tax: Keep you books in order and file income taxes at the end of the year\r\n- Payroll and Benefits: US Payroll in 50 states, US Contractors, International Contractors. Health, Vision, Dental, 401k Benefits",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:12",
+       "external_source_id": "yc_memo23:28817",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA; Remote",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 28817
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Summer 2023",
+        "yc_stage": "Growth",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B",
+        "yc_team_size_self_reported": 12,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://every.io"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "every.io",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 7,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "every.io",
+      "prequalified": {
+       "batch": "Summer 2023",
+       "best_tier": null,
+       "canonical_domain": "every.io",
+       "company_key": "every.io",
+       "eligible": false,
+       "exclusion": "insufficient_commercial",
+       "has_open_roles": false,
+       "identity_confidence": "domain_exact",
+       "jobs": [],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA; Remote",
+       "name": "Every",
+       "one_liner": "Banking + Payroll/Benefits + Bookkeeping + Tax in one place",
+       "reasons": [
+        "team size 12 inside the target range",
+        "YC industry B2B"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 12,
+       "technical": 0,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "28817",
+       "yc_url": "https://www.ycombinator.com/companies/every"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "every.io",
+       "confidence": 0.62,
+       "matched_roles": [],
+       "reasons": [
+        "US-based company with a potentially software-based business model, but it has no open roles and the description does not establish B2B SaaS or a marketing hire."
+       ],
+       "relevance": "uncertain",
+       "signal_strength": 18
+      },
+      "yc_open_jobs": []
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "nango.dev",
+     "company_name": "Nango",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|nango.dev|company_identity_resolution|apify_linkedin_company_search|v2:61cbb548385fe1f2032a3068"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "nango.dev",
+       "company_name": "Nango",
+       "company_type": null,
+       "description": "Customers expect your SaaS to integrate with all the software they use.\r\n\r\nWith Nango, you ship integrations your customers love, fast.\r\n\r\nLeverage hundreds of pre-built integrations and unlimited customization.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:6",
+       "external_source_id": "yc_memo23:27728",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA; Remote",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 27728
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Winter 2023",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B -> Engineering, Product and Design",
+        "yc_team_size_self_reported": 6,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://nango.dev"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "nango.dev",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 6,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "nango.dev",
+      "prequalified": {
+       "batch": "Winter 2023",
+       "best_tier": null,
+       "canonical_domain": "nango.dev",
+       "company_key": "nango.dev",
+       "eligible": false,
+       "exclusion": "technical_only",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "other",
+         "title": "Product Manager (Founding)"
+        },
+        {
+         "tier": "other",
+         "title": "GTM Engineer (Founding)"
+        },
+        {
+         "tier": "other",
+         "title": "Enterprise Account Executive (Founding)"
+        },
+        {
+         "tier": "other",
+         "title": "Head of Sales"
+        },
+        {
+         "tier": "other",
+         "title": "Developer Relations (Founding)"
+        },
+        {
+         "tier": "other",
+         "title": "Founder&#x27;s Associate"
+        },
+        {
+         "tier": "other",
+         "title": "Developer Content Engineer"
+        },
+        {
+         "tier": "technical",
+         "title": "Staff Backend Engineer (Remote)"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA; Remote",
+       "name": "Nango",
+       "one_liner": "A single API for all your integrations",
+       "reasons": [
+        "team size 6 inside the target range",
+        "YC industry B2B",
+        "1 technical role(s) only \u2014 not commercial evidence"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 6,
+       "technical": 1,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "27728",
+       "yc_url": "https://www.ycombinator.com/companies/nango"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "nango.dev",
+       "confidence": 0.66,
+       "matched_roles": [
+        "Developer Relations (Founding)",
+        "Developer Content Engineer"
+       ],
+       "reasons": [
+        "Small US-based developer infrastructure company with several founding GTM roles, but no clearly identified growth, product, content, demand-generation, or lifecycle marketing opening."
+       ],
+       "relevance": "uncertain",
+       "signal_strength": 35
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:107667",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/P3Ecpd6-product-manager-founding",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Product Manager (Founding)",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:107198",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/6SxwHsi-gtm-engineer-founding",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "GTM Engineer (Founding)",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:107170",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/0sE9rKq-enterprise-account-executive-founding",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Enterprise Account Executive (Founding)",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:107169",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/p3dm67x-head-of-sales",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Head of Sales",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:92450",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/oiAdChY-developer-relations-founding",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Developer Relations (Founding)",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:88844",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/HH2gC4J-founder-s-associate",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Founder&#x27;s Associate",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:85029",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/oO8roCC-developer-content-engineer",
+        "location": "Remote",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Developer Content Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Nango",
+        "company_source_id": "yc_memo23:27728",
+        "description": null,
+        "job_id": "yc_memo23:73764",
+        "job_url": "https://www.ycombinator.com/companies/nango/jobs/KplJ2YB-staff-backend-engineer-remote",
+        "location": "GB / FR / US / BR / CA / ES / PT / DE / AT / CH / BE / NL / DK / SE / NO / FI / GL / GR / IT / PL / RO / HU / SK / CZ / Remote (GB; FR; US; BR; CA; ES; PT; DE; AT; CH; BE; NL; DK; SE; NO; FI; GL; GR; IT; PL; RO; HU; SK; CZ)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Staff Backend Engineer (Remote)",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "pasito.ai",
+     "company_name": "Pasito",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|pasito.ai|company_identity_resolution|apify_linkedin_company_search|v2:f1f253df1b8500d057ad7107"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "pasito.ai",
+       "company_name": "Pasito",
+       "company_type": null,
+       "description": "Pasito builds AI agents for insurance and benefits\u2014transforming how benefits are built, delivered, and experienced.\r\n\r\nOur Core AI ingests and understands plan documents and employee census data to build structured benefit intelligence.\r\n\r\nOur Engagement AI Agents orchestrate complex workflows\u2014powering decision support, plan comparisons, guides, highlight sheets, microsites, communications, claims reminders, RFP management, document audits, translations, and more\u2014all from a single intelligent database.\r\n\r\nWith Pasito, carriers, brokers, and benefits vendors eliminate manual work, accelerate growth, and deliver the personalized benefits experiences employees deserve\u2014all powered by compliant, scalable AI systems.\r\n\r\nBacked by Y Combinator, Core Innovation Capital, and other leading investors.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:20",
+       "external_source_id": "yc_memo23:26713",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "New York City, NY, USA; Remote",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 26713
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Summer 2022",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "Fintech -> Insurance",
+        "yc_team_size_self_reported": 20,
+        "yc_top_company": false,
+        "yc_vertical": "Fintech"
+       },
+       "website": "https://pasito.ai"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "pasito.ai",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 3,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "pasito.ai",
+      "prequalified": {
+       "batch": "Summer 2022",
+       "best_tier": "A",
+       "canonical_domain": "pasito.ai",
+       "company_key": "pasito.ai",
+       "eligible": true,
+       "exclusion": null,
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "A",
+         "title": "Product Marketing Manager"
+        },
+        {
+         "tier": "technical",
+         "title": "Fullstack Engineer - UI"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "New York City, NY, USA; Remote",
+       "name": "Pasito",
+       "one_liner": "AI agents for insurance and benefits",
+       "reasons": [
+        "1 Tier-A commercial role(s)",
+        "team size 20 inside the target range"
+       ],
+       "score": 130,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": "Product Marketing Manager",
+       "team_size": 20,
+       "technical": 1,
+       "tier_a": 1,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "26713",
+       "yc_url": "https://www.ycombinator.com/companies/pasito"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "pasito.ai",
+       "confidence": 0.86,
+       "matched_roles": [
+        "Product Marketing Manager"
+       ],
+       "reasons": [
+        "US-based small company serving the insurance and benefits market with a Product Marketing Manager opening, matching the marketing-hiring intent; seed stage is not verified from discovery data."
+       ],
+       "relevance": "relevant",
+       "signal_strength": 78
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Pasito",
+        "company_source_id": "yc_memo23:26713",
+        "description": null,
+        "job_id": "yc_memo23:100843",
+        "job_url": "https://www.ycombinator.com/companies/pasito/jobs/ceFAiig-product-marketing-manager",
+        "location": "US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Product Marketing Manager",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Pasito",
+        "company_source_id": "yc_memo23:26713",
+        "description": null,
+        "job_id": "yc_memo23:88004",
+        "job_url": "https://www.ycombinator.com/companies/pasito/jobs/YOwfhsH-fullstack-engineer-ui",
+        "location": "US / AR / BR / CO / MX / Remote (US; AR; BR; CO; MX)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Fullstack Engineer - UI",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "furtherai.com",
+     "company_name": "FurtherAI",
+     "completed_operations": [
+      "lead-resume-state-v1|e8af257d-4c42-4fc2-9d62-037cdfac27c4|4250f181-b6ae-467a-bc46-1abd39ddeccb|furtherai.com|company_identity_resolution|apify_linkedin_company_search|v2:0839b38d0ad5007af2ac43a6"
+     ],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "unresolved",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "furtherai.com",
+       "company_name": "FurtherAI",
+       "company_type": null,
+       "description": "FurtherAI is a domain-specific AI for the insurance industry. Our AI Assistant automates complex workflows like submission intake, policy comparisons, and underwriting audits - making teams faster, smarter, and more efficient.\r\n\r\nLeading insurers, reinsurers, MGAs, and brokers rely on FurtherAI to drive better decisions at scale. Backed by top investors including Y Combinator, Nexus, South Park Commons, and Converge, FurtherAI supports customers writing over $15B in premiums across all 50 states.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:36",
+       "external_source_id": "yc_memo23:29290",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 29290
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Winter 2024",
+        "yc_stage": "Growth",
+        "yc_status": "Active",
+        "yc_subvertical": "B2B",
+        "yc_team_size_self_reported": 36,
+        "yc_top_company": false,
+        "yc_vertical": "B2B"
+       },
+       "website": "https://www.furtherai.com"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": {
+       "ambiguous_candidates": [],
+       "company_key": "furtherai.com",
+       "evidence": [
+        "no_lookup_results"
+       ],
+       "linkedin_company_url": null,
+       "status": "unresolved"
+      },
+      "investigation_rank": 4,
+      "investigation_state": "investigated",
+      "mission_evaluation": null,
+      "prequal_key": "furtherai.com",
+      "prequalified": {
+       "batch": "Winter 2024",
+       "best_tier": null,
+       "canonical_domain": "furtherai.com",
+       "company_key": "furtherai.com",
+       "eligible": false,
+       "exclusion": "technical_only",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "other",
+         "title": "Executive Assistant & Operations Lead"
+        },
+        {
+         "tier": "other",
+         "title": "Social Media Specialist"
+        },
+        {
+         "tier": "other",
+         "title": "Solutions Engineer"
+        },
+        {
+         "tier": "other",
+         "title": "Create your own role"
+        },
+        {
+         "tier": "other",
+         "title": "Marketing Generalist"
+        },
+        {
+         "tier": "technical",
+         "title": "Software Engineer - Frontend [India]"
+        },
+        {
+         "tier": "technical",
+         "title": "Founding Product Designer"
+        },
+        {
+         "tier": "other",
+         "title": "Customer Success Manager"
+        },
+        {
+         "tier": "technical",
+         "title": "Forward Deployed Engineer"
+        },
+        {
+         "tier": "other",
+         "title": "Enterprise Account Executive"
+        },
+        {
+         "tier": "technical",
+         "title": "Frontend Engineer - Web"
+        },
+        {
+         "tier": "technical",
+         "title": "Senior Software Engineer - Backend/Fullstack"
+        },
+        {
+         "tier": "other",
+         "title": "Sales Development Representative"
+        },
+        {
+         "tier": "technical",
+         "title": "Software Engineer - Backend/Fullstack [India]"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA",
+       "name": "FurtherAI",
+       "one_liner": "AI Workforce for the Insurance Industry",
+       "reasons": [
+        "team size 36 inside the target range",
+        "YC industry B2B",
+        "6 technical role(s) only \u2014 not commercial evidence"
+       ],
+       "score": 40,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 36,
+       "technical": 6,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "29290",
+       "yc_url": "https://www.ycombinator.com/companies/furtherai"
+      },
+      "shortlisted": true,
+      "triage": {
+       "company_key": "furtherai.com",
+       "confidence": 0.76,
+       "matched_roles": [
+        "Marketing Generalist",
+        "Social Media Specialist"
+       ],
+       "reasons": [
+        "US-based B2B insurance AI company with Marketing Generalist and Social Media Specialist openings, but its reported 36 employees and broad hiring footprint make seed stage and first-marketer status unclear."
+       ],
+       "relevance": "uncertain",
+       "signal_strength": 58
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:86524",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/5o9123v-executive-assistant-operations-lead",
+        "location": "San Francisco",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Executive Assistant & Operations Lead",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:86523",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/CqUsnaz-social-media-specialist",
+        "location": "San Francisco",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Social Media Specialist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:86521",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/vi15Nwd-solutions-engineer",
+        "location": "San Francisco",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Solutions Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:86518",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/aEVCp9Y-create-your-own-role",
+        "location": "San Francisco",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Create your own role",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:86029",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/Y70e7Jk-marketing-generalist",
+        "location": "San Francisco",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Marketing Generalist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:81356",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/lsRlYUA-software-engineer-frontend-india",
+        "location": "IN / Remote (IN)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Software Engineer - Frontend [India]",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:80903",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/rVO1Ds6-founding-product-designer",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Founding Product Designer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:78629",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/FjHA8gt-customer-success-manager",
+        "location": "San Francisco, CA, US / Remote (US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Customer Success Manager",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:77473",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/2uFhWmi-forward-deployed-engineer",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Forward Deployed Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:74863",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/kdIIjL9-enterprise-account-executive",
+        "location": "San Francisco, CA, US / Remote (Chicago, IL, US; New York, NY, US)",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Enterprise Account Executive",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:72438",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/zrN2j29-frontend-engineer-web",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Frontend Engineer - Web",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:72338",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/sGJen8v-senior-software-engineer-backend-fullstack",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Senior Software Engineer - Backend/Fullstack",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:70897",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/G6CMA8T-sales-development-representative",
+        "location": "San Francisco, CA, US",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Sales Development Representative",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "FurtherAI",
+        "company_source_id": "yc_memo23:29290",
+        "description": null,
+        "job_id": "yc_memo23:68037",
+        "job_url": "https://www.ycombinator.com/companies/furtherai/jobs/YZZvimn-software-engineer-backend-fullstack-india",
+        "location": "Remote",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:04:48.821Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Software Engineer - Backend/Fullstack [India]",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    },
+    {
+     "brain": "not_started",
+     "company_key": "poly.app",
+     "company_name": "Poly",
+     "completed_operations": [],
+     "enrichment": "not_required",
+     "founder": "not_eligible",
+     "hiring": "not_started",
+     "identity": "not_started",
+     "linkedin_company_url": null,
+     "snapshot": {
+      "brain": null,
+      "company": {
+       "canonical_domain": "poly.app",
+       "company_name": "Poly",
+       "company_type": null,
+       "description": "A personal cloud storage platform that's so good, it'll replace Finder / File Explorer on your desktop. Find anything with multi-modal, natural language search. Browse with a lightning fast interface that feels just like native. Organize, tag, view, edit, share, and more.",
+       "employee_count": null,
+       "employee_range_advisory": "yc_self_reported:3",
+       "external_source_id": "yc_memo23:26480",
+       "field_trust": {
+        "canonical_domain": "transformed",
+        "company_name": "direct",
+        "description": "alias",
+        "employee_range_advisory": "unsafe",
+        "geography": "alias",
+        "hiring_status": "direct",
+        "startup_evidence": "direct",
+        "website": "direct"
+       },
+       "geography": "San Francisco, CA, USA",
+       "hiring_status": true,
+       "industry_ids": [],
+       "linkedin_company_url": null,
+       "missing_fields": [
+        "linkedin_company_url:absent_from_actor_schema",
+        "employee_count:yc_team_size_is_self_reported_not_exact",
+        "provider_industry:yc_vertical_is_not_an_industry"
+       ],
+       "provider_industry": null,
+       "raw_ref": {
+        "actor_key": "apify_yc_companies_memo23",
+        "source_id": 26480
+       },
+       "source_provenance": "memo23/y-combinator-scraper",
+       "startup_evidence": {
+        "source": "y_combinator",
+        "yc_batch": "Summer 2022",
+        "yc_stage": "Early",
+        "yc_status": "Active",
+        "yc_subvertical": "Consumer",
+        "yc_team_size_self_reported": 3,
+        "yc_top_company": false,
+        "yc_vertical": "Consumer"
+       },
+       "website": "https://poly.app"
+      },
+      "enriched": null,
+      "enrichment_outcome": "not_attempted",
+      "hiring_assessment": null,
+      "hiring_jobs": [],
+      "identity": null,
+      "investigation_rank": 9007199254740991,
+      "investigation_state": "excluded_permanently",
+      "mission_evaluation": null,
+      "prequal_key": "poly.app",
+      "prequalified": {
+       "batch": "Summer 2022",
+       "best_tier": null,
+       "canonical_domain": "poly.app",
+       "company_key": "poly.app",
+       "eligible": false,
+       "exclusion": "technical_only",
+       "has_open_roles": true,
+       "identity_confidence": "domain_exact",
+       "jobs": [
+        {
+         "tier": "technical",
+         "title": "Platform Engineer \u2014 Generalist"
+        },
+        {
+         "tier": "other",
+         "title": "AI Research Engineer"
+        },
+        {
+         "tier": "technical",
+         "title": "Platform Engineer \u2014 AI Infra Specialist"
+        },
+        {
+         "tier": "technical",
+         "title": "Platform Engineer \u2014 Infra / Reliability Specialist"
+        },
+        {
+         "tier": "technical",
+         "title": "Platform Engineer \u2014 Web Frontend Specialist"
+        },
+        {
+         "tier": "technical",
+         "title": "Platform Engineer \u2014 Desktop / OS Specialist"
+        }
+       ],
+       "linkedin_identity_status": "unresolved",
+       "locations": "San Francisco, CA, USA",
+       "name": "Poly",
+       "one_liner": "Intelligent Personal Cloud Storage",
+       "reasons": [
+        "team size 3 inside the target range",
+        "5 technical role(s) only \u2014 not commercial evidence"
+       ],
+       "score": 30,
+       "size_fit": true,
+       "size_status": "in_range",
+       "strongest_signal": null,
+       "team_size": 3,
+       "technical": 5,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_id": "26480",
+       "yc_url": "https://www.ycombinator.com/companies/poly"
+      },
+      "shortlisted": false,
+      "triage": {
+       "company_key": "poly.app",
+       "confidence": 0.98,
+       "matched_roles": [],
+       "reasons": [
+        "The company describes itself as an intelligent personal cloud storage product, which appears consumer-focused rather than B2B SaaS.",
+        "Its open roles are all engineering positions, with no growth, marketing, demand generation, or related role indicating it is hiring a first growth marketer.",
+        "Although the US location and very small team are consistent with some constraints, the available evidence plainly conflicts with the required B2B and hiring-role signals."
+       ],
+       "relevance": "irrelevant",
+       "signal_strength": 5
+      },
+      "yc_open_jobs": [
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:69126",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/cbKLaWT-platform-engineer-generalist",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Platform Engineer \u2014 Generalist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:69125",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/q4bpvDS-ai-research-engineer",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "AI Research Engineer",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:69124",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/ivAeIv3-platform-engineer-ai-infra-specialist",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Platform Engineer \u2014 AI Infra Specialist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:69123",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/nHMeghI-platform-engineer-infra-reliability-specialist",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Platform Engineer \u2014 Infra / Reliability Specialist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:69121",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/mcPPIl6-platform-engineer-web-frontend-specialist",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Platform Engineer \u2014 Web Frontend Specialist",
+        "workplace_mode": null
+       },
+       {
+        "company_linkedin_url": null,
+        "company_name": "Poly",
+        "company_source_id": "yc_memo23:26480",
+        "description": null,
+        "job_id": "yc_memo23:55727",
+        "job_url": "https://www.ycombinator.com/companies/poly/jobs/L4ObRgn-platform-engineer-desktop-os-specialist",
+        "location": "San Francisco, CA",
+        "missing_fields": [
+         "posted_date:actor_returns_relative_postedAgo_only",
+         "description:absent_from_openJobs",
+         "workplace_mode:absent_from_openJobs"
+        ],
+        "posted_date": null,
+        "retrieved_at": "2026-09-13T16:19:17.458Z",
+        "source": "memo23/y-combinator-scraper",
+        "title": "Platform Engineer \u2014 Desktop / OS Specialist",
+        "workplace_mode": null
+       }
+      ]
+     },
+     "updated_at": "2026-09-13T16:20:21.483Z"
+    }
+   ],
+   "completed_company_keys": [
+    "lab0.ai",
+    "gojiberry.ai",
+    "fuseai.com",
+    "safetykit.com",
+    "every.io",
+    "nango.dev",
+    "pasito.ai",
+    "furtherai.com"
+   ],
+   "continuation_required": true,
+   "deadline_at": "2026-09-13T16:24:06.758Z",
+   "discovery_source_state": {
+    "admitted": 33,
+    "available_admitted": 1,
+    "exhausted": false,
+    "pages_taken": {
+     "apify_yc_companies_memo23": 1
+    },
+    "pool_target": 8,
+    "raw_rows": 33,
+    "sources_attempted": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_memo23"
+    ],
+    "stop_reason": "pass_limit"
+   },
+   "last_completed_capability": "startup_company_discovery",
+   "next_pending_capability": "company_identity_resolution",
+   "pending_company_keys": [
+    "propelauth.com",
+    "poly.app"
+   ],
+   "time_remaining_at_checkpoint_ms": 224763,
+   "version": "lead-resume-state-v1"
+  },
+  "lead_resume_lineage_root": "4250f181-b6ae-467a-bc46-1abd39ddeccb",
+  "lead_runtime": {
+   "contract": {
+    "executor_version": "v1",
+    "ok": true,
+    "planner_version": "v1",
+    "same_build": true
+   },
+   "executor_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "run-agent",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "executor"
+   },
+   "intelligence_mode": "new_architecture",
+   "planner_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "lead-mission-compiler",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "planner"
+   }
+  },
+  "legacy_loop_containment": {
+   "reachable": false,
+   "reason": "mission_graph_excludes_job_discovery:startup_company_discovery"
+  },
+  "mission_authority": "lead_mission_v1",
+  "mission_evaluation_observability": {
+   "budget_exhausted": false,
+   "calls_allowed": 10,
+   "calls_made": 0,
+   "calls_remaining": 10,
+   "cap": 20,
+   "companies_evaluated": 0,
+   "enabled": true,
+   "model": "openai/gpt-5.6-luna",
+   "reason": "enabled",
+   "shortlist_size": 10
+  },
+  "mission_funnel": {
+   "stages": [
+    {
+     "advanced": 10,
+     "decided": 0,
+     "detail": {
+      "prequalified": 10,
+      "unique_companies": 10
+     },
+     "entered": 10,
+     "excluded": 0,
+     "stage": "discovery",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 8,
+     "decided": 0,
+     "detail": {
+      "irrelevant": 2,
+      "not_triaged": 0,
+      "relevant": 4,
+      "uncertain": 4
+     },
+     "entered": 10,
+     "excluded": 2,
+     "stage": "mission_intelligence",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 8,
+     "decided": 0,
+     "detail": {
+      "awaiting_investigation": 0,
+      "selected": 8
+     },
+     "entered": 8,
+     "excluded": 0,
+     "stage": "smart_shortlist",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 8,
+     "detail": {
+      "blocked": 0,
+      "mismatch": 0,
+      "not_attempted": 2,
+      "resolved": 0,
+      "unresolved": 8
+     },
+     "entered": 8,
+     "excluded": 0,
+     "stage": "identity_resolution",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "deferred": 0,
+      "empty": 0,
+      "not_attempted": 0,
+      "provider_error": 0,
+      "success": 0,
+      "without_evidence": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "enrichment",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "deadline_deferred": 0,
+      "reached": 0,
+      "signal_not_established": 0,
+      "signal_refuted": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "company_brain",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "evaluated": 0,
+      "not_evaluated": 0,
+      "qualified": 0,
+      "rejected": 0,
+      "unknown": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "mission_evaluator",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "not_written": 0,
+      "written": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "persistence",
+     "unaccounted": 0,
+     "withheld": 0
+    }
+   ],
+   "summary": {
+    "awaiting_investigation": 0,
+    "discovered": 10,
+    "evaluated": 0,
+    "investigated": 8,
+    "never_investigated": 2,
+    "qualified": 0,
+    "rejected": 0,
+    "unknown": 0,
+    "withheld": 0
+   },
+   "version": "mission-funnel-v1"
+  },
+  "mission_triage_observability": {
+   "batch_size": 25,
+   "batches_allowed": 1,
+   "batches_made": 1,
+   "cap": 6,
+   "companies_triaged": 10,
+   "enabled": true,
+   "irrelevant": 2,
+   "model": "openai/gpt-5.6-luna",
+   "pool_size": 10,
+   "reason": "enabled",
+   "relevant": 4,
+   "uncertain": 4
+  },
+  "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+  "output": "Company-first sourcing (round_limit_reached): 0/1 eligible leads across 0 round(s); 0 verified companies. the legacy sourcing loop is disabled for this run; the capability engine owns sourcing and this loop reports no rounds of its own",
+  "paid_execution_preflight": {
+   "blocked": [],
+   "entry_capability": "startup_company_discovery",
+   "estimated_cost_units": 7,
+   "feasibility": {
+    "declared_gaps": [],
+    "mission_cohort": "y_combinator",
+    "ok": true,
+    "outputs": [
+     {
+      "by_capability": "company_brain_qualification",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      },
+      "message": "Produced by company_brain_qualification.",
+      "requirement": "output:qualified_companies",
+      "status": "satisfied"
+     }
+    ],
+    "refusals": [],
+    "requirements": [
+     {
+      "by_capability": "startup_company_discovery",
+      "detail": {
+       "event": "hiring",
+       "mission_cohort": "y_combinator",
+       "subject": "company"
+      },
+      "message": "Established by startup_company_discovery.",
+      "requirement": "hiring growth marketer",
+      "status": "satisfied"
+     }
+    ],
+    "version": "request-feasibility-v1"
+   },
+   "first_capability": "startup_company_discovery",
+   "first_provider": "apify_yc_companies_memo23",
+   "first_provider_input": {
+    "batch": [
+     "All Batches"
+    ],
+    "enrichEmails": false,
+    "industries": [
+     "B2B"
+    ],
+    "isHiring": true,
+    "maxEmployeeSize": "500",
+    "maxItems": 10,
+    "minEmployeeSize": "10+",
+    "mode": "companies",
+    "nonprofit": false,
+    "queries": [],
+    "regions": [
+     "United States of America"
+    ],
+    "scrapeFounderDetails": false,
+    "scrapeOpenJobs": true,
+    "topCompany": false
+   },
+   "first_provider_input_valid": true,
+   "input_errors": [],
+   "mission_authority": "lead_mission_v1",
+   "ok": true,
+   "ordered_capabilities": [
+    "startup_company_discovery",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+   ],
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+   "version": "paid-execution-preflight-v1"
+  },
+  "qualified_lead_run_context": {
+   "company_stage": "startup_or_small_team",
+   "company_vertical": "b2b_saas",
+   "count_entity": "contact_ready_lead",
+   "decision_maker_seniority": [],
+   "eligible_leads": 0,
+   "execution_mode": "company_first",
+   "hiring_seniority": [],
+   "job_family": null,
+   "job_titles": [],
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US that are hiring their first growth marketer.",
+   "parsed_intent_summary": "hiring=unclassified; department=unknown; hiring_seniority=unspecified; stage=first_hire; decision_maker=none; decision_maker_seniority=none; vertical=b2b_saas; geography=United States",
+   "planner_source": null,
+   "planner_status": null,
+   "provider_query_keywords": [],
+   "provider_query_location": "United States",
+   "quota_policy": "contact_only",
+   "remaining_leads": 1,
+   "requested_lead_count": 1,
+   "requested_leads": 1,
+   "requested_person_roles": [],
+   "round_number": null,
+   "terminal_status": "round_limit_reached",
+   "version": "qualified-lead-run-context-1.0.0",
+   "workflow_kind": "qualified_lead_sourcing"
+  },
+  "routing": {
+   "company_first": true,
+   "company_gate_required": true,
+   "execution_mode": "company_first",
+   "output_type": "qualified_companies",
+   "target_entity": "company"
+  },
+  "run_outcome": {
+   "completed_capabilities": [
+    "startup_company_discovery"
+   ],
+   "continuation": {
+    "reason": null,
+    "required": true,
+    "resumable": true
+   },
+   "funnel": {
+    "cited_rows": 0,
+    "deferred": 0,
+    "discovered": 10,
+    "enriched": 0,
+    "excluded": [
+     {
+      "count": 5,
+      "reason": "technical_only"
+     },
+     {
+      "count": 3,
+      "reason": "insufficient_commercial"
+     }
+    ],
+    "hiring_evidence_unavailable": 0,
+    "hiring_refuted": 0,
+    "hiring_verified": 0,
+    "identity_resolved": 0,
+    "shortlisted": 8
+   },
+   "gaps": [],
+   "persistence": {
+    "leads_written": 0,
+    "signals_written": 0
+   },
+   "qualification": {
+    "eligible": 2,
+    "evaluated": 0,
+    "not_reached": 2,
+    "not_reached_reason": "the run stopped first",
+    "qualified": 0,
+    "rejected": 0
+   },
+   "requested": 1,
+   "spend": {
+    "credits_charged": 19,
+    "provider_calls": 20,
+    "reused_operations": 0,
+    "unsettled_operations": 0,
+    "usd_reported": 0.059
+   },
+   "state": "PARTIALLY_SATISFIED",
+   "version": "run-outcome-v1"
+  },
+  "semantic_classification_status": {
+   "calls_allowed": 10,
+   "consulted_by_engine": true,
+   "enabled": true,
+   "reason": "enabled"
+  },
+  "sequential_source_execution": {
+   "capabilities_accepted": [],
+   "capabilities_requested": [],
+   "completed_steps": [],
+   "current_step": null,
+   "enabled": false,
+   "enablement_reason": "flag_off",
+   "feedback_eligible": false,
+   "observation_count": 0,
+   "ordered_plan_created": false,
+   "reason": "flag_off",
+   "sequential_source_execution": false,
+   "step_rejections": [],
+   "workspace_match": false
+  },
+  "task_status": "partial",
+  "terminal_status": "abandoned",
+  "terminated_by": {
+   "actor": "resume-stalled-leads",
+   "at": "2026-09-13T20:30:10.050Z",
+   "detail": "nothing has happened here for 250 minutes; the saved state is kept but the run will not resume itself",
+   "reason": "abandoned",
+   "version": "stalled-lead-resume-v1"
+  },
+  "unknown_companies_pending_evidence": [],
+  "workbench_enrichment_counts": {
+   "deferred": 0,
+   "empty": 0,
+   "not_attempted": 10,
+   "provider_error": 0,
+   "success": 0
+  },
+  "workbench_evaluation_counts": {
+   "accounts_found": 10,
+   "awaiting_investigation": 0,
+   "contact_ready": 0,
+   "deferred": 0,
+   "evaluated": 10,
+   "held_for_evidence": 0,
+   "identity_unresolved": 8,
+   "not_investigated": 2,
+   "not_qualified": 0,
+   "qualified": 0,
+   "shortlisted": 8
+  },
+  "workbench_evaluation_rows": [
+   {
+    "actionable": false,
+    "company_key": "fuseai.com",
+    "company_name": "Fuse AI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "fuseai.com",
+    "employee_count": 12,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": null,
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 140,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 12 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "identity_unresolved",
+    "strongest_signal": "Head of Growth Marketing",
+    "supporting_job_title": "Head of Growth Marketing",
+    "supporting_job_url": "https://www.ycombinator.com/companies/fuse-ai",
+    "triage_reasons": [
+     "Small US-based company with an agentic sales platform and a Head of Growth Marketing opening, a direct and strong match to the requested hiring signal."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 95
+   },
+   {
+    "actionable": false,
+    "company_key": "pasito.ai",
+    "company_name": "Pasito",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "pasito.ai",
+    "employee_count": 20,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": null,
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 130,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 20 inside the target range"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "identity_unresolved",
+    "strongest_signal": "Product Marketing Manager",
+    "supporting_job_title": "Product Marketing Manager",
+    "supporting_job_url": "https://www.ycombinator.com/companies/pasito",
+    "triage_reasons": [
+     "US-based small company serving the insurance and benefits market with a Product Marketing Manager opening, matching the marketing-hiring intent; seed stage is not verified from discovery data."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 78
+   },
+   {
+    "actionable": false,
+    "company_key": "every.io",
+    "company_name": "Every",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "every.io",
+    "employee_count": 12,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 12 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/every",
+    "triage_reasons": [
+     "US-based company with a potentially software-based business model, but it has no open roles and the description does not establish B2B SaaS or a marketing hire."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 18
+   },
+   {
+    "actionable": false,
+    "company_key": "furtherai.com",
+    "company_name": "FurtherAI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "furtherai.com",
+    "employee_count": 36,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 36 inside the target range",
+     "YC industry B2B",
+     "6 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/furtherai",
+    "triage_reasons": [
+     "US-based B2B insurance AI company with Marketing Generalist and Social Media Specialist openings, but its reported 36 employees and broad hiring footprint make seed stage and first-marketer status unclear."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 58
+   },
+   {
+    "actionable": false,
+    "company_key": "gojiberry.ai",
+    "company_name": "Gojiberry AI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "gojiberry.ai",
+    "employee_count": 7,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 7 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/gojiberry-ai",
+    "triage_reasons": [
+     "Small US-based company serving B2B teams, but current openings are sales development roles rather than marketing; B2B SaaS positioning and growth-marketing intent are not sufficiently clear."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 42
+   },
+   {
+    "actionable": false,
+    "company_key": "lab0.ai",
+    "company_name": "Lab0",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "lab0.ai",
+    "employee_count": 5,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 5 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/lab0",
+    "triage_reasons": [
+     "Small US-based company describing a B2B SaaS product and hiring a Founding Product Marketer, which strongly matches an early-stage first-marketing-hire signal."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 88
+   },
+   {
+    "actionable": false,
+    "company_key": "nango.dev",
+    "company_name": "Nango",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "nango.dev",
+    "employee_count": 6,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 6 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/nango",
+    "triage_reasons": [
+     "Small US-based developer infrastructure company with several founding GTM roles, but no clearly identified growth, product, content, demand-generation, or lifecycle marketing opening."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 35
+   },
+   {
+    "actionable": false,
+    "company_key": "safetykit.com",
+    "company_name": "SafetyKit",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "safetykit.com",
+    "employee_count": 10,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 10 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/safetykit",
+    "triage_reasons": [
+     "Small US-based B2B software company with a Growth Lead opening, directly aligned with hiring an early growth marketer."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 82
+   },
+   {
+    "actionable": false,
+    "company_key": "propelauth.com",
+    "company_name": "PropelAuth",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "propelauth.com",
+    "employee_count": 5,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 5 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": "triage_irrelevant",
+    "shortlist_exclusion_explanation": "Mission triage read this as not what the mission asked for.",
+    "signal_tier": null,
+    "status": "not_investigated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/propelauth",
+    "triage_reasons": [
+     "US-based B2B SaaS company, but its listed openings are exclusively engineering and support roles with no apparent marketing or growth hiring."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 5
+   },
+   {
+    "actionable": false,
+    "company_key": "poly.app",
+    "company_name": "Poly",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "poly.app",
+    "employee_count": 3,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Not investigated \u2014 the run never spent anything on this company.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 30,
+    "reasons": [
+     "team size 3 inside the target range",
+     "5 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": "triage_irrelevant",
+    "shortlist_exclusion_explanation": "Mission triage read this as not what the mission asked for.",
+    "signal_tier": null,
+    "status": "not_investigated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/poly",
+    "triage_reasons": [
+     "The company describes itself as an intelligent personal cloud storage product, which appears consumer-focused rather than B2B SaaS.",
+     "Its open roles are all engineering positions, with no growth, marketing, demand generation, or related role indicating it is hiring a first growth marketer.",
+     "Although the US location and very small team are consistent with some constraints, the available evidence plainly conflicts with the required B2B and hiring-role signals."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 5
+   }
+  ],
+  "workbench_grounded_explanations": [],
+  "workbench_portfolio": {
+   "counts": {
+    "contact_ready": 0,
+    "delivered": 1,
+    "opportunities": 0,
+    "qualified": 0,
+    "rejected_by_floor": 8,
+    "review": 0,
+    "tier_a": 1,
+    "tier_b": 0,
+    "tier_c": 0,
+    "watch": 1
+   },
+   "entries": [
+    {
+     "actionable": false,
+     "active": true,
+     "b2b_use_case": true,
+     "brain": null,
+     "company_key": "fuseai.com",
+     "company_name": "Fuse AI",
+     "contact_ready": false,
+     "domain": "fuseai.com",
+     "geography_ok": true,
+     "has_factual_signal": true,
+     "identity_status": "unresolved",
+     "rank": 1,
+     "reason": "Credible company and signal, but the LinkedIn identity is unresolved.",
+     "round": null,
+     "score": 140,
+     "source_evidence": true,
+     "source_url": "https://www.ycombinator.com/companies/fuse-ai",
+     "state": "identity_unresolved_watch",
+     "tier": "A"
+    }
+   ],
+   "shortfall": {
+    "contact_ready": 0,
+    "contact_ready_reason": null,
+    "opportunities": 1,
+    "opportunity_reason": "0 of 1 companies qualified or are under review; 1 more are shown as watch items pending identity or evidence"
+   },
+   "targets": {
+    "interpretation": "legacy_lead_count",
+    "requested_contact_ready_count": null,
+    "requested_lead_count": 1,
+    "requested_opportunity_count": 1
+   },
+   "version": "opportunity-portfolio-v1"
+  },
+  "workbench_progress": {
+   "accounts_found": 10,
+   "awaiting_external_run": false,
+   "companies_enriched": 0,
+   "decision_makers_verified": 0,
+   "eligible_opportunities": 2,
+   "evaluated": 10,
+   "exclusion_reasons": {
+    "insufficient_commercial": 3,
+    "technical_only": 5
+   },
+   "hiring_verified": 0,
+   "identity_resolved": 0,
+   "identity_unresolved": 8,
+   "in_progress": false,
+   "open_jobs_evaluated": 44,
+   "qualified_companies": 0,
+   "shortlisted": 8,
+   "stage": "qualified"
+  },
+  "workbench_triage_counts": {
+   "irrelevant": 2,
+   "relevant": 4,
+   "uncertain": 4
+  }
+ },
+ "status": "complete",
+ "step_index": 0,
+ "updated_at": "2026-09-13T16:20:27.202187+00:00"
+}

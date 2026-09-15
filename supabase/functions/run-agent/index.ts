@@ -91,6 +91,7 @@ import {
 import { resolveIndustryExclusions } from "../_shared/industryPrecedence.ts";
 import { AUTO_RESUME_SUPPRESSED_KEY } from "../_shared/stalledLeadResume.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 // GPT chooses the discovery Actors. `validateDiscoveryStrategy` in the engine
 // decides which of its choices are allowed; this only supplies the proposal.
 import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
@@ -1128,6 +1129,20 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // checkpoint live here, not in the request body — see the `state:` argument
   // to `runCapabilityPlan`.
   let resumedTaskResult: Record<string, unknown> = {};
+  // ── P0: A V2 LINEAGE IS NOT CONTINUED BY THE PARENT-TASK DOOR EITHER ──────
+  //
+  // continue-workflow starts a child with `lead_resume_parent_task_id`, not
+  // `resume_task_id`, so the refusal below never saw it: a Continue could run a
+  // second executor on a lineage the V2 queue owns. Only the worker may.
+  if (leadResumeParentTaskId && inProcess.continuationOwner !== "v2_queue") {
+    const v2OwnedParent = await loadV2OwnedTaskIds(supabase as never, [leadResumeParentTaskId]);
+    if (v2OwnedParent.has(leadResumeParentTaskId)) {
+      return json({
+        success: false, error: "continuation_refused", reason: "v2_queue_owned",
+        message: "The Lead V2 worker continues this mission automatically.",
+      }, 409);
+    }
+  }
   if (resume_task_id) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
@@ -2169,7 +2184,13 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // it did before this existed.
         const persistedBindings = readPersistedBindings(
           tool_input_body, (body as Record<string, unknown>).lead_referent_bindings);
-        const missionPlan = persistedMission ? buildCapabilityGraph(persistedMission) : null;
+        // P0: Lead V2 (allowlisted workspace, or the V2 queue executing it)
+        // never schedules a capability the engine cannot execute; V1 is legacy.
+        const leadExecutabilityGate = executabilityGateFor(
+          workspace_id, (k) => Deno.env.get(k), inProcess.continuationOwner === "v2_queue");
+        const missionPlan = persistedMission
+          ? buildCapabilityGraph(persistedMission, { executability: leadExecutabilityGate })
+          : null;
         console.log("[run-agent][lead-mission]", {
           task_id: task.id,
           has_mission: persistedMission !== null,
@@ -2545,6 +2566,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           })
           : { provider: null, compiled: null };
         const paidPreflight = buildPaidExecutionPreflight({
+          executability: leadExecutabilityGate,
           mission: persistedMission,
           plan: missionPlan,
           firstProvider: firstCall.provider,
@@ -2683,7 +2705,19 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         //
         // Offered to the engine for adoption by exact provider + input, so a
         // resumed slice re-reads a finished dataset instead of buying it again.
+        // A fresh mission has no parent: nothing to recover, and `.eq(task_id,
+        // null)` is a malformed filter the database rejects — the source of
+        // the `read failed [object Object]` lines on every first slice.
+        const describeReadError = (e: unknown): string => {
+          if (e && typeof e === "object") {
+            const o = e as Record<string, unknown>;
+            return JSON.stringify({ code: o.code ?? null, message: o.message ?? null,
+              details: o.details ?? null, hint: o.hint ?? null });
+          }
+          return String(e);
+        };
         const completedRunRows = await (async () => {
+          if (!leadResumeParentTaskId) return [] as LedgerStartedRow[];
           try {
             const { data, error } = await (supabase as any)
               .from(LEAD_EXECUTION_CALLS_TABLE)
@@ -2696,7 +2730,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               .order("started_at", { ascending: true })
               .limit(200) as unknown as { data: LedgerStartedRow[] | null; error: unknown };
             if (error) {
-              console.error("[run-agent][completed-run-recovery] read failed", String(error));
+              console.error("[run-agent][completed-run-recovery] read failed", describeReadError(error));
               return [];
             }
             return data ?? [];
@@ -2708,6 +2742,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         const recoveredCompletedRuns = recoverCompletedRuns(completedRunRows);
 
         const startedRunRows = await (async () => {
+          if (!leadResumeParentTaskId) return [] as LedgerStartedRow[];
           try {
             // deno-lint-ignore no-explicit-any
             const { data, error } = await (supabase as any)
@@ -2720,7 +2755,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               .not("provider_run_id", "is", null)
               .limit(50) as unknown as { data: LedgerStartedRow[] | null; error: unknown };
             if (error) {
-              console.error("[run-agent][pending-run-recovery] read failed", String(error));
+              console.error("[run-agent][pending-run-recovery] read failed", describeReadError(error));
               return [];
             }
             return data ?? [];
@@ -3970,7 +4005,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     const roundMission = plan
                       ? applyRoundPlanToMission(persistedMission, plan)
                       : persistedMission;
-                    const roundGraph = buildCapabilityGraph(roundMission);
+                    const roundGraph = buildCapabilityGraph(roundMission, { executability: leadExecutabilityGate });
                     latest = await executeRound(
                       roundMission, roundGraph,
                       // WHAT THE PREVIOUS ROUND ALREADY PROVED, so identity and

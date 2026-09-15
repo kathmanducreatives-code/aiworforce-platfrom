@@ -1,0 +1,164 @@
+{
+ "agent_slug": "scout",
+ "created_at": "2026-09-14T06:29:15.798431+00:00",
+ "id": "9144eaa4-ff19-48e7-943c-65696d3daa49",
+ "result": {
+  "accumulated_cost_units": 0,
+  "elapsed_ms": 17570,
+  "last_completed_capability": null,
+  "lead_runtime": {
+   "contract": {
+    "executor_version": "v1",
+    "ok": true,
+    "planner_version": "v1",
+    "same_build": true
+   },
+   "executor_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "run-agent",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "executor"
+   },
+   "intelligence_mode": "new_architecture",
+   "planner_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "lead-mission-compiler",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "planner"
+   }
+  },
+  "paid_execution_preflight": {
+   "blocked": [],
+   "entry_capability": "startup_company_discovery",
+   "estimated_cost_units": 7,
+   "feasibility": {
+    "constraints": [
+     {
+      "detail": {
+       "constraint": "stage",
+       "mission_cohort": "y_combinator",
+       "scheduled": [
+        "startup_company_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "hiring_verification",
+        "company_brain_qualification",
+        "persistence"
+       ],
+       "value": "seed"
+      },
+      "message": "\"seed\" is a hard constraint on funding stage, and no scheduled source establishes funding stage \u2014 a YC batch is an accelerator cohort, not a funding round. It is never assumed from the discovery source; a company is held unless its own evidence shows the stage.",
+      "requirement": "stage:seed",
+      "status": "unsupported"
+     }
+    ],
+    "declared_gaps": [
+     "stage:seed (unsupported)"
+    ],
+    "mission_cohort": "y_combinator",
+    "ok": true,
+    "outputs": [
+     {
+      "by_capability": "company_brain_qualification",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      },
+      "message": "Produced by company_brain_qualification.",
+      "requirement": "output:qualified_companies",
+      "status": "satisfied"
+     }
+    ],
+    "refusals": [],
+    "requirements": [
+     {
+      "by_capability": "startup_company_discovery",
+      "detail": {
+       "event": "hiring",
+       "mission_cohort": "y_combinator",
+       "subject": "company"
+      },
+      "message": "Established by startup_company_discovery.",
+      "requirement": "hiring growth marketer",
+      "status": "satisfied"
+     }
+    ],
+    "version": "request-feasibility-v1"
+   },
+   "first_capability": "startup_company_discovery",
+   "first_provider": "apify_yc_companies_memo23",
+   "first_provider_input": {
+    "batch": [
+     "All Batches"
+    ],
+    "enrichEmails": false,
+    "industries": [
+     "B2B"
+    ],
+    "isHiring": true,
+    "maxEmployeeSize": "500",
+    "maxItems": 10,
+    "minEmployeeSize": "10+",
+    "mode": "companies",
+    "nonprofit": false,
+    "queries": [],
+    "regions": [
+     "United States of America"
+    ],
+    "scrapeFounderDetails": false,
+    "scrapeOpenJobs": true,
+    "topCompany": false
+   },
+   "first_provider_input_valid": true,
+   "input_errors": [],
+   "mission_authority": "lead_mission_v1",
+   "ok": true,
+   "ordered_capabilities": [
+    "startup_company_discovery",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+   ],
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "version": "paid-execution-preflight-v1"
+  },
+  "pending_capabilities": [],
+  "pending_runs": [],
+  "provider_attempts": 0,
+  "resumable": false,
+  "task_status": "failed",
+  "terminal_record": {
+   "accumulated_cost_units": 0,
+   "blocked_by": [
+    {
+     "code": "no_valid_step",
+     "message": "no proposed step survived validation",
+     "severity": "block"
+    }
+   ],
+   "detail": "ExecutionPlanBlockedError: execution planning was blocked (no_valid_step): no proposed step survived validation. No deterministic plan was substituted and no provider work was scheduled.",
+   "elapsed_ms": 17570,
+   "failed_capabilities": [],
+   "last_completed_capability": null,
+   "pending_capabilities": [],
+   "pending_runs": [],
+   "provider_attempts": 0,
+   "reason": "unhandled_exception",
+   "resumable": false,
+   "status": "failed",
+   "version": "lead-execution-finalizer-v1"
+  },
+  "terminal_status": "unhandled_exception"
+ },
+ "status": "failed",
+ "step_index": 0,
+ "updated_at": "2026-09-14T06:29:15.798431+00:00"
+}

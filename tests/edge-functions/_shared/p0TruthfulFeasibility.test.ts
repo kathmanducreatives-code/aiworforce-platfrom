@@ -1,0 +1,179 @@
+// LEAD V2 P0 — AN ANCHOR THE ENGINE CANNOT EXECUTE FAILS TRUTHFULLY, BEFORE SPEND.
+//
+// Before P0 (legacy, pinned in p0-legacy-graph-snapshots.json):
+//   product launch → entry product_launch_discovery (no executor), `satisfied`
+//   technology     → technology_verification scheduled (no executor), `satisfied`
+//   expansion      → entry expansion_signal_discovery (skipped by the engine)
+// With the gate enforced (Lead V2), none of them may claim executable support,
+// and the paid preflight blocks them — so no provider is called. The working
+// routes — company profile, funding-first, hiring — stay feasible.
+//
+// Every case is pure: `fetch` throws for the whole file.
+
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { buildCapabilityGraph, type CapabilityPlan } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import {
+  assessRequestFeasibility, type FeasibilityReport,
+} from "../../../supabase/functions/_shared/requestFeasibility.ts";
+import { buildPaidExecutionPreflight } from "../../../supabase/functions/_shared/leadPaidExecutionPreflight.ts";
+import { compileFirstProviderCall } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { isCapabilityExecutable } from "../../../supabase/functions/_shared/capabilityExecutability.ts";
+import { parseLeadMissionDeterministic, type LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
+
+// deno-lint-ignore no-explicit-any
+type Json = any;
+const SNAP = JSON.parse(Deno.readTextFileSync(
+  new URL("../../fixtures/lead-v2/p0-legacy-graph-snapshots.json", import.meta.url)));
+const mission = (id: string): LeadMissionV1 => {
+  const c = (SNAP.cases as Json[]).find((x) => x.id === id || String(x.id).startsWith(`${id}:`));
+  assert(c, `snapshot case ${id}`);
+  return c.mission;
+};
+const legacyOf = (id: string) =>
+  (SNAP.cases as Json[]).find((x) => x.id === id || String(x.id).startsWith(`${id}:`));
+
+globalThis.fetch = () => { throw new Error("P0 feasibility must not reach the network"); };
+
+function enforce(m: LeadMissionV1): { plan: CapabilityPlan; f: FeasibilityReport; preflightBlocks: string[] } {
+  const plan = buildCapabilityGraph(m, { executability: "enforce" });
+  const f = assessRequestFeasibility(m, plan, { executability: "enforce" });
+  const first = compileFirstProviderCall(plan);
+  const preflight = buildPaidExecutionPreflight({
+    mission: m, plan, executability: "enforce",
+    firstProvider: first.provider,
+    firstProviderInput: first.compiled?.ok ? first.compiled.input : null,
+    firstProviderCompileOk: first.compiled ? first.compiled.ok : undefined,
+    firstProviderErrors: first.compiled && !first.compiled.ok ? first.compiled.errors : [],
+  });
+  return { plan, f, preflightBlocks: preflight.blocked.map((b) => b.code) };
+}
+const statuses = (f: FeasibilityReport) => f.requirements.map((r) => r.status);
+const codes = (f: FeasibilityReport) => f.refusals.map((r) => r.code);
+
+// ── working routes stay feasible ─────────────────────────────────────────────
+
+Deno.test("company-profile mission stays feasible", () => {
+  const { plan, f, preflightBlocks } = enforce(parseLeadMissionDeterministic("Find US B2B SaaS companies."));
+  assert(f.ok);
+  assert(isCapabilityExecutable(plan.entry_capability));
+  assertFalse(preflightBlocks.includes("request_not_feasible"));
+});
+
+Deno.test("funding-first missions stay feasible, entered by funding discovery", () => {
+  for (const id of ["q4", "inject:funding"]) {
+    const { plan, f, preflightBlocks } = enforce(mission(id));
+    assertEquals(plan.entry_capability, "funding_signal_discovery", id);
+    assert(f.ok, id);
+    assert(statuses(f).every((s) => s === "satisfied"), `${id}: ${statuses(f)}`);
+    assertFalse(preflightBlocks.includes("request_not_feasible"), id);
+  }
+  const both = enforce(mission("q14"));
+  assert(both.f.ok, "hiring + funding");
+});
+
+Deno.test("hiring missions stay feasible and satisfied by hiring verification", () => {
+  for (const id of ["q1", "q2", "q3", "q11", "q12", "inject:hiring"]) {
+    const { plan, f } = enforce(mission(id));
+    assert(f.ok, id);
+    assert(plan.steps.some((s) => s.capability === "hiring_verification"), id);
+    assert(statuses(f).every((s) => s === "satisfied"), `${id}: ${statuses(f)}`);
+  }
+});
+
+Deno.test("working routes build the same plan enforced as they did before P0", () => {
+  for (const id of ["q1", "q2", "q3", "q4", "q11", "q12", "q14", "inject:hiring", "inject:funding"]) {
+    const { plan } = enforce(mission(id));
+    const before = legacyOf(id).plan;
+    assertEquals(plan.entry_capability, before.entry_capability, id);
+    assertEquals(plan.steps.map((s) => s.capability), before.steps.map((s: Json) => s.capability), id);
+    assertEquals(plan.executability?.unexecutable ?? [], [], `${id}: nothing gated`);
+  }
+});
+
+// ── unsupported anchors fail truthfully ──────────────────────────────────────
+
+Deno.test("product-launch-first does NOT claim executable support, and spends nothing", () => {
+  for (const id of ["q5", "inject:product_launch"]) {
+    assertEquals(legacyOf(id).plan.entry_capability, "product_launch_discovery", `${id}: the pre-P0 lie`);
+    const { plan, f, preflightBlocks } = enforce(mission(id));
+    assert(plan.entry_capability !== "product_launch_discovery", id);
+    assertEquals(plan.executability?.unexecutable.map((u) => u.capability), ["product_launch_discovery"]);
+    assert(plan.routing_advisories.some((a) => a.includes("product_launch_discovery is not executable yet")));
+    assertFalse(f.ok, id);
+    assertFalse(statuses(f).includes("satisfied"), `${id}: ${statuses(f)}`);
+    assert(statuses(f).includes("partially_supported"), id);
+    assert(codes(f).includes("no_requirement_provable"), id);
+    assert(preflightBlocks.includes("request_not_feasible"), `${id}: blocked before the first paid call`);
+  }
+});
+
+Deno.test("headcount / expansion-first does NOT claim executable support", () => {
+  for (const id of ["q6", "q13", "inject:expansion", "inject:headcount_change"]) {
+    const { plan, f, preflightBlocks } = enforce(mission(id));
+    assert(plan.entry_capability !== "expansion_signal_discovery", id);
+    assertFalse(f.ok, id);
+    assertFalse(statuses(f).includes("satisfied"), `${id}: ${statuses(f)}`);
+    assert(preflightBlocks.includes("request_not_feasible"), id);
+  }
+});
+
+Deno.test("leadership-first does NOT claim executable support", () => {
+  for (const id of ["q8", "inject:leadership_change"]) {
+    const { f, preflightBlocks } = enforce(mission(id));
+    assertFalse(f.ok, id);
+    assertEquals(statuses(f), ["unsupported"], id);
+    assert(codes(f).includes("no_requirement_provable"), id);
+    assert(preflightBlocks.includes("request_not_feasible"), id);
+  }
+});
+
+Deno.test("technology-first does NOT claim executable support", () => {
+  for (const id of ["q7", "inject:technology"]) {
+    assert(legacyOf(id).plan.steps.some((s: Json) => s.capability === "technology_verification"), `${id}: pre-P0`);
+    const { plan, f, preflightBlocks } = enforce(mission(id));
+    assertFalse(plan.steps.some((s) => s.capability === "technology_verification"), id);
+    assertFalse(f.ok, id);
+    assertEquals(statuses(f), ["needs_engine_work"], id);
+    assert(preflightBlocks.includes("request_not_feasible"), id);
+  }
+});
+
+Deno.test("company-post evidence does NOT claim executable support", () => {
+  const { plan, f } = enforce(mission("inject:post_company"));
+  assertFalse(plan.steps.some((s) => s.capability === "company_post_verification"));
+  assertFalse(f.ok);
+  assertEquals(statuses(f), ["needs_engine_work"]);
+});
+
+Deno.test("a mixed mission runs what it can and declares what it cannot", () => {
+  const launch = enforce(mission("inject:hiring+product_launch"));
+  assert(launch.f.ok, "hiring is provable, so the mission runs");
+  assertEquals(statuses(launch.f).sort(), ["partially_supported", "satisfied"]);
+  const tech = enforce(mission("inject:hiring+technology"));
+  assert(tech.f.ok);
+  assertEquals(statuses(tech.f).sort(), ["needs_engine_work", "satisfied"]);
+  assertEquals(tech.f.executability?.unexecutable.map((u) => u.capability), ["technology_verification"]);
+});
+
+Deno.test("a job-listing mission is refused: its entry cannot execute", () => {
+  const m = { ...parseLeadMissionDeterministic("Find US B2B SaaS companies hiring growth marketers."),
+    requested_output: "job_listings" } as LeadMissionV1;
+  const legacy = buildCapabilityGraph(m);
+  assertEquals(legacy.entry_capability, "job_discovery");
+  const { f, preflightBlocks } = enforce(m);
+  assertFalse(f.ok);
+  assert(codes(f).includes("entry_not_executable"), `${codes(f)}`);
+  assert(preflightBlocks.includes("request_not_feasible"));
+});
+
+Deno.test("no enforced plan in the battery schedules a step the engine cannot run", () => {
+  for (const c of SNAP.cases as Json[]) {
+    const { plan, f } = enforce(c.mission);
+    for (const s of plan.steps) assert(isCapabilityExecutable(s.capability), `${c.id}: ${s.capability}`);
+    assertEquals(f.executability?.scheduled_unexecutable, [], c.id);
+    // Truth: `satisfied` only ever means an executable step proves it.
+    for (const r of f.requirements) {
+      if (r.status === "satisfied" && r.by_capability) assert(isCapabilityExecutable(r.by_capability), c.id);
+    }
+  }
+});

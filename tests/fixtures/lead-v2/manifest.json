@@ -1,0 +1,36 @@
+{
+ "captured_at": "2026-09-15T09:22:59Z",
+ "source": "read-only production GETs (Supabase REST + Apify API)",
+ "runs": {
+  "4250f181": {
+   "queue_id": "6d8d146d-6162-4e88-94a5-6c1a3b38c0bc",
+   "task_id": "4250f181-b6ae-467a-bc46-1abd39ddeccb",
+   "lineage_id": "4250f181-b6ae-467a-bc46-1abd39ddeccb",
+   "plan_id": "d5f25001-abec-492e-b657-1be7722f43c5",
+   "queue_status": "failed",
+   "attempts": 5,
+   "ledger_rows": 43,
+   "apify_runs": 20
+  },
+  "9144eaa4": {
+   "queue_id": "30cac5d4-b6bc-4a3d-aa07-137c8e9023a8",
+   "task_id": "9144eaa4-ff19-48e7-943c-65696d3daa49",
+   "lineage_id": "9144eaa4-ff19-48e7-943c-65696d3daa49",
+   "plan_id": "f6b4fb71-49cc-44b7-b6e8-6432ec93b035",
+   "queue_status": "failed",
+   "attempts": 1,
+   "ledger_rows": 0,
+   "apify_runs": 0
+  },
+  "1e52d43c": {
+   "queue_id": "1e52d43c-7351-4777-ab93-20c80e32ff26",
+   "task_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+   "lineage_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+   "plan_id": "8fbc66e8-17b7-4651-8690-44b9ceb56f7a",
+   "queue_status": "failed",
+   "attempts": 5,
+   "ledger_rows": 98,
+   "apify_runs": 33
+  }
+ }
+}

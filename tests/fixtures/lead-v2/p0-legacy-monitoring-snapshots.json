@@ -1,0 +1,1969 @@
+{
+ "captured_at_commit": "3833a2a6",
+ "cases": [
+  {
+   "id": "icp:hiring",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "hiring"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns.",
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:hiring",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "hiring"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:funding",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "funding"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "funding",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "funding_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires a funding signal",
+      "providers": [
+       "apify_funding_rounds_datahyena"
+      ],
+      "cost_units": 3,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_funding_rounds_datahyena",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "funding_signal_discovery",
+    "estimated_cost_units": 9,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a funding signal",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:funding",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "funding"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:expansion",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "expansion"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "expansion",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "expansion_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires an expansion signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "expansion_signal_verification",
+      "order": 3,
+      "reason": "the mission requires a verified expansion signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "expansion_signal_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires an expansion signal",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:expansion",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "expansion"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:product_launch",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "product_launch"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "product_launch",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "product_launch_discovery",
+      "order": 0,
+      "reason": "the mission requires a product-launch signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "product_launch_verification",
+      "order": 3,
+      "reason": "the mission requires a verified product-launch signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "product_launch_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a product-launch signal",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:product_launch",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "product_launch"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:technology",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "technology"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "technology",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "technology_verification",
+      "order": 3,
+      "reason": "the mission requires evidence of the company's technology stack",
+      "providers": [
+       "apify_builtwith_technology"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_builtwith_technology"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 6,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:technology",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "technology"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:leadership_change",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "leadership_change"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "leadership_change",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:leadership_change",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "leadership_change"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:post",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "post"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "post",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_post_verification",
+      "order": 3,
+      "reason": "the mission requires evidence from the company's own posts",
+      "providers": [
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:post",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "post"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:comment",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "comment"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "comment",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:comment",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "comment"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "icp:headcount_change",
+   "input": {
+    "subject": {
+     "kind": "icp",
+     "signals": [
+      {
+       "event": "headcount_change"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": true,
+   "refusal": null,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    },
+    "required_signals": [
+     {
+      "type": "headcount_change",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   }
+  },
+  {
+   "id": "company:headcount_change",
+   "input": {
+    "subject": {
+     "kind": "company",
+     "identifier": "acme.com",
+     "label": "Acme",
+     "signals": [
+      {
+       "event": "headcount_change"
+      }
+     ]
+    },
+    "icp": {
+     "verticals": [
+      "b2b saas"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     }
+    }
+   },
+   "compiled_ok": false,
+   "refusal": "no_usable_subjects",
+   "mission": null,
+   "plan": null
+  },
+  {
+   "id": "multi",
+   "compiled_ok": true,
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "[monitoring] the workspace ICP, competitor Rival",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ],
+     "employee_range": {
+      "min": 1,
+      "max": 150
+     },
+     "known_companies": [
+      "rival.io"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "subject": "company",
+      "timeframe_days": 30
+     },
+     {
+      "type": "product_launch",
+      "subject": "company",
+      "timeframe_days": 30
+     },
+     {
+      "type": "technology",
+      "subject": "company",
+      "timeframe_days": 30
+     },
+     {
+      "type": "expansion",
+      "subject": "company",
+      "timeframe_days": 30
+     },
+     {
+      "type": "funding",
+      "subject": "company",
+      "timeframe_days": 30
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile": "monitoring_subject",
+     "required_signals": "monitoring_subject"
+    },
+    "confidence": 1,
+    "mission_objective": "monitoring"
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "known_company_resolution",
+      "order": 0,
+      "reason": "1 company identifier(s) supplied by the user — discovery is skipped",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "supplied identifiers are resolved to canonical identities",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "expansion_signal_verification",
+      "order": 4,
+      "reason": "the mission requires a verified expansion signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "technology_verification",
+      "order": 5,
+      "reason": "the mission requires evidence of the company's technology stack",
+      "providers": [
+       "apify_builtwith_technology"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "product_launch_verification",
+      "order": 6,
+      "reason": "the mission requires a verified product-launch signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 7,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "company_post_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication",
+     "persistence"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search",
+     "apify_google_news",
+     "apify_linkedin_company_posts",
+     "apify_builtwith_technology"
+    ],
+    "entry_capability": "known_company_resolution",
+    "estimated_cost_units": 14,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "1 company identifier(s) supplied by the user — discovery is skipped",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns.",
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them.",
+     "This mission requires funding evidence and this plan schedules no funding step, because its declared research shape discovers companies another way. The funding source is DISCOVERY-ONLY — it finds companies BY a round and has no company or domain input — so funding cannot be proven over the pool this plan produces. Either enter through funding discovery and verify the other signals over that pool, or expect the funding requirement to be reported as uncollected."
+    ]
+   }
+  }
+ ]
+}

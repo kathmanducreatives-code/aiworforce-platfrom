@@ -1,0 +1,141 @@
+{
+ "completed_at": null,
+ "created_at": "2026-09-14T06:29:09.250547+00:00",
+ "goal": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+ "id": "f6b4fb71-49cc-44b7-b6e8-6432ec93b035",
+ "plan_summary": "6 capabilities: startup company discovery \u2192 company identity resolution \u2192 company enrichment \u2192 hiring verification \u2192 company brain qualification \u2192 persistence",
+ "status": "failed",
+ "steps": [
+  {
+   "agent_name": "Scout",
+   "agent_slug": "scout",
+   "expected_output": "Qualified results from the approved mission's capability graph.",
+   "instruction": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "metadata": {
+    "tool_input": {
+     "lead_mission": {
+      "company_profile": {
+       "business_models": [],
+       "locations": [
+        "United States"
+       ],
+       "stages": [
+        "startup"
+       ],
+       "verticals": [
+        "b2b saas (founder-led or small teams)"
+       ]
+      },
+      "confidence": 0.99,
+      "decision_makers": {
+       "current_employment_required": false,
+       "roles": []
+      },
+      "directives": {
+       "adjacent_signals": [],
+       "allowed_broadening": {
+        "company_types": [],
+        "employee_range": {
+         "max": null,
+         "min": null
+        },
+        "geographies": [],
+        "role_families": []
+       },
+       "disallowed_broadening": [],
+       "evaluation_instructions": "",
+       "excluded_signals": [],
+       "execution_preference": "balanced",
+       "founder_unlock_recommended": false,
+       "preferred_signals": [
+        "hiring"
+       ],
+       "requested_contact_ready_count": null,
+       "required_evidence": [],
+       "source_strategy": []
+      },
+      "field_provenance": {
+       "company_profile.business_models": "gpt_inference",
+       "company_profile.locations": "explicit_user_request",
+       "company_profile.stages": "explicit_user_request",
+       "company_profile.verticals": "explicit_user_request",
+       "decision_makers.roles": "gpt_inference",
+       "requested_count": "explicit_user_request",
+       "requested_output": "explicit_user_request",
+       "required_signals": "explicit_user_request",
+       "target_entity": "explicit_user_request"
+      },
+      "hard_constraints": {
+       "company_profile.locations": {
+        "operator": "in",
+        "reason": "stated explicitly in the user's query",
+        "value": [
+         "United States"
+        ]
+       },
+       "stage": {
+        "operator": "eq",
+        "reason": "stated in the request",
+        "value": "seed"
+       }
+      },
+      "lead_intelligence_contract_version": "v1",
+      "mission_type": "company_research",
+      "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+      "planner_runtime": {
+       "build_timestamp": "2026-08-29T10:44:33.276Z",
+       "dirty": false,
+       "function": "lead-mission-compiler",
+       "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+       "git_short": "046b61b0",
+       "lead_intelligence_contract_version": "v1",
+       "role": "planner"
+      },
+      "prohibited_capabilities": [
+       "founder_discovery",
+       "employer_verification",
+       "contact_enrichment"
+      ],
+      "requested_count": 3,
+      "requested_output": "qualified_companies",
+      "required_capabilities": [],
+      "required_signal_terms": [
+       "growth marketer"
+      ],
+      "required_signals": [
+       {
+        "event": "hiring",
+        "phrase": "hiring growth marketer",
+        "qualifier": {
+         "role_families": [
+          "marketing_growth"
+         ],
+         "role_terms": [
+          "growth marketer"
+         ]
+        },
+        "role_families": [
+         "marketing_growth"
+        ],
+        "subject": "company",
+        "type": "hiring"
+       }
+      ],
+      "soft_preferences": {},
+      "target_entity": "company",
+      "version": "lead-mission-v1"
+     }
+    }
+   },
+   "needs_approval": false,
+   "planner_source": "capability_graph",
+   "requires_approval": false,
+   "step_index": 0,
+   "success_criteria": "The capability plan completes, or reports the exact capability that could not.",
+   "task_description": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "task_title": "Execute the approved mission",
+   "tool_needed": "source_with_apify",
+   "tool_status": "ready"
+  }
+ ]
+}

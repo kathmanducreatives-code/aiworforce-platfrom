@@ -23,7 +23,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
 import { buildInvoker, readPendingRun } from "../_shared/capabilityExecution.ts";
 import { createExecutionDeadline } from "../_shared/leadExecutionFinalizer.ts";
-import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { buildMonitoringCapabilityGraph } from "../_shared/monitoringRetrievalPort.ts";
 import {
   runCapabilityPlan,
   type CapabilityEngineDeps, type CapabilityEngineOpts,
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
   const outcome = await runMonitoring(
     { workspace_id, subjects, icp },
     {
-      buildPlan: buildCapabilityGraph,
+      buildPlan: buildMonitoringCapabilityGraph,
       runPlan: async (mission, plan, resume) => {
         // ── THE SAME ENGINE, THE SAME MODEL SEAMS ─────────────────────────
         //

@@ -23,6 +23,7 @@ import {
   LEASE_REFUSAL_MESSAGE, lineageLeaseEnforced, lineageRootOf, readLineageLease,
   type SelectDb,
 } from "../_shared/lineageLease.ts";
+import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -138,6 +139,19 @@ Deno.serve(async (req) => {
   }
 
   const spec = decision.spec;
+
+  // ── P0: A LINEAGE THE V2 QUEUE OWNS IS CONTINUED BY THE QUEUE ─────────────
+  //
+  // Starting run-agent here would put a second executor — with the edge's own
+  // provider keys — on a lineage the worker holds. run-agent refuses it too;
+  // refusing here first means no child task, plan or message is created.
+  const v2Owned = await loadV2OwnedTaskIds(admin as never, [request.original_task_id]);
+  if (v2Owned.has(request.original_task_id)) {
+    return json({
+      error: "v2_queue_owned",
+      message: "The Lead V2 worker continues this mission automatically.",
+    }, 409);
+  }
 
   // ── 4b. IS A GENERATION OF THIS LINEAGE ALREADY RUNNING? ────────────────────
   //

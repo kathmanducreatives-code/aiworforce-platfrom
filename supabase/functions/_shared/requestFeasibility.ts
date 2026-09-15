@@ -53,6 +53,10 @@ import {
   evidenceProducedBy,
 } from "./actorEvidenceCapability.ts";
 import { REQUESTED_OUTPUTS, type LeadMissionV1 } from "./leadMission.ts";
+import {
+  executabilityStateOf, isCapabilityExecutable,
+  type ExecutabilityGateMode, type ExecutabilityState,
+} from "./capabilityExecutability.ts";
 
 export const FEASIBILITY_VERSION = "request-feasibility-v1" as const;
 
@@ -78,7 +82,16 @@ export type RequirementStatus =
   /** Provable, but only for a cohort this request is not limited to. */
   | "population_mismatch"
   /** Producible, but only behind an explicit user unlock. Not a defect. */
-  | "requires_unlock";
+  | "requires_unlock"
+  // ── P0: truthful executability (enforced gate only) ──────────────────────
+  /** Provable only per company; the signal's own discovery route cannot run yet. */
+  | "partially_supported"
+  /** The capability that would prove it has no verified provider contract. */
+  | "needs_provider_work"
+  /** The provider returns rows no canonical company can be extracted from. */
+  | "needs_extraction_work"
+  /** The provider is carded but the engine has no executor. */
+  | "needs_engine_work";
 
 export interface RequirementAssessment {
   /** The user's own words for this requirement, where they exist. */
@@ -99,7 +112,9 @@ export type FeasibilityRefusalCode =
    */
   | "no_requirement_provable"
   /** B/H — the promised output has no production path anywhere. */
-  | "output_unproducible";
+  | "output_unproducible"
+  /** P0 — the plan's entry capability cannot be executed by the engine. */
+  | "entry_not_executable";
 
 export interface FeasibilityRefusal {
   code: FeasibilityRefusalCode;
@@ -131,7 +146,24 @@ export interface FeasibilityReport {
    * invariant H's raw material.
    */
   declared_gaps: string[];
+  /** P0 — present only when the executability gate is enforced. */
+  executability?: {
+    mode: "enforce";
+    /** Capabilities the graph kept out of the plan because they cannot execute. */
+    unexecutable: Array<{ capability: string; role: string; state: ExecutabilityState }>;
+    /** Scheduled steps that cannot execute (should be empty under the gate). */
+    scheduled_unexecutable: Array<{ capability: string; state: ExecutabilityState }>;
+  };
 }
+
+export interface FeasibilityOptions {
+  /** `enforce` grades against engine executability; default `legacy` is unchanged. */
+  executability?: ExecutabilityGateMode;
+}
+
+const NOT_EXECUTABLE: ReadonlySet<RequirementStatus> = new Set<RequirementStatus>([
+  "partially_supported", "needs_provider_work", "needs_extraction_work", "needs_engine_work",
+]);
 
 /**
  * The artifact each requested output is MADE OF.
@@ -213,6 +245,7 @@ function catalogueProduces(artifact: string): string[] {
 export function assessRequestFeasibility(
   mission: LeadMissionV1 | null,
   plan: CapabilityPlan | null,
+  opts: FeasibilityOptions = {},
 ): FeasibilityReport {
   const cohort = plan ? missionCohortOf(plan) : null;
   const report: FeasibilityReport = {
@@ -234,6 +267,55 @@ export function assessRequestFeasibility(
   }));
   const allProviders = steps.flatMap((s) => s.providers);
 
+  // ── P0: ONLY WHAT THE ENGINE CAN EXECUTE MAY PROVE ANYTHING ──────────────
+  //
+  // In legacy mode `provingSteps` is every scheduled step, exactly as before.
+  const enforce = opts.executability === "enforce";
+  const provingSteps = enforce
+    ? steps.filter((s) => isCapabilityExecutable(s.capability))
+    : steps;
+  const keptOut = enforce ? (plan.executability?.unexecutable ?? []) : [];
+  const catalogueStep = (capability: string): Step => ({
+    capability,
+    providers: [...((CAPABILITY_REGISTRY as Record<string, { providers: readonly string[] }>)[capability]
+      ?.providers ?? [])].map(String),
+  });
+  /** Enforced grading for a requirement, or null to fall through to the legacy rules. */
+  const gradeExecutability = (
+    event: string, subject: string, phrase: string, detail: Record<string, unknown>,
+    provenBy: Step | null,
+  ): RequirementAssessment | null => {
+    const blockedEntry = keptOut.find((u) =>
+      u.role === "entry" && stepProves(catalogueStep(u.capability), event, subject, null));
+    if (provenBy) {
+      if (!blockedEntry) return null;
+      return {
+        requirement: phrase, status: "partially_supported", by_capability: provenBy.capability,
+        message:
+          `"${event}" can only be checked per company by ${provenBy.capability}; searching by ` +
+          `this signal first (${blockedEntry.capability}) is not executable yet ` +
+          `(${blockedEntry.state}). The run would discover by company profile instead.`,
+        detail: { ...detail, blocked_entry: blockedEntry.capability, blocked_state: blockedEntry.state },
+      };
+    }
+    const scheduledDead = steps.find((s) =>
+      !isCapabilityExecutable(s.capability) && stepProves(s, event, subject, cohort));
+    const keptDead = scheduledDead
+      ? null
+      : keptOut.find((u) => stepProves(catalogueStep(u.capability), event, subject, null));
+    const dead = scheduledDead?.capability ?? keptDead?.capability ?? null;
+    if (!dead) return null;
+    const state = executabilityStateOf(dead);
+    return {
+      requirement: phrase,
+      status: (state === "executable" || state === "unsupported" ? "unsupported" : state) as RequirementStatus,
+      message:
+        `"${event}" would be established by ${dead}, which the engine cannot execute yet ` +
+        `(${state}). Nothing executable in this plan proves it.`,
+      detail: { ...detail, capability: dead, state },
+    };
+  };
+
   // ── grade every stated signal requirement ────────────────────────────────
   for (const sig of mission.required_signals ?? []) {
     const event = String(sig.event ?? sig.type ?? "").trim();
@@ -242,7 +324,14 @@ export function assessRequestFeasibility(
     const phrase = String(sig.phrase ?? sig.type ?? event);
     const detail = { event, subject, mission_cohort: cohort };
 
-    const by = steps.find((s) => stepProves(s, event, subject, cohort));
+    const by = provingSteps.find((s) => stepProves(s, event, subject, cohort));
+    if (enforce) {
+      const graded = gradeExecutability(event, subject, phrase, detail, by ?? null);
+      if (graded) {
+        report.requirements.push(graded);
+        continue;
+      }
+    }
     if (by) {
       report.requirements.push({
         requirement: phrase, status: "satisfied", by_capability: by.capability,
@@ -368,7 +457,7 @@ export function assessRequestFeasibility(
     return typeof v === "string" && v.trim() ? v.trim() : null;
   })();
   if (stageValue) {
-    const by = steps.find((s) => stepProves(s, "funding", "company", cohort));
+    const by = provingSteps.find((s) => stepProves(s, "funding", "company", cohort));
     report.constraints = [by
       ? {
         requirement: `stage:${stageValue}`, status: "satisfied", by_capability: by.capability,
@@ -408,8 +497,18 @@ export function assessRequestFeasibility(
       detail: { requirements: signalReqs.map((r) => ({ r: r.requirement, s: r.status })) },
     });
   }
+  if (enforce && !isCapabilityExecutable(String(plan.entry_capability))) {
+    const state = executabilityStateOf(String(plan.entry_capability));
+    report.refusals.push({
+      code: "entry_not_executable", requirement: `entry:${plan.entry_capability}`,
+      message:
+        `This plan starts with ${plan.entry_capability}, which the engine cannot execute yet ` +
+        `(${state}), so it would find nothing.`,
+      detail: { entry_capability: plan.entry_capability, state },
+    });
+  }
   for (const o of report.outputs) {
-    if (o.status === "unsupported") {
+    if (o.status === "unsupported" || (enforce && NOT_EXECUTABLE.has(o.status))) {
       report.refusals.push({
         code: "output_unproducible", requirement: o.requirement,
         message: o.message, detail: o.detail,
@@ -420,6 +519,15 @@ export function assessRequestFeasibility(
   report.declared_gaps = [...signalReqs, ...report.outputs, ...(report.constraints ?? [])]
     .filter((r) => r.status !== "satisfied")
     .map((r) => `${r.requirement} (${r.status})`);
+  if (enforce) {
+    report.executability = {
+      mode: "enforce",
+      unexecutable: keptOut.map((u) => ({ capability: u.capability, role: u.role, state: u.state })),
+      scheduled_unexecutable: steps
+        .filter((s) => !isCapabilityExecutable(s.capability))
+        .map((s) => ({ capability: s.capability, state: executabilityStateOf(s.capability) })),
+    };
+  }
   report.ok = report.refusals.length === 0;
   return report;
 }

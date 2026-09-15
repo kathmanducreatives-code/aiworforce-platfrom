@@ -1,0 +1,4328 @@
+{
+ "captured_at_commit": "3833a2a6",
+ "cases": [
+  {
+   "id": "q1:Find US B2B SaaS companies hiring growth marketers.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies hiring growth marketers.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketers"
+       ]
+      },
+      "role_families": [
+       "marketing_growth"
+      ],
+      "phrase": "Find US B2B SaaS companies hiring growth marketers."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find US B2B SaaS companies hiring growth marketers.",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q2:Find US B2B SaaS startups hiring growth marketers.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS startups hiring growth marketers.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "growth marketers"
+       ]
+      },
+      "role_families": [
+       "marketing_growth"
+      ],
+      "phrase": "Find US B2B SaaS startups hiring growth marketers."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.stages": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns.",
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": "y_combinator",
+    "requirements": [
+     {
+      "requirement": "Find US B2B SaaS startups hiring growth marketers.",
+      "status": "satisfied",
+      "by_capability": "startup_company_discovery",
+      "message": "Established by startup_company_discovery.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": "y_combinator"
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q3:Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": 3,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [
+      "startup"
+     ],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "marketing_growth"
+       ],
+       "role_terms": [
+        "their first growth marketer"
+       ]
+      },
+      "role_families": [
+       "marketing_growth"
+      ],
+      "phrase": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.stages": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "explicit_user_request"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns.",
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": "y_combinator",
+    "requirements": [
+     {
+      "requirement": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+      "status": "satisfied",
+      "by_capability": "startup_company_discovery",
+      "message": "Established by startup_company_discovery.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": "y_combinator"
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q4:Find US B2B SaaS companies that recently raised funding.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies that recently raised funding.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "funding",
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "phrase": "Find US B2B SaaS companies that recently raised funding.",
+      "timeframe_days": 180
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "funding_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires a funding signal",
+      "providers": [
+       "apify_funding_rounds_datahyena"
+      ],
+      "cost_units": 3,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_funding_rounds_datahyena",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "funding_signal_discovery",
+    "estimated_cost_units": 9,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a funding signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find US B2B SaaS companies that recently raised funding.",
+      "status": "satisfied",
+      "by_capability": "funding_signal_discovery",
+      "message": "Established by funding_signal_discovery.",
+      "detail": {
+       "event": "funding",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q5:Find AI companies that launched a new product recently.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find AI companies that launched a new product recently.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "product_launch",
+      "event": "product_launch",
+      "subject": "company",
+      "qualifier": {},
+      "phrase": "Find AI companies that launched a new product recently.",
+      "timeframe_days": 180
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "product_launch_discovery",
+      "order": 0,
+      "reason": "the mission requires a product-launch signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "product_launch_verification",
+      "order": 3,
+      "reason": "the mission requires a verified product-launch signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "product_launch_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a product-launch signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find AI companies that launched a new product recently.",
+      "status": "satisfied",
+      "by_capability": "product_launch_discovery",
+      "message": "Established by product_launch_discovery.",
+      "detail": {
+       "event": "product_launch",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q6:Find SaaS companies rapidly expanding headcount.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find SaaS companies rapidly expanding headcount.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "saas"
+     ],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "headcount_change",
+      "event": "headcount_change",
+      "subject": "company",
+      "qualifier": {
+       "direction": "increase"
+      },
+      "phrase": "Find SaaS companies rapidly expanding headcount.",
+      "timeframe_days": 180
+     },
+     {
+      "type": "expansion",
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {},
+      "phrase": "Find SaaS companies rapidly expanding headcount.",
+      "timeframe_days": 180
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "expansion_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires an expansion signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "expansion_signal_verification",
+      "order": 3,
+      "reason": "the mission requires a verified expansion signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "expansion_signal_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires an expansion signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find SaaS companies rapidly expanding headcount.",
+      "status": "unsupported",
+      "message": "Nothing scheduled can establish \"headcount_change\". No capability in this plan has a provider producing headcount_change/company evidence.",
+      "detail": {
+       "event": "headcount_change",
+       "subject": "company",
+       "mission_cohort": null,
+       "scheduled": [
+        "expansion_signal_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "expansion_signal_verification",
+        "company_brain_qualification",
+        "persistence"
+       ]
+      }
+     },
+     {
+      "requirement": "Find SaaS companies rapidly expanding headcount.",
+      "status": "satisfied",
+      "by_capability": "expansion_signal_discovery",
+      "message": "Established by expansion_signal_discovery.",
+      "detail": {
+       "event": "expansion",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": [
+     "Find SaaS companies rapidly expanding headcount. (unsupported)"
+    ]
+   }
+  },
+  {
+   "id": "q7:Find companies using Snowflake.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find companies using Snowflake.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "technology",
+      "event": "technology",
+      "subject": "company",
+      "qualifier": {},
+      "phrase": "Find companies using Snowflake."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "technology_verification",
+      "order": 3,
+      "reason": "the mission requires evidence of the company's technology stack",
+      "providers": [
+       "apify_builtwith_technology"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_builtwith_technology"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 6,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find companies using Snowflake.",
+      "status": "satisfied",
+      "by_capability": "technology_verification",
+      "message": "Established by technology_verification.",
+      "detail": {
+       "event": "technology",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q8:Find companies where a new VP Sales was hired.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find companies where a new VP Sales was hired.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "leadership_change",
+      "event": "leadership_change",
+      "subject": "leadership",
+      "qualifier": {},
+      "phrase": "Find companies where a new VP Sales was hired.",
+      "timeframe_days": 180
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_founder_unlock",
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": false,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find companies where a new VP Sales was hired.",
+      "status": "unsupported",
+      "message": "Nothing scheduled can establish \"leadership_change\". No capability in this plan has a provider producing leadership_change/leadership evidence.",
+      "detail": {
+       "event": "leadership_change",
+       "subject": "leadership",
+       "mission_cohort": null,
+       "scheduled": [
+        "general_company_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "company_brain_qualification",
+        "persistence"
+       ]
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [
+     {
+      "code": "no_requirement_provable",
+      "requirement": "Find companies where a new VP Sales was hired.",
+      "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"leadership_change\". No capability in this plan has a provider producing leadership_change/leadership evidence.",
+      "detail": {
+       "requirements": [
+        {
+         "r": "Find companies where a new VP Sales was hired.",
+         "s": "unsupported"
+        }
+       ]
+      }
+     }
+    ],
+    "declared_gaps": [
+     "Find companies where a new VP Sales was hired. (unsupported)"
+    ]
+   }
+  },
+  {
+   "id": "q9:Find companies that recently opened a new office in the US.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find companies that recently opened a new office in the US.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q10:Find companies with strong recent LinkedIn activity.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find companies with strong recent LinkedIn activity.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q11:Find fintech companies in London hiring account executives.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find fintech companies in London hiring account executives.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "fintech"
+     ],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "gtm_sales"
+       ],
+       "role_terms": [
+        "account executives"
+       ]
+      },
+      "role_families": [
+       "gtm_sales"
+      ],
+      "phrase": "Find fintech companies in London hiring account executives."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find fintech companies in London hiring account executives.",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q12:Find 5 AI startups hiring software engineers.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find 5 AI startups hiring software engineers.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": 5,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [],
+     "stages": [
+      "startup"
+     ],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "engineering"
+       ],
+       "role_terms": [
+        "software engineers"
+       ]
+      },
+      "role_families": [
+       "engineering"
+      ],
+      "phrase": "Find 5 AI startups hiring software engineers."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.stages": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "explicit_user_request"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "startup_company_discovery",
+      "order": 0,
+      "reason": "the mission targets startups",
+      "providers": [
+       "apify_yc_companies_memo23",
+       "apify_yc_companies_solidcode",
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_yc_companies_memo23",
+     "apify_yc_companies_solidcode",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "startup_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets startups",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns.",
+     "The mission targets startups. Startup-cohort sources carry stage, team size and hiring state natively; a general company index does not and cannot prove any of them."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": "y_combinator",
+    "requirements": [
+     {
+      "requirement": "Find 5 AI startups hiring software engineers.",
+      "status": "satisfied",
+      "by_capability": "startup_company_discovery",
+      "message": "Established by startup_company_discovery.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": "y_combinator"
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q13:Find cybersecurity companies expanding into Europe.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find cybersecurity companies expanding into Europe.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "cybersecurity"
+     ],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "expansion",
+      "event": "expansion",
+      "subject": "company",
+      "qualifier": {
+       "region": "europe"
+      },
+      "phrase": "Find cybersecurity companies expanding into Europe.",
+      "timeframe_days": 180
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "expansion_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires an expansion signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "expansion_signal_verification",
+      "order": 3,
+      "reason": "the mission requires a verified expansion signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "expansion_signal_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires an expansion signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find cybersecurity companies expanding into Europe.",
+      "status": "satisfied",
+      "by_capability": "expansion_signal_discovery",
+      "message": "Established by expansion_signal_discovery.",
+      "detail": {
+       "event": "expansion",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "q14:Find B2B SaaS companies hiring RevOps that recently raised.",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find B2B SaaS companies hiring RevOps that recently raised.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": []
+    },
+    "required_signals": [
+     {
+      "type": "funding",
+      "event": "funding",
+      "subject": "company",
+      "qualifier": {},
+      "phrase": "Find B2B SaaS companies hiring RevOps that recently raised.",
+      "timeframe_days": 180
+     },
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "qualifier": {
+       "role_families": [
+        "ops"
+       ],
+       "role_terms": [
+        "revops that recently raised"
+       ]
+      },
+      "role_families": [
+       "ops"
+      ],
+      "phrase": "Find B2B SaaS companies hiring RevOps that recently raised."
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "required_signals": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "funding_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires a funding signal",
+      "providers": [
+       "apify_funding_rounds_datahyena"
+      ],
+      "cost_units": 3,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_funding_rounds_datahyena",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "funding_signal_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a funding signal",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "Find B2B SaaS companies hiring RevOps that recently raised.",
+      "status": "satisfied",
+      "by_capability": "funding_signal_discovery",
+      "message": "Established by funding_signal_discovery.",
+      "detail": {
+       "event": "funding",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     },
+     {
+      "requirement": "Find B2B SaaS companies hiring RevOps that recently raised.",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:hiring",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "phrase": "hiring",
+      "role_families": [
+       "marketing_growth"
+      ]
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "hiring",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:funding",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "funding",
+      "event": "funding",
+      "subject": "company",
+      "phrase": "funding"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "funding_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires a funding signal",
+      "providers": [
+       "apify_funding_rounds_datahyena"
+      ],
+      "cost_units": 3,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_funding_rounds_datahyena",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "funding_signal_discovery",
+    "estimated_cost_units": 9,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a funding signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "funding",
+      "status": "satisfied",
+      "by_capability": "funding_signal_discovery",
+      "message": "Established by funding_signal_discovery.",
+      "detail": {
+       "event": "funding",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:expansion",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "expansion",
+      "event": "expansion",
+      "subject": "company",
+      "phrase": "expansion"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "expansion_signal_discovery",
+      "order": 0,
+      "reason": "the mission requires an expansion signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "expansion_signal_verification",
+      "order": 3,
+      "reason": "the mission requires a verified expansion signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "expansion_signal_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires an expansion signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "expansion",
+      "status": "satisfied",
+      "by_capability": "expansion_signal_discovery",
+      "message": "Established by expansion_signal_discovery.",
+      "detail": {
+       "event": "expansion",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:product_launch",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "product_launch",
+      "event": "product_launch",
+      "subject": "company",
+      "phrase": "launch"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "product_launch_discovery",
+      "order": 0,
+      "reason": "the mission requires a product-launch signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "product_launch_verification",
+      "order": 3,
+      "reason": "the mission requires a verified product-launch signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "product_launch_discovery",
+    "estimated_cost_units": 11,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a product-launch signal",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "launch",
+      "status": "satisfied",
+      "by_capability": "product_launch_discovery",
+      "message": "Established by product_launch_discovery.",
+      "detail": {
+       "event": "product_launch",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:technology",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "technology",
+      "event": "technology",
+      "subject": "company",
+      "phrase": "technology"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "technology_verification",
+      "order": 3,
+      "reason": "the mission requires evidence of the company's technology stack",
+      "providers": [
+       "apify_builtwith_technology"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_builtwith_technology"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 6,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "technology",
+      "status": "satisfied",
+      "by_capability": "technology_verification",
+      "message": "Established by technology_verification.",
+      "detail": {
+       "event": "technology",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:leadership_change",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "leadership_change",
+      "event": "leadership_change",
+      "subject": "leadership",
+      "phrase": "leadership"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_founder_unlock",
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": false,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "leadership",
+      "status": "unsupported",
+      "message": "Nothing scheduled can establish \"leadership_change\". No capability in this plan has a provider producing leadership_change/leadership evidence.",
+      "detail": {
+       "event": "leadership_change",
+       "subject": "leadership",
+       "mission_cohort": null,
+       "scheduled": [
+        "general_company_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "company_brain_qualification",
+        "persistence"
+       ]
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [
+     {
+      "code": "no_requirement_provable",
+      "requirement": "leadership",
+      "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"leadership_change\". No capability in this plan has a provider producing leadership_change/leadership evidence.",
+      "detail": {
+       "requirements": [
+        {
+         "r": "leadership",
+         "s": "unsupported"
+        }
+       ]
+      }
+     }
+    ],
+    "declared_gaps": [
+     "leadership (unsupported)"
+    ]
+   }
+  },
+  {
+   "id": "inject:post_company",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "post",
+      "event": "post",
+      "subject": "company",
+      "phrase": "posts"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_post_verification",
+      "order": 3,
+      "reason": "the mission requires evidence from the company's own posts",
+      "providers": [
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 4,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 5,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 7,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "posts",
+      "status": "satisfied",
+      "by_capability": "company_post_verification",
+      "message": "Established by company_post_verification.",
+      "detail": {
+       "event": "post",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:headcount_change",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "headcount_change",
+      "event": "headcount_change",
+      "subject": "company",
+      "phrase": "headcount"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 3,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 4,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "hiring_verification",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 5,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": []
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": false,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "headcount",
+      "status": "unsupported",
+      "message": "Nothing scheduled can establish \"headcount_change\". No capability in this plan has a provider producing headcount_change/company evidence.",
+      "detail": {
+       "event": "headcount_change",
+       "subject": "company",
+       "mission_cohort": null,
+       "scheduled": [
+        "general_company_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "company_brain_qualification",
+        "persistence"
+       ]
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [
+     {
+      "code": "no_requirement_provable",
+      "requirement": "headcount",
+      "message": "This plan cannot establish the requirement the request depends on: Nothing scheduled can establish \"headcount_change\". No capability in this plan has a provider producing headcount_change/company evidence.",
+      "detail": {
+       "requirements": [
+        {
+         "r": "headcount",
+         "s": "unsupported"
+        }
+       ]
+      }
+     }
+    ],
+    "declared_gaps": [
+     "headcount (unsupported)"
+    ]
+   }
+  },
+  {
+   "id": "inject:hiring+product_launch",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "phrase": "hiring",
+      "role_families": [
+       "engineering"
+      ]
+     },
+     {
+      "type": "product_launch",
+      "event": "product_launch",
+      "subject": "company",
+      "phrase": "launch"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "product_launch_discovery",
+      "order": 0,
+      "reason": "the mission requires a product-launch signal",
+      "providers": [
+       "apify_google_news"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "product_launch_verification",
+      "order": 4,
+      "reason": "the mission requires a verified product-launch signal",
+      "providers": [
+       "apify_google_news",
+       "apify_linkedin_company_posts"
+      ],
+      "cost_units": 2,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 5,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 6,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "general_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "technology_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_google_news",
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search",
+     "apify_linkedin_company_posts"
+    ],
+    "entry_capability": "product_launch_discovery",
+    "estimated_cost_units": 13,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission requires a product-launch signal",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "hiring",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     },
+     {
+      "requirement": "launch",
+      "status": "satisfied",
+      "by_capability": "product_launch_discovery",
+      "message": "Established by product_launch_discovery.",
+      "detail": {
+       "event": "product_launch",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  },
+  {
+   "id": "inject:hiring+technology",
+   "mission": {
+    "version": "lead-mission-v1",
+    "original_user_query": "Find US B2B SaaS companies.",
+    "mission_type": "company_research",
+    "target_entity": "company",
+    "requested_output": "qualified_companies",
+    "requested_count": null,
+    "company_profile": {
+     "business_models": [],
+     "verticals": [
+      "b2b saas",
+      "saas"
+     ],
+     "stages": [],
+     "locations": [
+      "United States"
+     ]
+    },
+    "required_signals": [
+     {
+      "type": "hiring",
+      "event": "hiring",
+      "subject": "company",
+      "phrase": "hiring",
+      "role_families": [
+       "engineering"
+      ]
+     },
+     {
+      "type": "technology",
+      "event": "technology",
+      "subject": "company",
+      "phrase": "technology"
+     }
+    ],
+    "decision_makers": {
+     "roles": [],
+     "current_employment_required": false
+    },
+    "hard_constraints": {},
+    "soft_preferences": {},
+    "required_capabilities": [],
+    "prohibited_capabilities": [],
+    "field_provenance": {
+     "company_profile.verticals": "explicit_user_request",
+     "company_profile.locations": "explicit_user_request",
+     "target_entity": "explicit_user_request",
+     "requested_output": "explicit_user_request",
+     "requested_count": "system_default"
+    },
+    "confidence": 0.6,
+    "strategies": []
+   },
+   "plan": {
+    "version": "lead-capability-graph-v1",
+    "steps": [
+     {
+      "capability": "general_company_discovery",
+      "order": 0,
+      "reason": "the mission targets companies by profile",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "company_identity_resolution",
+      "order": 1,
+      "reason": "candidates need a canonical identity before enrichment",
+      "providers": [
+       "apify_linkedin_company_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_enrichment",
+      "order": 2,
+      "reason": "qualification requires enriched evidence, never discovery-time fields",
+      "providers": [
+       "apify_linkedin_company_details"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "hiring_verification",
+      "order": 3,
+      "reason": "the mission requires a verified hiring signal",
+      "providers": [
+       "apify_linkedin_job_search"
+      ],
+      "cost_units": 1,
+      "max_attempts": 2,
+      "fallback_policy": "provider_fallback_only"
+     },
+     {
+      "capability": "technology_verification",
+      "order": 4,
+      "reason": "the mission requires evidence of the company's technology stack",
+      "providers": [
+       "apify_builtwith_technology"
+      ],
+      "cost_units": 1,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "company_brain_qualification",
+      "order": 5,
+      "reason": "companies are qualified against the Company Brain",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     },
+     {
+      "capability": "persistence",
+      "order": 6,
+      "reason": "results are persisted to the Workbench",
+      "providers": [],
+      "cost_units": 0,
+      "max_attempts": 1,
+      "fallback_policy": "terminal_on_exhaustion"
+     }
+    ],
+    "prohibited": [
+     "startup_company_discovery",
+     "known_company_resolution",
+     "job_discovery",
+     "funding_signal_discovery",
+     "expansion_signal_discovery",
+     "product_launch_discovery",
+     "expansion_signal_verification",
+     "company_post_verification",
+     "product_launch_verification",
+     "founder_discovery",
+     "employer_verification",
+     "contact_enrichment",
+     "job_deduplication"
+    ],
+    "allowed_providers": [
+     "apify_linkedin_company_search",
+     "apify_linkedin_company_details",
+     "apify_linkedin_job_search",
+     "apify_builtwith_technology"
+    ],
+    "entry_capability": "general_company_discovery",
+    "estimated_cost_units": 8,
+    "offered_capabilities": [
+     "offer_deep_company_research"
+    ],
+    "routing_reason": "the mission targets companies by profile",
+    "routing_advisories": [
+     "This mission is hiring-first. No registered Actor can DISCOVER open job postings across employers: the four job-board Actors have no verified schema card, so no bounded input can be compiled for them, and apify_linkedin_job_search is company-scoped by contract — it verifies hiring inside a company set it is given and cannot find employers. Prefer a discovery Actor that carries EMBEDDED hiring evidence, or plan discovery first and hiring verification second over the pool it returns."
+    ]
+   },
+   "feasibility": {
+    "version": "request-feasibility-v1",
+    "ok": true,
+    "mission_cohort": null,
+    "requirements": [
+     {
+      "requirement": "hiring",
+      "status": "satisfied",
+      "by_capability": "hiring_verification",
+      "message": "Established by hiring_verification.",
+      "detail": {
+       "event": "hiring",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     },
+     {
+      "requirement": "technology",
+      "status": "satisfied",
+      "by_capability": "technology_verification",
+      "message": "Established by technology_verification.",
+      "detail": {
+       "event": "technology",
+       "subject": "company",
+       "mission_cohort": null
+      }
+     }
+    ],
+    "outputs": [
+     {
+      "requirement": "output:qualified_companies",
+      "status": "satisfied",
+      "by_capability": "company_brain_qualification",
+      "message": "Produced by company_brain_qualification.",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      }
+     }
+    ],
+    "refusals": [],
+    "declared_gaps": []
+   }
+  }
+ ]
+}

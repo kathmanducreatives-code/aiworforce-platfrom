@@ -28,6 +28,7 @@ import {
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
+import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 import { validateV2KickoffBody } from "../_shared/leadMissionV2Request.ts";
 import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
@@ -821,7 +822,11 @@ Deno.serve(async (req) => {
     // came to sit above a one-step execution card.
     const approvedMission = isLeadMissionV1(lead_mission) ? lead_mission : null;
     if (approvedMission) {
-      const graph: CapabilityPlan = buildCapabilityGraph(approvedMission);
+      // P0: a Lead V2 workspace never schedules a capability the engine
+      // cannot execute. V1 workspaces keep today's graph (legacy).
+      const graph: CapabilityPlan = buildCapabilityGraph(approvedMission, {
+        executability: executabilityGateFor(workspace_id, (k) => Deno.env.get(k)),
+      });
       const missionStep = mkStep(
         0,
         "scout",

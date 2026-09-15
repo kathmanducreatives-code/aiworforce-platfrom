@@ -1,0 +1,4052 @@
+{
+ "agent_slug": "scout",
+ "created_at": "2026-09-14T07:14:53.462447+00:00",
+ "id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+ "result": {
+  "auto_continuation": {
+   "continuing": false,
+   "decision": "retry_budget_exhausted",
+   "detail": "the Lead V2 queue ended this mission (failed: retry_budget_exhausted)",
+   "dispatch": null,
+   "user_message": "Still working \u2014 I've been through every company found so far and need 1 more, so I'm widening the search.",
+   "version": "lead-auto-continuation-v1"
+  },
+  "capability_execution_state": {
+   "accumulated_cost_units": 33,
+   "binding_fingerprint": null,
+   "company_keys": [],
+   "completed_capabilities": [
+    "company_identity_resolution",
+    "company_enrichment",
+    "startup_company_discovery"
+   ],
+   "completed_runs": [
+    {
+     "dataset_id": "3kEPT4mtnhQPinDCb",
+     "input_fingerprint": "e09fecb0",
+     "provider": "apify_yc_companies_memo23",
+     "run_id": "g3wIijOAbYpEEwI97"
+    },
+    {
+     "dataset_id": "m9iZ2MBduHeXtpMRt",
+     "input_fingerprint": "f8524e5c",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "H71EoIbUDYRi47f7q"
+    },
+    {
+     "dataset_id": "FDH0VY63nByioXokL",
+     "input_fingerprint": "df3c945f",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "gG1Yt5mKQJTbjIBDD"
+    },
+    {
+     "dataset_id": "qk02YWPTucxPzeTFz",
+     "input_fingerprint": "99981f8c",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "qVLqrcbOdZYclFpYa"
+    },
+    {
+     "dataset_id": "iMiY9YMOgTXXYn0GR",
+     "input_fingerprint": "6985c367",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "Jqm0FIlTKVeEbvaFg"
+    },
+    {
+     "dataset_id": "Ic5HAi4fiHilV3twE",
+     "input_fingerprint": "74c0ef65",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "lZsPL9SSSIE0B485e"
+    },
+    {
+     "dataset_id": "g5Rvucmi7Lhnokci2",
+     "input_fingerprint": "b0bebd93",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "qBUV7vXsJ1QUG7u5H"
+    },
+    {
+     "dataset_id": "rCsdEl8YEGaeosXaP",
+     "input_fingerprint": "352b34fb",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "HcSwE2i3UyWBXOBm1"
+    },
+    {
+     "dataset_id": "LJAVPacnX0crDtEcJ",
+     "input_fingerprint": "96a45d2",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "2CokWpVpjOtygHItD"
+    },
+    {
+     "dataset_id": "2Aq9vd4LIrLfyGfJZ",
+     "input_fingerprint": "37976e92",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "b6HlRFINbbGAdfYtG"
+    },
+    {
+     "dataset_id": "UWvnqi6JZSwGP1nNQ",
+     "input_fingerprint": "712563df",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "BZc9embexL0LMwrCp"
+    },
+    {
+     "dataset_id": "L2B6KUYZZOx3HKttT",
+     "input_fingerprint": "a4ebf094",
+     "provider": "apify_linkedin_company_details",
+     "run_id": "z6rRZhStbiRn7yOpg"
+    },
+    {
+     "dataset_id": "aEA2hmqgACNUlbxsT",
+     "input_fingerprint": "ce39b062",
+     "provider": "apify_yc_companies_memo23",
+     "run_id": "biOMPehAiDAbEx2Ci"
+    },
+    {
+     "dataset_id": "GQnrsJXKQYFM5z8qv",
+     "input_fingerprint": "bd59571d",
+     "provider": "apify_yc_companies_memo23",
+     "run_id": "mT7T2ewScfEI2Wxdi"
+    },
+    {
+     "dataset_id": "fSrSHuTMggtsknsQy",
+     "input_fingerprint": "bee77478",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "MFA7h04MHkEgn01cX"
+    },
+    {
+     "dataset_id": "ezNZ0wNStfZ9lt6hE",
+     "input_fingerprint": "31b72fab",
+     "provider": "apify_linkedin_company_details",
+     "run_id": "paRmY6609UebBnLtV"
+    },
+    {
+     "dataset_id": "eMeNJTXm9vu9yh2Ji",
+     "input_fingerprint": "479bd369",
+     "provider": "apify_yc_companies_memo23",
+     "run_id": "Jg1SocG73w5Mtze99"
+    },
+    {
+     "dataset_id": "0yhPgkPVN4Fqu7pMB",
+     "input_fingerprint": "a913b940",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "edDicoXd6ltPejHDV"
+    },
+    {
+     "dataset_id": "UPie5Kx7eaYxpIi7U",
+     "input_fingerprint": "6ce2b28a",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "wY7rr27oPWMYk0vLJ"
+    },
+    {
+     "dataset_id": "p2dqCTfRC23passEc",
+     "input_fingerprint": "6099235b",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "WxHPLqxN3UgobVd1r"
+    },
+    {
+     "dataset_id": "657iqDyUeHnXfbemT",
+     "input_fingerprint": "cdf1d6ed",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "89ddIOHX6jU8H5PVc"
+    },
+    {
+     "dataset_id": "gTpKZUfNtoffKPtfI",
+     "input_fingerprint": "40e3f390",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "gQGESe0ibetD4APqw"
+    },
+    {
+     "dataset_id": "ljWm3buAsEAtvemfM",
+     "input_fingerprint": "461aa9d6",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "Mag7x0uoD0MknhD17"
+    },
+    {
+     "dataset_id": "Y7bQpdMgupxxigOli",
+     "input_fingerprint": "71dd2a80",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "AfKYJEMDMGfM9NdVw"
+    },
+    {
+     "dataset_id": "VJkff7C4BkFdKFzfd",
+     "input_fingerprint": "6ecdf506",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "BAyaMHVOjmDBkPRn4"
+    },
+    {
+     "dataset_id": "9mmgpyGPc3dJ6Sq1t",
+     "input_fingerprint": "4496a74c",
+     "provider": "apify_linkedin_company_details",
+     "run_id": "qFHlWi91GKXlYkgqr"
+    },
+    {
+     "dataset_id": "SpRNOb6JBdAFrOebZ",
+     "input_fingerprint": "915d61ac",
+     "provider": "apify_yc_companies_memo23",
+     "run_id": "4havAcZYghTdDA0DJ"
+    },
+    {
+     "dataset_id": "QRhnYF5hZVLnCHzEa",
+     "input_fingerprint": "71f311b7",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "D0Vwys0SqzIW4WVf8"
+    },
+    {
+     "dataset_id": "rEnSUbWhhqXxCNSen",
+     "input_fingerprint": "1d20f2fb",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "f1jD96qxQPCeNUfdl"
+    },
+    {
+     "dataset_id": "OhBIAipHl3phU7cU9",
+     "input_fingerprint": "7a1e214f",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "ppgJyaKoleTa8zueq"
+    },
+    {
+     "dataset_id": "LBVWGbe1dLxnv5Ckc",
+     "input_fingerprint": "e88fd186",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "XVTjIYlu2cPQff3bG"
+    },
+    {
+     "dataset_id": "O6rOds7uvQsX1ykgZ",
+     "input_fingerprint": "81b9c9a",
+     "provider": "apify_linkedin_company_search",
+     "run_id": "7WtGtHGvQp373cfYn"
+    },
+    {
+     "dataset_id": "316BWg6ULcC1LNold",
+     "input_fingerprint": "58faa9e1",
+     "provider": "apify_linkedin_company_details",
+     "run_id": "L5QHuk9MTVSggq3Cy"
+    }
+   ],
+   "contact_identities": [],
+   "current_capability": null,
+   "discovery_query_families": [
+    "{\"q\":[\"b2b saas\",\"saas\"],\"b\":[\"all batches\"],\"r\":[\"united states of america\"],\"i\":[\"b2b\"],\"role\":\"marketing\",\"hiring\":true,\"mode\":\"companies\"}",
+    "{\"q\":[\"b2b saas\",\"b2b software as a service\",\"business software saas\"],\"b\":[\"all batches\"],\"r\":[\"united states of america\"],\"i\":[\"all industries\"],\"role\":\"marketing\",\"hiring\":true,\"mode\":\"companies\"}",
+    "{\"q\":[\"b2b saas\",\"saas startup\"],\"b\":[\"all batches\"],\"r\":[\"united states of america\"],\"i\":[\"all industries\"],\"role\":\"marketing\",\"hiring\":true,\"mode\":\"companies\"}",
+    "{\"q\":[\"b2b saas\",\"business software saas\",\"software for businesses\"],\"b\":[\"fall 2025\",\"spring 2026\",\"summer 2025\",\"winter 2026\"],\"r\":[\"united states of america\"],\"i\":[\"all industries\"],\"role\":\"marketing\",\"hiring\":true,\"mode\":\"companies\"}",
+    "{\"q\":[],\"b\":[\"all batches\"],\"r\":[\"united states of america\"],\"i\":[\"b2b\"],\"role\":\"marketing\",\"hiring\":true,\"mode\":\"companies\"}"
+   ],
+   "discovery_source_state": {
+    "admitted": 30,
+    "available_admitted": 12,
+    "exhausted": false,
+    "pages_taken": {
+     "apify_yc_companies_memo23": 1
+    },
+    "pool_target": 8,
+    "raw_rows": 30,
+    "sources_attempted": [
+     "apify_yc_companies_memo23"
+    ],
+    "stop_reason": "admitted_target_met"
+   },
+   "discovery_strategy": {
+    "actors": [
+     {
+      "actor_key": "apify_yc_companies_memo23",
+      "dropped_filters": [],
+      "input": {
+       "isHiring": true,
+       "maxEmployeeSize": "250",
+       "maxItems": 10,
+       "minEmployeeSize": "1+",
+       "mode": "companies",
+       "queries": [
+        "B2B SaaS",
+        "SaaS software"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "role": "marketing",
+       "scrapeFounderDetails": false,
+       "scrapeOpenJobs": true,
+       "topCompany": false
+      },
+      "input_fields": [
+       "isHiring",
+       "maxEmployeeSize",
+       "maxItems",
+       "minEmployeeSize",
+       "mode",
+       "queries",
+       "regions",
+       "role",
+       "scrapeFounderDetails",
+       "scrapeOpenJobs",
+       "topCompany"
+      ],
+      "rationale": "Discover US YC startups with current hiring status and embedded open-job evidence, biased toward B2B SaaS and marketing roles. The returned openJobs will be checked for an exact or clearly equivalent growth-marketer role and the company record will be checked for seed-stage fit.",
+      "requires_enrichment": true,
+      "role": "primary"
+     }
+    ],
+    "all_require_enrichment": true,
+    "blocked": 0,
+    "model_chosen": true,
+    "repaired": 0,
+    "source": "model_validated",
+    "version": "lead-discovery-strategy-v1",
+    "violations": []
+   },
+   "entry_capability": "startup_company_discovery",
+   "execution_plan": {
+    "reasoning": "",
+    "source": "model_validated",
+    "steps": [
+     {
+      "actor_key": "apify_yc_companies_memo23",
+      "capability": "startup_company_discovery",
+      "depends_on": [],
+      "input": {
+       "isHiring": true,
+       "maxEmployeeSize": "250",
+       "maxItems": 100,
+       "minEmployeeSize": "1+",
+       "mode": "companies",
+       "queries": [
+        "B2B SaaS",
+        "SaaS software"
+       ],
+       "regions": [
+        "United States of America"
+       ],
+       "role": "marketing",
+       "scrapeFounderDetails": false,
+       "scrapeOpenJobs": true,
+       "topCompany": false
+      },
+      "purpose": "Discover US YC startups with current hiring status and embedded open-job evidence, biased toward B2B SaaS and marketing roles. The returned openJobs will be checked for an exact or clearly equivalent growth-marketer role and the company record will be checked for seed-stage fit.",
+      "step": 1
+     },
+     {
+      "actor_key": "apify_linkedin_company_search",
+      "capability": "company_identity_resolution",
+      "depends_on": [],
+      "input": {
+       "maxItems": 5,
+       "scraperMode": "full",
+       "searchQuery": "{{candidate.name}}"
+      },
+      "purpose": "Resolve each surviving YC candidate by company name to a real LinkedIn company URL. This is necessary because the YC discovery output has no LinkedIn URL; the LinkedIn search result is used for identity only, not as proof of industry, size, or hiring.",
+      "step": 2
+     },
+     {
+      "actor_key": "apify_linkedin_company_details",
+      "capability": "company_enrichment",
+      "depends_on": [
+       1
+      ],
+      "input": {
+       "companies": [
+        "{{identity.linkedinUrl}}"
+       ]
+      },
+      "purpose": "Enrich the resolved companies with authoritative exact employee count, industry hierarchy, description, locations, website, and canonical LinkedIn identity so B2B SaaS, US location, and small-company fit can be judged against the mission and Brain.",
+      "step": 3
+     },
+     {
+      "actor_key": null,
+      "capability": "company_brain_qualification",
+      "depends_on": [
+       2
+      ],
+      "input": {},
+      "purpose": "Qualify and rank the enriched candidates against the explicit mission and Company Brain. Require US location, B2B SaaS business, seed-stage startup evidence, and a current open job whose title or description genuinely indicates a growth-marketing role; exclude Brain disqualifiers and retain the strongest 3.",
+      "step": 4
+     },
+     {
+      "actor_key": null,
+      "capability": "persistence",
+      "depends_on": [
+       3
+      ],
+      "input": {},
+      "purpose": "Persist the final three qualified companies and their supporting identity, enrichment, and open-job evidence to the Workbench.",
+      "step": 5
+     }
+    ],
+    "version": "lead-execution-plan-v1",
+    "violations": []
+   },
+   "fallback_reason": null,
+   "identity_match_diagnostics": {
+    "accepted_rank_histogram": {
+     "0": 10,
+     "1": 2,
+     "3": 3,
+     "6": 1
+    },
+    "by_code": {
+     "domain_exact": 16,
+     "domain_mismatch": 13,
+     "name_and_slug": 1,
+     "name_matched_nothing_corroborated": 1,
+     "no_name_or_domain_match": 72
+    },
+    "companies_accepted": 16,
+    "companies_judged": 22,
+    "companies_rejected": 6,
+    "rejected_samples": [
+     {
+      "candidate_domain": "www.lab0.com",
+      "candidate_name": "Lab0",
+      "candidate_slug": "lab0",
+      "code": "domain_mismatch",
+      "company_domain": "lab0.ai",
+      "company_key": "lab0.ai",
+      "company_name": "Lab0",
+      "rank": 0
+     },
+     {
+      "candidate_domain": "http://www.clean-streak.com",
+      "candidate_name": "Clean Streak Ventures",
+      "candidate_slug": "cleanstreak",
+      "code": "no_name_or_domain_match",
+      "company_domain": "streak.com",
+      "company_key": "streak.com",
+      "company_name": "Streak",
+      "rank": 0
+     },
+     {
+      "candidate_domain": "www.mossconsulting.com",
+      "candidate_name": "Moss Consulting HR Services",
+      "candidate_slug": "mossconsulting",
+      "code": "no_name_or_domain_match",
+      "company_domain": "moss.dev",
+      "company_key": "moss.dev",
+      "company_name": "Moss",
+      "rank": 0
+     },
+     {
+      "candidate_domain": "http://www.taskletfactory.com",
+      "candidate_name": "Tasklet Factory",
+      "candidate_slug": "taskletfactory",
+      "code": "no_name_or_domain_match",
+      "company_domain": "tasklet.ai",
+      "company_key": "tasklet.ai",
+      "company_name": "Tasklet",
+      "rank": 0
+     },
+     {
+      "candidate_domain": "https://manicule.dev",
+      "candidate_name": "Manicule (YC P26)",
+      "candidate_slug": "manicule",
+      "code": "no_name_or_domain_match",
+      "company_domain": "manicule.com",
+      "company_key": "manicule.com",
+      "company_name": "Manicule",
+      "rank": 0
+     },
+     {
+      "candidate_domain": null,
+      "candidate_name": "NIXO",
+      "candidate_slug": "nixo",
+      "code": "name_matched_nothing_corroborated",
+      "company_domain": "withnixo.com",
+      "company_key": "withnixo.com",
+      "company_name": "Nixo",
+      "rank": 1
+     }
+    ],
+    "retrieval_modes": {
+     "full": 103
+    },
+    "retrieval_outcomes": {
+     "candidates_returned": 22,
+     "no_candidates": 8
+    },
+    "version": "identity-match-diagnostics-v1"
+   },
+   "investigation_capacity": {
+    "capacity": 6,
+    "concurrency": 4,
+    "enrichment_batch_size": 10,
+    "enrichment_call_ms": 12000,
+    "hiring_batch_size": 3,
+    "hiring_call_ms": 80000,
+    "identity_call_ms": 12000,
+    "per_company_ms": 42867,
+    "qualification_ms": 12000,
+    "remaining_ms": 291667,
+    "reserve_ms": 18000,
+    "usable_ms": 273667
+   },
+   "investigation_ranking": [],
+   "investigation_selected": 24,
+   "investigation_slices": [
+    {
+     "carried": 0,
+     "excluded": 0,
+     "investigated": 0,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 10
+    },
+    {
+     "carried": 0,
+     "excluded": 2,
+     "investigated": 8,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 1
+    },
+    {
+     "carried": 0,
+     "excluded": 0,
+     "investigated": 2,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 8
+    },
+    {
+     "carried": 0,
+     "excluded": 4,
+     "investigated": 1,
+     "pass": 1,
+     "reason": "budget",
+     "remaining": 0,
+     "selected": 5
+    },
+    {
+     "carried": 0,
+     "excluded": 0,
+     "investigated": 0,
+     "pass": 1,
+     "reason": "no_capacity",
+     "remaining": 0,
+     "selected": 0
+    }
+   ],
+   "mission_hash": "f47399e6cc67e9051acc03532fb9654285abd22e21acf1736bd58ea10d6f908c",
+   "mission_output": {
+    "companies": [],
+    "people": "[stripped:people]",
+    "requested_entity": "company",
+    "returned_entity": "company",
+    "rows_are_the_answer": true,
+    "substitution": {
+     "accounts_pending": 0,
+     "message": null,
+     "occurred": false,
+     "reason": null,
+     "unlock_capability": null,
+     "unlock_credits": null
+    },
+    "version": "mission-output-contract-v1"
+   },
+   "pending_capabilities": [
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+   ],
+   "pending_runs": [],
+   "prequalification": {
+    "any_open_role_satisfies_signal": false,
+    "artifacts_excluded": 0,
+    "companies": [],
+    "companies_with_commercial_roles": 0,
+    "companies_with_open_roles": 0,
+    "companies_with_technical_roles": 0,
+    "eligible_companies": 0,
+    "employee_size_excluded": 0,
+    "generic_scored": 0,
+    "generic_version": "generic-prequalification-v1",
+    "generic_with_description": 0,
+    "generic_with_trusted_size": 0,
+    "open_jobs_evaluated": 0,
+    "technical_only_companies": 0,
+    "technical_roles_satisfy_signal": false,
+    "total_rows": 0,
+    "unique_companies": 0,
+    "version": "commercial-prequalification-v1"
+   },
+   "progress": {
+    "accounts_found": 0,
+    "awaiting_external_run": false,
+    "companies_enriched": 0,
+    "decision_makers_verified": 0,
+    "eligible_opportunities": 0,
+    "evaluated": 0,
+    "exclusion_reasons": {},
+    "hiring_verified": 0,
+    "identity_resolved": 0,
+    "identity_unresolved": 0,
+    "in_progress": true,
+    "open_jobs_evaluated": 0,
+    "qualified_companies": 0,
+    "shortlisted": 0,
+    "stage": "qualified"
+   },
+   "provider_attempts": [
+    {
+     "attempt": 1,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "e09fecb0",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 1,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "df3c945f",
+     "outcome": "empty",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 0
+    },
+    {
+     "attempt": 2,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "99981f8c",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 3,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6985c367",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 4,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "352b34fb",
+     "outcome": "empty",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 0
+    },
+    {
+     "attempt": 5,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "f8524e5c",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 6,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "74c0ef65",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 4
+    },
+    {
+     "attempt": 7,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "b0bebd93",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 8,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "96a45d2",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 9,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "37976e92",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 10,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "712563df",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 1,
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "input_fingerprint": "a4ebf094",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_details",
+     "reason": null,
+     "rows": 6
+    },
+    {
+     "attempt": 2,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "ce39b062",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 3,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "bd59571d",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 11,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "6985c367",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 12,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "df3c945f",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 13,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "352b34fb",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 14,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "bee77478",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 3
+    },
+    {
+     "attempt": 2,
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "input_fingerprint": "31b72fab",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_details",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 4,
+     "capability": "startup_company_discovery",
+     "cost_units": 0,
+     "outcome": "skipped_repeat_query",
+     "provider": "apify_yc_companies_memo23",
+     "reason": "this lineage already bought this discovery question; its rows are in the pool",
+     "rows": 0
+    },
+    {
+     "attempt": 5,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "479bd369",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 15,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "6985c367",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 16,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "df3c945f",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 17,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "cdf1d6ed",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 2
+    },
+    {
+     "attempt": 18,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "a913b940",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 4
+    },
+    {
+     "attempt": 19,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6ce2b28a",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 20,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6099235b",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 21,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "71dd2a80",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 2
+    },
+    {
+     "attempt": 22,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "461aa9d6",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 23,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "40e3f390",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 24,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "6ecdf506",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 2
+    },
+    {
+     "attempt": 3,
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "input_fingerprint": "4496a74c",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_details",
+     "reason": null,
+     "rows": 4
+    },
+    {
+     "attempt": 6,
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "input_fingerprint": "915d61ac",
+     "outcome": "ok",
+     "provider": "apify_yc_companies_memo23",
+     "reason": null,
+     "rows": 10
+    },
+    {
+     "attempt": 25,
+     "capability": "company_identity_resolution",
+     "cost_units": 0,
+     "input_fingerprint": "37976e92",
+     "outcome": "skipped_resume_reuse",
+     "provider": "apify_linkedin_company_search",
+     "reason": "already_completed",
+     "rows": 0
+    },
+    {
+     "attempt": 26,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "1d20f2fb",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 27,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "71f311b7",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 28,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "7a1e214f",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 29,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "e88fd186",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 15
+    },
+    {
+     "attempt": 30,
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "input_fingerprint": "81b9c9a",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_search",
+     "reason": null,
+     "rows": 1
+    },
+    {
+     "attempt": 4,
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "input_fingerprint": "58faa9e1",
+     "outcome": "ok",
+     "provider": "apify_linkedin_company_details",
+     "reason": null,
+     "rows": 5
+    }
+   ],
+   "qualified_company_keys": [],
+   "shortlist_decision": {
+    "budget": {
+     "budget": 0,
+     "cap": 100,
+     "pool_size": 0,
+     "requested_count": 3,
+     "source": "pool_bound",
+     "version": "lead-investigation-budget-v1"
+    },
+    "counts": {
+     "hard_excluded": 0,
+     "ineligible": 0,
+     "irrelevant": 0,
+     "no_triage": 0,
+     "ranked": 0,
+     "relevant": 0,
+     "selected": 0,
+     "uncertain": 0
+    },
+    "gpt_budget": {
+     "cap": 500,
+     "evaluation_budget": 0,
+     "pool_size": 0,
+     "read_budget": 0,
+     "source": "pool_bound",
+     "version": "lead-investigation-budget-v1"
+    },
+    "ranking": [],
+    "time_capacity": {
+     "capacity": 6,
+     "concurrency": 4,
+     "enrichment_batch_size": 10,
+     "enrichment_call_ms": 12000,
+     "hiring_batch_size": 3,
+     "hiring_call_ms": 80000,
+     "identity_call_ms": 12000,
+     "per_company_ms": 42867,
+     "qualification_ms": 12000,
+     "remaining_ms": 291667,
+     "reserve_ms": 18000,
+     "usable_ms": 273667
+    },
+    "untriaged_policy": "rank"
+   },
+   "signal_coverage": {
+    "fully_covered": true,
+    "required_actors": [
+     "apify_yc_companies_memo23",
+     "apify_linkedin_job_search"
+    ],
+    "runnable_actors": [
+     "apify_yc_companies_memo23",
+     "apify_linkedin_company_search",
+     "apify_linkedin_job_search"
+    ],
+    "signals": [
+     {
+      "actors": [
+       "apify_yc_companies_memo23",
+       "apify_linkedin_job_search"
+      ],
+      "scenarios": [
+       "hiring_engineers"
+      ],
+      "signal": "hiring",
+      "status": "covered"
+     }
+    ]
+   },
+   "terminal_reason": null,
+   "triage": {
+    "batches_available": 1,
+    "batches_made": 1,
+    "irrelevant": 4,
+    "relevant": 0,
+    "total": 10,
+    "uncertain": 6
+   },
+   "unknown_company_keys": [],
+   "version": "capability-execution-state-v1"
+  },
+  "capability_graph": {
+   "allowed_providers": [
+    "apify_yc_companies_memo23",
+    "apify_yc_companies_solidcode",
+    "apify_linkedin_company_search",
+    "apify_linkedin_company_details",
+    "apify_linkedin_job_search"
+   ],
+   "entry_capability": "startup_company_discovery",
+   "estimated_cost_units": 7,
+   "prohibited": [
+    "general_company_discovery",
+    "known_company_resolution",
+    "job_discovery",
+    "funding_signal_discovery",
+    "expansion_signal_discovery",
+    "product_launch_discovery",
+    "expansion_signal_verification",
+    "company_post_verification",
+    "product_launch_verification",
+    "technology_verification",
+    "founder_discovery",
+    "employer_verification",
+    "contact_enrichment",
+    "job_deduplication"
+   ],
+   "steps": [
+    {
+     "capability": "startup_company_discovery",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 0,
+     "providers": [
+      "apify_yc_companies_memo23",
+      "apify_yc_companies_solidcode",
+      "apify_linkedin_company_search"
+     ],
+     "reason": "the mission targets startups"
+    },
+    {
+     "capability": "company_identity_resolution",
+     "cost_units": 1,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 1,
+     "providers": [
+      "apify_linkedin_company_search"
+     ],
+     "reason": "candidates need a canonical identity before enrichment"
+    },
+    {
+     "capability": "company_enrichment",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 2,
+     "providers": [
+      "apify_linkedin_company_details"
+     ],
+     "reason": "qualification requires enriched evidence, never discovery-time fields"
+    },
+    {
+     "capability": "hiring_verification",
+     "cost_units": 1,
+     "fallback_policy": "provider_fallback_only",
+     "max_attempts": 2,
+     "order": 3,
+     "providers": [
+      "apify_linkedin_job_search"
+     ],
+     "reason": "the mission requires a verified hiring signal"
+    },
+    {
+     "capability": "company_brain_qualification",
+     "cost_units": 0,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 4,
+     "providers": [],
+     "reason": "companies are qualified against the Company Brain"
+    },
+    {
+     "capability": "persistence",
+     "cost_units": 0,
+     "fallback_policy": "terminal_on_exhaustion",
+     "max_attempts": 1,
+     "order": 5,
+     "providers": [],
+     "reason": "results are persisted to the Workbench"
+    }
+   ],
+   "version": "lead-capability-graph-v1"
+  },
+  "capability_outcomes": [
+   {
+    "capability": "startup_company_discovery",
+    "evidence_satisfied": true,
+    "providers_used": [],
+    "reason": null,
+    "rows": 0,
+    "status": "complete"
+   },
+   {
+    "capability": "company_identity_resolution",
+    "evidence_satisfied": true,
+    "providers_used": [],
+    "reason": "completed in an earlier run",
+    "rows": 0,
+    "status": "skipped_resumed"
+   },
+   {
+    "capability": "company_enrichment",
+    "evidence_satisfied": true,
+    "providers_used": [],
+    "reason": "completed in an earlier run",
+    "rows": 0,
+    "status": "skipped_resumed"
+   },
+   {
+    "capability": "hiring_verification",
+    "evidence_satisfied": false,
+    "providers_used": [],
+    "reason": "the planned chain proves hiring from evidence an earlier step already returned; a paid verification would re-buy it",
+    "rows": 0,
+    "status": "skipped_no_input"
+   },
+   {
+    "capability": "company_brain_qualification",
+    "evidence_satisfied": false,
+    "providers_used": [],
+    "reason": "no company reached the Company Brain: none of the 0 companies carried a hiring assessment \u2014 nothing was evaluated, nothing was rejected",
+    "rows": 0,
+    "status": "complete"
+   },
+   {
+    "capability": "persistence",
+    "evidence_satisfied": true,
+    "providers_used": [],
+    "reason": null,
+    "rows": 0,
+    "status": "complete"
+   }
+  ],
+  "company_brain_observability": {
+   "companies": []
+  },
+  "company_brain_policy": {
+   "brain_version": null,
+   "enforced": true,
+   "hard_constraints": [
+    "employee_count",
+    "industry",
+    "business_model"
+   ],
+   "policy_hash": "b3259dcdb63dff5b19b4137e8813a3efcbae561f17ac32705b06229f35c678af",
+   "policy_version": "company-brain-effective-policy-1.0.0",
+   "rejected_broadening": [],
+   "size": {
+    "confirmation_required": false,
+    "mapping_id": null,
+    "mapping_version": "company-size-semantics-1.0.0",
+    "max": 150,
+    "min": 1,
+    "source": "explicit_numeric"
+   },
+   "unknown_evidence": "research"
+  },
+  "company_first": {
+   "bottlenecks": [],
+   "budget_consumed": 0,
+   "continuation": {
+    "checkpoint_at": "2026-09-14T07:37:30.639Z",
+    "continuation_token": null,
+    "next_action": "finalize",
+    "next_round": null,
+    "required": false,
+    "resumed_from_round": 1
+   },
+   "continuation_owner": "v2_queue",
+   "counts": {
+    "candidates": 0,
+    "contact": 0,
+    "needsReview": 0,
+    "persisted": 0,
+    "rawJobs": 0,
+    "reject": 0,
+    "verifiedCompanies": 0,
+    "watch": 0
+   },
+   "diagnostics": {
+    "budgetStopped": false,
+    "jobsInvoked": false,
+    "peopleCalls": 0
+   },
+   "executed_sourcing_mode": "company_first",
+   "expansions_attempted": [],
+   "idempotency": [],
+   "items": [],
+   "lead_quota_provenance": {
+    "execution_quota": 1,
+    "mission_requested": 3,
+    "source": "v2_canary"
+   },
+   "plan_sources": [],
+   "planner_metadata": [],
+   "provider_calls": 0,
+   "quota": {
+    "eligible_leads": 0,
+    "quota_policy": "contact_only",
+    "remaining_leads": 1,
+    "requested_count_source": "explicit",
+    "requested_leads": 1
+   },
+   "rounds": [],
+   "rounds_attempted": 0,
+   "routing": {
+    "company_first": true,
+    "execution_mode": "company_first",
+    "job_search_spec": {
+     "company_vertical": "saas",
+     "compilation_status": "insufficient",
+     "keyword_queries": [],
+     "location": "United States"
+    },
+    "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+    "requested_person_role": null
+   },
+   "semantic_classification": {
+    "budget_exhausted": false,
+    "calls_allowed": 10,
+    "calls_made": 0,
+    "calls_remaining": 10,
+    "companies_classified": 0,
+    "skipped": {}
+   },
+   "stage_funnel": {
+    "candidates_discovered": 0,
+    "company_fit_evaluated": 0,
+    "company_fit_pass": 0,
+    "company_fit_pending": 0,
+    "company_fit_reject": 0,
+    "contact_ready": 0,
+    "enrichment_complete": 0,
+    "enrichment_pending": 0,
+    "founder_mismatch": 0,
+    "founder_searched": 0,
+    "founder_verified": 0,
+    "hiring_checked": 0,
+    "hiring_not_verified": 0,
+    "hiring_verified": 0,
+    "identity_pending": 0,
+    "qualified_companies": 0,
+    "quota_counted": 0
+   },
+   "status": "round_limit_reached",
+   "terminal_reason": "the legacy sourcing loop is disabled for this run; the capability engine owns sourcing and this loop reports no rounds of its own",
+   "writeBoundary": {
+    "invariantViolation": null,
+    "normalizedJobs": 0,
+    "peopleResults": 0,
+    "persistedRecords": 0,
+    "persistenceAttempts": 0,
+    "providerSideWrites": 0,
+    "qualifiedCandidates": 0,
+    "rawProviderItems": 0,
+    "rejectedCandidates": 0,
+    "verifiedCompanies": 0
+   }
+  },
+  "company_first_state": {
+   "actual_cost": 0,
+   "attempted_strategy_hashes": [],
+   "attempted_titles": [],
+   "candidate_diagnostics": [],
+   "checkpoint_at": "2026-09-14T07:37:30.639Z",
+   "completed_calls": [],
+   "completed_rounds": [],
+   "current_round": 1,
+   "eligible_leads": 0,
+   "estimated_cost": 0,
+   "next_action": "start_round",
+   "persisted_lead_keys": [],
+   "planner_metadata": [],
+   "quota_policy": "contact_only",
+   "remaining_leads": 1,
+   "requested_lead_count": 1,
+   "seen_company_keys": [],
+   "seen_job_urls": [],
+   "seen_lead_keys": [],
+   "task_id": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+   "terminal_reason": null,
+   "terminal_status": null,
+   "version": "company-first-state-1.0.0",
+   "workspace_id": "e8af257d-4c42-4fc2-9d62-037cdfac27c4"
+  },
+  "continuation_owner": "v2_queue",
+  "discovery_strategy": {
+   "actors": [
+    {
+     "actor_key": "apify_yc_companies_memo23",
+     "dropped_filters": [],
+     "input": {
+      "isHiring": true,
+      "maxEmployeeSize": "250",
+      "maxItems": 10,
+      "minEmployeeSize": "1+",
+      "mode": "companies",
+      "queries": [
+       "B2B SaaS",
+       "SaaS software"
+      ],
+      "regions": [
+       "United States of America"
+      ],
+      "role": "marketing",
+      "scrapeFounderDetails": false,
+      "scrapeOpenJobs": true,
+      "topCompany": false
+     },
+     "input_fields": [
+      "isHiring",
+      "maxEmployeeSize",
+      "maxItems",
+      "minEmployeeSize",
+      "mode",
+      "queries",
+      "regions",
+      "role",
+      "scrapeFounderDetails",
+      "scrapeOpenJobs",
+      "topCompany"
+     ],
+     "rationale": "Discover US YC startups with current hiring status and embedded open-job evidence, biased toward B2B SaaS and marketing roles. The returned openJobs will be checked for an exact or clearly equivalent growth-marketer role and the company record will be checked for seed-stage fit.",
+     "requires_enrichment": true,
+     "role": "primary"
+    }
+   ],
+   "all_require_enrichment": true,
+   "blocked": 0,
+   "model_chosen": true,
+   "repaired": 0,
+   "source": "model_validated",
+   "version": "lead-discovery-strategy-v1",
+   "violations": []
+  },
+  "evaluation_paths": {
+   "companies": [],
+   "counts": {
+    "fabricated_pass": 0,
+    "fabricated_reject": 0,
+    "model_evaluated": 0,
+    "model_unavailable": 0,
+    "not_reached": 0,
+    "restored_decision": 0
+   },
+   "decided_by_model": 0,
+   "decided_without_model": 0,
+   "reached_evaluation": 0,
+   "version": "evaluation-path-telemetry-v1"
+  },
+  "executed_sourcing_mode": "company_first",
+  "field_provenance": {
+   "company_profile.business_models": "gpt_inference",
+   "company_profile.locations": "explicit_user_request",
+   "company_profile.stages": "explicit_user_request",
+   "company_profile.verticals": "explicit_user_request",
+   "decision_makers.roles": "gpt_inference",
+   "requested_count": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "target_entity": "explicit_user_request"
+  },
+  "grounded_brain_diagnostics": {
+   "companies": [],
+   "enablement": {
+    "enabled": true,
+    "mode": "shadow",
+    "model": "openai/gpt-5.6-luna",
+    "reason": "enabled",
+    "threshold": 0.6
+   },
+   "mode": "shadow",
+   "shadow_comparison": []
+  },
+  "headcount_snapshots": {
+   "observed": 0,
+   "written": 0
+  },
+  "hiring_route": {
+   "drift": [],
+   "enrichment_required": true,
+   "executed_route": null,
+   "executed_source_order": [],
+   "fallback_reason": null,
+   "repairs": [
+    "source_not_in_route_dropped:apify_linkedin_company_search",
+    "source_not_in_route_dropped:apify_linkedin_company_details",
+    "source_not_in_route_dropped:apify_linkedin_job_search"
+   ],
+   "requested_route": "startup_company_first",
+   "requested_source_order": [],
+   "validated_route": "startup_company_first",
+   "validated_source_order": [
+    "apify_yc_companies_memo23",
+    "apify_yc_companies_solidcode"
+   ]
+  },
+  "investigation_budget": {
+   "budget": {
+    "budget": 0,
+    "cap": 100,
+    "pool_size": 0,
+    "requested_count": 3,
+    "source": "pool_bound",
+    "version": "lead-investigation-budget-v1"
+   },
+   "counts": {
+    "hard_excluded": 0,
+    "ineligible": 0,
+    "irrelevant": 0,
+    "no_triage": 0,
+    "ranked": 0,
+    "relevant": 0,
+    "selected": 0,
+    "uncertain": 0
+   },
+   "gpt_budget": {
+    "cap": 500,
+    "evaluation_budget": 0,
+    "pool_size": 0,
+    "read_budget": 0,
+    "source": "pool_bound",
+    "version": "lead-investigation-budget-v1"
+   },
+   "ranking": [],
+   "time_capacity": {
+    "capacity": 6,
+    "concurrency": 4,
+    "enrichment_batch_size": 10,
+    "enrichment_call_ms": 12000,
+    "hiring_batch_size": 3,
+    "hiring_call_ms": 80000,
+    "identity_call_ms": 12000,
+    "per_company_ms": 42867,
+    "qualification_ms": 12000,
+    "remaining_ms": 291667,
+    "reserve_ms": 18000,
+    "usable_ms": 273667
+   },
+   "untriaged_policy": "rank"
+  },
+  "investigation_capacity": {
+   "capacity": 6,
+   "concurrency": 4,
+   "enrichment_batch_size": 10,
+   "enrichment_call_ms": 12000,
+   "hiring_batch_size": 3,
+   "hiring_call_ms": 80000,
+   "identity_call_ms": 12000,
+   "per_company_ms": 42867,
+   "qualification_ms": 12000,
+   "remaining_ms": 291667,
+   "reserve_ms": 18000,
+   "usable_ms": 273667
+  },
+  "lead_entity_intent": {
+   "clarification_required": false,
+   "company_categories": [
+    "B2B SaaS"
+   ],
+   "company_gate_required": true,
+   "confidence": 0.9,
+   "evidence_spans": [
+    {
+     "evidence": [
+      "startups"
+     ],
+     "field": "target_entity",
+     "value": "company"
+    },
+    {
+     "evidence": [
+      "hiring"
+     ],
+     "field": "signal",
+     "value": "hiring"
+    }
+   ],
+   "execution_mode": "company_first",
+   "freshness": "recent_signal",
+   "geographies": [
+    "United States"
+   ],
+   "hard_constraints": [],
+   "hiring_signal_required": true,
+   "job_search_spec": {
+    "company_vertical": "saas",
+    "compilation_status": "insufficient",
+    "country": "US",
+    "insufficient_reason": "no_hiring_role_phrase",
+    "job_families": [],
+    "keyword_queries": [],
+    "location": "United States",
+    "no_broadening_requested": true,
+    "original_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+    "requested_person_roles": []
+   },
+   "original_user_instruction": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "output_type": "qualified_companies",
+   "person_roles": [],
+   "requested_count": 3,
+   "requested_person_role": null,
+   "signals": [
+    {
+     "evidence": [
+      "hiring"
+     ],
+     "type": "hiring"
+    }
+   ],
+   "soft_constraints": [
+    "signal:hiring"
+   ],
+   "target_entity": "company",
+   "version": 1
+  },
+  "lead_library_persistence": {
+   "persisted": 0,
+   "planned": 0,
+   "results": [],
+   "skipped": [],
+   "version": "lead-mission-persistence-projection-v1"
+  },
+  "lead_lineage_progress": {
+   "barren_slices": 4,
+   "brain_decided": 5,
+   "continuations_used": 5,
+   "cost_units_used": 33,
+   "investigation_authorisations": 24,
+   "qualified_high_water": 0,
+   "stopped_detail": null,
+   "stopped_reason": null,
+   "unique_companies_investigated": 10,
+   "version": "lead-auto-continuation-v1"
+  },
+  "lead_mission": {
+   "company_profile": {
+    "business_models": [],
+    "locations": [
+     "United States"
+    ],
+    "stages": [
+     "startup"
+    ],
+    "verticals": [
+     "b2b saas (founder-led or small teams)"
+    ]
+   },
+   "confidence": 0.99,
+   "decision_makers": {
+    "current_employment_required": false,
+    "roles": []
+   },
+   "directives": {
+    "adjacent_signals": [],
+    "allowed_broadening": {
+     "company_types": [],
+     "employee_range": {
+      "max": null,
+      "min": null
+     },
+     "geographies": [],
+     "role_families": []
+    },
+    "disallowed_broadening": [],
+    "evaluation_instructions": "",
+    "excluded_signals": [],
+    "execution_preference": "balanced",
+    "founder_unlock_recommended": false,
+    "preferred_signals": [
+     "hiring"
+    ],
+    "requested_contact_ready_count": null,
+    "required_evidence": [],
+    "source_strategy": []
+   },
+   "field_provenance": {
+    "company_profile.business_models": "gpt_inference",
+    "company_profile.locations": "explicit_user_request",
+    "company_profile.stages": "explicit_user_request",
+    "company_profile.verticals": "explicit_user_request",
+    "decision_makers.roles": "gpt_inference",
+    "requested_count": "explicit_user_request",
+    "requested_output": "explicit_user_request",
+    "required_signals": "explicit_user_request",
+    "target_entity": "explicit_user_request"
+   },
+   "hard_constraints": {
+    "company_profile.locations": {
+     "operator": "in",
+     "reason": "stated explicitly in the user's query",
+     "value": [
+      "United States"
+     ]
+    },
+    "stage": {
+     "operator": "eq",
+     "reason": "stated in the request",
+     "value": "seed"
+    }
+   },
+   "lead_intelligence_contract_version": "v1",
+   "mission_type": "company_research",
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "planner_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "lead-mission-compiler",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "planner"
+   },
+   "prohibited_capabilities": [
+    "founder_discovery",
+    "employer_verification",
+    "contact_enrichment"
+   ],
+   "requested_count": 3,
+   "requested_output": "qualified_companies",
+   "required_capabilities": [],
+   "required_signal_terms": [
+    "growth marketer"
+   ],
+   "required_signals": [
+    {
+     "event": "hiring",
+     "phrase": "hiring growth marketer",
+     "qualifier": {
+      "role_families": [
+       "marketing_growth"
+      ],
+      "role_terms": [
+       "growth marketer"
+      ]
+     },
+     "role_families": [
+      "marketing_growth"
+     ],
+     "subject": "company",
+     "type": "hiring"
+    }
+   ],
+   "soft_preferences": {},
+   "target_entity": "company",
+   "version": "lead-mission-v1"
+  },
+  "lead_mission_version": "lead-mission-v1",
+  "lead_quota_provenance": {
+   "execution_quota": 1,
+   "mission_requested": 3,
+   "source": "v2_canary"
+  },
+  "lead_resume_checkpoint": {
+   "checkpoint_reason": "all_work_complete",
+   "companies": [],
+   "completed_company_keys": [],
+   "continuation_required": true,
+   "deadline_at": "2026-09-14T07:42:04.841Z",
+   "discovery_source_state": {
+    "admitted": 30,
+    "available_admitted": 12,
+    "exhausted": false,
+    "pages_taken": {
+     "apify_yc_companies_memo23": 1
+    },
+    "pool_target": 8,
+    "raw_rows": 30,
+    "sources_attempted": [
+     "apify_yc_companies_memo23"
+    ],
+    "stop_reason": "admitted_target_met"
+   },
+   "last_completed_capability": "startup_company_discovery",
+   "next_pending_capability": "hiring_verification",
+   "pending_company_keys": [],
+   "time_remaining_at_checkpoint_ms": 276351,
+   "version": "lead-resume-state-v1"
+  },
+  "lead_resume_lineage_root": "d9c2974f-bb12-4f29-8821-235d743ed7b8",
+  "lead_runtime": {
+   "contract": {
+    "executor_version": "v1",
+    "ok": true,
+    "planner_version": "v1",
+    "same_build": true
+   },
+   "executor_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "run-agent",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "executor"
+   },
+   "intelligence_mode": "new_architecture",
+   "planner_runtime": {
+    "build_timestamp": "2026-08-29T10:44:33.276Z",
+    "dirty": false,
+    "function": "lead-mission-compiler",
+    "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5",
+    "git_short": "046b61b0",
+    "lead_intelligence_contract_version": "v1",
+    "role": "planner"
+   }
+  },
+  "legacy_loop_containment": {
+   "reachable": false,
+   "reason": "mission_graph_excludes_job_discovery:startup_company_discovery"
+  },
+  "mission_authority": "lead_mission_v1",
+  "mission_evaluation_observability": {
+   "budget_exhausted": false,
+   "calls_allowed": 10,
+   "calls_made": 0,
+   "calls_remaining": 10,
+   "cap": 20,
+   "companies_evaluated": 0,
+   "enabled": true,
+   "model": "openai/gpt-5.6-luna",
+   "reason": "enabled",
+   "shortlist_size": 10
+  },
+  "mission_funnel": {
+   "stages": [
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "prequalified": 0,
+      "unique_companies": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "discovery",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "irrelevant": 0,
+      "not_triaged": 0,
+      "relevant": 0,
+      "uncertain": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "mission_intelligence",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "awaiting_investigation": 0,
+      "selected": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "smart_shortlist",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "blocked": 0,
+      "mismatch": 0,
+      "not_attempted": 0,
+      "resolved": 0,
+      "unresolved": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "identity_resolution",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "deferred": 0,
+      "empty": 0,
+      "not_attempted": 0,
+      "provider_error": 0,
+      "success": 0,
+      "without_evidence": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "enrichment",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "deadline_deferred": 0,
+      "reached": 0,
+      "signal_not_established": 0,
+      "signal_refuted": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "company_brain",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "evaluated": 0,
+      "not_evaluated": 0,
+      "qualified": 0,
+      "rejected": 0,
+      "unknown": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "mission_evaluator",
+     "unaccounted": 0,
+     "withheld": 0
+    },
+    {
+     "advanced": 0,
+     "decided": 0,
+     "detail": {
+      "not_written": 0,
+      "written": 0
+     },
+     "entered": 0,
+     "excluded": 0,
+     "stage": "persistence",
+     "unaccounted": 0,
+     "withheld": 0
+    }
+   ],
+   "summary": {
+    "awaiting_investigation": 0,
+    "discovered": 0,
+    "evaluated": 0,
+    "investigated": 0,
+    "never_investigated": 0,
+    "qualified": 0,
+    "rejected": 0,
+    "unknown": 0,
+    "withheld": 0
+   },
+   "version": "mission-funnel-v1"
+  },
+  "mission_triage_observability": {
+   "batch_size": 25,
+   "batches_allowed": 1,
+   "batches_made": 0,
+   "cap": 6,
+   "companies_triaged": 10,
+   "enabled": true,
+   "irrelevant": 4,
+   "model": "openai/gpt-5.6-luna",
+   "pool_size": 10,
+   "reason": "enabled",
+   "relevant": 0,
+   "uncertain": 6
+  },
+  "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+  "output": "Company-first sourcing (round_limit_reached): 0/1 eligible leads across 0 round(s); 0 verified companies. the legacy sourcing loop is disabled for this run; the capability engine owns sourcing and this loop reports no rounds of its own",
+  "paid_execution_preflight": {
+   "blocked": [],
+   "entry_capability": "startup_company_discovery",
+   "estimated_cost_units": 7,
+   "feasibility": {
+    "constraints": [
+     {
+      "detail": {
+       "constraint": "stage",
+       "mission_cohort": "y_combinator",
+       "scheduled": [
+        "startup_company_discovery",
+        "company_identity_resolution",
+        "company_enrichment",
+        "hiring_verification",
+        "company_brain_qualification",
+        "persistence"
+       ],
+       "value": "seed"
+      },
+      "message": "\"seed\" is a hard constraint on funding stage, and no scheduled source establishes funding stage \u2014 a YC batch is an accelerator cohort, not a funding round. It is never assumed from the discovery source; a company is held unless its own evidence shows the stage.",
+      "requirement": "stage:seed",
+      "status": "unsupported"
+     }
+    ],
+    "declared_gaps": [
+     "stage:seed (unsupported)"
+    ],
+    "mission_cohort": "y_combinator",
+    "ok": true,
+    "outputs": [
+     {
+      "by_capability": "company_brain_qualification",
+      "detail": {
+       "output": "qualified_companies",
+       "required_artifact": "qualification_verdict"
+      },
+      "message": "Produced by company_brain_qualification.",
+      "requirement": "output:qualified_companies",
+      "status": "satisfied"
+     }
+    ],
+    "refusals": [],
+    "requirements": [
+     {
+      "by_capability": "startup_company_discovery",
+      "detail": {
+       "event": "hiring",
+       "mission_cohort": "y_combinator",
+       "subject": "company"
+      },
+      "message": "Established by startup_company_discovery.",
+      "requirement": "hiring growth marketer",
+      "status": "satisfied"
+     }
+    ],
+    "version": "request-feasibility-v1"
+   },
+   "first_capability": "startup_company_discovery",
+   "first_provider": "apify_yc_companies_memo23",
+   "first_provider_input": {
+    "batch": [
+     "All Batches"
+    ],
+    "enrichEmails": false,
+    "industries": [
+     "B2B"
+    ],
+    "isHiring": true,
+    "maxEmployeeSize": "500",
+    "maxItems": 10,
+    "minEmployeeSize": "10+",
+    "mode": "companies",
+    "nonprofit": false,
+    "queries": [],
+    "regions": [
+     "United States of America"
+    ],
+    "scrapeFounderDetails": false,
+    "scrapeOpenJobs": true,
+    "topCompany": false
+   },
+   "first_provider_input_valid": true,
+   "input_errors": [],
+   "mission_authority": "lead_mission_v1",
+   "ok": true,
+   "ordered_capabilities": [
+    "startup_company_discovery",
+    "company_identity_resolution",
+    "company_enrichment",
+    "hiring_verification",
+    "company_brain_qualification",
+    "persistence"
+   ],
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "version": "paid-execution-preflight-v1"
+  },
+  "pool_evaluation_checkpoint": {
+   "checkpointed_at": "2026-09-14T07:34:01.656Z",
+   "completed_company_keys": [
+    "bymason.com",
+    "snapmagic.com",
+    "gemnote.com",
+    "tara.ai"
+   ],
+   "discovered_pool_fingerprint": "pool:4:504d819b",
+   "grounded_results": [
+    {
+     "company_key": "bymason.com",
+     "verification": {
+      "classifier_result": {
+       "agentory_use_case": "plausible",
+       "business_model": {
+        "claims": [
+         {
+          "claim": "Mason offers a fully managed platform for developing and delivering dedicated devices.",
+          "claim_type": "business_model",
+          "evidence_excerpts": [
+           {
+            "evidence_id": "yc_company_record:startup_directory:5f8b56be",
+            "excerpt": "The Mason Smart Device Platform is the only fully managed infrastructure for developing and delivering dedicated devices."
+           }
+          ],
+          "evidence_ids": [
+           "yc_company_record:startup_directory:5f8b56be"
+          ]
+         }
+        ],
+        "confidence": 0.94,
+        "value": "unknown"
+       },
+       "company_fit": "review",
+       "confidence": 0.78,
+       "conflicting_evidence_ids": [],
+       "missing_evidence": [
+        "Seed-stage status",
+        "Hiring for a first growth marketer"
+       ],
+       "mission_signal_assessment": {
+        "evidence_ids": [
+         "yc_job:startup_directory:5c9412f1",
+         "yc_job:startup_directory:c8408cd4",
+         "yc_job:startup_directory:c46adad2",
+         "yc_job:startup_directory:0b7b3e11"
+        ],
+        "reason": "The evidence shows current roles in product management, account management, and software engineering, but does not establish hiring for a first growth marketer.",
+        "signal_strength": "weak",
+        "strongest_signal": "Current hiring evidence exists, but none of the listed roles is a growth marketer role."
+       },
+       "reason": "The evidence supports a B2B-oriented software/platform business and current hiring, but is insufficient to verify seed stage or a first growth marketer opening.",
+       "supporting_claims": [
+        {
+         "claim": "Mason has listed roles including Technical Product Manager, Software and Account Manager - Hardware/Physical Devices.",
+         "claim_type": "commercial_signal",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "yc_job:startup_directory:5c9412f1",
+           "excerpt": "Technical Product Manager, Software"
+          },
+          {
+           "evidence_id": "yc_job:startup_directory:c8408cd4",
+           "excerpt": "Account Manager - Hardware/Physical Devices"
+          }
+         ],
+         "evidence_ids": [
+          "yc_job:startup_directory:5c9412f1",
+          "yc_job:startup_directory:c8408cd4"
+         ]
+        }
+       ],
+       "unknown_fields": []
+      },
+      "downgrade_reasons": [],
+      "final_grounded_decision": "review",
+      "grounding_score": 1,
+      "rejected_claims": [],
+      "unacknowledged_conflicts": [],
+      "validated_claims": [
+       {
+        "claim": "Mason offers a fully managed platform for developing and delivering dedicated devices.",
+        "claim_type": "business_model",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_company_record:startup_directory:5f8b56be",
+          "excerpt": "The Mason Smart Device Platform is the only fully managed infrastructure for developing and delivering dedicated devices."
+         }
+        ],
+        "evidence_ids": [
+         "yc_company_record:startup_directory:5f8b56be"
+        ]
+       },
+       {
+        "claim": "Mason has listed roles including Technical Product Manager, Software and Account Manager - Hardware/Physical Devices.",
+        "claim_type": "commercial_signal",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_job:startup_directory:5c9412f1",
+          "excerpt": "Technical Product Manager, Software"
+         },
+         {
+          "evidence_id": "yc_job:startup_directory:c8408cd4",
+          "excerpt": "Account Manager - Hardware/Physical Devices"
+         }
+        ],
+        "evidence_ids": [
+         "yc_job:startup_directory:5c9412f1",
+         "yc_job:startup_directory:c8408cd4"
+        ]
+       }
+      ],
+      "version": "grounded-claims-v1"
+     }
+    },
+    {
+     "company_key": "snapmagic.com",
+     "verification": {
+      "classifier_result": {
+       "agentory_use_case": "plausible",
+       "business_model": {
+        "claims": [
+         {
+          "claim": "SnapMagic provides electronic component libraries and an AI copilot for circuit board designers.",
+          "claim_type": "business_model",
+          "evidence_excerpts": [
+           {
+            "evidence_id": "company_description:linkedin:d9ba7c59",
+            "excerpt": "Creators of SnapMagic Search, your source of component libraries, and SnapMagic Copilot, your AI copilot for circuit board designers."
+           }
+          ],
+          "evidence_ids": [
+           "company_description:linkedin:d9ba7c59"
+          ]
+         }
+        ],
+        "confidence": 0.96,
+        "value": "unknown"
+       },
+       "company_fit": "review",
+       "confidence": 0.82,
+       "conflicting_evidence_ids": [],
+       "missing_evidence": [
+        "Seed-stage status",
+        "Hiring for a first growth marketer"
+       ],
+       "mission_signal_assessment": {
+        "evidence_ids": [
+         "yc_job:startup_directory:027f0bb1",
+         "yc_job:startup_directory:a0b7a3d4"
+        ],
+        "reason": "The roles indicate commercial expansion, but the evidence does not establish that SnapMagic is hiring its first growth marketer.",
+        "signal_strength": "moderate",
+        "strongest_signal": "Current commercial hiring is evidenced by Head of Sales and Enterprise Account Executive roles, but no growth marketer role is shown."
+       },
+       "reason": "SnapMagic appears to offer a B2B engineering software product and has commercial hiring signals, but the supplied evidence does not verify seed stage or a first growth marketer opening.",
+       "supporting_claims": [
+        {
+         "claim": "SnapMagic has listed Head of Sales and Enterprise Account Executive roles.",
+         "claim_type": "commercial_signal",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "yc_job:startup_directory:027f0bb1",
+           "excerpt": "Head of Sales"
+          },
+          {
+           "evidence_id": "yc_job:startup_directory:a0b7a3d4",
+           "excerpt": "Enterprise Account Executive"
+          }
+         ],
+         "evidence_ids": [
+          "yc_job:startup_directory:027f0bb1",
+          "yc_job:startup_directory:a0b7a3d4"
+         ]
+        },
+        {
+         "claim": "SnapMagic's electronic component data is used by engineers at large organizations.",
+         "claim_type": "customer_type",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "company_description:linkedin:d9ba7c59",
+           "excerpt": "SnapMagic\u2019s electronic component data is used by over 1.5 million engineers across the world\u2019s largest organizations."
+          }
+         ],
+         "evidence_ids": [
+          "company_description:linkedin:d9ba7c59"
+         ]
+        }
+       ],
+       "unknown_fields": []
+      },
+      "downgrade_reasons": [],
+      "final_grounded_decision": "review",
+      "grounding_score": 1,
+      "rejected_claims": [],
+      "unacknowledged_conflicts": [],
+      "validated_claims": [
+       {
+        "claim": "SnapMagic provides electronic component libraries and an AI copilot for circuit board designers.",
+        "claim_type": "business_model",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "company_description:linkedin:d9ba7c59",
+          "excerpt": "Creators of SnapMagic Search, your source of component libraries, and SnapMagic Copilot, your AI copilot for circuit board designers."
+         }
+        ],
+        "evidence_ids": [
+         "company_description:linkedin:d9ba7c59"
+        ]
+       },
+       {
+        "claim": "SnapMagic has listed Head of Sales and Enterprise Account Executive roles.",
+        "claim_type": "commercial_signal",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_job:startup_directory:027f0bb1",
+          "excerpt": "Head of Sales"
+         },
+         {
+          "evidence_id": "yc_job:startup_directory:a0b7a3d4",
+          "excerpt": "Enterprise Account Executive"
+         }
+        ],
+        "evidence_ids": [
+         "yc_job:startup_directory:027f0bb1",
+         "yc_job:startup_directory:a0b7a3d4"
+        ]
+       },
+       {
+        "claim": "SnapMagic's electronic component data is used by engineers at large organizations.",
+        "claim_type": "customer_type",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "company_description:linkedin:d9ba7c59",
+          "excerpt": "SnapMagic\u2019s electronic component data is used by over 1.5 million engineers across the world\u2019s largest organizations."
+         }
+        ],
+        "evidence_ids": [
+         "company_description:linkedin:d9ba7c59"
+        ]
+       }
+      ],
+      "version": "grounded-claims-v1"
+     }
+    },
+    {
+     "company_key": "gemnote.com",
+     "verification": {
+      "classifier_result": {
+       "agentory_use_case": "weak",
+       "business_model": {
+        "claims": [
+         {
+          "claim": "Gemnote provides a full-service branded merchandise platform covering curation, sourcing, warehousing, fulfillment, and shipping.",
+          "claim_type": "business_model",
+          "evidence_excerpts": [
+           {
+            "evidence_id": "company_description:linkedin:a07cd4ff",
+            "excerpt": "Our expert team helps you curate, source, warehouse, fulfill and ship your branded merchandise and company swag"
+           }
+          ],
+          "evidence_ids": [
+           "company_description:linkedin:a07cd4ff"
+          ]
+         }
+        ],
+        "confidence": 0.96,
+        "value": "unknown"
+       },
+       "company_fit": "review",
+       "confidence": 0.84,
+       "conflicting_evidence_ids": [],
+       "missing_evidence": [
+        "Seed-stage status",
+        "Hiring for a first growth marketer"
+       ],
+       "mission_signal_assessment": {
+        "evidence_ids": [
+         "yc_job:startup_directory:7148ddaa"
+        ],
+        "reason": "The evidence supports current hiring for operations, not hiring for a first growth marketer.",
+        "signal_strength": "weak",
+        "strongest_signal": "A current Head of Operations role is listed, but no growth marketer role is shown."
+       },
+       "reason": "The evidence shows a business-facing technology-enabled merchandise service and current hiring, but does not verify seed stage or a first growth marketer opening.",
+       "supporting_claims": [
+        {
+         "claim": "Gemnote has listed a Head of Operations role.",
+         "claim_type": "commercial_signal",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "yc_job:startup_directory:7148ddaa",
+           "excerpt": "Head of Operations"
+          }
+         ],
+         "evidence_ids": [
+          "yc_job:startup_directory:7148ddaa"
+         ]
+        },
+        {
+         "claim": "Gemnote's platform supports order tracking, inventory visibility, campaign redemption pages, and integrations.",
+         "claim_type": "product_type",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "company_description:linkedin:a07cd4ff",
+           "excerpt": "With our proprietary technology, you can easily place/track orders, view real-time inventory, request restocks, create redemption pages for campaigns and more."
+          }
+         ],
+         "evidence_ids": [
+          "company_description:linkedin:a07cd4ff"
+         ]
+        }
+       ],
+       "unknown_fields": []
+      },
+      "downgrade_reasons": [],
+      "final_grounded_decision": "review",
+      "grounding_score": 1,
+      "rejected_claims": [],
+      "unacknowledged_conflicts": [],
+      "validated_claims": [
+       {
+        "claim": "Gemnote provides a full-service branded merchandise platform covering curation, sourcing, warehousing, fulfillment, and shipping.",
+        "claim_type": "business_model",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "company_description:linkedin:a07cd4ff",
+          "excerpt": "Our expert team helps you curate, source, warehouse, fulfill and ship your branded merchandise and company swag"
+         }
+        ],
+        "evidence_ids": [
+         "company_description:linkedin:a07cd4ff"
+        ]
+       },
+       {
+        "claim": "Gemnote has listed a Head of Operations role.",
+        "claim_type": "commercial_signal",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_job:startup_directory:7148ddaa",
+          "excerpt": "Head of Operations"
+         }
+        ],
+        "evidence_ids": [
+         "yc_job:startup_directory:7148ddaa"
+        ]
+       },
+       {
+        "claim": "Gemnote's platform supports order tracking, inventory visibility, campaign redemption pages, and integrations.",
+        "claim_type": "product_type",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "company_description:linkedin:a07cd4ff",
+          "excerpt": "With our proprietary technology, you can easily place/track orders, view real-time inventory, request restocks, create redemption pages for campaigns and more."
+         }
+        ],
+        "evidence_ids": [
+         "company_description:linkedin:a07cd4ff"
+        ]
+       }
+      ],
+      "version": "grounded-claims-v1"
+     }
+    },
+    {
+     "company_key": "tara.ai",
+     "verification": {
+      "classifier_result": {
+       "agentory_use_case": "plausible",
+       "business_model": {
+        "claims": [
+         {
+          "claim": "Tara AI helps software teams manage and deliver across the product development lifecycle.",
+          "claim_type": "business_model",
+          "evidence_excerpts": [
+           {
+            "evidence_id": "company_description:linkedin:85565801",
+            "excerpt": "Tara AI is a platform designed to help modern software teams manage and deliver across their product development lifecycle."
+           }
+          ],
+          "evidence_ids": [
+           "company_description:linkedin:85565801"
+          ]
+         }
+        ],
+        "confidence": 0.97,
+        "value": "unknown"
+       },
+       "company_fit": "review",
+       "confidence": 0.88,
+       "conflicting_evidence_ids": [],
+       "missing_evidence": [
+        "Seed-stage status",
+        "Hiring for a first growth marketer"
+       ],
+       "mission_signal_assessment": {
+        "evidence_ids": [
+         "yc_job:startup_directory:b212e4d6",
+         "yc_job:startup_directory:022881d9"
+        ],
+        "reason": "Founding sales hiring is a meaningful commercial signal, but the evidence does not establish hiring for a first growth marketer.",
+        "signal_strength": "moderate",
+        "strongest_signal": "Current hiring includes Founding Account Executive roles, but no growth marketer role is shown."
+       },
+       "reason": "The evidence supports a B2B software product with customer and founding-sales hiring signals, but does not verify seed stage or a first growth marketer opening.",
+       "supporting_claims": [
+        {
+         "claim": "Tara AI has listed Founding Account Executive roles for Remote and San Francisco, CA.",
+         "claim_type": "commercial_signal",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "yc_job:startup_directory:b212e4d6",
+           "excerpt": "Founding Account Executive \u2014 Remote"
+          },
+          {
+           "evidence_id": "yc_job:startup_directory:022881d9",
+           "excerpt": "Founding Account Executive \u2014 San Francisco, CA"
+          }
+         ],
+         "evidence_ids": [
+          "yc_job:startup_directory:b212e4d6",
+          "yc_job:startup_directory:022881d9"
+         ]
+        },
+        {
+         "claim": "Tara AI reports customers including MongoDB, Clearbit, and Prometric.",
+         "claim_type": "customer_type",
+         "evidence_excerpts": [
+          {
+           "evidence_id": "yc_company_record:startup_directory:0bc31568",
+           "excerpt": "Our customers include MongoDB, Clearbit and Prometric."
+          }
+         ],
+         "evidence_ids": [
+          "yc_company_record:startup_directory:0bc31568"
+         ]
+        }
+       ],
+       "unknown_fields": []
+      },
+      "downgrade_reasons": [],
+      "final_grounded_decision": "review",
+      "grounding_score": 1,
+      "rejected_claims": [],
+      "unacknowledged_conflicts": [],
+      "validated_claims": [
+       {
+        "claim": "Tara AI helps software teams manage and deliver across the product development lifecycle.",
+        "claim_type": "business_model",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "company_description:linkedin:85565801",
+          "excerpt": "Tara AI is a platform designed to help modern software teams manage and deliver across their product development lifecycle."
+         }
+        ],
+        "evidence_ids": [
+         "company_description:linkedin:85565801"
+        ]
+       },
+       {
+        "claim": "Tara AI has listed Founding Account Executive roles for Remote and San Francisco, CA.",
+        "claim_type": "commercial_signal",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_job:startup_directory:b212e4d6",
+          "excerpt": "Founding Account Executive \u2014 Remote"
+         },
+         {
+          "evidence_id": "yc_job:startup_directory:022881d9",
+          "excerpt": "Founding Account Executive \u2014 San Francisco, CA"
+         }
+        ],
+        "evidence_ids": [
+         "yc_job:startup_directory:b212e4d6",
+         "yc_job:startup_directory:022881d9"
+        ]
+       },
+       {
+        "claim": "Tara AI reports customers including MongoDB, Clearbit, and Prometric.",
+        "claim_type": "customer_type",
+        "evidence_excerpts": [
+         {
+          "evidence_id": "yc_company_record:startup_directory:0bc31568",
+          "excerpt": "Our customers include MongoDB, Clearbit and Prometric."
+         }
+        ],
+        "evidence_ids": [
+         "yc_company_record:startup_directory:0bc31568"
+        ]
+       }
+      ],
+      "version": "grounded-claims-v1"
+     }
+    }
+   ],
+   "model_accounting": {
+    "companies_evaluated": 4,
+    "completed_calls": 1,
+    "evaluation_batches_attempted": 1,
+    "failed_calls": 0,
+    "ranking_calls_attempted": 0,
+    "restored_calls": 0
+   },
+   "next_batch_offset": 4,
+   "pool_fingerprint": "f47399e6cc67e9051acc03532fb9654285abd22e21acf1736bd58ea10d6f908c",
+   "version": "pool-evaluation-checkpoint-v1"
+  },
+  "qualified_lead_run_context": {
+   "company_stage": "startup_or_small_team",
+   "company_vertical": "b2b_saas",
+   "count_entity": "contact_ready_lead",
+   "decision_maker_seniority": [],
+   "eligible_leads": 0,
+   "execution_mode": "company_first",
+   "hiring_seniority": [],
+   "job_family": null,
+   "job_titles": [],
+   "original_user_query": "Find 3 seed-stage B2B SaaS startups in the US hiring their first growth marketer.",
+   "parsed_intent_summary": "hiring=unclassified; department=unknown; hiring_seniority=unspecified; stage=first_hire; decision_maker=none; decision_maker_seniority=none; vertical=b2b_saas; geography=United States",
+   "planner_source": null,
+   "planner_status": null,
+   "provider_query_keywords": [],
+   "provider_query_location": "United States",
+   "quota_policy": "contact_only",
+   "remaining_leads": 1,
+   "requested_lead_count": 1,
+   "requested_leads": 1,
+   "requested_person_roles": [],
+   "round_number": null,
+   "terminal_status": "round_limit_reached",
+   "version": "qualified-lead-run-context-1.0.0",
+   "workflow_kind": "qualified_lead_sourcing"
+  },
+  "routing": {
+   "company_first": true,
+   "company_gate_required": true,
+   "execution_mode": "company_first",
+   "output_type": "qualified_companies",
+   "target_entity": "company"
+  },
+  "run_outcome": {
+   "completed_capabilities": [
+    "company_identity_resolution",
+    "company_enrichment",
+    "startup_company_discovery"
+   ],
+   "continuation": {
+    "reason": null,
+    "required": true,
+    "resumable": false
+   },
+   "funnel": {
+    "cited_rows": 0,
+    "deferred": 0,
+    "discovered": 0,
+    "enriched": 0,
+    "excluded": [],
+    "hiring_evidence_unavailable": 0,
+    "hiring_refuted": 0,
+    "hiring_verified": 0,
+    "identity_resolved": 0,
+    "shortlisted": 0
+   },
+   "gaps": [],
+   "persistence": {
+    "leads_written": 0,
+    "signals_written": 0
+   },
+   "qualification": {
+    "eligible": 0,
+    "evaluated": 0,
+    "not_reached": 0,
+    "not_reached_reason": null,
+    "qualified": 0,
+    "rejected": 0
+   },
+   "requested": 1,
+   "spend": {
+    "credits_charged": 38,
+    "provider_calls": 45,
+    "reused_operations": 0,
+    "unsettled_operations": 0,
+    "usd_reported": 0.2463
+   },
+   "state": "PARTIALLY_SATISFIED",
+   "version": "run-outcome-v1"
+  },
+  "semantic_classification_status": {
+   "calls_allowed": 10,
+   "consulted_by_engine": true,
+   "enabled": true,
+   "reason": "enabled"
+  },
+  "sequential_source_execution": {
+   "capabilities_accepted": [],
+   "capabilities_requested": [],
+   "completed_steps": [],
+   "current_step": null,
+   "enabled": false,
+   "enablement_reason": "flag_off",
+   "feedback_eligible": false,
+   "observation_count": 0,
+   "ordered_plan_created": false,
+   "reason": "flag_off",
+   "sequential_source_execution": false,
+   "step_rejections": [],
+   "workspace_match": false
+  },
+  "stage2_ranking_diagnostics": {
+   "eligible_exclusions": [
+    {
+     "company_key": "shipbob.com",
+     "company_name": "ShipBob",
+     "detail": "1709 is clearly above the 150 ceiling",
+     "reason": "verified_employee_size_mismatch"
+    }
+   ],
+   "fallback_reason": "ranking computed in shadow mode; deterministic order shipped",
+   "model_accounting": {
+    "companies_evaluated": 4,
+    "completed_calls": 2,
+    "evaluation_batches_attempted": 1,
+    "failed_calls": 0,
+    "ranking_calls_attempted": 1,
+    "restored_calls": 0
+   },
+   "pool_composition_changed": true,
+   "pool_fingerprint": "pool:4:504d819b",
+   "ranking_mode": "shadow",
+   "ranking_shadow_comparison": {
+    "action_changes": [],
+    "computed": true,
+    "delivered_window": 2,
+    "fallback_reason": "ranking response was absent or unreadable",
+    "identical_order": true,
+    "max_rank_delta": 0,
+    "moved_count": 0,
+    "proposed_confidence": 0,
+    "proposed_source": "deterministic_fallback",
+    "rank_changes": [],
+    "rejected_entries": [],
+    "validator_changes": [],
+    "version": "pool-ranking-v1",
+    "would_enter_delivery": [],
+    "would_leave_delivery": []
+   },
+   "rejected_entries": [],
+   "validator_changes": []
+  },
+  "task_status": "failed",
+  "terminal_status": "retry_budget_exhausted",
+  "unknown_companies_pending_evidence": [],
+  "v2_terminal": {
+   "queue_status": "failed",
+   "reason": "retry_budget_exhausted",
+   "reconciled_at": "2026-09-14T07:37:46.438Z"
+  },
+  "workbench_enrichment_counts": {
+   "deferred": 0,
+   "empty": 0,
+   "not_attempted": 14,
+   "provider_error": 0,
+   "success": 16
+  },
+  "workbench_evaluation_counts": {
+   "accounts_found": 30,
+   "awaiting_investigation": 0,
+   "contact_ready": 0,
+   "deferred": 0,
+   "evaluated": 30,
+   "held_for_evidence": 0,
+   "identity_unresolved": 8,
+   "not_investigated": 0,
+   "not_qualified": 0,
+   "qualified": 0,
+   "shortlisted": 24
+  },
+  "workbench_evaluation_rows": [
+   {
+    "actionable": false,
+    "company_key": "furtherai.com",
+    "company_name": "FurtherAI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "furtherai.com",
+    "employee_count": 64,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": null,
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 78,
+    "mission_reasoning": "FurtherAI is located in the United States and has a current Marketing Generalist opening, which matches the mission's marketing-role vocabulary. The evidence does not establish that the company is seed-stage, nor that it is specifically a B2B SaaS startup or that this is its first growth marketer. Its description identifies a domain-specific AI product serving insurers, reinsurers, MGAs, and brokers, but does not establish the exact B2B SaaS requirement.",
+    "prequalification_score": 140,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 36 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "verifying",
+    "strongest_signal": "Marketing Generalist",
+    "supporting_job_title": "Marketing Generalist",
+    "supporting_job_url": "https://www.ycombinator.com/companies/furtherai",
+    "triage_reasons": [
+     "US company with an AI workforce product for the insurance industry, plausibly B2B SaaS.",
+     "Marketing Generalist is a direct match to the requested marketing hiring intent.",
+     "The 36-person team is larger than a typical very early startup, making seed stage less certain."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 78
+   },
+   {
+    "actionable": false,
+    "company_key": "fuseai.com",
+    "company_name": "Fuse AI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "fuseai.com",
+    "employee_count": 9,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": null,
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 90,
+    "mission_reasoning": "Fuse AI has evidence of a B2B sales platform serving revenue teams, a United States location, and a matching growth marketing opening. Its small team is consistent with a founder-led or small-team startup, but the supplied evidence does not establish the required seed stage. Therefore the company cannot be marked pass.",
+    "prequalification_score": 140,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 12 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "verifying",
+    "strongest_signal": "Head of Growth Marketing",
+    "supporting_job_title": "Head of Growth Marketing",
+    "supporting_job_url": "https://www.ycombinator.com/companies/fuse-ai",
+    "triage_reasons": [
+     "Small US company offering an agentic sales platform, plausibly B2B SaaS.",
+     "Head of Growth Marketing is a direct and strong match to the requested role.",
+     "Small team and senior growth hire are consistent with an early-stage company, though seed stage is not verified."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 97
+   },
+   {
+    "actionable": false,
+    "company_key": "safetykit.com",
+    "company_name": "SafetyKit",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "safetykit.com",
+    "employee_count": 21,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": null,
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 75,
+    "mission_reasoning": "The United States and Growth Lead requirements were established previously and are carried forward unchanged. The available company-owned page describes SafetyKit's AI infrastructure and customers but does not establish seed stage or that the Growth Lead is the company's first growth marketer. Therefore the mission cannot be marked pass, and there is no clear contradiction warranting fail.",
+    "prequalification_score": 140,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 10 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "verifying",
+    "strongest_signal": "Growth Lead",
+    "supporting_job_title": "Growth Lead",
+    "supporting_job_url": "https://www.ycombinator.com/companies/safetykit",
+    "triage_reasons": [
+     "Small US company offering a B2B risk, compliance, and safety product.",
+     "Growth Lead is a direct match to the requested growth-marketing intent.",
+     "Seed stage is plausible from the small team size, though not stated."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 86
+   },
+   {
+    "actionable": false,
+    "company_key": "pasito.ai",
+    "company_name": "Pasito",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "pasito.ai",
+    "employee_count": 80,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": null,
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 84,
+    "mission_reasoning": "Pasito has a verified United States location and a current-looking Product Marketing Manager opening that matches the mission's hiring-role vocabulary. Its description establishes a software product serving business customers, but the supplied evidence does not explicitly establish that it is B2B SaaS. The supplied evidence also does not establish seed stage; being backed by Y Combinator is not sufficient to prove the exact required stage of seed. Therefore the company requires review rather than a pass.",
+    "prequalification_score": 130,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 20 inside the target range"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "verifying",
+    "strongest_signal": "Product Marketing Manager",
+    "supporting_job_title": "Product Marketing Manager",
+    "supporting_job_url": "https://www.ycombinator.com/companies/pasito",
+    "triage_reasons": [
+     "US-based company with a small 20-person team, plausibly consistent with seed-stage startup targeting.",
+     "Description suggests a B2B insurance and benefits technology product.",
+     "Open Product Marketing Manager role is a strong match for hiring an early growth-oriented marketer."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 92
+   },
+   {
+    "actionable": false,
+    "company_key": "10xscience.com",
+    "company_name": "10x Science (YC W26)",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "10xscience.com",
+    "employee_count": 5,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "not_qualified",
+    "mission_failed_requirements": [
+     "industry is b2b saas (founder-led or small teams): The company describes an AI-native platform for protein characterization and drug development in the life sciences, not a B2B SaaS company.",
+     "stage is seed: The supplied evidence identifies the company as YC W26 but does not establish the required seed stage.",
+     "hiring role matches a required marketing role: The cited opening is \"Founding Engineer,\" which does not match any required marketing role."
+    ],
+    "mission_match_score": 10,
+    "mission_reasoning": "The company is located in the United States, but the evidence describes a life-sciences and drug-development AI company rather than the required B2B SaaS vertical. Seed stage is not established, and the only cited opening is for a Founding Engineer rather than a growth or marketing role. The mission therefore fails on clear evidence against the industry requirement and the hiring requirement.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 5 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/10x-science",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the very small team.",
+     "AI protein characterization platform may be a B2B product, but the description does not establish SaaS or B2B positioning.",
+     "Only open role is Founding Engineer, with no marketing hiring signal."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 18
+   },
+   {
+    "actionable": false,
+    "company_key": "every.io",
+    "company_name": "Every",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "every.io",
+    "employee_count": 455,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 12 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/every",
+    "triage_reasons": [
+     "Small US company with a potentially business-focused financial services product.",
+     "No open roles are listed, so there is no hiring signal for a first growth marketer.",
+     "The description does not clearly establish B2B SaaS or seed stage."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 15
+   },
+   {
+    "actionable": false,
+    "company_key": "gemnote.com",
+    "company_name": "Gemnote",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "gemnote.com",
+    "employee_count": 28,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "not_qualified",
+    "mission_failed_requirements": [
+     "b2b saas (founder-led or small teams): The company describes itself as creating custom merchandise, packaging, swag, and gifts, with warehousing, fulfillment, shipping, and integrations; this does not establish B2B SaaS and specifically includes packaging, which conflicts with a workspace hard constraint.",
+     "stage is seed: No evidence establishes that Gemnote is currently seed-stage.",
+     "hiring role matches one of the required marketing roles: The cited opening is for \"Head of Operations,\" not a growth marketer, product marketer, content marketer, demand generation, lifecycle, performance, brand, founding marketer, marketing generalist, growth lead, head of growth, growth manager, head of marketing, or marketing lead role."
+    ],
+    "mission_match_score": 8,
+    "mission_reasoning": "Gemnote is located in the United States, but the available company descriptions indicate a custom merchandise and fulfillment business rather than the required B2B SaaS vertical. The only cited opening is Head of Operations, which does not match the required marketing-role vocabulary. Seed stage is also not established. The merchandise and packaging focus conflicts with the workspace's excluded packaging-related industries, although the Mission failure is independently supported by unmet Mission requirements.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 40 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/gemnote",
+    "triage_reasons": [
+     "US-based small company, but its custom-products description does not clearly indicate B2B SaaS.",
+     "The only listed role is Head of Operations, with no growth marketing hiring signal.",
+     "Seed stage is unclear."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 18
+   },
+   {
+    "actionable": false,
+    "company_key": "hyperspell.com",
+    "company_name": "Hyperspell",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "hyperspell.com",
+    "employee_count": 11,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 48,
+    "mission_reasoning": "Hyperspell has a verified United States location. Its small team and startup-directory company record provide some support for an early-stage profile, but the supplied evidence does not explicitly establish that it is seed-stage. The company description does not establish B2B SaaS, and no cited current opening matches any required marketing role; the listed openings are engineering roles.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 8 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/hyperspell",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the small team.",
+     "Company Brain product could be B2B software, but the description is too vague to establish B2B SaaS.",
+     "All listed roles are engineering or forward-deployed engineering roles, with no marketing hiring signal."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 10
+   },
+   {
+    "actionable": false,
+    "company_key": "bymason.com",
+    "company_name": "Mason",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "bymason.com",
+    "employee_count": 249,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "not_qualified",
+    "mission_failed_requirements": [
+     "stage is seed: The company has 249 employees, which is clear evidence against the requested seed-stage profile.",
+     "vertical is b2b saas (founder-led or small teams): The company describes a fully managed smart-device infrastructure platform with usage-based pricing for device fleets, rather than a B2B SaaS startup profile.",
+     "hiring role matches one of the required marketing roles: The listed openings are Technical Product Manager, Account Manager, Full Stack Software Engineer, and Software Engineer - Backend; none match the required marketing-role vocabulary."
+    ],
+    "mission_match_score": 12,
+    "mission_reasoning": "Mason satisfies the United States location requirement, but the evidence indicates 249 employees, a hardware-dependent managed smart-device platform, and current openings limited to product, account management, and engineering roles. This is clear evidence against the seed-stage and required hiring-role requirements, so the company fails the Mission.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 65 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/mason",
+    "triage_reasons": [
+     "US-based technology company with a relatively small reported team.",
+     "The description centers on smart-device deployment and the open roles are technical, product, and account-management positions rather than growth marketing.",
+     "B2B SaaS and seed stage are unclear."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 28
+   },
+   {
+    "actionable": false,
+    "company_key": "propelauth.com",
+    "company_name": "PropelAuth",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "propelauth.com",
+    "employee_count": 7,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 62,
+    "mission_reasoning": "The company has evidence of a business-focused authentication product and a United States location. However, the seed-stage requirement is not established by the supplied evidence, and no listed opening matches any required marketing role. The available jobs are engineering and support roles.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 5 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/propelauth",
+    "triage_reasons": [
+     "Appears to be a very small US B2B SaaS company, but open roles are engineering and support only, with no evident marketing hiring signal.",
+     "Seed stage is not stated."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 18
+   },
+   {
+    "actionable": false,
+    "company_key": "sembleai.com",
+    "company_name": "Semble",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "sembleai.com",
+    "employee_count": 3,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "not_qualified",
+    "mission_failed_requirements": [
+     "company is a seed-stage startup: The evidence identifies Semble as a startup and shows 3 employees, but does not establish the required seed stage.",
+     "company is B2B SaaS: The company is described as an operating system for construction businesses, but the evidence does not establish B2B SaaS as stated in the Mission.",
+     "company is hiring its first growth marketer: The cited opening is \"Founding AI Engineer\", not a growth marketer or any listed marketing role."
+    ],
+    "mission_match_score": 35,
+    "mission_reasoning": "Semble has evidence of a United States location and a small team, but the required seed stage is not established. Its descriptions concern construction-business operations and AI agents rather than explicitly establishing B2B SaaS. The only cited current opening is for a Founding AI Engineer, so the required first growth marketer hiring signal is contradicted by the available job evidence.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 14 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/semble",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the small team.",
+     "Description suggests software for integrators and may indicate B2B SaaS, but this is not explicit.",
+     "Only open role is Founding AI Engineer, with no marketing hiring signal."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 22
+   },
+   {
+    "actionable": false,
+    "company_key": "shipbob.com",
+    "company_name": "ShipBob",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "shipbob.com",
+    "employee_count": 1709,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "not_qualified",
+    "mission_failed_requirements": [
+     "company is a seed-stage startup: The company has 1709 employees, which is clear evidence against the requested seed-stage profile.",
+     "company is B2B SaaS (founder-led or small teams): The company is identified as Transportation, Logistics, Supply Chain and Storage, and the supplied company descriptions describe fulfillment and supply-chain services rather than a B2B SaaS startup.",
+     "company is hiring their first growth marketer: The cited opening is for Applied AI Engineer, Agentic Systems, not a growth-marketing role."
+    ],
+    "mission_match_score": 5,
+    "mission_reasoning": "ShipBob has a United States location, but the evidence shows a large, established fulfillment and supply-chain company with 1709 employees. Its cited opening is an applied AI engineering role, not one of the mission's required marketing roles. Therefore it does not satisfy the seed-stage B2B SaaS and first-growth-marketer requirements.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 1 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/shipbob",
+    "triage_reasons": [
+     "US-based and appears to be a very small team, but the description suggests e-commerce logistics rather than clearly B2B SaaS.",
+     "The open role is an AI engineering position, not a growth or marketing role.",
+     "Seed stage is not established from the available data."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 32
+   },
+   {
+    "actionable": false,
+    "company_key": "snapmagic.com",
+    "company_name": "SnapMagic",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "snapmagic.com",
+    "employee_count": 23,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 48,
+    "mission_reasoning": "SnapMagic has a cited United States location and appears to be a small technology company, but the evidence does not establish that it is a B2B SaaS company or that it is seed-stage. The cited openings are for operations, sales, customer success, and enterprise account executive roles; none matches the Mission's required marketing-role vocabulary. Because the missing stage and business-model requirements are unresolved rather than contradicted, the result is review.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 23 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/snapmagic",
+    "triage_reasons": [
+     "US-based and relatively small, with an AI-assisted software product that could plausibly be B2B.",
+     "No growth or marketing role is listed; openings are operations, sales, customer success, and enterprise account executive roles.",
+     "Seed stage is not established."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 24
+   },
+   {
+    "actionable": false,
+    "company_key": "tara.ai",
+    "company_name": "Tara AI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "tara.ai",
+    "employee_count": 27,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [
+     "the company is hiring their first growth marketer: The cited opening is for \"Founding Account Executive \u2014 Remote,\" not a role matching the mission's marketing-role vocabulary."
+    ],
+    "mission_match_score": 42,
+    "mission_reasoning": "Tara AI has a cited United States location. The available cited opening is a founding account executive role, so there is no evidence of hiring a growth marketer or an equivalent marketing role. Seed stage is not established by the supplied evidence: YC backing and a small employee count do not by themselves prove the exact required stage.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 13 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/tara-ai",
+    "triage_reasons": [
+     "US-based and very small, with an engineering-efficiency software product that may be B2B SaaS.",
+     "The open roles are founding account executive positions, not growth marketing roles.",
+     "Seed stage is plausible but not confirmed, and the hiring signal does not match the requested marketing function."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 34
+   },
+   {
+    "actionable": false,
+    "company_key": "uplane.com",
+    "company_name": "Uplane",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "uplane.com",
+    "employee_count": 19,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [],
+    "mission_match_score": 62,
+    "mission_reasoning": "The established requirements remain satisfied. The supplied evidence does not establish seed stage. Current AI Marketing Strategist openings indicate marketing hiring, but do not establish that the role is the company's first growth marketer. The company website describes marketing software and names enterprise and in-house teams, but does not conclusively establish the required B2B SaaS customer focus beyond the established requirement.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 22 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/uplane",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the small team.",
+     "Description indicates an AI marketing product, but does not clearly establish B2B SaaS.",
+     "AI Marketing Strategist roles are adjacent to growth or marketing execution, though they may be service-delivery roles rather than the company's first growth marketer."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 48
+   },
+   {
+    "actionable": false,
+    "company_key": "zentail.com",
+    "company_name": "Zentail",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "zentail.com",
+    "employee_count": 12,
+    "enrichment_explanation": "Enrichment returned a company record.",
+    "enrichment_state": "success",
+    "exclusion": "technical_only",
+    "explanation": "Identity resolved; evidence collection in progress.",
+    "mission_decision": "insufficient_evidence",
+    "mission_failed_requirements": [
+     "the company is hiring their first growth marketer: The cited current openings are for Business Development Representative, Account Executive, and Software Engineer; none matches the required marketing role."
+    ],
+    "mission_match_score": 55,
+    "mission_reasoning": "Zentail has a verified United States location and appears to be a small startup, but the supplied evidence does not establish seed stage or B2B SaaS. Its description refers to a Revenue Growth Platform for ecommerce brands, but this does not by itself establish the exact B2B SaaS requirement. The available openings do not match any required growth or marketing role, so the mission cannot pass.",
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 30 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "verifying",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/zentail",
+    "triage_reasons": [
+     "US company serving ecommerce brands, potentially B2B software.",
+     "Open roles are sales and engineering rather than growth marketing.",
+     "The 30-person team and lack of marketing hiring make seed-stage first-marketer fit unclear."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 16
+   },
+   {
+    "actionable": false,
+    "company_key": "manicule.com",
+    "company_name": "Manicule",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "manicule.com",
+    "employee_count": 7,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": null,
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 205,
+    "reasons": [
+     "3 Tier-A commercial role(s)",
+     "multiple commercial openings",
+     "team size 7 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "identity_unresolved",
+    "strongest_signal": "LinkedIn Content Marketer",
+    "supporting_job_title": "LinkedIn Content Marketer",
+    "supporting_job_url": "https://www.ycombinator.com/companies/manicule",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the small team.",
+     "AgentRel appears to be a B2B developer-focused product, plausibly SaaS.",
+     "Multiple direct marketing and content roles strongly signal an early marketing hire, including LinkedIn Content Marketer and Technical Writer & Content Strategist."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 92
+   },
+   {
+    "actionable": false,
+    "company_key": "lab0.ai",
+    "company_name": "Lab0",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "lab0.ai",
+    "employee_count": 5,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": null,
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 140,
+    "reasons": [
+     "1 Tier-A commercial role(s)",
+     "team size 5 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": "A",
+    "status": "identity_unresolved",
+    "strongest_signal": "Founding Product Marketer (AI-native)",
+    "supporting_job_title": "Founding Product Marketer (AI-native)",
+    "supporting_job_url": "https://www.ycombinator.com/companies/lab0",
+    "triage_reasons": [
+     "Very small US company with a B2B SaaS-focused product description.",
+     "Open role is Founding Product Marketer, a strong direct signal for an early-stage first-marketer search.",
+     "Seed stage is plausible from the company size and founding role, though not verified."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 94
+   },
+   {
+    "actionable": false,
+    "company_key": "gojiberry.ai",
+    "company_name": "Gojiberry AI",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "gojiberry.ai",
+    "employee_count": 7,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 7 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/gojiberry-ai",
+    "triage_reasons": [
+     "Small US company with a B2B go-to-market product and plausible early-stage profile.",
+     "Current openings are sales development roles, not marketing roles, so the hiring signal is weak for this mission.",
+     "Seed stage is not stated."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 42
+   },
+   {
+    "actionable": false,
+    "company_key": "moss.dev",
+    "company_name": "Moss",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "moss.dev",
+    "employee_count": 5,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 5 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/moss",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the very small team.",
+     "Developer-focused semantic search product may be B2B, but SaaS positioning is not explicit.",
+     "No relevant marketing role is open."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 12
+   },
+   {
+    "actionable": false,
+    "company_key": "nango.dev",
+    "company_name": "Nango",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "nango.dev",
+    "employee_count": 6,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 6 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/nango",
+    "triage_reasons": [
+     "Very small US developer-infrastructure company with a B2B SaaS-adjacent product.",
+     "Hiring includes founding GTM, developer relations, and content-oriented roles, indicating go-to-market activity, but no direct growth-marketing role.",
+     "Seed stage is plausible but not stated."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 48
+   },
+   {
+    "actionable": false,
+    "company_key": "withnixo.com",
+    "company_name": "Nixo",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "withnixo.com",
+    "employee_count": 6,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 6 inside the target range",
+     "YC industry B2B",
+     "2 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/nixo",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the very small team.",
+     "Product is explicitly aimed at FDE teams, suggesting a B2B software company and likely SaaS context.",
+     "Founding GTM Lead is a strong adjacent signal for an early growth or marketing leader, although the role may include sales."
+    ],
+    "triage_relevance": "relevant",
+    "triage_signal_strength": 78
+   },
+   {
+    "actionable": false,
+    "company_key": "streak.com",
+    "company_name": "Streak",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "streak.com",
+    "employee_count": 35,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 35 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/streak",
+    "triage_reasons": [
+     "US B2B software company, but the only listed opening is a Staff UI Engineer.",
+     "No relevant marketing hiring signal is present, and the company size suggests it may be beyond seed stage."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 12
+   },
+   {
+    "actionable": false,
+    "company_key": "tasklet.ai",
+    "company_name": "Tasklet",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "tasklet.ai",
+    "employee_count": 8,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "LinkedIn company identity could not be resolved, so verification could not run.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 8 inside the target range",
+     "YC industry B2B",
+     "3 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "identity_unresolved",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/tasklet-2",
+    "triage_reasons": [
+     "US-based and plausibly seed-stage based on the small team.",
+     "Agents that own the work may be B2B software, but the description does not clearly establish SaaS.",
+     "No relevant marketing role is open; listed roles focus on engineering, customer success engineering, and design engineering."
+    ],
+    "triage_relevance": "uncertain",
+    "triage_signal_strength": 16
+   },
+   {
+    "actionable": false,
+    "company_key": "bitmovin.com",
+    "company_name": "Bitmovin",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "bitmovin.com",
+    "employee_count": 145,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 145 inside the target range",
+     "YC industry B2B"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/bitmovin",
+    "triage_reasons": [
+     "The reported 145 employees make seed stage highly unlikely.",
+     "The only listed opening is a Sales Director role, not a growth marketing role."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 5
+   },
+   {
+    "actionable": false,
+    "company_key": "deepgram.com",
+    "company_name": "Deepgram",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "deepgram.com",
+    "employee_count": 115,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 115 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/deepgram",
+    "triage_reasons": [
+     "The company is substantially larger than a typical seed-stage startup based on the reported 115 employees.",
+     "No relevant growth or marketing hiring is shown; listed roles are engineering, research, sales, and strategy positions."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 8
+   },
+   {
+    "actionable": false,
+    "company_key": "mashgin.com",
+    "company_name": "Mashgin",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "mashgin.com",
+    "employee_count": 150,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 150 inside the target range",
+     "YC industry B2B",
+     "3 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/mashgin",
+    "triage_reasons": [
+     "The reported 150 employees make seed stage highly unlikely.",
+     "The company appears focused on physical self-checkout systems rather than clearly B2B SaaS, and its openings are technical and product roles rather than growth marketing."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 6
+   },
+   {
+    "actionable": false,
+    "company_key": "mux.com",
+    "company_name": "Mux",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "mux.com",
+    "employee_count": 95,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 40,
+    "reasons": [
+     "team size 95 inside the target range",
+     "YC industry B2B",
+     "1 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/mux",
+    "triage_reasons": [
+     "The reported 95 employees and established video infrastructure business make seed stage unlikely.",
+     "The only listed opening is a platform engineering role, not a growth marketing role."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 7
+   },
+   {
+    "actionable": false,
+    "company_key": "poly.app",
+    "company_name": "Poly",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "poly.app",
+    "employee_count": 3,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "technical_only",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 30,
+    "reasons": [
+     "team size 3 inside the target range",
+     "5 technical role(s) only \u2014 not commercial evidence"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/poly",
+    "triage_reasons": [
+     "US-based and very small, but the description indicates an intelligent personal cloud storage product rather than B2B SaaS.",
+     "All listed open roles are engineering or AI research roles, with no marketing or growth hiring signal."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 5
+   },
+   {
+    "actionable": false,
+    "company_key": "quartzy.com",
+    "company_name": "Quartzy",
+    "counts_as_qualified": false,
+    "decided": false,
+    "decision_source": "not_evaluated",
+    "domain": "quartzy.com",
+    "employee_count": 100,
+    "enrichment_explanation": "Enrichment was never attempted for this company.",
+    "enrichment_state": "not_attempted",
+    "exclusion": "insufficient_commercial",
+    "explanation": "Evaluated against the mission's hiring signals and size range.",
+    "mission_decision": null,
+    "mission_failed_requirements": [],
+    "mission_match_score": null,
+    "mission_reasoning": null,
+    "prequalification_score": 30,
+    "reasons": [
+     "team size 100 inside the target range"
+    ],
+    "resumable": false,
+    "shortlist_exclusion": null,
+    "shortlist_exclusion_explanation": null,
+    "signal_tier": null,
+    "status": "evaluated",
+    "strongest_signal": null,
+    "supporting_job_title": null,
+    "supporting_job_url": "https://www.ycombinator.com/companies/quartzy",
+    "triage_reasons": [
+     "The company describes itself as a marketplace for life science supplies, not clearly a B2B SaaS product.",
+     "The listed open roles are territory sales positions rather than growth, marketing, or product marketing roles.",
+     "Its 100-person size and apparent established commercial hiring provide weak evidence for a seed-stage startup hiring its first growth marketer."
+    ],
+    "triage_relevance": "irrelevant",
+    "triage_signal_strength": 8
+   }
+  ],
+  "workbench_grounded_explanations": [],
+  "workbench_pool": {
+   "metrics": {
+    "contact_ready": 0,
+    "delivered": 2,
+    "discovered": 5,
+    "eligible": 4,
+    "evaluated": 4,
+    "founder_unlocked": 0,
+    "hard_gated": 1,
+    "qualified": 0,
+    "rejected": 2,
+    "requested": 3,
+    "restored": 0,
+    "review": 2,
+    "shortfall": 1,
+    "unevaluated": 0,
+    "watch": 0
+   },
+   "partial": false,
+   "pool_explanation": "deterministic ordering; no semantic comparison available",
+   "ranking_confidence": 0,
+   "ranking_source": "deterministic_fallback",
+   "rounds": {
+    "contact_ready": 0,
+    "contact_unlocked": 0,
+    "delivered": 2,
+    "founder_unlocked": 0,
+    "qualified": 0,
+    "requested": 1,
+    "review": 2,
+    "rounds": [
+     {
+      "delivered": 2,
+      "discovered": 10,
+      "duplicate_rate": 0,
+      "eligible": 5,
+      "hard_gated": 1,
+      "new_unique": 10,
+      "qualification_rate": 0,
+      "round": 1
+     }
+    ],
+    "rounds_used": 1,
+    "shortfall": 0,
+    "terminal_reason": "quota_not_met",
+    "watch": 0
+   },
+   "rows": [
+    {
+     "brain_decision": "review",
+     "company_key": "tara.ai",
+     "company_name": "Tara AI",
+     "confidence_after_grounding": 0.88,
+     "founder_state": "locked",
+     "grounding_score": 1,
+     "material_conflicts": [],
+     "missing_evidence": [
+      "Seed-stage status",
+      "Hiring for a first growth marketer"
+     ],
+     "opportunity_tier": null,
+     "ranking_reason": "deterministic order: review, grounding 1",
+     "reason_to_contact_now": "Tara AI has listed Founding Account Executive roles for Remote and San Francisco, CA.",
+     "recommended_action": "review",
+     "relative_strength": "moderate",
+     "semantic_rank": 1,
+     "strongest_signal": "Tara AI has listed Founding Account Executive roles for Remote and San Francisco, CA."
+    },
+    {
+     "brain_decision": "review",
+     "company_key": "snapmagic.com",
+     "company_name": "SnapMagic",
+     "confidence_after_grounding": 0.82,
+     "founder_state": "locked",
+     "grounding_score": 1,
+     "material_conflicts": [],
+     "missing_evidence": [
+      "Seed-stage status",
+      "Hiring for a first growth marketer"
+     ],
+     "opportunity_tier": null,
+     "ranking_reason": "deterministic order: review, grounding 1",
+     "reason_to_contact_now": "SnapMagic has listed Head of Sales and Enterprise Account Executive roles.",
+     "recommended_action": "review",
+     "relative_strength": "moderate",
+     "semantic_rank": 2,
+     "strongest_signal": "SnapMagic has listed Head of Sales and Enterprise Account Executive roles."
+    }
+   ]
+  },
+  "workbench_portfolio": {
+   "counts": {
+    "contact_ready": 0,
+    "delivered": 0,
+    "opportunities": 0,
+    "qualified": 0,
+    "rejected_by_floor": 0,
+    "review": 0,
+    "tier_a": 0,
+    "tier_b": 0,
+    "tier_c": 0,
+    "watch": 0
+   },
+   "entries": [],
+   "shortfall": {
+    "contact_ready": 0,
+    "contact_ready_reason": null,
+    "opportunities": 1,
+    "opportunity_reason": "0 of 1 companies qualified or are under review"
+   },
+   "targets": {
+    "interpretation": "legacy_lead_count",
+    "requested_contact_ready_count": null,
+    "requested_lead_count": 1,
+    "requested_opportunity_count": 1
+   },
+   "version": "opportunity-portfolio-v1"
+  },
+  "workbench_progress": {
+   "accounts_found": 0,
+   "awaiting_external_run": false,
+   "companies_enriched": 0,
+   "decision_makers_verified": 0,
+   "eligible_opportunities": 0,
+   "evaluated": 0,
+   "exclusion_reasons": {},
+   "hiring_verified": 0,
+   "identity_resolved": 0,
+   "identity_unresolved": 0,
+   "in_progress": false,
+   "open_jobs_evaluated": 0,
+   "qualified_companies": 0,
+   "shortlisted": 0,
+   "stage": "qualified"
+  },
+  "workbench_triage_counts": {
+   "irrelevant": 6,
+   "relevant": 7,
+   "uncertain": 17
+  }
+ },
+ "status": "failed",
+ "step_index": 0,
+ "updated_at": "2026-09-14T07:37:34.808425+00:00"
+}

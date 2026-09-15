@@ -29,6 +29,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import type { ExecutabilityGateMode } from "./capabilityExecutability.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { PlaybookAuthorization } from "./leadPlaybookExecution.ts";
 import type { LeadIntelligenceCapabilities } from "./leadIntelligencePolicy.ts";
@@ -159,6 +160,8 @@ export interface BuildPreflightInput {
    * is inert by construction.
    */
   playbook?: PlaybookAuthorization | null;
+  /** P0 — grade feasibility against engine executability (Lead V2 only). */
+  executability?: ExecutabilityGateMode;
 }
 
 function isStartupMission(m: LeadMissionV1): boolean {
@@ -442,7 +445,7 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
   // proof path is not a weak plan, it is a false one: it would spend on
   // discovery, enrichment and qualification and then report success for a fact
   // nothing investigated.
-  const feasibility = assessRequestFeasibility(mission, plan);
+  const feasibility = assessRequestFeasibility(mission, plan, { executability: i.executability });
   for (const r of feasibility.refusals) {
     block("request_not_feasible", `${r.requirement} — ${r.message}`);
   }

@@ -116,6 +116,7 @@ import {
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
+import { executabilityGateFor, type ExecutabilityGateMode } from "../_shared/capabilityExecutability.ts";
 import { MissionCompilationBlockedError } from "../_shared/leadMissionCompiler.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import {
@@ -337,6 +338,11 @@ function buildMissionForPrompt(
    * answers deterministically.
    */
   gptProposal?: unknown,
+  /**
+   * P0 — `enforce` for a Lead V2 workspace, so the card and its dry run show
+   * only what the engine can execute; `legacy` (V1) is unchanged.
+   */
+  executability: ExecutabilityGateMode = "legacy",
 ): LeadMissionV1 & {
   brain_rejected_broadening: unknown[];
   preflight_dry_run: unknown;
@@ -352,7 +358,7 @@ function buildMissionForPrompt(
     requestedCount,
   });
   const merged = mergeCompanyBrainIntoMission(compiled.final_mission, brain);
-  const plan = buildCapabilityGraph(merged.mission);
+  const plan = buildCapabilityGraph(merged.mission, { executability });
   // THE DRY RUN THE USER APPROVES IS THE RECORD THAT GATES SPENDING.
   //
   // Built from the SAME `buildPaidExecutionPreflight` run-agent calls before its
@@ -367,6 +373,7 @@ function buildMissionForPrompt(
     firstProviderInput: firstCall.compiled?.ok ? firstCall.compiled.input : null,
     firstProviderCompileOk: firstCall.compiled ? firstCall.compiled.ok : undefined,
     firstProviderErrors: firstCall.compiled && !firstCall.compiled.ok ? firstCall.compiled.errors : [],
+    executability,
   });
   return {
     ...merged.mission,
@@ -771,7 +778,8 @@ async function compileCanonicalLeadMission(i: {
   // status code and user message is unchanged.
   let mission: ReturnType<typeof buildMissionForPrompt>;
   try {
-    mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal);
+    mission = buildMissionForPrompt(i.prompt, i.requestedCount, brainContext, gptProposal,
+      executabilityGateFor(i.workspaceId));
   } catch (e) {
     if (e instanceof MissionCompilationBlockedError) {
       console.log("[pilot-chat][mission-compilation-blocked]", {
@@ -926,7 +934,8 @@ async function generateWorkflowConfirmation(
     // deterministic reading wearing the compiler's shape.
     let cardMission: ReturnType<typeof buildMissionForPrompt>;
     try {
-      cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal);
+      cardMission = buildMissionForPrompt(prompt, null, cardBrainContext, gptProposal,
+        executabilityGateFor(workspaceId));
     } catch (e) {
       if (e instanceof MissionCompilationBlockedError) {
         console.log("[pilot-chat][card-mission-compilation-blocked]", {
@@ -3087,8 +3096,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           }
         })();
 
-        const previewPlan = buildCapabilityGraph(mission as never);
-        const feasibility = assessRequestFeasibility(mission, previewPlan);
+        const previewGate = executabilityGateFor(workspaceId);
+        const previewPlan = buildCapabilityGraph(mission as never, { executability: previewGate });
+        const feasibility = assessRequestFeasibility(mission, previewPlan, { executability: previewGate });
         const preview = buildMissionPreview(
           mission, previewPlan, feasibility, brainRoute.lead);
 
