@@ -18,6 +18,7 @@ import {
 import { buildPaidExecutionPreflight } from "../../../supabase/functions/_shared/leadPaidExecutionPreflight.ts";
 import { compileFirstProviderCall } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { isCapabilityExecutable } from "../../../supabase/functions/_shared/capabilityExecutability.ts";
+import { buildMissionPreview } from "../../../supabase/functions/_shared/missionPreview.ts";
 import { parseLeadMissionDeterministic, type LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -164,6 +165,26 @@ Deno.test("a job-listing mission is refused: its entry cannot execute", () => {
   assertFalse(f.ok);
   assert(codes(f).includes("entry_not_executable"), `${codes(f)}`);
   assert(preflightBlocks.includes("request_not_feasible"));
+});
+
+Deno.test("the Pilot refusal names the missing executable capability, not a placeholder", () => {
+  const cases: Array<[string, string]> = [
+    ["q5", "product_launch_discovery"], ["inject:technology", "technology_verification"],
+    ["q6", "expansion_signal_discovery"], ["inject:post_company", "company_post_verification"],
+  ];
+  for (const [id, cap] of cases) {
+    const { plan, f } = enforce(mission(id));
+    const p = buildMissionPreview(mission(id), plan, f);
+    assertFalse(p.feasible, id);
+    const text = p.gaps.map((g) => g.detail).join("; ");
+    assert(text.includes(cap) && /not executable yet|cannot execute yet/.test(text), `${id}: ${text}`);
+    assertFalse(text.includes("part of this can't be run"), `${id}: placeholder`);
+    assertFalse(p.gaps.some((g) => g.detail === "declared gap"), `${id}: placeholder`);
+  }
+  // Leadership has no capability at all: the reason says so, still in words.
+  const { plan, f } = enforce(mission("q8"));
+  const lead = buildMissionPreview(mission("q8"), plan, f).gaps.map((g) => g.detail).join("; ");
+  assert(lead.length > 40 && !lead.includes("part of this can't be run"), lead);
 });
 
 Deno.test("no enforced plan in the battery schedules a step the engine cannot run", () => {

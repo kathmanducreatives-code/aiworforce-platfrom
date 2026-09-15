@@ -108,6 +108,31 @@ export function buildMissionPreview(
     describes: describe(String(s.capability)),
   }));
 
+  // ── STAGE 0'S OWN WORDS, NOT A PLACEHOLDER ──────────────────────────────
+  //
+  // Refusals carry their explanation in `message` and declared gaps are plain
+  // strings. Reading `reason` / `detail` found neither, so every refusal reached
+  // the user as "part of this can't be run" — including P0's "the engine cannot
+  // execute technology_verification yet". A gap a refusal already states is not
+  // repeated.
+  const refusalGaps: DeclaredGap[] = (feasibility?.refusals ?? []).map((r) => {
+    const o = r as { code?: unknown; message?: unknown; reason?: unknown };
+    const text = o.message ?? o.reason;
+    return {
+      code: `not_feasible:${String(o.code ?? "refused")}`,
+      detail: typeof text === "string" && text ? text : "part of this can't be run",
+    };
+  });
+  const stage0Gaps: DeclaredGap[] = (feasibility?.declared_gaps ?? [])
+    .map((g) => {
+      const o = g as unknown as { code?: unknown; detail?: unknown };
+      const text = typeof g === "string" ? g : o.detail;
+      return {
+        code: `stage0_gap:${String((typeof g === "string" ? null : o.code) ?? "gap")}`,
+        detail: typeof text === "string" && text ? text : "declared gap",
+      };
+    })
+    .filter((g) => !refusalGaps.some((r) => r.detail.includes(g.detail)));
   const gaps: DeclaredGap[] = [
     // What the request asked for that the lead surface could not express.
     ...(projection?.unprojected ?? []).map((u) => ({
@@ -115,14 +140,8 @@ export function buildMissionPreview(
       detail: `I can't filter on ${u.replace(/^filter:|^requirement:/, "")} in this run`,
     })),
     // What Stage 0 says cannot be satisfied.
-    ...(feasibility?.refusals ?? []).map((r) => ({
-      code: `not_feasible:${String((r as { code?: unknown }).code ?? "refused")}`,
-      detail: String((r as { reason?: unknown }).reason ?? "part of this can't be run"),
-    })),
-    ...(feasibility?.declared_gaps ?? []).map((g) => ({
-      code: `stage0_gap:${String((g as { code?: unknown }).code ?? "gap")}`,
-      detail: String((g as { detail?: unknown }).detail ?? "declared gap"),
-    })),
+    ...refusalGaps,
+    ...stage0Gaps,
   ];
 
   const spends = steps.some((s) => s.providers.length > 0);
