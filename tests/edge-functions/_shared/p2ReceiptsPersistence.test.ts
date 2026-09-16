@@ -5,7 +5,7 @@ import {
   markExecuted, newSpendLedger, reserve, resolveCeilings, attachProviderRun, receiptUsd,
 } from "../../../supabase/functions/_shared/budgetPolicy.ts";
 import {
-  apifyReceiptFromRun, fetchApifyRunReceipt, settleUntilStable,
+  apifyReceiptFromRun, fetchApifyRunReceipt, settlementAttempts, settleUntilStable,
 } from "../../../supabase/functions/_shared/providerReceipts.ts";
 import {
   persistP2Spine, settleAndPersistP2Spine, settlementPatches, type SpineDb,
@@ -94,6 +94,16 @@ Deno.test("a running run and a call without a run keep their provisional floor �
   assertEquals(l.reservations.map((r) => r.status), ["executed", "executed"]);
   assertEquals(out.unsettled, 1);
   assertEquals(out.without_run, 1);
+});
+
+Deno.test("receipt reads scale with the time left instead of collapsing to one (canary 5ee5ee4c)", () => {
+  assertEquals(settlementAttempts(138_000), 7);
+  assertEquals(settlementAttempts(80_000), 5);
+  assertEquals(settlementAttempts(30_000), 1);
+  assertEquals(settlementAttempts(5_000), 1);
+  assertEquals(settlementAttempts(Infinity), 7);
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assert(src.includes("attempts: settlementAttempts(room, { waitMs: 15_000 }),"));
 });
 
 // ── the run id reaches the engine ─────────────────────────────────────────────

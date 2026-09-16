@@ -100,4 +100,17 @@ export async function settleUntilStable(
   };
 }
 
+/**
+ * How many receipt reads fit the time left, keeping `reserveMs` for the result
+ * write. Canary 5ee5ee4c had ~138s left and an all-or-nothing rule allowed one
+ * read, so a finished mission kept eight settlements never confirmed final.
+ */
+export function settlementAttempts(
+  remainingMs: number, opts: { waitMs?: number; reserveMs?: number; max?: number } = {},
+): number {
+  const wait = opts.waitMs ?? 15_000, reserve = opts.reserveMs ?? 20_000, max = opts.max ?? 7;
+  if (!Number.isFinite(remainingMs)) return max;
+  return Math.max(1, Math.min(max, Math.floor((remainingMs - reserve) / wait) + 1));
+}
+
 export { receiptUsd };

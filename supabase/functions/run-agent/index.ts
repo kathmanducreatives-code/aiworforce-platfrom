@@ -151,7 +151,7 @@ import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import {
   persistP2Spine, settleAndPersistP2Spine, type SpineDb, type SpineState,
 } from "../_shared/p2SpinePersistence.ts";
-import { fetchApifyRunReceipt } from "../_shared/providerReceipts.ts";
+import { fetchApifyRunReceipt, settlementAttempts } from "../_shared/providerReceipts.ts";
 import { specGovernedPageFetcher, webEvidenceCreditRate } from "../_shared/webEvidenceSpec.ts";
 import {
   readFreshPages, readResearchedRequirements,
@@ -4096,7 +4096,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 receiptFor: apifyToken ? (runId) => fetchApifyRunReceipt(runId, apifyToken) : null,
                 db: supabase as unknown as SpineDb,
                 scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
-                attempts: room > 150_000 ? 7 : 1,
+                attempts: settlementAttempts(room, { waitMs: 15_000 }),
                 waitMs: 15_000,
                 minFinishedAgeMs: 60_000,
               });
