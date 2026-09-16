@@ -42,6 +42,7 @@
 //
 // PURE. No network, no provider, no model, no database.
 
+import { criteriaExecutionPolicy, hardConstraintsBackedByCriteria, rejectingAxes } from "./criteriaExecutionPolicy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
 import {
   classifyRoleFamily, roleFamilyAliases, type RoleFamily,
@@ -205,7 +206,16 @@ function strs(v: unknown): string[] {
  * parses `original_user_query` — it is carried verbatim for evidence and
  * explanation, never re-read for meaning.
  */
-export function buildQualificationContext(mission: LeadMissionV1): QualificationContext {
+export function buildQualificationContext(
+  mission: LeadMissionV1,
+  /**
+   * P2 — `criteriaAuthority`: the axes the mission may REJECT on, and the hard
+   * constraints handed to evaluation, come from HARD criteria only. A location
+   * or size the Company Brain filled, or a constraint the model inferred, ranks
+   * and never rejects. Off (default): today's field-presence rule.
+   */
+  opts: { criteriaAuthority?: boolean } = {},
+): QualificationContext {
   const profile = rec((mission as unknown as Record<string, unknown>).company_profile);
   const verticals = strs(profile.verticals);
   const stages = strs(profile.stages);
@@ -294,12 +304,15 @@ export function buildQualificationContext(mission: LeadMissionV1): Qualification
     original_user_query: String(
       (mission as unknown as Record<string, unknown>).original_user_query ?? ""),
     target_entity: lc((mission as unknown as Record<string, unknown>).target_entity) || "company",
-    hard_constraints: hard,
+    hard_constraints: opts.criteriaAuthority ? hardConstraintsBackedByCriteria(mission, hard) : hard,
     soft_preferences: soft,
     verticals, stages, locations, strategies,
     employee_range,
     role_vocabulary,
-    mission_owns: {
+    mission_owns: opts.criteriaAuthority ? {
+      ...rejectingAxes(criteriaExecutionPolicy(mission)),
+      hiring_role: role_vocabulary.source === "mission",
+    } : {
       // The Mission owns an axis when it actually said something about it.
       employee_count: employee_range.min != null || employee_range.max != null,
       industry: verticals.length > 0,

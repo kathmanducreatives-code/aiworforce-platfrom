@@ -101,6 +101,12 @@ export interface CompiledCallLike {
   inputHash: string;
   /** Set when resuming a run Apify already started. */
   resumeRunId?: string;
+  /**
+   * P2 — the finalised ProviderCallSpec. Travels in the envelope, which the
+   * ledger persists as `request_input` when the call STARTS — so the spec is
+   * recorded before the network call returns.
+   */
+  providerCallSpec?: unknown;
 }
 
 /**
@@ -133,6 +139,7 @@ export function buildInvoker(ctx: CapabilityExecutionContext) {
       compiled_input_hash: call.inputHash,
       persistence_authority: ctx.persistenceAuthority,
       ...(resumeRunId ? { resume_run_id: resumeRunId } : {}),
+      ...(call.providerCallSpec ? { provider_call_spec: call.providerCallSpec } : {}),
     };
 
     const rr = await ctx.runTool(

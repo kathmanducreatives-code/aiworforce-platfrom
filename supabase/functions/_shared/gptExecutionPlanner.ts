@@ -185,8 +185,15 @@ export interface GptPlanExecutionInput {
 
 function systemPromptFor(
   brain: CompanyBrainBriefing | null, results?: DiscoveryResultsSummary | null,
+  actorKeys?: readonly string[] | null,
 ): string {
-  return [buildAgentoryBriefing({ brain, results }), "", STAGE_RULES].join("\n");
+  return [buildAgentoryBriefing({ brain, results, actorKeys }), "", STAGE_RULES].join("\n");
+}
+
+/** P2 — the actors a payload authorises, for the playbook subset. */
+export function authorisedActorKeys(payload: Record<string, unknown>): string[] {
+  const caps = (payload.authorised_capabilities ?? []) as Array<{ actors?: Array<{ actor_key?: string }> }>;
+  return [...new Set(caps.flatMap((c) => (c.actors ?? []).map((a) => String(a.actor_key ?? ""))).filter(Boolean))];
 }
 
 /** Exported so a test can assert what the model is shown without a network call. */
@@ -264,6 +271,8 @@ function feedbackSection(
 
 export interface GptExecutionPlannerContext {
   brain?: CompanyBrainBriefing | null;
+  /** P2 — show only the playbook cards of actors this payload authorises. */
+  playbookSubset?: boolean;
   /** Leads the user asked for. Read only by the model router. */
   requestedCount?: number;
   /** Every routing decision, so the run can report which model ran what. */
@@ -297,7 +306,8 @@ export function makeGptExecutionPlanner(
     ctx.onRoute?.(route);
     const r: GptResult<GptExecutionProposal> = await gptStructured<GptExecutionProposal>({
       purpose: route.stage,
-      system: systemPromptFor(ctx.brain ?? null, i.results ?? null) +
+      system: systemPromptFor(ctx.brain ?? null, i.results ?? null,
+          ctx.playbookSubset ? authorisedActorKeys(i.payload) : null) +
         feedbackSection(feedback),
       user: JSON.stringify(i.payload, null, 2),
       schema: RESPONSE_SCHEMA as unknown as { name: string; schema: Record<string, unknown> },

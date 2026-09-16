@@ -180,8 +180,13 @@ export function companyBrainSection(brain: CompanyBrainBriefing | null): string 
  * change. That is the whole contract of this module: update the knowledge, not
  * a branch.
  */
-export function actorPlaybookSection(): string {
-  const actors = discoveryCatalogBriefing();
+export function actorPlaybookSection(actorKeys?: readonly string[] | null): string {
+  // P2 — THE RELEVANT SUBSET. Given the actors this mission's graph admitted,
+  // only their cards are shown; the full catalog (~70k characters) otherwise.
+  const all = discoveryCatalogBriefing();
+  const actors = actorKeys && actorKeys.length
+    ? all.filter((a) => actorKeys.includes(String(a.actor_key)))
+    : all;
   const unserveable = scenarioBriefing()
     .filter((s) => s.servable === false)
     .map((s) => ({ scenario: s.scenario, why: s.blocked_reason }));
@@ -209,6 +214,8 @@ export interface BriefingInput {
   brain: CompanyBrainBriefing | null;
   /** What the run has learned so far, when re-planning. See `resultsSection`. */
   results?: DiscoveryResultsSummary | null;
+  /** P2 — restrict the actor playbook to these actors (the mission's admitted set). */
+  actorKeys?: readonly string[] | null;
 }
 
 /**
@@ -289,7 +296,7 @@ export function buildAgentoryBriefing(i: BriefingInput): string {
     "",
     companyBrainSection(i.brain),
     "",
-    actorPlaybookSection(),
+    actorPlaybookSection(i.actorKeys ?? null),
     "",
     AGENTORY_AGENTS,
     ...(i.results ? ["", resultsSection(i.results)] : []),

@@ -173,8 +173,17 @@ export interface GptPlanDiscoveryInput {
  * pinning.
  */
 /** The stage prompt, prefixed by everything GPT should know about Agentory. */
-function systemPromptFor(brain: CompanyBrainBriefing | null, results?: DiscoveryResultsSummary | null): string {
-  return [buildAgentoryBriefing({ brain, results }), "", STAGE_RULES].join("\n");
+function systemPromptFor(
+  brain: CompanyBrainBriefing | null, results?: DiscoveryResultsSummary | null,
+  actorKeys?: readonly string[] | null,
+): string {
+  return [buildAgentoryBriefing({ brain, results, actorKeys }), "", STAGE_RULES].join("\n");
+}
+
+/** P2 — the actors a discovery payload offers, for the playbook subset. */
+export function availableActorKeys(payload: Record<string, unknown>): string[] {
+  const xs = (payload.available_actors ?? []) as Array<{ actor_key?: string }>;
+  return [...new Set(xs.map((a) => String(a.actor_key ?? "")).filter(Boolean))];
 }
 
 export function buildPrompt(i: GptPlanDiscoveryInput): { system: string; user: string } {
@@ -243,6 +252,8 @@ function validationFeedbackSection(
 }
 
 export interface GptDiscoveryPlannerContext {
+  /** P2 — show only the playbook cards of actors this payload offers. */
+  playbookSubset?: boolean;
   /** Leads the user asked for. Read only by the model router. */
   requestedCount?: number;
   /** Every routing decision, so the run can report which model ran what. */
@@ -284,7 +295,8 @@ export function makeGptDiscoveryPlanner(
     // can notice its own strategy failing.
     const feedback = i.validation_feedback ?? [];
     const { system, user } = {
-      system: systemPromptFor(ctx.brain ?? null, i.results ?? null) +
+      system: systemPromptFor(ctx.brain ?? null, i.results ?? null,
+          ctx.playbookSubset ? availableActorKeys(i.payload) : null) +
         validationFeedbackSection(feedback),
       user: JSON.stringify(i.payload, null, 2),
     };

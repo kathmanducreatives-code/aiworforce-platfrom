@@ -59,6 +59,20 @@ Apply only after that one, deliberately. Until then the live sweeper is
 unchanged; the V2 heartbeat keeps `tasks.updated_at` fresh, which is what keeps
 a live V2 run out of the sweeper today.
 
+## `20260916120000_lead_v2_p2_execution_spine.sql`
+
+Lead V2 P2. Adds `lead_plan_versions` (immutable RetrievalPlan versions),
+`lead_mission_events` (append-only mission trace), and ProviderCallSpec identity
+and settlement columns on `lead_execution_calls` (`provider_call_id`,
+`idempotency_key`, `plan_version`, `route_id`, `settled_usd`,
+`settlement_source`, `variance_usd`) with a partial unique index that allows one
+successful execution per idempotency key in a lineage. Additive.
+
+**Not required for P2 to run.** Until it is applied the engine carries plan
+versions, the spend ledger and the trace in the execution state, and the full
+spec is persisted in the call envelope (`request_input.provider_call_spec`).
+Apply with the P2 release, after `lead_mission_queue` exists.
+
 ## Tests
 
 `tests/infra/` still reads these files — the baseline's structure, the V2

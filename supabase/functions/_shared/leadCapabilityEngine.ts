@@ -221,6 +221,20 @@ import {
   coverMissionSignals, coverageDiagnostics, signalsUnservedByStrategy,
 } from "./signalActorCoverage.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
+// ── P2: the execution spine ──────────────────────────────────────────────────
+import {
+  amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability,
+  type AmendmentTrigger, type RetrievalPlan,
+} from "./retrievalPlan.ts";
+import { compileProviderCallSpec, specSummary, type ProviderCallSpec } from "./providerCallSpec.ts";
+import { criteriaExecutionPolicy } from "./criteriaExecutionPolicy.ts";
+import {
+  derivedFloorUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
+  type Ceilings, type SpendLedger,
+} from "./budgetPolicy.ts";
+import { appendTrace, newMissionTrace, type MissionTrace } from "./missionTrace.ts";
+import { ACTOR_INPUT_CONTRACTS as P2_ACTOR_CONTRACTS } from "./actorInputContracts.ts";
+import { hashInput as p2HashInput } from "./hiringActorInputs.ts";
 import { toRepoKey } from "./actorIdentity.ts";
 
 /**
@@ -347,6 +361,10 @@ export interface ProviderAttempt {
   attempt: number;
   outcome:
     | "ok" | "empty" | "error" | "pending" | "skipped_idempotent" | "compile_failed"
+    /** P2: the ProviderCallSpec's ceilings refused the call before it started. */
+    | "refused_budget"
+    /** P2: the retrieval plan refused this route (e.g. an unfiltered sweep). */
+    | "refused_policy"
     | "skipped_not_configured"
     /** The execution deadline closed before this call could safely start. */
     | "skipped_deadline"
@@ -522,6 +540,15 @@ export interface PrequalificationRecord {
 
 export interface CapabilityExecutionState {
   version: typeof CAPABILITY_EXECUTION_STATE_VERSION;
+  // ── P2: THE EXECUTION SPINE, CARRIED WITH THE STATE (so continuations keep it) ──
+  /** Every RetrievalPlan version, oldest first. The last is current. */
+  retrieval_plans?: RetrievalPlan[];
+  /** Estimate → reserve → execute → settle, against absolute ceilings. */
+  spend_ledger?: SpendLedger;
+  /** Append-only mission trace. */
+  mission_trace?: MissionTrace;
+  /** Compact form of every compiled ProviderCallSpec (the ledger row holds the full spec). */
+  provider_call_specs?: Array<ReturnType<typeof specSummary>>;
   /** Binds this state to the mission it was produced for. */
   mission_hash: string;
   /**
@@ -618,7 +645,9 @@ export interface CapabilityExecutionState {
       | "no_further_actor_proposed"
       | "pass_limit"
       | "schema_failure"
-      | "run_pending";
+      | "run_pending"
+      /** P2: a replan's amendment was refused (trigger, reserve or validation). */
+      | "amendment_refused";
   };
   /**
    * Stage removals the chain PROPOSED and containment refused.
@@ -1920,6 +1949,17 @@ export interface CapabilityEngineDeps {
 export interface CapabilityEngineOpts {
   mission: LeadMissionV1;
   plan: CapabilityPlan;
+  /**
+   * P2 — `enforce`: every provider call is compiled into a ProviderCallSpec
+   * from the current RetrievalPlan and sent exactly; ceilings reserve before
+   * the call; amendments are versioned; qualification rejects on hard criteria
+   * only. Absent/`off`: today's behaviour, unchanged (V1, Signals monitoring).
+   */
+  specMode?: "enforce" | "off";
+  /** Idempotency scope when no resume scope exists. */
+  specScope?: { workspace_id: string; lineage_id: string };
+  ceilings?: Partial<Ceilings>;
+  canary?: boolean;
   /** Resume state. Ignored unless its mission_hash matches. */
   state?: CapabilityExecutionState | null;
   brain?: {
@@ -2234,7 +2274,8 @@ export async function runCapabilityPlan(
   // and a Mission asking for companies hiring software engineers qualified none
   // of a hundred (TEST run cf6cce3d): its own required signal was classified
   // `technical`, and `technical` could not produce a qualifying tier.
-  const qualificationCtx = buildQualificationContext(opts.mission);
+  const qualificationCtx = buildQualificationContext(opts.mission,
+    { criteriaAuthority: opts.specMode === "enforce" });
   log("qualification_context", qualificationContextSummary(qualificationCtx));
 
   // ── WHAT A SECOND LOOK NEEDS, BUILT ONCE FOR THE WHOLE RUN ──────────────
@@ -2419,6 +2460,41 @@ export async function runCapabilityPlan(
 
   // ── WHAT A PREVIOUS INVOCATION ALREADY PAID FOR ────────────────────────────
   const resumeScope = opts.resume ?? null;
+
+  // ── P2: THE EXECUTION SPINE ─────────────────────────────────────────────────
+  const specOn = opts.specMode === "enforce";
+  const criteriaPolicy = specOn ? criteriaExecutionPolicy(opts.mission) : null;
+  const p2MissionHash = specOn ? await missionHash(opts.mission) : "";
+  const p2Scope = {
+    workspace_id: resumeScope?.workspace_id ?? opts.specScope?.workspace_id ?? "unscoped",
+    lineage_id: resumeScope?.lineage_root_task_id ?? opts.specScope?.lineage_id ?? p2MissionHash.slice(0, 24),
+  };
+  const currentPlan = (): RetrievalPlan | null =>
+    state.retrieval_plans?.[state.retrieval_plans.length - 1] ?? null;
+  if (specOn) {
+    state.spend_ledger ??= newSpendLedger(resolveCeilings(opts.ceilings ?? null, opts.canary === true));
+    state.mission_trace ??= newMissionTrace();
+    state.provider_call_specs ??= [];
+    state.retrieval_plans ??= [];
+    if (currentPlan()) {
+      // A WORKER CONTINUATION EXECUTES THE CURRENT VERSION. It never re-plans.
+      appendTrace(state.mission_trace, "continuation_resumed", {
+        reservations: state.spend_ledger.reservations.length,
+      }, { plan_version: currentPlan()!.version });
+    }
+  }
+  /** Adaptive reserve left: the reserve minus spend by calls from amended versions. */
+  const adaptiveReserveRemaining = (): number => {
+    const l = state.spend_ledger;
+    if (!l) return 0;
+    const amended = new Set((state.provider_call_specs ?? [])
+      .filter((sp) => (sp.plan_version ?? 1) > 1).map((sp) => sp.provider_call_id));
+    const spent = l.reservations
+      .filter((r) => amended.has(r.provider_call_id) &&
+        (r.status === "reserved" || r.status === "executed" || r.status === "settled"))
+      .reduce((n, r) => n + (r.settled_usd ?? r.provisional_usd ?? r.estimate_usd), 0);
+    return Math.max(0, l.ceilings.adaptive_reserve_usd - spent);
+  };
   const priorRecords = new Map<string, CompanyResumeRecord>(
     (resumeScope?.records ?? []).map((r) => [r.company_key, r]));
 
@@ -3195,7 +3271,7 @@ export async function runCapabilityPlan(
     // FINGERPRINTED FROM THE COMPILED INPUT, when there is one. A compile
     // failure has no input to fingerprint and needs none: it never reached a
     // provider, so there is no question to avoid repeating.
-    const attemptFingerprint = compiled.ok ? inputFingerprint(compiled.input) : undefined;
+    let attemptFingerprint = compiled.ok ? inputFingerprint(compiled.input) : undefined;
     // ── A RUN WE ARE ONLY RE-READING WAS ALREADY PAID FOR ───────────────────
     //
     // Set when this call adopts a run some earlier invocation started. Adoption
@@ -3238,7 +3314,65 @@ export async function runCapabilityPlan(
       record("compile_failed", 0, compiled.errors.join("; "));
       return [];
     }
-    const call = compiled;
+    let call = compiled;
+
+    // ── P2: THE SPEC IS COMPILED HERE, AND THE SPEC IS WHAT IS SENT ──────────
+    let callSpec: ProviderCallSpec | null = null;
+    const p2Card = specOn ? hiringActorCard(provider) : null;
+    if (specOn && criteriaPolicy) {
+      const plan = currentPlan();
+      const engineInput = call.input as Record<string, unknown>;
+      const entry = plan ? planEntryForCall(plan, capability, provider, engineInput) : null;
+      const route = entry?.kind === "route" ? entry.route : null;
+      const purpose = purposeForCapability(capability);
+      const countField = (p2Card?.input_limits && "maxResults" in p2Card.input_limits) ? "maxResults" : "maxItems";
+      const engineCount = typeof engineInput[countField] === "number" ? engineInput[countField] as number : null;
+      callSpec = compileProviderCallSpec({
+        actorKey: provider, capability, purpose,
+        proposed: entry ? (entry.kind === "route" ? entry.route.proposed_input : entry.stage.proposed_input) : null,
+        engine: engineInput, policy: criteriaPolicy,
+        plan: {
+          plan_id: plan?.plan_id ?? null, version: plan?.version ?? null, route_id: route?.route_id ?? null,
+          route_anchor: route?.anchor ?? (purpose === "discovery" ? anchorForCapability(capability) : null),
+          route_refused: route?.refused ?? null,
+        },
+        candidate_keys: company ? [company.key] : [...(group ?? [])],
+        scope: p2Scope, mission_hash: p2MissionHash, ceilings: state.spend_ledger!.ceilings,
+        cost_model: p2Card?.cost_model ?? null,
+        contract_fields: P2_ACTOR_CONTRACTS[provider]?.fields ?? null,
+        card_enums: p2Card?.verified_enums, card_limits: p2Card?.input_limits,
+        count_bounds: purpose === "discovery"
+          ? (typeof opts.maxCandidates === "number"
+            ? [{ value: opts.maxCandidates, changed_by: "budget_policy" as const, reason: "discovery pool size for the requested count" }]
+            : [])
+          : (engineCount && engineCount > 0 && purpose !== "identity"
+            ? [{ value: engineCount, changed_by: "budget_policy" as const, reason: "engine batch sizing for this stage" }]
+            : []),
+        size_ceiling: memo23MaxSizeCeiling,
+      });
+      state.provider_call_specs!.push(specSummary(callSpec));
+      if (state.provider_call_specs!.length > 300) state.provider_call_specs!.shift();
+      const refs = { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key };
+      appendTrace(state.mission_trace!, callSpec.status === "intended" ? "spec_compiled" : "spec_refused", {
+        actor: provider, capability, purpose, route_id: callSpec.route_id,
+        changes: specSummary(callSpec).changes, engine_rewrites_rejected: callSpec.engine_rewrites_rejected,
+        estimate_usd: callSpec.cost.estimate_usd, ceiling_usd: callSpec.cost.ceiling_usd, refusal: callSpec.refusal,
+      }, refs);
+      if (callSpec.status !== "intended") {
+        record(callSpec.status === "refused_budget" ? "refused_budget" : "refused_policy", 0,
+          callSpec.refusal ? `${callSpec.refusal.code}: ${callSpec.refusal.detail}` : null);
+        log("provider_call_spec_refused", { capability, provider, refusal: callSpec.refusal });
+        return [];
+      }
+      call = {
+        ...call,
+        input: callSpec.serialized_input as never,
+        inputHash: p2HashInput(callSpec.serialized_input, provider),
+        batchIdentity: `${provider}:spec:${callSpec.idempotency_key.slice(0, 24)}`,
+        providerCallSpec: callSpec,
+      } as typeof call;
+      attemptFingerprint = inputFingerprint(call.input);
+    }
 
     // ── THE RESUME GUARD ─────────────────────────────────────────────────────
     //
@@ -3357,6 +3491,40 @@ export async function runCapabilityPlan(
     // uncharged, rather than only the one that happens to succeed.
     if (inFlight) adoptedRunId = inFlight.run_id;
     else if (completedMatch) adoptedRunId = completedMatch.run_id;
+    // ── P2: IDEMPOTENCY, THEN RESERVE — BEFORE ANY NETWORK CALL ─────────────
+    if (callSpec) {
+      const ledger = state.spend_ledger!;
+      const refs = { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key };
+      const already = ledger.reservations.some((r) => r.idempotency_key === callSpec!.idempotency_key &&
+        (r.status === "executed" || r.status === "settled"));
+      if (already && !inFlight && !completedMatch) {
+        record("skipped_idempotent", 0, `spec ${callSpec.provider_call_id} already executed in this lineage`);
+        appendTrace(state.mission_trace!, "call_idempotent_skip", { actor: provider, capability }, refs);
+        return [];
+      }
+      if (inFlight || completedMatch) {
+        appendTrace(state.mission_trace!, "call_adopted", {
+          actor: provider, capability, run_id: (inFlight ?? completedMatch)!.run_id,
+        }, refs);
+      } else {
+        const d = reserve(ledger, {
+          idempotency_key: callSpec.idempotency_key, provider_call_id: callSpec.provider_call_id,
+          purpose: callSpec.purpose, route_id: callSpec.route_id,
+          route_anchor: callSpec.route_id ? (currentPlan()?.routes.find((r) => r.route_id === callSpec!.route_id)?.anchor ?? null) : null,
+          candidate_keys: callSpec.candidate_keys, estimate_usd: callSpec.cost.estimate_usd,
+        });
+        if (!d.ok) {
+          record("refused_budget", 0,
+            `${d.ceiling} ceiling $${d.limit_usd} would be exceeded ($${d.would_commit_usd} committed)`);
+          appendTrace(state.mission_trace!, "call_refused_budget", {
+            actor: provider, capability, ceiling: d.ceiling, limit_usd: d.limit_usd, would_commit_usd: d.would_commit_usd,
+          }, refs);
+          log("provider_call_refused_budget", { capability, provider, ceiling: d.ceiling, limit_usd: d.limit_usd });
+          return [];
+        }
+        appendTrace(state.mission_trace!, "call_reserved", { actor: provider, estimate_usd: callSpec.cost.estimate_usd }, refs);
+      }
+    }
     const outbound = {
       ...call,
       capabilityId: capability,
@@ -3456,10 +3624,29 @@ export async function runCapabilityPlan(
       if (operationKey && company && !company.completed_operations.includes(operationKey)) {
         company.completed_operations.push(operationKey);
       }
+      if (callSpec && !inFlight && !completedMatch && p2Card) {
+        const floor = derivedFloorUsd(provider, p2Card.cost_model, callSpec.serialized_input as Record<string, unknown>, rows.length);
+        markExecuted(state.spend_ledger!, callSpec.idempotency_key, floor);
+        appendTrace(state.mission_trace!, "call_executed", { actor: provider, rows: rows.length, provisional_usd: floor },
+          { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key });
+      }
       return rows;
     } catch (e) {
       deps.deadline?.observeCall(
         Date.now() - startedAt, deadlineOperationFor(capability, provider));
+      if (callSpec && !inFlight && !completedMatch) {
+        const refs = { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key };
+        if (e instanceof CapabilityContainmentError || e instanceof PaidExecutionBlockedError) {
+          // Refused before the network: nothing was bought.
+          release(state.spend_ledger!, callSpec.idempotency_key);
+          appendTrace(state.mission_trace!, "call_released", { actor: provider, error: String(e).slice(0, 200) }, refs);
+        } else {
+          // The run may have started: the start fee is the floor until a receipt settles it.
+          const floor = p2Card?.cost_model.start_usd ?? 0;
+          markExecuted(state.spend_ledger!, callSpec.idempotency_key, floor);
+          appendTrace(state.mission_trace!, "call_failed", { actor: provider, error: String(e).slice(0, 200), provisional_usd: floor }, refs);
+        }
+      }
       // A CONTAINMENT error is an engine bug, not a provider failure. Letting it
       // become "try the next provider" is exactly how a guard turns into a
       // suggestion, so it propagates.
@@ -3858,6 +4045,61 @@ export async function runCapabilityPlan(
       source: executionPlan.source,
     });
   }
+
+  // ── P2: RETRIEVAL PLAN v1, BUILT ONCE PER LINEAGE ───────────────────────────
+  if (specOn && criteriaPolicy && !currentPlan()) {
+    const plan = buildRetrievalPlan({
+      mission: opts.mission, mission_hash: p2MissionHash, graph: opts.plan,
+      execution_plan: executionPlan, policy: criteriaPolicy, ceilings: state.spend_ledger!.ceilings,
+    });
+    state.retrieval_plans!.push(plan);
+    appendTrace(state.mission_trace!, "retrieval_plan_created", {
+      content_hash: plan.content_hash, anchor: plan.anchors.primary,
+      routes: plan.routes.map((r) => ({ route_id: r.route_id, refused: r.refused, terms: r.query_families[0]?.terms ?? [] })),
+      stages: plan.stages.map((st) => st.stage_id),
+    }, { plan_version: plan.version });
+    log("retrieval_plan_created", { version: plan.version, routes: plan.routes.length, stages: plan.stages.length });
+  }
+  /**
+   * P2 — the only way a plan changes. Returns true when the change may apply
+   * (accepted, or identical in content); false when it was refused.
+   */
+  const p2AcceptAmendment = (
+    amendedPlan: ExecutionPlan | null, trigger: AmendmentTrigger,
+    newRoutes: Array<{ capability: string; provider: string; input: Record<string, unknown> }> = [],
+  ): boolean => {
+    if (!specOn || !criteriaPolicy) return true;
+    const current = currentPlan();
+    if (!current) return true;
+    const priorAdjacent = current.routes
+      .filter((r) => r.query_families[0]?.purpose === "adjacent" && r.proposed_input)
+      .map((r) => ({ capability: r.capability, provider: r.provider, input: r.proposed_input!, purpose: "adjacent" as const }));
+    const decision = amendRetrievalPlan(current, {
+      build: {
+        mission: opts.mission, mission_hash: p2MissionHash, graph: opts.plan,
+        execution_plan: amendedPlan, policy: criteriaPolicy, ceilings: current.ceilings,
+        extra_routes: [...priorAdjacent, ...newRoutes.map((r) => ({ ...r, purpose: "adjacent" as const }))],
+      },
+      trigger, component: "retrieval_controller",
+      rationale: amendedPlan?.reasoning ?? "discovery replan",
+      reserve_remaining_usd: adaptiveReserveRemaining(),
+    });
+    if (!decision.accepted) {
+      if (decision.reason === "no_change") return true;
+      appendTrace(state.mission_trace!, "amendment_refused", {
+        reason: decision.reason, detail: decision.detail, trigger,
+        changes: decision.changes.slice(0, 20),
+      }, { plan_version: current.version });
+      log("retrieval_plan_amendment_refused", { reason: decision.reason, trigger, detail: decision.detail });
+      return false;
+    }
+    state.retrieval_plans!.push(decision.plan);
+    appendTrace(state.mission_trace!, "retrieval_plan_amended", {
+      trigger, content_hash: decision.plan.content_hash, changes: decision.changes.slice(0, 20),
+    }, { plan_version: decision.plan.version });
+    log("retrieval_plan_amended", { version: decision.plan.version, trigger, changes: decision.changes.length });
+    return true;
+  };
 
   /**
    * Did the CHAIN deselect this capability?
@@ -5015,6 +5257,15 @@ export async function runCapabilityPlan(
           discoveryStop = "no_further_actor_proposed";
           break;
         }
+        // P2: A REPLAN IS A PLAN AMENDMENT — named trigger, validation, reserve.
+        if (!p2AcceptAmendment(executionPlan, "insufficient_candidates",
+          next.selections.map((sel) => ({
+            capability: cap, provider: sel.actor_key, input: (sel.input ?? {}) as Record<string, unknown>,
+          })))) {
+          log("discovery_replan_refused_by_plan", { pass });
+          discoveryStop = "amendment_refused";
+          break;
+        }
         log("discovery_replan_running", {
           pass, actors: next.selections.map((s) => s.actor_key),
         });
@@ -5268,7 +5519,8 @@ export async function runCapabilityPlan(
                 results: summary,
               })),
             opts.mission, opts.plan);
-          if (amended.source !== "blocked") {
+          if (amended.source !== "blocked" && p2AcceptAmendment(amended,
+            availableAdmittedNow() < admittedTarget ? "insufficient_candidates" : "evidence_unavailable")) {
             const before = executionPlan.steps.map((s) => s.capability);
             const after = amended.steps.map((s) => s.capability);
 

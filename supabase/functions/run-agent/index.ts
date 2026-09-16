@@ -2188,6 +2188,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // never schedules a capability the engine cannot execute; V1 is legacy.
         const leadExecutabilityGate = executabilityGateFor(
           workspace_id, (k) => Deno.env.get(k), inProcess.continuationOwner === "v2_queue");
+        // P2: ProviderCallSpec + RetrievalPlan + ceilings + trace, and the
+        // playbook subset, exactly where the executability gate is enforced
+        // (Lead V2). LEAD_V2_SPECS=off is the rollback.
+        const p2Specs = leadExecutabilityGate === "enforce" &&
+          String(readEnvSafe("LEAD_V2_SPECS") ?? "").trim().toLowerCase() !== "off";
         const missionPlan = persistedMission
           ? buildCapabilityGraph(persistedMission, { executability: leadExecutabilityGate })
           : null;
@@ -3064,6 +3069,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   business_models: brainIcpCtx.icp.business_models ?? [],
                 },
                 requestedCount: quota.requestedLeadCount,
+                playbookSubset: p2Specs,
                 onRoute: (r) => modelRouting.record(r),
               }),
 
@@ -3095,6 +3101,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   business_models: brainIcpCtx.icp.business_models ?? [],
                 },
                 requestedCount: quota.requestedLeadCount,
+                playbookSubset: p2Specs,
                 onRoute: (r) => modelRouting.record(r),
               }),
 
@@ -3734,6 +3741,8 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             }, {
               mission: roundMission,
               plan: roundGraph,
+              specMode: p2Specs ? "enforce" : "off",
+              specScope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
               // ── WHICH REAL COMPANY EACH REFERENT MEANT ──────────────────
               //
               // Read off the plan step, never re-derived. Two effects and no
