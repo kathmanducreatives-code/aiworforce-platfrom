@@ -572,6 +572,20 @@ export interface LeadMissionV1 {
    * READ `requested_output`. This field is provenance.
    */
   proposed_output_intent?: RequestedOutput;
+
+  // ── P1: THE CANONICAL MEANING ──────────────────────────────────────────────
+  //
+  // Hard / target / opportunity-signal / hypothesis criteria, each with its
+  // source, window and confidence, plus the canonical signal kinds and every
+  // correction the semantic pass made to the carriers above. Produced by
+  // `compileMissionSemantics` (missionCriteria.ts) when a mission is compiled,
+  // and re-derived after any Company Brain merge.
+  //
+  // Optional: missions compiled before P1 have neither, and every reader
+  // derives criteria on the fly. NOT part of `missionHash` — they restate the
+  // question the hashed fields already ask.
+  criteria?: import("./missionCriteria.ts").MissionCriterion[];
+  mission_semantics?: import("./missionCriteria.ts").MissionSemanticsRecord;
 }
 
 /** Structural guard. Used to decide mission-path vs legacy-carrier path. */

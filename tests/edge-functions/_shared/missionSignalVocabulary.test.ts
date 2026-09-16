@@ -145,6 +145,10 @@ Deno.test("seam: the DIRECTIVES keep the model's own words", () => {
 
 Deno.test("seam: an unrecognised signal survives to be REPORTED, not silently dropped", () => {
   const m = compiled(["partnership interest"]);
-  assertEquals(m.required_signals.map((s) => s.type), ["partnership interest"]);
+  // P1: the user's own words ("…currently hiring") state a hiring signal the
+  // proposal omitted, and code owns canonical meaning — so hiring is added
+  // beside it. The property this seam pins is unchanged: the unrecognised
+  // signal survives, verbatim, to be reported.
+  assertEquals(m.required_signals.map((s) => s.type), ["partnership interest", "hiring"]);
   assertEquals(m.directives.preferred_signals, ["partnership interest"]);
 });

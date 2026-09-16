@@ -117,6 +117,7 @@ import {
 } from "../_shared/leadMission.ts";
 import { buildCapabilityGraph } from "../_shared/leadCapabilityGraph.ts";
 import { executabilityGateFor, type ExecutabilityGateMode } from "../_shared/capabilityExecutability.ts";
+import { deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import { MissionCompilationBlockedError } from "../_shared/leadMissionCompiler.ts";
 import { compileLeadMission } from "../_shared/leadMissionCompiler.ts";
 import {
@@ -391,6 +392,9 @@ function buildMissionForPrompt(
     required_capabilities: plan.steps.map((s) => s.capability),
     prohibited_capabilities: plan.prohibited,
     brain_rejected_broadening: merged.rejected_broadening,
+    // P1: re-derived AFTER this merge, so every Company Brain addition shows
+    // with its provenance rather than as something the user said.
+    criteria: deriveMissionCriteria(merged.mission),
     preflight_dry_run: preflightDryRun(preflight),
     // ── OBSERVABILITY ──────────────────────────────────────────────────────
     // Enough to answer "why did it choose YC for this query?" and "why did it

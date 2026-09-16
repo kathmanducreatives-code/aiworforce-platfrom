@@ -35,6 +35,7 @@
 
 import type { LeadMissionV1 } from "./leadMission.ts";
 import type { MissionPreview } from "./missionPreview.ts";
+import { criteriaSections, type CriteriaSections } from "./missionCriteria.ts";
 
 export const MISSION_CARD_VERSION = "mission-card-v1" as const;
 
@@ -65,6 +66,12 @@ export interface MissionConfirmationPayload {
   original_instruction: string;
   workflow_kind: string;
   card_version: typeof MISSION_CARD_VERSION;
+  /**
+   * P1 — what the request demands, prefers, tests and cannot prove, with
+   * windows and provenance. Derived from the same mission; Stage 0's gaps are
+   * folded into `unsupported` so there is one list of "will not be established".
+   */
+  criteria_sections: CriteriaSections;
 }
 
 const titleFor = (mission: LeadMissionV1): string => {
@@ -123,5 +130,6 @@ export function buildMissionConfirmation(
     original_instruction: originalInstruction,
     workflow_kind: "account_opportunity_sourcing",
     card_version: MISSION_CARD_VERSION,
+    criteria_sections: criteriaSections(mission, preview.gaps.map((g) => g.detail)),
   };
 }

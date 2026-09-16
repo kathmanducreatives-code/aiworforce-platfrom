@@ -95,6 +95,41 @@ const PROVENANCE_LABEL: Record<string, string> = {
   gpt_inference: 'inferred',
 };
 
+/**
+ * P1 — the card's criteria sections, computed by the backend from the mission
+ * (`_shared/missionCriteria.ts`). Rendered verbatim: the frontend never
+ * re-derives meaning.
+ */
+export interface CriteriaSections {
+  version?: string;
+  hard: string[];
+  target: string[];
+  opportunity_signals: string[];
+  hypotheses: string[];
+  time_windows: string[];
+  unsupported: string[];
+}
+
+export const CRITERIA_SECTION_LABELS: ReadonlyArray<readonly [Exclude<keyof CriteriaSections, 'version'>, string]> = [
+  ['hard', 'Hard constraints'],
+  ['target', 'Target criteria'],
+  ['opportunity_signals', 'Opportunity signals'],
+  ['hypotheses', 'Hypotheses / assumptions'],
+  ['time_windows', 'Time windows'],
+  ['unsupported', 'Unsupported / unprovable'],
+];
+
+export function criteriaSectionsOf(payload: unknown): CriteriaSections | null {
+  const s = (payload as { criteria_sections?: unknown } | null)?.criteria_sections;
+  if (!s || typeof s !== 'object') return null;
+  const out = {} as CriteriaSections;
+  for (const [key] of CRITERIA_SECTION_LABELS) {
+    const v = (s as Record<string, unknown>)[key];
+    out[key] = Array.isArray(v) ? v.map(String).filter(Boolean) : [];
+  }
+  return CRITERIA_SECTION_LABELS.some(([k]) => out[k].length > 0) ? out : null;
+}
+
 export function provenanceLabel(code: string | null | undefined): string | null {
   if (!code) return null;
   return PROVENANCE_LABEL[code] ?? code.replace(/_/g, ' ');

@@ -17,6 +17,7 @@ import {
 } from '@/lib/qualifiedLead/contract';
 import { executionStages, COMPOUND_STAGE_NOTE } from '@/lib/qualifiedLead/planCopy';
 import { requestImpliesQualifiedLead } from '@/lib/qualifiedLead/routingExpectation';
+import { criteriaSectionsOf, CRITERIA_SECTION_LABELS } from '@/lib/leadMission/missionView';
 
 interface WorkflowConfirmationPayload {
   workflow_id: string;
@@ -114,6 +115,9 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
   const missionSteps = mission ? missionCapabilities(mission) : [];
   const notBroadened = mission ? missionRejectedBroadening(mission) : [];
   const dryRun = mission ? missionDryRun(mission) : null;
+  // P1 — hard / target / signals / hypotheses / windows / unprovable, as the
+  // backend derived them from this mission.
+  const criteria = mission ? criteriaSectionsOf(payload) : null;
 
   // The qualified-lead route, decided by Pilot from the user's own words.
   const qualifiedLead = isQualifiedLeadPayload(payload);
@@ -252,6 +256,34 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
               )}
             </div>
           ))}
+          {criteria && (
+            <div
+              data-testid="mission-criteria"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-1.5"
+            >
+              {CRITERIA_SECTION_LABELS.filter(([key]) => criteria[key].length > 0).map(([key, label]) => (
+                <div key={key} data-testid={`criteria-section-${key}`}>
+                  <div
+                    className={`text-[10px] font-mono uppercase tracking-wider ${
+                      key === 'unsupported' ? 'text-amber-300/90' : 'text-[#7D8590]'
+                    }`}
+                  >
+                    {label}
+                  </div>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {criteria[key].map((line) => (
+                      <li
+                        key={line}
+                        className={`text-[12px] ${key === 'unsupported' ? 'text-amber-200/90' : 'text-[#C9D1D9]'}`}
+                      >
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
           {missionSteps.length > 0 && (
             <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
               <div className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590]">

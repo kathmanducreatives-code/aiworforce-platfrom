@@ -49,6 +49,7 @@
 // PURE. No network, provider, model or database access — the caller injects the
 // model call and passes its raw output in.
 
+import { compileMissionSemantics } from "./missionCriteria.ts";
 import { readSignalPhrase } from "./missionSignalDescriptor.ts";
 import {
   runtimeIdentity, LEAD_INTELLIGENCE_CONTRACT_VERSION,
@@ -366,6 +367,13 @@ export const MISSION_COMPILER_SYSTEM_PROMPT = [
   "number — null is the correct answer there, not a guess at what they might want.",
   "Report only what the request states: an empty list is the correct",
   "answer whenever it states nothing, and is always better than a plausible guess.",
+  // ── P1: meaning the model most often got wrong ─────────────────────────────
+  "A recently hired or appointed executive ('just hired a VP Sales', 'new CTO') is a",
+  "leadership change, not hiring: write 'leadership change' in preferred_signals.",
+  "'Likely to need', 'probably', 'could benefit from' describe a hypothesis to test, not a",
+  "signal to require: put it in 'unknowns', never in preferred_signals.",
+  "'Only', 'must' and 'strictly' make a stage or size constraint hard; 'prefer' and",
+  "'ideally' make it a soft preference.",
   "Return only the requested JSON object.",
 ].join(" ");
 
@@ -1031,6 +1039,21 @@ export function compileLeadMission(i: CompileMissionInput): CompiledMissionResul
   }
 
   mission = { ...mission, hard_constraints: hard, soft_preferences: soft, directives };
+
+  // ── P1: THE MEANING, MADE EXPLICIT — AND THE CARRIERS KEPT HONEST ─────────
+  //
+  // Criteria (hard / target / opportunity signal / hypothesis, with source,
+  // window and confidence) are derived from the user's own words and the
+  // fields above. Where a carrier contradicts those words — a leadership
+  // appointment compiled as an open-role search, a hypothesis compiled as a
+  // required signal, "prefer seed-stage" compiled as a hard constraint — the
+  // carrier is corrected and the correction is recorded here by name.
+  const semantics = compileMissionSemantics({
+    query, mission,
+    proposal: p ? { signal_recency_days: p.signal_recency_days, confidence: p.confidence } : null,
+  });
+  mission = semantics.mission;
+  for (const c of semantics.changes) changes.push(c);
 
   // ── STAMPED WHERE MISSIONS ARE MADE, NOT WHERE THEY ARE USED ─────────────
   //
