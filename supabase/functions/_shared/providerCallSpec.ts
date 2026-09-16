@@ -54,6 +54,7 @@ export type ChangedBy =
   | "criteria_policy"
   | "provider_contract"
   | "budget_policy"
+  | "evidence_planner"
   | "engine";
 
 export interface SpecFieldProvenance {
@@ -83,7 +84,7 @@ export interface ProviderCallSpec {
   route_id: string | null;
   candidate_keys: string[];
   purpose: CallPurpose;
-  provider: "apify";
+  provider: "apify" | "firecrawl";
   actor: string;
   capability: string;
   proposed_input: Record<string, unknown> | null;

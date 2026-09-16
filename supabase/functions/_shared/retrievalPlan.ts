@@ -318,13 +318,23 @@ export function validateRetrievalPlan(plan: RetrievalPlan, policy: CriteriaExecu
 
 // ── AMENDMENTS ──────────────────────────────────────────────────────────────
 
+function unset(v: unknown): unknown {
+  if (v === undefined || v === null || v === "") return null;
+  if (Array.isArray(v) && v.length === 0) return null;
+  if (typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length === 0) return null;
+  return v;
+}
+
 function diffInputs(pathBase: string, actor: string, before: Record<string, unknown> | null,
   after: Record<string, unknown> | null): PlanChange[] {
   const out: PlanChange[] = [];
   const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
   for (const k of keys) {
     const b = before?.[k], a = after?.[k];
-    if (canonicalJson(b ?? null) === canonicalJson(a ?? null)) continue;
+    // "", [], {} and absent all mean "not set": a planner writing one where it
+    // wrote another is not a change (P2 canary cfc5c18f recorded location ""
+    // → null as a semantic change).
+    if (canonicalJson(unset(b)) === canonicalJson(unset(a))) continue;
     const role = roleOf(actor, k);
     const operational = role === "count" || role === "page" || role === "operational" || k === COUNT_FIELD[actor];
     out.push({ path: `${pathBase}.${k}`, before: b ?? null, after: a ?? null,

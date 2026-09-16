@@ -78,13 +78,16 @@ export function missionEventRows(scope: SpineScope, trace: MissionTrace) {
   }));
 }
 
-/** Settlement patches for calls that ran a provider run. */
+/**
+ * Settlement patches for every call that executed. A call with a provider run
+ * is matched on its run too; a synchronous call (a Firecrawl page) has none.
+ */
 export function settlementPatches(ledger: SpendLedger) {
   return ledger.reservations
-    .filter((r) => r.provider_run_id && (r.status === "settled" || r.status === "executed"))
+    .filter((r) => r.status === "settled" || r.status === "executed")
     .map((r) => ({
       idempotency_key: r.idempotency_key,
-      provider_run_id: r.provider_run_id as string,
+      provider_run_id: r.provider_run_id ?? null,
       patch: {
         settled_usd: r.status === "settled" ? r.settled_usd : r.provisional_usd,
         settlement_source: r.status === "settled" ? "provider_receipt" : "derived_floor",
@@ -122,12 +125,13 @@ export async function persistP2Spine(
       if (!note("mission_events", error)) report.events += chunk.length;
     }
     for (const s of state.spend_ledger ? settlementPatches(state.spend_ledger) : []) {
-      const { error } = await db.from("lead_execution_calls").update(s.patch)
+      let q = db.from("lead_execution_calls").update(s.patch)
         .eq("workspace_id", scope.workspace_id)
         .eq("idempotency_key", s.idempotency_key)
-        .eq("provider_run_id", s.provider_run_id)
         // A resumed run's re-read row names the same run; it bought nothing.
         .neq("status", "reused");
+      if (s.provider_run_id) q = q.eq("provider_run_id", s.provider_run_id);
+      const { error } = await q;
       if (!note("settlement", error)) report.settlements++;
     }
   } catch (e) {

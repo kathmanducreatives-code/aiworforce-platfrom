@@ -166,7 +166,7 @@ Deno.test("the spine is written with keyed, duplicate-ignoring writes, and settl
   assertEquals((events.rows as Array<{ seq: number }>).map((r) => r.seq), [1, 2]);
   assertEquals(events.opts, { onConflict: "workspace_id,lineage_id,seq", ignoreDuplicates: true });
   const upd = calls.find((c) => c.table === "lead_execution_calls")!;
-  assertEquals(upd.filters, [`workspace_id=${WS}`, "idempotency_key=k1", "provider_run_id=run1", "status!=reused"]);
+  assertEquals(upd.filters, [`workspace_id=${WS}`, "idempotency_key=k1", "status!=reused", "provider_run_id=run1"]);
   assertEquals(upd.patch, { settled_usd: 0.009, settlement_source: "derived_floor", variance_usd: null });
 });
 
@@ -202,6 +202,15 @@ Deno.test("settle-and-persist traces each settlement that changed, once, and wri
   assertEquals(again.settlement?.reads, 0);
   assertEquals(trace.events.filter((e) => e.type === "call_settled").length, 1);
   assertEquals(settlementPatches(l).length, 1);
+});
+
+Deno.test("a call with no provider run (a Firecrawl page) is settled on its idempotency key alone", async () => {
+  const { db, calls } = fakeDb();
+  const l = ledgerWith([["page1", null, 0.0064]]);
+  await persistP2Spine(db, { workspace_id: WS, lineage_id: LIN }, { spend_ledger: l });
+  const upd = calls.find((c) => c.table === "lead_execution_calls")!;
+  assertEquals(upd.filters, [`workspace_id=${WS}`, "idempotency_key=page1", "status!=reused"]);
+  assertEquals(upd.patch, { settled_usd: 0.0064, settlement_source: "derived_floor", variance_usd: null });
 });
 
 // ── wiring ───────────────────────────────────────────────────────────────────

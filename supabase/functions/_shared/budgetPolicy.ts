@@ -18,7 +18,9 @@ export const BUDGET_POLICY_VERSION = "budget-policy-v1" as const;
 
 export type CallPurpose =
   | "discovery" | "identity" | "enrichment" | "hiring_evidence" | "funding_evidence"
-  | "news_evidence" | "team_composition" | "technology_evidence" | "people";
+  | "news_evidence" | "team_composition" | "technology_evidence" | "people"
+  /** A page read for required evidence (Firecrawl `/scrape`). */
+  | "web_evidence";
 
 export interface Ceilings {
   mission_provider_usd: number;
@@ -43,6 +45,7 @@ export const DEFAULT_CEILINGS: Readonly<Ceilings> = Object.freeze({
     team_composition: 0.03,
     technology_evidence: 0.05,
     people: 0.10,
+    web_evidence: 0.01,
   },
   per_candidate_evidence_usd: 0.06,
   adaptive_reserve_usd: 0.30,
@@ -65,7 +68,7 @@ export function resolveCeilings(over: Partial<Ceilings> | null | undefined, cana
 /** Purposes whose spend counts against a candidate's evidence ceiling. */
 const CANDIDATE_EVIDENCE: ReadonlySet<CallPurpose> = new Set([
   "identity", "enrichment", "hiring_evidence", "funding_evidence", "news_evidence",
-  "team_composition", "technology_evidence",
+  "team_composition", "technology_evidence", "web_evidence",
 ]);
 
 export type ReservationStatus =

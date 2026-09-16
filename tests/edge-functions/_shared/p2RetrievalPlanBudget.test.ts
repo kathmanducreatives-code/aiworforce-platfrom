@@ -90,6 +90,16 @@ Deno.test("a query change needs a semantic trigger and reserve, and produces ver
   assertEquals((noReserve as { reason: string }).reason, "adaptive_reserve_exhausted");
 });
 
+Deno.test("an amendment that only swaps \"\" / [] / {} for absent is no change (canary cfc5c18f)", () => {
+  const v1 = buildRetrievalPlan(build(execPlan({ ...Q1, location: "", batch: [], industries: [], extra: {} })));
+  const d = amendRetrievalPlan(v1, { build: build(execPlan(Q1)), trigger: "insufficient_candidates", component: "retrieval_controller", rationale: "", reserve_remaining_usd: 0.3 });
+  assertFalse(d.accepted);
+  assertEquals((d as { reason: string }).reason, "no_change");
+  const real = amendRetrievalPlan(v1, { build: build(execPlan({ ...Q1, queries: ["fintech"] })), trigger: "insufficient_candidates", component: "retrieval_controller", rationale: "", reserve_remaining_usd: 0.3 });
+  assert(real.accepted);
+  assertEquals(real.plan.amendment!.changes.map((c) => c.path), ["routes.startup_company_discovery:apify_yc_companies_memo23.input.queries"]);
+});
+
 Deno.test("an operational trigger may change only counts", () => {
   const v1 = buildRetrievalPlan(build(execPlan(Q1, 5)));
   const d = amendRetrievalPlan(v1, { build: build(execPlan(Q1, 3)), trigger: "provider_limit", component: "budget_policy", rationale: "", reserve_remaining_usd: 0 });

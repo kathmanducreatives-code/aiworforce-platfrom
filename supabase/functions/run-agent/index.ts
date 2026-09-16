@@ -152,6 +152,7 @@ import {
   persistP2Spine, settleAndPersistP2Spine, type SpineDb, type SpineState,
 } from "../_shared/p2SpinePersistence.ts";
 import { fetchApifyRunReceipt } from "../_shared/providerReceipts.ts";
+import { specGovernedPageFetcher, webEvidenceCreditRate } from "../_shared/webEvidenceSpec.ts";
 import {
   readFreshPages, readResearchedRequirements,
 } from "../_shared/webEvidenceStore.ts";
@@ -4445,13 +4446,23 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                       // orphan — the exact defect (D2) that cost run a5c1616e
                       // a paid job search. One synchronous page per call means
                       // there is never an in-flight fetch to strand.
-                      fetchPage: async ({ url, request_id, company_key }) => {
+                      fetchPage: (() => {
+                      const fetchOne = async (
+                        { url, request_id, spec }: {
+                          url: string; request_id: string;
+                          spec?: import("../_shared/providerCallSpec.ts").ProviderCallSpec;
+                        },
+                      ): ReturnType<import("../_shared/webEvidenceRunner.ts").PageFetcher> => {
                         const r = await runTool("scrape_url", {
-                          url,
-                          extraction_goal: "requirement evidence",
-                          max_pages: 1,
+                          // P2: under specs, EXACTLY the spec's input.
+                          ...(spec ? spec.serialized_input : {
+                            url,
+                            extraction_goal: "requirement evidence",
+                            max_pages: 1,
+                          }),
                           capability_key: "web_evidence_verification",
                           compiled_input_hash: request_id,
+                          ...(spec ? { provider_call_spec: spec } : {}),
                           // The ledger's own vocabulary: this enriches a company
                           // with evidence, and the reason it runs at all is that
                           // a required piece of evidence is missing.
@@ -4485,9 +4496,32 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                             ? "timeout"
                             : "not_found",
                         };
-                      },
+                      };
+                      // P2: every page is a spec'd, reserved, recorded call on
+                      // the mission's own ledger — or it is not bought.
+                      if (p2Specs && capabilityRun) {
+                        return specGovernedPageFetcher({
+                          state: capabilityRun.state as never,
+                          scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                          usd_per_credit: webEvidenceCreditRate(readEnvSafe).usd_per_credit,
+                          send: (spec) => fetchOne({
+                            url: String(spec.serialized_input.url), request_id: spec.idempotency_key, spec,
+                          }),
+                          log: (event, meta) => console.log(`[run-agent][${event}]`, { task_id: task.id, ...meta }),
+                        });
+                      }
+                      return ({ url, request_id }: { url: string; request_id: string; company_key: string }) =>
+                        fetchOne({ url, request_id });
+                      })(),
                     },
                   });
+                  // P2: the evidence pages' specs and spend, written down.
+                  if (p2Specs && capabilityRun) {
+                    const spine = await persistP2Spine(supabase as unknown as SpineDb, {
+                      workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId),
+                    }, capabilityRun.state as SpineState);
+                    if (spine.errors.length) console.log("[run-agent][p2-spine][evidence]", spine.errors);
+                  }
                 // ── P4: READ BACK WHAT WE ALREADY BOUGHT ────────────────
                 //
                 // Runs OUTSIDE the capability walk, deliberately. Qualification
