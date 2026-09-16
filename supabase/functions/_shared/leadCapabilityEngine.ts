@@ -229,7 +229,7 @@ import {
 import { compileProviderCallSpec, specSummary, type ProviderCallSpec } from "./providerCallSpec.ts";
 import { criteriaExecutionPolicy } from "./criteriaExecutionPolicy.ts";
 import {
-  derivedFloorUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
+  attachProviderRun, derivedFloorUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
   type Ceilings, type SpendLedger,
 } from "./budgetPolicy.ts";
 import { appendTrace, newMissionTrace, type MissionTrace } from "./missionTrace.ts";
@@ -3370,6 +3370,9 @@ export async function runCapabilityPlan(
         inputHash: p2HashInput(callSpec.serialized_input, provider),
         batchIdentity: `${provider}:spec:${callSpec.idempotency_key.slice(0, 24)}`,
         providerCallSpec: callSpec,
+        // The run that executes the spec, so its receipt can settle the reservation.
+        onProviderRun: (run: { run_id: string }) =>
+          attachProviderRun(state.spend_ledger!, callSpec!.idempotency_key, run.run_id),
       } as typeof call;
       attemptFingerprint = inputFingerprint(call.input);
     }
@@ -3644,6 +3647,8 @@ export async function runCapabilityPlan(
           // The run may have started: the start fee is the floor until a receipt settles it.
           const floor = p2Card?.cost_model.start_usd ?? 0;
           markExecuted(state.spend_ledger!, callSpec.idempotency_key, floor);
+          const failedRun = ((e as { toolResult?: { run_id?: unknown } }).toolResult ?? {}).run_id;
+          if (typeof failedRun === "string") attachProviderRun(state.spend_ledger!, callSpec.idempotency_key, failedRun);
           appendTrace(state.mission_trace!, "call_failed", { actor: provider, error: String(e).slice(0, 200), provisional_usd: floor }, refs);
         }
       }

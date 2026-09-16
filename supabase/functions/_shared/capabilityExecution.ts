@@ -107,6 +107,8 @@ export interface CompiledCallLike {
    * recorded before the network call returns.
    */
   providerCallSpec?: unknown;
+  /** P2 — told which provider run executed this call, so its receipt can settle it. */
+  onProviderRun?: (run: { run_id: string; dataset_id: string | null }) => void;
 }
 
 /**
@@ -144,6 +146,13 @@ export function buildInvoker(ctx: CapabilityExecutionContext) {
 
     const rr = await ctx.runTool(
       "source_with_apify", { ...envelope, ...ctx.auditOwnership() }, ctx.toolCtx);
+    const runData = (rr.data ?? {}) as { run_id?: unknown; dataset_id?: unknown };
+    if (call.onProviderRun && typeof runData.run_id === "string" && runData.run_id) {
+      call.onProviderRun({
+        run_id: runData.run_id,
+        dataset_id: typeof runData.dataset_id === "string" ? runData.dataset_id : null,
+      });
+    }
 
     if (!rr.ok || !rr.data) {
       // THE FAILURE DATA TRAVELS WITH THE ERROR. A RUNNING Apify run comes back

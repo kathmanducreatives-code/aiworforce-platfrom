@@ -84,6 +84,15 @@ export interface SpendReservation {
   settled_usd: number | null;
   settlement_source: "provider_receipt" | "derived_floor" | null;
   variance_usd: number | null;
+  /** The provider's run, so the receipt can be fetched after the call returns. */
+  provider_run_id?: string | null;
+  /**
+   * True once two consecutive receipt reads agree. Apify posts per-result
+   * charges AFTER a run reports SUCCEEDED (4250f181: $0.059 read at SUCCEEDED,
+   * $0.355 billed), so a first read is not final until a later read repeats it.
+   */
+  settlement_stable?: boolean;
+  receipt_reads?: number;
 }
 
 export interface SpendLedger {
@@ -218,6 +227,14 @@ export function markExecuted(l: SpendLedger, key: string, provisional_usd: numbe
   return r;
 }
 
+/** Name the provider run that executed a reservation. */
+export function attachProviderRun(l: SpendLedger, key: string, runId: string | null | undefined): SpendReservation | null {
+  const r = find(l, key);
+  if (!r || !runId) return r ?? null;
+  r.provider_run_id = runId;
+  return r;
+}
+
 /** An existing paid run was re-read, not bought: it commits nothing. */
 export function markAdopted(l: SpendLedger, key: string): SpendReservation | null {
   const r = find(l, key);
@@ -236,13 +253,17 @@ export function release(l: SpendLedger, key: string): SpendReservation | null {
 
 /** Settle from the provider's receipt. The receipt is the truth. */
 export function settle(
-  l: SpendLedger, key: string, receipt_usd: number,
+  l: SpendLedger, key: string, receipt_usd: number, mayBeFinal = true,
 ): SpendReservation | null {
   const r = find(l, key);
   if (!r) return null;
-  r.settled_usd = round4(receipt_usd);
+  const usd = round4(receipt_usd);
+  // A repeat read that agrees with the last settlement makes it final.
+  r.settlement_stable = mayBeFinal && r.status === "settled" && r.settled_usd === usd;
+  r.receipt_reads = (r.receipt_reads ?? 0) + 1;
+  r.settled_usd = usd;
   r.settlement_source = "provider_receipt";
-  r.variance_usd = round4(receipt_usd - (r.provisional_usd ?? r.estimate_usd));
+  r.variance_usd = round4(usd - (r.provisional_usd ?? r.estimate_usd));
   r.status = "settled";
   return r;
 }
@@ -316,7 +337,18 @@ export function derivedFloorUsd(
 export interface ProviderReceipt {
   /** The provider's settled total. */
   usageTotalUsd?: number | null;
+  /** Charged event counts x the run's own event prices, when the run reports them. */
+  chargedUsd?: number | null;
   status?: string | null;
+  /** When the run finished; charges keep posting for a while after. */
+  finishedAt?: string | null;
+}
+
+/** The receipt's charge: the larger of the usage total and the priced events, never their sum. */
+export function receiptUsd(r: ProviderReceipt | null | undefined): number | null {
+  const vals = [r?.usageTotalUsd, r?.chargedUsd]
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0);
+  return vals.length ? Math.max(...vals) : null;
 }
 
 /**
@@ -329,15 +361,20 @@ export interface ProviderReceipt {
 export async function settlementPass(
   l: SpendLedger,
   receiptFor: (r: SpendReservation) => Promise<ProviderReceipt | null>,
+  opts: { resettle?: boolean; minFinishedAgeMs?: number; now?: () => number } = {},
 ): Promise<{ settled: number; unsettled: number }> {
   let settled = 0, unsettled = 0;
   for (const r of l.reservations) {
-    if (r.status !== "executed") continue;
+    const open = r.status === "executed" ||
+      (opts.resettle === true && r.status === "settled" && r.settlement_stable !== true);
+    if (!open) continue;
     const receipt = await receiptFor(r).catch(() => null);
-    const usd = receipt?.usageTotalUsd;
+    const usd = receiptUsd(receipt);
     const done = !receipt?.status || /SUCCEEDED|FAILED|ABORTED|TIMED-OUT/i.test(String(receipt.status));
     if (typeof usd === "number" && Number.isFinite(usd) && done) {
-      settle(l, r.idempotency_key, usd);
+      const finished = receipt?.finishedAt ? Date.parse(receipt.finishedAt) : NaN;
+      const age = Number.isFinite(finished) ? (opts.now ?? Date.now)() - finished : Infinity;
+      settle(l, r.idempotency_key, usd, age >= (opts.minFinishedAgeMs ?? 0));
       settled++;
     } else {
       unsettled++;

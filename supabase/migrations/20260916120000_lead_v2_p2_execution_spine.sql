@@ -1,12 +1,11 @@
 -- LEAD V2 P2 — THE EXECUTION SPINE: PLAN VERSIONS, MISSION EVENTS, SPEC COLUMNS.
 --
--- HELD. Not applied. Apply deliberately, after `lead_mission_queue` exists, as
--- part of the P2 release (see `docs/lead-v2/LEAD_V2_SIGNAL_FIRST_FINAL_IMPLEMENTATION_PLAN.md`,
--- P2). Until then the engine carries RetrievalPlan versions, the spend ledger and
--- the mission trace in `tasks.result.capability_execution_state` (so continuations
--- keep them), and the full ProviderCallSpec travels in the call envelope, which
--- the ledger already persists as `lead_execution_calls.request_input` when the
--- call starts. Everything here is additive.
+-- Applied to production 2026-09-16 with the P2 release. Additive and idempotent
+-- (`if not exists` throughout). The engine still carries RetrievalPlan versions,
+-- the spend ledger and the mission trace in
+-- `tasks.result.capability_execution_state`, so continuations keep them; these
+-- tables mirror them for querying (`_shared/p2SpinePersistence.ts`). The full
+-- ProviderCallSpec is persisted in `lead_execution_calls.request_input`.
 
 -- ── RetrievalPlan versions (immutable) ──────────────────────────────────────
 create table if not exists public.lead_plan_versions (
@@ -38,6 +37,7 @@ create table if not exists public.lead_mission_events (
   idempotency_key text,
   detail jsonb not null default '{}'::jsonb,
   occurred_at timestamptz not null,
+  created_at timestamptz not null default now(),
   unique (workspace_id, lineage_id, seq)
 );
 alter table public.lead_mission_events enable row level security;
@@ -50,12 +50,19 @@ alter table public.lead_execution_calls
   add column if not exists plan_version integer,
   add column if not exists route_id text,
   add column if not exists settled_usd numeric,
-  add column if not exists settlement_source text
-    check (settlement_source is null or settlement_source in ('provider_receipt', 'derived_floor')),
+  add column if not exists settlement_source text,
   add column if not exists variance_usd numeric;
 
--- One successful execution per idempotency key. The key already hashes the
--- workspace and lineage, so it is unique per lineage by construction.
-create unique index if not exists lead_execution_calls_idempotency_once
+do $$ begin
+  alter table public.lead_execution_calls
+    add constraint lead_execution_calls_settlement_source_chk
+    check (settlement_source is null or settlement_source in ('provider_receipt', 'derived_floor'));
+exception when duplicate_object then null; end $$;
+
+-- NOT UNIQUE, deliberately. The ledger row is written when a call STARTS, so a
+-- unique index cannot prevent a purchase — it could only make the ledger drop
+-- the row that proves one happened. The engine's spend ledger refuses a second
+-- reservation for a key; this index makes checking that a cheap query.
+create index if not exists lead_execution_calls_idempotency_idx
   on public.lead_execution_calls (workspace_id, idempotency_key)
-  where idempotency_key is not null and status in ('succeeded', 'empty');
+  where idempotency_key is not null;

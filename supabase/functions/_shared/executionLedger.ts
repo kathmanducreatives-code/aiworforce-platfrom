@@ -205,6 +205,10 @@ export interface ExecutionOutcome {
 }
 
 export interface ExecutionLedgerRow extends Omit<ExecutionCallSpec, "request_input"> {
+  provider_call_id?: string;
+  idempotency_key?: string;
+  plan_version?: number | null;
+  route_id?: string | null;
   id: string;
   version: typeof EXECUTION_LEDGER_VERSION;
   record_kind: RecordKind;
@@ -366,6 +370,7 @@ function num(v: number | null | undefined): number | null {
 
 export function buildStartedRow(spec: ExecutionCallSpec): ExecutionLedgerRow {
   return {
+    ...specIdentityColumns(spec.request_input),
     id: newId(),
     version: EXECUTION_LEDGER_VERSION,
     record_kind: spec.record_kind ?? "provider_call",
@@ -403,6 +408,29 @@ export function buildStartedRow(spec: ExecutionCallSpec): ExecutionLedgerRow {
     cost_source: "unknown",
     next_decision: null,
     metadata: null,
+  };
+}
+
+/**
+ * LEAD V2 P2 — the ProviderCallSpec's identity as queryable columns.
+ *
+ * Present only when the envelope carries a spec, so every other row keeps
+ * exactly the shape it had. The full spec stays in `request_input`.
+ */
+export function specIdentityColumns(requestInput: unknown): {
+  provider_call_id?: string; idempotency_key?: string; plan_version?: number | null; route_id?: string | null;
+} {
+  const spec = (requestInput as { provider_call_spec?: Record<string, unknown> } | null)?.provider_call_spec;
+  if (!spec || typeof spec !== "object") return {};
+  const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+  const key = str(spec.idempotency_key);
+  const id = str(spec.provider_call_id);
+  if (!key || !id) return {};
+  return {
+    provider_call_id: id,
+    idempotency_key: key,
+    plan_version: typeof spec.plan_version === "number" ? spec.plan_version : null,
+    route_id: str(spec.route_id),
   };
 }
 

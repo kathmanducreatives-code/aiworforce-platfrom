@@ -149,6 +149,10 @@ import {
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import {
+  persistP2Spine, settleAndPersistP2Spine, type SpineDb, type SpineState,
+} from "../_shared/p2SpinePersistence.ts";
+import { fetchApifyRunReceipt } from "../_shared/providerReceipts.ts";
+import {
   readFreshPages, readResearchedRequirements,
 } from "../_shared/webEvidenceStore.ts";
 import { EVIDENCE_PLANNER_PROMPT } from "../_shared/webEvidencePlanner.ts";
@@ -3703,6 +3707,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     // checkpoint into a failed run.
                     console.log("[run-agent][checkpoint] notice failed", String(e));
                   }
+                  // P2: the plan versions and trace so far, queryable while the
+                  // run continues. Keyed writes; a later pass repeats them harmlessly.
+                  if (p2Specs) {
+                    const spine = await persistP2Spine(supabase as unknown as SpineDb, {
+                      workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId),
+                    }, snap.state as SpineState);
+                    if (spine.errors.length) console.log("[run-agent][p2-spine][checkpoint]", spine.errors);
+                  }
                   // ── THE WRITE LANDED. SAY SO, AND SAY AT WHAT VERSION ──
                   //
                   // Read back one column, immediately. The engine pairs this
@@ -3947,7 +3959,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // further round is worth it, the planner proposes HOW to broaden,
             // and `validateRoundPlan` decides whether it may — the people
             // stages are unreachable from that plan by construction.
-            if (multiRoundBinding.enabled && capabilityRun) {
+            // P2: a later round re-plans by rewriting the Mission and starts a
+            // fresh engine state — outside the RetrievalPlan's amendment rules
+            // and the mission's spend ceiling. Under specs, broadening is an
+            // amendment inside the engine or it does not happen.
+            if (multiRoundBinding.enabled && capabilityRun && p2Specs) {
+              console.log("[run-agent][multi-round][skipped]", { task_id: task.id, reason: "p2_specs_enforced" });
+            }
+            if (multiRoundBinding.enabled && capabilityRun && !p2Specs) {
               try {
                 const groundedAcross = new Map(restoredPoolResults);
                 for (const c of capabilityRun.companies) {
@@ -4060,6 +4079,30 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // RUN. Round 1's result is already in hand and ships.
                 console.error("[run-agent][multi-round][failed]", String(e));
               }
+            }
+
+            // ── P2: SETTLE FROM THE PROVIDER'S RECEIPTS, THEN WRITE THE SPINE ─
+            //
+            // The engine recorded a provisional floor per call. Apify posts
+            // per-result charges after SUCCEEDED, so receipts are re-read until
+            // they agree and the run finished a minute ago — bounded, and cut to
+            // a single read when the deadline has no room.
+            if (p2Specs && capabilityRun) {
+              const apifyToken = readEnvSafe("APIFY_API_TOKEN");
+              const room = terminalGuard.deadline ? terminalGuard.deadline.remainingMs() : Infinity;
+              const p2Final = await settleAndPersistP2Spine({
+                state: capabilityRun.state as SpineState,
+                receiptFor: apifyToken ? (runId) => fetchApifyRunReceipt(runId, apifyToken) : null,
+                db: supabase as unknown as SpineDb,
+                scope: { workspace_id: String(workspace_id ?? ""), lineage_id: String(lineageRootId) },
+                attempts: room > 150_000 ? 7 : 1,
+                waitMs: 15_000,
+                minFinishedAgeMs: 60_000,
+              });
+              console.log("[run-agent][p2-spine][final]", {
+                task_id: task.id, settlement: p2Final.settlement,
+                persisted: p2Final.persisted, error: p2Final.error ?? null,
+              });
             }
 
             // ── THE TRACE, ASSEMBLED WHERE EVERY PIECE IS IN SCOPE ──────────

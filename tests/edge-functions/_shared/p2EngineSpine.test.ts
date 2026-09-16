@@ -80,8 +80,11 @@ function deps(sent: Sent[], opts: { amendWith?: Record<string, unknown>; discove
       planCalls++;
       return Promise.resolve(executionProposal(i.results && opts.amendWith ? opts.amendWith : PLANNED_MEMO23));
     },
-    invoke: (call: CompiledActorCall<unknown> & { providerCallSpec?: Record<string, unknown> }) => {
+    invoke: (call: CompiledActorCall<unknown> & {
+      providerCallSpec?: Record<string, unknown>; onProviderRun?: (r: { run_id: string; dataset_id: string | null }) => void;
+    }) => {
       sent.push({ actor: call.actorKey, input: call.input as Record<string, unknown>, spec: call.providerCallSpec });
+      call.onProviderRun?.({ run_id: `run-${sent.length}`, dataset_id: null });
       if (call.actorKey === "apify_yc_companies_memo23") return Promise.resolve(YC_ROWS);
       if (call.actorKey === "apify_linkedin_company_search") {
         const q = String((call.input as { searchQuery?: string }).searchQuery ?? "");
@@ -283,4 +286,17 @@ Deno.test("specs and subsetting are on only for Lead V2 enforce; V1 and Signals 
   const scan = Deno.readTextFileSync(new URL("../../../supabase/functions/run-monitoring-scan/index.ts", import.meta.url));
   assertFalse(scan.includes("specMode"));
   assertFalse(scan.includes("playbookSubset"));
+});
+
+// ── receipts need the run ─────────────────────────────────────────────────────
+
+Deno.test("enforce: every executed reservation names the provider run its receipt will settle", async () => {
+  const { sent, result } = await run("enforce");
+  const ledger = (result as { state: { spend_ledger: { reservations: Array<{ status: string; provider_run_id?: string; idempotency_key: string }> } } }).state.spend_ledger;
+  const executed = ledger.reservations.filter((r) => r.status === "executed");
+  assert(executed.length > 0 && executed.length === sent.length, `${executed.length} executed vs ${sent.length} sent`);
+  for (const [i, r] of executed.entries()) {
+    assertEquals(r.provider_run_id, `run-${i + 1}`);
+    assertEquals(r.idempotency_key, (sent[i].spec as { idempotency_key: string }).idempotency_key);
+  }
 });
