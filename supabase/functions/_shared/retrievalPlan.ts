@@ -374,6 +374,28 @@ export function diffPlans(from: RetrievalPlan, to: RetrievalPlan): PlanChange[] 
   return changes;
 }
 
+/**
+ * A worker continuation keeps its plan while the pool it bought is unspent.
+ *
+ * Canary 6000f9a9 amended v4 → v7 across four slices, each re-buying discovery
+ * and none reaching a verdict, because "insufficient candidates" was read
+ * before the candidates in hand were worked. A semantic amendment on a resumed
+ * plan is refused until no admitted candidate remains unprocessed; operational
+ * triggers are unaffected. Pure.
+ */
+export function continuationAmendmentRefusal(i: {
+  resumed_onto_plan: boolean;
+  trigger: AmendmentTrigger;
+  available_admitted: number;
+  plan_version: number;
+}): { reason: "continuation_holds_plan"; detail: string } | null {
+  if (!i.resumed_onto_plan || !SEMANTIC_TRIGGERS.has(i.trigger) || i.available_admitted <= 0) return null;
+  return {
+    reason: "continuation_holds_plan",
+    detail: `a continuation keeps plan v${i.plan_version} while ${i.available_admitted} admitted candidate(s) remain unprocessed`,
+  };
+}
+
 export type AmendmentDecision =
   | { accepted: true; plan: RetrievalPlan; changes: PlanChange[] }
   | { accepted: false; reason: "no_change" | "trigger_cannot_change_semantics" | "adaptive_reserve_exhausted" | "validation_failed";

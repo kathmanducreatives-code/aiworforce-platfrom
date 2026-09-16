@@ -223,7 +223,7 @@ import {
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 // ── P2: the execution spine ──────────────────────────────────────────────────
 import {
-  amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability,
+  amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability, continuationAmendmentRefusal,
   type AmendmentTrigger, type RetrievalPlan,
 } from "./retrievalPlan.ts";
 import { compileProviderCallSpec, specSummary, type ProviderCallSpec } from "./providerCallSpec.ts";
@@ -2471,13 +2471,15 @@ export async function runCapabilityPlan(
   };
   const currentPlan = (): RetrievalPlan | null =>
     state.retrieval_plans?.[state.retrieval_plans.length - 1] ?? null;
+  /** A slice resumed onto an existing plan version (a worker continuation). */
+  const resumedOntoPlan = specOn && (state.retrieval_plans?.length ?? 0) > 0;
   if (specOn) {
     state.spend_ledger ??= newSpendLedger(resolveCeilings(opts.ceilings ?? null, opts.canary === true));
     state.mission_trace ??= newMissionTrace();
     state.provider_call_specs ??= [];
     state.retrieval_plans ??= [];
     if (currentPlan()) {
-      // A WORKER CONTINUATION EXECUTES THE CURRENT VERSION. It never re-plans.
+      // A WORKER CONTINUATION EXECUTES THE CURRENT VERSION. See `p2AcceptAmendment`.
       appendTrace(state.mission_trace, "continuation_resumed", {
         reservations: state.spend_ledger.reservations.length,
       }, { plan_version: currentPlan()!.version });
@@ -4072,10 +4074,46 @@ export async function runCapabilityPlan(
   const p2AcceptAmendment = (
     amendedPlan: ExecutionPlan | null, trigger: AmendmentTrigger,
     newRoutes: Array<{ capability: string; provider: string; input: Record<string, unknown> }> = [],
+    ctx: {
+      /** Admitted candidates still waiting for a stage. */
+      availableAdmitted: number;
+      /**
+       * Discovery already ran: the amendment may change stages, never the
+       * discovery routes. Canary 2bd8b267/6000f9a9 — a post-discovery amendment
+       * rewrote the memo23 input, so every later slice bought discovery again.
+       */
+      keepRoutes?: boolean;
+    },
   ): boolean => {
     if (!specOn || !criteriaPolicy) return true;
     const current = currentPlan();
     if (!current) return true;
+    // A CONTINUATION HOLDS ITS PLAN while the pool it bought is unspent. The
+    // same canary amended v4 → v7 across four slices, each buying discovery
+    // and none reaching a verdict: "insufficient" was read before the pool was
+    // worked. Broadening a resumed run needs the pool exhausted first.
+    const held = continuationAmendmentRefusal({
+      resumed_onto_plan: resumedOntoPlan, trigger, available_admitted: ctx.availableAdmitted, plan_version: current.version,
+    });
+    if (held) {
+      appendTrace(state.mission_trace!, "amendment_refused", {
+        reason: held.reason, trigger, available_admitted: ctx.availableAdmitted, detail: held.detail,
+      }, { plan_version: current.version });
+      log("retrieval_plan_amendment_refused", { reason: "continuation_holds_plan", trigger, available: ctx.availableAdmitted });
+      return false;
+    }
+    if (ctx.keepRoutes && amendedPlan) {
+      const routeInput = new Map(current.routes
+        .filter((r) => r.proposed_input && r.query_families[0]?.purpose !== "adjacent")
+        .map((r) => [`${r.capability}|${r.provider}`, r.proposed_input!]));
+      amendedPlan = {
+        ...amendedPlan,
+        steps: amendedPlan.steps.map((st) => {
+          const held = routeInput.get(`${st.capability}|${st.actor_key}`);
+          return held ? { ...st, input: held } : st;
+        }),
+      } as ExecutionPlan;
+    }
     const priorAdjacent = current.routes
       .filter((r) => r.query_families[0]?.purpose === "adjacent" && r.proposed_input)
       .map((r) => ({ capability: r.capability, provider: r.provider, input: r.proposed_input!, purpose: "adjacent" as const }));
@@ -5266,7 +5304,7 @@ export async function runCapabilityPlan(
         if (!p2AcceptAmendment(executionPlan, "insufficient_candidates",
           next.selections.map((sel) => ({
             capability: cap, provider: sel.actor_key, input: (sel.input ?? {}) as Record<string, unknown>,
-          })))) {
+          })), { availableAdmitted: availableAdmittedNow() })) {
           log("discovery_replan_refused_by_plan", { pass });
           discoveryStop = "amendment_refused";
           break;
@@ -5525,7 +5563,8 @@ export async function runCapabilityPlan(
               })),
             opts.mission, opts.plan);
           if (amended.source !== "blocked" && p2AcceptAmendment(amended,
-            availableAdmittedNow() < admittedTarget ? "insufficient_candidates" : "evidence_unavailable")) {
+            availableAdmittedNow() < admittedTarget ? "insufficient_candidates" : "evidence_unavailable",
+            [], { availableAdmitted: availableAdmittedNow(), keepRoutes: true })) {
             const before = executionPlan.steps.map((s) => s.capability);
             const after = amended.steps.map((s) => s.capability);
 

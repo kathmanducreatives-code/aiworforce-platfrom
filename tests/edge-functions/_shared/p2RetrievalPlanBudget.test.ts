@@ -2,7 +2,7 @@
 
 import { assert, assertAlmostEquals, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  amendRetrievalPlan, buildRetrievalPlan, type BuildPlanInput,
+  amendRetrievalPlan, buildRetrievalPlan, continuationAmendmentRefusal, type BuildPlanInput,
 } from "../../../supabase/functions/_shared/retrievalPlan.ts";
 import {
   DEFAULT_CEILINGS, markExecuted, newSpendLedger, reserve, resolveCeilings, settlementPass, spendTotals,
@@ -98,6 +98,24 @@ Deno.test("an amendment that only swaps \"\" / [] / {} for absent is no change (
   const real = amendRetrievalPlan(v1, { build: build(execPlan({ ...Q1, queries: ["fintech"] })), trigger: "insufficient_candidates", component: "retrieval_controller", rationale: "", reserve_remaining_usd: 0.3 });
   assert(real.accepted);
   assertEquals(real.plan.amendment!.changes.map((c) => c.path), ["routes.startup_company_discovery:apify_yc_companies_memo23.input.queries"]);
+});
+
+Deno.test("a continuation holds its plan while admitted candidates remain unprocessed (canary 6000f9a9)", () => {
+  const base = { resumed_onto_plan: true, trigger: "insufficient_candidates" as const, available_admitted: 6, plan_version: 4 };
+  assertEquals(continuationAmendmentRefusal(base)?.reason, "continuation_holds_plan");
+  assertEquals(continuationAmendmentRefusal({ ...base, trigger: "route_exhausted" })?.reason, "continuation_holds_plan");
+  assertEquals(continuationAmendmentRefusal({ ...base, available_admitted: 0 }), null, "an exhausted pool may broaden");
+  assertEquals(continuationAmendmentRefusal({ ...base, resumed_onto_plan: false }), null, "the first slice follows the ordinary rules");
+  assertEquals(continuationAmendmentRefusal({ ...base, trigger: "provider_limit" }), null, "operational triggers are unaffected");
+});
+
+Deno.test("the engine's amendment gate consults the continuation hold before any amendment", () => {
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  const gate = src.slice(src.indexOf("const p2AcceptAmendment = ("), src.indexOf("const decision = amendRetrievalPlan(current"));
+  assert(gate.includes("continuationAmendmentRefusal({"), "hold is checked inside the gate, before amendRetrievalPlan");
+  assert(/resumed_onto_plan: resumedOntoPlan/.test(gate));
+  assert(/\n    if \(held\) \{[\s\S]{0,500}?\n      return false;\n    \}/.test(gate), "a held plan refuses the amendment");
+  assert((src.match(/availableAdmitted: availableAdmittedNow\(\)/g) ?? []).length === 2, "both amendment call sites pass the live pool");
 });
 
 Deno.test("an operational trigger may change only counts", () => {

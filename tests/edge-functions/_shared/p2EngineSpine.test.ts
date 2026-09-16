@@ -201,25 +201,29 @@ Deno.test("an identity call over its ceiling is refused before invoke, and says 
   assert(result.state.mission_trace!.events.some((e) => e.type === "spec_refused" || e.type === "call_refused_budget"));
 });
 
-Deno.test("an amendment that rewrites the discovery question needs a trigger and reserve — or it is refused", async () => {
-  // Without reserve: refused, recorded, and the executed plan is NOT silently replaced.
-  const refused = await run("enforce", { ceilings: { adaptive_reserve_usd: 0 } }, { amendWith: AMENDED_MEMO23 });
-  assertEquals(refused.deps.planCalls, 2, "the plan, then the post-discovery amendment");
-  assertEquals(refused.result.state.retrieval_plans?.length, 1);
-  const r = refused.result.state.mission_trace!.events.find((e) => e.type === "amendment_refused")!;
-  assertEquals([r.detail.reason, r.detail.trigger], ["adaptive_reserve_exhausted", "insufficient_candidates"]);
-  const exec = refused.result.state.execution_plan?.steps?.find((st) => st.capability === "startup_company_discovery");
-  assertEquals((exec?.input as { queries?: string[] })?.queries, ["B2B SaaS", "developer tools"]);
+Deno.test("a post-discovery amendment cannot rewrite the discovery route it follows (canary 6000f9a9)", async () => {
+  // GPT proposes new memo23 queries after discovery ran. Discovery is spent: the
+  // route is held, so there is no new version, no new key, nothing re-bought.
+  const a = await run("enforce", {}, { amendWith: AMENDED_MEMO23 });
+  assertEquals(a.deps.planCalls, 2, "the plan, then the post-discovery amendment");
+  const plans = a.result.state.retrieval_plans!;
+  assertEquals(plans.length, 1);
+  assertEquals(plans[0].routes[0].proposed_input?.queries, ["B2B SaaS", "developer tools"]);
+  assertEquals(byActor(a.sent, "apify_yc_companies_memo23").length, 1);
+  assertFalse(a.result.state.mission_trace!.events.some((e) => e.type === "retrieval_plan_amended"));
+});
 
-  // With reserve and a thin pool: a new, versioned plan with named changes.
-  const accepted = await run("enforce", {}, { amendWith: AMENDED_MEMO23 });
-  const plans = accepted.result.state.retrieval_plans!;
-  assertEquals(plans.length, 2);
-  assertEquals(plans[1].version, 2);
-  assertEquals(plans[1].amendment!.trigger, "insufficient_candidates");
-  const q = plans[1].amendment!.changes.find((c) => c.path.endsWith(".queries"))!;
-  assertEquals([q.before, q.after, q.kind], [["B2B SaaS", "developer tools"], ["API infrastructure"], "semantic"]);
-  assertEquals(plans[1].routes[0].proposed_input?.queries, ["API infrastructure"]);
+Deno.test("a continuation holds its plan while admitted candidates remain, and buys no new discovery", async () => {
+  const first = await run("enforce", { maxCandidates: 10, readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "0" : undefined) });
+  const plansBefore = first.result.state.retrieval_plans!.length;
+  const second = await run("enforce", {
+    state: first.result.state,
+    discoveryReplenishment: { reason: "replenishment_required", sources_attempted: [], pages_taken: {} },
+  }, { amendWith: AMENDED_MEMO23 });
+  const events = second.result.state.mission_trace!.events;
+  assert(events.some((e) => e.type === "continuation_resumed"));
+  assertEquals(second.result.state.retrieval_plans!.length, plansBefore, JSON.stringify(events.filter((e) => e.type.startsWith("amend") || e.type.startsWith("retrieval")).map((e) => e.detail)));
+  assertEquals(byActor(second.sent, "apify_yc_companies_memo23").length, 0);
 });
 
 Deno.test("a continuation's discovery reopen buys nothing and records why", async () => {
