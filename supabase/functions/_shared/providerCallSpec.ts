@@ -169,18 +169,31 @@ export function registeredEngineFields(actorKey: string, purpose: CallPurpose): 
       companies: { changed_by: "template_binding", reason: "the resolved LinkedIn URLs of this batch" },
       searches: { changed_by: "template_binding", reason: "the resolved identities of this batch" },
     };
-    case "apify_linkedin_job_search": return {
-      company: { changed_by: "template_binding", reason: "the identity-resolved LinkedIn URLs of this batch" },
-      jobTitles: { changed_by: "evidence_policy", reason: "titles from the mission's role vocabulary" },
-      postedLimit: { changed_by: "evidence_policy", reason: "posting window from the mission" },
-    };
+    case "apify_linkedin_job_search":
+      // P3: a DISCOVERY call is the planner's question end to end — the role
+      // query, the window, the geography. Nothing is engine-owned there.
+      return purpose === "discovery" ? {} : {
+        company: { changed_by: "template_binding", reason: "the identity-resolved LinkedIn URLs of this batch" },
+        jobTitles: { changed_by: "evidence_policy", reason: "titles from the mission's role vocabulary" },
+        postedLimit: { changed_by: "evidence_policy", reason: "posting window from the mission" },
+      };
     case "apify_google_news": return {
       keywords: { changed_by: "template_binding", reason: "the named company this evidence is about" },
     };
-    case "apify_linkedin_company_employees": return {
-      companies: { changed_by: "template_binding", reason: "the company whose people were unlocked" },
-      profileScraperMode: people, jobTitles: people, maxItemsPerCompany: people,
-    };
+    case "apify_linkedin_company_employees":
+      // P3: a TEAM CHECK for "first hire in the function" reads who already
+      // holds the function at one shortlisted company. Titles only; no person
+      // is kept, contacted or unlocked.
+      return purpose === "hiring_evidence" ? {
+        companies: { changed_by: "template_binding", reason: "the shortlisted company whose team is checked" },
+        jobTitles: { changed_by: "evidence_policy", reason: "titles of the mission's function, to test 'first in the function'" },
+        profileScraperMode: { changed_by: "people_policy", reason: "short profiles only — titles, no contact data" },
+        maxItems: { changed_by: "evidence_policy", reason: "the check needs only whether anyone already holds the function" },
+        maxItemsPerCompany: { changed_by: "evidence_policy", reason: "one company per check" },
+      } : {
+        companies: { changed_by: "template_binding", reason: "the company whose people were unlocked" },
+        profileScraperMode: people, jobTitles: people, maxItemsPerCompany: people,
+      };
     case "apify_people_search": return {
       currentCompanies: { changed_by: "template_binding", reason: "the company whose people were unlocked" },
       profileScraperMode: people, currentJobTitles: people,

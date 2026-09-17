@@ -452,6 +452,99 @@ export function normalizeLinkedInJob(r: Record<string, unknown>): NormalizedHiri
   };
 }
 
+// ── JOB-FIRST DISCOVERY (LEAD V2 P3) ─────────────────────────────────────────
+//
+// A discovery job row carries the EMPLOYER'S LinkedIn company record, not just
+// a name — verified live 2026-09-16 on 10/10 rows: `company.linkedinUrl`,
+// `website`, `universalName`, exact `employeeCount`, `industries`, `locations`
+// (with the headquarter flagged). So identity is taken from the posting and the
+// guarded Company Search is never needed for these employers.
+
+/** The employer a discovery job row names, as a pipeline company. Null without a LinkedIn company URL. */
+export function jobEmployerToCompany(r: Record<string, unknown>): NormalizedHiringCompany | null {
+  const c = (r.company ?? {}) as Record<string, unknown>;
+  const url = normalizeCompanyLinkedInUrl(c.linkedinUrl);
+  if (!url) return null;
+  const inds = linkedinIndustries(c);
+  const locs = Array.isArray(c.locations) ? c.locations as Record<string, unknown>[] : [];
+  const hq = locs.find((l) => l && l.headquarter === true) ?? locs[0];
+  const hqText = hq ? s((hq.parsed as Record<string, unknown> | undefined)?.text) ??
+    [s(hq.city), s(hq.geographicArea), s(hq.country)].filter(Boolean).join(", ") : null;
+  const out: NormalizedHiringCompany = {
+    external_source_id: `li_company:${c.id ?? s(c.universalName) ?? "unknown"}`,
+    company_name: s(c.name),
+    canonical_domain: domainFrom(c.website),
+    linkedin_company_url: url,
+    website: normalizeWebsite(c.website) ?? s(c.website),
+    description: s(c.description),
+    provider_industry: inds[0]?.name ?? null,
+    industry_ids: inds,
+    employee_count: n(c.employeeCount),
+    employee_range_advisory: rangeText(c),
+    geography: hqText || null,
+    company_type: null,
+    startup_evidence: null,
+    // The posting itself: this company has at least one open role.
+    hiring_status: true,
+    source_provenance: "harvestapi/linkedin-job-search",
+    field_trust: {
+      company_name: "direct", linkedin_company_url: "direct", website: "direct",
+      description: "direct", provider_industry: "direct", employee_count: "direct",
+      employee_range_advisory: "unsafe", geography: "transformed",
+    },
+    missing_fields: [],
+    raw_ref: { actor_key: "apify_linkedin_job_search", source_id: s(r.id) },
+  };
+  out.missing_fields = [
+    ...(out.employee_count === null ? ["employee_count:absent_on_job_row"] : []),
+    ...(out.geography === null ? ["geography:no_headquarter_on_job_row"] : []),
+  ];
+  return out;
+}
+
+const AGENCY_INDUSTRY_RE = /staffing|recruit|executive search|human resources services|employment/i;
+const AGENCY_NAME_RE = /\b(recruit(?:ing|ers|ment)?|staffing|talent (?:partners|solutions|group)|headhunt\w*|search partners)\b/i;
+/** Agency requisition codes seen live: "[AQ-18078]", "[SK-18057]". */
+const REQUISITION_CODE_RE = /\[[A-Z]{2,4}-\d{3,}\]/;
+
+/**
+ * Why this posting's employer is a staffing agency, or null. Deterministic —
+ * the Actor's `industryIds` filter matches the JOB's industry, so an agency
+ * posting a software role survives it (Scion Staffing, probe 2026-09-16).
+ */
+export function jobEmployerAgencyReason(r: Record<string, unknown>): string | null {
+  const c = (r.company ?? {}) as Record<string, unknown>;
+  const inds = linkedinIndustries(c).map((x) => x.name);
+  const hit = inds.find((x) => AGENCY_INDUSTRY_RE.test(x));
+  if (hit) return `employer_industry:${hit}`;
+  if (AGENCY_NAME_RE.test(String(c.name ?? ""))) return "employer_name_is_agency";
+  if (REQUISITION_CODE_RE.test(String(r.title ?? ""))) return "agency_requisition_code";
+  return null;
+}
+
+/** A posting no longer open is not a hiring signal. */
+export function jobIsOpen(r: Record<string, unknown>): boolean {
+  if (r.closedAt) return false;
+  const st = String(r.jobState ?? "LISTED").toUpperCase();
+  return st === "LISTED" || st === "";
+}
+
+const FIRST_HIRE_TEXT_RE =
+  /\b(?:(?:our|the|as (?:our|the)|you(?:'| a)?ll be (?:our|the))\s+(?:very\s+)?first\s+(?:[a-z-]+\s+){0,3}?(?:hire|marketer|marketing|growth|sales|seller|engineer|designer|person|employee|team member)|founding\s+(?:[a-z-]+\s+){0,2}?(?:marketer|marketing|growth|sales|engineer|designer|hire|team|member|ae|sdr|lead)|first\s+(?:marketing|growth|sales)\s+hire|build(?:ing)? (?:the|our) (?:marketing|growth|sales) (?:function|team) from (?:scratch|the ground up|zero))\b/i;
+
+/** Where the posting itself says the hire is the first in its function. */
+export function firstHireLanguage(r: Record<string, unknown>): { field: "title" | "description"; quote: string } | null {
+  for (const field of ["title", "descriptionText"] as const) {
+    const text = String(r[field] ?? "");
+    const m = FIRST_HIRE_TEXT_RE.exec(text);
+    if (m) {
+      const at = Math.max(0, m.index - 60);
+      return { field: field === "title" ? "title" : "description", quote: text.slice(at, m.index + m[0].length + 60).replace(/\s+/g, " ").trim() };
+    }
+  }
+  return null;
+}
+
 /** Deduplicate on job id — the Actor returned 25% duplicate rows in one pack. */
 export function dedupeJobs(jobs: NormalizedHiringJob[]): NormalizedHiringJob[] {
   const seen = new Set<string>(); const out: NormalizedHiringJob[] = [];

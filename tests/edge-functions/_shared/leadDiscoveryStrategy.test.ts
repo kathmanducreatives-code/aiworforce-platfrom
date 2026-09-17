@@ -309,8 +309,10 @@ Deno.test("17. every briefed actor can genuinely introduce a candidate", () => {
   // The set stays CLOSED, and verification-only purposes stay out: an actor
   // that must be GIVEN its subject can never introduce one, so briefing it for
   // discovery would invite a choice the validator would then refuse.
+  // P3: an open role names its employer (with its LinkedIn page), so
+  // `job_discovery` joins the set. Verification-only purposes still do not.
   const CAN_INTRODUCE = [
-    "company_discovery", "funding_discovery", "social_discovery", "news_signal",
+    "company_discovery", "funding_discovery", "social_discovery", "news_signal", "job_discovery",
   ];
   const briefed = discoveryCatalogBriefing();
   assert(briefed.length > 0);

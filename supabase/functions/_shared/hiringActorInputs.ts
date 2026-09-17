@@ -15,7 +15,7 @@
 import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, COMPANY_SCRAPER_MODES, COMPANY_SIZE_BANDS,
   EMAIL_ENRICHMENT_MODES, HIRING_ACTOR_CATALOG, JOB_EMPLOYMENT_TYPES,
-  JOB_POSTED_LIMITS, JOB_SORT_BY, JOB_WORKPLACE_TYPES, PROFILE_SEARCH_SCRAPER_MODES,
+  JOB_EXPERIENCE_LEVELS, JOB_POSTED_LIMITS, JOB_SORT_BY, JOB_WORKPLACE_TYPES, PROFILE_SEARCH_SCRAPER_MODES,
   PROFILE_SCRAPER_MODES, PROFILE_SCRAPER_EMAIL_MODE,
   YC_MEMO23_INDUSTRIES, YC_MEMO23_MAX_SIZES, YC_MEMO23_MIN_SIZES, YC_MEMO23_MODES,
   YC_SOLIDCODE_INDUSTRIES, YC_SOLIDCODE_REGIONS, YC_SOLIDCODE_STATUSES,
@@ -93,6 +93,29 @@ export interface HarvestJobSearchInput {
   sortBy?: typeof JOB_SORT_BY[number];
   /** PER jobTitle PER location. Not a total. */
   maxItems: number;
+}
+
+/**
+ * LEAD V2 P3 — the same Actor asked a DISCOVERY question: open roles across
+ * employers, no `company[]`. Verified live 2026-09-16 (run
+ * `p3/probe_rows.json`, 10 rows): every row carried `company.linkedinUrl`,
+ * `website`, `universalName` and an exact `employeeCount`, so the employer's
+ * identity arrives with the posting.
+ */
+export interface HarvestJobDiscoveryInput {
+  /** LinkedIn boolean syntax is supported: `"growth marketer" OR "head of growth"`. */
+  jobTitles: string[];
+  locations?: string[];
+  /** Freshness is REQUIRED for discovery: a hiring signal without a window is not a signal. */
+  postedLimit: typeof JOB_POSTED_LIMITS[number];
+  industryIds?: string[];
+  experienceLevel?: string[];
+  workplaceType?: string[];
+  employmentType?: string[];
+  sortBy?: typeof JOB_SORT_BY[number];
+  /** PER jobTitle PER location. Not a total. */
+  maxItems: number;
+  page?: number;
 }
 
 export interface HarvestCompanyEmployeesInput {
@@ -582,6 +605,44 @@ export function compileHarvestJobSearchInput(
     cost(K, rows, undefined,
       `maxItems(${i.maxItems}) x jobTitles(${i.jobTitles.length}) x locations(${locs}) = up to ${rows} paid rows`),
     w, `${i.company.length}co`);
+}
+
+/** Bounds for a discovery call: titles × locations × maxItems is the bill. */
+export const JOB_DISCOVERY_LIMITS = Object.freeze({ jobTitles: 3, locations: 2, maxItems: 50, industryIds: 10 });
+
+export function compileHarvestJobDiscoveryInput(
+  i: HarvestJobDiscoveryInput & { company?: unknown },
+): CompileResult<HarvestJobDiscoveryInput> {
+  const K = "apify_linkedin_job_search";
+  const e: string[] = []; const w: string[] = [];
+  if (i.company !== undefined) {
+    e.push("company[] must be absent — a discovery call finds employers; a company-scoped call verifies them (compileHarvestJobSearchInput)");
+  }
+  if (!i.jobTitles?.length) e.push("jobTitles[] is required — the role IS the discovery question");
+  checkMax(e, "jobTitles", i.jobTitles, JOB_DISCOVERY_LIMITS.jobTitles);
+  checkMax(e, "locations", i.locations, JOB_DISCOVERY_LIMITS.locations);
+  checkMax(e, "industryIds", i.industryIds, JOB_DISCOVERY_LIMITS.industryIds);
+  if (!i.postedLimit || !JOB_POSTED_LIMITS.includes(i.postedLimit)) {
+    e.push(`postedLimit is required for discovery — verified enum is ${JOB_POSTED_LIMITS.join(" | ")}`);
+  }
+  checkEnum(e, "workplaceType", i.workplaceType, JOB_WORKPLACE_TYPES);
+  checkEnum(e, "employmentType", i.employmentType, JOB_EMPLOYMENT_TYPES);
+  checkEnum(e, "experienceLevel", i.experienceLevel, JOB_EXPERIENCE_LEVELS);
+  if (i.sortBy && !JOB_SORT_BY.includes(i.sortBy)) e.push(`sortBy: "${i.sortBy}" invalid`);
+  if (!Number.isInteger(i.maxItems) || i.maxItems < 1) e.push("maxItems must be a positive integer");
+  else if (i.maxItems > JOB_DISCOVERY_LIMITS.maxItems) e.push(`maxItems ${i.maxItems} exceeds the discovery bound ${JOB_DISCOVERY_LIMITS.maxItems}`);
+  for (const t of i.jobTitles ?? []) {
+    if (typeof t !== "string" || !t.trim()) e.push("jobTitles entries must be non-empty strings");
+  }
+  if (e.length) return fail(K, e);
+  const locs = Math.max(1, i.locations?.length ?? 1);
+  const rows = i.maxItems * i.jobTitles.length * locs;
+  w.push("jobTitles matching is FUZZY — the role vocabulary decides, never the query");
+  w.push("staffing agencies post on behalf of clients — the agency guard drops them before any paid stage");
+  return build(K, i as HarvestJobDiscoveryInput, "job",
+    cost(K, rows, undefined,
+      `maxItems(${i.maxItems}) x jobTitles(${i.jobTitles.length}) x locations(${locs}) = up to ${rows} paid rows`),
+    w, `discovery:${i.jobTitles.length}q`);
 }
 
 export function compileHarvestCompanyEmployeesInput(

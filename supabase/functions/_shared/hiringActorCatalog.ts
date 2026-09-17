@@ -40,6 +40,11 @@ export type ActorPurpose =
    * directory scraper be declared the provider of `funding_event`.
    */
   | "funding_discovery"
+  /**
+   * LEAD V2 P3 — discover companies BY an open role, and carry the posting as
+   * hiring evidence. The row names its employer with a LinkedIn company record.
+   */
+  | "job_discovery"
   /** Read posts from a LinkedIn identity you already hold. Verification. */
   | "social_verification"
   /** Find posts by TOPIC, before any identity is known. Discovery. */
@@ -131,6 +136,9 @@ export const JOB_WORKPLACE_TYPES = ["remote", "hybrid", "office"] as const;
 export const JOB_EMPLOYMENT_TYPES =
   ["full-time", "part-time", "contract", "internship", "temporary"] as const;
 export const JOB_SORT_BY = ["date", "relevance"] as const;
+/** Live schema enum, verified 2026-09-16. */
+export const JOB_EXPERIENCE_LEVELS =
+  ["internship", "entry", "associate", "mid-senior", "director", "executive"] as const;
 
 export const COMPANY_SIZE_BANDS = [
   "1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+",
@@ -466,25 +474,35 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
   apify_linkedin_job_search: {
     actor_key: "apify_linkedin_job_search",
     actor_id: "harvestapi/linkedin-job-search",
-    purposes: ["hiring_verification"],
+    // P3: DISCOVERY TOO. Without `company[]` it searches open roles across
+    // employers (verified live 2026-09-16, probe run in
+    // tests/fixtures/lead-v2/p3-job-discovery-probe.json). Company-scoped
+    // verification keeps its own compiler; the two are never one input.
+    purposes: ["hiring_verification", "job_discovery"],
     supported_filters: ["company", "jobTitles", "locations", "postedLimit",
-      "workplaceType", "employmentType", "sortBy", "industryIds"],
+      "workplaceType", "employmentType", "experienceLevel", "sortBy", "industryIds"],
     verified_enums: {
       postedLimit: JOB_POSTED_LIMITS, workplaceType: JOB_WORKPLACE_TYPES,
       employmentType: JOB_EMPLOYMENT_TYPES, sortBy: JOB_SORT_BY,
+      experienceLevel: JOB_EXPERIENCE_LEVELS,
     },
-    input_limits: { company: 10, industryIds: 20,
+    input_limits: { company: 10, industryIds: 20, jobTitles_discovery: 3, locations_discovery: 2,
       maxItems: "PER jobTitle PER location — multiplies total rows and cost" },
-    outputs: ["id", "title", "linkedinUrl", "company{id,name,linkedinUrl,website}",
-      "location", "workplaceType", "postedDate", "descriptionText", "employmentType",
-      "experienceLevel", "jobFunctions", "applicantTrackingSystem"],
-    best_for: ["verifying hiring INSIDE a known company set — zero cross-company leakage observed"],
-    not_for: ["exact role matching", "treating the posting company as the employer"],
+    outputs: ["id", "title", "linkedinUrl", "jobState", "postedDate", "expireAt", "closedAt",
+      "company{id,universalName,name,linkedinUrl,website,employeeCount,employeeCountRange,industries[{name}],locations[{headquarter,parsed.text}],description}",
+      "location{linkedinText}", "workplaceType", "descriptionText", "employmentType",
+      "experienceLevel", "industries", "jobFunctions", "applicants", "hiringTeam", "applicantTrackingSystem"],
+    best_for: [
+      "JOB-FIRST DISCOVERY: employers with an open role right now — the employer's LinkedIn URL, website and exact headcount arrive on every row (10/10 observed), so no Company Search is needed",
+      "verifying hiring INSIDE a known company set — zero cross-company leakage observed",
+    ],
+    not_for: ["exact role matching", "filtering by company size (no such input)",
+      "treating a staffing agency's posting as its client's hiring"],
     cost_model: { tier: "BRONZE", start_usd: 0.001, per_result_usd: 0.001,
       events_usd: { "actor-start": 0.001, job: 0.001 }, minimum_total_usd: 0.002,
       cost_multiplier_fields: ["maxItems x jobTitles x locations"] },
     normalizer_key: "linkedin_job",
-    schema_build: "0.0.55", last_verified_at: VERIFIED, confidence: "medium",
+    schema_build: "0.0.55", last_verified_at: "2026-09-16", confidence: "high",
     known_defects: [
       { id: "job_search_fuzzy_titles",
         summary: "jobTitles is a fuzzy search. 'Sales Operations Manager' returned 'Enterprise Account Manager (Aviation)' and 'Operation Manager Trainee'. Zero exact pack matches in packs A and B.",
@@ -494,6 +512,14 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
         summary: "The posting company is not necessarily the employer. Two 'Swooped' postings described entirely different businesses.",
         mitigation: "Run aggregator evidence extraction before treating a posting as company hiring intent.",
         evidence_ref: `${EV}/raw_outputs/run5_jobsearch_B_revenue_ops.json` },
+      { id: "job_search_agency_postings",
+        summary: "Unscoped discovery for 'growth marketing manager' returned 4 staffing agencies in 10 rows (Aquent, Goodwin Recruiting, Skill, Scion Staffing). `industryIds` matches the JOB's industry, so an agency posting a software role passes it.",
+        mitigation: "jobEmployerAgencyReason drops agency employers (employer industry, name, requisition code) before any paid stage.",
+        evidence_ref: "tests/fixtures/lead-v2/p3-job-discovery-probe.json" },
+      { id: "job_search_no_size_filter",
+        summary: "No company-size input: the same probe returned LinkedIn (23,643 employees) and Bevi (412) beside 5-person startups.",
+        mitigation: "Size is read from the row's exact employeeCount and applied by qualification — a filter only when the mission's size is hard.",
+        evidence_ref: "tests/fixtures/lead-v2/p3-job-discovery-probe.json" },
       { id: "job_search_duplicate_rows",
         summary: "25% duplicate rows within a single pack (8 rows, 6 unique titles).",
         mitigation: "Deduplicate on job id during normalization.",

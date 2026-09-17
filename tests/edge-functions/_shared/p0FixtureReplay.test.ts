@@ -62,7 +62,9 @@ Deno.test("recorded missions rebuild their graph and feasibility offline", () =>
     assert(mission?.original_user_query, r);
     for (const mode of ["legacy", "enforce"] as const) {
       const plan = buildCapabilityGraph(mission, { executability: mode });
-      assertEquals(plan.entry_capability, "startup_company_discovery", `${r}/${mode}`);
+      // P3: the audited mission IS the canonical hiring-led mission. V1 keeps
+      // the YC-first plan it ran; V2 now starts from the open role.
+      assertEquals(plan.entry_capability, mode === "legacy" ? "startup_company_discovery" : "job_discovery", `${r}/${mode}`);
       const f = assessRequestFeasibility(mission, plan, { executability: mode });
       assert(f.ok, `${r}/${mode}: the audited hiring mission stays feasible`);
     }
@@ -106,7 +108,8 @@ Deno.test("engine discovery replays the recorded memo23 dataset with no network"
     },
     verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
   } as unknown as CapabilityEngineDeps as never, {
-    mission, plan: buildCapabilityGraph(mission, { executability: "enforce" }), maxCandidates: 20,
+    // The recorded run was planned YC-first; replay it on that (legacy) graph.
+    mission, plan: buildCapabilityGraph(mission, { executability: "legacy" }), maxCandidates: 20,
     readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined,
   } as never));
   assert(memoCalls >= 1, "discovery asked the recorded provider");

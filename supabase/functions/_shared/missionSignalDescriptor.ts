@@ -192,6 +192,13 @@ export interface SignalQualifier {
   round_type?: string;
   /** For headcount_change: which way. */
   direction?: "increase" | "decrease";
+  /**
+   * LEAD V2 P3 — the hire is the FIRST in its function ("our first growth
+   * marketer", "founding AE"). Only ever set from the user's own words. Not a
+   * `QUALIFIER_KEYS` member: it refines a hiring requirement, it does not make
+   * a different one.
+   */
+  first_in_function?: { phrase: string; source: "user_explicit" };
 }
 
 export const QUALIFIER_KEYS = [

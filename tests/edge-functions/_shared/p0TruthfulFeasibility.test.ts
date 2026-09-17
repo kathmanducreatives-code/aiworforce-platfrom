@@ -82,13 +82,32 @@ Deno.test("hiring missions stay feasible and satisfied by hiring verification", 
 });
 
 Deno.test("working routes build the same plan enforced as they did before P0", () => {
-  for (const id of ["q1", "q2", "q3", "q4", "q11", "q12", "q14", "inject:hiring", "inject:funding"]) {
+  // P3: hiring-led company missions (q1 q2 q3 q11 q12, inject:hiring) now enter
+  // through job discovery under V2 — see the next test. Legacy plans for them
+  // are unchanged, and every other working route is still identical.
+  for (const id of ["q4", "q14", "inject:funding"]) {
     const { plan } = enforce(mission(id));
     const before = legacyOf(id).plan;
     assertEquals(plan.entry_capability, before.entry_capability, id);
     assertEquals(plan.steps.map((s) => s.capability), before.steps.map((s: Json) => s.capability), id);
     assertEquals(plan.executability?.unexecutable ?? [], [], `${id}: nothing gated`);
   }
+});
+
+Deno.test("P3: hiring-led missions enter through job discovery under V2 only, nothing gated", () => {
+  const JOB_ROUTE = ["job_discovery", "job_deduplication", "company_identity_resolution", "company_enrichment",
+    "hiring_verification", "company_brain_qualification", "persistence"];
+  for (const id of ["q1", "q2", "q3", "q11", "q12", "inject:hiring"]) {
+    const { plan, f } = enforce(mission(id));
+    assertEquals(plan.entry_capability, "job_discovery", id);
+    assertEquals(plan.steps.map((s) => s.capability), JOB_ROUTE, id);
+    assertEquals(plan.executability?.unexecutable ?? [], [], `${id}: nothing gated`);
+    assert(f.ok, `${id}: feasible`);
+    assertFalse(plan.allowed_providers.includes("apify_yc_companies_memo23"), `${id}: no YC-first default`);
+    assertEquals(buildCapabilityGraph(mission(id)).entry_capability, legacyOf(id).plan.entry_capability, `${id}: V1 unchanged`);
+  }
+  // A funding requirement is proven only at discovery: q14 keeps its funding entry.
+  assertEquals(enforce(mission("q14")).plan.entry_capability, "funding_signal_discovery");
 });
 
 // ── unsupported anchors fail truthfully ──────────────────────────────────────
@@ -149,7 +168,12 @@ Deno.test("company-post evidence does NOT claim executable support", () => {
 Deno.test("a mixed mission runs what it can and declares what it cannot", () => {
   const launch = enforce(mission("inject:hiring+product_launch"));
   assert(launch.f.ok, "hiring is provable, so the mission runs");
-  assertEquals(statuses(launch.f).sort(), ["partially_supported", "satisfied"]);
+  // P3: hiring-led, so it enters through job discovery and never attempts the
+  // unexecutable launch-DISCOVERY entry; the executable launch VERIFICATION is
+  // scheduled on the job route, so the launch requirement is provable.
+  assertEquals(launch.plan.entry_capability, "job_discovery");
+  assert(launch.plan.steps.some((s) => s.capability === "product_launch_verification"));
+  assertEquals(statuses(launch.f).sort(), ["satisfied", "satisfied"]);
   const tech = enforce(mission("inject:hiring+technology"));
   assert(tech.f.ok);
   assertEquals(statuses(tech.f).sort(), ["needs_engine_work", "satisfied"]);

@@ -208,6 +208,89 @@ export const ACTOR_INPUT_STRATEGIES:
     ],
   },
 
+  // ── JOBS (DISCOVERY AND VERIFICATION) ─────────────────────────────────────
+  apify_linkedin_job_search: {
+    discovery_pattern:
+      "JOB-FIRST: ask LinkedIn for the ROLE the mission is about, in the mission's " +
+      "hard geography, inside a recency window — and omit `company` entirely. " +
+      "Each row names its employer with a LinkedIn URL, website and exact " +
+      "headcount, so identity comes from the posting and size/stage are judged " +
+      "afterwards from those fields, never guessed in the query.",
+    verification_pattern:
+      "Company-scoped: `company` = the resolved LinkedIn URLs, `jobTitles` = the " +
+      "role vocabulary. Proves hiring inside a known set.",
+    filters: {
+      jobTitles: {
+        means: "Search queries; LinkedIn boolean syntax works (quoted phrases, OR).",
+        use_when:
+          "ALWAYS. One query with the role's real title variants joined by OR " +
+          "(\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\"). " +
+          "Every extra array entry is a separate paid search.",
+        avoid_when: "Never pass seniority or company words here — they are not titles.",
+        effect: "raises_precision",
+      },
+      locations: {
+        means: "LinkedIn location autocomplete — the JOB's location, not the employer's HQ.",
+        use_when: "The mission's geography is hard. Use full names ('United States', never 'US').",
+        avoid_when: "Geography is only a preference.",
+        effect: "raises_precision",
+      },
+      postedLimit: {
+        means: "Recency window: 1h | 24h | week | month.",
+        use_when: "ALWAYS for discovery — 'hiring now' means posted within the window.",
+        effect: "raises_precision",
+      },
+      industryIds: {
+        means: "LinkedIn industry ids of the JOB (4 = Software Development).",
+        use_when: "The mission's industry is hard. Agencies posting in that industry still pass — they are dropped after retrieval.",
+        avoid_when: "Industry is only a preference.",
+        effect: "raises_precision",
+      },
+      experienceLevel: {
+        means: "internship | entry | associate | mid-senior | director | executive.",
+        use_when: "The role itself implies a level (a 'head of' role → director).",
+        avoid_when: "A first hire at a tiny company — titles and levels are inconsistent there, and the filter discards real matches.",
+        effect: "raises_precision",
+      },
+      maxItems: {
+        means: "Rows PER jobTitles entry PER location.",
+        use_when: "Always set; 10–25 is enough for one or a few leads.",
+        effect: "neutral",
+        multiplies_cost: true,
+      },
+      company: {
+        means: "Scope to known employers.",
+        use_when: "Verification only.",
+        avoid_when: "DISCOVERY — a discovery call with `company` is refused.",
+        effect: "raises_precision",
+      },
+    },
+    good_combinations: [
+      { fields: ["jobTitles", "locations", "postedLimit", "maxItems"],
+        why: "The minimum honest discovery question: the role, where, how recent, and a cost bound." },
+      { fields: ["jobTitles", "industryIds", "postedLimit"],
+        why: "A hard industry narrows away most large-company noise before any row is paid for." },
+    ],
+    bad_combinations: [
+      { fields: ["jobTitles[] with many entries", "locations[] with many entries"],
+        why: "maxItems × titles × locations — three titles in two locations is six paid searches." },
+      { fields: ["company", "jobTitles for discovery"],
+        why: "A company list turns discovery into verification and can never find a new employer." },
+    ],
+    recency_mapping:
+      "A hiring window becomes postedLimit: ≤1 day → 24h, ≤7 → week, otherwise month. " +
+      "No window stated → month for discovery.",
+    expensive_inputs: ["maxItems × jobTitles × locations ($0.001 per row + $0.001 per run)"],
+    query_guidance: [
+      "Put title variants in ONE boolean query rather than several array entries.",
+      "Search the role, not the company kind: 'startup' and 'SaaS' are not job titles.",
+    ],
+    noisy_patterns: [
+      "OBSERVED 2026-09-16: 4 of 10 unscoped rows were staffing agencies reposting client roles.",
+      "OBSERVED 2026-09-16: large employers (LinkedIn, 23,643 staff) rank first on sortBy=date — size is not filterable.",
+    ],
+  },
+
   // ── COMPANY POSTS ─────────────────────────────────────────────────────────
   apify_linkedin_company_posts: {
     verification_pattern:

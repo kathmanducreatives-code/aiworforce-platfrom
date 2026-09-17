@@ -247,6 +247,8 @@ export type FounderStage =
  * `PrequalifiedCompany`, and the engine owns the casts.
  */
 export interface CompanyWorkingSetSnapshot {
+  /** LEAD V2 P3 — first-hire evidence, so a continuation does not re-check it. */
+  first_in_function?: Record<string, unknown> | null;
   /** The normalized company, as discovery produced it. */
   company: Record<string, unknown>;
   /** Discovery-time open jobs. BOUNDED — see `MAX_SNAPSHOT_JOBS`. */

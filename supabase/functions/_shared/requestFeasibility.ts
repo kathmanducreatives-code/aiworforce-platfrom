@@ -497,8 +497,13 @@ export function assessRequestFeasibility(
       detail: { requirements: signalReqs.map((r) => ({ r: r.requirement, s: r.status })) },
     });
   }
-  if (enforce && !isCapabilityExecutable(String(plan.entry_capability))) {
-    const state = executabilityStateOf(String(plan.entry_capability));
+  // P3: job discovery is executable as the ROUTE to a company. Job postings as
+  // the DELIVERABLE are still not persisted by the engine, so that plan would
+  // run and hand back nothing the user asked for.
+  const jobsAsDeliverable = plan.entry_capability === "job_discovery" &&
+    (mission as { requested_output?: string }).requested_output === "job_listings";
+  if (enforce && (jobsAsDeliverable || !isCapabilityExecutable(String(plan.entry_capability)))) {
+    const state = jobsAsDeliverable ? "needs_engine_work" : executabilityStateOf(String(plan.entry_capability));
     report.refusals.push({
       code: "entry_not_executable", requirement: `entry:${plan.entry_capability}`,
       message:

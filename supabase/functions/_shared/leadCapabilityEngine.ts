@@ -47,7 +47,8 @@ import {
 import {
   compileHarvestCompanyDetailsInput, compileHarvestCompanyEmployeesInput,
   compileHarvestCompanySearchInput,
-  compileHarvestJobSearchInput, compileHarvestProfileSearchInput,
+  compileHarvestJobDiscoveryInput, compileHarvestJobSearchInput, compileHarvestProfileSearchInput,
+  JOB_DISCOVERY_LIMITS,
   compileDatahyenaFundingInput, compileMemo23YcInput, fanOutSolidcodeTeamSizes,
   type CompiledActorCall, type CompileResult,
 } from "./hiringActorInputs.ts";
@@ -167,6 +168,7 @@ import {
   nonCompanyPageReason,
   normalizeLinkedInCompanyCandidate, normalizeLinkedInCompanyEnriched,
   normalizeLinkedInJob, normalizeMemo23Company, normalizeMemo23OpenJobs,
+  firstHireLanguage, jobEmployerAgencyReason, jobEmployerToCompany, jobIsOpen,
   normalizeSolidcodeCompany,
   type NormalizedHiringCompany, type NormalizedHiringJob, type NormalizedHiringPerson,
   normalizeDatahyenaFundingRound, fundingRoundToCompany,
@@ -189,7 +191,7 @@ import {
   COMPANY_EMPLOYEES_SCRAPER_MODES, PROFILE_SEARCH_SCRAPER_MODES,
 } from "./hiringActorCatalog.ts";
 import {
-  CAPABILITY_REGISTRY, CapabilityContainmentError, onCapabilityExhausted,
+  CAPABILITY_REGISTRY, CapabilityContainmentError, firstInFunctionRequested, onCapabilityExhausted,
   type CapabilityId, type CapabilityPlan,
 } from "./leadCapabilityGraph.ts";
 import { normalizeLocationName } from "./harvestApiPeople.ts";
@@ -1608,6 +1610,12 @@ export interface EngineCompany {
    * signal event, so nothing has to translate between vocabularies to find it.
    */
   signal_evidence: Record<string, NormalizedNewsArticle[]>;
+  /**
+   * LEAD V2 P3 — "first hire in the function", when the mission asked. From the
+   * posting's own words, or from a team check on a shortlisted company. Titles
+   * only; no person is kept.
+   */
+  first_in_function?: FirstInFunctionEvidence | null;
   fit: CompanyFitResult | null;
   /** The canonical hiring decision, with its evidence and reason. */
   hiring_assessment: HiringAssessment | null;
@@ -1679,12 +1687,68 @@ function toTriageInput(c: EngineCompany): TriageCompanyInput {
   };
 }
 
+/**
+ * P3 — the titles that make someone part of the mission's FUNCTION, for the
+ * first-hire team check. The role vocabulary plus its function word, so an
+ * existing "Head of Marketing" counts against "first growth marketer".
+ */
+export function functionTitlesFor(vocab: { required_titles: readonly string[] } | null | undefined): string[] {
+  const base = [...new Set((vocab?.required_titles ?? []).map((t) => String(t).trim()).filter(Boolean))];
+  const joined = base.join(" ").toLowerCase();
+  const family: string[] = [];
+  if (/market|growth|demand gen|brand|content/.test(joined)) family.push("marketing", "growth");
+  if (/sales|account exec|\bae\b|sdr|bdr|business development/.test(joined)) family.push("sales", "business development");
+  if (/engineer|developer/.test(joined)) family.push("engineer");
+  if (/design/.test(joined)) family.push("designer");
+  if (/product manager|\bpm\b/.test(joined)) family.push("product manager");
+  return [...new Set([...family, ...base])].slice(0, 10);
+}
+
+/** Current employees AT this company whose title is in the function. Titles only. */
+export function teamFunctionMembers(
+  rows: readonly Record<string, unknown>[], companyUrl: string,
+  vocab: { required_titles: readonly string[] } | null | undefined,
+): string[] {
+  const words = functionTitlesFor(vocab).map((t) => t.toLowerCase());
+  const target = normalizeCompanyLinkedInUrl(companyUrl);
+  const out: string[] = [];
+  for (const r of rows) {
+    const positions = Array.isArray(r.currentPositions) ? r.currentPositions as Record<string, unknown>[] : [];
+    const here = positions.find((p) => p && p.current !== false &&
+      normalizeCompanyLinkedInUrl(p.companyLinkedinUrl) === target);
+    const title = String(here?.title ?? "").toLowerCase();
+    if (!title) continue;
+    if (words.some((w) => title.includes(w))) out.push(String(here!.title));
+  }
+  return out;
+}
+
+/** P3 — above this headcount a first-hire team check is not bought. */
+export const TEAM_CHECK_MAX_HEADCOUNT = 200;
+
+/** P3 — this company was found through its own open posting. */
+function jobSourced(c: EngineCompany): boolean {
+  return c.company.source_provenance === "harvestapi/linkedin-job-search";
+}
+
 function companyKey(c: NormalizedHiringCompany): string {
   return (c.linkedin_company_url ?? c.canonical_domain ?? c.external_source_id)
     .toLowerCase().replace(/\/$/, "");
 }
 
 // --------------------------------------------------------------------- deps ----
+
+export interface FirstInFunctionEvidence {
+  status: "supported" | "contradicted" | "unverified";
+  source: "job_posting" | "team_composition" | "none";
+  /** The posting's own words, when that is the source. */
+  quote?: string | null;
+  job_url?: string | null;
+  /** Current staff whose title is in the function (team check). Titles only. */
+  function_members?: number;
+  function_titles?: string[];
+  reason: string;
+}
 
 export type ActorInvoker = (call: CompiledActorCall<unknown>) => Promise<Record<string, unknown>[]>;
 
@@ -2331,7 +2395,8 @@ export async function runCapabilityPlan(
       c.yc_open_jobs.map((j) => ({ title: j.title, url: j.job_url, location: j.location })),
       supporting,
       // THE MISSION'S OWN VOCABULARY, the same list prequalification scored on.
-      { source: "yc_open_jobs", vocab: qualificationCtx.role_vocabulary },
+      // P3: postings found BY a LinkedIn job search are that search's answer.
+      { source: jobSourced(c) ? "external_job_search" : "yc_open_jobs", vocab: qualificationCtx.role_vocabulary },
     );
   };
 
@@ -5002,6 +5067,70 @@ export async function runCapabilityPlan(
                   " — not companies, excluded before any paid identity call",
               });
             }
+          } else if (provider === "apify_linkedin_job_search") {
+            // ── P3: JOB-FIRST DISCOVERY ─────────────────────────────────────
+            //
+            // The planner's question verbatim (the spec compiler owns bounds);
+            // the engine adds only a row bound when none was proposed. Each
+            // open, non-agency posting brings its employer WITH a LinkedIn
+            // company record, so identity is never searched for these.
+            const compiled = compileHarvestJobDiscoveryInput({
+              maxItems: Math.min(maxCandidates, JOB_DISCOVERY_LIMITS.maxItems),
+              ...sel.input,
+            } as never);
+            const dropped = new Map<string, number>();
+            const seenJobs = new Set<string>();
+            let jobsKept = 0;
+            const jobRows = await callProvider(cap, provider, compiled);
+            for (const r of jobRows) {
+              if (!jobIsOpen(r)) {
+                dropped.set("posting_closed", (dropped.get("posting_closed") ?? 0) + 1);
+                continue;
+              }
+              const agency = jobEmployerAgencyReason(r);
+              if (agency) {
+                dropped.set(`staffing_agency(${agency})`, (dropped.get(`staffing_agency(${agency})`) ?? 0) + 1);
+                continue;
+              }
+              const employer = jobEmployerToCompany(r);
+              if (!employer) {
+                dropped.set("no_employer_linkedin_url", (dropped.get("no_employer_linkedin_url") ?? 0) + 1);
+                continue;
+              }
+              const job = normalizeLinkedInJob(r);
+              const jobKey = job.job_id ?? job.job_url ?? `${employer.linkedin_company_url}|${job.title}`;
+              if (seenJobs.has(jobKey)) continue;
+              seenJobs.add(jobKey);
+              jobsKept++;
+              const key = companyKey(employer);
+              const existing = companies.find((x) => x.key === key);
+              if (existing) {
+                if (!existing.yc_open_jobs.some((j) => (j.job_id ?? j.job_url) === (job.job_id ?? job.job_url))) {
+                  existing.yc_open_jobs.push(job);
+                }
+              } else {
+                addCompany(companies, employer, [job]);
+              }
+              const holder = companies.find((x) => x.key === key)!;
+              const said = firstHireLanguage(r);
+              if (said && holder.first_in_function?.status !== "supported") {
+                holder.first_in_function = {
+                  status: "supported", source: "job_posting", quote: said.quote,
+                  job_url: job.job_url, reason: `the posting's ${said.field} says so`,
+                };
+              }
+            }
+            if (jobRows.length > 0) state.provider_attempts.push({
+              capability: cap, provider,
+              attempt: state.provider_attempts.filter((x) => x.capability === cap && x.provider === provider).length + 1,
+              outcome: "rows_dropped",
+              rows: [...dropped.values()].reduce((a, b) => a + b, 0),
+              cost_units: 0,
+              reason: `kept ${jobsKept} open posting(s) with the employer's LinkedIn page` +
+                (dropped.size ? `; dropped ${[...dropped.entries()].map(([why, k]) => `${k} ${why}`).join(", ")}` : "") +
+                " — identity taken from the posting, no Company Search",
+            });
+            log("job_discovery_rows", { kept: jobsKept, dropped: Object.fromEntries(dropped), employers: companies.length });
           } else if (provider === "apify_funding_rounds_datahyena") {
             // ── DISCOVERY BY FUNDING EVENT ──────────────────────────────────
             //
@@ -5672,8 +5801,15 @@ export async function runCapabilityPlan(
     // `funding_signal_discovery` LEFT THIS LIST when it gained a provider that
     // can keep its claim. It is driven through the shared discovery stage like
     // any other discovery capability — see `ENGINE_DRIVEN_DISCOVERY`.
-    if (cap === "job_discovery" ||
-        cap === "expansion_signal_discovery" || cap === "job_deduplication") {
+    // P3: job rows are deduplicated by job id and employers by LinkedIn company
+    // WHILE job discovery normalizes them; this stage reports that work.
+    if (cap === "job_deduplication") {
+      const jobs = companies.reduce((n, c) => n + (jobSourced(c) ? c.yc_open_jobs.length : 0), 0);
+      if (jobs > 0) finish(cap, "complete", jobs, [], true, null);
+      else finish(cap, "skipped_no_input", 0, [], false, "no open posting reached deduplication");
+      continue;
+    }
+    if (cap === "expansion_signal_discovery") {
       // Declared in the graph and reachable, but not yet driven by this engine.
       // Recorded honestly rather than silently treated as done.
       finish(cap, "skipped_no_input", 0, [], false,
@@ -6554,8 +6690,10 @@ export async function runCapabilityPlan(
       // reasons are per company and unchanged: a company whose verdict is
       // already settled by free evidence is not paid for, and one a previous
       // slice already asked about is not asked again.
+      // P3: a company found by the job search was already answered by it.
+      const toCheck = targets.filter((t) => !jobSourced(t));
       const needsPaid: Array<{ c: EngineCompany; url: string; opKey: string | null }> = [];
-      for (const c of targets) {
+      for (const c of toCheck) {
         // Named `assessment` deliberately: the paid-search gate below is the
         // same expression the per-company loop used, and
         // `commercialPolicyAndPortfolio` pins it by name as the guarantee that
@@ -6889,7 +7027,66 @@ export async function runCapabilityPlan(
       // company passed. A run that correctly finds three watch-list companies
       // has done its job.
       const decided = verified + review + watch;
-      finish(cap, "complete", verified, paidCalls > 0 ? ["apify_linkedin_job_search"] : [],
+      // ── P3: FIRST IN THE FUNCTION ──────────────────────────────────────────
+      //
+      // Only when the mission asked, only when the graph granted the team
+      // provider for this mission, only for SHORTLISTED companies (enriched,
+      // hiring verified or needing review), and only where the posting does not
+      // already say so. Titles are read; no person is kept.
+      const teamChecks = { checked: 0, supported: 0, contradicted: 0, from_posting: 0 };
+      const teamStep = opts.plan.steps.find((st) => st.capability === cap);
+      if (firstInFunctionRequested(opts.mission) &&
+          teamStep?.providers.includes("apify_linkedin_company_employees")) {
+        const titles = functionTitlesFor(qualificationCtx.role_vocabulary);
+        const maxChecks = Math.max(1, Math.min(3, (opts.remainingLeads ?? effectiveRequestedCount(opts.mission)) * 2));
+        const headcount = (c: EngineCompany) => c.enriched?.employee_count ?? c.company.employee_count ?? null;
+        // Smallest first: "first in the function" is only a live question at a
+        // small team, so the bounded checks go where the answer can be yes.
+        const shortlisted = companies.filter((c) => c.enriched && c.hiring_assessment &&
+          (c.hiring_assessment.verdict === "hiring_verified" || c.hiring_assessment.verdict === "hiring_verification_needed"))
+          .sort((a, b) => (headcount(a) ?? Number.MAX_SAFE_INTEGER) - (headcount(b) ?? Number.MAX_SAFE_INTEGER));
+        for (const c of shortlisted) {
+          if (c.first_in_function?.status === "supported" && c.first_in_function.source === "job_posting") {
+            teamChecks.from_posting++;
+            continue;
+          }
+          if (c.first_in_function?.source === "team_composition") continue;
+          // A SPEND rule, not a criterion: the company stays in the pool and is
+          // ranked as usual; only the paid check is not bought where a first
+          // hire in the function is implausible.
+          const hc = headcount(c);
+          if (hc !== null && hc > TEAM_CHECK_MAX_HEADCOUNT) {
+            c.first_in_function ??= { status: "unverified", source: "none",
+              reason: `team check not bought: ${hc} employees makes a first hire in the function implausible` };
+            continue;
+          }
+          if (teamChecks.checked >= maxChecks) break;
+          const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
+          if (!url || titles.length === 0) continue;
+          const compiled = compileHarvestCompanyEmployeesInput({
+            companies: [url], jobTitles: titles, maxItems: 3, maxItemsPerCompany: 3,
+            profileScraperMode: COMPANY_EMPLOYEES_SCRAPER_MODES[0],
+          });
+          const rows = await callProvider(cap, "apify_linkedin_company_employees", compiled, c);
+          if (c.stage_block?.capability === cap) {
+            c.first_in_function = { status: "unverified", source: "none", reason: `team check not run: ${c.stage_block.reason}` };
+            continue;
+          }
+          teamChecks.checked++;
+          const members = teamFunctionMembers(rows, url, qualificationCtx.role_vocabulary);
+          c.first_in_function = members.length === 0
+            ? { status: "supported", source: "team_composition", function_members: 0, function_titles: [],
+              reason: "no current employee holds a title in this function" }
+            : { status: "contradicted", source: "team_composition", function_members: members.length,
+              function_titles: members.slice(0, 5),
+              reason: `${members.length} current employee(s) already hold the function` };
+          if (c.first_in_function.status === "supported") teamChecks.supported++; else teamChecks.contradicted++;
+        }
+        log("first_in_function_checked", teamChecks);
+      }
+      finish(cap, "complete", verified,
+        [...(paidCalls > 0 ? ["apify_linkedin_job_search"] : []),
+          ...(teamChecks.checked > 0 ? ["apify_linkedin_company_employees"] : [])],
         decided > 0,
         decided === 0 ? "no company had a relevant commercial role" : null);
       log("hiring_verification_complete", {
@@ -8898,6 +9095,9 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       company: c.company as unknown as Record<string, unknown>,
       yc_open_jobs: c.yc_open_jobs.slice(0, MAX_SNAPSHOT_JOBS) as unknown as Record<
         string, unknown>[],
+      ...(c.first_in_function
+        ? { first_in_function: c.first_in_function as unknown as Record<string, unknown> }
+        : {}),
       prequalified: (c.prequalified ?? null) as unknown as Record<string, unknown> | null,
       prequal_key: c.prequal_key,
       shortlisted: c.shortlisted,
@@ -9145,6 +9345,7 @@ export function restoreWorkingSet(
     );
     const c = out.find((x) => x.key === r.company_key);
     if (!c) continue;
+    if (s.first_in_function) c.first_in_function = s.first_in_function as unknown as FirstInFunctionEvidence;
     c.prequalified = (s.prequalified ?? null) as unknown as EngineCompany["prequalified"];
     c.shortlisted = s.shortlisted === true;
     c.enriched = (s.enriched ?? null) as unknown as NormalizedHiringCompany | null;
@@ -9257,6 +9458,8 @@ export const ENGINE_DRIVEN_DISCOVERY: ReadonlySet<CapabilityId> = new Set<Capabi
   // input schema, a bounded compiler, a normalizer and a cost model, which are
   // the four things membership here has always required.
   "funding_signal_discovery",
+  // P3: LinkedIn job search, discovery compiler, employer identity from the row.
+  "job_discovery",
 ]);
 
 /**

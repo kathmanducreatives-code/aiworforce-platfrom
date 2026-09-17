@@ -337,6 +337,23 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     delete hard.stage;
   }
 
+  // 5b. "first growth marketer" / "founding AE": the hire is the first in its
+  //     function. Read from the user's words only, attached to the hiring
+  //     requirement it qualifies — never inferred, never a separate signal.
+  const firstHire = firstInFunctionPhrase(query);
+  if (firstHire) {
+    let attached = false;
+    signals = signals.map((s) => {
+      if (!isHiringSignal(s)) return s;
+      attached = true;
+      const q = (s.qualifier ?? {}) as SignalQualifier;
+      if (q.first_in_function) return s;
+      changes.push(`first_in_function_from_user_words:${JSON.stringify(firstHire)}`);
+      return { ...s, qualifier: { ...q, first_in_function: { phrase: firstHire, source: "user_explicit" } } };
+    });
+    if (!attached) changes.push(`first_in_function_without_hiring_signal:${JSON.stringify(firstHire)}`);
+  }
+
   // 6. Signal language nothing could read is recorded, never dropped.
   const unrepresented = [...(i.mission.unrepresented_requirements ?? [])];
   for (const phrase of lang.unmapped) {
@@ -422,11 +439,25 @@ const SOURCE_LABEL: Record<CriterionSource, string> = {
   system_default: "default",
 };
 
+/**
+ * "first growth marketer", "founding AE", "our first sales hire". The word must
+ * qualify a role, so "first round", "first-party data" and "first 30 days" do
+ * not read as a first hire.
+ */
+const FIRST_IN_FUNCTION_RE =
+  /\b(?:first|first-ever|founding)\s+(?:(?:in-house|full-time|dedicated|b2b|saas)\s+)?((?:[a-z&/-]+\s+){0,2}?(?:marketer|marketing\s+(?:hire|lead|manager)|growth(?:\s+(?:marketer|hire|lead|manager))?|sales(?:\s+(?:hire|rep|lead))?|seller|salesperson|ae|account\s+executive|sdr|bdr|engineer|designer|product\s+manager|pm|recruiter|hr|people\s+(?:hire|lead)|ops\s+hire|operations\s+(?:hire|lead)|customer\s+success(?:\s+(?:hire|manager|lead))?|cs\s+hire|data\s+(?:hire|scientist|engineer|analyst)|finance\s+(?:hire|lead)|content\s+(?:marketer|writer|hire)|hire))\b/i;
+
+export function firstInFunctionPhrase(query: string): string | null {
+  const m = FIRST_IN_FUNCTION_RE.exec(String(query ?? ""));
+  return m ? m[0].trim() : null;
+}
+
 function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind?: string): string {
   const q = (s.qualifier ?? {}) as SignalQualifier & { direction?: string };
   const bits: string[] = [];
   if (q.role_terms?.length) bits.push(q.role_terms.join(", "));
   else if (s.role_families?.length) bits.push(s.role_families.join(", "));
+  if (q.first_in_function) bits.push("first hire in the function");
   if (q.round_type) bits.push(q.round_type);
   if (q.region) bits.push(q.region);
   if (q.topic) bits.push(`about ${q.topic}`);

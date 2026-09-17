@@ -333,7 +333,8 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     id: "job_discovery",
     label: "Discover job postings",
     requires: ["requested_output is job_listings, or job_discovery explicitly allowed"],
-    produces: ["job_posting"],
+    // P3: each posting introduces its employer, identified — a company candidate.
+    produces: ["job_posting", "company_candidate"],
     allowed_next: ["job_deduplication", "company_identity_resolution"],
     // STILL THE BOARD SET, AND STILL UNDRIVEN.
     //
@@ -348,7 +349,16 @@ export const CAPABILITY_REGISTRY: Readonly<Record<CapabilityId, CapabilitySpec>>
     // first; until then a hiring-first mission is routed through company
     // discovery plus company-scoped verification, which uses only carded
     // Actors — see `buildCapabilityGraph`.
+    //
+    // ── P3: DRIVEN, BY THE CARDED LINKEDIN JOB SEARCH ───────────────────────
+    //
+    // `apify_linkedin_job_search` now has TWO compilers: the company-scoped one
+    // above (verification) and `compileHarvestJobDiscoveryInput`, which refuses
+    // `company[]`. Verified live 2026-09-16: without `company` it discovers
+    // employers, and every row carries the employer's LinkedIn company record.
+    // It is listed FIRST; the four boards stay declared and uncarded.
     providers: [
+      "apify_linkedin_job_search",
       "apify_jobs", "apify_linkedin_jobs_crawlworks",
       "apify_indeed_jobs_automation_lab", "apify_glassdoor_jobs",
     ],
@@ -716,6 +726,48 @@ function step(
   };
 }
 
+/** P3 — the hiring requirement names a role, and the user named no cohort. */
+export function hiringLedMission(m: LeadMissionV1): boolean {
+  if (m.target_entity === "person") return false;
+  const hiring = m.required_signals.filter((s) => s.type === "hiring" && (s.subject ?? "company") === "company");
+  if (hiring.length === 0) return false;
+  const role = hiringRoleOf(m);
+  if (!role) return false;
+  // A FUNDING requirement is proven only by funding discovery (datahyena rounds
+  // are the evidence). Entering through the posting would leave it unprovable,
+  // so that mission keeps its funding entry and verifies hiring afterwards.
+  if (m.required_signals.some((s) => s.type === "funding")) return false;
+  const cohortFirst = (m.directives?.source_strategy ?? [])[0] === "startup_cohort_first";
+  if (cohortFirst || namesCohort(m)) return false;
+  return true;
+}
+
+export function hiringRoleOf(m: LeadMissionV1): string | null {
+  for (const s of m.required_signals) {
+    if (s.type !== "hiring") continue;
+    const q = (s.qualifier ?? {}) as { role_terms?: string[]; role_families?: string[] };
+    const t = q.role_terms?.[0] ?? s.role_families?.[0] ?? q.role_families?.[0];
+    if (t) return String(t);
+  }
+  return m.required_signal_terms?.[0] ?? null;
+}
+
+export function firstInFunctionRequested(m: LeadMissionV1): boolean {
+  return m.required_signals.some((s) => s.type === "hiring" &&
+    !!(s.qualifier as { first_in_function?: unknown } | undefined)?.first_in_function);
+}
+
+const COHORT_RE = /\by\s?c\b|y[- ]?combinator|yc[- ]backed|techstars|500 ?startups/i;
+function namesCohort(m: LeadMissionV1): boolean {
+  const stageBits = [
+    ...(m.company_profile.stages ?? []),
+    JSON.stringify((m.hard_constraints as Record<string, unknown> | undefined)?.stage ?? ""),
+    JSON.stringify((m.soft_preferences as Record<string, unknown> | undefined)?.stage ?? ""),
+    ...(m.criteria ?? []).filter((c) => c.dimension === "company_stage").map((c) => JSON.stringify(c.value)),
+  ];
+  return stageBits.some((b) => COHORT_RE.test(String(b)));
+}
+
 function hasSignal(m: LeadMissionV1, type: string): boolean {
   return m.required_signals.some((s) => s.type === type);
 }
@@ -858,6 +910,20 @@ export function buildCapabilityGraph(
   } else if (mission.requested_output === "job_listings") {
     entry = "job_discovery";
     entryReason = "the requested output is job listings";
+  // ── P3: A HIRING-LED MISSION STARTS FROM THE OPEN ROLE ────────────────────
+  //
+  // "seed-stage B2B SaaS startup hiring its first growth marketer" is found
+  // through the posting, not through a startup directory filtered afterwards
+  // for a role it may not list (P0 canonical run: YC-first, the role never
+  // searched). Taken only when the hiring requirement names a ROLE to search,
+  // the user named no cohort, and the job route is executable — and before the
+  // model's own capability list, so a compiled `startup_company_discovery`
+  // cannot quietly turn a hiring question back into a directory crawl.
+  // V2 ONLY: taken where the executability gate is enforced (Lead V2). Legacy
+  // plans — V1 workspaces, Signals monitoring — keep their entry exactly.
+  } else if (enforceExecutability && hiringLedMission(mission) && usable("job_discovery", "entry")) {
+    entry = "job_discovery";
+    entryReason = `the mission is hiring-led: an open ${hiringRoleOf(mission)} role is how these companies are found`;
 
   // ── WHAT USED TO SIT HERE, AND WHY IT IS GONE ─────────────────────────────
   //
@@ -975,9 +1041,39 @@ export function buildCapabilityGraph(
     const jobsAreTheDeliverable = mission.requested_output === "job_listings";
     if (!jobsAreTheDeliverable) {
       steps.push(step("company_identity_resolution", order++,
-        "companies reached through their openings still need a canonical identity"));
+        "the posting names the employer's LinkedIn page; Company Search runs only for an employer without one"));
       steps.push(step("company_enrichment", order++,
         "qualification requires enriched evidence, never job-row fields"));
+      if (hasSignal(mission, "hiring")) {
+        const hv = step("hiring_verification", order++,
+          "the postings are the hiring evidence; nothing already held is bought again");
+        // FIRST IN THE FUNCTION is a claim about the TEAM, not the posting. It
+        // may need the company's current staff in that function — on
+        // shortlisted companies only, and only for this mission.
+        if (enforceExecutability && firstInFunctionRequested(mission) && usable("hiring_verification", "verification")) {
+          hv.providers.push("apify_linkedin_company_employees");
+          hv.reason += "; 'first in the function' may need the current team, shortlisted companies only";
+        }
+        steps.push(hv);
+      }
+      // THE SAME QUALIFIER VERIFICATIONS AS THE PROFILE ROUTE. A hiring-led
+      // mission that also asks for a launch, a stack or company posts keeps
+      // those requirements; entering through the posting must not drop them.
+      if (hasSignal(mission, "expansion") && usable("expansion_signal_verification", "verification")) {
+        steps.push(step("expansion_signal_verification", order++, "the mission requires a verified expansion signal"));
+      }
+      if (hasSignal(mission, "technology") && usable("technology_verification", "verification")) {
+        steps.push(step("technology_verification", order++,
+          "the mission requires evidence of the company's technology stack"));
+      }
+      if (hasSignalSubject(mission, "post", "company") && usable("company_post_verification", "verification")) {
+        steps.push(step("company_post_verification", order++,
+          "the mission requires evidence from the company's own posts"));
+      }
+      if (hasSignal(mission, "product_launch") && usable("product_launch_verification", "verification")) {
+        steps.push(step("product_launch_verification", order++,
+          "the mission requires a verified product-launch signal"));
+      }
       steps.push(step("company_brain_qualification", order++,
         "the employers are qualified against the Company Brain"));
     } else if (wantsPeople || mission.requested_output === "enriched_companies") {

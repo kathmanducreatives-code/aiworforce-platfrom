@@ -86,7 +86,8 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
   // The signal-verification capabilities share a stage for the same reason the
   // discovery ones do, and are re-derived from the engine's own exported set.
   for (const c of ENGINE_DRIVEN_SIGNAL_VERIFICATION) implemented.add(c);
-  const SKIP_ANCHOR = 'if (cap === "job_discovery" ||';
+  // P3: job discovery/deduplication left the skip guard when they became driven.
+  const SKIP_ANCHOR = 'if (cap === "expansion_signal_discovery") {';
   const anchorAt = ENGINE.indexOf(SKIP_ANCHOR);
   // A MISSING ANCHOR MUST FAIL LOUDLY. `indexOf` returning -1 would slice from
   // the end of the file and silently derive an EMPTY skip set, which makes
@@ -111,15 +112,21 @@ Deno.test("the engine-driven capability list matches the engine's own source", (
   // schema, a bounded compiler, a normalizer and a cost model;
   // `known_company_resolution` gained none, because it needs none — its input
   // arrives with the mission.
-  for (const c of [
-    "job_discovery", "expansion_signal_discovery", "job_deduplication",
-  ]) {
+  //
+  // P3 is the third: `job_discovery` gained the LinkedIn job search's discovery
+  // compiler, an employer normaliser with identity from the row, and a cost
+  // model already on its card; `job_deduplication` happens as rows normalise.
+  for (const c of ["expansion_signal_discovery"]) {
     assert(skipped.has(c), `the engine must still skip ${c}`);
     assertFalse(isEngineDriven(c as never), `${c} must not be marked engine-driven`);
   }
+  for (const c of ["job_discovery", "job_deduplication"] as const) {
+    assertFalse(skipped.has(c), `${c} is driven since P3`);
+    assert(isEngineDriven(c), `${c} is marked engine-driven since P3`);
+  }
   assertEquals(
-    ENGINE_DRIVEN_CAPABILITIES.length, 14,
-    "fourteen capabilities are engine-driven; a change here is a real architecture change",
+    ENGINE_DRIVEN_CAPABILITIES.length, 16,
+    "sixteen capabilities are engine-driven (P3 added job discovery + deduplication); a change here is a real architecture change",
   );
 });
 
@@ -135,7 +142,7 @@ Deno.test("a capability with providers is NOT enough to call it engine-driven", 
   // Keeping this test example-free is deliberate. Re-pointing it at whichever
   // playbook happens to be unsupported would make it a record of the current
   // gap rather than of the rule, and the rule is what must survive.
-  for (const c of ["job_discovery", "expansion_signal_discovery"] as const) {
+  for (const c of ["expansion_signal_discovery"] as const) {
     assert(c in CAPABILITY_REGISTRY, `${c} is a real capability`);
     assert(
       (CAPABILITY_REGISTRY[c].providers ?? []).length > 0,

@@ -23,7 +23,9 @@ const MISSION = compileLeadMission({
     decision_maker_roles: [], hard_constraints: [], soft_preferences: [],
     preferred_signals: ["hiring software engineers"], adjacent_signals: [], excluded_signals: [],
     allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } },
-    disallowed_broadening: [], required_evidence: [], required_capabilities: [], preferred_source_strategy: [],
+    disallowed_broadening: [], required_evidence: [], required_capabilities: [],
+    // A startup-COHORT mission: exercises the memo23 spec path. Hiring-led routing is P3 (p3JobFirstRoute.test.ts).
+    preferred_source_strategy: ["startup_cohort_first"],
     evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.8, unknowns: [],
   },
 }).final_mission;

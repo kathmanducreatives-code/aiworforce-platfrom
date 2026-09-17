@@ -100,12 +100,16 @@ export const CAPABILITY_EXECUTABILITY: Readonly<Record<CapabilityId, CapabilityE
       reason: "resolves companies the user supplied; no provider needed",
     },
     job_discovery: {
-      capability: "job_discovery", state: "needs_provider_work",
-      primitives: P(true, false, false, true, "partial"),
-      limitations: [],
+      capability: "job_discovery", state: "executable",
+      primitives: P(true, true, true, true, true),
+      limitations: [
+        "LinkedIn job search only: no company-size input, so size is judged from each row's exact employeeCount",
+        "staffing-agency postings are dropped by a deterministic guard, not by the provider",
+        "the four job-board Actors remain uncarded and are never selected",
+      ],
       reason:
-        "the job-board Actors exist only in the V1 registry with no verified V2 contract, " +
-        "and the engine skips job discovery",
+        "LinkedIn job search (P3, verified 2026-09-16): the employer's LinkedIn page, website " +
+        "and headcount arrive on each posting, engine-driven discovery",
     },
     funding_signal_discovery: {
       capability: "funding_signal_discovery", state: "executable",
@@ -198,10 +202,10 @@ export const CAPABILITY_EXECUTABILITY: Readonly<Record<CapabilityId, CapabilityE
       reason: "profile enrichment, unlock-gated",
     },
     job_deduplication: {
-      capability: "job_deduplication", state: "needs_engine_work",
-      primitives: P(true, true, false, false, "n/a"),
+      capability: "job_deduplication", state: "executable",
+      primitives: P(true, true, true, true, "n/a"),
       limitations: [],
-      reason: "the engine skips job deduplication",
+      reason: "job rows are deduplicated by job id, and employers by LinkedIn company, during job discovery",
     },
     persistence: {
       capability: "persistence", state: "executable",

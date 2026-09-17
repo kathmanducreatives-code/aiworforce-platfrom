@@ -53,9 +53,10 @@ Deno.test("an executable capability has an engine executor and is not skipped", 
 Deno.test("a non-executable capability really has no executor today", () => {
   const skipped = skippedByEngine();
   const nonExecutable = CAPABILITY_IDS.filter((id) => !isCapabilityExecutable(id));
+  // P3: job_discovery (LinkedIn job search) and job_deduplication became executable.
   assertEquals(nonExecutable.sort(), [
-    "company_post_verification", "expansion_signal_discovery", "job_deduplication",
-    "job_discovery", "product_launch_discovery", "technology_verification",
+    "company_post_verification", "expansion_signal_discovery",
+    "product_launch_discovery", "technology_verification",
   ]);
   for (const id of nonExecutable) {
     assert(!ENGINE_DRIVEN_DISCOVERY.has(id) && !ENGINE_DRIVEN_SIGNAL_VERIFICATION.has(id), id);
@@ -81,7 +82,7 @@ Deno.test("state and primitives agree: executable ⇔ every primitive present", 
   }
   assertEquals(executabilityStateOf("technology_verification"), "needs_engine_work");
   assertEquals(executabilityStateOf("product_launch_discovery"), "needs_extraction_work");
-  assertEquals(executabilityStateOf("job_discovery"), "needs_provider_work");
+  assertEquals(executabilityStateOf("job_discovery"), "executable", "P3: carded, driven, normalised");
   assertEquals(executabilityStateOf("no_such_capability"), "unsupported");
   assertEquals(isCapabilityExecutable("no_such_capability"), false, "unknown is never executable");
 });

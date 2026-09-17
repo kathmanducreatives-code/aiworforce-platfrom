@@ -1,0 +1,276 @@
+// LEAD V2 P3 — THE FIRST REAL HIRING-FIRST ROUTE, OFFLINE.
+//
+// The canonical mission, compiled by the real compiler; the V2 graph; a GPT
+// execution plan carrying LinkedIn-job-search-native JSON; the real engine with
+// P2 specs enforced; and an invoker serving the rows the actor-audit probe
+// actually returned on 2026-09-16 (tests/fixtures/lead-v2/p3-job-discovery-probe.json).
+
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { runCapabilityPlan, functionTitlesFor, teamFunctionMembers } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { buildCapabilityGraph, firstInFunctionRequested, hiringLedMission } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
+import { assessRequestFeasibility } from "../../../supabase/functions/_shared/requestFeasibility.ts";
+import { compileHarvestJobDiscoveryInput } from "../../../supabase/functions/_shared/hiringActorInputs.ts";
+import {
+  firstHireLanguage, jobEmployerAgencyReason, jobEmployerToCompany,
+} from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
+import { hiringActorCard } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
+import { discoveryCatalogBriefing } from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
+import { buildExecutionPlannerPayload } from "../../../supabase/functions/_shared/leadExecutionPlan.ts";
+import { authorisedActorKeys } from "../../../supabase/functions/_shared/gptExecutionPlanner.ts";
+import { registeredEngineFields } from "../../../supabase/functions/_shared/providerCallSpec.ts";
+import { canonicalJson } from "../../../supabase/functions/_shared/providerInputFingerprint.ts";
+import { firstInFunctionPhrase } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
+
+globalThis.fetch = () => { throw new Error("P3 route tests must not reach the network"); };
+
+const CANONICAL = "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.";
+const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
+const PROBE_ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Record<string, unknown>[];
+
+const proposal = {
+  requested_opportunity_count: 1, requested_contact_ready_count: null, company_types: ["B2B SaaS"],
+  geographies: ["United States"], geography_is_hard: true, employee_range: { min: null, max: null },
+  decision_maker_roles: [], hard_constraints: [], soft_preferences: [],
+  preferred_signals: ["hiring growth marketer"], required_signal_terms: ["growth marketer"],
+  adjacent_signals: [], excluded_signals: [],
+  allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } },
+  disallowed_broadening: [], required_evidence: [], required_capabilities: ["startup_company_discovery", "hiring_verification"],
+  preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
+};
+const MISSION = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+const GRAPH = buildCapabilityGraph(MISSION, { executability: "enforce" });
+
+/** What GPT is expected to author from the job actor's card: actor-native, no company[]. */
+const GPT_JOB_INPUT = {
+  jobTitles: ['"growth marketer" OR "growth marketing manager" OR "head of growth" OR "demand generation manager"'],
+  locations: ["United States"],
+  postedLimit: "month",
+  sortBy: "date",
+  maxItems: 10,
+};
+
+// A B2B SaaS employer whose posting says it is the first marketing hire, built
+// from the probe's own row shape (Bobyard's) so the route has a qualifying case.
+const FIRST_HIRE_ROW = (() => {
+  const base = structuredClone(PROBE_ROWS.find((r) => (r.company as { name: string }).name === "Bobyard")!);
+  const c = base.company as Record<string, unknown>;
+  Object.assign(base, {
+    id: "p3-founding-growth", title: "Founding Growth Marketer",
+    linkedinUrl: "https://www.linkedin.com/jobs/view/p3-founding-growth/",
+    descriptionText: "You'll be our first marketing hire, reporting to the founders of a seed-stage B2B SaaS company.",
+  });
+  Object.assign(c, { id: "900001", universalName: "pipewise", name: "Pipewise",
+    linkedinUrl: "https://www.linkedin.com/company/pipewise", website: "https://pipewise.io", employeeCount: 9,
+    description: "Pipewise is B2B SaaS for revenue teams." });
+  return base;
+})();
+const JOB_ROWS = [...PROBE_ROWS, FIRST_HIRE_ROW];
+
+function executionProposal() {
+  return {
+    reasoning: "hiring-led: search the open role, take identity from the posting, verify, qualify",
+    steps: [
+      { capability: "job_discovery", actor_key: "apify_linkedin_job_search", purpose: "find employers with an open growth-marketing role", input: GPT_JOB_INPUT, depends_on: [] },
+      { capability: "company_identity_resolution", actor_key: "apify_linkedin_company_search", purpose: "only employers without a LinkedIn page",
+        input: { searchQuery: "{{step_1.company.name}}", scraperMode: "full", maxItems: 5, locations: ["United States"] }, depends_on: [1] },
+      { capability: "company_enrichment", actor_key: "apify_linkedin_company_details", purpose: "details",
+        input: { companies: ["{{step_1.company.linkedinUrl}}"] }, depends_on: [2] },
+      { capability: "hiring_verification", actor_key: "apify_linkedin_job_search", purpose: "postings already in hand", input: {}, depends_on: [3] },
+      { capability: "company_brain_qualification", actor_key: null, purpose: "qualify", input: {}, depends_on: [4] },
+      { capability: "persistence", actor_key: null, purpose: "save", input: {}, depends_on: [5] },
+    ],
+  };
+}
+
+interface Sent { actor: string; input: Record<string, unknown>; spec?: Record<string, unknown> }
+
+function deps(sent: Sent[]) {
+  const byUrl = new Map(JOB_ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
+  return {
+    planDiscovery: emptyDiscoverySelector() as never,
+    planExecution: () => Promise.resolve(executionProposal()),
+    invoke: (call: { actorKey: string; input: unknown; providerCallSpec?: Record<string, unknown>;
+      onProviderRun?: (r: { run_id: string; dataset_id: null }) => void }) => {
+      sent.push({ actor: call.actorKey, input: call.input as Record<string, unknown>, spec: call.providerCallSpec });
+      call.onProviderRun?.({ run_id: `run-${sent.length}`, dataset_id: null });
+      const input = call.input as Record<string, unknown>;
+      if (call.actorKey === "apify_linkedin_job_search") return Promise.resolve(input.company ? [] : JOB_ROWS);
+      if (call.actorKey === "apify_linkedin_company_details") {
+        return Promise.resolve(((input.companies as string[]) ?? []).map((u) => {
+          const c = byUrl.get(u)!;
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount,
+            description: c.description, industries: c.industries, locations: c.locations };
+        }));
+      }
+      if (call.actorKey === "apify_linkedin_company_employees") {
+        const url = (input.companies as string[])[0];
+        return Promise.resolve([{ id: "p1", currentPositions: [{ title: "Founder & CEO", companyLinkedinUrl: url, current: true }] }]);
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+  };
+}
+
+async function run(over: Record<string, unknown> = {}) {
+  const sent: Sent[] = [];
+  const result = await runCapabilityPlan(deps(sent) as never, {
+    mission: MISSION, plan: GRAPH, maxCandidates: 10,
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+    specMode: "enforce", specScope: { workspace_id: "ws-p3", lineage_id: "lineage-p3" },
+    ...over,
+  } as never);
+  return { sent, result: result as never as {
+    state: Record<string, any>; companies: Array<Record<string, any>>; capability_outcomes: Array<Record<string, any>>;
+  } };
+}
+const byActor = (s: Sent[], a: string) => s.filter((x) => x.actor === a);
+
+// ── the actor, verified ─────────────────────────────────────────────────────
+
+Deno.test("the probe proves the contract: employer identity arrives on every job row", () => {
+  assertEquals(PROBE_ROWS.length, 10);
+  for (const r of PROBE_ROWS) {
+    const c = jobEmployerToCompany(r)!;
+    assert(c.linkedin_company_url?.startsWith("https://www.linkedin.com/company/"), String(r.id));
+    assert(c.canonical_domain, `${c.company_name}: domain`);
+    assert(typeof c.employee_count === "number", `${c.company_name}: exact headcount`);
+  }
+  assertEquals(PROBE.probes["harvestapi~linkedin-job-search"].chargedEventCounts, { job: 10, "actor-start": 1 });
+  const reasons = Object.fromEntries(PROBE_ROWS.map((r) => [(r.company as { name: string }).name, jobEmployerAgencyReason(r)]));
+  // The employer's OWN industry decides first — Scion's posting was tagged Software Development.
+  for (const n of ["Aquent", "Goodwin Recruiting", "Skill", "Scion Staffing"]) {
+    assertEquals(reasons[n], "employer_industry:Staffing and Recruiting", n);
+  }
+  for (const n of ["LinkedIn", "Entropy", "nothing else", "Bobyard", "Audicus", "Bevi"]) assertEquals(reasons[n], null, n);
+  // The fallbacks, each on its own.
+  assertEquals(jobEmployerAgencyReason({ title: "Growth Lead", company: { name: "Northwind Labs", industries: [] } }), null);
+  assertEquals(jobEmployerAgencyReason({ title: "Growth Lead", company: { name: "Northstar Recruiting", industries: [] } }), "employer_name_is_agency");
+  assertEquals(jobEmployerAgencyReason({ title: "Growth Marketer [AQ-18078]", company: { name: "Acme", industries: [] } }), "agency_requisition_code");
+  const card = hiringActorCard("apify_linkedin_job_search")!;
+  assert(card.purposes.includes("job_discovery") && card.purposes.includes("hiring_verification"));
+  assert(card.known_defects.some((d) => d.id === "job_search_agency_postings"));
+});
+
+Deno.test("the discovery compiler refuses company[], requires freshness and bounds the multiplier", () => {
+  assert(compileHarvestJobDiscoveryInput(GPT_JOB_INPUT as never).ok);
+  assertFalse(compileHarvestJobDiscoveryInput({ ...GPT_JOB_INPUT, company: ["https://www.linkedin.com/company/x"] } as never).ok);
+  assertFalse(compileHarvestJobDiscoveryInput({ ...GPT_JOB_INPUT, postedLimit: undefined } as never).ok);
+  assertFalse(compileHarvestJobDiscoveryInput({ ...GPT_JOB_INPUT, jobTitles: ["a", "b", "c", "d"] } as never).ok);
+  assertFalse(compileHarvestJobDiscoveryInput({ ...GPT_JOB_INPUT, maxItems: 500 } as never).ok);
+  assertEquals(registeredEngineFields("apify_linkedin_job_search", "discovery"), {}, "discovery input is the planner's alone");
+});
+
+Deno.test("posting language and team rows answer 'first in the function' deterministically", () => {
+  assertEquals(firstInFunctionPhrase(CANONICAL), "first growth marketer");
+  assert(firstHireLanguage(FIRST_HIRE_ROW));
+  assertEquals(PROBE_ROWS.filter((r) => firstHireLanguage(r)).length, 0);
+  const vocab = { required_titles: ["growth marketer"] };
+  assert(functionTitlesFor(vocab).includes("marketing"));
+  const url = "https://www.linkedin.com/company/acme";
+  assertEquals(teamFunctionMembers([{ currentPositions: [{ title: "Head of Marketing", companyLinkedinUrl: url, current: true }] }], url, vocab), ["Head of Marketing"]);
+  assertEquals(teamFunctionMembers([{ currentPositions: [{ title: "Head of Marketing", companyLinkedinUrl: "https://www.linkedin.com/company/other", current: true }] }], url, vocab), []);
+  assertEquals(teamFunctionMembers([{ currentPositions: [{ title: "CTO", companyLinkedinUrl: url, current: true }] }], url, vocab), []);
+});
+
+// ── the route ────────────────────────────────────────────────────────────────
+
+Deno.test("the canonical mission is hiring-led: V2 enters through job discovery, never YC-first", () => {
+  assert(hiringLedMission(MISSION));
+  assert(firstInFunctionRequested(MISSION), "the user's 'first growth marketer' is carried on the hiring requirement");
+  assertEquals(GRAPH.entry_capability, "job_discovery");
+  assertEquals(GRAPH.steps.map((s) => s.capability), ["job_discovery", "job_deduplication", "company_identity_resolution",
+    "company_enrichment", "hiring_verification", "company_brain_qualification", "persistence"]);
+  assertFalse(GRAPH.allowed_providers.includes("apify_yc_companies_memo23"));
+  assert(GRAPH.steps.find((s) => s.capability === "hiring_verification")!.providers.includes("apify_linkedin_company_employees"),
+    "team provider granted for THIS mission because it asked for a first hire");
+  assert(assessRequestFeasibility(MISSION, GRAPH, { executability: "enforce" }).ok);
+  assertEquals(buildCapabilityGraph(MISSION).entry_capability, "startup_company_discovery", "V1 plan unchanged");
+  // Without "first", no team provider is granted.
+  const plain = compileLeadMission({ originalUserQuery: "Find 1 B2B SaaS startup in the US hiring a growth marketer.", proposal }).final_mission;
+  const plainGraph = buildCapabilityGraph(plain, { executability: "enforce" });
+  assertEquals(plainGraph.entry_capability, "job_discovery");
+  assertFalse(plainGraph.allowed_providers.includes("apify_linkedin_company_employees"));
+});
+
+Deno.test("GPT is briefed with the hiring actor card and its discovery guidance, not the YC cards", () => {
+  const keys = authorisedActorKeys(buildExecutionPlannerPayload(MISSION, GRAPH, { brain: null }) as never);
+  assert(keys.includes("apify_linkedin_job_search"));
+  assertFalse(keys.includes("apify_yc_companies_memo23"));
+  const entry = discoveryCatalogBriefing().find((e) => e.actor_key === "apify_linkedin_job_search") as Record<string, any>;
+  assert(entry, "briefed for discovery");
+  assert(String(entry.input_strategy?.discovery_pattern ?? JSON.stringify(entry)).includes("JOB-FIRST"));
+});
+
+Deno.test("job discovery sends GPT's JSON exactly, takes identity from the rows and never runs Company Search", async () => {
+  const { sent, result } = await run();
+  const jobs = byActor(sent, "apify_linkedin_job_search");
+  assertEquals(jobs.length, 1, "one discovery call; no company-scoped re-search of the same employers");
+  assertEquals(canonicalJson(jobs[0].input), canonicalJson(GPT_JOB_INPUT), "sent == GPT's actor-native JSON");
+  assertEquals(canonicalJson(jobs[0].input), canonicalJson(jobs[0].spec!.serialized_input), "sent == spec");
+  assertFalse("company" in jobs[0].input);
+  const spec = jobs[0].spec as { purpose: string; provenance: Array<{ changed: boolean; changed_by: string; reason: string }>; route_id: string };
+  assertEquals(spec.purpose, "discovery");
+  assertEquals(spec.provenance.filter((p) => p.changed), [], "no field of GPT's discovery input was changed");
+  assertEquals(result.state.retrieval_plans[0].anchors.primary, "hiring");
+
+  assertEquals(byActor(sent, "apify_linkedin_company_search").length, 0, "every employer arrived identified");
+  assertEquals(byActor(sent, "apify_yc_companies_memo23").length, 0);
+  const keys = result.companies.map((c) => c.company.linkedin_company_url);
+  for (const agency of ["aquent", "goodwin-hospitality-and-recruiting", "skill-recruiting", "scion-staffing"]) {
+    assertFalse(keys.includes(`https://www.linkedin.com/company/${agency}`), `${agency} dropped before any paid stage`);
+  }
+  assertEquals(result.companies.length, 7, "6 non-agency probe employers + the first-hire employer");
+  const dropped = result.state.provider_attempts.find((a: { outcome: string }) => a.outcome === "rows_dropped");
+  assert(String(dropped?.reason).includes("staffing_agency"), JSON.stringify(dropped));
+  const dedup = result.capability_outcomes.find((o) => o.capability === "job_deduplication");
+  assertEquals(dedup?.status, "complete");
+});
+
+Deno.test("hiring verification buys nothing it holds; the team check runs only where the posting is silent", async () => {
+  const { sent, result } = await run();
+  const verificationSearches = byActor(sent, "apify_linkedin_job_search").filter((s) => "company" in s.input);
+  assertEquals(verificationSearches.length, 0);
+  const pipewise = result.companies.find((c) => c.company.linkedin_company_url === "https://www.linkedin.com/company/pipewise")!;
+  assertEquals(pipewise.first_in_function?.source, "job_posting", "the posting's own words settle it — no team call");
+  const team = byActor(sent, "apify_linkedin_company_employees");
+  assertFalse(team.some((t) => (t.input.companies as string[])[0] === "https://www.linkedin.com/company/pipewise"));
+  assertEquals(team.length, 2, "bounded to twice the requested count, and used");
+  const checked = team.map((t) => (t.input.companies as string[])[0]);
+  assertEquals(checked, ["https://www.linkedin.com/company/useentropy", "https://www.linkedin.com/company/audicus"],
+    "smallest shortlisted employers first (5, then 77 employees); Pipewise was settled by its posting");
+  const linkedin = result.companies.find((c) => c.company.linkedin_company_url === "https://www.linkedin.com/company/linkedin")!;
+  assertFalse(checked.includes("https://www.linkedin.com/company/linkedin"));
+  assert(linkedin.first_in_function === undefined || linkedin.first_in_function.source !== "team_composition");
+  for (const t of team) {
+    const c = result.companies.find((x) => x.company.linkedin_company_url === (t.input.companies as string[])[0])!;
+    assert(c.enriched, "team checks run on enriched (shortlisted) companies only");
+    assertEquals(c.first_in_function?.source, "team_composition");
+    assertEquals(canonicalJson(t.input), canonicalJson(t.spec!.serialized_input));
+    assert((t.spec as { provenance: Array<{ changed: boolean; reason: string }> }).provenance
+      .filter((p) => p.changed).every((p) => p.reason.length > 0), "every engine-set field is recorded with a reason");
+  }
+});
+
+Deno.test("companies found by the job search are never re-searched by paid hiring verification", () => {
+  // Every probe posting is a Tier A match for this vocabulary, so the paid
+  // path is unreachable in the engine test above; the guard is pinned here.
+  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  assert(src.includes("const toCheck = targets.filter((t) => !jobSourced(t));"));
+  const at = src.indexOf("const needsPaid:");
+  assert(src.slice(at, at + 200).includes("for (const c of toCheck) {"), "the paid loop iterates the filtered set");
+});
+
+Deno.test("a continuation does not repeat the discovery purchase", async () => {
+  const first = await run();
+  const second = await run({ state: first.result.state });
+  assertEquals(byActor(second.sent, "apify_linkedin_job_search").length, 0, JSON.stringify(second.sent.map((s) => s.actor)));
+  assertEquals(second.result.state.retrieval_plans.length, first.result.state.retrieval_plans.length);
+  const keys = second.result.state.spend_ledger.reservations
+    .filter((r: { status: string }) => r.status === "executed" || r.status === "settled")
+    .map((r: { idempotency_key: string }) => r.idempotency_key);
+  assertEquals(new Set(keys).size, keys.length, "no key bought twice");
+});
+

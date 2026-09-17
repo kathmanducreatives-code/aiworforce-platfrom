@@ -74,6 +74,10 @@ export const ENGINE_DRIVEN_CAPABILITIES: readonly CapabilityId[] = Object.freeze
   // Joined when the funding capability gained a provider that can keep its
   // claim. It runs through the same shared discovery stage as the two above.
   "funding_signal_discovery",
+  // Joined in P3: LinkedIn job search discovers employers with their LinkedIn
+  // page on the row; job rows are deduplicated as they are normalised.
+  "job_discovery",
+  "job_deduplication",
   // Joined when the engine learned to seed the companies a mission NAMES. It
   // is the one driven capability that buys nothing: its input arrived with the
   // mission, and every claim about the companies it seeds is still established

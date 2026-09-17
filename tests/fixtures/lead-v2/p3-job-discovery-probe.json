@@ -1,0 +1,3376 @@
+{
+ "note": "LEAD V2 P3 actor-audit probes, 2026-09-16. Capped runs on the worker's Apify account. Descriptions truncated to 2500 chars; logos removed.",
+ "probes": {
+  "harvestapi~linkedin-job-search": {
+   "run_id": "znAAkQcVqg6NtC7hk",
+   "status": "SUCCEEDED",
+   "usageTotalUsd": 0.011,
+   "chargedEventCounts": {
+    "job": 10,
+    "actor-start": 1
+   },
+   "input": {
+    "jobTitles": [
+     "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\""
+    ],
+    "locations": [
+     "United States"
+    ],
+    "postedLimit": "month",
+    "maxItems": 10,
+    "sortBy": "date"
+   },
+   "buildNumber": "0.0.60",
+   "finishedAt": "2026-09-16T15:22:35.912Z",
+   "items": [
+    {
+     "id": "4467942355",
+     "title": "Demand Generation Manager, Lead Gen",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4467942355/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T03:16:06.000Z",
+     "headerCaptionText": "LinkedIn\nSan Francisco, CA\n12 hours ago\nBe among the first 25 applicants\nSee who LinkedIn has hired for this role",
+     "descriptionText": "LinkedIn is the world's largest professional network, built to create economic opportunity for every member of the global workforce. Our products help people make powerful connections, discover exciting opportunities, build necessary skills, and gain valuable insights every day. We're also committed to providing transformational opportunities for our own employees by investing in their growth. We aspire to create a culture that's built on trust, care, inclusion, and fun \u2013 where everyone can succeed.\n\nJoin us to transform the way the world works.\n\n\n\nJob Description\n\nAt LinkedIn, our approach to flexible work is centered on trust and optimized for culture, connection, clarity, and the evolving needs of our business. The work location of this role is hybrid, meaning it will be performed both from home and from a LinkedIn office on select days, as determined by the business needs of the team. \n\nThis role will be based in San Francisco Bay Area or New York City.\n\nWe are looking for a performance-driven growth marketer to own the execution, optimization, and performance of scaled lead generation campaigns. This role is responsible for managing day-to-day campaign health across acquisition channels, identifying opportunities to improve efficiency and conversion, and leveraging data-driven insights to design new campaigns that can deliver revenue impact. \n\nAs a Lead Generation Manager, you will translate quarterly targets into channel execution plans, manage weekly lead volume performance, and drive test iterations to improve conversion across targeting strategy and creative materials. You\u2019ll partner closely with Product Marketing, Marketing Operations, and channel owners to leverage the right messaging, localization strategy, and ensure accurate tracking, targeting, and lead routing are in place for all new campaign launches. You will also partner closely with Sales and Sales Ops to ensure leads are qualified, prioritized, and converted effectively and analyze funnel performance to improve conversion rates and hit revenue targets. \n\nThis is an execution-focused role for someone who thrives in complex environments, managing multiple concurrent launches while maintaining strong attention to detail and delivering coordinated, cross-functional campaigns that drive measurable results.\n\nResponsibilities:\n\nOwn campaign execution and performance across scaled demand generation campaigns (e.g. email, LinkedIn), delivering against lead volume, SQOs, and revenue targets. Ma",
+     "location": {
+      "linkedinText": "San Francisco, CA",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "102277331",
+      "parsed": {
+       "text": "San Francisco, CA, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "California",
+       "city": "San Francisco"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "on_site",
+     "workRemoteAllowed": false,
+     "easyApplyUrl": "https://www.linkedin.com/job-apply/4467942355",
+     "applyMethod": {
+      "easyApplyUrl": "https://www.linkedin.com/job-apply/4467942355",
+      "companyApplyUrl": "https://jobs.smartrecruiters.com/LinkedIn3/744000149767555-demand-generation-manager-lead-gen-",
+      "unifyApplyEnabled": true,
+      "type": "ComplexOnsiteApply"
+     },
+     "applicants": 25,
+     "hiringTeam": [],
+     "company": {
+      "id": "1337",
+      "universalName": "linkedin",
+      "linkedinUrl": "https://www.linkedin.com/company/linkedin",
+      "name": "LinkedIn",
+      "website": "https://careers.linkedin.com",
+      "employeeCount": 23643,
+      "employeeCountRange": {
+       "start": 10001
+      },
+      "followerCount": 34347706,
+      "description": "Founded in 2003, LinkedIn connects the world's professionals to make them more productive and successful. With more than 1 billion members worldwide, including executives from every Fortune 500 company, LinkedIn is the world's largest professional network. The company has a diversified business model with revenue coming from Talent Solutions, Marketing Solutions, Sales Solutions and Premium Subscriptions products. Headquartered in Silicon Valley, LinkedIn has offices across the globe.",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "CA",
+        "city": "Sunnyvale",
+        "line1": "1000 W Maude",
+        "postalCode": "94085",
+        "headquarter": true,
+        "parsed": {
+         "text": "Sunnyvale, CA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "California",
+         "city": "Sunnyvale"
+        }
+       }
+      ],
+      "specialities": [
+       "Online Professional Network",
+       "Jobs",
+       "People Search",
+       "Company Search",
+       "Address Book",
+       "Advertising",
+       "Professional Identity",
+       "Group Collaboration",
+       "Recruiting"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Software Development",
+        "title": "Software Development",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1791417600&v=beta&t=DlpMwWZTL7CGt_HZizhDM1pXyV3z8yJZiauRcCsTwQQ",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_200_200/company-logo_200_200/0/1638831590218/linkedin_logo?e=1791417600&v=beta&t=vlbyzva5JlwThZXGrMwAOScmPCqDFVkSSMv31l9IqwE",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_100_100/company-logo_100_100/0/1638831590218/linkedin_logo?e=1791417600&v=beta&t=T7y1oag9bM2Jv-PJz4wjx9MtApLLu95dscvq5ddjkbU",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D4E3DAQG6NmOCKfmThw/image-scale_325_1920/B4EaAbfBUkKgAI-/0/1787167512119/linkedin_cover?e=1790179200&v=beta&t=ZZZFyDVfV4mY3-dQhpF229-3GuL619RSPvjSwd-dc6I",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQG6NmOCKfmThw/image-scale_325_1920/B4EaAbfBUkKgAI-/0/1787167512119/linkedin_cover?e=1790179200&v=beta&t=ZZZFyDVfV4mY3-dQhpF229-3GuL619RSPvjSwd-dc6I",
+        "width": 1510,
+        "height": 256
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQG6NmOCKfmThw/image-scale_191_1128/B4EaAbfBUkKgAY-/0/1787167512119/linkedin_cover?e=1790179200&v=beta&t=hfCje63siHKteavNv7vkFxo6r_0TF3VbX2ztXfRMYko",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQG6NmOCKfmThw/image-scale_127_750/B4EaAbfBUkKgAE-/0/1787167512120/linkedin_cover?e=1790179200&v=beta&t=9CjX19P15Tvb0K_6UYkwiPQ-GVQcYCiWNNlSYYYS1h0",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQG6NmOCKfmThw/image-scale_108_640/B4EaAbfBUkKgAM-/0/1787167512120/linkedin_cover?e=1790179200&v=beta&t=jdyzeosvf2I3aUwtA5TaLZD_qPh-cyT2iflBo2JQYXk",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MRKT"
+     ],
+     "industries": [
+      "Technology, Information and Internet"
+     ],
+     "experienceLevel": "Mid-Senior level",
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2027-03-15T03:05:26.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": "SmartRecruiters",
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4465979568",
+     "title": "Senior Demand Generation Manager [AQ-18078]",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4465979568/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T11:24:40.000Z",
+     "headerCaptionText": "Aquent\nAlpharetta, GA\n3 hours ago\nBe among the first 25 applicants\nSee who Aquent has hired for this role",
+     "descriptionText": "Aquent is partnering with a pioneering technology company that is revolutionizing how businesses manage their data. This organization is at the forefront of innovation, dedicated to delivering cutting-edge solutions that empower clients to achieve unparalleled operational efficiency and strategic insight. By joining this team, you will play a pivotal role in driving revenue outcomes and shaping the future of AI-enabled marketing within a dynamic and collaborative environment, making a tangible impact on global growth and strategic partnerships.\n\nWe are seeking a visionary leader to take the helm of our global demand generation efforts. This is an extraordinary opportunity to build, optimize, and scale a revenue-focused demand engine from the ground up. As a senior individual contributor, you will be instrumental in developing and executing strategies that directly contribute to pipeline and revenue goals, influencing cross-functional teams without direct authority. You\u2019ll be at the forefront of integrating AI into marketing workflows, forging critical partnerships, and delivering actionable intelligence that empowers our sales teams. Your work will directly impact our market presence, customer acquisition, and overall business success, particularly in expanding our strategic alliance with a major cloud provider.\n\nKey Responsibilities\n\nDevelop and execute the global demand generation plan, meticulously aligning it with pipeline and revenue objectives.Own quarterly pipeline contribution targets, continuously optimizing performance across various channels and programs.Manage global advertising and digital marketing budgets, making data-driven investment decisions to maximize ROI.Strategically improve inbound lead quality, conversion rates, and cost per opportunity.Oversee the global integrated campaign calendar and campaign strategy, ensuring cohesive and impactful execution.Design and launch campaigns tailored to target audiences, buyer journey stages, key performance indicators (KPIs), and pipeline objectives.Collaborate closely with product marketing to translate positioning into highly effective demand programs.Develop, test, and optimize nurture strategies to guide prospects through the sales funnel.Manage and refine the company\u2019s propensity model for intelligent account and lead prioritization.Provide sales and business development teams with actionable account intelligence, including intent signals, technographic data, and trigger-event alerts.Measure ",
+     "location": {
+      "linkedinText": "Alpharetta, GA",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "101256529",
+      "parsed": {
+       "text": "Alpharetta, GA, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Georgia",
+       "city": "Alpharetta"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "hybrid",
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "type": "SimpleOnsiteApply",
+      "unifyApplyEnabled": true
+     },
+     "applicants": 25,
+     "hiringTeam": [
+      {
+       "linkedinUrl": "https://www.linkedin.com/in/lesean-burren-16830a193",
+       "name": "LeSean Burren",
+       "position": "Direct Hire Consultant ( Executive Recruiter) at Aquent"
+      }
+     ],
+     "company": {
+      "id": "4433",
+      "universalName": "aquent",
+      "linkedinUrl": "https://www.linkedin.com/company/aquent",
+      "name": "Aquent",
+      "website": "http://www.aquent.com",
+      "employeeCount": 4192,
+      "employeeCountRange": {
+       "start": 10001
+      },
+      "followerCount": 1211998,
+      "description": "We are the leading global creative staffing company, with more than 40 years of experience connecting businesses with the elite talent they need to excel. We combine that expertise with proprietary recruiting technology and a genuine commitment to the people we place. Because when the right people find the right work, everyone wins.\n\nOur brands include Skill, Aquent Studios, Aquent RoboHead, and Aquent Scout. Based in the U.S. with locations in Australia, Canada, France, Germany, Japan, Netherlands, and the U.K., we are positioned to deliver the solutions you need to unlock your global potential. \n\nLearn more at aquent.com.",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "MA",
+        "city": "Boston",
+        "line1": "501 Boylston St",
+        "line2": "Third Floor",
+        "postalCode": "02116",
+        "headquarter": true,
+        "parsed": {
+         "text": "Boston, MA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "Massachusetts",
+         "city": "Boston"
+        }
+       }
+      ],
+      "specialities": [
+       "Employer of Record Services",
+       "Digital Marketing",
+       "Graphic Design",
+       "Freelance Recruitment",
+       "Extended Workforce Services",
+       "Marketing Talent",
+       "Creative Talent",
+       "Marketing Staffing",
+       "Creative Staffing",
+       "Web Development",
+       "Staffing",
+       "Web Development Staffing",
+       "UX Staffing",
+       "Professional Development",
+       "Content Marketing",
+       "Creative Studio",
+       "UI Staffing",
+       "UI",
+       "UX",
+       "Web Development Staffing",
+       "Project Management Cloud Solution"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Staffing and Recruiting",
+        "title": "Staffing and Recruiting",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFekmR3Dor5PA/company-logo_400_400/company-logo_400_400/0/1630458942051/aquent_logo?e=1791417600&v=beta&t=hi1SjbjfTsNXX249UVvfYpKRlac0I0ywVurtp17Lzok",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFekmR3Dor5PA/company-logo_200_200/company-logo_200_200/0/1630458942050/aquent_logo?e=1791417600&v=beta&t=GVfetBGr2rd6MRYgI4tJNaf5EelpF-q8rJz_3AnjKwg",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFekmR3Dor5PA/company-logo_100_100/company-logo_100_100/0/1630458942051/aquent_logo?e=1791417600&v=beta&t=0UgOpql5Jw7heKY1flkauaouCiTZRxsnbx1U41X5iPU",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D4E3DAQHZ5jsyyzgs2Q/image-scale_191_1128/B4EZ7L7DWgHMAU-/0/1781537715898/aquent_cover?e=1790179200&v=beta&t=gy5cukKUP20IOirzWUb8KpSWgAUhJaq8jdOzJ9EoZlY",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHZ5jsyyzgs2Q/image-scale_191_1128/B4EZ7L7DWgHMAU-/0/1781537715898/aquent_cover?e=1790179200&v=beta&t=gy5cukKUP20IOirzWUb8KpSWgAUhJaq8jdOzJ9EoZlY",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHZ5jsyyzgs2Q/image-scale_127_750/B4EZ7L7DWgHMAE-/0/1781537715898/aquent_cover?e=1790179200&v=beta&t=rsIn2MKoJSSYbZpBa7dElU4b0Uf67buujjAmnD4EBEk",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHZ5jsyyzgs2Q/image-scale_108_640/B4EZ7L7DWgHMAI-/0/1781537715898/aquent_cover?e=1790179200&v=beta&t=0eR2JzM4UHcbjmBRiAUPpcGip6IuGJ6VX1k1RnLP8Kg",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": "100,000 - 110,000 USD",
+      "min": 100000,
+      "max": 110000,
+      "currency": "USD",
+      "payPeriod": "YEARLY",
+      "compensationType": "BASE_SALARY",
+      "compensationSource": "JOB_POSTER_PROVIDED",
+      "providedByEmployer": true
+     },
+     "jobFunctions": [
+      "MRKT",
+      "MGMT",
+      "STRA"
+     ],
+     "industries": [
+      "Staffing and Recruiting"
+     ],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2026-10-16T11:24:40.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4448572948",
+     "title": "Demand Generation Manager, SaaS:: Great Opportunity! JN -082026-179498",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4448572948/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-15T21:31:40.000Z",
+     "headerCaptionText": "Goodwin Recruiting\nNorthville, MI\n17 hours ago\nBe among the first 25 applicants\nSee who Goodwin Recruiting has hired for this role",
+     "descriptionText": "To Apply for this Job Click Here\n\nAn established and growing Accounting Technology firm is looking for a DEMAND GENERATION MANAGER to join the team and make an immediate impact by executing integrated campaigns in the GTM space with a focus on marketing technology and automation.\n\nThe ideal DEMAND GENERATION MANAGER will bring 4+ years of experience in SaaS B2B marketing tech, the ability to work independently to execute campaigns, and a passion for marketing technology.\n\nThis is a hybrid role, 4 days are expected in office.\n\nDemand Generation Manager Responsibilities\n\nTake ownership for the execution of demand generation campaigns across multiple channels in a collaborative environment. Oversee lead forecasting, paid media, and additional multi-channel marketing programs.Manage & improve marketing tech stack.\n\nDemand Generation Manager Requirements\n\nBachelor degree and 7+ years of B2B SaaS marketing experience.Proficiency in marketing technology, particularly automation platforms to include Marekto, Pardot, & HubSpot. Ai experience a major plus.Proven collaborative project management experience.\n\nDemand Generation Manager Salary & Benefits\n\nCompetitive salary.Excellent benefits.Growth potential.\n\nJOB ID: 179498 #post\n\nJohn Broker\n\nTo Apply for this Job Click Here\n\n, $70,000 - $80,000,\n\n",
+     "location": {
+      "linkedinText": "Northville, MI",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "106888384",
+      "parsed": {
+       "text": "Northville, MI, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Michigan",
+       "city": "Northville"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": null,
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "type": "SimpleOnsiteApply",
+      "unifyApplyEnabled": true
+     },
+     "applicants": 25,
+     "hiringTeam": [
+      {
+       "linkedinUrl": "https://www.linkedin.com/in/johnbroker",
+       "name": "John Broker",
+       "position": "Senior Recruiter - Specialty Division"
+      }
+     ],
+     "company": {
+      "id": "74985",
+      "universalName": "goodwin-hospitality-and-recruiting",
+      "linkedinUrl": "https://www.linkedin.com/company/goodwin-hospitality-and-recruiting",
+      "name": "Goodwin Recruiting",
+      "website": "http://goodwinrecruiting.com",
+      "employeeCount": 428,
+      "employeeCountRange": {
+       "start": 201,
+       "end": 500
+      },
+      "followerCount": 330102,
+      "description": "Goodwin Recruiting (Forbes America's Best Recruiting Firms since 2020) has been connecting top talent with amazing opportunities since 1999. Our expert team brings hands-on experience to every search, helping clients and candidates thrive. We\u2019re all about building meaningful, long-lasting partnerships - one successful match at a time.\n\nJust as a great recipe creates a memorable meal, our Core Values are the RECIPE that allow us to consistently deliver a world-class experience:\n\u2022 R: Relentless Improvement\n\u2022 E: Excellence\n\u2022 C: Creator of Your Own Success\n\u2022 I: Integrity\n\u2022 P: People First\n\u2022 E: Empowering\n\nOUR PROMISE\n\u2022  To promptly return calls and communicate with you during each step of the process\n\u2022  To listen, understand, and communicate openly, honestly, and with complete candor at all ti",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "New Hampshire",
+        "city": "Exeter",
+        "line1": "4 Center St",
+        "postalCode": "03833",
+        "headquarter": true,
+        "parsed": {
+         "text": "Exeter, NH, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "New Hampshire",
+         "city": "Exeter"
+        }
+       }
+      ],
+      "specialities": [
+       "Hospitality Recruiting",
+       "Accounting Recruiting",
+       "Finance Recruiting",
+       "Executive Recruiting",
+       "Medical Recruiting",
+       "Healthcare Recruiting",
+       "Manufacturing Recruiting",
+       "Engineering Recruiting",
+       "Hotel Recruiting",
+       "Restaurant Management Recruiting",
+       "Senior Living Recruiting",
+       "Industrial Recruiting",
+       "IT Recruiting",
+       "Construction Recruiting",
+       "Private Equity Recruiting",
+       "Government Recruiting",
+       "Marketing Recruiting",
+       "Sales Recruiting",
+       "Retained Search",
+       "Legal Recruiting"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Staffing and Recruiting",
+        "title": "Staffing and Recruiting",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEWdZhPfweRuA/company-logo_400_400/company-logo_400_400/0/1674141908701/goodwin_hospitality_and_recruiting_logo?e=1791417600&v=beta&t=s8RNOMhha9LlzQdXRbrj32Ta4LRBpjAqb4pyKY_aGTo",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEWdZhPfweRuA/company-logo_200_200/company-logo_200_200/0/1674141908701/goodwin_hospitality_and_recruiting_logo?e=1791417600&v=beta&t=ktTsNnbZIwuKWcm_jUH9Q1H1J-mx6ZPNMovZqcYdZHw",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEWdZhPfweRuA/company-logo_100_100/company-logo_100_100/0/1674141908701/goodwin_hospitality_and_recruiting_logo?e=1791417600&v=beta&t=5QyVaeGLNADNfUYI4ja-MVTSWN0SkhEf7A6gAL0JEX4",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D563DAQGvz-Y4DrJu7A/image-scale_191_1128/B56Z5HVSY6GoAU-/0/1779313223493/goodwin_hospitality_and_recruiting_cover?e=1790179200&v=beta&t=dyr4IkEogCkgeci2T1uRt_Tm_sbEHEzO3hL51T7bdqo",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQGvz-Y4DrJu7A/image-scale_191_1128/B56Z5HVSY6GoAU-/0/1779313223493/goodwin_hospitality_and_recruiting_cover?e=1790179200&v=beta&t=dyr4IkEogCkgeci2T1uRt_Tm_sbEHEzO3hL51T7bdqo",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQGvz-Y4DrJu7A/image-scale_127_750/B56Z5HVSY6GoAE-/0/1779313223493/goodwin_hospitality_and_recruiting_cover?e=1790179200&v=beta&t=pLlBfmm4o3SGMX-8lbKYgMpwSQAUhEWzaJgnf7zlmG8",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQGvz-Y4DrJu7A/image-scale_108_640/B56Z5HVSY6GoAI-/0/1779313223493/goodwin_hospitality_and_recruiting_cover?e=1790179200&v=beta&t=QUuV5JwI8d5xrvqkMHZRfOkOQw1C2sG08pEYDiffIl8",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MGMT"
+     ],
+     "industries": [
+      "Staffing and Recruiting"
+     ],
+     "experienceLevel": "Mid-Senior level",
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2026-10-15T21:31:40.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4466207021",
+     "title": "Head of Growth / Head of Marketing",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4466207021/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T14:11:00.000Z",
+     "headerCaptionText": "Entropy\nUnited States\n1 hour ago\nBe among the first 25 applicants\nSee who Entropy has hired for this role",
+     "descriptionText": "About Entropy is an operating firm serving investors, ventures and policymakers in complex markets. Funds, founders, and ministries bring us deals to structure, assets to fix, and reforms to align with the market.\nEntropy's work spans investment operations, venture development, and policy delivery, including due diligence, structuring, turnarounds, pilots, and regulatory design. In addition to the operational practice, Entropy Studio builds and operates ventures aligned with its thesis based on market demand and insights gathered from hands on operations.\nRole DescriptionThis is a remote role for a senior Commercial/Marketing leader managing growth delivery for Entropy clients and studio ventures, with budget authority and a ownership of the numbers.\nThe role covers acquisition, conversion, retention, and measurement across several companies, and builds the method Entropy reuses. Compensation is a base salary plus performance compensation tied to the accounts you carry, with equity participation in the ventures you help build.\nResponsibilitiesOwn acquisition across paid, organic, partner, and outbound channels, with budget authority on your accounts.Run conversion and retention work, including onboarding, activation, lifecycle messaging, and the pricing and packaging tests that move revenue.Build the measurement layer: tracking that survives an audit, attribution that survives scrutiny, and reporting a board reads without translation.Leave each company a system it can run without us, including playbooks, dashboards, and the hiring spec for the team that inherits it.Support studio ventures and portfolio companies on go-to-market at formation.\nQualifications5+ years or more in growth, performance marketing, or revenue operations, including a head of growth seat or the equivalent. You understand how the whole funnel connects.Direct ownership of a significant paid budgets, with the ability to defend every line of it against contribution and margin. You understand the difference between spend and return.Hands-on capability across ad platforms, analytics, and lifecycle tools. You understand and build the tracking needed to make decisions.Experience in markets where channel costs, payments, and consumer behaviour differ from the Western defaults or products that require customized and innovative positioning. You have a command of a broader growth toolkit (not just ads) to create custom solutions and understand that playbooks are not one-size-fits-all.Capacity to ",
+     "location": {
+      "linkedinText": "United States",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "103644278",
+      "parsed": {
+       "text": "United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America"
+      }
+     },
+     "employmentType": "part_time",
+     "workplaceType": "remote",
+     "workRemoteAllowed": true,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "type": "SimpleOnsiteApply",
+      "unifyApplyEnabled": true
+     },
+     "applicants": 25,
+     "hiringTeam": [],
+     "company": {
+      "id": "105583996",
+      "universalName": "useentropy",
+      "linkedinUrl": "https://www.linkedin.com/company/useentropy",
+      "name": "Entropy",
+      "website": "useentropy.com",
+      "employeeCount": 5,
+      "employeeCountRange": {
+       "start": 11,
+       "end": 50
+      },
+      "followerCount": 2552,
+      "description": "Entropy is an operating firm for ventures, investors & policymakers in complex markets. We believe the most influential businesses do not just capture value, they build infrastructure that enables markets to create value. We build the businesses & secure the institutional alignment that makes it possible.\n\nWhat We Do\n\nInvestment Operations\nWe work with investors & funds deploying into MENA, Asia & Africa. Our work covers due diligence, vehicle structuring & special situations in complex environments. When a portfolio company needs lift, we step in as fractional operators leading turnarounds & transformation.\n\nVenture Development\nWe co-build & scale ventures alongside founders. We validate business models, design & run pilots, & build strategic partnerships. We tune unit economics, sharpen ",
+      "locations": [
+       {
+        "country": "CY",
+        "city": "Nicosia",
+        "line1": "1 Methonis",
+        "postalCode": "1070",
+        "headquarter": true,
+        "parsed": {
+         "text": "Nicosia, Cyprus",
+         "countryCode": "CY",
+         "regionCode": null,
+         "country": "Cyprus",
+         "countryFull": "Cyprus",
+         "state": "Nicosia District (Lefko\u015fa)",
+         "city": "Nicosia"
+        }
+       }
+      ],
+      "specialities": [
+       "business strategy",
+       "emerging markets",
+       "marketing",
+       "business planning",
+       "process improvement",
+       "data analytics",
+       "investment management",
+       "risk mitigation",
+       "go-to-market",
+       "scale up",
+       "revenue optimization",
+       "cost optimization",
+       "public relations & branding",
+       "sales strategy",
+       "operations management",
+       "project management",
+       "product management",
+       "venture capital",
+       "investment structuring",
+       "investment readiness",
+       "creative structuring",
+       "policy design",
+       "governance frameworks",
+       "political advisory"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Business Consulting and Services",
+        "title": "Business Consulting and Services",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQEa45EKsXdPfA/company-logo_400_400/B56ZnDUvx5HUAY-/0/1759918620871/useentropy_logo?e=1791417600&v=beta&t=n0mfEwVrYQeduuPwxGqaBRlPVuyf__9LFATXBH57RAM",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQEa45EKsXdPfA/company-logo_200_200/B56ZnDUvx5HUAI-/0/1759918620871/useentropy_logo?e=1791417600&v=beta&t=aKIkgTzivCsmccS8GglW6M_eOPkKYg3DyFaCO_9dJGs",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQEa45EKsXdPfA/company-logo_100_100/B56ZnDUvx5HUAQ-/0/1759918620871/useentropy_logo?e=1791417600&v=beta&t=EvO3400bkt2SpaQ7sMgPrwCRApnXpd37IF4oNjl4rcA",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D563DAQFlq3ghBZ6gcQ/image-scale_191_1128/B56ZjG.1drHkAk-/0/1755685019464/useentropy_cover?e=1790179200&v=beta&t=vNjNcdg14NYUX6vbDOpuBWCSwdP0FgPbGPlegPbZtVk",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQFlq3ghBZ6gcQ/image-scale_191_1128/B56ZjG.1drHkAk-/0/1755685019464/useentropy_cover?e=1790179200&v=beta&t=vNjNcdg14NYUX6vbDOpuBWCSwdP0FgPbGPlegPbZtVk",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQFlq3ghBZ6gcQ/image-scale_127_750/B56ZjG.1drHkAU-/0/1755685019464/useentropy_cover?e=1790179200&v=beta&t=FF50joVN97dj13a1Kgave6LjObORvw9c6rht8DaqStQ",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQFlq3ghBZ6gcQ/image-scale_108_640/B56ZjG.1drHkAY-/0/1755685019464/useentropy_cover?e=1790179200&v=beta&t=pAaVEdgszwxctLdFLvhyvWHhCy_nRRX9wwRFNmh9Xe4",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MRKT",
+      "SALE"
+     ],
+     "industries": [],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2027-03-15T14:11:00.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4466517504",
+     "title": "Growth Marketing Manager",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4466517504/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T01:54:47.000Z",
+     "headerCaptionText": "nothing else\nMiami, FL\n13 hours ago\nBe among the first 25 applicants\nSee who nothing else has hired for this role",
+     "descriptionText": "Role: Growth Marketing Manager (Meta Ads Specialist)Hours: Part-time, 10 hours per weekLocation: RemoteCompensation: $1,500-$2,500 retainer per month, depending on experience.\nAbout Us (www.thenothingelse.com):nothing else is a one-year-old skincare brand on a mission to eliminate water and synthetic preservatives from daily personal care. After establishing retail presence and organic momentum in year one, we are now ready to scale our online paid ads.\nThe Role:You will work directly with the founder as our Meta Ads Specialist to own, optimize, and scale our paid social spend. Your sole focus is building a highly profitable, scalable customer acquisition engine in Meta Ads Manager.\nWhat You\u2019ll Do:Campaign Architecture & ScalingDaily/Weekly Account OptimizationCreative Feedback & Direction\nRequirements:4+ years of hands-on Meta Ads experience, specifically running and scaling campaigns for physical product/e-commerce brands.Track record of scaling ad spend in the $5k\u2013$50k+/month range while maintaining target CPA and profitability.Expert in modern Meta mechanics and e-commerce dataBased in the USA\nHow to ApplySend an email to ben@thenothingelse.com",
+     "location": {
+      "linkedinText": "Miami, FL",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "102394087",
+      "parsed": {
+       "text": "Miami, FL, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Florida",
+       "city": "Miami"
+      }
+     },
+     "employmentType": "part_time",
+     "workplaceType": "remote",
+     "workRemoteAllowed": true,
+     "easyApplyUrl": "https://www.linkedin.com/job-apply/4466517504",
+     "applyMethod": {
+      "unifyApplyEnabled": true,
+      "easyApplyUrl": "https://www.linkedin.com/job-apply/4466517504",
+      "type": "ComplexOnsiteApply"
+     },
+     "applicants": 25,
+     "hiringTeam": [],
+     "company": {
+      "id": "104120391",
+      "universalName": "thenothingelse",
+      "linkedinUrl": "https://www.linkedin.com/company/thenothingelse",
+      "name": "nothing else",
+      "website": "thenothingelse.com",
+      "employeeCount": 197,
+      "employeeCountRange": {
+       "start": 0,
+       "end": 1
+      },
+      "followerCount": 6117,
+      "description": "Nothing Else is a sensitive skincare brand specializing in waterless products with plant-based preservatives. \n\nWe are the world's first skincare company with a Bitcoin Reserve. ",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "California",
+        "city": "San Diego",
+        "postalCode": "07960",
+        "headquarter": true,
+        "parsed": {
+         "text": "San Diego, CA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "California",
+         "city": "San Diego"
+        }
+       }
+      ],
+      "specialities": [
+       "skincare",
+       "haircare",
+       "sensitive skin",
+       "rosemary extract"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Retail",
+        "title": "Retail",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFAuwGJt9wNnQ/company-logo_400_400/company-logo_400_400/0/1722530621841?e=1791417600&v=beta&t=Hd1aPBioC5gFhLb-pLkZIWoaBRjW288RhPvJN4b4Vw4",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFAuwGJt9wNnQ/company-logo_200_200/company-logo_200_200/0/1722530621841?e=1791417600&v=beta&t=YtPbxGGAbu1UncRabolF3pEiaNWuZJ0nacLBAlaG-Q8",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFAuwGJt9wNnQ/company-logo_100_100/company-logo_100_100/0/1722530621841?e=1791417600&v=beta&t=Nm3KjJjs6GK6dfI0C_D3VhBVdxs5LeSeoWbU4KravZ0",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MRKT",
+      "SALE"
+     ],
+     "industries": [],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2027-03-15T01:54:47.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": "LinkedIn",
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4457021389",
+     "title": "Demand Generation Manager",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4457021389/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-15T22:02:05.000Z",
+     "headerCaptionText": "Bobyard\nSan Francisco, CA\n17 hours ago\n45 applicants\nSee who Bobyard has hired for this role",
+     "descriptionText": "About Bobyard\n\nConstruction is a trillion industry still running on manual work. Contractors measure and count materials off drawings by hand \u2014 it takes forever, and it caps how many jobs they can bid. Bobyard uses AI to automate takeoffs and estimates, cutting takeoff time by 50\u201390% and letting contractors send more bids. We're Series A, backed by 8VC, Primary, and Pear, and growing uncomfortably fast.\n\nAbout The Role\n\nMarketing at Bobyard has real channels \u2014 paid, content, social, events, partnerships \u2014 and real early traction. What it doesn't have yet is one person turning those channels into a coordinated pipeline machine instead of five separate efforts competing for the same creative resources. That's this role. You'll own the strategy and channel mix, and you'll be judged the same way we are internally: on marketing-sourced pipeline dollars.\n\nWhat You'll Do\n\nOwn the marketing-sourced pipeline number and report on it weekly against targetPlan and run integrated campaigns across paid, content, and events \u2014 set the audience, the goal, and the channel mix for each cycleBrief content, paid, and events teams so campaigns are planned together instead of competing for the same creative resources in real timeOwn MQL-to-SQO conversion tracking and work with Sales to keep speed-to-lead tight on high-intent leadsPartner with our GTM engineer on lead routing and attribution accuracy \u2014 you don't own the automation stack, but you live in itDefine nurture strategy \u2014 audience, stages, messaging, exit criteriaIdentify and pitch new channels worth testing, backed by a real case for why\n\nWhat We're Looking For\n\n4+ years running B2B demand generation with a pipeline dollar number you personally owned and can talk through in detailStrong analytical instincts \u2014 you know your numbers cold and adjust budget based on what's converting, not what you planned three weeks agoA track record of working directly with Sales on lead handoff, routing, and conversionComfortable partnering with channel leads and marketing ops/automationReal experience running multi-channel campaigns\n\nNice to have\n\nB2B SaaS experience selling into a non-technical or trades-adjacent buyerExperience at a founder-led or early-stage company where you had to build the playbook, not inherit oneFamiliarity with HubSpot or similar\n\nWhat We Offer\n\n$115K\u2013$135K base + variable comp tied to quarterly pipeline targets + meaningful early-stage equity (4-year vest, 1-year cliff)A real number to own, and the room to bui",
+     "location": {
+      "linkedinText": "San Francisco, CA",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "102277331",
+      "parsed": {
+       "text": "San Francisco, CA, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "California",
+       "city": "San Francisco"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "on_site",
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "companyApplyUrl": "https://jobs.ashbyhq.com/bobyard/0e798e93-474d-484e-869b-35d0ac876f76/application?utm_source=LinkedinAutomatedPostings",
+      "applyStartersPreferenceVoid": false,
+      "inPageOffsiteApply": false,
+      "type": "OffsiteApply"
+     },
+     "applicants": 45,
+     "hiringTeam": [],
+     "company": {
+      "id": "99035003",
+      "universalName": "bobyard",
+      "linkedinUrl": "https://www.linkedin.com/company/bobyard",
+      "name": "Bobyard",
+      "website": "https://www.bobyard.com/",
+      "employeeCount": 104,
+      "employeeCountRange": {
+       "start": 51,
+       "end": 200
+      },
+      "followerCount": 4517,
+      "description": "Bobyard is the AI infrastructure for the construction trades. Founded in 2023 by Michael Ding, a Stanford-trained engineer, we're a San Francisco-based company building custom AI models for construction trades to reduce weeks of manual takeoff and estimating work into minutes so contractors can grow their business with more bids, not more overhead.\n\nBacked by the largest Series A in construction software history, Bobyard has become the platform of choice for leading commercial contractors and outfits of all sizes across the United States. We're closing a 50-year productivity gap in American construction and building the AI layer the trades have been waiting for.",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "California",
+        "city": "San Francisco",
+        "line1": "101 2nd St",
+        "postalCode": "94105",
+        "headquarter": true,
+        "parsed": {
+         "text": "San Francisco, CA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "California",
+         "city": "San Francisco"
+        }
+       }
+      ],
+      "specialities": [
+       "AI",
+       "Computer Vision"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Software Development",
+        "title": "Software Development",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFbISr07HCKpw/company-logo_400_400/B56Z6KcpAEKMAY-/0/1780439224543/bobyard_logo?e=1791417600&v=beta&t=cJkD9acql_xGBQAZ3nzTjXvd89gpuf8QJFokVNPNgKU",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFbISr07HCKpw/company-logo_200_200/B56Z6KcpAEKMAI-/0/1780439224543/bobyard_logo?e=1791417600&v=beta&t=smwNqYrE8SB42XTRsJUxaH7Qz4_xlwG49RqswV9L0mE",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D560BAQFbISr07HCKpw/company-logo_100_100/B56Z6KcpAEKMAM-/0/1780439224543/bobyard_logo?e=1791417600&v=beta&t=ABMhG-69_3HnN9_SwaV_glFo2Sij_f0TvafKawkWbU0",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D563DAQHo9uVpSain6A/image-scale_191_1128/B56Z6KarjEGgAY-/0/1780438711070/bobyard_cover?e=1790179200&v=beta&t=SSY6Bz2afBS0BWTganGMf4huWjDeMGM7gevDCij2Oeg",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQHo9uVpSain6A/image-scale_191_1128/B56Z6KarjEGgAY-/0/1780438711070/bobyard_cover?e=1790179200&v=beta&t=SSY6Bz2afBS0BWTganGMf4huWjDeMGM7gevDCij2Oeg",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQHo9uVpSain6A/image-scale_127_750/B56Z6KarjEGgAI-/0/1780438711070/bobyard_cover?e=1790179200&v=beta&t=3OYb3kyiaJYSMPNNB62_X6cVG0RNcMCbNhvl3s0NElk",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQHo9uVpSain6A/image-scale_108_640/B56Z6KarjEGgAM-/0/1780438711070/bobyard_cover?e=1790179200&v=beta&t=68jZcd-sVenkMVWeT60oFBg87VknmBeacIRERGykBvk",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": "115,000 - 135,000 USD",
+      "min": 115000,
+      "max": 135000,
+      "currency": "USD",
+      "payPeriod": "YEARLY",
+      "compensationType": "BASE_SALARY",
+      "compensationSource": "JOB_POSTER_PROVIDED",
+      "providedByEmployer": true
+     },
+     "jobFunctions": [
+      "MRKT",
+      "SALE"
+     ],
+     "industries": [
+      "Technology, Information and Internet"
+     ],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2026-10-15T22:02:05.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4465977590",
+     "title": "Growth Marketing Manager [SK-18057]",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4465977590/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T11:24:40.000Z",
+     "headerCaptionText": "Skill\nDallas, TX\n3 hours ago\nBe among the first 25 applicants\nSee who Skill has hired for this role",
+     "descriptionText": "Are you ready to be a creative powerhouse, driving measurable results and making a tangible difference in market presence and user base? Partnering with Aquent, we are seeking a visionary leader to join a dynamic team at a rapidly growing company at the forefront of financial innovation. This is your chance to significantly influence the marketing trajectory, driving impactful creative strategies that directly contribute to user growth and retention, making a profound impact on the future of consumer finance.\n\nAbout The Company\n\nThis leading company is revolutionizing how consumers manage their money, earn rewards, and engage with digital finance. Their mission is to create intuitive and impactful financial experiences that empower users. They thrive on creativity, data, and continuous innovation, shaping the future of consumer financial services through cutting-edge strategies and a commitment to measurable growth.\n\nThe Opportunity\n\nThis is an exhilarating opportunity to be instrumental in developing and executing campaigns that capture attention, explain complex offerings simply, and motivate action across a wide array of digital platforms. You will directly shape how products are perceived and adopted, continuously generating new ideas, rigorously testing them, learning from performance data, and transforming those insights into increasingly effective creative strategies, directly impacting user growth and engagement. Your work will directly contribute to expanding the user base and enhancing market presence.\n\nKey Responsibilities\n\nDevelop creative concepts for Meta, Google, YouTube, TikTok, Apple Search Ads, and other paid and organic channels.Create strong hooks, headlines, offers, scripts, and campaign angles that drive performance.Develop concepts for static ads, short-form videos, user-generated content (UGC), landing pages, and social content.Research competitors, market trends, customer pain points, and winning creative strategies to inform your work.Collaborate closely with graphic designers, video editors, content creators, and the broader marketing team.Translate complex marketing offers into simple, easy-to-understand creative concepts.Review advertising performance data and identify which hooks, messages, and creative styles are most effective.Build new creative variations and iterate on top-performing hooks based on performance data.Help create and manage a structured creative testing strategy to optimize campaigns.Stay ahead of trends acro",
+     "location": {
+      "linkedinText": "Dallas, TX",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "103312888",
+      "parsed": {
+       "text": "Dallas, TX, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Texas",
+       "city": "Dallas"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "remote",
+     "workRemoteAllowed": true,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "type": "SimpleOnsiteApply",
+      "unifyApplyEnabled": true
+     },
+     "applicants": 25,
+     "hiringTeam": [],
+     "company": {
+      "id": "106411312",
+      "universalName": "skill-recruiting",
+      "linkedinUrl": "https://www.linkedin.com/company/skill-recruiting",
+      "name": "Skill",
+      "website": "www.skill.com",
+      "employeeCount": 35,
+      "employeeCountRange": {
+       "start": 501,
+       "end": 1000
+      },
+      "followerCount": 29127,
+      "description": "Skill is a recruiting technology company that operates an integrated, full-service staffing business. Purpose-built for the complexity of the enterprise, our technology is designed to power our own high-volume operations. Developed to work seamlessly with our patented AI and agentic recruiting software, our unique capabilities deliver the best of both worlds\u2014the efficiency and scale of a technology platform, combined with the expertise of a premier staffing partner.",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "Massachusetts",
+        "city": "Boston",
+        "line1": "501 Boylston St",
+        "line2": "Third Floor",
+        "postalCode": "02116",
+        "headquarter": true,
+        "parsed": {
+         "text": "Boston, MA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "Massachusetts",
+         "city": "Boston"
+        }
+       }
+      ],
+      "specialities": [],
+      "industries": [
+       {
+        "id": null,
+        "name": "Staffing and Recruiting",
+        "title": "Staffing and Recruiting",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIzooNEsLQHw/company-logo_400_400/B4EZiugTaWGwAc-/0/1755274360856/skill_recruiting_logo?e=1791417600&v=beta&t=NlwPoD_EXuqpbyutp9SRI56XuTrOjcPw5r49c14c7LQ",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIzooNEsLQHw/company-logo_200_200/B4EZiugTaWGwAM-/0/1755274360856/skill_recruiting_logo?e=1791417600&v=beta&t=dRtWvVP3e_3Bm24rQa_ehZ-pvJ5jf_rik1q8l-Ijtzw",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIzooNEsLQHw/company-logo_100_100/B4EZiugTaWGwAU-/0/1755274360856/skill_recruiting_logo?e=1791417600&v=beta&t=NmC_672paaBX9DRcgSlY5eT2uwjAFbwdR1jn3NfFdOc",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D4E3DAQHRPKVyKjcW8A/image-scale_191_1128/B4EZiugQK.HgAc-/0/1755274347584/skill_recruiting_cover?e=1790179200&v=beta&t=EieexOIgFIerQLbCco7uP4LssUNUIZf_G_IWC6K5S9Y",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHRPKVyKjcW8A/image-scale_191_1128/B4EZiugQK.HgAc-/0/1755274347584/skill_recruiting_cover?e=1790179200&v=beta&t=EieexOIgFIerQLbCco7uP4LssUNUIZf_G_IWC6K5S9Y",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHRPKVyKjcW8A/image-scale_127_750/B4EZiugQK.HgAM-/0/1755274347584/skill_recruiting_cover?e=1790179200&v=beta&t=0aHSZt0vkz9Fju6JdwmXWReZkcJ9FsnsZsvM4ZHmhVI",
+        "width": 750,
+        "height": 126
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQHRPKVyKjcW8A/image-scale_108_640/B4EZiugQK.HgAQ-/0/1755274347584/skill_recruiting_cover?e=1790179200&v=beta&t=_0jIuI2IwpdQYnaJtN2pQveoYmc5-5XH6kRCDz27Ws8",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": "50 - 58 USD",
+      "min": 50,
+      "max": 58,
+      "currency": "USD",
+      "payPeriod": "HOURLY",
+      "compensationType": "BASE_SALARY",
+      "compensationSource": "JOB_POSTER_PROVIDED",
+      "providedByEmployer": true
+     },
+     "jobFunctions": [
+      "MRKT",
+      "ADVR"
+     ],
+     "industries": [
+      "Staffing and Recruiting"
+     ],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": "JOB_POSTER",
+     "views": 0,
+     "expireAt": "2026-10-16T11:24:40.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4467775804",
+     "title": "Demand Generation Manager",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4467775804/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-15T20:48:04.000Z",
+     "headerCaptionText": "Scion Staffing\nAustin, TX\n18 hours ago\nBe among the first 25 applicants\nSee who Scion Staffing has hired for this role",
+     "descriptionText": "Scion Staffing has been engaged to conduct a search for a Demand Generation Manager for an innovative, fast-growing technology organization specializing in AI-powered cybersecurity and IT asset intelligence. This is a hybrid opportunity based in Austin, Texas, offering the opportunity to play a key role in building and executing global demand generation and account-based marketing programs.\nPOSITION OVERVIEW:The Demand Generation Manager will drive integrated campaigns designed to generate qualified pipeline, accelerate opportunities, and support revenue growth across enterprise and mid-market audiences. This hands-on role will own demand generation initiatives across paid media, email, events, content, SEO/SEM, and account-based marketing while partnering closely with Sales, RevOps, Product Marketing, and Marketing Operations. The ideal candidate brings strong B2B SaaS demand generation experience, a data-driven approach, and the ability to leverage AI and automation to improve campaign performance and personalization.\nPERKS:Competitive $80,000\u2013$120,000 salary range with an opportunity to make a measurable impact on global pipeline generation.Hybrid Austin work environment with telework equipment and a monthly internet allowance.Comprehensive medical, dental, vision, life, disability insurance, and EAP mental health support.401(k) with a 4% employer match, plus generous paid time off including vacation, sick, personal days, and public holidays.Join an AI-forward, fast-scaling SaaS organization with opportunities for professional growth, learning, international collaboration, and team events.\nRESPONSIBILITIES:Own and execute integrated demand generation campaigns across paid media, SEO/SEM, email marketing, webinars, content syndication, events, and direct mail.Develop multi-touch B2B campaigns focused on generating net-new pipeline and accelerating active opportunities across enterprise and mid-market audiences.Build and optimize Account-Based Marketing (ABM) programs in partnership with Sales, with a focus on priority accounts and new-logo opportunities.Establish and monitor campaign and pipeline performance metrics, using data and attribution insights to continuously improve ROI and campaign effectiveness.Partner cross-functionally with Sales, RevOps, Product Marketing, Marketing Operations, Creative, and other marketing teams to align campaigns with business objectives.Leverage AI-powered tools and automation to improve campaign efficiency, personaliza",
+     "location": {
+      "linkedinText": "Austin, TX",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "104472865",
+      "parsed": {
+       "text": "Austin, TX, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Texas",
+       "city": "Austin"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "hybrid",
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "companyApplyUrl": "https://scionstaffing.com/job/15518",
+      "applyStartersPreferenceVoid": true,
+      "inPageOffsiteApply": false,
+      "type": "OffsiteApply"
+     },
+     "applicants": 25,
+     "hiringTeam": [
+      {
+       "linkedinUrl": "https://www.linkedin.com/in/emily-king-1664a5248",
+       "name": "Emily King",
+       "position": "Senior Recruiter | Connecting Top Talent with Leading Organizations"
+      }
+     ],
+     "company": {
+      "id": "450323",
+      "universalName": "scion-staffing",
+      "linkedinUrl": "https://www.linkedin.com/company/scion-staffing",
+      "name": "Scion Staffing",
+      "website": "https://www.scionstaffing.com/",
+      "employeeCount": 39,
+      "employeeCountRange": {
+       "start": 201,
+       "end": 500
+      },
+      "followerCount": 224170,
+      "description": "Do you need to hire exceptional talent? Scion Staffing, Inc. is an award-winning national executive recruitment firm and staffing agency that will connect you to the talent you need! Our specialized divisions serve seven distinct areas: Corporate, Nonprofit, and Information Technology (IT), Creative, Medical and Nonprofit and Corporate Executive Search. Our firm has been recognized on the list of Best Executive Recruiting Firms in the world by Forbes, and the Business Times as a leading firm for the past sixteen years running over many markets, and Best of Staffing Winner by ClearlyRated.\n\nStaffing specialties include:\n\n\u2022 Executive | C-Level | Vice-President | Officer | Director\n\n\u2022 Operations | VP | Director | Operations Manager | Facilities Coordinator | Project Manager\n\n\u2022 Finance & Accou",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "California",
+        "city": "San Francisco",
+        "line1": "95 3rd Street",
+        "line2": "2nd Floor",
+        "postalCode": "94103",
+        "headquarter": true,
+        "parsed": {
+         "text": "San Francisco, CA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "California",
+         "city": "San Francisco"
+        }
+       }
+      ],
+      "specialities": [
+       "IT Staffing",
+       "Executive Search Services",
+       "Corporate Staffing",
+       "Contingent Labor",
+       "Nonprofit Staffing",
+       "Consultants",
+       "Temporary Staffing Services",
+       "Direct Hire",
+       "Nonprofit Executive Search",
+       "Medical Staffing",
+       "Healthcare Recruiting",
+       "Finance Recruitment",
+       "Biotech Recruiting",
+       "Engineering Recruiting",
+       "Interim Staffing",
+       "Temporary-to-Hire Staffing",
+       "Education Recruiting",
+       "Creative Staffing",
+       "Employer of Record Services",
+       "Temporary Staffing Agency",
+       "Executive Search Firm",
+       "Human Resource Staffing"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Staffing and Recruiting",
+        "title": "Staffing and Recruiting",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQGFcGPY11BbBg/company-logo_400_400/company-logo_400_400/0/1631334156611?e=1791417600&v=beta&t=yBdfHmSx-yHFUeV16Rx2Y_nAgNjYaApTLq3HfPpD7Ac",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQGFcGPY11BbBg/company-logo_200_200/company-logo_200_200/0/1631334156611?e=1791417600&v=beta&t=RukW4PVVVt7zDV8x7A0GqZNYOgJISg1UBk-lWKDkAps",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C560BAQGFcGPY11BbBg/company-logo_100_100/company-logo_100_100/0/1631334156611?e=1791417600&v=beta&t=m1DbmMPQ84KGnx0IXLsjxAjhlokbE47QVljrA5WFLsk",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/C561BAQGyp353b9B6Ig/company-background_10000/company-background_10000/0/1604600980309/scion_staffing_cover?e=1790179200&v=beta&t=7EDNNQaFFE5z2kGpEMnzO94TtZFAWmNFs8Xg_XnGGp4",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C561BAQGyp353b9B6Ig/company-background_10000/company-background_10000/0/1604600980309/scion_staffing_cover?e=1790179200&v=beta&t=7EDNNQaFFE5z2kGpEMnzO94TtZFAWmNFs8Xg_XnGGp4",
+        "width": 1400,
+        "height": 425
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C561BAQGyp353b9B6Ig/company-background_400/company-background_400/0/1604600980309/scion_staffing_cover?e=1790179200&v=beta&t=_RGpzImgAXz2QLdo04772ylyHjWhSU7xovH9U6yGNAY",
+        "width": 400,
+        "height": 121
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C561BAQGyp353b9B6Ig/company-background_200/company-background_200/0/1604600980309/scion_staffing_cover?e=1790179200&v=beta&t=3G6GvEgLiVytUZK-brst5GO9nV123PLfpiu7Kys99q0",
+        "width": 200,
+        "height": 60
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": "80,000 - 120,000 USD",
+      "min": 80000,
+      "max": 120000,
+      "currency": "USD",
+      "payPeriod": "YEARLY",
+      "compensationType": "BASE_SALARY",
+      "compensationSource": "JOB_POSTER_PROVIDED",
+      "providedByEmployer": true
+     },
+     "jobFunctions": [
+      "OTHR"
+     ],
+     "industries": [
+      "Software Development"
+     ],
+     "experienceLevel": "Mid-Senior level",
+     "benefits": [
+      "Medical insurance",
+      "Vision insurance",
+      "Dental insurance",
+      "401(k)"
+     ],
+     "benefitsDataSource": null,
+     "views": 0,
+     "expireAt": "2026-10-15T20:48:03.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4466805693",
+     "title": "Senior Growth Marketing Manager",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4466805693/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T01:00:41.000Z",
+     "headerCaptionText": "Audicus\nNew York, NY\n14 hours ago\nBe among the first 25 applicants\nSee who Audicus has hired for this role",
+     "descriptionText": "THE ROLE\n\nWe are looking for a Senior Growth Marketing Manager to oversee the performance and growth marketing function at Audicus. This role is accountable for the full acquisition funnel - from the paid media that drives qualified traffic, through the landing page and lead capture experience that converts it. You will own channel strategy and budget allocation across paid search, display, paid social, and affiliate, and you will build the conversion rate optimization program that makes every dollar of that spend work harder. This is a hands-on role for someone who wants to set strategy and then go build it.\n\nResponsibilities\n\nOwn the performance and growth marketing function end to end - paid search, display, paid social, and affiliate - with full accountability for lead volume, CAC, and revenue contribution across our B2C business.Own and allocate the paid media budget across channels, continuously shifting spend toward the highest-return opportunities and building the case for incremental investment.Run the conversion rate optimization program: define the testing roadmap, prioritize hypotheses, and execute A/B and multivariate tests across landing pages, forms, and the lead capture funnel to lift conversion and reduce CAC.Manage affiliate partners and marketing vendors end to end: sourcing, negotiation, onboarding, performance management, and ongoing accountability to agreed KPIs.Lead channel diversification - identify, test, and scale new acquisition channels and audiences to reduce concentration risk in any single campaign or platform.Own growth reporting and dashboards, translating performance into clear, prioritized recommendations for marketing leadership and the executive team.Partner with Lifecycle, Brand, Product, and Sales so that paid traffic, landing pages, and lead handoff operate as one system rather than a set of disconnected channels.Provide support to our B2B2C partnerships, primarily landing page and lead capture optimization for existing partner programs.Ensure paid and organic strategies reinforce rather than compete with each other, partnering on SEO and AEO/GEO visibility efforts.\n\nWhat We Are Looking For\n\nThe ideal candidate has a proven track record of scaling paid acquisition and improving conversion efficiency for B2C businesses. Creative problem-solvers who think strategically and analytically about sustainable growth, yet want to get tactical and build, will particularly enjoy this role. Beyond that, we are looking for the fo",
+     "location": {
+      "linkedinText": "New York, NY",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "102571732",
+      "parsed": {
+       "text": "New York City, NY, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "New York",
+       "city": "New York City"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": null,
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "companyApplyUrl": "https://www.click2apply.net/WRr8QYF7QR8rahWEQudWXx",
+      "applyStartersPreferenceVoid": false,
+      "inPageOffsiteApply": false,
+      "type": "OffsiteApply"
+     },
+     "applicants": 25,
+     "hiringTeam": [],
+     "company": {
+      "id": "2031653",
+      "universalName": "audicus",
+      "linkedinUrl": "https://www.linkedin.com/company/audicus",
+      "name": "Audicus",
+      "website": "http://www.audicus.com",
+      "employeeCount": 77,
+      "employeeCountRange": {
+       "start": 51,
+       "end": 200
+      },
+      "followerCount": 3390,
+      "description": "Audicus is a hearing health company that believes everyone deserves to hear and live a more connected and empowered life.\n\nWith over a decade of clinical innovation, Audicus has developed a clinically-validated virtual hearing care platform with access to remote testing, advanced hearing aids and lifetime audiology support \u2013 all delivered at a fraction of the cost of traditional hearing clinics.\n\nAudicus has saved consumers over $40 million in healthcare costs and has transformed thousands of lives by revolutionizing how people access hearing care.\n\nOur teleaudiology and virtual care models for health plans and partners makes it simple to enable members to access hearing care and custom-programmed hearing aids.\n\nAudicus is a rapidly growing health tech company. If you're a switched-on, ide",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "NY",
+        "city": "New York",
+        "line1": "39 W 29th St",
+        "line2": "8th Fl",
+        "postalCode": "10001",
+        "headquarter": true,
+        "parsed": {
+         "text": "New York City, NY, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "New York",
+         "city": "New York City"
+        }
+       }
+      ],
+      "specialities": [
+       "Hearing Aids",
+       "Hearing Loss",
+       "Hearing Care",
+       "Affordable Healthcare",
+       "Audiology",
+       "Tele-Audiology",
+       "Tinnitus",
+       "Virtual Audiology"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Retail",
+        "title": "Retail",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHvOoHzvZ999Q/company-logo_400_400/company-logo_400_400/0/1708962308086/audicus_logo?e=1791417600&v=beta&t=dPfGSO1mvtt_LkbqDlOgMkXiETSKrdoCeyHtPwntsUQ",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHvOoHzvZ999Q/company-logo_200_200/company-logo_200_200/0/1708962308086/audicus_logo?e=1791417600&v=beta&t=j3YxtJtc25ILVWHxrji_dNBaCzwKB3sxxFL3yiVxpYY",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHvOoHzvZ999Q/company-logo_100_100/company-logo_100_100/0/1708962308086/audicus_logo?e=1791417600&v=beta&t=EYUwbeVMSlwQf_suh429H7JZr5yz46q3UmZLwsxf_Jc",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D563DAQE_wROAqAqP3w/image-scale_191_1128/B56Z2My1OzHEAc-/0/1776183629664/audicus_cover?e=1790179200&v=beta&t=FRPfW_DthpgFKwBUhfn5fUEumspvBrhZfVxpNb-UQdg",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQE_wROAqAqP3w/image-scale_191_1128/B56Z2My1OzHEAc-/0/1776183629664/audicus_cover?e=1790179200&v=beta&t=FRPfW_DthpgFKwBUhfn5fUEumspvBrhZfVxpNb-UQdg",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQE_wROAqAqP3w/image-scale_127_750/B56Z2My1OzHEAM-/0/1776183629664/audicus_cover?e=1790179200&v=beta&t=372x-2Rk8uZzAgiJmW8hTZvUY-H_iLS4UwgTKBa8eoI",
+        "width": 750,
+        "height": 126
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D563DAQE_wROAqAqP3w/image-scale_108_640/B56Z2My1OzHEAQ-/0/1776183629664/audicus_cover?e=1790179200&v=beta&t=Z2__L-_uLoQfX_8RbvFz1e43ZfqLXWBH8fbOqBXslYU",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MRKT",
+      "SALE"
+     ],
+     "industries": [
+      "Retail Health and Personal Care Products"
+     ],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": null,
+     "views": 0,
+     "expireAt": "2026-10-16T01:00:41.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_CREATE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    },
+    {
+     "id": "4448902093",
+     "title": "Growth Marketing Manager",
+     "linkedinUrl": "https://www.linkedin.com/jobs/view/4448902093/",
+     "jobState": "LISTED",
+     "postedDate": "2026-09-16T14:41:11.000Z",
+     "headerCaptionText": "Bevi\nBoston, MA\n41 minutes ago\n103 applicants\nSee who Bevi has hired for this role",
+     "descriptionText": "Bevi is on a mission to transform how beverages are delivered and consumed. Our connected beverage platform eliminates the need for single-use bottles and cans, making it easy, fun, and sustainable to stay hydrated. As the category leader in IoT-enabled beverage technology, we're building a future where Bevi machines are everywhere people live, work, and connect. We've raised over $160M in venture capital, serve thousands of customers across the US, Canada, UK and Ireland, and we've been rapidly growing year over year, saving over 1 billion bottles from waste. In addition to driving hypergrowth with our current product line, Bevi is heavily investing in new product development.\n\nWe're looking for a Growth Marketing Manager to own Bevi's email marketing engine end-to-end, from strategy through hands-on building, sending, and measuring every campaign, across every function that touches a customer or prospect. This is a high-impact, cross-functional role that spans demand generation, product launches, partner communications, events, strategic accounts, and thought leadership.\n\nYou'll own strategy and hands-on execution end-to-end across email marketing, landing pages, and web experience, building every campaign in HubSpot, hitting send, and measuring results against pipeline and revenue impact. You'll serve as the marketing partner to Bevi's cross-functional marketing teams, and run the editorial process that keeps the entire organization aligned. You work closely with Sales and RevOps, and report into Growth Marketing.\n\nYour Day to Day\n\nHands-On Email Campaign Build, Send & Measurement\n\nBuild emails yourself, end-to-end, in HubSpot: template and module setup, personalization tokens, dynamic content, list and segment selection, and workflow logic.QA and test send every campaign before deployment, checking rendering across clients and devices, links, personalization, and deliverability, then own hitting send.Track and report on performance after every send: opens, clicks, conversion, unsubscribes, and pipeline or revenue impact, feeding results back into the testing roadmap.Own the annual email roadmap across all sending programs, aligned to product launches, campaign moments, seasonal demand patterns, event schedule, and company priorities.Develop and maintain an email content playbook with documented standards for subject line construction, copy length by email type, design principles, CTA hierarchy, and personalization use cases.\n\nMarketing Partner to Produ",
+     "location": {
+      "linkedinText": "Boston, MA",
+      "postalAddress": null,
+      "countryCode": "us",
+      "geoId": "102380872",
+      "parsed": {
+       "text": "Boston, MA, United States",
+       "countryCode": "US",
+       "regionCode": null,
+       "country": "United States",
+       "countryFull": "United States of America",
+       "state": "Massachusetts",
+       "city": "Boston"
+      }
+     },
+     "employmentType": "full_time",
+     "workplaceType": "hybrid",
+     "workRemoteAllowed": false,
+     "easyApplyUrl": null,
+     "applyMethod": {
+      "companyApplyUrl": "https://job-boards.greenhouse.io/bevicareers/jobs/4354854009?gh_src=fd4ik3lf9us",
+      "applyStartersPreferenceVoid": true,
+      "inPageOffsiteApply": false,
+      "type": "OffsiteApply"
+     },
+     "applicants": 103,
+     "hiringTeam": [],
+     "company": {
+      "id": "3350660",
+      "universalName": "bevi",
+      "linkedinUrl": "https://www.linkedin.com/company/bevi",
+      "name": "Bevi",
+      "website": "http://www.bevi.co",
+      "employeeCount": 412,
+      "employeeCountRange": {
+       "start": 201,
+       "end": 500
+      },
+      "followerCount": 42896,
+      "description": "Founded in 2013 with a vision to eliminate the need for single-use bottles and cans, Bevi is redefining how beverages are delivered in commercial spaces. Best known for its Smart Water Cooler\u00ae, Bevi has grown into the leading connected beverage platform, combining hardware, data, and beverage innovation to deliver still, sparkling, flavored, and enhanced drinks on demand. \n\nPowered by real-time connectivity and insights, Bevi enables organizations like Hyatt, Tripadvisor, Netflix, and Delta to offer customizable, healthy beverage experiences while reducing environmental impact. To date, Bevi machines have reduced the need for more than one billion single-use plastic bottles and cans. \n\nThousands of organizations across the United States, Canada, the UK, and Ireland hydrate sustainably with",
+      "locations": [
+       {
+        "country": "US",
+        "geographicArea": "MA",
+        "city": "Boston",
+        "line1": "529 Main St",
+        "postalCode": "02129",
+        "headquarter": true,
+        "parsed": {
+         "text": "Boston, MA, United States",
+         "countryCode": "US",
+         "regionCode": null,
+         "country": "United States",
+         "countryFull": "United States of America",
+         "state": "Massachusetts",
+         "city": "Boston"
+        }
+       }
+      ],
+      "specialities": [
+       "Hardware Engineering ",
+       "Firmware Engineering",
+       "Green Tech",
+       "Software Engineering",
+       "Design Thinking",
+       "Product Design",
+       "Manufacturing ",
+       "Supply Chain ",
+       "Startups ",
+       "Benefits & Perks",
+       "Internet of Things",
+       "Facilities Management",
+       "Clean Tech"
+      ],
+      "industries": [
+       {
+        "id": null,
+        "name": "Food and Beverage Services",
+        "title": "Food and Beverage Services",
+        "hierarchy": null
+       }
+      ],
+      "logos": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEnaF_T5hto8Q/company-logo_400_400/company-logo_400_400/0/1673019990679/bevi_logo?e=1791417600&v=beta&t=xNVJrTeWo7VjllKiUMWtNbeNZgkOM9uQluY2spiSGJ8",
+        "width": 400,
+        "height": 400
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEnaF_T5hto8Q/company-logo_200_200/company-logo_200_200/0/1673019990679/bevi_logo?e=1791417600&v=beta&t=J-vMDnSxsIsL_390k1BdTsbge3rAJ7f9CIzrpJIhEJY",
+        "width": 200,
+        "height": 200
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEnaF_T5hto8Q/company-logo_100_100/company-logo_100_100/0/1673019990679/bevi_logo?e=1791417600&v=beta&t=Hlgglxvcc-pYoOgow7DZ1vYZk4IvY1oViE292-zkhwc",
+        "width": 100,
+        "height": 100
+       }
+      ],
+      "backgroundCover": "https://media.licdn.com/dms/image/v2/D4E3DAQFIAjTkKDnXRQ/image-scale_191_1128/B4EZ2wVQomGkAc-/0/1776779857157/bevi_cover?e=1790179200&v=beta&t=vvzNqdkNEENGZXVV9ozbX5C4TeOsgZNQHuhcPtOg_Uk",
+      "backgroundCovers": [
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQFIAjTkKDnXRQ/image-scale_191_1128/B4EZ2wVQomGkAc-/0/1776779857157/bevi_cover?e=1790179200&v=beta&t=vvzNqdkNEENGZXVV9ozbX5C4TeOsgZNQHuhcPtOg_Uk",
+        "width": 1128,
+        "height": 191
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQFIAjTkKDnXRQ/image-scale_127_750/B4EZ2wVQomGkAM-/0/1776779857157/bevi_cover?e=1790179200&v=beta&t=hji5hg_YpP7ZfBfhEkM0kIWHYz5Pl0-Os6lkQiMhu0E",
+        "width": 749,
+        "height": 127
+       },
+       {
+        "url": "https://media.licdn.com/dms/image/v2/D4E3DAQFIAjTkKDnXRQ/image-scale_108_640/B4EZ2wVQomGkAQ-/0/1776779857157/bevi_cover?e=1790179200&v=beta&t=GeQypMu8CxZdY1hVXFH1fhUxKyIetJSuqHMyGSoBTag",
+        "width": 108,
+        "height": 18
+       }
+      ],
+      "callToActionUrl": null,
+      "similarOrganizations": [],
+      "affiliatedPages": []
+     },
+     "salary": {
+      "text": null,
+      "min": null,
+      "max": null
+     },
+     "jobFunctions": [
+      "MRKT",
+      "SALE"
+     ],
+     "industries": [
+      "Food and Beverage Services"
+     ],
+     "experienceLevel": null,
+     "benefits": [],
+     "benefitsDataSource": null,
+     "views": 0,
+     "expireAt": "2026-11-02T22:35:01.000Z",
+     "new": true,
+     "closedAt": null,
+     "contentSource": "JOBS_PREMIUM_OFFLINE",
+     "jobApplicationLimitReached": false,
+     "applicantTrackingSystem": null,
+     "query": {
+      "search": "\"growth marketing manager\" OR \"head of growth\" OR \"growth marketer\" OR \"demand generation manager\"",
+      "sortBy": "date",
+      "postedLimit": "month",
+      "location": "United States"
+     },
+     "_meta": {
+      "pagination": {
+       "totalElements": 495,
+       "totalPages": 20,
+       "pageNumber": 1,
+       "previousElements": 0,
+       "pageSize": 25
+      }
+     }
+    }
+   ]
+  },
+  "fantastic-jobs~advanced-linkedin-job-search-api": {
+   "run_id": "czjTs5TgPcfvaCNnY",
+   "status": "SUCCEEDED",
+   "usageTotalUsd": 0.050100000000000006,
+   "chargedEventCounts": {
+    "apify-default-dataset-item": 10,
+    "apify-actor-start": 1,
+    "recruiter-url-filtered-result": 0
+   },
+   "input": {
+    "timeRange": "7d",
+    "limit": 10,
+    "removeAgency": true,
+    "titleSearch": [
+     "growth marketing:*",
+     "head of growth",
+     "growth marketer",
+     "demand generation:*"
+    ],
+    "locationSearch": [
+     "United States"
+    ],
+    "organizationSizeFilter": [
+     "2-10",
+     "11-50"
+    ],
+    "descriptionType": "text"
+   },
+   "buildNumber": "0.0.70",
+   "finishedAt": "2026-09-16T15:23:52.264Z",
+   "items": [
+    {
+     "id": 2366300131,
+     "date_posted": "2026-09-16T14:11:54.854",
+     "date_created": "2026-09-16T14:32:54.927441",
+     "title": "Head of Growth / Head of Marketing",
+     "organization": "Entropy",
+     "organization_url": "https://www.linkedin.com/company/useentropy",
+     "date_valid_through": null,
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "",
+        "addressCountry": "",
+        "addressLocality": "United States"
+       }
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "PART_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/head-of-growth-head-of-marketing-at-entropy-4466207021",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": null,
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      39.7837304
+     ],
+     "lngs_derived": [
+      -100.445882
+     ],
+     "seniority": "Director",
+     "direct_apply": true,
+     "no_jb_schema": true,
+     "ats_duplicate": null,
+     "linkedin_id": 4466207021,
+     "org_linkedin_slug": "useentropy",
+     "org_linkedin_id": 105583996,
+     "org_linkedin_headcount": 5,
+     "org_linkedin_website": "useentropy.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "The Operating Firm for Complex Markets",
+     "org_linkedin_industry": "Strategic Management Services",
+     "org_linkedin_followers": null,
+     "org_linkedin_headquarters": "Nicosia",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2024",
+     "org_linkedin_specialties": [
+      "business strategy",
+      "emerging markets",
+      "marketing",
+      "business planning",
+      "process improvement",
+      "data analytics",
+      "investment management",
+      "risk mitigation",
+      "go-to-market",
+      "scale up",
+      "revenue optimization",
+      "cost optimization",
+      "public relations & branding",
+      "sales strategy",
+      "operations management",
+      "project management",
+      "product management",
+      "venture capital",
+      "investment structuring",
+      "investment readiness",
+      "creative structuring",
+      "policy design",
+      "governance frameworks",
+      "and political advisory"
+     ],
+     "org_linkedin_locations": [
+      "1 Methonis, Nicosia, 1070, CY",
+      "Dubai, AE",
+      "Bangkok, TH",
+      "Nairobi, KE",
+      "Singapore, SG",
+      "London, GB"
+     ],
+     "org_linkedin_description": "Entropy is an operating firm for ventures, investors & policymakers in complex markets. We believe the most influential businesses do not just capture value, they build infrastructure that enables markets to create value. We build the businesses & secure the institutional alignment that makes it possible.\n\nWhat We Do\n\nInvestment Operations\nWe work with investors & funds deploying into MENA, Asia & Africa. Our work covers due diligence, vehicle structuring & special situations in complex environments. When a portfolio company needs lift, we step in as fractional operators leading turnarounds & transformation.\n\nVenture Development\nWe co-build & scale ventures alongside founders. We validate business models, design & run pilots, & build strategic partnerships. We tune unit economics, sharpen operating processes, & help founders navigate the regulation & market dynamics that decide whether a venture scales.\n\nPolicy Delivery\nWe work with ministries, regulators & development investors to structure effective policy. We bring an operational & commercial lens to public sector work, which separates policies that look good on paper from policies that hold up in practice. Our work covers PPP structuring, regulatory design, delivery PMOs, & institutional capacity to ensure adherence.\n\nWe also build, back & operate our own ventures:\n\nEntropy EOR | Compliant hiring, payroll & employment infrastructure for remote workers. \nWe operate as Employer of Record for:\n1. international companies offshoring mandates to MENA, South Asia & Southeast Asia talents\n2. remote freelancers & consultants needing simpler tax compliance and proof of income\n3. emerging market firms simplifying HR operations while improving tax & payroll treatment for employees\n\nInReal | A neobank for real estate. \nWe enable fractional investment in fully managed, income-producing properties through shares anyone can own. Pick a property, choose your amount, earn rental income & sell your stake when you want to exit.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": [
+      "Performance Compensation",
+      "Equity Participation"
+     ],
+     "ai_experience_level": "5-10",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States"
+     ],
+     "ai_remote_location_derived": [
+      "United States"
+     ],
+     "ai_key_skills": [
+      "Growth Marketing",
+      "Performance Marketing",
+      "Revenue Operations",
+      "Customer Acquisition",
+      "Conversion Rate Optimization",
+      "Retention Strategy",
+      "Budget Management",
+      "Data Analytics",
+      "Lifecycle Messaging",
+      "Go-To-Market Strategy",
+      "B2B Software",
+      "Marketplace Growth",
+      "Financial Services",
+      "Attribution Modeling",
+      "Strategic Planning",
+      "Remote Leadership"
+     ],
+     "ai_hiring_manager_name": "Mckenzey H.",
+     "ai_hiring_manager_email_address": "mckenzey.h@useentropy.com",
+     "ai_core_responsibilities": "Lead growth delivery for clients and studio ventures by owning acquisition, conversion, and retention across multiple channels. Establish scalable measurement systems and playbooks to ensure long-term operational independence for each company.",
+     "ai_requirements_summary": "Requires 5+ years of experience in growth or revenue operations with a proven track record of managing significant paid budgets. Candidates should have experience in complex markets, B2B software, or financial services, and be comfortable working in unstructured, remote environments.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "PART_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Paid Media",
+      "Organic Growth",
+      "Outbound Channels",
+      "Onboarding",
+      "Activation",
+      "Pricing and Packaging",
+      "Attribution",
+      "Venture Studio",
+      "GTM Strategy",
+      "Emerging Markets",
+      "B2B Software",
+      "Marketplaces",
+      "Financial Services",
+      "KPI Tracking",
+      "Lifecycle Tools",
+      "Performance Marketing",
+      "Revenue Operations",
+      "Strategic Management"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Management & Leadership",
+      "Consulting",
+      "Sales",
+      "Finance & Accounting"
+     ],
+     "ai_education": null,
+     "description_text": "About \nEntropy is an operating firm serving investors, ventures and policymakers in complex markets. Funds, founders, and ministries bring us deals to structure, assets to fix, and reforms to align with the market.\n\nEntropy's work spans investment operations, venture development, and policy delivery, including due diligence, structuring, turnarounds, pilots, and regulatory design. In addition to the operational practice, Entropy Studio builds and operates ventures aligned with its thesis based on market demand and insights gathered from hands on operations.\n\nRole Description\nThis is a remote role for a senior Commercial/Marketing leader managing growth delivery for Entropy clients and studio ventures, with budget authority and a ownership of the numbers.\n\nThe role covers acquisition, conversion, retention, and measurement across several companies, and builds the method Entropy reuses. Compensation is a base salary plus performance compensation tied to the accounts you carry, with equity participation in the ventures you help build.\n\nResponsibilities\nOwn acquisition across paid, organic, partner, and outbound channels, with budget authority on your accounts.\nRun conversion and retention work, including onboarding, activation, lifecycle messaging, and the pricing and packaging tests that move revenue.\nBuild the measurement layer: tracking that survives an audit, attribution that survives scrutiny, and reporting a board reads without translation.\nLeave each company a system it can run without us, including playbooks, dashboards, and the hiring spec for the team that inherits it.\nSupport studio ventures and portfolio companies on go-to-market at formation.\n\nQualifications\n5+ years or more in growth, performance marketing, or revenue operations, including a head of growth seat or the equivalent. You understand how the whole funnel connects.\nDirect ownership of a significant paid budgets, with the ability to defend every line of it against contribution and margin. You understand the difference between spend and return.\nHands-on capability across ad platforms, analytics, and lifecycle tools. You understand and build the tracking needed to make decisions.\nExperience in markets where channel costs, payments, and consumer behaviour differ from the Western defaults or products that require customized and innovative positioning. You have a command of a broader growth toolkit (not just ads) to create custom solutions and understand that playbooks are not one-size-fits-"
+    },
+    {
+     "id": 2365358445,
+     "date_posted": "2026-09-16T01:55:47.318",
+     "date_created": "2026-09-16T02:02:47.386495",
+     "title": "Growth Marketer (Paid Media)",
+     "organization": "Atlas",
+     "organization_url": "https://www.linkedin.com/company/atlasfin",
+     "date_valid_through": null,
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "",
+        "addressCountry": "",
+        "addressLocality": "United States"
+       }
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/growth-marketer-paid-media-at-atlas-4467934863",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": null,
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      39.7837304
+     ],
+     "lngs_derived": [
+      -100.445882
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": false,
+     "no_jb_schema": true,
+     "ats_duplicate": true,
+     "linkedin_id": 4467934863,
+     "org_linkedin_slug": "atlasfin",
+     "org_linkedin_id": 81965287,
+     "org_linkedin_headcount": 118,
+     "org_linkedin_website": "www.atlasfin.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "Accessible rewards credit card and platform. Building the Costco/Prime of financial services to help people get ahead.\n",
+     "org_linkedin_industry": "Financial Services",
+     "org_linkedin_followers": 2452,
+     "org_linkedin_headquarters": "San Francisco Bay Area",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2022",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [
+      "San Francisco Bay Area, US"
+     ],
+     "org_linkedin_description": "Atlas is an accessible rewards credit card and automation platform, that helps people save more with less effort. We're building the Costco/Prime of financial services, by reimagining access to credit and rewards. \n\nOur long term goal is to democratize financial empowerment to help more people get ahead and realize their full potential. \n\nThe Atlas Card is issued by our bank partners Patriot Bank N.A. and Academy Bank N.A., Members FDIC and pursuant to a license from Mastercard\u00ae International Incorporated.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": null,
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States"
+     ],
+     "ai_remote_location_derived": [
+      "United States"
+     ],
+     "ai_key_skills": [
+      "Paid Media Acquisition",
+      "Media Strategy",
+      "Meta Ads",
+      "TikTok Ads",
+      "Google Ads",
+      "Budget Forecasting",
+      "CAC Optimization",
+      "ROAS Optimization",
+      "A/B Testing",
+      "Funnel Economics",
+      "Competitive Auditing",
+      "Data Analysis",
+      "Performance Marketing",
+      "Landing Page Optimization",
+      "UGC Briefing"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "The Growth Marketer will own the end-to-end paid media acquisition strategy, managing spend across Meta, TikTok, and Google to hit CAC and ROAS targets. They will be responsible for systematic testing, budget forecasting, and collaborating with creative teams to scale profitable channels.",
+     "ai_requirements_summary": "Candidates must have 3-5+ years of experience in paid media management with a strong track record of hitting performance targets and a deep understanding of funnel economics. Proficiency in Meta Ads is required, while experience in fintech or managing high-budget campaigns is a plus.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Paid Media",
+      "Growth Marketing",
+      "Meta",
+      "TikTok",
+      "Google Ads",
+      "YouTube",
+      "CAC",
+      "ROAS",
+      "MER",
+      "LTV",
+      "Payback Period",
+      "CBO",
+      "ABO",
+      "CPA",
+      "CTR",
+      "CVR",
+      "CPM",
+      "Fintech",
+      "DTC",
+      "Subscription",
+      "UGC",
+      "Performance Marketing",
+      "Funnel Economics",
+      "Media Strategy",
+      "Scaling Frameworks"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Finance & Accounting",
+      "Data & Analytics",
+      "Sales"
+     ],
+     "ai_education": null,
+     "description_text": "About Atlas\n\nAt Atlas, we believe the financial system should work for everyone. We\u2019re building a modern rewards credit card and banking platform designed to grow with our members - helping them build credit on autopilot with 0% APR, no late fees, and premium rewards. By replacing harsh penalties with empathy and smart technology, we are making stress-free financial progress accessible to millions.\n\nWe are a product- and technology-obsessed team with roots at Facebook, Amazon, Robinhood, and Uber. If you\u2019re ready to build a high-impact product that democratizes opportunity and accelerates financial empowerment, join us.\n\nAbout The Role\n\nAtlas is hiring a performance-first Growth Marketer to own paid media acquisition end-to-end. This role is for someone who lives in the data you build the media strategy, launch and manage spend across channels, and relentlessly optimize toward CAC and ROAS targets. You think in testing frameworks and scaling systems, not one-off campaigns.\n\nThis is a remote-friendly role.\n\nWhat You'll Own\n\n\ud83c\udfaf Media Strategy\n\nBuild the paid acquisition strategy and channel mix (Meta, TikTok, Google, YouTube, and beyond)\nSet targeting, bidding, and budget allocation frameworks across campaigns\nBuild a testing roadmap for audiences, placements, and campaign structures\nForecast and own monthly media budgets against CAC/ROAS targets\n\n\ud83d\udcca Campaign Execution\n\nLaunch and manage campaigns in Meta / TikTok / Google Ads Manager\nStructure campaigns (CBO/ABO, bid strategies, scaling frameworks)\nMonitor performance daily and optimize based on CPA, CTR, CVR, CPM, ROAS\nKill underperforming campaigns quickly and scale profitable ones\nNegotiate rates and terms with media vendors and ad networks where applicable\n\n\ud83d\udd01 Testing & Scaling\n\nRun systematic tests across audiences, bids, placements, and campaign structures\nIdentify bottlenecks (targeting vs. budget pacing vs. landing page vs. creative) and route fixes accordingly\nBuild repeatable scaling playbooks for channels that prove out\nPartner closely with creative/content teams to brief and prioritize what needs testing next\n\n\ud83d\udd0e Research & Reporting\n\nConduct competitive audits on channel strategy and spend patterns\nTrack and report on CAC, ROAS, MER, and payback period weekly\nIdentify emerging channels and platform features worth testing\nPresent clear, data-backed recommendations to leadership\n\nWhat \"Great\" Looks Like\n\nYou can explain exactly why a campaign is performing well or poorly\nYou hit or beat CAC/ROAS targ"
+    },
+    {
+     "id": 2364769387,
+     "date_posted": "2026-09-15T20:17:44.098",
+     "date_created": "2026-09-15T20:32:44.181709",
+     "title": "Growth Marketer",
+     "organization": "HeyDrew!",
+     "organization_url": "https://www.linkedin.com/company/heydrew.com",
+     "date_valid_through": null,
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "",
+        "addressCountry": "",
+        "addressLocality": "United States"
+       }
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/growth-marketer-at-heydrew%21-4465907533",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": null,
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      39.7837304
+     ],
+     "lngs_derived": [
+      -100.445882
+     ],
+     "seniority": "Not Applicable",
+     "direct_apply": false,
+     "no_jb_schema": true,
+     "ats_duplicate": false,
+     "linkedin_id": 4465907533,
+     "org_linkedin_slug": "heydrew.com",
+     "org_linkedin_id": 111528219,
+     "org_linkedin_headcount": 6,
+     "org_linkedin_website": "https://heydrew.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "Built by Entrepreneurs for Entrepreneurs",
+     "org_linkedin_industry": "Financial Services",
+     "org_linkedin_followers": null,
+     "org_linkedin_headquarters": "",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2025",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [],
+     "org_linkedin_description": "Most small businesses have a CPA who looks backward. At HeyDrew!, we give them an AI strategist that looks forward. We\u2019ve taken the elite strategies usually reserved for the 1% and built them into a platform that helps entrepreneurs keep their capital and grow their legacy. We\u2019re closing the 'Strategy Gap' for the people who actually power the economy.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": [
+      "Equity"
+     ],
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "Remote Solely",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States"
+     ],
+     "ai_remote_location_derived": [
+      "United States"
+     ],
+     "ai_key_skills": [
+      "Growth Marketing",
+      "Performance Marketing",
+      "Campaign Management",
+      "Vendor Management",
+      "KPI Tracking",
+      "A/B Testing",
+      "Funnel Optimization",
+      "Budget Management",
+      "Meta Ads",
+      "LinkedIn Ads",
+      "Google Ads",
+      "GA4",
+      "GoHighLevel",
+      "HubSpot",
+      "SEO",
+      "Content Strategy"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "The Growth Marketer will own the end-to-end marketing strategy and execution across content, paid ads, and social channels. They are responsible for managing the campaign calendar, tracking KPIs, and optimizing the growth funnel from awareness to retention.",
+     "ai_requirements_summary": "Candidates need 3-5 years of experience in growth or performance marketing, specifically with a track record of managing vendors and running paid campaigns. Proficiency in tools like GA4, Meta/Google Ads, and CRM platforms like HubSpot or GoHighLevel is required.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Growth Marketing",
+      "Performance Marketing",
+      "CAC",
+      "ROAS",
+      "Conversion Rate",
+      "Pipeline",
+      "Meta Ads",
+      "LinkedIn Ads",
+      "Google Ads",
+      "TikTok Ads",
+      "GA4",
+      "Attribution",
+      "GoHighLevel",
+      "HubSpot",
+      "Klaviyo",
+      "Mailchimp",
+      "Jira",
+      "Confluence",
+      "Asana",
+      "Notion",
+      "Trello",
+      "Impact.com",
+      "SEO",
+      "Lifecycle Marketing",
+      "Marketing Automation",
+      "Startup",
+      "Financial Services",
+      "Tax Strategy",
+      "A/B Testing",
+      "Funnel Optimization"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Finance & Accounting",
+      "Management & Leadership",
+      "Sales",
+      "Data & Analytics"
+     ],
+     "ai_education": null,
+     "description_text": "Department: Marketing\n\nReports to: COO\n\nLocation: Remote in the US, with a strong preference for the Eastern Time Zone\n\nEmployment type: Full-time. W2\n\nCompensation: competitive salary + equity\n\nAbout The Company\n\nHeyDrew is the tax strategy and execution platform built for small business owners tired of overpaying the IRS. Most CPAs only look backward, filing what already happened. We look forward: our AI identifies every strategy you qualify for, then a real team gets it done with you, all year long, not just at tax time. We're not a filing service, and we don't hand you a list of strategies and wish you luck. Every client gets a dedicated Tax Team that explains each strategy in plain language, backed by a licensed EA who owns every number and sign-off. No jargon, no guesswork, just real savings, done right. Ready to stop losing money to avoidable taxes? HeyDrew is your team.\n\nAbout The Role\n\nWe're looking for a Growth Marketer to own how our marketing runs and grows \u2014 from strategy through to execution across channels. You'll set the direction, build and run the campaign calendar, and turn plans into shipped work across content, ads, and social. This is a role for someone who can think in strategy and funnels but is equally comfortable getting into the operational detail and making sure things actually get done.\n\nKey Responsibilities\n\nOwn initiative management, the campaign calendar, and channel execution end to end \u2014 planning what ships, when, and where, and making sure it happens. \nDevelop marketing and growth strategy, then translate it into concrete campaigns, initiatives, and priorities. \nSet content direction, briefing and guiding content, ads, and social output so it aligns with strategy and brand. \nManage vendors and agency relationships \u2014 briefing, coordinating, reviewing, and holding to standard delivery. \nCommunicate strategy and scope clearly to leadership and vendors, so everyone understands the \"what\" and the \"why\". \nRun marketing operations \u2014 tools, processes, tracking, and reporting that keep marketing organized and measurable. \nPlan and manage campaigns across content, paid ads, and social from concept through to results, and run A/B tests to improve performance. \nSet and track KPIs (e.g. CAC, ROAS, conversion, engagement, pipeline) and report on performance to leadership. \nOwn the growth funnel \u2014 awareness through acquisition, activation, and retention \u2014 and identify where to focus for the biggest impact. \nPlan and manage the marketing"
+    },
+    {
+     "id": 2364769563,
+     "date_posted": "2026-09-15T20:01:28",
+     "date_created": "2026-09-15T20:32:53.708914",
+     "title": "Founding Growth Marketer, B2C Funnels & Personal Brand",
+     "organization": "Soul Health",
+     "organization_url": "https://www.linkedin.com/company/thesoulhealth",
+     "date_valid_through": "2027-03-14T20:01:28",
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US",
+        "addressLocality": "New Jersey",
+        "addressRegion": "United States",
+        "streetAddress": null
+       },
+       "latitude": 40.139095,
+       "longitude": -74.67852
+      }
+     ],
+     "location_type": "TELECOMMUTE",
+     "location_requirements": [
+      {
+       "@type": "Country",
+       "name": "New Jersey, United States"
+      }
+     ],
+     "salary": null,
+     "employment_type": [
+      "CONTRACTOR"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/founding-growth-marketer-b2c-funnels-personal-brand-at-soul-health-4467783357",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": [
+      "New Jersey"
+     ],
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "New Jersey, United States"
+     ],
+     "timezones_derived": [
+      "America/New_York"
+     ],
+     "lats_derived": [
+      40.0757384
+     ],
+     "lngs_derived": [
+      -74.4041622
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": true,
+     "no_jb_schema": null,
+     "ats_duplicate": null,
+     "linkedin_id": 4467783357,
+     "org_linkedin_slug": "thesoulhealth",
+     "org_linkedin_id": 108362784,
+     "org_linkedin_headcount": 4,
+     "org_linkedin_website": "getsoulhealth.co",
+     "org_linkedin_size": "2-10 employees",
+     "org_linkedin_slogan": "Neuroscience-backed team burnout diagnostics for high-growth companies.",
+     "org_linkedin_industry": "Business Consulting and Services",
+     "org_linkedin_followers": 34,
+     "org_linkedin_headquarters": "New York, NY",
+     "org_linkedin_type": "Self-Owned",
+     "org_linkedin_founded_date": "2025",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [
+      "New York, NY, US"
+     ],
+     "org_linkedin_description": "Soul Health is a neuroscience-grounded firm that helps founders protect their most under-managed asset: their cognitive capacity.\n\n",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": null,
+     "ai_experience_level": "5-10",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": null,
+     "ai_remote_location_derived": null,
+     "ai_key_skills": [
+      "B2C Funnel Building",
+      "Personal Branding",
+      "Direct-Response Copywriting",
+      "Instagram Marketing",
+      "Email Marketing",
+      "Paid Acquisition",
+      "Conversion Rate Optimization",
+      "Landing Page Design",
+      "Growth Strategy",
+      "Meta Ads",
+      "Offer Positioning",
+      "Data Analysis"
+     ],
+     "ai_hiring_manager_name": "Nicole V. Pires",
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "Develop and execute a B2C growth strategy to transform the founder's personal brand into a customer acquisition engine. This includes building customer journeys from Instagram to purchase, managing paid campaigns, and optimizing conversion flows.",
+     "ai_requirements_summary": "Proven experience in building B2C funnels and selling products via Instagram with strong direct-response copywriting skills. Candidates must be comfortable working independently in an early-stage environment and have a genuine interest in mental fitness or psychology.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "CONTRACTOR"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "B2C Funnels",
+      "Personal Brand",
+      "Direct-Response Marketing",
+      "Instagram",
+      "Meta Ads",
+      "Landing Pages",
+      "Email Nurture Sequences",
+      "Conversion Optimization",
+      "Growth Hacking",
+      "Neuroscience",
+      "Psychology",
+      "Mental Fitness",
+      "Founder Reset",
+      "Customer Journey Mapping",
+      "Lead Generation",
+      "Acquisition Costs"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Sales",
+      "Consulting",
+      "Creative & Media"
+     ],
+     "ai_education": null,
+     "description_text": "About Soul Health\nSoul Health is building mental fitness products for founders and high achievers.\nOur work combines psychology, neuroscience, and practical tools to help ambitious people protect their ability to think clearly, recover from pressure, and build meaningful lives alongside their companies.\nSoul Health is an early-stage, founder-led company. Nicole V. Pires is the founder, the face of the brand, and the primary voice behind its content. We are looking for a marketer who can transform that voice, expertise, and mission into a strong personal brand and a B2C growth engine.\n\nAbout the Role\nWe are hiring a Founding Growth Marketer, B2C Funnels & Personal Brand for a paid contract engagement.\nYour job is to build and improve the entire journey from someone discovering Nicole or Soul Health on Instagram to becoming a paying customer.\nThis is a hands-on role. You will develop the strategy and execute the work yourself, including positioning, content, funnels, email marketing, paid acquisition, landing pages, and conversion optimization.\nYou will work directly with Nicole to establish the growth foundation for Soul Health and promote offers such as the 30-Day Founder Reset.\nThis is an independent contract role based in New Jersey. The scope, schedule, and working arrangement will be agreed upon based on fit and availability.\n\nWhat You\u2019ll Own\n\u2022 Develop a clear B2C growth strategy for Soul Health and Nicole\u2019s personal brand\n\u2022 Build customer journeys from Instagram content, Stories, Reels, and ads to landing pages, email sequences, and purchases\n\u2022 Strengthen the positioning and messaging of Soul Health\u2019s offers\n\u2022 Create content concepts, hooks, scripts, campaign angles, and calls to action\n\u2022 Plan and execute product launches and evergreen acquisition funnels\n\u2022 Write or improve landing-page copy, email nurture sequences, sales emails, and conversion flows\n\u2022 Manage and optimize paid campaigns, especially on Instagram and Meta\n\u2022 Set up practical tracking to understand lead sources, conversion rates, acquisition costs, and revenue\n\u2022 Analyze performance and identify where potential customers are leaving the funnel\n\u2022 Design and run creative and conversion experiments\n\u2022 Report what is working, what is not working, and what should be tested next\n\u2022 Create repeatable growth processes that can scale as Soul Health grows\n\nWho We\u2019re Looking For\nYou may be a growth marketer, direct-response marketer, funnel strategist, or personal-brand marketer. The title matters les"
+    },
+    {
+     "id": 2364715845,
+     "date_posted": "2026-09-15T19:55:24",
+     "date_created": "2026-09-15T20:03:05.978487",
+     "title": "Demand Generation",
+     "organization": "Sent",
+     "organization_url": "https://www.linkedin.com/company/sentdm",
+     "date_valid_through": "2026-10-15T19:55:24",
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US",
+        "addressLocality": "New York",
+        "addressRegion": "NY",
+        "streetAddress": null
+       },
+       "latitude": 40.713047,
+       "longitude": -74.00723
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": {
+      "@type": "MonetaryAmount",
+      "currency": "USD",
+      "value": {
+       "@type": "QuantitativeValue",
+       "minValue": 155000,
+       "maxValue": 225000,
+       "unitText": "YEAR"
+      }
+     },
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/demand-generation-at-sent-4465922345",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": [
+      "New York"
+     ],
+     "counties_derived": null,
+     "regions_derived": [
+      "New York"
+     ],
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "New York, New York, United States"
+     ],
+     "timezones_derived": [
+      "America/New_York"
+     ],
+     "lats_derived": [
+      40.7127281
+     ],
+     "lngs_derived": [
+      -74.0060152
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": false,
+     "no_jb_schema": null,
+     "ats_duplicate": true,
+     "linkedin_id": 4465922345,
+     "org_linkedin_slug": "sentdm",
+     "org_linkedin_id": 101156833,
+     "org_linkedin_headcount": 47,
+     "org_linkedin_website": "https://www.sent.dm",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "Sent is the unified API for sending messages across SMS, WhatsApp, and RCS.",
+     "org_linkedin_industry": "Telecommunications",
+     "org_linkedin_followers": 3206,
+     "org_linkedin_headquarters": "New York, NY",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2024",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [
+      "157 W 18th St, FL 7, New York, NY 10011, US",
+      "157 W 18th St, FL 7, New York, NY 10011, US"
+     ],
+     "org_linkedin_description": "Sent is the unified API for sending messages across SMS, WhatsApp, and RCS.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": "USD",
+     "ai_salary_value": null,
+     "ai_salary_min_value": 155000,
+     "ai_salary_max_value": 225000,
+     "ai_salary_unit_text": "YEAR",
+     "ai_benefits": [
+      "Equity",
+      "Medical Insurance",
+      "Dental Insurance",
+      "Vision Insurance",
+      "401(k) with 100% match up to 4%",
+      "Unlimited PTO",
+      "Daily meals and unlimited snacks",
+      "New MacBook Pro",
+      "Apple Studio Display",
+      "Wellhub Gold or Equinox membership stipend"
+     ],
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "On-site",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": null,
+     "ai_remote_location_derived": null,
+     "ai_key_skills": [
+      "Demand Generation",
+      "Growth Marketing",
+      "SQL",
+      "API Integration",
+      "A/B Testing",
+      "Developer Relations",
+      "SEO",
+      "Lifecycle Marketing",
+      "Lead Scoring",
+      "Data Analysis",
+      "Funnel Optimization",
+      "Technical Writing",
+      "Paid Media",
+      "Account-Based Marketing",
+      "Programmatic SEO",
+      "Coding"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "The role focuses on building a demand generation engine to convert developer mindshare into signups and activated accounts. Responsibilities include running growth experiments, owning the self-serve activation funnel, and partnering with DevRel to turn technical content into measurable demand.",
+     "ai_requirements_summary": "Candidates need at least 4 years of experience in demand generation or growth marketing, specifically within developer-first or API infrastructure companies. A deeply technical skillset including the ability to code and write SQL is required to build tooling and track metrics independently.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Demand Generation",
+      "Growth Loops",
+      "API",
+      "SMS",
+      "WhatsApp",
+      "RCS",
+      "SQL",
+      "CAC",
+      "Conversion Rates",
+      "Payback Period",
+      "ROI",
+      "Hacker News",
+      "Reddit",
+      "Discord",
+      "GitHub",
+      "Developer Ecosystem",
+      "Self-Serve Funnel",
+      "A2P Messaging",
+      "Infrastructure",
+      "Telecommunications",
+      "Programmatic SEO",
+      "Lead Scoring",
+      "ABM",
+      "Lifecycle Marketing",
+      "Paid Search",
+      "Paid Social",
+      "Sponsorships",
+      "Technical Marketing",
+      "DevRel",
+      "Experimentation"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Software",
+      "Technology",
+      "Sales",
+      "Data & Analytics"
+     ],
+     "ai_education": null,
+     "description_text": "About Sent\n\nSent is an infrastructure for sending A2P messages across SMS, WhatsApp, and RCS through a single unified API. Our intelligent routing model automates channel selection based on deliverability and cost, ensuring lower cost and global reach without any channel-specific integrations.\n\nWe recently closed a $12M Series A backed by Companyon Ventures, Bessemer Venture Partners, UIF, and others. We're hiring to build the best infrastructure to replace multi-channel messaging stacks.\n\nThe Role\n\nWe're hiring a Demand Gen expert to build the engine that turns Sent's growing developer mindshare into signups, activated accounts, and real pipeline. The job is to own the full path to signup and live production.\n\nThis is a technical, experiment-driven role. You'll run a high-velocity testing cadence across the funnel, and you'll build a lot of it yourself: you write the code to pull your own numbers, you ship the landing page, and you understand the product well enough to use it. You'll be the person who knows, down to the dollar, what a qualified signup costs, which experiments moved it, and where the best developers come from. As one of our earliest marketing hires, you'll inherit the demand engine directly from our CEO and own its number moving forward.\n\nYou'll also work hand in hand with our developer relations function, turning technical content, demos, and community engagement into measurable demand. You know how DevRel actually works, how the ecosystem behaves, and how to plug into it without coming off as a marketer. Where DevRel builds trust and mindshare, you build the loops that capture and convert it.\n\nWhat You'll Do\n\nRun a structured growth experimentation cadence: form hypotheses, ship tests across landing pages, onboarding, pricing, and paid creative, read the results honestly, and double down on what wins\nOwn the self-serve activation funnel end to end: signup \u2192 first API call \u2192 first production send. Instrument it, find where developers drop off, and write the experiments that fix it\nPartner closely with DevRel to turn technical content, demos, talks, and community presence into distribution and demand, and build the measurement to show what's landing\nEngage credibly in the developer ecosystem, Hacker News, X, Reddit, Discord, GitHub, dev newsletters and podcasts, and turn that engagement into repeatable acquisition channels\nOwn full-funnel demand across paid (search, social, podcast/newsletter sponsorships), SEO, lifecycle, and events, buil"
+    },
+    {
+     "id": 2364666704,
+     "date_posted": "2026-09-15T19:03:58",
+     "date_created": "2026-09-15T19:32:35.856184",
+     "title": "Marketing Coordinator \u2014 Demand Generation & Marketing Operations",
+     "organization": "TruVideo",
+     "organization_url": "https://www.linkedin.com/company/truvideo",
+     "date_valid_through": "2027-03-14T19:03:58",
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US",
+        "addressLocality": "Wellesley",
+        "addressRegion": "MA",
+        "streetAddress": null
+       },
+       "latitude": 42.29693,
+       "longitude": -71.291855
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/marketing-coordinator-%E2%80%94-demand-generation-marketing-operations-at-truvideo-4465584862",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": [
+      "Wellesley"
+     ],
+     "counties_derived": [
+      "Norfolk County"
+     ],
+     "regions_derived": [
+      "Massachusetts"
+     ],
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "Wellesley, Massachusetts, United States"
+     ],
+     "timezones_derived": [
+      "America/New_York"
+     ],
+     "lats_derived": [
+      42.2964859
+     ],
+     "lngs_derived": [
+      -71.2925571
+     ],
+     "seniority": "Entry level",
+     "direct_apply": true,
+     "no_jb_schema": null,
+     "ats_duplicate": null,
+     "linkedin_id": 4465584862,
+     "org_linkedin_slug": "truvideo",
+     "org_linkedin_id": 10113614,
+     "org_linkedin_headcount": 49,
+     "org_linkedin_website": "https://truvideo.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "TruVideo is the video intelligence platform helping auto, aviation and insurance brands build trust and grow revenue.",
+     "org_linkedin_industry": "Software Development",
+     "org_linkedin_followers": 2439,
+     "org_linkedin_headquarters": "Wellesley, Massachusetts",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2015",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [
+      "888 Worcester St, Floor 3, Suite 340, Wellesley, Massachusetts 02482, US"
+     ],
+     "org_linkedin_description": "TruVideo is a video, messaging & AI platform for service providers that improves customer communication and trust while increasing revenue.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": "USD",
+     "ai_salary_value": null,
+     "ai_salary_min_value": 65000,
+     "ai_salary_max_value": 85000,
+     "ai_salary_unit_text": "YEAR",
+     "ai_benefits": null,
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "On-site",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": null,
+     "ai_remote_location_derived": null,
+     "ai_key_skills": [
+      "HubSpot Marketing Hub",
+      "Demand Generation",
+      "Marketing Operations",
+      "Project Management",
+      "Email Marketing",
+      "Sales Enablement",
+      "Event Coordination",
+      "WordPress",
+      "Lead Management",
+      "Digital Marketing",
+      "Content Management",
+      "CRM Administration",
+      "B2B Marketing",
+      "Market Research",
+      "Reporting and Analytics",
+      "Written Communication"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "The role focuses on managing day-to-day operations within HubSpot, including email campaigns, landing pages, and lead routing. Additionally, the coordinator supports event logistics, sales enablement collateral, and routine website updates.",
+     "ai_requirements_summary": "Candidates need 2-3 years of professional B2B or SaaS marketing experience with strong organizational and communication skills. A bachelor's degree in Marketing or a related field is preferred, along with proficiency in Microsoft Office or Google Workspace.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "HubSpot",
+      "SaaS",
+      "B2B",
+      "Demand Generation",
+      "Marketing Operations",
+      "Salesforce",
+      "WordPress",
+      "CMS",
+      "Lead Management",
+      "Sales Enablement",
+      "Field Marketing",
+      "Email Marketing",
+      "Landing Pages",
+      "CRM",
+      "Marketing Automation",
+      "Project Management",
+      "Google Workspace",
+      "Microsoft Office",
+      "Digital Marketing",
+      "Content Strategy"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Sales",
+      "Software",
+      "Technology",
+      "Administrative"
+     ],
+     "ai_education": [
+      "bachelor degree"
+     ],
+     "description_text": "About TruVideo\nTruVideo is transforming how automotive, aviation and insurance organizations use video to communicate, document and make better decisions. Our technology helps businesses capture, share and analyze visual information to improve service, reduce costs and create better customer experiences.\n\nWe're growing our marketing team and are looking for an organized, energetic Marketing Coordinator to work closely with our Senior Director of Marketing and CMO across a broad range of marketing programs.\n\nThis is an ideal role for someone with 2\u20133 years of marketing experience who wants to become a well-rounded B2B marketer while developing deep expertise in marketing technology, demand generation and marketing operations.\n\nThe Opportunity\nThis is a hands-on role with a lot of variety. You'll help keep marketing programs moving \u2014 from events and sales enablement to website updates, campaigns, content and marketing technology.\n\nOver time, you'll become the day-to-day owner of HubSpot Marketing Hub, including email campaigns, forms, landing pages, workflows, lists, campaign tracking and reporting.\n\nYou don't need to be a HubSpot expert on day one. We are looking for someone who is digitally savvy, highly organized, curious and eager to become the team's HubSpot expert.\n\nWhat You'll Do\n\nMarketing Operations & HubSpot\nLearn and ultimately own day-to-day administration and execution within HubSpot Marketing Hub\nBuild and manage email campaigns, forms, landing pages, lists and basic workflows\nSupport campaign tracking, lead management and marketing reporting\nMaintain marketing data quality and help ensure leads are properly routed to Sales\nWork with the Senior Director of Marketing to execute demand-generation campaigns\nLearn how Marketing Hub connects with Sales Hub and the broader revenue process\n\nEvents & Field Marketing\nHelp manage TruVideo's annual event and conference calendar\nCoordinate event registrations, deadlines, sponsorship deliverables, booth materials, shipping, promotional items and other logistics\nMaintain event timelines and make sure internal stakeholders have what they need before each event\nSupport pre-event promotion and post-event follow-up\nHelp track leads and results from events\n\nSales Enablement\nHelp create and maintain sales collateral, presentations, one-pagers, case studies, product materials and other sales tools\nWork with Sales and Marketing to keep collateral current and organized\nHelp turn marketing content into practical tools"
+    },
+    {
+     "id": 2364505251,
+     "date_posted": "2026-09-15T17:55:57.174",
+     "date_created": "2026-09-15T18:02:57.238339",
+     "title": "Senior Growth Marketing Associate",
+     "organization": "Good Moose",
+     "organization_url": "https://www.linkedin.com/company/good-moose",
+     "date_valid_through": null,
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "",
+        "addressCountry": "",
+        "addressLocality": "United States"
+       }
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/senior-growth-marketing-associate-at-good-moose-4466554915",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": null,
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      39.7837304
+     ],
+     "lngs_derived": [
+      -100.445882
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": true,
+     "no_jb_schema": true,
+     "ats_duplicate": null,
+     "linkedin_id": 4466554915,
+     "org_linkedin_slug": "good-moose",
+     "org_linkedin_id": 12998861,
+     "org_linkedin_headcount": 22,
+     "org_linkedin_website": "https://goodmoose.co",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "Independent growth marketing agency in New York. Performance media, creative, and\nretention for DTC beauty and consumer ",
+     "org_linkedin_industry": "Advertising Services",
+     "org_linkedin_followers": 6363,
+     "org_linkedin_headquarters": "New York, NY",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2019",
+     "org_linkedin_specialties": [
+      "social advertising",
+      "display advertising",
+      "Amazon advertising",
+      "influencer marketing",
+      "and go-to-market strategies"
+     ],
+     "org_linkedin_locations": [
+      "New York, NY 10002, US"
+     ],
+     "org_linkedin_description": "Good Moose is an independent growth marketing agency in New York working with beauty and consumer brands across direct to consumer and retail. Founded in 2019 out of Red Antler, the brand company behind Casper and Allbirds, we became independent in 2023.  \n\nPrestige beauty is the core of the business. Good Moose has worked with Sol de Janeiro, Summer Fridays, Henry Rose, Living Proof, The Inkey List, True Botanicals, Orlane, and Mario Badescu, spanning skincare, body care, fragrance, and haircare. The work covers both direct to consumer and retail, including brands with significant Sephora and Ulta businesses.\n\nWe run paid media, creative, analytics, and retention as one team rather than splitting\nthem across vendors. Channels include Meta, Google, TikTok, Amazon, and Snapchat, alongside\nemail and SMS. We are a Google Partner, Meta Business Partner, TikTok Marketing Partner,\nTikTok Shops partner, Amazon Ads partner, Snapchat Marketing Partner, and Funnel partner,\nand we are Google Analytics certified.\n\nRecent recognition includes the 2026 Digiday Media Buying and Planning Award for Best Influencer Partnership, for our Henry Rose work with Crystal Nicole, and the 2025 BeautyMatter Award for Best Performance Marketing Campaigns, for our Sol de Janeiro campaign. Our CEO and co-founder Daniel Romano was named an Adweek Media All-Star in 2024.\n\ngoodmoose.co",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": "USD",
+     "ai_salary_value": null,
+     "ai_salary_min_value": 60000,
+     "ai_salary_max_value": 80000,
+     "ai_salary_unit_text": "YEAR",
+     "ai_benefits": [
+      "Health Care (Medical, Dental, Vision)",
+      "HSA/FSA",
+      "Paid Time Off",
+      "Company Paid Holidays",
+      "Flex Fridays",
+      "401K Retirement Plan with Company Match",
+      "Paid Parental Leave",
+      "Commuter Benefits",
+      "Dependent Care FSA",
+      "Mental Health - TalkSpace Membership",
+      "In office lunch"
+     ],
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States"
+     ],
+     "ai_remote_location_derived": [
+      "United States"
+     ],
+     "ai_key_skills": [
+      "Digital Media Management",
+      "Paid Search",
+      "Paid Social",
+      "Client Management",
+      "Data Analytics",
+      "Direct Response Marketing",
+      "Full Funnel Strategy",
+      "Conversion Rate Optimization",
+      "Media Planning",
+      "Project Management",
+      "Google Ads",
+      "Facebook Ads",
+      "Pivot Tables",
+      "VLOOKUP",
+      "Strategic Thinking",
+      "KPI Analysis"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "Support digital campaign activations, optimizations, and reporting to drive conversions and revenue for clients. Collaborate with internal teams to define testing agendas and provide strategic recommendations to senior brand leadership.",
+     "ai_requirements_summary": "Requires 1-3 years of experience in digital media planning and buying, specifically with Google and Facebook ads. Candidates must possess strong analytical skills, exceptional communication abilities, and a conversion-focused direct response background.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Paid Search",
+      "Paid Social",
+      "Google Ads",
+      "Facebook Ads",
+      "CTV/OTT",
+      "Shopify",
+      "Google Data Studio",
+      "TripleWhale",
+      "Northbeam",
+      "Tableau",
+      "Rockerbox",
+      "Glew",
+      "Looker",
+      "Motion",
+      "Direct Response",
+      "Full Funnel",
+      "Conversion Rate Optimization",
+      "KPIs",
+      "Attribution",
+      "Segmentation",
+      "Automation",
+      "Beauty Brands",
+      "Growth Marketing",
+      "Media Buying",
+      "Digital Strategy",
+      "Analytics",
+      "VLOOKUP",
+      "Pivot Tables",
+      "Customer Journey",
+      "CPA"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Creative & Media",
+      "Data & Analytics",
+      "Consulting",
+      "Sales"
+     ],
+     "ai_education": null,
+     "description_text": "Good Moose is an independent boutique Growth Marketing Agency based in New York, partnering with brands of all growth stages, from startups to established market leaders. We help brands to launch, grow, and scale sustainably.\n\nOur team combines hands-on media platform experience with high expertise across creative, analytics, and retention. We leverage data to feed all our processes through measurement, automation, segmentation, attribution, and incrementally, feeding thoughtful, powerful, and efficient strategies that help brands to grow in a profitable way.\n\nIn this remote-first role, you'll be a part of a growing media team that primarily focuses on driving conversions and revenue, but also helps define a full-funnel marketing approach as needed for various clients. In this position, you will gain unparalleled exposure to the entire brand process, from pre-launch to scaling, and build extensive knowledge of best practices in the media industry. We are a dedicated team, passionate about the work we do, how we do it, and who we do it for, and we are looking for a Growth Marketing Associate to work and grow with us.\n\nResponsibilities:\nDigital Media Management & Execution: Support digital campaign activations, strategy, optimizations, reporting, and analysis, focusing on improving results across tactics to meet clients\u2019 goals.\nClient Management: Serve as support to our client partners. Work closely with team leads to efficiently manage day-to-day responsibilities and workflow of client deliverables internally and externally. Educate both client and internal teams on the latest trends, best practices, technologies etc. (This position offers the opportunity to engage and work directly with senior brand leadership - from Investors to Board Members and CEOs - to help identify and build exciting growth strategies.)\nCross-Team Collaboration & Analysis: Work closely with internal teams, including analytics, ad operations, and creatives to help define testing agendas and analyze KPIs in order to improve performance and deliver on revenue goals. Utilize analytics platforms to develop insights and action items intended to increase our clients\u2019 revenues.\nStrategic Thinking & Leadership: Continuously think outside of the box to improve performance. You are able to (and understand when to) wear many hats. For example, you can identify and recommend changes to websites and apps that could improve conversion rates and reduce friction on the customer journey. You\u2019re always"
+    },
+    {
+     "id": 2364511777,
+     "date_posted": "2026-09-15T17:42:45.682",
+     "date_created": "2026-09-15T18:05:45.746412",
+     "title": "Demand Generation Manager (Remote, Houston)",
+     "organization": "Blacksmith Agency",
+     "organization_url": "https://www.linkedin.com/company/blacksmith-agency",
+     "date_valid_through": null,
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "",
+        "addressCountry": "",
+        "addressLocality": "United States"
+       }
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/demand-generation-manager-remote-houston-at-blacksmith-agency-4466555771",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": null,
+     "counties_derived": null,
+     "regions_derived": null,
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      39.7837304
+     ],
+     "lngs_derived": [
+      -100.445882
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": false,
+     "no_jb_schema": true,
+     "ats_duplicate": false,
+     "linkedin_id": 4466555771,
+     "org_linkedin_slug": "blacksmith-agency",
+     "org_linkedin_id": 2811425,
+     "org_linkedin_headcount": 50,
+     "org_linkedin_website": "https://blacksmith.agency",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": null,
+     "org_linkedin_industry": "Advertising Services",
+     "org_linkedin_followers": 7791,
+     "org_linkedin_headquarters": "Phoenix, AZ",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2011",
+     "org_linkedin_specialties": [
+      "SEO",
+      "PPC",
+      "Web Design",
+      "Web Development",
+      "Digital Marketing",
+      "Ecommerce Development",
+      "and Digital Strategy"
+     ],
+     "org_linkedin_locations": [
+      "4600 E Washington, Phoenix, AZ 85034, US",
+      "111 W. Jackson, Chicago, Il. 60604, US",
+      "1745 Broadway, New York City, NY 10019, US",
+      "555 West Fifth Street, Los Angeles, CA 90013, US",
+      "325 N. St. Paul Street, Dallas, Texas 75201, US"
+     ],
+     "org_linkedin_description": "Blacksmith Agency is a digital growth partner for companies that want predictable, measurable revenue from their website and marketing channels.\n\nWe help leadership teams replace fragmented marketing efforts with a disciplined, data driven system that supports real business growth.\n\nOur work sits at the intersection of:\n\u2022 Website strategy, design, and development\n\u2022 Search engine optimization built for long term compounding growth\n\u2022 Paid media tied directly to cost per acquisition and revenue\n\u2022 Analytics and reporting leadership can trust\n\nWe are often brought in when:\n\u2022 A website redesign is overdue and revenue performance matters\n\u2022 SEO or PPC spend lacks accountability or clarity\n\u2022 Marketing data is inconsistent, incomplete, or unreliable\n\u2022 Internal teams need a strong external partner, not another vendor\n\nHow we work:\n\u2022 Strategy before execution\n\u2022 Clear ownership and accountability\n\u2022 Fewer tools, cleaner data\n\u2022 Decisions driven by evidence, not opinions\n\nWho we work best with:\n\u2022 Teams focused on long term ROI over short term tactics\n\nBlacksmith Agency is intentionally selective.\nWe are not built for churn, volume, or vanity metrics.\n\nIf you are looking for:\n\u2022 A website that supports revenue, not just branding\n\u2022 Marketing channels that work together, not in silos\n\u2022 Clear answers to where growth is coming from and why\n\nThat is the work we do.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": null,
+     "ai_experience_level": "5-10",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States",
+      "Canada",
+      "South Africa"
+     ],
+     "ai_remote_location_derived": [
+      "Canada",
+      "South Africa",
+      "United States"
+     ],
+     "ai_key_skills": [
+      "PPC",
+      "SEO",
+      "Demand Generation",
+      "Google Ads",
+      "GA4",
+      "Conversion Rate Optimization",
+      "Paid Social",
+      "Keyword Research",
+      "Technical SEO",
+      "Performance Tracking",
+      "Client Management",
+      "Strategic Planning",
+      "Full-Funnel Strategy",
+      "Analytics",
+      "Lead Generation",
+      "Project Coordination"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "Lead the strategy and performance for PPC and SEO clients across multiple industries, including managing paid search, paid social, and organic search. The role involves joining sales calls to shape strategy and presenting performance summaries to clients.",
+     "ai_requirements_summary": "Requires 4 to 7 years of experience in multi-channel full-funnel strategy with expertise in Google Ads, GA4, and SEO tools. Candidates must have a track record of overseeing execution teams and the ability to articulate strategic recommendations.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Google Ads",
+      "GA4",
+      "Google Search Console",
+      "Meta Ads",
+      "Microsoft Ads",
+      "Technical SEO",
+      "On-page SEO",
+      "Link Building",
+      "Programmatic SEO",
+      "AI SEO",
+      "CRO",
+      "Conversion Attribution",
+      "KPI Tracking",
+      "Demand Generation",
+      "Full-Funnel Strategy",
+      "Multifamily",
+      "Real Estate",
+      "B2B",
+      "Lead Generation",
+      "PPC",
+      "SEO"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Management & Leadership",
+      "Consulting",
+      "Data & Analytics",
+      "Sales"
+     ],
+     "ai_education": null,
+     "description_text": "Blacksmith Agency\n\nMarketing\nFull time\nRemote (USA, Canada or South Africa)\n\nAbout The Role\n\nBlacksmith Agency is scaling its marketing division to support a growing portfolio of PPC and SEO clients across multifamily, B2B and technical verticals. As Demand Generation Manager at Blacksmith, you own strategy, performance and client-facing leadership across paid search, paid social, SEO and conversion optimization.\n\nThis is a hybrid strategic and operational role. You join sales calls to shape strategy, oversee internal and external specialists, build performance roadmaps and make sure client campaigns deliver measurable outcomes. You own results, reporting, QA and continual improvement. It is a senior seat that blends analytical depth, strong communication and execution oversight.\n\nWhat You Will Own\n\nLead strategy for all PPC and SEO clients across multiple industries.\nJoin sales calls with account executives to validate scope, pitch technical recommendations and help close deals.\nBuild 90 day, 6 month and annual growth roadmaps for every client.\nOwn client performance across Google Ads, Meta, Microsoft and organic search.\nAudit PPC campaigns, keyword strategies, bidding structures, landing pages and CRO opportunities.\nOversee technical SEO, on-page SEO, link building, programmatic pages and AI-driven content.\nOwn KPI tracking, conversion attribution and analytics accuracy.\nGive weekly direction and QA, and coordinate priorities with the marketing project manager.\nPresent monthly and quarterly performance summaries to clients.\n\nWhat You Bring\n\n4 to 7 years in PPC, SEO or multi-channel full-funnel strategy.\nStrong experience running paid and organic channels at the same time.\nExpertise with Google Ads, GA4, Google Search Console, keyword research tools and paid media optimization.\nAbility to build and articulate strategic recommendations for clients and account executives.\nA track record of overseeing execution teams and managing deliverable quality.\nSharp analytical skills and the ability to diagnose performance issues fast.\n\nNice to have\n\nAgency experience managing multiple clients at once.\nExperience joining sales calls and influencing close rates.\nFamiliarity with multifamily, real estate or high-intent lead generation.\nExperience with AI SEO, programmatic SEO, technical SEO audits and CRO.\n\nWho Succeeds Here\n\nPeople who think strategically and manage execution.\nPeople who simplify complex marketing ideas for clients.\nPeople who own results and take full"
+    },
+    {
+     "id": 2364314228,
+     "date_posted": "2026-09-15T15:51:38",
+     "date_created": "2026-09-15T16:03:04.60985",
+     "title": "Director of Demand Generation",
+     "organization": "InScribe",
+     "organization_url": "https://www.linkedin.com/company/inscribeapp",
+     "date_valid_through": "2026-10-15T15:51:38",
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US",
+        "addressLocality": "Englewood",
+        "addressRegion": "CO",
+        "streetAddress": null
+       },
+       "latitude": 39.649437,
+       "longitude": -104.98891
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/director-of-demand-generation-at-inscribe-4466529701",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": [
+      "Englewood"
+     ],
+     "counties_derived": [
+      "Arapahoe County"
+     ],
+     "regions_derived": [
+      "Colorado"
+     ],
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "Englewood, Colorado, United States"
+     ],
+     "timezones_derived": [
+      "America/Denver"
+     ],
+     "lats_derived": [
+      39.6482059
+     ],
+     "lngs_derived": [
+      -104.9879641
+     ],
+     "seniority": "Mid-Senior level",
+     "direct_apply": true,
+     "no_jb_schema": null,
+     "ats_duplicate": null,
+     "linkedin_id": 4466529701,
+     "org_linkedin_slug": "inscribeapp",
+     "org_linkedin_id": 18232061,
+     "org_linkedin_headcount": 16,
+     "org_linkedin_website": "http://inscribeapp.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "Helping higher education VPs, Directors, & Deans scale student support, belonging, and retention with measurable impact.",
+     "org_linkedin_industry": "Higher Education",
+     "org_linkedin_followers": 2465,
+     "org_linkedin_headquarters": "Denver, Colorado",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "2016",
+     "org_linkedin_specialties": [
+      "Student Success",
+      "Student Engagement",
+      "Student Belonging",
+      "Student Retention",
+      "Peer-to-Peer Support",
+      "Online Learning Communities",
+      "Higher Education",
+      "EdTech",
+      "AI Moderation",
+      "Scalable Student Support",
+      "Social Capital",
+      "Academic Advising",
+      "Learning Management System (LMS) Integration",
+      "Student Equity",
+      "Virtual Learning Support",
+      "Persistence Strategies",
+      "Institutional Effectiveness",
+      "Non-traditional Learning",
+      "and Online learning"
+     ],
+     "org_linkedin_locations": [
+      "Denver, Colorado 80210, US",
+      "2221 E Arapahoe Rd, 3922, Littleton, Colorado 80122, US"
+     ],
+     "org_linkedin_description": "InScribe is a digital community platform and a trusted online community advisor to higher education leaders. We help institutions scale high-impact student support, engagement, and retention across the institution.\n\nWe work with college and university Vice Presidents, Directors, and Deans to create persistent, AI-moderated online communities. These communities connect students with peers, staff, and faculty so they can get help, share knowledge, and build a lasting sense of belonging\u2014anytime and from anywhere.\n\n\"Connection and community are vital to student success, and the InScribe pilot confirmed this. Expanding the platform at UMGC ensures all students, wherever they are, can access the support they need to thrive.\" Matthew Belanger, VP Student Engagement & Achievement and\nSenior Advisor to the University President\n\nInScribe integrates directly into the systems students already use, including LMS, CRM, and support portals. This ensures support is always available, embedded within the learning environment, and delivered at the moment of need. Our platform helps students develop essential 21st-century skills like collaboration, communication, and information literacy.\n\nUnlike traditional help desks or one-off chat tools, InScribe creates self-sustaining ecosystems of support that grow with your institution. We help campuses reduce support wait times, extend the reach of staff, and improve outcomes for all students\u2014without increasing workload.\n\nThe Results Our Partners Are Achieving\n- Rio Salado College students reported 40% higher levels of belonging and 14% increase in peer connectedness in just 6 weeks.\n- University of Maryland Global Campus saw 13 percentage points higher course success rate, 19 percentage points more likely to earn an A, and 13 percentage points more likely to persist.\n- Arizona State University reported a 10% improvement in the number of students receiving A grades.\n- University of North Texas reported a 13% increase in persistence rates. \n",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": "Ana Hernandez",
+     "recruiter_title": "Co-Founder and COO at InScribe - Helping higher education build digital communities to scale support and improve student outcomes",
+     "recruiter_url": "https://www.linkedin.com/in/ana-hernandez-inscribe",
+     "ai_salary_currency": "USD",
+     "ai_salary_value": null,
+     "ai_salary_min_value": 105000,
+     "ai_salary_max_value": 120000,
+     "ai_salary_unit_text": "YEAR",
+     "ai_benefits": [
+      "Competitive salary",
+      "Full benefits",
+      "Stock options",
+      "Paid family leave",
+      "Uncapped PTO",
+      "Fully remote work environment",
+      "Opportunities for career growth"
+     ],
+     "ai_experience_level": "5-10",
+     "ai_work_arrangement": "Remote OK",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": [
+      "United States"
+     ],
+     "ai_remote_location_derived": [
+      "United States"
+     ],
+     "ai_key_skills": [
+      "Demand Generation",
+      "Digital Acquisition",
+      "B2B SaaS Marketing",
+      "SEO",
+      "Paid Search",
+      "Paid Social",
+      "Marketing Automation",
+      "Account-Based Marketing",
+      "Lead Nurturing",
+      "Conversion Rate Optimization",
+      "Content Strategy",
+      "Data Analysis",
+      "Pipeline Management",
+      "Email Marketing",
+      "Webinar Management",
+      "Higher Education Marketing"
+     ],
+     "ai_hiring_manager_name": "Aaron Knox",
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "Lead the strategy and execution of multi-channel demand generation to increase top-of-funnel growth and qualified prospects for a higher-education SaaS business. Manage digital acquisition, marketing automation, and content campaigns to create a predictable and measurable revenue engine.",
+     "ai_requirements_summary": "Requires 6+ years of B2B marketing experience with a proven track record in demand generation and digital acquisition. Strong preference for candidates with experience marketing technology or SaaS to colleges and universities.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "SaaS",
+      "EdTech",
+      "Demand Generation",
+      "B2B Marketing",
+      "SEO",
+      "SEM",
+      "ABM",
+      "Marketing Automation",
+      "Lead Scoring",
+      "CAC",
+      "ROI",
+      "Conversion Paths",
+      "Higher Education",
+      "Pipeline Growth",
+      "Digital Funnel",
+      "Content Marketing",
+      "Lead Management",
+      "Market Expansion",
+      "Attribution",
+      "Paid Acquisition"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Management & Leadership",
+      "Software",
+      "Education",
+      "Sales"
+     ],
+     "ai_education": null,
+     "description_text": "Director of Demand Generation\nRemote (USA) | Headquartered in Denver, CO\n\nAbout InScribe\nInScribe, is a small remote EdTech company based in Denver, CO. We\u2019re reimagining the student journey with a focus on engagement and belonging to promote success in higher education and beyond. \n\nOur Culture\nWe believe great people build great companies. We believe the right organizational culture is important and that having the right people is the key to our success. At InScribe, we value diverse perspectives, question the status quo, and embrace a culture where mistakes are seen as opportunities to learn. Our team is humble, curious, collaborative, and deeply passionate about improving education. If you\u2019re someone who thrives in a startup environment and finds joy in both the work and the mission, you might be a great fit.\n\nWe are an Equal Employment Opportunity (EEO) employer. We value diversity because it strengthens our work and reflects the communities we serve. We strongly encourage individuals from underrepresented backgrounds in tech and higher ed to apply.\n\nYour Role: Director of Demand Generation\nWe are looking for a highly driven, innovative, and data-oriented Director of Demand Generation to build and lead the engine responsible for substantially increasing awareness, engagement, and top-of-funnel growth for our higher-education SaaS business.\n\nThis is a hands-on leadership role for a marketer who knows how to turn a strong product and compelling market opportunity into a predictable flow of qualified prospects. You will own the strategy and execution across digital demand generation, paid acquisition, organic growth, content-driven campaigns, email, marketing automation, webinars, events, partnerships, and other programs designed to create and accelerate pipeline.\n\nOur ideal candidate understands both modern B2B SaaS demand generation and the unique buying environment of higher education. You will develop campaigns that resonate with university leaders, administrators, and other key decision-makers while building scalable programs that expand our reach across the higher education market.\n\nThe primary mandate is simple: significantly increase the number of qualified prospects entering our funnel and create a scalable, measurable demand-generation engine that contributes directly to revenue growth.\n\nDay to day, you\u2019ll report to our Chief Revenue Officer, Aaron Knox, and with the rest of the Sales & Marketing organization.\n\nWhat You\u2019ll Do\n\nDemand Generation"
+    },
+    {
+     "id": 2363396075,
+     "date_posted": "2026-09-15T03:32:33",
+     "date_created": "2026-09-15T03:36:36.946423",
+     "title": "Growth Marketer",
+     "organization": "Benji",
+     "organization_url": "https://www.linkedin.com/company/withbenji",
+     "date_valid_through": "2027-03-14T03:32:33",
+     "locations": [
+      {
+       "@type": "Place",
+       "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US",
+        "addressLocality": "Chicago",
+        "addressRegion": "IL",
+        "streetAddress": null
+       },
+       "latitude": 41.88323,
+       "longitude": -87.6324
+      }
+     ],
+     "location_type": null,
+     "location_requirements": null,
+     "salary": null,
+     "employment_type": [
+      "FULL_TIME"
+     ],
+     "url": "https://www.linkedin.com/jobs/view/growth-marketer-at-benji-4466174174",
+     "source_type": "jobboard",
+     "source": "linkedin",
+     "source_domain": "linkedin.com",
+     "cities_derived": [
+      "Chicago"
+     ],
+     "counties_derived": [
+      "Cook County"
+     ],
+     "regions_derived": [
+      "Illinois"
+     ],
+     "countries_derived": [
+      "United States"
+     ],
+     "locations_derived": [
+      "Chicago, Illinois, United States"
+     ],
+     "timezones_derived": [
+      "America/Chicago"
+     ],
+     "lats_derived": [
+      41.8755616
+     ],
+     "lngs_derived": [
+      -87.6244212
+     ],
+     "seniority": "Entry level",
+     "direct_apply": false,
+     "no_jb_schema": null,
+     "ats_duplicate": false,
+     "linkedin_id": 4466174174,
+     "org_linkedin_slug": "withbenji",
+     "org_linkedin_id": 105904658,
+     "org_linkedin_headcount": 16,
+     "org_linkedin_website": "https://withbenji.com",
+     "org_linkedin_size": "11-50 employees",
+     "org_linkedin_slogan": "The modern platform for loyalty partnerships",
+     "org_linkedin_industry": "Software Development",
+     "org_linkedin_followers": 785,
+     "org_linkedin_headquarters": "New York, NY",
+     "org_linkedin_type": "Privately Held",
+     "org_linkedin_founded_date": "",
+     "org_linkedin_specialties": [],
+     "org_linkedin_locations": [
+      "1178 Broadway, 3rd Floor #1320, New York, NY 10001, US",
+      "1821 W Hubbard St, Chicago, IL 60622, US"
+     ],
+     "org_linkedin_description": "Join us in building the industry's first loyalty partnership API \u2014 enabling brands to create meaningful partnerships and offer their members powerful ways to earn and redeem reward points.",
+     "org_linkedin_recruitment_agency_derived": false,
+     "recruiter_name": null,
+     "recruiter_title": null,
+     "recruiter_url": null,
+     "ai_salary_currency": null,
+     "ai_salary_value": null,
+     "ai_salary_min_value": null,
+     "ai_salary_max_value": null,
+     "ai_salary_unit_text": null,
+     "ai_benefits": [
+      "Competitive Salary",
+      "Performance Bonuses",
+      "Equity Package",
+      "Medical Benefits",
+      "Dental Benefits",
+      "Vision Benefits",
+      "Unlimited Vacation Policy"
+     ],
+     "ai_experience_level": "2-5",
+     "ai_work_arrangement": "On-site",
+     "ai_work_arrangement_office_days": null,
+     "ai_remote_location": null,
+     "ai_remote_location_derived": null,
+     "ai_key_skills": [
+      "Growth Marketing",
+      "Demand Generation",
+      "Content Creation",
+      "Conversion Rate Optimization",
+      "B2B SaaS",
+      "Storytelling",
+      "Data Analysis",
+      "AI Tooling",
+      "Lead Generation",
+      "Campaign Management",
+      "Copywriting",
+      "Funnel Optimization"
+     ],
+     "ai_hiring_manager_name": null,
+     "ai_hiring_manager_email_address": null,
+     "ai_core_responsibilities": "Build and scale the demand engine by executing campaigns across LinkedIn, email, and content to drive inbound pipeline. Optimize the website for conversion and partner with sales to refine market positioning and messaging.",
+     "ai_requirements_summary": "Requires a data-driven storyteller with B2B SaaS experience and an AI-first mindset for GTM tooling. Candidates should be comfortable owning the growth function end-to-end and creating content from scratch.",
+     "ai_working_hours": 40,
+     "ai_employment_type": [
+      "FULL_TIME"
+     ],
+     "ai_job_language": "English",
+     "ai_visa_sponsorship": false,
+     "ai_keywords": [
+      "Growth Marketing",
+      "Demand Generation",
+      "B2B SaaS",
+      "LinkedIn Ads",
+      "HubSpot",
+      "SEO",
+      "LLMs",
+      "GTM Tooling",
+      "Pipeline Growth",
+      "Conversion Optimization",
+      "Case Studies",
+      "Lead Capture",
+      "Enterprise Strategy",
+      "Content Marketing",
+      "Inbound Marketing"
+     ],
+     "ai_taxonomies_a": [
+      "Marketing",
+      "Sales",
+      "Software",
+      "Technology"
+     ],
+     "ai_education": null,
+     "description_text": "The role\nWe\u2019re hiring a Growth Marketer to build and scale Benji\u2019s demand engine. You\u2019ll own how we generate inbound interest, shape our narrative, and turn attention into pipeline.\nThis is a high-impact role for someone who enjoys both strategy and execution and wants to build something from the ground up.\n\nWhat you\u2019ll do\nBuild and execute campaigns across LinkedIn, email, content, and events.\nDrive consistent inbound pipeline and qualified leads.\nCreate compelling content (case studies, POVs, use cases).\nHelp define and evolve Benji\u2019s voice in the market.\nOptimize website and landing pages for conversion.\nImprove lead capture and funnel performance.\nSupport outbound efforts with messaging, sequences, and collateral.\nPartner closely with sales to refine positioning and campaigns.\nTrack campaign performance and key metrics.\nContinuously test, learn, and improve results.\n\nWhat you\u2019ll bring\nStrong writer and storyteller.\nData-driven and comfortable measuring performance.\nBuilder mindset: you enjoy creating from scratch.\nAI-first mindset: experience across frontier LLMs and GTM tooling, always running experiments, and consistently finding ways to get more done using AI.\nExperience in B2B SaaS, growth, or demand generation.\nComfortable owning a function end-to-end.\nBonus: experience with HubSpot, LinkedIn Ads, SEO, or AI tools.\n\nWhat success looks like\nConsistent inbound pipeline (~15 qualified leads/month).\nCampaigns that drive measurable pipeline and revenue.\nImproved website conversion and content performance.\nClear contribution to overall pipeline growth.\n\nBenefits\nCompetitive salary and performance bonuses\nEquity package\n100% medical, dental and vision benefits\nUnlimited vacation policy\n\nWhy Benji\nJoin Benji to help redefine how enterprises partner and manage rewards. You\u2019ll be part of a scrappy, collaborative team that\u2019s passionate about building something exceptional, with real ownership, early exposure to enterprise strategy, and the opportunity to grow quickly into new roles as the company scales."
+    }
+   ]
+  }
+ }
+}

@@ -195,6 +195,8 @@ const DISCOVERY_PURPOSES: readonly string[] = Object.freeze([
   "funding_discovery",
   "social_discovery",
   "news_signal",
+  // P3: open roles introduce their employer, identity included.
+  "job_discovery",
 ]);
 
 const ROLES: readonly DiscoveryActorRole[] = ["primary", "breadth", "fallback"];
