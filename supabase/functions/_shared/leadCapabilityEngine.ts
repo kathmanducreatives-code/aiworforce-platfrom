@@ -6612,7 +6612,14 @@ export async function runCapabilityPlan(
       // A chain that omits it has said "an earlier step proves this". A chain
       // that includes it has said the opposite. Either way the reasoning is
       // recorded, and the free assessment below still runs on every route.
-      if (chainSkips(cap)) {
+      // P3: "first in the function" is not a hiring re-purchase. When the
+      // mission asked for it and the graph granted the team lookup, the stage
+      // runs anyway (canary 2a215d44: the chain omitted it and the first-hire
+      // check never happened). Paid job re-searches stay suppressed for
+      // job-sourced employers, so the chain's cost decision still holds.
+      const firstHireCheckOwed = firstInFunctionRequested(opts.mission) &&
+        !!opts.plan.steps.find((st) => st.capability === cap)?.providers.includes("apify_linkedin_company_employees");
+      if (chainSkips(cap) && !firstHireCheckOwed) {
         finish(cap, "skipped_no_input", 0, [], false,
           "the planned chain proves hiring from evidence an earlier step already " +
           "returned; a paid verification would re-buy it");

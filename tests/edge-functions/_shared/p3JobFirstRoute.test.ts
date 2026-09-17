@@ -86,11 +86,12 @@ function executionProposal() {
 
 interface Sent { actor: string; input: Record<string, unknown>; spec?: Record<string, unknown> }
 
-function deps(sent: Sent[], opts: { refuseTeam?: boolean } = {}) {
+function deps(sent: Sent[], opts: { refuseTeam?: boolean; chainOmitsHiring?: boolean } = {}) {
   const byUrl = new Map(JOB_ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
   return {
     planDiscovery: emptyDiscoverySelector() as never,
-    planExecution: () => Promise.resolve(executionProposal()),
+    planExecution: () => Promise.resolve(((p) => opts.chainOmitsHiring
+      ? { ...p, steps: p.steps.filter((st) => st.capability !== "hiring_verification") } : p)(executionProposal())),
     invoke: (call: { actorKey: string; input: unknown; providerCallSpec?: Record<string, unknown>;
       onProviderRun?: (r: { run_id: string; dataset_id: null }) => void }) => {
       sent.push({ actor: call.actorKey, input: call.input as Record<string, unknown>, spec: call.providerCallSpec });
@@ -120,7 +121,7 @@ function deps(sent: Sent[], opts: { refuseTeam?: boolean } = {}) {
   };
 }
 
-async function run(over: Record<string, unknown> = {}, depOpts: { refuseTeam?: boolean } = {}) {
+async function run(over: Record<string, unknown> = {}, depOpts: { refuseTeam?: boolean; chainOmitsHiring?: boolean } = {}) {
   const sent: Sent[] = [];
   const result = await runCapabilityPlan(deps(sent, depOpts) as never, {
     mission: MISSION, plan: GRAPH, maxCandidates: 10,
@@ -327,4 +328,17 @@ Deno.test("a spent job-first pool widens by the next page on continuation, as a 
   assert((jobs[0].spec as { idempotency_key: string }).idempotency_key !== (firstJob.spec as { idempotency_key: string }).idempotency_key,
     "page 2 is not mistaken for the page already bought");
   assertEquals(again.result.state.discovery_source_state?.pages_taken?.apify_linkedin_job_search, 2);
+});
+
+Deno.test("the first-hire check still runs when GPT's chain omits hiring verification (canary 2a215d44)", async () => {
+  const { sent, result } = await run({}, { chainOmitsHiring: true });
+  assertEquals(byActor(sent, "apify_linkedin_job_search").length, 1, "no paid job re-search is added back");
+  assertEquals(byActor(sent, "apify_linkedin_company_employees").length, 2, "the bounded team checks run");
+  const hv = result.capability_outcomes.find((o) => o.capability === "hiring_verification");
+  assert(hv?.status !== "skipped_no_input", JSON.stringify(hv));
+  // And without a first-hire request the chain's skip is honoured exactly as before.
+  const plain = compileLeadMission({ originalUserQuery: "Find 1 B2B SaaS startup in the US hiring a growth marketer.", proposal }).final_mission;
+  const plainRun = await run({ mission: plain, plan: buildCapabilityGraph(plain, { executability: "enforce" }) }, { chainOmitsHiring: true });
+  assertEquals(plainRun.result.capability_outcomes.find((o) => o.capability === "hiring_verification")?.status, "skipped_no_input");
+  assertEquals(byActor(plainRun.sent, "apify_linkedin_company_employees").length, 0);
 });
