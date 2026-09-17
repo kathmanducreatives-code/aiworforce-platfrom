@@ -86,7 +86,7 @@ function executionProposal() {
 
 interface Sent { actor: string; input: Record<string, unknown>; spec?: Record<string, unknown> }
 
-function deps(sent: Sent[]) {
+function deps(sent: Sent[], opts: { refuseTeam?: boolean } = {}) {
   const byUrl = new Map(JOB_ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
   return {
     planDiscovery: emptyDiscoverySelector() as never,
@@ -105,6 +105,12 @@ function deps(sent: Sent[]) {
         }));
       }
       if (call.actorKey === "apify_linkedin_company_employees") {
+        if (opts.refuseTeam) {
+          // What the tool layer does for an opt-in-only actor: refused, no run.
+          const err = new Error("apify_actor_disabled_by_default") as Error & { toolResult?: unknown };
+          err.toolResult = { actor_id: "harvestapi/linkedin-company-employees", source_type: "people" };
+          return Promise.reject(err);
+        }
         const url = (input.companies as string[])[0];
         return Promise.resolve([{ id: "p1", currentPositions: [{ title: "Founder & CEO", companyLinkedinUrl: url, current: true }] }]);
       }
@@ -114,9 +120,9 @@ function deps(sent: Sent[]) {
   };
 }
 
-async function run(over: Record<string, unknown> = {}) {
+async function run(over: Record<string, unknown> = {}, depOpts: { refuseTeam?: boolean } = {}) {
   const sent: Sent[] = [];
-  const result = await runCapabilityPlan(deps(sent) as never, {
+  const result = await runCapabilityPlan(deps(sent, depOpts) as never, {
     mission: MISSION, plan: GRAPH, maxCandidates: 10,
     readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
     specMode: "enforce", specScope: { workspace_id: "ws-p3", lineage_id: "lineage-p3" },
@@ -295,3 +301,30 @@ Deno.test("a continuation does not repeat the discovery purchase", async () => {
   assertEquals(new Set(keys).size, keys.length, "no key bought twice");
 });
 
+// ── what the live canary 03f4c9c6 taught ────────────────────────────────────
+
+Deno.test("a team lookup the tool layer refuses is tried once, releases its reservation and blocks no company", async () => {
+  const { sent, result } = await run({}, { refuseTeam: true });
+  assertEquals(byActor(sent, "apify_linkedin_company_employees").length, 1, "an unavailable provider is not retried per company");
+  const team = result.state.spend_ledger.reservations.filter((r: { purpose: string }) => r.purpose === "hiring_evidence");
+  assertEquals(team.map((r: { status: string }) => r.status), ["released"], "refused before any run: nothing booked");
+  for (const c of result.companies) {
+    assertFalse(c.stage_block?.capability === "hiring_verification", `${c.company.company_name} is not held back`);
+    if (c.company.company_name === "Pipewise") continue;
+    assertEquals(c.first_in_function?.status, "unverified");
+    assert(String(c.first_in_function?.reason).includes("apify_actor_disabled_by_default"), String(c.first_in_function?.reason));
+  }
+});
+
+Deno.test("a spent job-first pool widens by the next page on continuation, as a distinct purchase", async () => {
+  const first = await run();
+  const firstJob = byActor(first.sent, "apify_linkedin_job_search")[0];
+  const again = await run({ state: first.result.state,
+    discoveryReplenishment: { reason: "replenishment_required", sources_attempted: ["apify_linkedin_job_search"], pages_taken: {} } });
+  const jobs = byActor(again.sent, "apify_linkedin_job_search");
+  assertEquals(jobs.length, 1);
+  assertEquals(canonicalJson(jobs[0].input), canonicalJson({ ...GPT_JOB_INPUT, page: 2 }), "only the page moved");
+  assert((jobs[0].spec as { idempotency_key: string }).idempotency_key !== (firstJob.spec as { idempotency_key: string }).idempotency_key,
+    "page 2 is not mistaken for the page already bought");
+  assertEquals(again.result.state.discovery_source_state?.pages_taken?.apify_linkedin_job_search, 2);
+});

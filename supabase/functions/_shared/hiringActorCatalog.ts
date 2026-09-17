@@ -487,6 +487,8 @@ export const HIRING_ACTOR_CATALOG: Readonly<Record<string, HiringActorCard>> = O
       experienceLevel: JOB_EXPERIENCE_LEVELS,
     },
     input_limits: { company: 10, industryIds: 20, jobTitles_discovery: 3, locations_discovery: 2,
+      // 25 jobs per page; a continuation may widen a job-first pool to page 3.
+      pages_discovery: 3,
       maxItems: "PER jobTitle PER location — multiplies total rows and cost" },
     outputs: ["id", "title", "linkedinUrl", "jobState", "postedDate", "expireAt", "closedAt",
       "company{id,universalName,name,linkedinUrl,website,employeeCount,employeeCountRange,industries[{name}],locations[{headquarter,parsed.text}],description}",

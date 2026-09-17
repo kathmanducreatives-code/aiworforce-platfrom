@@ -1723,6 +1723,15 @@ export function teamFunctionMembers(
   return out;
 }
 
+/**
+ * A provider refusal that happens before any run exists: the tool layer
+ * declined the actor, or it is not configured or authorised. Nothing was bought.
+ */
+export function refusedBeforeAnyRun(e: unknown): boolean {
+  return /apify_actor_disabled_by_default|actor_not_configured|not configured|apify_unauthorized|unauthorized_actor/i
+    .test(String((e as Error)?.message ?? e));
+}
+
 /** P3 — above this headcount a first-hire team check is not bought. */
 export const TEAM_CHECK_MAX_HEADCOUNT = 200;
 
@@ -3706,8 +3715,11 @@ export async function runCapabilityPlan(
         Date.now() - startedAt, deadlineOperationFor(capability, provider));
       if (callSpec && !inFlight && !completedMatch) {
         const refs = { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key };
-        if (e instanceof CapabilityContainmentError || e instanceof PaidExecutionBlockedError) {
-          // Refused before the network: nothing was bought.
+        const failedRunId = ((e as { toolResult?: { run_id?: unknown } }).toolResult ?? {}).run_id;
+        if (e instanceof CapabilityContainmentError || e instanceof PaidExecutionBlockedError ||
+            (typeof failedRunId !== "string" && refusedBeforeAnyRun(e))) {
+          // Refused before the network — or by the tool layer before any run
+          // existed (P3 canary 03f4c9c6: an opt-in-only actor) — nothing was bought.
           release(state.spend_ledger!, callSpec.idempotency_key);
           appendTrace(state.mission_trace!, "call_released", { actor: provider, error: String(e).slice(0, 200) }, refs);
         } else {
@@ -5204,12 +5216,18 @@ export async function runCapabilityPlan(
       if (opts.discoveryReplenishment) {
         for (const sel of strategy.selections) {
           const card = hiringActorCard(sel.actor_key);
-          if (!card || !acceptedInputFields(card).includes("startPage")) continue;
-          const limit = Number(card.input_limits?.takePages ?? 0);
-          const taken = pagesTaken[sel.actor_key] ?? 0;
+          // P3: the LinkedIn job search pages with `page`, bounded by the card,
+          // so a job-first continuation widens the pool instead of idling
+          // (canary 03f4c9c6: four barren slices).
+          const pageField = card && acceptedInputFields(card).includes("startPage") ? "startPage"
+            : card && cap === "job_discovery" && acceptedInputFields(card).includes("page") ? "page" : null;
+          if (!card || !pageField) continue;
+          const limit = Number(card.input_limits?.[pageField === "page" ? "pages_discovery" : "takePages"] ?? 0);
+          const taken = pagesTaken[sel.actor_key] ??
+            (pageField === "page" && attemptCountFor(sel.actor_key) > 0 ? 1 : 0);
           if (taken <= 0 || limit <= taken) continue;
           // THE INPUT CARRIES THE NEXT PAGE; THE CURSOR DOES NOT MOVE YET.
-          sel.input = { ...sel.input, startPage: taken + 1 };
+          sel.input = { ...sel.input, [pageField]: taken + 1 };
           proposedPages.set(sel.actor_key, {
             page: taken + 1, before: attemptCountFor(sel.actor_key),
           });
@@ -7033,7 +7051,7 @@ export async function runCapabilityPlan(
       // provider for this mission, only for SHORTLISTED companies (enriched,
       // hiring verified or needing review), and only where the posting does not
       // already say so. Titles are read; no person is kept.
-      const teamChecks = { checked: 0, supported: 0, contradicted: 0, from_posting: 0 };
+      const teamChecks = { attempted: 0, checked: 0, supported: 0, contradicted: 0, from_posting: 0 };
       const teamStep = opts.plan.steps.find((st) => st.capability === cap);
       if (firstInFunctionRequested(opts.mission) &&
           teamStep?.providers.includes("apify_linkedin_company_employees")) {
@@ -7045,7 +7063,13 @@ export async function runCapabilityPlan(
         const shortlisted = companies.filter((c) => c.enriched && c.hiring_assessment &&
           (c.hiring_assessment.verdict === "hiring_verified" || c.hiring_assessment.verdict === "hiring_verification_needed"))
           .sort((a, b) => (headcount(a) ?? Number.MAX_SAFE_INTEGER) - (headcount(b) ?? Number.MAX_SAFE_INTEGER));
+        let teamLookupUnavailable: string | null = null;
         for (const c of shortlisted) {
+          if (teamLookupUnavailable) {
+            c.first_in_function ??= { status: "unverified", source: "none",
+              reason: `team check not run: ${teamLookupUnavailable}` };
+            continue;
+          }
           if (c.first_in_function?.status === "supported" && c.first_in_function.source === "job_posting") {
             teamChecks.from_posting++;
             continue;
@@ -7060,16 +7084,25 @@ export async function runCapabilityPlan(
               reason: `team check not bought: ${hc} employees makes a first hire in the function implausible` };
             continue;
           }
-          if (teamChecks.checked >= maxChecks) break;
+          if (teamChecks.attempted >= maxChecks) break;
           const url = c.identity?.linkedin_company_url ?? c.company.linkedin_company_url;
           if (!url || titles.length === 0) continue;
           const compiled = compileHarvestCompanyEmployeesInput({
             companies: [url], jobTitles: titles, maxItems: 3, maxItemsPerCompany: 3,
             profileScraperMode: COMPANY_EMPLOYEES_SCRAPER_MODES[0],
           });
+          const priorBlock = c.stage_block;
           const rows = await callProvider(cap, "apify_linkedin_company_employees", compiled, c);
-          if (c.stage_block?.capability === cap) {
-            c.first_in_function = { status: "unverified", source: "none", reason: `team check not run: ${c.stage_block.reason}` };
+          teamChecks.attempted++;
+          if (c.stage_block !== priorBlock && c.stage_block?.capability === cap) {
+            // EVIDENCE, NEVER A GATE. A failed team lookup must not hold the
+            // company back from qualification (canary 03f4c9c6: four companies
+            // stuck "verifying", the Brain never asked).
+            const last = state.provider_attempts[state.provider_attempts.length - 1];
+            const why = String(last?.reason ?? c.stage_block.reason).slice(0, 160);
+            c.stage_block = priorBlock;
+            c.first_in_function = { status: "unverified", source: "none", reason: `team check failed: ${why}` };
+            if (refusedBeforeAnyRun(why)) teamLookupUnavailable = `the team lookup provider is unavailable (${why})`;
             continue;
           }
           teamChecks.checked++;
@@ -9420,6 +9453,9 @@ export function restoreWorkingSet(
  */
 const DISCOVERY_REPLENISHABLE: ReadonlySet<string> = new Set([
   "startup_company_discovery", "general_company_discovery",
+  // P3: a spent job-first pool widens by the job search's next `page`
+  // (canary 03f4c9c6 idled four slices without this).
+  "job_discovery",
 ]);
 
 /**

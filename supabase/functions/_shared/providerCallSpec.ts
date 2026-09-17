@@ -415,9 +415,18 @@ export function compileProviderCallSpec(i: SpecCompileInput): ProviderCallSpec {
   // 5. Cost, identity, refusal.
   const serialized = JSON.parse(JSON.stringify(final)) as Record<string, unknown>;
   const estimate = i.cost_model ? estimateCallUsd(i.actorKey, i.cost_model, serialized) : 0;
-  const page = i.page ?? 0;
   const pageless = { ...serialized };
-  for (const k of Object.keys(pageless)) if (roleOf(i.actorKey, k) === "page") delete pageless[k];
+  // THE PAGE IS PART OF THE IDENTITY. Stripped from the canonical input and
+  // appended explicitly — read from the input's own page fields when the caller
+  // passes none, so page 2 is never mistaken for an already-bought page 1.
+  let derivedPage = 0;
+  for (const k of Object.keys(pageless)) {
+    if (roleOf(i.actorKey, k) !== "page") continue;
+    const n = Number(pageless[k]);
+    if (k !== "takePages" && Number.isFinite(n) && n > 1) derivedPage = Math.max(derivedPage, n);
+    delete pageless[k];
+  }
+  const page = i.page ?? derivedPage;
   const idempotency_key = sha256Hex(
     `${i.scope.workspace_id}:${i.scope.lineage_id}:apify:${i.actorKey}:${i.purpose}:${canonicalJson(pageless)}:${page}`);
   let status: ProviderCallSpec["status"] = "intended";
