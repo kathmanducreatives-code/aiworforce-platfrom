@@ -51,6 +51,10 @@ export const LEAD_MISSION_VERSION = "lead-mission-v1" as const;
 export const PROVENANCE_ORDER = [
   "explicit_user_request",
   "workflow_edit",
+  // P3 freeze: a Company Brain value the workspace ENFORCES on every mission
+  // (explicit numeric size, compiled by `compileEffectiveCompanyPolicy`). Same
+  // precedence as the Brain; different meaning — hard, not a preference.
+  "company_brain_policy",
   "company_brain",
   "system_default",
   "gpt_inference",
@@ -1216,6 +1220,12 @@ export interface BrainMergeInput {
   locations?: string[];
   employee_min?: number | null;
   employee_max?: number | null;
+  /**
+   * The size bounds are an explicit numeric Brain rule the run enforces as a
+   * hard policy (`compileEffectiveCompanyPolicy`), not a preference. Canary
+   * 2a215d44 excluded 30 employers on it while the card never showed it.
+   */
+  employee_policy?: boolean;
 }
 
 export interface BrainMergeResult {
@@ -1309,7 +1319,7 @@ export function mergeCompanyBrainIntoMission(
       cp.employee_range = {
         ...(bMin != null ? { min: bMin } : {}), ...(bMax != null ? { max: bMax } : {}),
       };
-      prov["company_profile.employee_range"] = "company_brain";
+      prov["company_profile.employee_range"] = brain.employee_policy ? "company_brain_policy" : "company_brain";
       applied.push({ field: "company_profile.employee_range", values: [`${bMin ?? ""}-${bMax ?? ""}`] });
     } else {
       const next = { ...userRange };

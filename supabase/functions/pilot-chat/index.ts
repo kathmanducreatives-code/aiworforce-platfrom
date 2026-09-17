@@ -314,6 +314,9 @@ export interface CompilerBrainContext {
   industries: string[];
   stages: string[];
   locations: string[];
+  employee_min?: number | null;
+  employee_max?: number | null;
+  employee_policy?: boolean;
 }
 
 function companyBrainContextForCompiler(brain: any): CompilerBrainContext {
@@ -325,7 +328,17 @@ function companyBrainContextForCompiler(brain: any): CompilerBrainContext {
     industries: arr(icp.industries ?? icp.industry ?? icp.target_industry),
     stages: arr(icp.company_stage ?? icp.stages ?? icp.funding_stage),
     locations: arr(icp.geography ?? icp.locations ?? icp.location),
+    // THE BRAIN'S ENFORCED SIZE RULE. run-agent compiles these exact fields into
+    // a hard policy (`compileEffectiveCompanyPolicy`); the card must show it.
+    ...(num(icp.company_size_min) != null || num(icp.company_size_max) != null
+      ? { employee_min: num(icp.company_size_min), employee_max: num(icp.company_size_max), employee_policy: true }
+      : {}),
   };
+}
+
+function num(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
 }
 
 function buildMissionForPrompt(

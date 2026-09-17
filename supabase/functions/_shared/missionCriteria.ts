@@ -410,6 +410,7 @@ const sourceFromProvenance = (
     case "explicit_user_request":
     case "workflow_edit": return "user_explicit";
     case "company_brain": return "company_brain_preference";
+    case "company_brain_policy": return "company_brain_policy";
     case "system_default": return "system_default";
     case "gpt_inference": return valueInQuery ? "user_explicit" : "user_inferred";
     default: return valueInQuery ? "user_explicit" : "user_inferred";
@@ -565,10 +566,12 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
     const source = sourceFromProvenance(prov["company_profile.employee_range"],
       /\b\d{1,5}\s*(?:-|to|–)\s*\d{1,5}\b|\bemployees?\b/.test(q));
     push({
-      kind: source === "user_explicit" ? "hard" : "target", dimension: "company_size",
+      kind: source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target", dimension: "company_size",
       value: { min: er.min ?? null, max: er.max ?? null },
       label: `Company size: ${er.min ?? 0}–${er.max ?? "∞"} employees`, source, user_phrase: "",
-      rationale: source === "company_brain_preference"
+      rationale: source === "company_brain_policy"
+        ? "your Company Brain's size rule, enforced on every mission"
+        : source === "company_brain_preference"
         ? "your Company Brain's size band; you did not state one" : "stated in the request",
     });
   }

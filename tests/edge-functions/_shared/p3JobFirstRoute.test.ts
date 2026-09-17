@@ -342,3 +342,29 @@ Deno.test("the first-hire check still runs when GPT's chain omits hiring verific
   assertEquals(plainRun.result.capability_outcomes.find((o) => o.capability === "hiring_verification")?.status, "skipped_no_input");
   assertEquals(byActor(plainRun.sent, "apify_linkedin_company_employees").length, 0);
 });
+
+// ── P3 freeze: the Company Brain's enforced size rule is visible, not hidden ──
+
+import { criteriaSections, deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
+
+Deno.test("an explicit numeric Company Brain size is a hard Brain rule on the card, not a hidden filter (canary 2a215d44)", () => {
+  // Compiled the way pilot-chat compiles: Brain merged, then criteria derived.
+  const policy = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150, employee_policy: true } }).final_mission;
+  assertEquals(policy.field_provenance["company_profile.employee_range"], "company_brain_policy");
+  const size = deriveMissionCriteria(policy).find((c) => c.dimension === "company_size")!;
+  assertEquals([size.kind, size.source], ["hard", "company_brain_policy"]);
+  const hard = criteriaSections(policy).hard;
+  assert(hard.some((l) => l.includes("Company size: 1–150") && l.includes("Company Brain rule")), JSON.stringify(hard));
+  assert(criteriaExecutionPolicy(policy).dimensions.company_size.may_reject,
+    "the run's enforced size rule and the criteria agree");
+  // A Brain size band that is NOT an enforced rule stays a preference.
+  const pref = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission;
+  const prefSize = deriveMissionCriteria(pref).find((c) => c.dimension === "company_size")!;
+  assertEquals([prefSize.kind, prefSize.source], ["target", "company_brain_preference"]);
+  // Pilot passes the same Brain fields run-agent enforces.
+  const pilot = Deno.readTextFileSync(new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
+  assert(/employee_min: num\(icp\.company_size_min\), employee_max: num\(icp\.company_size_max\), employee_policy: true/.test(pilot));
+  const runAgent = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
+  assert(runAgent.includes("company_size_min: brainIcpCtx.icp.company_size_min ?? null"));
+});
