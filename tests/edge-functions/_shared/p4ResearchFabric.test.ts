@@ -32,6 +32,9 @@ import { buildRetrievalPlan, type RetrievalPlan } from "../../../supabase/functi
 import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
 import { DEFAULT_CEILINGS } from "../../../supabase/functions/_shared/budgetPolicy.ts";
 import { parseRouteControlProposal } from "../../../supabase/functions/_shared/gptRouteController.ts";
+import {
+  CHECKPOINT_RESULT_KEY, readCheckpointCompanies, RESUME_STATE_VERSION,
+} from "../../../supabase/functions/_shared/leadResumeState.ts";
 import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
 
 globalThis.fetch = () => { throw new Error("P4 fabric tests must not reach the network"); };
@@ -162,8 +165,15 @@ Deno.test("both sources' evidence survives the merge, and provenance survives a 
   assert(f.evidence.dimensions.some((d) => d.dimension === "job"), "the posting only the job route had is kept");
   assertEquals(f.evidence.gaps, ["funding"]);
   assertEquals(fabric.union.multi_source_companies, 1);
-  // Through a checkpoint and back.
-  const restored = restoreWorkingSet([toResumeRecord(c)]);
+  // Through the REAL checkpoint path — written, persisted as JSON, read back by
+  // the reader that validates it. Canary 0dbce8d5 lost `found_by` here: the
+  // writer recorded it and `readWorkingSetSnapshot` did not read it.
+  const persisted = JSON.parse(JSON.stringify({
+    [CHECKPOINT_RESULT_KEY]: { version: RESUME_STATE_VERSION, companies: [toResumeRecord(c)] },
+  }));
+  const records = readCheckpointCompanies(persisted);
+  assertEquals(records.length, 1);
+  const restored = restoreWorkingSet(records);
   assertEquals(restored[0].found_by!.map((x) => x.provider_call_id), ["pc_job_1", "pc_yc_1"]);
   assertEquals(restored[0].observations!.length, 2);
 });

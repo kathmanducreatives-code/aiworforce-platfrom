@@ -849,7 +849,24 @@ function readWorkingSetSnapshot(raw: unknown): CompanyWorkingSetSnapshot | null 
     // AND THE EVALUATION IT CITES. Written, declared and read — all three, or
     // the verdict comes back as an outcome with no reasoning behind it.
     mission_evaluation: asObjectOrNull(s.mission_evaluation),
+    // P4 — THE UNION'S PROVENANCE, READ BACK AS WELL AS WRITTEN.
+    //
+    // Canary 0dbce8d5 restored ten companies whose `found_by` the writer had
+    // recorded and this reader dropped, so a continuation reported one source
+    // for a company two routes had found. Bounded on read like the job lists.
+    found_by: boundedRecords(s.found_by, MAX_SNAPSHOT_FOUND_BY),
+    observations: boundedRecords(s.observations, MAX_SNAPSHOT_OBSERVATIONS),
+    identity_conflicts: boundedRecords(s.identity_conflicts, MAX_SNAPSHOT_FOUND_BY),
   };
+}
+
+/** How many route sightings and observations a restored company may carry. */
+export const MAX_SNAPSHOT_FOUND_BY = 12;
+export const MAX_SNAPSHOT_OBSERVATIONS = 8;
+
+function boundedRecords(raw: unknown, cap: number): Record<string, unknown>[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map(asRecord).filter((x): x is Record<string, unknown> => x !== null).slice(0, cap);
 }
 
 /**
