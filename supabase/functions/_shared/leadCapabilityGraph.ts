@@ -1024,6 +1024,12 @@ export function buildCapabilityGraph(
 
   let order = 0;
   steps.push(step(entry, order++, entryReason));
+  // P3: on the V2 job route only the carded LinkedIn job search is offered;
+  // the uncarded boards could never be selected and only confuse the planner.
+  if (enforceExecutability && entry === "job_discovery" && mission.requested_output !== "job_listings") {
+    steps[steps.length - 1].providers = steps[steps.length - 1].providers
+      .filter((p) => !BROAD_JOB_PROVIDERS.includes(p));
+  }
 
   if (entry === "job_discovery") {
     steps.push(step("job_deduplication", order++, "job output must be deduplicated"));
@@ -1312,7 +1318,27 @@ export function buildCapabilityGraph(
   // knowledge they reach the planner's briefing and inform an actor choice;
   // stated as branches they silently replace one.
   const routing_advisories: string[] = [];
-  if (strategy.includes("job_signal_first") || hasSignal(mission, "hiring")) {
+  // P3: the V2 job-first route states what is TRUE of it. Positive wording
+  // only — a planner told an actor "cannot" prove something returns no plan
+  // (see agentory planner empty-plan veto, 2026-09-14; canary 357f93e8).
+  const jobFirstRoute = enforceExecutability && entry === "job_discovery" &&
+    mission.requested_output !== "job_listings";
+  if (jobFirstRoute) {
+    routing_advisories.push(
+      "This mission is hiring-led and enters through job_discovery. " +
+      "apify_linkedin_job_search called WITHOUT `company` discovers employers that have the open role " +
+      "right now; every row carries the employer's LinkedIn URL, website and exact headcount, so " +
+      "identity resolution reuses that URL. Plan job_discovery with actor-native input — jobTitles " +
+      "as one boolean OR query of the role's real titles, locations for a hard geography, postedLimit, " +
+      "maxItems — then identity resolution, enrichment, hiring verification and qualification.",
+      "Stage, company size and industry are judged afterwards from enrichment and ranked; a target " +
+      "criterion is evidence for ranking, never a reason to plan fewer steps.",
+      ...(firstInFunctionRequested(mission)
+        ? ["'First in the function' is checked by the engine during hiring verification on shortlisted " +
+          "companies — from the posting's own words first, then a bounded team lookup. No extra step is needed."]
+        : []),
+    );
+  } else if (strategy.includes("job_signal_first") || hasSignal(mission, "hiring")) {
     routing_advisories.push(
       "This mission is hiring-first. No registered Actor can DISCOVER open job " +
       "postings across employers: the four job-board Actors have no verified " +
@@ -1323,7 +1349,7 @@ export function buildCapabilityGraph(
       "discovery first and hiring verification second over the pool it returns.",
     );
   }
-  if (mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
+  if (!jobFirstRoute && mission.company_profile.stages.some((s) => /startup|seed|series a|early/.test(s))) {
     routing_advisories.push(
       "The mission targets startups. Startup-cohort sources carry stage, team " +
       "size and hiring state natively; a general company index does not and " +

@@ -527,7 +527,13 @@ export function buildExecutionPlannerPayload(
               // `not_for: "semantic/concept search"` is true of `searchQuery`
               // and of nothing else. Said without this, the model reads it as
               // "cannot discover a concept population" and plans nothing.
-              ...(supportsStructuredDiscovery(card)
+              ...(s.capability === "job_discovery" && key === "apify_linkedin_job_search"
+                ? {
+                  concept_discovery:
+                    "via jobTitles (one boolean OR query of the role's titles) with locations, " +
+                    "postedLimit and optionally industryIds; omit company",
+                }
+                : supportsStructuredDiscovery(card)
                 ? {
                   concept_discovery: "via industryIds/locations/companySize, not searchQuery",
                 }
@@ -540,7 +546,12 @@ export function buildExecutionPlannerPayload(
                 ? {
                   input_contract: {
                     fields: ACTOR_INPUT_CONTRACTS[key].fields,
-                    example: ACTOR_INPUT_CONTRACTS[key].example,
+                    example: s.capability === "job_discovery" && key === "apify_linkedin_job_search"
+                      ? {
+                        jobTitles: ['"growth marketer" OR "growth marketing manager" OR "head of growth"'],
+                        locations: ["United States"], postedLimit: "month", sortBy: "date", maxItems: 10,
+                      }
+                      : ACTOR_INPUT_CONTRACTS[key].example,
                     ...(ACTOR_INPUT_CONTRACTS[key].selection_notes
                       ? { selection_notes: ACTOR_INPUT_CONTRACTS[key].selection_notes }
                       : {}),

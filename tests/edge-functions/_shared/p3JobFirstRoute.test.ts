@@ -195,6 +195,27 @@ Deno.test("the canonical mission is hiring-led: V2 enters through job discovery,
   assertFalse(plainGraph.allowed_providers.includes("apify_linkedin_company_employees"));
 });
 
+Deno.test("the planner payload tells the truth about the job route (canary 357f93e8: a stale advisory made GPT return no steps)", () => {
+  const payload = buildExecutionPlannerPayload(MISSION, GRAPH, { brain: null }) as Record<string, any>;
+  const text = JSON.stringify(payload);
+  assertFalse(text.includes("No registered Actor can DISCOVER"), "the pre-P3 advisory is gone on the job route");
+  assertFalse(text.includes("company-scoped by contract"));
+  assertFalse(/a general company index does not and\s+cannot prove/.test(text), "no startup-cohort veto on the job route");
+  const advisories = (payload.execution_advisories ?? []) as string[];
+  assert(advisories.some((a) => a.includes("WITHOUT `company` discovers employers")));
+  assert(advisories.some((a) => a.includes("never a reason to plan fewer steps")));
+  assert(advisories.some((a) => a.includes("'First in the function' is checked by the engine")));
+  for (const a of advisories) assertFalse(/\bcannot\b/i.test(a), `positive wording only: ${a}`);
+  const job = payload.authorised_capabilities.find((c: { capability: string }) => c.capability === "job_discovery");
+  assertEquals(job.actors.map((a: { actor_key: string }) => a.actor_key), ["apify_linkedin_job_search"], "uncarded boards are not offered");
+  const actor = job.actors[0];
+  assertFalse("company" in actor.input_contract.example, "the discovery example omits company");
+  assert(String(actor.concept_discovery).includes("omit company"));
+  // Legacy (V1) payload is untouched.
+  const legacy = JSON.stringify(buildExecutionPlannerPayload(MISSION, buildCapabilityGraph(MISSION), { brain: null }));
+  assert(legacy.includes("No registered Actor can DISCOVER"), "V1 prompt byte-for-byte as before");
+});
+
 Deno.test("GPT is briefed with the hiring actor card and its discovery guidance, not the YC cards", () => {
   const keys = authorisedActorKeys(buildExecutionPlannerPayload(MISSION, GRAPH, { brain: null }) as never);
   assert(keys.includes("apify_linkedin_job_search"));
