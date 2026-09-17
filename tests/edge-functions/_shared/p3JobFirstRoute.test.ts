@@ -347,6 +347,7 @@ Deno.test("the first-hire check still runs when GPT's chain omits hiring verific
 
 import { criteriaSections, deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { criteriaExecutionPolicy } from "../../../supabase/functions/_shared/criteriaExecutionPolicy.ts";
+import { compileCompanyBrainContext } from "../../../supabase/functions/_shared/companyBrainCompiler.ts";
 
 Deno.test("an explicit numeric Company Brain size is a hard Brain rule on the card, not a hidden filter (canary 2a215d44)", () => {
   // Compiled the way pilot-chat compiles: Brain merged, then criteria derived.
@@ -362,9 +363,14 @@ Deno.test("an explicit numeric Company Brain size is a hard Brain rule on the ca
   const pref = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: { employee_min: 1, employee_max: 150 } }).final_mission;
   const prefSize = deriveMissionCriteria(pref).find((c) => c.dimension === "company_size")!;
   assertEquals([prefSize.kind, prefSize.source], ["target", "company_brain_preference"]);
-  // Pilot passes the same Brain fields run-agent enforces.
+  // Pilot derives the rule with the SAME compiler run-agent enforces from. The
+  // live Brain stores a LABEL, not numbers (canary 1fb4e5b3 card showed no size
+  // while execution enforced 1–150): the label must still reach the card.
   const pilot = Deno.readTextFileSync(new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
-  assert(/employee_min: num\(icp\.company_size_min\), employee_max: num\(icp\.company_size_max\), employee_policy: true/.test(pilot));
+  assert(/compileCompanyBrainContext\(\{ workspace_id: "", profile: brain as Record<string, unknown> \}\)\.icp/.test(pilot));
+  assert(pilot.includes("companyBrainContextForCompiler({ ...profile, icp })"), "the card passes the whole profile");
   const runAgent = Deno.readTextFileSync(new URL("../../../supabase/functions/run-agent/index.ts", import.meta.url));
-  assert(runAgent.includes("company_size_min: brainIcpCtx.icp.company_size_min ?? null"));
+  assert(runAgent.includes("compileCompanyBrainContext({ workspace_id, profile: brain as unknown as Record<string, unknown> })"));
+  const labelled = compileCompanyBrainContext({ workspace_id: "", profile: { icp: { company_size: "Founder-led to early-stage teams; lean GTM or recruiting ops" } } }).icp;
+  assertEquals([labelled.company_size_min, labelled.company_size_max], [1, 150]);
 });

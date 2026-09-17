@@ -111,6 +111,7 @@ import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainL
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
+import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
@@ -328,17 +329,21 @@ function companyBrainContextForCompiler(brain: any): CompilerBrainContext {
     industries: arr(icp.industries ?? icp.industry ?? icp.target_industry),
     stages: arr(icp.company_stage ?? icp.stages ?? icp.funding_stage),
     locations: arr(icp.geography ?? icp.locations ?? icp.location),
-    // THE BRAIN'S ENFORCED SIZE RULE. run-agent compiles these exact fields into
-    // a hard policy (`compileEffectiveCompanyPolicy`); the card must show it.
-    ...(num(icp.company_size_min) != null || num(icp.company_size_max) != null
-      ? { employee_min: num(icp.company_size_min), employee_max: num(icp.company_size_max), employee_policy: true }
-      : {}),
+    // THE BRAIN'S ENFORCED SIZE RULE, derived by the SAME compiler run-agent
+    // uses (`compileCompanyBrainContext` → `compileEffectiveCompanyPolicy`). A
+    // size LABEL ("Founder-led to early-stage teams…") parses to 1–150 there
+    // and is enforced as a hard bound, so the card must show exactly that.
+    ...brainSizeRule(brain),
   };
 }
 
-function num(v: unknown): number | null {
-  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
-  return Number.isFinite(n) ? n : null;
+function brainSizeRule(brain: any): Pick<CompilerBrainContext, "employee_min" | "employee_max" | "employee_policy"> {
+  if (!brain || typeof brain !== "object") return {};
+  const { company_size_min: min, company_size_max: max } =
+    compileCompanyBrainContext({ workspace_id: "", profile: brain as Record<string, unknown> }).icp;
+  return min != null || max != null
+    ? { employee_min: min ?? null, employee_max: max ?? null, employee_policy: true }
+    : {};
 }
 
 function buildMissionForPrompt(
@@ -915,7 +920,7 @@ async function generateWorkflowConfirmation(
   };
   // Brain-only ICP context for the compiler. Derived from the Company Brain
   // profile, never from the sentence — see `companyBrainContextForCompiler`.
-  const cardBrainContext = companyBrainContextForCompiler({ icp });
+  const cardBrainContext = companyBrainContextForCompiler({ ...profile, icp });
   if (LEAD_CONFIRMATION_CATEGORIES.has(category)) {
     // ── THE ONE INTERPRETIVE MODEL CALL, BEFORE ANYTHING IS PLANNED ────────
     //
