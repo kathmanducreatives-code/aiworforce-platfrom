@@ -29,6 +29,8 @@ import {
   LEAD_MISSION_VERSION, type LeadMissionV1,
 } from "../../../supabase/functions/_shared/leadMission.ts";
 import { compileFirstProviderCall } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { BROAD_JOB_PROVIDERS } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { discoveryCatalogBriefing } from "../../../supabase/functions/_shared/leadDiscoveryStrategy.ts";
 import {
   HIRING_ACTOR_CATALOG,
 } from "../../../supabase/functions/_shared/hiringActorCatalog.ts";
@@ -146,6 +148,12 @@ Deno.test("every capability the hiring playbook needs has engine + card + compil
     apify_linkedin_company_details: compileHarvestCompanyDetailsInput as never,
     apify_linkedin_job_search: compileHarvestJobSearchInput as never,
   };
+  // P3: job_discovery's carded provider is the LinkedIn job search (discovery
+  // compiler: compileHarvestJobDiscoveryInput). The four broad job boards stay
+  // declared and uncarded; the discovery briefing never offers them, so they
+  // can never be chosen — asserted below rather than exempted silently.
+  const briefedKeys = new Set(discoveryCatalogBriefing().map((e) => String(e.actor_key)));
+  for (const b of BROAD_JOB_PROVIDERS) assertFalse(briefedKeys.has(b), `${b} must never be briefed`);
 
   const spec = RESEARCH_PLAYBOOKS.hiring;
   for (const capability of [...spec.discovery_capabilities, ...spec.proving_capabilities]) {
@@ -153,6 +161,7 @@ Deno.test("every capability the hiring playbook needs has engine + card + compil
     const providers = CAPABILITY_REGISTRY[capability].providers;
     assert(providers.length > 0, `${capability}: no approved provider`);
     for (const p of providers) {
+      if (capability === "job_discovery" && BROAD_JOB_PROVIDERS.includes(p)) continue;
       const card = HIRING_ACTOR_CATALOG[p];
       assert(card, `${p}: no catalogue card, so no Actor id can be resolved`);
       assert(card.actor_id.includes("/"), `${p}: card has no Actor id`);
@@ -373,7 +382,10 @@ Deno.test("a hiring Mission asking for job listings is still authorised", () => 
   });
   const { plan, authorization } = chain(m);
   assertEquals(plan.entry_capability, "job_discovery");
-  assertEquals(authorization.entry_source, "mission_forced");
+  // P3: job_discovery is a hiring-playbook discovery capability now. The
+  // playbook authorises it; the paid preflight still refuses job LISTINGS as
+  // the deliverable (p0TruthfulFeasibility: "a job-listing mission is refused").
+  assertEquals(authorization.entry_source, "playbook_discovery");
   assert(authorization.authorized, authorization.reason);
 });
 

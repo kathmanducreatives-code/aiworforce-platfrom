@@ -16,6 +16,8 @@ import {
   assessRequestFeasibility, type FeasibilityReport,
 } from "../../../supabase/functions/_shared/requestFeasibility.ts";
 import { buildPaidExecutionPreflight } from "../../../supabase/functions/_shared/leadPaidExecutionPreflight.ts";
+import { authorizePlaybookExecution } from "../../../supabase/functions/_shared/leadPlaybookExecution.ts";
+import { selectResearchPlaybooks } from "../../../supabase/functions/_shared/leadResearchPlaybooks.ts";
 import { compileFirstProviderCall } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { isCapabilityExecutable } from "../../../supabase/functions/_shared/capabilityExecutability.ts";
 import { buildMissionPreview } from "../../../supabase/functions/_shared/missionPreview.ts";
@@ -103,6 +105,13 @@ Deno.test("P3: hiring-led missions enter through job discovery under V2 only, no
     assertEquals(plan.steps.map((s) => s.capability), JOB_ROUTE, id);
     assertEquals(plan.executability?.unexecutable ?? [], [], `${id}: nothing gated`);
     assert(f.ok, `${id}: feasible`);
+    // The live canary d298a03b was refused HERE, by the paid-execution preflight
+    // and the hiring playbook, which still assumed company missions open at
+    // company discovery. Both are part of the route, so both are asserted.
+    const { preflightBlocks } = enforce(mission(id));
+    assertEquals(preflightBlocks, [], `${id}: paid execution preflight`);
+    const pb = authorizePlaybookExecution(selectResearchPlaybooks(mission(id)), plan, mission(id));
+    assert(pb.authorized, `${id}: playbook ${JSON.stringify(pb.violations)}`);
     assertFalse(plan.allowed_providers.includes("apify_yc_companies_memo23"), `${id}: no YC-first default`);
     assertEquals(buildCapabilityGraph(mission(id)).entry_capability, legacyOf(id).plan.entry_capability, `${id}: V1 unchanged`);
   }
@@ -189,6 +198,14 @@ Deno.test("a job-listing mission is refused: its entry cannot execute", () => {
   assertFalse(f.ok);
   assert(codes(f).includes("entry_not_executable"), `${codes(f)}`);
   assert(preflightBlocks.includes("request_not_feasible"));
+});
+
+Deno.test("P3: a company mission whose job plan never resolves employers is still refused at preflight", () => {
+  const m = mission("q3");
+  const plan = buildCapabilityGraph(m, { executability: "enforce" });
+  const truncated = { ...plan, steps: plan.steps.filter((s) => !["company_identity_resolution", "company_brain_qualification"].includes(s.capability)) };
+  const pre = buildPaidExecutionPreflight({ mission: m, plan: truncated as CapabilityPlan, executability: "enforce", firstProvider: "apify_linkedin_job_search" });
+  assert(pre.blocked.some((b) => b.code === "entry_capability_mismatch"), JSON.stringify(pre.blocked));
 });
 
 Deno.test("the Pilot refusal names the missing executable capability, not a placeholder", () => {

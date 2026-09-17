@@ -242,11 +242,11 @@ export const RESEARCH_PLAYBOOKS:
         "Discover companies — from the startup cohort when the mission targets " +
         "startups, otherwise by company profile — and prove they are hiring the " +
         "requested role.",
-      // Deliberately NOT `job_discovery`. The four job boards can discover but
-      // have no card in `hiringActorCatalog`, so no bounded input can be
-      // compiled for them; `buildCapabilityGraph` documents this at length and
-      // routes hiring the same way. This module does not hold a second opinion.
-      discovery_capabilities: ["startup_company_discovery", "general_company_discovery"],
+      // P3: `job_discovery` joined when LinkedIn job search was carded for
+      // discovery — the posting names its employer, identified. The four job
+      // boards remain uncarded and are never selected. `buildCapabilityGraph`
+      // routes hiring-led V2 missions there; this module agrees, not decides.
+      discovery_capabilities: ["job_discovery", "startup_company_discovery", "general_company_discovery"],
       proving_capabilities: ["hiring_verification"],
       unwired_actor_keys: [],
       notes: [

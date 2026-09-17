@@ -178,10 +178,11 @@ Deno.test("hiring and funding are the supported playbooks, and their whole path 
     );
     assert(r.providers.length > 0, `${r.capability} must have an approved provider`);
   }
-  // Both discovery entries, because the graph refines by company profile.
+  // P3: job discovery first (hiring-led V2 missions), then both profile
+  // entries, because the graph refines by company profile otherwise.
   assertEquals(
     RESEARCH_PLAYBOOKS.hiring.discovery_capabilities,
-    ["startup_company_discovery", "general_company_discovery"],
+    ["job_discovery", "startup_company_discovery", "general_company_discovery"],
   );
   assertEquals(RESEARCH_PLAYBOOKS.hiring.proving_capabilities, ["hiring_verification"]);
 });

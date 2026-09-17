@@ -405,10 +405,17 @@ export function buildPaidExecutionPreflight(i: BuildPreflightInput): PaidExecuti
   // registered company-discovery capability — `startup_company_discovery`,
   // `general_company_discovery` — is equally acceptable and GPT keeps the
   // choice between them.
+  // P3: a company mission MAY open at `job_discovery` when the plan then
+  // resolves and qualifies the employers the postings name — that is the
+  // hiring-first route, the same request. A job plan that stops at postings
+  // is still two different requests and is still refused.
+  const resolvesEmployers = ordered.includes("company_identity_resolution") &&
+    ordered.includes("company_brain_qualification");
   if (
     mission && plan?.entry_capability &&
     mission.requested_output !== "job_listings" &&
-    /^job_/.test(plan.entry_capability)
+    /^job_/.test(plan.entry_capability) &&
+    !(plan.entry_capability === "job_discovery" && resolvesEmployers)
   ) {
     block("entry_capability_mismatch",
       `this mission asks for companies but the plan opens at ` +
