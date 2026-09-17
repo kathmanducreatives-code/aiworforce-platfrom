@@ -103,6 +103,13 @@ export const GPT_STAGES = [
   "execution_plan",
   "execution_plan_repair",
   "execution_plan_amendment",
+  /**
+   * P4. Reads one discovery wave's per-route yield and proposes continue /
+   * stop / add / change / deepen. Code validates every proposal against the
+   * wave's own numbers, readiness and budget, so a wrong answer is refused, not
+   * executed.
+   */
+  "research_route_control",
   "mission_triage",
   "mission_evaluation",
   "company_qualification",
@@ -253,6 +260,12 @@ const POLICY: Readonly<Record<GptStage, StagePolicy>> = Object.freeze({
     reason:
       "re-plans against what the pool actually contains; getting this wrong " +
       "either re-buys evidence already held or drops the step that proves it",
+  },
+  research_route_control: {
+    primary: LUNA, effort: "low", escalation: null,
+    reason:
+      "proposes a route change from one wave's measured yield; validation refuses " +
+      "any proposal the numbers, readiness or budget do not support, so no repair round",
   },
 
   // ── REPAIR: already Terra, and it cannot escalate further ───────────────

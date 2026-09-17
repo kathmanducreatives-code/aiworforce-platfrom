@@ -249,6 +249,11 @@ export type FounderStage =
 export interface CompanyWorkingSetSnapshot {
   /** LEAD V2 P3 — first-hire evidence, so a continuation does not re-check it. */
   first_in_function?: Record<string, unknown> | null;
+  /** P4 — every route that found the company (entityResolution `FoundBy`). */
+  found_by?: Record<string, unknown>[];
+  /** P4 — bounded route observations (candidateObservation). */
+  observations?: Record<string, unknown>[];
+  identity_conflicts?: Record<string, unknown>[];
   /** The normalized company, as discovery produced it. */
   company: Record<string, unknown>;
   /** Discovery-time open jobs. BOUNDED — see `MAX_SNAPSHOT_JOBS`. */

@@ -125,4 +125,8 @@ export const PRIMARY_GEOGRAPHY_FIELD: Readonly<Record<string, string>> = Object.
   apify_yc_companies_memo23: "regions",
   apify_linkedin_company_search: "locations",
   apify_funding_rounds_datahyena: "countries",
+  // P4: a job-discovery route a route controller adds without `locations` would
+  // otherwise search every country for a US-only mission. Discovery/identity
+  // purposes only (providerCallSpec), so company-scoped hiring checks are untouched.
+  apify_linkedin_job_search: "locations",
 });

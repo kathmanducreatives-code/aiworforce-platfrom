@@ -225,13 +225,29 @@ import {
 import { hiringActorCard } from "./hiringActorCatalog.ts";
 // ── P2: the execution spine ──────────────────────────────────────────────────
 import {
+  compactObservation, entityHintFromCompany, observationFromCompany, type CandidateObservation, type EvidenceDimension,
+  type ObservationContext,
+} from "./candidateObservation.ts";
+import {
+  absorbIdentifiers, appendFoundBy, foundByFrom, identifiersFromHint, resolveEntity,
+  type EntityIdentifiers, type FoundBy, type IdentityConflict,
+} from "./entityResolution.ts";
+import {
+  buildCompanyEvidenceGraph, evidenceFromRegistry, projectEvidenceGraph, requiredEvidenceDimensions,
+  type EvidenceGraphProjection,
+} from "./evidenceGraph.ts";
+import {
+  summarizeResearchWave, validateRouteControl, type ResearchWaveSummary, type RouteCallStat,
+} from "./researchFeedback.ts";
+import { ACTOR_READINESS, routeActorReady } from "./actorIntelligence.ts";
+import {
   amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability, continuationAmendmentRefusal,
   type AmendmentTrigger, type RetrievalPlan,
 } from "./retrievalPlan.ts";
 import { compileProviderCallSpec, specSummary, type ProviderCallSpec } from "./providerCallSpec.ts";
 import { criteriaExecutionPolicy } from "./criteriaExecutionPolicy.ts";
 import {
-  attachProviderRun, derivedFloorUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
+  attachProviderRun, derivedFloorUsd, estimateCallUsd, markExecuted, newSpendLedger, release, reserve, resolveCeilings,
   type Ceilings, type SpendLedger,
 } from "./budgetPolicy.ts";
 import { appendTrace, newMissionTrace, type MissionTrace } from "./missionTrace.ts";
@@ -540,6 +556,18 @@ export interface PrequalificationRecord {
   reasons: string[];
 }
 
+/** A route controller's proposal and code's decision, as persisted. */
+export interface RouteControlRecord {
+  wave: number;
+  plan_version: number | null;
+  proposal: Record<string, unknown> | null;
+  accepted: boolean;
+  action: string;
+  reason: string | null;
+  detail: string | null;
+  new_plan_version: number | null;
+}
+
 export interface CapabilityExecutionState {
   version: typeof CAPABILITY_EXECUTION_STATE_VERSION;
   // ── P2: THE EXECUTION SPINE, CARRIED WITH THE STATE (so continuations keep it) ──
@@ -551,6 +579,11 @@ export interface CapabilityExecutionState {
   mission_trace?: MissionTrace;
   /** Compact form of every compiled ProviderCallSpec (the ledger row holds the full spec). */
   provider_call_specs?: Array<ReturnType<typeof specSummary>>;
+  // ── P4: THE RESEARCH FABRIC'S FEEDBACK, CARRIED WITH THE STATE ──
+  /** One summary per discovery wave, oldest first (researchFeedback). */
+  research_waves?: ResearchWaveSummary[];
+  /** Every route-control proposal and what code decided about it. */
+  route_controls?: RouteControlRecord[];
   /** Binds this state to the mission it was produced for. */
   mission_hash: string;
   /**
@@ -1660,6 +1693,18 @@ export interface EngineCompany {
   verified_founders: NormalizedHiringPerson[];
   contact_identities: string[];
   record: CompanyRecordState;
+  /**
+   * P4 — EVERY ROUTE THAT FOUND THIS COMPANY, first sighting first.
+   *
+   * `company.source_provenance` is one string and the first writer won it, so
+   * a company the job route and a profile route both returned kept one source.
+   * Optional so a pre-P4 checkpoint restores; `addCompany` always sets it.
+   */
+  found_by?: FoundBy[];
+  /** P4 — each route's statement about this company, never merged into each other. */
+  observations?: CandidateObservation[];
+  /** P4 — strong identifiers that disagreed and so blocked a merge. */
+  identity_conflicts?: IdentityConflict[];
 }
 
 /**
@@ -1882,6 +1927,19 @@ export interface CapabilityEngineDeps {
     mission_hash: string;
     validation_feedback?: Array<{ code: string; message: string; actor_key?: string }>;
     results?: DiscoveryResultsSummary | null;
+  }) => Promise<unknown>;
+  /**
+   * P4 — THE ROUTE CONTROLLER (GPT in production). Sees one wave's summary and
+   * PROPOSES continue / stop a route / stop discovery / add a route / change a
+   * query / deepen. `validateRouteControl` decides; nothing it returns is
+   * executed unvalidated. Absent, discovery runs its routes as planned.
+   */
+  controlRoutes?: (i: {
+    summary: ResearchWaveSummary;
+    mission: LeadMissionV1;
+    plan: RetrievalPlan;
+    capability: CapabilityId;
+    ready_actors: string[];
   }) => Promise<unknown>;
   triageCompanies?: (i: {
     input: MissionTriageInput;
@@ -3291,6 +3349,10 @@ export async function runCapabilityPlan(
    * Reset at the start of every call, read immediately after.
    */
   let lastCallBlock: "deferred" | "provider_error" | null = null;
+  /** P4 — the plan route and provider call behind the rows `callProvider` just returned. */
+  let lastCallRef: { route_id: string | null; plan_version: number | null; provider_call_id: string | null } = {
+    route_id: null, plan_version: null, provider_call_id: null,
+  };
 
   /**
    * NOTHING ENTERS A PAID STAGE UNTRIAGED AND UNBUDGETED.
@@ -3340,6 +3402,7 @@ export async function runCapabilityPlan(
     // CLEARED PER CALL. A stale block from an earlier batch would mark a
     // perfectly answered one as deferred.
     lastCallBlock = null;
+    lastCallRef = { route_id: null, plan_version: currentPlan()?.version ?? null, provider_call_id: null };
     const spec = CAPABILITY_REGISTRY[capability];
     // COUNTED AT RECORD TIME, not before the await. The resolution stage runs two
     // calls concurrently; computing the number up front gave both of them
@@ -3427,6 +3490,7 @@ export async function runCapabilityPlan(
         size_ceiling: memo23MaxSizeCeiling,
       });
       state.provider_call_specs!.push(specSummary(callSpec));
+      lastCallRef = { route_id: callSpec.route_id, plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id };
       if (state.provider_call_specs!.length > 300) state.provider_call_specs!.shift();
       const refs = { plan_version: callSpec.plan_version, provider_call_id: callSpec.provider_call_id, idempotency_key: callSpec.idempotency_key };
       appendTrace(state.mission_trace!, callSpec.status === "intended" ? "spec_compiled" : "spec_refused", {
@@ -3808,6 +3872,15 @@ export async function runCapabilityPlan(
       return [];
     }
   };
+
+  /** P4 — who is speaking for the rows the last `callProvider` returned. */
+  const observedBy = (capability: CapabilityId, provider: string): ObservationContext => ({
+    capability, actor_key: provider, provider: "apify",
+    route_id: lastCallRef.route_id, plan_version: lastCallRef.plan_version,
+    provider_call_id: lastCallRef.provider_call_id,
+    mission_id: resumeScope?.lineage_root_task_id ?? opts.identity?.task_id ?? null,
+    observed_at: new Date().toISOString(),
+  });
 
   /**
    * Publish what is TRUE right now.
@@ -4795,12 +4868,156 @@ export async function runCapabilityPlan(
       //
       // Nothing inside has changed. It is the same dispatch, the same guards and
       // the same break conditions; only its shape is different.
+      // ── P4: EVERY WAVE IS SUMMARIZED; A ROUTE CHANGES ONLY BY AMENDMENT ────
+      //
+      // After a batch of selections runs, the wave is summarized per route —
+      // rows, companies introduced vs re-found, identity coverage, the
+      // deterministic hard gate, evidence gaps, settled cost, budget left —
+      // and the route controller may propose a change. Code validates it
+      // (`validateRouteControl`): a stop only reduces spend and leaves every
+      // other route alone; an add/change/deepen needs a supported trigger, a
+      // READY actor, budget room, and never happens on a worker continuation.
+      let discoveryStoppedByControl = false;
+      let routeControlCalls = 0;
+      const MAX_ROUTE_CONTROL_CALLS = 2;
+      const routeStoppedFor = (provider: string): boolean => {
+        const routes = (currentPlan()?.routes ?? []).filter((r) => r.capability === cap && r.provider === provider);
+        return routes.length > 0 && routes.every((r) => /^route_stopped/.test(r.refused ?? ""));
+      };
+      const requiredDims = requiredEvidenceDimensions(criteriaPolicy ?? null,
+        (opts.mission.required_signals ?? []).map((sig) => String(sig.type)));
+      const researchWave = async (): Promise<void> => {
+        const plan = currentPlan();
+        const scored = prequalifyDiscoveredCompanies(companies.map((c) => c.company), admissionBounds,
+          { size_enforceable: admissionEnforceable });
+        const verdictByKey = new Map(scored.companies.map((p) => [p.company_key, p.eligible]));
+        const byProvider = new Map<string, RouteCallStat>();
+        for (const a of state.provider_attempts) {
+          if (a.capability !== cap) continue;
+          const spec = [...(state.provider_call_specs ?? [])].reverse()
+            .find((sp) => sp.capability === cap && sp.actor === a.provider);
+          const st = byProvider.get(a.provider) ?? {
+            route_id: spec?.route_id ?? null, capability: cap, actor_key: a.provider, calls: 0, rows: 0, exhausted: false,
+          };
+          if (a.outcome === "ok" || a.outcome === "empty") {
+            st.calls++; st.rows += a.rows;
+            st.exhausted = a.outcome === "empty" || a.rows === 0;
+          }
+          byProvider.set(a.provider, st);
+        }
+        const summary = summarizeResearchWave({
+          wave: (state.research_waves?.length ?? 0) + 1, plan,
+          companies: companies.filter((c) => (c.found_by ?? []).length > 0).map((c) => {
+            const ids = entityIdentifiersOf(c);
+            const known = new Set((c.observations ?? []).flatMap((o) => o.evidence)
+              .filter((e) => e.status !== "unknown").map((e) => e.dimension));
+            const v = verdictByKey.get(genericPrequalificationKey(c.company));
+            return {
+              key: c.key, found_by: c.found_by ?? [], has_linkedin_url: !!ids.linkedin_company_url,
+              has_domain: ids.domains.length > 0, hard_pass: v === undefined ? null : v,
+              gaps: requiredDims.filter((d) => !known.has(d)),
+            };
+          }),
+          calls: [...byProvider.values()], ledger: state.spend_ledger ?? null,
+          admitted: { available: availableAdmittedNow(), target: admittedTarget },
+          adaptive_reserve_remaining_usd: adaptiveReserveRemaining(),
+        });
+        state.research_waves = [...(state.research_waves ?? []), summary].slice(-20);
+        log("research_wave_summarized", {
+          wave: summary.wave, routes: summary.routes.map((r) => `${r.actor_key}:${r.rows}/${r.new_companies}+${r.merged_into_existing}`),
+          unique: summary.unique_companies, multi_source: summary.multi_source_companies,
+          low_yield: summary.low_yield_routes, exhausted: summary.exhausted_routes,
+        });
+        if (state.mission_trace) {
+          appendTrace(state.mission_trace, "research_wave_summarized", {
+            wave: summary.wave, routes: summary.routes, unique_companies: summary.unique_companies,
+            multi_source_companies: summary.multi_source_companies, identity: summary.identity,
+            hard_constraints: summary.hard_constraints, admitted: summary.admitted, cost: summary.cost,
+          }, { plan_version: plan?.version ?? null });
+        }
+        const undecided = summary.low_yield_routes.length > 0 || summary.exhausted_routes.length > 0 ||
+          summary.admitted.available < summary.admitted.target;
+        if (!deps.controlRoutes || !plan || !criteriaPolicy || !undecided || discoveryStoppedByControl ||
+            routeControlCalls >= MAX_ROUTE_CONTROL_CALLS) return;
+        routeControlCalls++;
+        let proposal: unknown = null;
+        try {
+          proposal = await deps.controlRoutes({
+            summary, mission: opts.mission, plan, capability: cap,
+            ready_actors: ACTOR_READINESS.filter((r) => r.capability === cap && r.readiness === "READY").map((r) => r.actor),
+          });
+        } catch (e) {
+          log("route_control_failed", { error: String(e).slice(0, 200) });
+          return;
+        }
+        if (!proposal) return;
+        const decision = validateRouteControl(proposal, {
+          summary, plan, continuation: resumedOntoPlan,
+          routeReady: (actor, capability) => capability === cap
+            ? routeActorReady(actor, capability)
+            : { ready: false, reason: `this discovery stage is ${cap}; ${capability} routes are added by their own stage` },
+          estimateUsd: (actor, input) => {
+            const card = hiringActorCard(actor);
+            return card?.cost_model ? estimateCallUsd(actor, card.cost_model, input) : Number.POSITIVE_INFINITY;
+          },
+        });
+        const recordControl = (accepted: boolean, reason: string | null, detail: string | null, newVersion: number | null) => {
+          const rec: RouteControlRecord = {
+            wave: summary.wave, plan_version: plan.version,
+            proposal: proposal && typeof proposal === "object" ? JSON.parse(JSON.stringify(proposal)) : null,
+            accepted, action: decision.action, reason, detail, new_plan_version: newVersion,
+          };
+          state.route_controls = [...(state.route_controls ?? []), rec].slice(-20);
+          if (state.mission_trace) {
+            appendTrace(state.mission_trace, "route_control_decided", rec as unknown as Record<string, unknown>,
+              { plan_version: newVersion ?? plan.version });
+          }
+          log("route_control_decided", { action: rec.action, accepted, reason, new_plan_version: newVersion });
+        };
+        if (!decision.accepted) { recordControl(false, decision.reason, decision.detail, null); return; }
+        if (decision.action === "continue") { recordControl(true, null, null, null); return; }
+        if ("plan" in decision) {
+          state.retrieval_plans!.push(decision.plan);
+          if (state.mission_trace) {
+            appendTrace(state.mission_trace, "retrieval_plan_amended", {
+              trigger: decision.plan.amendment?.trigger, content_hash: decision.plan.content_hash,
+              changes: decision.plan.amendment?.changes ?? [],
+            }, { plan_version: decision.plan.version });
+          }
+          if (decision.action === "stop_discovery") discoveryStoppedByControl = true;
+          recordControl(true, null, `stopped ${decision.stopped.join(", ")}`, decision.plan.version);
+          return;
+        }
+        if (!("route" in decision)) return;
+        const amended = p2AcceptAmendment(executionPlan, decision.trigger, [{
+          capability: cap, provider: decision.route.actor_key, input: decision.route.input,
+        }], { availableAdmitted: availableAdmittedNow() });
+        const after = currentPlan();
+        if (!amended || !after || after.version === plan.version) {
+          recordControl(false, "amendment_refused", "the retrieval plan refused the route amendment", null);
+          return;
+        }
+        recordControl(true, null, `${decision.action} ${decision.route.actor_key}`, after.version);
+        await executeSelections([{
+          actor_key: decision.route.actor_key, role: "breadth", input: decision.route.input,
+          rationale: `route control (${decision.trigger}): ${decision.action}`, dropped_filters: [],
+          requires_enrichment: hiringActorCard(decision.route.actor_key)?.requires_enrichment_before_qualification ?? false,
+        }]);
+      };
+
       const executeSelections = async (
         sels: readonly DiscoveryActorSelection[],
       ): Promise<void> => {
         for (const sel of sels) {
           const provider = sel.actor_key;
           if (schemaFailure) break;
+          if (discoveryStoppedByControl) break;
+          // P4: a route stopped by an amendment stays stopped; its siblings run.
+          if (routeStoppedFor(provider)) {
+            tried.push(provider);
+            log("discovery_route_stopped_skip", { provider });
+            continue;
+          }
           // A FALLBACK MUST NOT SPEND WHILE THE PRIMARY IS STILL RUNNING. The
           // primary may yet return everything the mission needs, and paying a
           // second source to answer a question already in flight is the waste this
@@ -4925,7 +5142,7 @@ export async function runCapabilityPlan(
               // from the same raw row, so the shortlist and the working set cannot
               // drift apart.
               addCompany(companies, c, normalizeMemo23OpenJobs(r),
-                prequalificationKey(r as YcCompanyInput));
+                prequalificationKey(r as YcCompanyInput), undefined, observedBy(cap, provider));
             }
           } else if (provider === "apify_yc_companies_solidcode") {
             // NOT CONFIGURED IS NOT INVALID INPUT.
@@ -4958,7 +5175,7 @@ export async function runCapabilityPlan(
               bands,
             )) {
               for (const r of await callProvider(cap, provider, compiled)) {
-                addCompany(companies, normalizeSolidcodeCompany(r), []);
+                addCompany(companies, normalizeSolidcodeCompany(r), [], null, undefined, observedBy(cap, provider));
               }
             }
           } else if (provider === "apify_linkedin_company_search") {
@@ -5064,7 +5281,7 @@ export async function runCapabilityPlan(
               // and LinkedIn both surface is one row, identified and enriched
               // once. This is the diagram's "deduplication is global across all
               // actors", and it needed no new machinery.
-              addCompany(companies, normalizeLinkedInCompanyCandidate(r), []);
+              addCompany(companies, normalizeLinkedInCompanyCandidate(r), [], null, undefined, observedBy(cap, provider));
             }
             // RECORDED, not silent. A pool that shrank between the provider's
             // row count and ours must say why, or the next audit re-derives it
@@ -5114,16 +5331,9 @@ export async function runCapabilityPlan(
               if (seenJobs.has(jobKey)) continue;
               seenJobs.add(jobKey);
               jobsKept++;
-              const key = companyKey(employer);
-              const existing = companies.find((x) => x.key === key);
-              if (existing) {
-                if (!existing.yc_open_jobs.some((j) => (j.job_id ?? j.job_url) === (job.job_id ?? job.job_url))) {
-                  existing.yc_open_jobs.push(job);
-                }
-              } else {
-                addCompany(companies, employer, [job]);
-              }
-              const holder = companies.find((x) => x.key === key)!;
+              // P4: the union absorbs a second posting from the same employer (its
+              // job joins the company's list) exactly as it absorbs another route.
+              const holder = addCompany(companies, employer, [job], null, undefined, observedBy(cap, provider))!;
               const said = firstHireLanguage(r);
               if (said && holder.first_in_function?.status !== "supported") {
                 holder.first_in_function = {
@@ -5173,7 +5383,7 @@ export async function runCapabilityPlan(
               // arising.
               if (!round.is_evidence) continue;
               const fundedCompany = fundingRoundToCompany(round);
-              addCompany(companies, fundedCompany, []);
+              const fundedHolder = addCompany(companies, fundedCompany, [], null, undefined, observedBy(cap, provider));
               fundingRounds.push(round);
               // KEYED THE WAY THE POOL KEYS IT. `fundingRounds` was pushed to
               // and never read, so the round — stage, amount, announced date,
@@ -5181,7 +5391,7 @@ export async function runCapabilityPlan(
               // and a funding mission proved nothing. The key is derived from
               // the same company object `addCompany` used, so the two cannot
               // disagree about which company this round belongs to.
-              roundByCompanyKey.set(companyKey(fundedCompany), round);
+              roundByCompanyKey.set(fundedHolder?.key ?? companyKey(fundedCompany), round);
             }
           }
           // A REJECTED INPUT ENDS THE CAPABILITY IMMEDIATELY.
@@ -5193,6 +5403,7 @@ export async function runCapabilityPlan(
           if (compileFailedFor(provider)) { schemaFailure = true; break; }
           if (pendingFor(provider)) { runPending = true; break; }
         }
+        if (sels.length > 0 && !runPending && !schemaFailure) await researchWave();
       };
 
       // ── A REOPENED DISCOVERY RESUMES; IT DOES NOT RESTART ────────────────
@@ -6456,6 +6667,7 @@ export async function runCapabilityPlan(
         for (const batch of chunk(urls, COMPANY_DETAILS_BATCH_SIZE)) {
           const compiled = compileHarvestCompanyDetailsInput({ companies: batch });
           const rows = await callProvider(cap, "apify_linkedin_company_details", compiled);
+          const enrichedBy = observedBy(cap, "apify_linkedin_company_details");
           // ── WHY THIS BATCH PRODUCED NOTHING ─────────────────────────────────
           //
           // Read IMMEDIATELY after the call and scoped to THIS batch's
@@ -6519,6 +6731,9 @@ export async function runCapabilityPlan(
             for (const c of matches) {
               c.enriched = normalized;
               c.enrichment_outcome = "success";
+              // P4: enrichment is one more source's statement about the company,
+              // kept beside discovery's — never folded into it.
+              recordObservation(c, compactObservation(observationFromCompany(normalized, enrichedBy)));
               // THE BLOCK IS CLEARED BY AN ANSWER. A company whose earlier batch
               // errored and whose retry succeeded is not blocked.
               if (c.stage_block?.capability === cap) c.stage_block = null;
@@ -9147,6 +9362,11 @@ export function toResumeRecord(c: EngineCompany): CompanyResumeRecord {
       // continuation would report a provider error or a deadline deferral as
       // `not_attempted` — losing precisely the fact the outcome exists to keep.
       enrichment_outcome: c.enrichment_outcome,
+      // P4 — THE UNION SURVIVES THE PROCESS. A continuation that forgot which
+      // routes found a company would report one source for a merged company.
+      found_by: (c.found_by ?? []) as unknown as Record<string, unknown>[],
+      observations: (c.observations ?? []) as unknown as Record<string, unknown>[],
+      identity_conflicts: (c.identity_conflicts ?? []) as unknown as Record<string, unknown>[],
       // THE FRONTIER SURVIVES THE PROCESS. Without these three a continuation
       // cannot tell a company that is waiting from one that was closed, and the
       // pool is frozen at whatever the first invocation selected.
@@ -9386,6 +9606,9 @@ export function restoreWorkingSet(
     const c = out.find((x) => x.key === r.company_key);
     if (!c) continue;
     if (s.first_in_function) c.first_in_function = s.first_in_function as unknown as FirstInFunctionEvidence;
+    c.found_by = Array.isArray(s.found_by) ? s.found_by as unknown as FoundBy[] : [];
+    c.observations = Array.isArray(s.observations) ? s.observations as unknown as CandidateObservation[] : [];
+    c.identity_conflicts = Array.isArray(s.identity_conflicts) ? s.identity_conflicts as unknown as IdentityConflict[] : [];
     c.prequalified = (s.prequalified ?? null) as unknown as EngineCompany["prequalified"];
     c.shortlisted = s.shortlisted === true;
     c.enriched = (s.enriched ?? null) as unknown as NormalizedHiringCompany | null;
@@ -10058,7 +10281,7 @@ function dedupeKeys(xs: readonly string[]): string[] {
   return out;
 }
 
-function addCompany(
+export function addCompany(
   set: EngineCompany[], c: NormalizedHiringCompany, ycJobs: NormalizedHiringJob[],
   prequalKey: string | null = null,
   /**
@@ -10072,10 +10295,41 @@ function addCompany(
    * operations included — would stop matching. The recorded key is authoritative.
    */
   explicitKey?: string,
-): void {
+  /**
+   * P4 — WHICH ROUTE SAID THIS. With it, the row joins the candidate union:
+   * a company already in the pool under ANY shared identifier (external id,
+   * LinkedIn URL, verified domain, website, guarded name+country) absorbs the
+   * row — its identifiers, jobs and observation — instead of entering twice.
+   * Without it (restores, supplied companies) the exact-key rule is unchanged.
+   */
+  observed?: ObservationContext,
+): EngineCompany | null {
   const key = explicitKey ?? companyKey(c);
-  if (set.some((x) => x.key === key)) return;
-  set.push({
+  const exact = set.find((x) => x.key === key);
+  const observation = observed ? compactObservation(observationFromCompany(c, observed, ycJobs)) : null;
+  if (observation && explicitKey === undefined) {
+    const resolved = resolveEntity(set.map(entityIdentifiersOf), observation.entity_hint);
+    // The same engine key is the same company even when no identifier survived
+    // normalization (a keyless external id); that is how the pool deduped before.
+    const match = resolved.kind === "new" && exact
+      ? { kind: "match" as const, entity_key: exact.key, method: "external_id" as const, conflicts: resolved.conflicts }
+      : resolved;
+    if (match.kind === "match") {
+      const holder = set.find((x) => x.key === match.entity_key)!;
+      absorbObservation(holder, c, ycJobs, prequalKey, observation, match.method);
+      if (match.conflicts.length) holder.identity_conflicts = [...(holder.identity_conflicts ?? []), ...match.conflicts];
+      return holder;
+    }
+    if (match.conflicts.length) {
+      for (const k of new Set(match.conflicts.map((x) => x.existing))) {
+        const other = set.find((x) => x.company.linkedin_company_url === k);
+        if (other) other.identity_conflicts = [...(other.identity_conflicts ?? []), ...match.conflicts];
+      }
+    }
+  } else if (exact) {
+    return exact;
+  }
+  const entry: EngineCompany = {
     key, prequal_key: prequalKey, prequalified: null, shortlisted: false,
     lead_verdict: null, signal_assessments: [],
     triage: null, shortlist_exclusion: null,
@@ -10099,7 +10353,160 @@ function addCompany(
     mission_evaluation: null,
     founders: [], verified_founders: [], contact_identities: [],
     record: newCompanyRecord(key),
+    found_by: observation ? [foundByFrom(observation, "first_seen")] : [],
+    observations: observation ? [withCompanyKey(observation, key)] : [],
+    identity_conflicts: [],
+  };
+  set.push(entry);
+  return entry;
+}
+
+/** At most this many route observations are kept per company in a checkpoint. */
+const MAX_OBSERVATIONS_PER_COMPANY = 6;
+
+function withCompanyKey(o: CandidateObservation, key: string): CandidateObservation {
+  return { ...o, evidence: o.evidence.map((e) => ({ ...e, company_key: key })) };
+}
+
+// ── P4: THE CANONICAL COMPANY + EVIDENCE MODEL A WORKBENCH READS ────────────
+
+export const RESEARCH_FABRIC_VERSION = "research-fabric-v1" as const;
+
+export interface ResearchFabricCompany {
+  company_key: string;
+  company_name: string | null;
+  identifiers: EntityIdentifiers;
+  /** A LinkedIn URL is known, so no paid Company Search is needed. */
+  identity_known: boolean;
+  found_by: FoundBy[];
+  /** Distinct discovery routes that returned this company. */
+  discovery_sources: number;
+  /** Distinct actors that contributed any evidence. */
+  evidence_sources: string[];
+  identity_conflicts: IdentityConflict[];
+  evidence: EvidenceGraphProjection;
+  shortlisted: boolean;
+  verdict: EngineCompany["verdict"];
+}
+
+export interface ResearchFabricProjection {
+  version: typeof RESEARCH_FABRIC_VERSION;
+  union: { unique_companies: number; multi_source_companies: number; observations: number; merged_sightings: number };
+  companies: ResearchFabricCompany[];
+  waves: ResearchWaveSummary[];
+  route_controls: RouteControlRecord[];
+}
+
+/** Every evidence item for one company: route observations, the registry, derived verdict facts. */
+export function companyEvidenceItems(c: EngineCompany, missionId: string | null = null) {
+  const items = [
+    ...(c.observations ?? []).flatMap((o) => o.evidence.map((e) => ({ ...e, company_key: c.key }))),
+    ...evidenceFromRegistry(c.evidence_registry, missionId),
+  ];
+  const at = c.observations?.[0]?.observed_at ?? new Date(0).toISOString();
+  const derived = (dimension: EvidenceDimension, value: unknown, status: "proven" | "disproven" | "unknown",
+    from: string[], confidence: "high" | "medium" | "low") => items.push({
+    evidence_id: `drv_${c.key}_${dimension}`, company_key: c.key, dimension, value, status,
+    source: { provider: "engine", actor: "deterministic_verdict", provider_call_id: null, url: from[0] ?? null, excerpt: null },
+    method: "deterministic_derivation", observed_at: at, valid_until: null, confidence,
+    derived_from: from, mission_id: missionId, origin: "lead_mission",
   });
+  if (c.hiring_assessment?.verdict === "hiring_verified") {
+    derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
+  }
+  const f = c.first_in_function;
+  if (f) {
+    derived("team_composition", { first_in_function: f.status, source: f.source, quote: f.quote ?? null },
+      f.status === "supported" ? "proven" : f.status === "contradicted" ? "disproven" : "unknown",
+      [f.job_url ?? ""].filter(Boolean), f.source === "job_posting" ? "high" : "medium");
+  }
+  return items;
+}
+
+export function projectResearchFabric(
+  run: { companies: readonly EngineCompany[]; state: Pick<CapabilityExecutionState, "research_waves" | "route_controls"> },
+  opts: { required?: readonly EvidenceDimension[]; missionId?: string | null; now?: Date; limit?: number } = {},
+): ResearchFabricProjection {
+  const ranked = [...run.companies].sort((a, b) =>
+    Number(b.verdict === "pass") - Number(a.verdict === "pass") ||
+    Number(b.shortlisted) - Number(a.shortlisted) ||
+    (b.found_by?.length ?? 0) - (a.found_by?.length ?? 0));
+  const companies = ranked.slice(0, opts.limit ?? 60).map((c): ResearchFabricCompany => {
+    const graph = buildCompanyEvidenceGraph(c.key, companyEvidenceItems(c, opts.missionId ?? null), {
+      now: opts.now, required: opts.required,
+    });
+    const ids = entityIdentifiersOf(c);
+    const found = c.found_by ?? [];
+    return {
+      company_key: c.key,
+      company_name: c.enriched?.company_name ?? c.company.company_name,
+      identifiers: ids,
+      identity_known: !!(ids.linkedin_company_url ?? c.identity?.linkedin_company_url),
+      found_by: found,
+      discovery_sources: new Set(found.map((x) => `${x.capability}|${x.actor_key}|${x.route_id ?? ""}`)).size,
+      evidence_sources: [...new Set(graph.claims.flatMap((x) => x.sources))],
+      identity_conflicts: c.identity_conflicts ?? [],
+      evidence: projectEvidenceGraph(graph),
+      shortlisted: c.shortlisted,
+      verdict: c.verdict,
+    };
+  });
+  const all = run.companies;
+  return {
+    version: RESEARCH_FABRIC_VERSION,
+    union: {
+      unique_companies: all.length,
+      multi_source_companies: all.filter((c) =>
+        new Set((c.found_by ?? []).map((x) => `${x.capability}|${x.actor_key}|${x.route_id ?? ""}`)).size > 1).length,
+      observations: all.reduce((n, c) => n + (c.observations?.length ?? 0), 0),
+      merged_sightings: all.reduce((n, c) => n + Math.max(0, (c.found_by?.length ?? 0) - 1), 0),
+    },
+    companies,
+    waves: run.state.research_waves ?? [],
+    route_controls: run.state.route_controls ?? [],
+  };
+}
+
+/** Adds a non-discovery observation (enrichment, verification). Not a `found_by` entry. */
+function recordObservation(c: EngineCompany, o: CandidateObservation): void {
+  const obs = c.observations ?? [];
+  if (!obs.some((x) => x.observation_id === o.observation_id) && obs.length < MAX_OBSERVATIONS_PER_COMPANY + 2) {
+    obs.push(withCompanyKey(o, c.key));
+  }
+  c.observations = obs;
+}
+
+/** Every identifier the pool knows for this company, from the row and every observation. */
+export function entityIdentifiersOf(c: EngineCompany): EntityIdentifiers {
+  let ids = identifiersFromHint(c.key, entityHintFromCompany(c.company));
+  for (const o of c.observations ?? []) ids = absorbIdentifiers(ids, o.entity_hint);
+  return ids;
+}
+
+/**
+ * One more route's row for a company already in the pool. Fills identifiers the
+ * pool lacked (never overwrites one it has), adds jobs it had not seen, and
+ * keeps the observation beside the others. The company keeps its key.
+ */
+function absorbObservation(
+  holder: EngineCompany, c: NormalizedHiringCompany, jobs: readonly NormalizedHiringJob[],
+  prequalKey: string | null, o: CandidateObservation, method: FoundBy["method"],
+): void {
+  const h = holder.company;
+  if (!h.linkedin_company_url && c.linkedin_company_url) h.linkedin_company_url = c.linkedin_company_url;
+  if (!h.canonical_domain && c.canonical_domain) h.canonical_domain = c.canonical_domain;
+  if (!h.website && c.website) h.website = c.website;
+  if (!holder.prequal_key && prequalKey) holder.prequal_key = prequalKey;
+  for (const j of jobs) {
+    const id = j.job_id ?? j.job_url;
+    if (!holder.yc_open_jobs.some((x) => (x.job_id ?? x.job_url) === id)) holder.yc_open_jobs.push(j);
+  }
+  holder.found_by = appendFoundBy(holder.found_by ?? [], foundByFrom(o, method));
+  const obs = holder.observations ?? [];
+  if (!obs.some((x) => x.observation_id === o.observation_id) && obs.length < MAX_OBSERVATIONS_PER_COMPANY) {
+    obs.push(withCompanyKey(o, holder.key));
+  }
+  holder.observations = obs;
 }
 
 // --------------------------------------------------- evaluation telemetry ----

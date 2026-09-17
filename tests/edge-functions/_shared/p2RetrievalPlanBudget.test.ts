@@ -117,7 +117,8 @@ Deno.test("the engine's amendment gate consults the continuation hold before any
   assert(gate.includes("continuationAmendmentRefusal({"), "hold is checked inside the gate, before amendRetrievalPlan");
   assert(/resumed_onto_plan: resumedOntoPlan/.test(gate));
   assert(/\n    if \(held\) \{[\s\S]{0,500}?\n      return false;\n    \}/.test(gate), "a held plan refuses the amendment");
-  assert((src.match(/availableAdmitted: availableAdmittedNow\(\)/g) ?? []).length === 2, "both amendment call sites pass the live pool");
+  // P4 adds the route-control amendment (researchWave) as a third call site.
+  assert((src.match(/availableAdmitted: availableAdmittedNow\(\)/g) ?? []).length === 3, "every amendment call site passes the live pool");
 });
 
 Deno.test("an operational trigger may change only counts", () => {

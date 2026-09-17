@@ -97,6 +97,10 @@ import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
 import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
+import { makeGptRouteController } from "../_shared/gptRouteController.ts";
+import { projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
+import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
+import { criteriaExecutionPolicy } from "../_shared/criteriaExecutionPolicy.ts";
 import { ModelRoutingLedger } from "../_shared/gptModelRouter.ts";
 import { buildLeadRunTrace, describeLeadRunTrace } from "../_shared/leadRunTrace.ts";
 import { gptAvailable } from "../_shared/gptProvider.ts";
@@ -3090,6 +3094,20 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // returns `no_api_key`, the planner returns null, and the engine
               // runs the graph's own authorised order — which is code, and is
               // the sequence this system ran before chains existed.
+              // ── P4: GPT PROPOSES ROUTE CHANGES FROM EACH WAVE'S YIELD ─────
+              //
+              // Consulted by the engine only under the spec spine, only when a
+              // wave shows a low-yield or exhausted route or a pool below
+              // target, at most twice per invocation. Every proposal passes
+              // `validateRouteControl` before a plan version changes.
+              // LEAD_V2_ROUTE_CONTROL=off removes it.
+              ...(String(readEnvSafe("LEAD_V2_ROUTE_CONTROL") ?? "").trim().toLowerCase() === "off" ? {} : {
+                controlRoutes: makeGptRouteController({
+                  readEnv: readEnvSafe,
+                  onModelCall: modelCalls.sink,
+                  log: (m, meta) => console.log(`[gpt-route-control] ${m}`, meta ?? ""),
+                }, { onRoute: (r) => modelRouting.record(r) }),
+              }),
               planExecution: makeGptExecutionPlanner({
                 readEnv: readEnvSafe,
                 onModelCall: modelCalls.sink,
@@ -6074,6 +6092,23 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             // incomplete capability — it never re-interprets the query.
             capability_execution_state: capabilityRun?.state ?? null,
             capability_outcomes: capabilityRun?.capability_outcomes ?? null,
+            // ── P4: THE CANONICAL COMPANY + EVIDENCE MODEL ──────────────────
+            // One row per canonical company: every identifier, every route
+            // that found it, and its evidence graph (claims, conflicts, gaps).
+            // Built after web re-evaluation, so fetched pages are claims too.
+            research_fabric: capabilityRun ? (() => {
+              try {
+                return projectResearchFabric(capabilityRun, {
+                  required: requiredEvidenceDimensions(
+                    persistedMission ? criteriaExecutionPolicy(persistedMission) : null,
+                    (persistedMission?.required_signals ?? []).map((sig) => String(sig.type))),
+                  missionId: String(task.id),
+                });
+              } catch (e) {
+                console.error("[run-agent][research_fabric][failed]", String(e));
+                return null;
+              }
+            })() : null,
             // Companies the Brain could not decide on. Held for evidence
             // resolution, explicitly NOT counted as rejections.
             unknown_companies_pending_evidence:

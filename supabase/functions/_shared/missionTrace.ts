@@ -27,7 +27,10 @@ export type TraceEventType =
   | "call_failed"
   | "call_released"
   | "call_settled"
-  | "continuation_resumed";
+  | "continuation_resumed"
+  // P4: research fabric feedback and route control.
+  | "research_wave_summarized"
+  | "route_control_decided";
 
 export interface TraceEvent {
   seq: number;
