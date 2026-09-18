@@ -20,6 +20,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { usableHeadcount } from "./headcountValue.ts";
 import type {
   NormalizedHiringCompany, NormalizedHiringJob,
 } from "./hiringActorNormalizers.ts";
@@ -113,7 +114,8 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
   const url = clean(i.linkedin_company_url) ??
     clean(rich?.linkedin_company_url) ?? clean(base.linkedin_company_url);
 
-  const employees = rich?.employee_count ?? base.employee_count ?? null;
+  // A zero is LinkedIn's "no number", not a count — see headcountValue.ts.
+  const employees = usableHeadcount(rich?.employee_count) ?? usableHeadcount(base.employee_count);
   if (rich?.employee_count != null && base.employee_count != null &&
       rich.employee_count !== base.employee_count) {
     // A 2x gap is a different company; a small gap is a stale count.

@@ -518,10 +518,12 @@ Deno.test("P5.2: only a VERIFIED self-description becomes evidence, and never as
 
   const has = (g: unknown) => companyEvidenceItems(company(g), null).some((e) => e.evidence_id === "grd_c1_business_model");
   const itemOf = (g: unknown) => companyEvidenceItems(company(g), null).find((e) => e.evidence_id === "grd_c1_business_model")!;
-  // P5.2 decision semantics: an explicit FAIL that kept validated claims is a
-  // verified reading (it can prove a contradiction); a REVIEW is plausible only.
+  // P5.2: the business-model claim's OWN decision decides; the company verdict
+  // (pass / review / fail) is recorded beside it and never used as proof.
   assertEquals([itemOf({ ...pass, final_grounded_decision: "fail" }).status, itemOf({ ...pass, final_grounded_decision: "fail" }).assessment?.decision], ["proven", "fail"]);
-  assertEquals([itemOf({ ...pass, final_grounded_decision: "review" }).status, itemOf({ ...pass, final_grounded_decision: "review" }).confidence], ["plausible", "low"]);
+  assertEquals([itemOf({ ...pass, final_grounded_decision: "review" }).status, itemOf({ ...pass, final_grounded_decision: "review" }).assessment?.business_model_decision], ["proven", "accepted"]);
+  const unsure = { ...pass, classifier_result: { business_model: { value: "b2b_saas", confidence: 0.3, claims: [claim] } } };
+  assertEquals([itemOf(unsure).status, itemOf(unsure).confidence], ["plausible", "low"]);
   // A claim the excerpt check rejected is not a validated claim, so nothing is emitted.
   assertFalse(has({ ...pass, validated_claims: [], rejected_claims: [claim] }));
   // And "unknown" is not a business model.

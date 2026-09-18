@@ -223,6 +223,7 @@ import {
   coverMissionSignals, coverageDiagnostics, signalsUnservedByStrategy,
 } from "./signalActorCoverage.ts";
 import { hiringActorCard } from "./hiringActorCatalog.ts";
+import { businessModelDecision } from "./groundedClaims.ts";
 // ── P2: the execution spine ──────────────────────────────────────────────────
 import {
   CANDIDATE_OBSERVATION_VERSION, compactObservation, entityHintFromCompany, observationFromCompany,
@@ -10454,18 +10455,19 @@ export interface ResearchFabricProjection {
  * quoted and verified — admitted at `model_extraction`, which `compareEvidence`
  * ranks below any provider field that disagrees.
  *
- * ── WHAT THE GROUNDING DECISION MAKES OF IT (P5.2) ─────────────────────────
+ * ── THE BUSINESS MODEL'S OWN DECISION DECIDES (P5.2) ────────────────────────
  *
- *   pass    accepted: the reading is PROVEN and may pass — or, through the
- *           controlled vocabulary, fail — a hard rule
- *   fail    rejected with its reasoning intact (the verifier downgrades a
- *           `fail` that validated nothing to `review`): the reading is PROVEN,
- *           so a verified "consumer" model rules out a B2B requirement
- *   review  uncertain: the reading is PLAUSIBLE — shown, ranked, never proof,
- *           so the hard rule stays pending
+ * `businessModelDecision` judges the business-model CLAIM on its own evidence;
+ * the grounder's whole-company verdict (`final_grounded_decision`) is recorded
+ * beside it and never used as proof. Canary c584fd77 showed why: a request
+ * with unprovable targets makes that verdict `review` for nearly everyone.
  *
- * The decision travels on the item (`assessment`) into eligibility, so a check
- * can say which kind of grounding it rests on.
+ *   accepted  the reading is PROVEN and may pass — or, through the controlled
+ *             vocabulary, fail — a hard rule (verified "consumer" rules out B2B)
+ *   review    the reading is PLAUSIBLE — shown, ranked, never proof, so the
+ *             hard rule stays pending
+ *
+ * Both decisions travel on the item (`assessment`) into eligibility.
  *
  * Null when no business-model claim survived, or when the grounder itself said
  * the model is unknown — the honest answer for a company whose description does
@@ -10479,7 +10481,8 @@ export function groundedBusinessModelItem(
   const claims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
   if (!g || !bm || bm.value === "unknown" || claims.length === 0) return null;
   const decision = g.final_grounded_decision;
-  const accepted = decision === "pass" || decision === "fail";
+  const bmDecision = businessModelDecision(g);
+  const accepted = bmDecision.decision === "accepted";
   const excerpt = claims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
   return {
     evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
@@ -10496,6 +10499,7 @@ export function groundedBusinessModelItem(
     mission_id: missionId, origin: "web",
     assessment: {
       decision, grounding_score: Number(g.grounding_score ?? 0), validated_claims: claims.length,
+      business_model_decision: bmDecision.decision, business_model_reasons: bmDecision.reasons,
     },
   };
 }

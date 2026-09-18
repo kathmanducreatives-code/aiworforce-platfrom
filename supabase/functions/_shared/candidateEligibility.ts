@@ -47,6 +47,7 @@ import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts"
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
 import { matchBusinessModel } from "./businessModelMatch.ts";
+import { usableHeadcount } from "./headcountValue.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
 
@@ -79,8 +80,10 @@ export interface CheckProvenance {
   method: EvidenceItem["method"];
   confidence: EvidenceItem["confidence"];
   actor: string;
-  /** Set when a grounded evaluation produced the item. */
+  /** The grounder's whole-company verdict, when a grounded evaluation produced the item. */
   grounding_decision: "pass" | "review" | "fail" | null;
+  /** The business-model claim's own decision — what actually made it proof or not. */
+  business_model_decision: "accepted" | "review" | null;
 }
 
 export interface CriterionCheck {
@@ -110,13 +113,15 @@ export interface EligibilityResult {
 const text = (v: unknown): string => String(v ?? "").trim().toLowerCase();
 
 function headcountSatisfied(required: unknown, count: unknown): CheckResult {
-  if (typeof count !== "number" || !Number.isFinite(count)) return "unknown";
+  // A zero or negative "count" is a missing number, never a contradiction.
+  const n = usableHeadcount(count);
+  if (n === null) return "unknown";
   const r = required as { min?: number | null; max?: number | null } | number | null;
   const min = typeof r === "object" && r ? r.min ?? null : null;
   const max = typeof r === "object" && r ? r.max ?? null : null;
   if (min == null && max == null) return "unknown";
-  if (min != null && count < min) return "fail";
-  if (max != null && count > max) return "fail";
+  if (min != null && n < min) return "fail";
+  if (max != null && n > max) return "fail";
   return "pass";
 }
 
@@ -125,6 +130,7 @@ function provenanceOf(item: EvidenceItem): CheckProvenance {
     evidence_id: item.evidence_id, dimension: item.dimension, status: item.status,
     method: item.method, confidence: item.confidence, actor: item.source.actor,
     grounding_decision: item.assessment?.decision ?? null,
+    business_model_decision: item.assessment?.business_model_decision ?? null,
   };
 }
 

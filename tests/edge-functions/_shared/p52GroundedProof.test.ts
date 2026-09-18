@@ -7,7 +7,10 @@
 //            canary 62c8b188 could never surface a lead
 //   SEM-2    verified contradictory evidence left a hard rule `unknown`, so a
 //            ruled-out company sat in `pending` forever
-//   REVIEW-1 a `review` grounding was admitted as proof
+//   REVIEW-1 a `review` grounding was admitted as proof — and then (canary
+//            c584fd77) the whole-company verdict blocked every business model;
+//            the business-model claim now has its own decision
+//   HEAD-0   LinkedIn's employeeCount 0 ("no number") became a verified FAIL
 //   MATCH-1  industry matching was substring: "AI" matched "Retail"
 //   E2E-1    persistence was checked by grepping source; this runs the real
 //            engine through checkpoint → restore → Stage-2 rebuild → view
@@ -43,6 +46,13 @@ import {
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
+import { usableHeadcount } from "../../../supabase/functions/_shared/headcountValue.ts";
+import {
+  jobEmployerToCompany, normalizeLinkedInCompanyCandidate, normalizeLinkedInCompanyEnriched,
+} from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
+import { normalizeApifyJobRow } from "../../../supabase/functions/_shared/apifyJobsNormalizer.ts";
+import { buildCompanyEvidence } from "../../../supabase/functions/_shared/leadCompanyEvidence.ts";
+import { observationFromCompany } from "../../../supabase/functions/_shared/candidateObservation.ts";
 
 globalThis.fetch = () => { throw new Error("P5.2 tests must not reach the network"); };
 
@@ -75,11 +85,12 @@ function ev(dimension: EvidenceDimension, value: unknown, over: Partial<Evidence
     confidence: "high", derived_from: [], mission_id: "task", origin: "lead_mission", ...over,
   };
 }
-const grounded = (value: string, decision: "pass" | "review" | "fail") => ev("business_model", value, {
+/** A grounded business-model item as the engine builds it: `bm` is the claim's own decision. */
+const grounded = (value: string, bm: "accepted" | "review", verdict: "pass" | "review" | "fail" = "review") => ev("business_model", value, {
   evidence_id: "grd_c1_business_model", method: "model_extraction", origin: "web",
-  status: decision === "review" ? "plausible" : "proven", confidence: decision === "review" ? "low" : "medium",
+  status: bm === "accepted" ? "proven" : "plausible", confidence: bm === "accepted" ? "medium" : "low",
   source: { provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null, url: null, excerpt: "We sell…" },
-  assessment: { decision, grounding_score: 1, validated_claims: 1 },
+  assessment: { decision: verdict, grounding_score: 1, validated_claims: 1, business_model_decision: bm, business_model_reasons: [] },
 });
 const graphOf = (items: EvidenceItem[]) => buildCompanyEvidenceGraph("c1", items, { now: NOW });
 const US = () => ev("geography", "Austin, TX, United States");
@@ -129,7 +140,7 @@ Deno.test("BRAIN-1: the approved canary 62c8b188 mission, verbatim, now derives 
   assertFalse(pref.source === "user_explicit", "words the request does not say are never user-explicit");
 
   // And the candidate the canary could never surface now can.
-  const e = evaluateEligibility(cs, graphOf([US(), SMALL(), grounded("b2b saas", "pass")]));
+  const e = evaluateEligibility(cs, graphOf([US(), SMALL(), grounded("b2b saas", "accepted")]));
   assertEquals(e.eligibility, "eligible", JSON.stringify(e.checks.filter((c) => c.kind === "hard")));
 });
 
@@ -161,15 +172,15 @@ Deno.test("SEM-2: supporting proof passes, verified contradiction fails, missing
   const cs = deriveMissionCriteria(mission);
   const industry = (items: EvidenceItem[]) => evaluateEligibility(cs, graphOf([US(), ...items])).hard_checks.industry;
 
-  assertEquals(industry([grounded("b2b saas", "pass")]), "pass");
-  assertEquals(industry([grounded("consumer", "pass")]), "fail", "verified consumer rules out B2B SaaS");
-  assertEquals(industry([grounded("b2b service", "pass")]), "fail", "a services firm is not SaaS");
+  assertEquals(industry([grounded("b2b saas", "accepted")]), "pass");
+  assertEquals(industry([grounded("consumer", "accepted")]), "fail", "verified consumer rules out B2B SaaS");
+  assertEquals(industry([grounded("b2b service", "accepted")]), "fail", "a services firm is not SaaS");
   assertEquals(industry([]), "unknown");
   assertEquals(industry([ev("industry", "Consumer Services", { status: "plausible", confidence: "medium" })]), "unknown",
     "an unverified label that disagrees is not a contradiction");
-  assertEquals(industry([grounded("ai saas", "pass")]), "unknown", "AI SaaS neither shows nor rules out B2B");
+  assertEquals(industry([grounded("ai saas", "accepted")]), "unknown", "AI SaaS neither shows nor rules out B2B");
 
-  const e = evaluateEligibility(cs, graphOf([US(), grounded("consumer", "pass")]));
+  const e = evaluateEligibility(cs, graphOf([US(), grounded("consumer", "accepted")]));
   assertEquals(e.eligibility, "ineligible");
   assertEquals(e.disproven.length, 1);
 
@@ -183,40 +194,61 @@ Deno.test("SEM-2: supporting proof passes, verified contradiction fails, missing
 
 // ══════════════════════════════════════════════════════════════ REVIEW-1 ══
 
-Deno.test("REVIEW-1: pass and fail groundings can prove; a review grounding is pending; provenance is carried", () => {
+Deno.test("REVIEW-1: the business model's OWN decision proves; the whole-company verdict never does", () => {
   const cs = deriveMissionCriteria(compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission);
   const industryCheck = (g: EvidenceItem) => evaluateEligibility(cs, graphOf([US(), g])).checks.find((c) => c.dimension === "industry" && c.kind === "hard")!;
 
-  const pass = industryCheck(grounded("b2b saas", "pass"));
+  // Canary c584fd77's shape: the company verdict is `review`, the business-model claim is accepted.
+  const pass = industryCheck(grounded("b2b saas", "accepted", "review"));
   assertEquals(pass.result, "pass");
   assertEquals(pass.provenance, {
     evidence_id: "grd_c1_business_model", dimension: "business_model", status: "proven",
-    method: "model_extraction", confidence: "medium", actor: "grounded_evidence_evaluation", grounding_decision: "pass",
+    method: "model_extraction", confidence: "medium", actor: "grounded_evidence_evaluation",
+    grounding_decision: "review", business_model_decision: "accepted",
   });
-  const review = industryCheck(grounded("b2b saas", "review"));
-  assertEquals(review.result, "unknown", "review is uncertain: never proof");
-  assertEquals([review.provenance?.status, review.provenance?.grounding_decision], ["plausible", "review"]);
-  assertEquals(industryCheck(grounded("consumer", "fail")).result, "fail");
+  const review = industryCheck(grounded("b2b saas", "review", "pass"));
+  assertEquals(review.result, "unknown", "a business model under review is never proof, whatever the company verdict");
+  assertEquals([review.provenance?.status, review.provenance?.business_model_decision], ["plausible", "review"]);
+  assertEquals(industryCheck(grounded("consumer", "accepted", "fail")).result, "fail");
 
-  // The builder itself: decision → status.
-  const company = (decision: string, value = "b2b_saas") => ({
+  // The builder: the company verdict is recorded, the claim decides.
+  const DESC = "company_description:linkedin:aa11";
+  const company = (over: Record<string, unknown> = {}, bm: Record<string, unknown> = {}) => ({
     key: "c1", company: { company_name: "Acme", linkedin_company_url: null, canonical_domain: null, website: null, geography: null, external_source_id: "x" },
     observations: [], evidence_registry: null, hiring_jobs: [], hiring_assessment: null, first_in_function: null,
     enriched: null, identity: null, found_by: [],
     grounded: {
-      version: "grounded-claims-v1", classifier_result: { business_model: { value, confidence: 0.9, claims: [] } },
-      validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: ["d1"], evidence_excerpts: [{ evidence_id: "d1", excerpt: "sells" }] }],
-      rejected_claims: [], grounding_score: 0.8, final_grounded_decision: decision, downgrade_reasons: [], unacknowledged_conflicts: [],
+      version: "grounded-claims-v1", classifier_result: { business_model: { value: "b2b_saas", confidence: 0.9, claims: [], ...bm } },
+      validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: [DESC], evidence_excerpts: [{ evidence_id: DESC, excerpt: "sells" }] }],
+      rejected_claims: [], grounding_score: 0.8, final_grounded_decision: "review", downgrade_reasons: [], unacknowledged_conflicts: [],
+      ...over,
     },
   }) as never;
-  const item = (d: string) => companyEvidenceItems(company(d)).find((e) => e.evidence_id === "grd_c1_business_model")!;
-  assertEquals([item("pass").status, item("review").status, item("fail").status], ["proven", "plausible", "proven"]);
-  assertEquals(item("review").assessment, { decision: "review", grounding_score: 0.8, validated_claims: 1 });
+  const item = (over: Record<string, unknown> = {}, bm: Record<string, unknown> = {}) =>
+    companyEvidenceItems(company(over, bm)).find((e) => e.evidence_id === "grd_c1_business_model")!;
+  for (const verdict of ["pass", "review", "fail"]) {
+    assertEquals(item({ final_grounded_decision: verdict }).status, "proven", `verdict ${verdict} does not decide`);
+  }
+  assertEquals(item().assessment, {
+    decision: "review", grounding_score: 0.8, validated_claims: 1, business_model_decision: "accepted", business_model_reasons: [],
+  });
+  // What DOES keep it under review — each a fact about the business-model claim itself.
+  const reviewed = (over: Record<string, unknown>, bm: Record<string, unknown> = {}) => {
+    const i = item(over, bm);
+    return [i.status, i.assessment?.business_model_decision, i.assessment?.business_model_reasons?.[0]];
+  };
+  assertEquals(reviewed({}, { confidence: 0.4 }), ["plausible", "review", "low_model_confidence"]);
+  assertEquals(reviewed({ rejected_claims: [{ claim: "y", claim_type: "business_model", reason: "excerpt_not_found", detail: "" }] }),
+    ["plausible", "review", "business_model_claim_rejected:excerpt_not_found"]);
+  assertEquals(reviewed({ unacknowledged_conflicts: [DESC] }), ["plausible", "review", `unacknowledged_conflict:${DESC}`]);
+  // …and what does not: a claim that merely cited the wrong KIND of evidence, or a conflict elsewhere.
+  assertEquals(item({ rejected_claims: [{ claim: "z", claim_type: "business_model", reason: "unsupported_evidence_type", detail: "" }] }).status, "proven");
+  assertEquals(item({ unacknowledged_conflicts: ["employee_count:linkedin:bb22"] }).status, "proven");
 
   // A pre-P5.2 checkpoint item (no assessment; review stored as proven/low) is read as plausible.
-  const legacy = grounded("b2b saas", "pass");
+  const legacy = grounded("b2b saas", "accepted");
   delete legacy.assessment;
-  const restored = { ...(company("pass") as object), grounded: null, observations: [{ evidence: [{ ...legacy, confidence: "low" }] }] } as never;
+  const restored = { ...(company() as object), grounded: null, observations: [{ evidence: [{ ...legacy, confidence: "low" }] }] } as never;
   const r = companyEvidenceItems(restored).find((e) => e.evidence_id === "grd_c1_business_model")!;
   assertEquals(r.status, "plausible");
 });
@@ -254,12 +286,14 @@ Deno.test("MATCH-1: controlled vocabulary, whole words, no substrings", () => {
 const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
 const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
 /** What the grounded evaluator concludes per employer — one of each outcome. */
-const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fail" }> = {
+const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fail"; confidence?: number }> = {
   "LinkedIn": { value: "b2b_saas", decision: "pass" },
-  "Audicus": { value: "b2b_saas", decision: "pass" },
+  // The canary's shape: whole-company verdict `review`, business model plainly stated.
+  "Audicus": { value: "b2b_saas", decision: "review" },
   "Bevi": { value: "consumer", decision: "fail" },
   "nothing else": { value: "consumer", decision: "fail" },
-  "Bobyard": { value: "b2b_saas", decision: "review" },
+  // The model is not sure what it sells: the business model itself stays under review.
+  "Bobyard": { value: "b2b_saas", decision: "review", confidence: 0.4 },
 };
 
 Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 rebuild → eligibility → Workbench", async () => {
@@ -283,7 +317,7 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
         return {
           company_key: m.company_key, failure: null, detail: null, verification: {
             version: "grounded-claims-v1",
-            classifier_result: { business_model: { value: v.value, confidence: 0.9, claims: [claim] } },
+            classifier_result: { business_model: { value: v.value, confidence: v.confidence ?? 0.9, claims: [claim] } },
             validated_claims: [claim], rejected_claims: [], grounding_score: 1, final_grounded_decision: v.decision,
             downgrade_reasons: [], unacknowledged_conflicts: [],
           },
@@ -335,16 +369,19 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
   const run1 = await runCapabilityPlan(deps() as never, opts() as never) as unknown as Run;
   assertEquals(batchCalls, 1);
   const one = project(run1);
-  // One of each: PASS, FAIL on the verified business model, PENDING on a review grounding.
+  // One of each: PASS on an accepted business model under a `review` company
+  // verdict, FAIL on a verified consumer model, PENDING on a business model the
+  // model itself was unsure of.
   const industryOf = (p: typeof one, name: string) => p.lead(name).hard_check_details.find((d) => d.dimension === "industry")!;
   assertEquals(one.lead("Audicus").hard_checks.industry, "pass");
   assertEquals(one.lead("Bevi").hard_checks.industry, "fail");
   assertEquals(one.lead("Bevi").bucket, "ineligible");
   assertEquals(one.lead("Bobyard").hard_checks.industry, "unknown");
   assertEquals(one.lead("Bobyard").bucket, "pending");
-  assertEquals(industryOf(one, "Audicus").provenance?.grounding_decision, "pass");
-  assertEquals(industryOf(one, "Bevi").provenance?.grounding_decision, "fail");
-  assertEquals(industryOf(one, "Bobyard").provenance?.grounding_decision, "review");
+  // Provenance carries BOTH decisions: the company verdict, and the one that proved.
+  assertEquals([industryOf(one, "Audicus").provenance?.grounding_decision, industryOf(one, "Audicus").provenance?.business_model_decision], ["review", "accepted"]);
+  assertEquals([industryOf(one, "Bevi").provenance?.grounding_decision, industryOf(one, "Bevi").provenance?.business_model_decision], ["fail", "accepted"]);
+  assertEquals([industryOf(one, "Bobyard").provenance?.grounding_decision, industryOf(one, "Bobyard").provenance?.business_model_decision], ["review", "review"]);
   assert(one.view.leads.some((l) => l.label !== null), "a lead surfaces");
 
   // ── THE CHECKPOINT: what a slice stopped mid-qualification leaves ──────
@@ -385,7 +422,8 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
   // The grounded claim itself came back from the checkpoint, not the live run.
   const audicus = run2.companies.find((c) => c.company.company_name === "Audicus")!;
   const bm = companyEvidenceItems(audicus as never).find((e) => e.dimension === "business_model")!;
-  assertEquals([bm.status, bm.source.actor, bm.assessment?.decision], ["proven", "grounded_evidence_evaluation", "pass"]);
+  assertEquals([bm.status, bm.source.actor, bm.assessment?.decision, bm.assessment?.business_model_decision],
+    ["proven", "grounded_evidence_evaluation", "review", "accepted"]);
   assert(bm.derived_from.length > 0 && bm.source.excerpt, "it still cites the company's own words");
 });
 
@@ -421,10 +459,11 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
   const criteria = deriveMissionCriteria(mission);
   const byUrl = new Map(ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
   /** What the MODEL says, in its own words — never the code. */
-  const SAYS: Record<string, { value: string; fit: "pass" | "review" | "fail" }> = {
-    "Audicus": { value: "B2B SaaS", fit: "pass" },
+  const SAYS: Record<string, { value: string; fit: "pass" | "review" | "fail"; confidence?: number }> = {
+    // Exactly canary c584fd77: a plain "B2B SaaS" under a `review` company verdict.
+    "Audicus": { value: "B2B SaaS", fit: "review" },
     "Bevi": { value: "Consumer hardware brand", fit: "fail" },
-    "Bobyard": { value: "B2B SaaS platform", fit: "review" },
+    "Bobyard": { value: "B2B SaaS platform", fit: "review", confidence: 0.4 },
   };
   const evaluateBatch = (members: Parameters<typeof evaluateBatchResponse>[0]["batch"]) => {
     const rows = members.flatMap((m) => {
@@ -443,7 +482,7 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
         evidence_excerpts: [{ evidence_id: job.evidence_id, excerpt: String(job.source_text).slice(0, 20) }],
       }] : [];
       return [{
-        company_key: m.company_key, business_model: { value: says.value, confidence: 0.9, claims: [claim] },
+        company_key: m.company_key, business_model: { value: says.value, confidence: says.confidence ?? 0.9, claims: [claim] },
         company_fit: says.fit, agentory_use_case: "plausible",
         mission_signal_assessment: { strongest_signal: null, signal_strength: "none", evidence_ids: [], reason: "" },
         supporting_claims: signal, conflicting_evidence_ids: [], missing_evidence: [], unknown_fields: [], confidence: 0.9, reason: "",
@@ -490,7 +529,45 @@ Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach elig
     const [cand] = missionCandidatesFrom({ companies: [run.companies.find((c) => c.company.company_name === name)!] } as never, { now: NOW });
     return evaluateEligibility(criteria, cand.graph).hard_checks.industry;
   };
-  assertEquals(industry("Audicus"), "pass", "a pass grounding of \"B2B SaaS\" proves the criterion");
+  assertEquals(industry("Audicus"), "pass", "an accepted \"B2B SaaS\" proves the criterion, whatever the company verdict");
   assertEquals(industry("Bevi"), "fail", "a verified consumer reading rules it out");
-  assertEquals(industry("Bobyard"), "unknown", "a review grounding stays pending");
+  assertEquals(industry("Bobyard"), "unknown", "a business model the model was unsure of stays pending");
+});
+
+
+// ════════════════════════════════════════════════════════════════ HEAD-0 ══
+
+Deno.test("HEAD-0: LinkedIn's employeeCount 0 is a missing number — unknown at every layer, never a FAIL", () => {
+  // The rule.
+  for (const v of [0, -3, Number.NaN, Number.POSITIVE_INFINITY, "12", null, undefined]) {
+    assertEquals(usableHeadcount(v), null, String(v));
+  }
+  assertEquals(usableHeadcount(57), 57);
+
+  // Where a count ENTERS: every normalizer that reads employeeCount.
+  const li = "https://www.linkedin.com/company/dime9";
+  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 0 }).employee_count, null);
+  assertEquals(normalizeLinkedInCompanyEnriched({ name: "Dime9", linkedinUrl: li, employeeCount: 57 }).employee_count, 57);
+  assertEquals(normalizeLinkedInCompanyCandidate({ name: "Dime9", linkedinUrl: li, employeeCount: 0 })?.employee_count ?? null, null);
+  assertEquals(jobEmployerToCompany({ company: { name: "Dime9", linkedinUrl: li, employeeCount: 0 } })?.employee_count ?? null, null);
+  const job = JSON.stringify(normalizeApifyJobRow({ companyName: "Dime9", companyEmployeesCount: 0, title: "Growth Marketer", link: "https://x.test/j" }));
+  assertFalse(/"employee_count":0\b/.test(job), "the job-row normalizer does not emit a zero count");
+
+  // Where a count DECIDES, even if a zero slips past a normalizer.
+  const zero = { company_name: "Dime9", linkedin_company_url: li, canonical_domain: null, website: null, geography: null,
+    external_source_id: "li:dime9", employee_count: 0 } as never;
+  const record = buildCompanyEvidence({ company_key: li, source_capability: "job_discovery" as never, company: zero, enriched: zero, identity_state: "resolved" });
+  assertEquals(record.employee_evidence, null, "the registry holds no verified count");
+  const obs = observationFromCompany(zero, { capability: "job_discovery", actor_key: "apify_linkedin_job_search", provider: "apify",
+    route_id: null, plan_version: null, provider_call_id: null, mission_id: null, observed_at: "2026-09-18T00:00:00Z" });
+  assertFalse(obs.evidence.some((e) => e.dimension === "headcount"), "no headcount observation from a zero");
+
+  // And eligibility: a proven zero is unknown (pending), a proven 4,000 still fails.
+  const sized = deriveMissionCriteria(mergeCompanyBrainIntoMission(
+    compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission, CANARY_BRAIN).mission);
+  const size = (n: number) => evaluateEligibility(sized, graphOf([ev("headcount", n)])).hard_checks.company_size;
+  assertEquals(size(0), "unknown");
+  assertEquals(size(4000), "fail");
+  assertEquals(size(20), "pass");
+  assertFalse(evaluateEligibility(sized, graphOf([US(), grounded("b2b saas", "accepted"), ev("headcount", 0)])).eligibility === "ineligible");
 });

@@ -30,6 +30,8 @@
 //
 // Pure / import-free so it is fully unit-testable. Never fabricates URLs or proof.
 
+import { usableHeadcount } from "./headcountValue.ts";
+
 export interface SourceProofItem {
   url: string;
   type: "job_posting" | "company_website" | "linkedin_company";
@@ -220,10 +222,10 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   // 50-person company against a 1–150 band, because it was handed nothing.
   //
   // Same transposition class as the `postedDate`/`datePosted` gap fixed in #125.
-  const employeeCount = toInt(
+  const employeeCount = usableHeadcount(toInt(
     r.companyEmployeeCount ?? r.companyEmployeesCount ?? r.employeeCount ??
       co.employeeCount ?? r.companySize ?? r.employees,
-  );
+  ));
   const location = firstStr(
     r.location, loc.linkedinText, locParsed.text, r.formattedLocation, r.jobLocation,
     r.city, r.address, r.companyLocation);

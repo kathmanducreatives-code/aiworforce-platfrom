@@ -10,6 +10,7 @@
 //
 // Pure. No I/O.
 
+import { usableHeadcount } from "./headcountValue.ts";
 import { normalizeCompanyLinkedInUrl, normalizeWebsite, sanitizeUrl } from "./structuredCompanyEnrichment.ts";
 
 export type FieldTrust = "direct" | "alias" | "transformed" | "semantic" | "unsafe";
@@ -312,7 +313,7 @@ export function normalizeLinkedInCompanyCandidate(
     provider_industry: inds[0]?.name ?? s(r.industry),
     industry_ids: inds,
     // Present only in full mode; null in short mode. Never taken from the range.
-    employee_count: n(r.employeeCount),
+    employee_count: usableHeadcount(r.employeeCount),
     employee_range_advisory: rangeText(r),
     geography: s((Array.isArray(r.locations) && (r.locations as Record<string, unknown>[])[0]
       ? (r.locations as Record<string, unknown>[])[0].linkedinText : null)) ??
@@ -406,7 +407,7 @@ export function normalizeLinkedInCompanyEnriched(
     description: s(r.description),
     provider_industry: inds[0]?.name ?? null,
     industry_ids: inds,
-    employee_count: n(r.employeeCount),
+    employee_count: usableHeadcount(r.employeeCount),
     employee_range_advisory: rangeText(r),
     geography: enrichedGeography(r.locations),
     company_type: s(r.companyType),
@@ -479,7 +480,7 @@ export function jobEmployerToCompany(r: Record<string, unknown>): NormalizedHiri
     description: s(c.description),
     provider_industry: inds[0]?.name ?? null,
     industry_ids: inds,
-    employee_count: n(c.employeeCount),
+    employee_count: usableHeadcount(c.employeeCount),
     employee_range_advisory: rangeText(c),
     geography: hqText || null,
     company_type: null,

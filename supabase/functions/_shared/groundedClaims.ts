@@ -465,6 +465,56 @@ export function verifyGroundedResult(i: VerifyInput): GroundedVerification {
   };
 }
 
+// ─────────────────────────── the business model, judged on its own (P5.2) ──
+//
+// `final_grounded_decision` answers "does this company fit the WHOLE request?"
+// — and for a request carrying unprovable targets ("seed-stage", "first growth
+// marketer") that answer is `review` for nearly everyone. Canary c584fd77:
+// every non-rejected company came back `review`, so a company whose own words
+// verifiably say "B2B SaaS" could never prove a B2B SaaS requirement.
+//
+// The business model is its own claim, with its own evidence, and gets its own
+// decision here. It never reads `company_fit`.
+//
+//   accepted   a business model was named (not unknown), at least one
+//              business-model claim survived verification, no business-model
+//              claim was caught misquoting or mis-citing, the model's own
+//              confidence is at least BUSINESS_MODEL_MIN_CONFIDENCE, and no
+//              unacknowledged conflict sits on evidence that can carry one
+//   review     anything else
+//
+// A claim rejected only for citing the WRONG KIND of evidence (a LinkedIn
+// industry label, say) did not count — that is not a reason to distrust the
+// claims that did. A claim rejected for an excerpt that is not in its source, a
+// mismatched hard fact or a borrowed id IS: the model misrepresented the
+// business model, so its reading is not accepted.
+
+export const BUSINESS_MODEL_MIN_CONFIDENCE = 0.6;
+
+export interface BusinessModelDecision {
+  decision: "accepted" | "review";
+  reasons: string[];
+}
+
+export function businessModelDecision(v: GroundedVerification): BusinessModelDecision {
+  const bm = v.classifier_result?.business_model;
+  const reasons: string[] = [];
+  if (!bm || bm.value === "unknown") reasons.push("no_business_model_named");
+  const validated = (v.validated_claims ?? []).filter((c) => c.claim_type === "business_model");
+  if (validated.length === 0) reasons.push("no_validated_business_model_claim");
+  for (const r of v.rejected_claims ?? []) {
+    if (r.claim_type === "business_model" && r.reason !== "unsupported_evidence_type") {
+      reasons.push(`business_model_claim_rejected:${r.reason}`);
+    }
+  }
+  if (bm && Number(bm.confidence) < BUSINESS_MODEL_MIN_CONFIDENCE) reasons.push("low_model_confidence");
+  const carriers = CLAIM_EVIDENCE_RULES.business_model.allowed as readonly string[];
+  for (const id of v.unacknowledged_conflicts ?? []) {
+    if (carriers.includes(String(id).split(":")[0])) reasons.push(`unacknowledged_conflict:${id}`);
+  }
+  return { decision: reasons.length === 0 ? "accepted" : "review", reasons: [...new Set(reasons)] };
+}
+
 /**
  * Does this claim restate a hard fact WRONGLY?
  *

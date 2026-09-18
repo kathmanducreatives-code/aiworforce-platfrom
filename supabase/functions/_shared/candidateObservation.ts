@@ -16,6 +16,7 @@
 // GPT never writes an observation. Every item here is a provider field or a
 // deterministic derivation of one. Pure.
 
+import { usableHeadcount } from "./headcountValue.ts";
 import { sha256Hex } from "./providerInputFingerprint.ts";
 import type { NormalizedHiringCompany, NormalizedHiringJob } from "./hiringActorNormalizers.ts";
 import { normalizeCompanyLinkedInUrl, normalizeWebsite } from "./structuredCompanyEnrichment.ts";
@@ -58,9 +59,13 @@ export interface EvidenceItem {
    * eligibility can say what a claim rests on. Absent on provider fields.
    */
   assessment?: {
+    /** The grounder's verdict on the WHOLE company — recorded, not used as proof. */
     decision: "pass" | "review" | "fail";
     grounding_score: number;
     validated_claims: number;
+    /** The business-model claim's own decision (`businessModelDecision`). This is what proves. */
+    business_model_decision?: "accepted" | "review";
+    business_model_reasons?: string[];
   };
 }
 
@@ -195,7 +200,7 @@ export function observationFromCompany(
       ...base, status: "plausible", confidence: trust.geography === "direct" ? "high" : "medium",
     }));
   }
-  if (c.employee_count != null) {
+  if (usableHeadcount(c.employee_count) != null) {
     ev.push(item(ctx, "headcount", c.employee_count, {
       ...base, status: "plausible", confidence: trust.employee_count === "direct" ? "medium" : "low",
     }));
