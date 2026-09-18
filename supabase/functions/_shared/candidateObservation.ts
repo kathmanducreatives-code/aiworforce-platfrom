@@ -53,6 +53,15 @@ export interface EvidenceItem {
   derived_from: string[];
   mission_id: string | null;
   origin: EvidenceOrigin;
+  /**
+   * P5.2 — the assessment that produced a model-extracted item, carried so
+   * eligibility can say what a claim rests on. Absent on provider fields.
+   */
+  assessment?: {
+    decision: "pass" | "review" | "fail";
+    grounding_score: number;
+    validated_claims: number;
+  };
 }
 
 /** What a source says the company IS, before resolution decides which company that is. */

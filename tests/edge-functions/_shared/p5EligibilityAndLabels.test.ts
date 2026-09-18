@@ -517,8 +517,11 @@ Deno.test("P5.2: only a VERIFIED self-description becomes evidence, and never as
   assert(item.source.excerpt?.includes("B2B SaaS"), "the company's own words travel with it");
 
   const has = (g: unknown) => companyEvidenceItems(company(g), null).some((e) => e.evidence_id === "grd_c1_business_model");
-  // A verification that FAILED proves nothing.
-  assertFalse(has({ ...pass, final_grounded_decision: "fail" }));
+  const itemOf = (g: unknown) => companyEvidenceItems(company(g), null).find((e) => e.evidence_id === "grd_c1_business_model")!;
+  // P5.2 decision semantics: an explicit FAIL that kept validated claims is a
+  // verified reading (it can prove a contradiction); a REVIEW is plausible only.
+  assertEquals([itemOf({ ...pass, final_grounded_decision: "fail" }).status, itemOf({ ...pass, final_grounded_decision: "fail" }).assessment?.decision], ["proven", "fail"]);
+  assertEquals([itemOf({ ...pass, final_grounded_decision: "review" }).status, itemOf({ ...pass, final_grounded_decision: "review" }).confidence], ["plausible", "low"]);
   // A claim the excerpt check rejected is not a validated claim, so nothing is emitted.
   assertFalse(has({ ...pass, validated_claims: [], rejected_claims: [claim] }));
   // And "unknown" is not a business model.
@@ -548,12 +551,6 @@ Deno.test("P5.2: the view derives criteria from the mission, so an approved card
   assertFalse(/persistedMission\.criteria \?\? deriveMissionCriteria/.test(src));
 });
 
-Deno.test("P5.2: a verified business model is recorded as an observation, so it survives a continuation", () => {
-  const src = Deno.readTextFileSync(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
-  const site = src.slice(src.indexOf("c.grounded = grounded ?? null;"), src.indexOf("// ── ENFORCE ONLY, AND ENFORCE MEANS ENFORCE"));
-  assert(/groundedBusinessModelItem\(/.test(site), "the item is built where the verification lands");
-  assert(/recordObservation\(c, \{/.test(site), "and kept as an observation, which the snapshot carries");
-  // The evidence id is stable, so the graph cannot count the live item and the
-  // restored observation as two separate claims.
-  assert(/`grd_\$\{c\.key\}_business_model`/.test(src));
-});
+// The persistence check that lived here grepped the engine source. It is
+// replaced by E2E-1 in p52GroundedProof.test.ts, which runs the real engine
+// through checkpoint → restore → Stage-2 rebuild → eligibility → Workbench.

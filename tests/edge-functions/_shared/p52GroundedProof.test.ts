@@ -1,0 +1,379 @@
+// LEAD V2 P5.2 — GROUNDED PROOF FOR HARD CRITERIA, AND WHAT MAY NEVER BECOME IT.
+//
+// The audit of 02808b4d found five things, fixed here and pinned here:
+//
+//   BRAIN-1  the Company Brain rewrote the user's hard criterion ("B2B SaaS" →
+//            "b2b saas (founder-led or small teams)", still user-explicit), so
+//            canary 62c8b188 could never surface a lead
+//   SEM-2    verified contradictory evidence left a hard rule `unknown`, so a
+//            ruled-out company sat in `pending` forever
+//   REVIEW-1 a `review` grounding was admitted as proof
+//   MATCH-1  industry matching was substring: "AI" matched "Retail"
+//   E2E-1    persistence was checked by grepping source; this runs the real
+//            engine through checkpoint → restore → Stage-2 rebuild → view
+//
+// Offline. No provider, model or database is reached.
+
+import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
+import {
+  mergeCompanyBrainIntoMission, type LeadMissionV1,
+} from "../../../supabase/functions/_shared/leadMission.ts";
+import {
+  criteriaSections, deriveMissionCriteria, type MissionCriterion,
+} from "../../../supabase/functions/_shared/missionCriteria.ts";
+import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
+import type { EvidenceDimension, EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
+import { checkCriterion, evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
+import { matchBusinessModel } from "../../../supabase/functions/_shared/businessModelMatch.ts";
+import { buildWorkbenchMissionView } from "../../../supabase/functions/_shared/workbenchMissionView.ts";
+import {
+  checkpointSnapshot, companyEvidenceItems, missionCandidatesFrom, runCapabilityPlan,
+} from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
+import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
+import { emptyDiscoverySelector } from "./discoverySelectorFixture.ts";
+
+globalThis.fetch = () => { throw new Error("P5.2 tests must not reach the network"); };
+
+const NOW = new Date("2026-09-18T12:00:00.000Z");
+const CANONICAL = "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.";
+const proposal = {
+  requested_opportunity_count: 1, requested_contact_ready_count: null, company_types: ["B2B SaaS"],
+  geographies: ["United States"], geography_is_hard: true, employee_range: { min: null, max: null },
+  decision_maker_roles: [], hard_constraints: [], soft_preferences: [],
+  preferred_signals: ["hiring growth marketer"], required_signal_terms: ["growth marketer"],
+  adjacent_signals: [], excluded_signals: [],
+  allowed_broadening: { role_families: [], company_types: [], geographies: [], employee_range: { min: null, max: null } },
+  disallowed_broadening: [], required_evidence: [], required_capabilities: ["startup_company_discovery", "hiring_verification"],
+  preferred_source_strategy: [], evaluation_instructions: "", founder_unlock_recommended: false, confidence: 0.85, unknowns: [],
+};
+/** The canary workspace's Brain, as pilot-chat reads it: an ICP industry and its enforced size rule. */
+const CANARY_BRAIN = {
+  industries: ["B2B SaaS (founder-led or small teams)"], employee_min: 1, employee_max: 150, employee_policy: true,
+};
+
+const hard = (cs: readonly MissionCriterion[]) => cs.filter((c) => c.kind === "hard" && c.status === "ok");
+const targets = (cs: readonly MissionCriterion[]) => cs.filter((c) => c.kind === "target");
+
+let seq = 0;
+function ev(dimension: EvidenceDimension, value: unknown, over: Partial<EvidenceItem> = {}): EvidenceItem {
+  return {
+    evidence_id: `ev_${dimension}_${++seq}`, company_key: "c1", dimension, value, status: "proven",
+    source: { provider: "apify", actor: "apify_linkedin_company_details", provider_call_id: "pc_1", url: null, excerpt: null },
+    method: "provider_field", observed_at: "2026-09-17T00:00:00.000Z", valid_until: null,
+    confidence: "high", derived_from: [], mission_id: "task", origin: "lead_mission", ...over,
+  };
+}
+const grounded = (value: string, decision: "pass" | "review" | "fail") => ev("business_model", value, {
+  evidence_id: "grd_c1_business_model", method: "model_extraction", origin: "web",
+  status: decision === "review" ? "plausible" : "proven", confidence: decision === "review" ? "low" : "medium",
+  source: { provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null, url: null, excerpt: "We sell…" },
+  assessment: { decision, grounding_score: 1, validated_claims: 1 },
+});
+const graphOf = (items: EvidenceItem[]) => buildCompanyEvidenceGraph("c1", items, { now: NOW });
+const US = () => ev("geography", "Austin, TX, United States");
+const SMALL = () => ev("headcount", 20);
+
+// ═══════════════════════════════════════════════════════════════ BRAIN-1 ══
+
+Deno.test("BRAIN-1: the canary's Brain refinement never rewrites the user's hard criterion", () => {
+  // The path pilot-chat takes: compile with the Brain, then merge again.
+  const compiled = compileLeadMission({ originalUserQuery: CANONICAL, proposal, companyBrain: CANARY_BRAIN as never }).final_mission;
+  const mission = mergeCompanyBrainIntoMission(compiled, CANARY_BRAIN).mission;
+
+  // The user's values, exactly — the compiler reads both "b2b saas" and "saas" from the sentence.
+  assertEquals(mission.company_profile.verticals.map((v) => v.toLowerCase()), ["b2b saas", "saas"], "the user's values, exactly");
+  assertEquals(mission.field_provenance["company_profile.verticals"], "explicit_user_request");
+  assertEquals(mission.brain_refinements?.length, 1, "recorded once, even though the Brain was merged twice");
+  assertEquals(mission.brain_refinements![0].qualifier, "founder-led or small teams");
+
+  const cs = deriveMissionCriteria(mission);
+  const industry = hard(cs).filter((c) => c.dimension === "industry");
+  assertEquals(industry.map((c) => [String(c.value).toLowerCase(), c.source]), [["b2b saas", "user_explicit"], ["saas", "user_explicit"]]);
+  assertFalse(hard(cs).some((c) => /founder|small teams/i.test(String(c.value))), "no Brain words in any hard rule");
+
+  const pref = targets(cs).find((c) => c.value === "founder-led or small teams")!;
+  assert(pref, "the Brain's qualifier is a target");
+  assertEquals([pref.dimension, pref.source, pref.status], ["industry", "company_brain_preference", "unprovable_today"]);
+
+  // The size rule IS enforced policy, so it alone stays hard.
+  const size = cs.find((c) => c.dimension === "company_size")!;
+  assertEquals([size.kind, size.source], ["hard", "company_brain_policy"]);
+
+  // The card says both, in the right sections.
+  const card = criteriaSections({ ...mission, criteria: cs });
+  assert(card.hard.some((l) => /^Industry: b2b saas ·/i.test(l)), card.hard.join(" | "));
+  assert(card.target.some((l) => /founder-led or small teams/.test(l)), card.target.join(" | "));
+});
+
+Deno.test("BRAIN-1: the approved canary 62c8b188 mission, verbatim, now derives hard B2B SaaS + a target", () => {
+  const raw = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/canary-62c8b188-mission.json", import.meta.url)));
+  delete raw._source;
+  const mission = raw as LeadMissionV1;
+  const cs = deriveMissionCriteria(mission);
+
+  assertEquals(hard(cs).filter((c) => c.dimension === "industry").map((c) => [c.value, c.source]), [["b2b saas", "user_explicit"]]);
+  const pref = targets(cs).find((c) => c.dimension === "industry")!;
+  assertEquals([pref.value, pref.status], ["founder-led or small teams", "unprovable_today"]);
+  assertFalse(pref.source === "user_explicit", "words the request does not say are never user-explicit");
+
+  // And the candidate the canary could never surface now can.
+  const e = evaluateEligibility(cs, graphOf([US(), SMALL(), grounded("b2b saas", "pass")]));
+  assertEquals(e.eligibility, "eligible", JSON.stringify(e.checks.filter((c) => c.kind === "hard")));
+});
+
+Deno.test("BRAIN-1: a broader Brain value, an open field and a word-inside-a-word", () => {
+  const user = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+  // Broader ("saas" under "b2b saas"): nothing to add, and the user's value stands.
+  const broader = mergeCompanyBrainIntoMission(user, { industries: ["SaaS"] }).mission;
+  assertEquals(broader.company_profile.verticals.map((v) => v.toLowerCase()), ["b2b saas", "saas"]);
+  assertEquals(broader.brain_refinements, undefined);
+
+  // "ai" is not inside "retail": a different industry is a widening, rejected.
+  const aiUser = { ...user, company_profile: { ...user.company_profile, verticals: ["ai"] } };
+  const retail = mergeCompanyBrainIntoMission(aiUser, { industries: ["Retail"] });
+  assertEquals(retail.mission.company_profile.verticals, ["ai"]);
+  assert(retail.rejected_broadening.some((r) => r.values.includes("retail")));
+
+  // A field the user left open is still filled — as a Brain preference, never hard.
+  const open = { ...user, company_profile: { ...user.company_profile, verticals: [] }, field_provenance: { ...user.field_provenance } };
+  delete open.field_provenance["company_profile.verticals"];
+  const filled = mergeCompanyBrainIntoMission(open, { industries: ["B2B SaaS"] }).mission;
+  const c = deriveMissionCriteria(filled).find((x) => x.dimension === "industry")!;
+  assertEquals([c.kind, c.source], ["target", "company_brain_preference"]);
+});
+
+// ═════════════════════════════════════════════════════════════════ SEM-2 ══
+
+Deno.test("SEM-2: supporting proof passes, verified contradiction fails, missing or unverified is pending", () => {
+  const mission = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+  const cs = deriveMissionCriteria(mission);
+  const industry = (items: EvidenceItem[]) => evaluateEligibility(cs, graphOf([US(), ...items])).hard_checks.industry;
+
+  assertEquals(industry([grounded("b2b saas", "pass")]), "pass");
+  assertEquals(industry([grounded("consumer", "pass")]), "fail", "verified consumer rules out B2B SaaS");
+  assertEquals(industry([grounded("b2b service", "pass")]), "fail", "a services firm is not SaaS");
+  assertEquals(industry([]), "unknown");
+  assertEquals(industry([ev("industry", "Consumer Services", { status: "plausible", confidence: "medium" })]), "unknown",
+    "an unverified label that disagrees is not a contradiction");
+  assertEquals(industry([grounded("ai saas", "pass")]), "unknown", "AI SaaS neither shows nor rules out B2B");
+
+  const e = evaluateEligibility(cs, graphOf([US(), grounded("consumer", "pass")]));
+  assertEquals(e.eligibility, "ineligible");
+  assertEquals(e.disproven.length, 1);
+
+  // The same rule for geography and headcount: only VERIFIED contradiction rejects.
+  assertEquals(evaluateEligibility(cs, graphOf([ev("geography", "Berlin, Germany")])).hard_checks.geography, "fail");
+  assertEquals(evaluateEligibility(cs, graphOf([ev("geography", "Berlin, Germany", { status: "plausible" })])).hard_checks.geography, "unknown");
+  const sized = deriveMissionCriteria(mergeCompanyBrainIntoMission(mission, CANARY_BRAIN).mission);
+  assertEquals(evaluateEligibility(sized, graphOf([ev("headcount", 4000)])).hard_checks.company_size, "fail");
+  assertEquals(evaluateEligibility(sized, graphOf([ev("headcount", 4000, { status: "plausible" })])).hard_checks.company_size, "unknown");
+});
+
+// ══════════════════════════════════════════════════════════════ REVIEW-1 ══
+
+Deno.test("REVIEW-1: pass and fail groundings can prove; a review grounding is pending; provenance is carried", () => {
+  const cs = deriveMissionCriteria(compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission);
+  const industryCheck = (g: EvidenceItem) => evaluateEligibility(cs, graphOf([US(), g])).checks.find((c) => c.dimension === "industry" && c.kind === "hard")!;
+
+  const pass = industryCheck(grounded("b2b saas", "pass"));
+  assertEquals(pass.result, "pass");
+  assertEquals(pass.provenance, {
+    evidence_id: "grd_c1_business_model", dimension: "business_model", status: "proven",
+    method: "model_extraction", confidence: "medium", actor: "grounded_evidence_evaluation", grounding_decision: "pass",
+  });
+  const review = industryCheck(grounded("b2b saas", "review"));
+  assertEquals(review.result, "unknown", "review is uncertain: never proof");
+  assertEquals([review.provenance?.status, review.provenance?.grounding_decision], ["plausible", "review"]);
+  assertEquals(industryCheck(grounded("consumer", "fail")).result, "fail");
+
+  // The builder itself: decision → status.
+  const company = (decision: string, value = "b2b_saas") => ({
+    key: "c1", company: { company_name: "Acme", linkedin_company_url: null, canonical_domain: null, website: null, geography: null, external_source_id: "x" },
+    observations: [], evidence_registry: null, hiring_jobs: [], hiring_assessment: null, first_in_function: null,
+    enriched: null, identity: null, found_by: [],
+    grounded: {
+      version: "grounded-claims-v1", classifier_result: { business_model: { value, confidence: 0.9, claims: [] } },
+      validated_claims: [{ claim: "x", claim_type: "business_model", evidence_ids: ["d1"], evidence_excerpts: [{ evidence_id: "d1", excerpt: "sells" }] }],
+      rejected_claims: [], grounding_score: 0.8, final_grounded_decision: decision, downgrade_reasons: [], unacknowledged_conflicts: [],
+    },
+  }) as never;
+  const item = (d: string) => companyEvidenceItems(company(d)).find((e) => e.evidence_id === "grd_c1_business_model")!;
+  assertEquals([item("pass").status, item("review").status, item("fail").status], ["proven", "plausible", "proven"]);
+  assertEquals(item("review").assessment, { decision: "review", grounding_score: 0.8, validated_claims: 1 });
+
+  // A pre-P5.2 checkpoint item (no assessment; review stored as proven/low) is read as plausible.
+  const legacy = grounded("b2b saas", "pass");
+  delete legacy.assessment;
+  const restored = { ...(company("pass") as object), grounded: null, observations: [{ evidence: [{ ...legacy, confidence: "low" }] }] } as never;
+  const r = companyEvidenceItems(restored).find((e) => e.evidence_id === "grd_c1_business_model")!;
+  assertEquals(r.status, "plausible");
+});
+
+// ═══════════════════════════════════════════════════════════════ MATCH-1 ══
+
+Deno.test("MATCH-1: controlled vocabulary, whole words, no substrings", () => {
+  const cases: Array<[string, string, string]> = [
+    ["AI", "Retail", "unknown"],
+    ["AI", "ai saas", "pass"],
+    ["B2B SaaS", "b2b saas", "pass"],
+    ["B2B SaaS", "B2B software-as-a-service", "pass"],
+    ["B2B SaaS", "consumer", "fail"],
+    ["B2B SaaS", "b2b service", "fail"],
+    ["B2B SaaS", "b2b software", "unknown"],
+    ["B2B SaaS", "ai saas", "unknown"],
+    ["B2B software", "b2b saas", "pass"],
+    ["SaaS", "consumer", "unknown"],
+    ["fintech", "fintech", "pass"],
+    ["fintech", "b2b saas", "unknown"],
+    ["healthcare SaaS", "b2b saas", "unknown"],
+    ["b2b saas or b2b service", "b2b service", "pass"],
+    ["b2b saas or consumer", "b2b service", "fail"],
+    ["enterprise software", "consumer", "fail"],
+  ];
+  for (const [req, got, want] of cases) assertEquals(matchBusinessModel(req, got), want, `${req} vs ${got}`);
+
+  // Through eligibility: a PROVEN "Retail" does not satisfy an "AI" requirement.
+  const g = graphOf([ev("industry", "Retail")]);
+  assertEquals(checkCriterion({ id: "i", dimension: "industry", kind: "hard", value: "AI", status: "ok" } as never, g).result, "unknown");
+});
+
+// ═════════════════════════════════════════════════════════════════ E2E-1 ══
+
+const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
+const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
+/** What the grounded evaluator concludes per employer — one of each outcome. */
+const VERDICT: Record<string, { value: string; decision: "pass" | "review" | "fail" }> = {
+  "LinkedIn": { value: "b2b_saas", decision: "pass" },
+  "Audicus": { value: "b2b_saas", decision: "pass" },
+  "Bevi": { value: "consumer", decision: "fail" },
+  "nothing else": { value: "consumer", decision: "fail" },
+  "Bobyard": { value: "b2b_saas", decision: "review" },
+};
+
+Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 rebuild → eligibility → Workbench", async () => {
+  const mission = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+  const criteria = deriveMissionCriteria(mission);
+  const plan = buildCapabilityGraph(mission, { executability: "enforce" });
+  const byUrl = new Map(ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
+  let batchCalls = 0;
+  const evaluateBatch = (members: Array<{ company_key: string; company_name: string | null; registry: { items: Array<Record<string, unknown>> } }>) => {
+    batchCalls++;
+    return Promise.resolve({
+      version: "test", foreign_results: [], evaluated: members.length, failed: 0,
+      outcomes: members.map((m) => {
+        const v = VERDICT[String(m.company_name)];
+        const desc = m.registry.items.find((x) => x.evidence_type === "company_description");
+        if (!v || !desc) return { company_key: m.company_key, verification: null, failure: "malformed_result", detail: null };
+        const claim = {
+          claim: "the company's own description", claim_type: "business_model", evidence_ids: [String(desc.evidence_id)],
+          evidence_excerpts: [{ evidence_id: String(desc.evidence_id), excerpt: String(desc.source_text).slice(0, 24) }],
+        };
+        return {
+          company_key: m.company_key, failure: null, detail: null, verification: {
+            version: "grounded-claims-v1",
+            classifier_result: { business_model: { value: v.value, confidence: 0.9, claims: [claim] } },
+            validated_claims: [claim], rejected_claims: [], grounding_score: 1, final_grounded_decision: v.decision,
+            downgrade_reasons: [], unacknowledged_conflicts: [],
+          },
+        };
+      }),
+    });
+  };
+  const deps = (restored?: Map<string, unknown>) => ({
+    planDiscovery: emptyDiscoverySelector(),
+    planExecution: () => Promise.resolve({
+      reasoning: "e2e", steps: [
+        { capability: "job_discovery", actor_key: "apify_linkedin_job_search", purpose: "roles", input: { jobTitles: ['"growth marketer"'], locations: ["United States"], postedLimit: "month", maxItems: 10 }, depends_on: [] },
+        { capability: "company_enrichment", actor_key: "apify_linkedin_company_details", purpose: "details", input: { companies: ["{{url}}"] }, depends_on: [1] },
+        { capability: "company_brain_qualification", actor_key: null, purpose: "qualify", input: {}, depends_on: [2] },
+      ],
+    }),
+    invoke: (call: { actorKey: string; input: Record<string, unknown>; onProviderRun?: (r: { run_id: string; dataset_id: null }) => void }) => {
+      call.onProviderRun?.({ run_id: `run-${call.actorKey}`, dataset_id: null });
+      if (call.actorKey === "apify_linkedin_job_search") return Promise.resolve(call.input.company ? [] : ROWS);
+      if (call.actorKey === "apify_linkedin_company_details") {
+        return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
+          const c = byUrl.get(u)!;
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+        }));
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+    evaluateBatch,
+    ...(restored ? { restoredGroundedResults: restored } : {}),
+  });
+  const opts = (extra: Record<string, unknown> = {}) => ({
+    mission, plan, maxCandidates: 10,
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+    specMode: "enforce", specScope: { workspace_id: "ws-p52", lineage_id: "lineage-p52" }, ...extra,
+  });
+  type Run = { companies: Array<Record<string, unknown> & { key: string; company: { company_name: string } }>; state: Record<string, unknown> };
+  const project = (run: Run) => {
+    const candidates = missionCandidatesFrom(run as never, { missionId: "task-p52", now: NOW });
+    const view = buildWorkbenchMissionView({
+      mission: { requested_count: 1, execution_limit: 1, anchor: "hiring" }, criteria, stage: "complete", candidates,
+    });
+    const byName = new Map(run.companies.map((c) => [c.company.company_name, c.key]));
+    const lead = (name: string) => view.leads.find((l) => l.company.key === byName.get(name))!;
+    return { view, lead };
+  };
+
+  // ── SLICE 1: discovery, enrichment, Stage-2 grounding, qualification ──
+  const run1 = await runCapabilityPlan(deps() as never, opts() as never) as unknown as Run;
+  assertEquals(batchCalls, 1);
+  const one = project(run1);
+  // One of each: PASS, FAIL on the verified business model, PENDING on a review grounding.
+  const industryOf = (p: typeof one, name: string) => p.lead(name).hard_check_details.find((d) => d.dimension === "industry")!;
+  assertEquals(one.lead("Audicus").hard_checks.industry, "pass");
+  assertEquals(one.lead("Bevi").hard_checks.industry, "fail");
+  assertEquals(one.lead("Bevi").bucket, "ineligible");
+  assertEquals(one.lead("Bobyard").hard_checks.industry, "unknown");
+  assertEquals(one.lead("Bobyard").bucket, "pending");
+  assertEquals(industryOf(one, "Audicus").provenance?.grounding_decision, "pass");
+  assertEquals(industryOf(one, "Bevi").provenance?.grounding_decision, "fail");
+  assertEquals(industryOf(one, "Bobyard").provenance?.grounding_decision, "review");
+  assert(one.view.leads.some((l) => l.label !== null), "a lead surfaces");
+
+  // ── THE CHECKPOINT: what a slice stopped mid-qualification leaves ──────
+  const snap = checkpointSnapshot(run1.state as never, run1.companies as never);
+  assert(snap.coherent, String(snap.incoherence));
+  const records = JSON.parse(JSON.stringify(snap.resume_records));
+  const state = JSON.parse(JSON.stringify(snap.state));
+  state.completed_capabilities = state.completed_capabilities.filter((c: string) => c !== "company_brain_qualification");
+  if (!state.pending_capabilities.includes("company_brain_qualification")) {
+    state.pending_capabilities = ["company_brain_qualification", ...state.pending_capabilities];
+  }
+  // run-agent restores Stage-2 results from the checkpoint the same way.
+  const restoredGrounded = new Map(run1.companies
+    .filter((c) => c.grounded).map((c) => [c.key, JSON.parse(JSON.stringify(c.grounded))]));
+
+  // ── SLICE 2: a fresh process, from the checkpoint only ─────────────────
+  batchCalls = 0;
+  const run2 = await runCapabilityPlan(deps(restoredGrounded) as never, opts({
+    state, resume: { workspace_id: "ws-p52", lineage_root_task_id: "task-p52", records },
+  }) as never) as unknown as Run;
+  assertEquals(run2.companies.map((c) => c.key).sort(), run1.companies.map((c) => c.key).sort(),
+    "the job-first working set is restored, not lost");
+  assertEquals(batchCalls, 0, "nothing already grounded is bought again");
+  for (const c of run2.companies) {
+    assertEquals(c.evaluation_path, "restored_decision");
+    assert(c.evidence_registry, `${c.company.company_name}: Stage 2 rebuilt the registry`);
+    assertEquals(c.grounded, null, "`grounded` itself is not carried — the observation is");
+  }
+
+  const two = project(run2);
+  // PASS, FAIL and PENDING all survive, with the same provenance.
+  for (const name of ["Audicus", "LinkedIn", "Bevi", "nothing else", "Bobyard"]) {
+    assertEquals(two.lead(name).bucket, one.lead(name).bucket, `${name}: bucket`);
+    assertEquals(two.lead(name).hard_checks, one.lead(name).hard_checks, `${name}: hard checks`);
+    assertEquals(industryOf(two, name).provenance, industryOf(one, name).provenance, `${name}: provenance`);
+  }
+  assertEquals(two.view.counts, one.view.counts, "the Workbench view is identical after a continuation");
+  // The grounded claim itself came back from the checkpoint, not the live run.
+  const audicus = run2.companies.find((c) => c.company.company_name === "Audicus")!;
+  const bm = companyEvidenceItems(audicus as never).find((e) => e.dimension === "business_model")!;
+  assertEquals([bm.status, bm.source.actor, bm.assessment?.decision], ["proven", "grounded_evidence_evaluation", "pass"]);
+  assert(bm.derived_from.length > 0 && bm.source.excerpt, "it still cites the company's own words");
+});

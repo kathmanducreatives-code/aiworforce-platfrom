@@ -494,6 +494,18 @@ export interface LeadMissionV1 {
   prohibited_capabilities: CapabilityId[];
 
   field_provenance: Record<string, FieldProvenance>;
+  /**
+   * P5.2 — COMPANY BRAIN REFINEMENTS OF A FIELD THE USER CLOSED.
+   *
+   * The user said "B2B SaaS"; the Brain says "B2B SaaS (founder-led or small
+   * teams)". The user's value stays exactly as stated and stays hard; the
+   * Brain's extra words are recorded HERE and derive a `target` criterion
+   * sourced to the Brain. They can rank a company, never reject one.
+   *
+   * Not part of `missionHash`: like `criteria`, they are a reading of the
+   * Brain beside the question, not the question itself.
+   */
+  brain_refinements?: BrainRefinement[];
   confidence: number;
   /** Set only on the model-compiled path. See {@link MissionDirectives}. */
   directives?: MissionDirectives;
@@ -1228,6 +1240,39 @@ export interface BrainMergeInput {
   employee_policy?: boolean;
 }
 
+/** A Company Brain value that narrows a field the user already closed. */
+export interface BrainRefinement {
+  /** e.g. "company_profile.verticals" */
+  field: string;
+  /** The user's value it refines, exactly as the mission carries it. */
+  user_value: string;
+  /** The Brain's value, normalised. */
+  brain_value: string;
+  /** The Brain's extra words beyond the user's value ("founder-led or small teams"). */
+  qualifier: string;
+}
+
+/**
+ * What the Brain adds to a user value it contains. "b2b saas (founder-led or
+ * small teams)" over "b2b saas" → "founder-led or small teams". Empty when the
+ * Brain says nothing more.
+ */
+/** `needle` occurs in `hay` as whole words ("b2b saas" in "b2b saas (x)"; "ai" not in "retail"). */
+export function containsPhrase(hay: string, needle: string): boolean {
+  const n = needle.trim().toLowerCase();
+  if (!n) return false;
+  const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(hay.toLowerCase());
+}
+
+export function refinementQualifier(userValue: string, brainValue: string): string {
+  if (!containsPhrase(brainValue, userValue)) return "";
+  const i = brainValue.toLowerCase().indexOf(userValue.toLowerCase());
+  if (i < 0) return "";
+  const rest = `${brainValue.slice(0, i)} ${brainValue.slice(i + userValue.length)}`;
+  return rest.replace(/[()[\]{}]/g, " ").replace(/^[\s,;:—–-]+|[\s,;:—–-]+$/g, "").replace(/\s+/g, " ").trim();
+}
+
 export interface BrainMergeResult {
   mission: LeadMissionV1;
   /** Brain values NOT applied because they would widen an explicit request. */
@@ -1249,6 +1294,19 @@ export interface BrainMergeResult {
  *
  * Rejected values are RETURNED, not discarded, so the UI can offer the broader
  * scope as an explicit choice rather than taking it.
+ *
+ * ── A CLOSED FIELD IS NEVER REWRITTEN (P5.2) ──────────────────────────────
+ *
+ * The Brain used to REPLACE the user's list with its "compatible refinement":
+ * canary 62c8b188 asked for "B2B SaaS" and ran with the hard, user-explicit
+ * requirement "b2b saas (founder-led or small teams)" — words the user never
+ * said, which no evidence can establish, so every candidate stayed pending.
+ *
+ * Now the user's value stays exactly as stated. A Brain value that CONTAINS a
+ * user value and says more is recorded in `brain_refinements` and becomes a
+ * target sourced to the Brain. A Brain value the user's value contains
+ * ("saas" under "b2b saas") is broader and is simply not needed. Only a Brain
+ * rule that is genuinely enforced policy (`employee_policy`) is ever hard.
  */
 export function mergeCompanyBrainIntoMission(
   mission: LeadMissionV1, brain: BrainMergeInput,
@@ -1256,6 +1314,7 @@ export function mergeCompanyBrainIntoMission(
   const rejected: BrainMergeResult["rejected_broadening"] = [];
   const applied: BrainMergeResult["applied"] = [];
   const prov = { ...mission.field_provenance };
+  const refinements: BrainRefinement[] = [...(mission.brain_refinements ?? [])];
   const cp: MissionCompanyProfile = {
     ...mission.company_profile,
     business_models: [...mission.company_profile.business_models],
@@ -1267,9 +1326,12 @@ export function mergeCompanyBrainIntoMission(
   const norm = (xs: readonly string[] | undefined) =>
     [...new Set((xs ?? []).map((s) => String(s ?? "").trim().toLowerCase()).filter(Boolean))];
 
-  /** Compatible = one is a refinement of the other ("saas" vs "b2b saas"). */
+  /**
+   * Compatible = one is a refinement of the other ("saas" vs "b2b saas").
+   * WHOLE WORDS: "ai" is not inside "retail".
+   */
   const compatible = (userVal: string, brainVal: string) =>
-    userVal.includes(brainVal) || brainVal.includes(userVal);
+    containsPhrase(userVal, brainVal) || containsPhrase(brainVal, userVal);
 
   const mergeList = (
     field: string, userList: string[], brainList: string[],
@@ -1288,9 +1350,10 @@ export function mergeCompanyBrainIntoMission(
       }
       return userList;
     }
-    // The user closed this field. Brain values may only REFINE it.
+    // The user closed this field. Their list stands EXACTLY as stated; a Brain
+    // value that narrows one of their values is recorded beside it, never
+    // written over it.
     const u = norm(userList);
-    const refinements = b.filter((x) => u.some((y) => compatible(y, x)));
     const widening = b.filter((x) => !u.some((y) => compatible(y, x)));
     if (widening.length) {
       rejected.push({
@@ -1298,10 +1361,17 @@ export function mergeCompanyBrainIntoMission(
         reason: `outside the user's explicit ${field.split(".").pop()}: ${u.join(", ")}`,
       });
     }
-    if (refinements.length) {
-      applied.push({ field, values: refinements });
-      return refinements;
+    const noted: string[] = [];
+    for (const x of b) {
+      const user = u.find((y) => x !== y && containsPhrase(x, y));
+      if (!user) continue;
+      const qualifier = refinementQualifier(user, x);
+      if (!qualifier) continue;
+      if (refinements.some((r) => r.field === field && r.user_value === user && r.brain_value === x)) continue;
+      refinements.push({ field, user_value: user, brain_value: x, qualifier });
+      noted.push(x);
     }
+    if (noted.length) applied.push({ field, values: noted });
     return userList;
   };
 
@@ -1336,7 +1406,10 @@ export function mergeCompanyBrainIntoMission(
   }
 
   return {
-    mission: { ...mission, company_profile: cp, field_provenance: prov },
+    mission: {
+      ...mission, company_profile: cp, field_provenance: prov,
+      ...(refinements.length ? { brain_refinements: refinements } : {}),
+    },
     rejected_broadening: rejected,
     applied,
   };

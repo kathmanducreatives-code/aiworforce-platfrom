@@ -21,12 +21,32 @@
 // unknown rather than proven. That is what sends a candidate to evidence
 // completion instead of onto the shortlist.
 //
+// P5.2 — THE THREE ANSWERS, AND WHAT EACH ONE NEEDS.
+//
+//   pass      the current item is PROVEN and supports the requirement
+//   fail      the current item is PROVEN (verified) and contradicts it, or the
+//             item itself is disproven
+//   unknown   anything else: no item, an unverified item, or an item that
+//             neither shows nor rules the requirement out
+//
+// A contradiction only fails a hard rule when the evidence behind it is
+// verified. A provider's reported location or headcount band that disagrees
+// sends the candidate to `pending`, not out of the mission: an unverified
+// claim can no more reject a company than it can qualify one. Industry and
+// business model are compared through the controlled vocabulary in
+// `businessModelMatch.ts` — never by substring.
+//
+// Every check carries the provenance of the item it read (status, method,
+// confidence, actor, and the grounding decision when one produced it), so the
+// Workbench can show WHY a rule passed, not just that it did.
+//
 // GPT is not consulted and cannot appeal. Pure.
 
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { EvidenceDimension, EvidenceItem } from "./candidateObservation.ts";
 import type { CriterionDimension, MissionCriterion } from "./missionCriteria.ts";
 import { geographyContradicts } from "./leadEligiblePool.ts";
+import { matchBusinessModel } from "./businessModelMatch.ts";
 
 export const ELIGIBILITY_VERSION = "candidate-eligibility-v1" as const;
 
@@ -51,6 +71,18 @@ export const CRITERION_EVIDENCE_DIMENSION: Readonly<Partial<Record<CriterionDime
     technology: "technology",
   });
 
+/** Where the answer came from — carried, never recomputed downstream. */
+export interface CheckProvenance {
+  evidence_id: string;
+  dimension: EvidenceDimension;
+  status: EvidenceItem["status"];
+  method: EvidenceItem["method"];
+  confidence: EvidenceItem["confidence"];
+  actor: string;
+  /** Set when a grounded evaluation produced the item. */
+  grounding_decision: "pass" | "review" | "fail" | null;
+}
+
 export interface CriterionCheck {
   criterion_id: string;
   dimension: CriterionDimension;
@@ -59,6 +91,8 @@ export interface CriterionCheck {
   /** Why, in the words a card can show. */
   reason: string;
   evidence_ids: string[];
+  /** The item the answer rests on. Null when nothing answered it. */
+  provenance: CheckProvenance | null;
 }
 
 export interface EligibilityResult {
@@ -75,14 +109,6 @@ export interface EligibilityResult {
 
 const text = (v: unknown): string => String(v ?? "").trim().toLowerCase();
 
-/** Tokens a label must contain to satisfy an industry/business-model criterion. */
-function industrySatisfied(required: unknown, claimed: unknown): boolean {
-  const need = text(required).split(/[^a-z0-9+]+/).filter((t) => t.length > 1);
-  const got = text(claimed);
-  if (!need.length || !got) return false;
-  return need.every((t) => got.includes(t));
-}
-
 function headcountSatisfied(required: unknown, count: unknown): CheckResult {
   if (typeof count !== "number" || !Number.isFinite(count)) return "unknown";
   const r = required as { min?: number | null; max?: number | null } | number | null;
@@ -92,6 +118,14 @@ function headcountSatisfied(required: unknown, count: unknown): CheckResult {
   if (min != null && count < min) return "fail";
   if (max != null && count > max) return "fail";
   return "pass";
+}
+
+function provenanceOf(item: EvidenceItem): CheckProvenance {
+  return {
+    evidence_id: item.evidence_id, dimension: item.dimension, status: item.status,
+    method: item.method, confidence: item.confidence, actor: item.source.actor,
+    grounding_decision: item.assessment?.decision ?? null,
+  };
 }
 
 /** The item that currently speaks for a dimension, and what it says. */
@@ -107,32 +141,26 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   const base = { criterion_id: c.id, dimension: c.dimension, kind: c.kind };
   const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
   if (!dim) {
-    return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [] };
+    return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [], provenance: null };
   }
-  // AN INDUSTRY CRITERION IS ALSO ANSWERED BY THE BUSINESS MODEL.
-  //
-  // The compiler puts the noun phrase "B2B SaaS" under `industry`, while the
-  // thing that can actually be established about a company is its business
-  // model. Either claim may satisfy it; the stronger one is preferred.
-  const item = c.dimension === "industry"
-    ? [currentItem(graph, "business_model"), currentItem(graph, "industry")]
-      .filter((x): x is EvidenceItem => !!x)
-      .sort((a, b) => (industrySatisfied(c.value, b.value) ? 1 : 0) - (industrySatisfied(c.value, a.value) ? 1 : 0))[0] ?? null
-    : currentItem(graph, dim);
+  if (c.dimension === "industry" || c.dimension === "business_model") return checkBusinessModel(c, graph, base);
+  const item = currentItem(graph, dim);
   if (!item || item.status === "unknown") {
     const stale = graph.claims.find((x) => x.dimension === dim)?.stale.length ?? 0;
     return {
-      ...base, result: "unknown", evidence_ids: [],
+      ...base, result: "unknown", evidence_ids: [], provenance: null,
       reason: stale > 0 ? `the only ${dim} evidence has expired` : `${dim} is not established`,
     };
   }
   const ids = [item.evidence_id];
+  const provenance = provenanceOf(item);
   // A disproven claim fails whatever the value was.
   if (item.status === "disproven") {
-    return { ...base, result: "fail", reason: `${dim} is disproven by ${item.source.actor}`, evidence_ids: ids };
+    return { ...base, result: "fail", reason: `${dim} is disproven by ${item.source.actor}`, evidence_ids: ids, provenance };
   }
-  // PLAUSIBLE IS NOT PROVEN. A provider's own industry label, an advisory
-  // headcount band — they rank a candidate; they never satisfy a hard rule.
+  // PLAUSIBLE IS NOT PROVEN — in either direction. A provider's reported
+  // location or headcount band ranks a candidate; it neither satisfies a hard
+  // rule nor rules the candidate out.
   const proven = item.status === "proven";
 
   switch (c.dimension) {
@@ -140,31 +168,25 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       const required = Array.isArray(c.value) ? c.value.map(String) : [String(c.value ?? "")];
       const claimed = typeof item.value === "string" ? item.value : null;
       if (geographyContradicts(claimed, required.filter(Boolean))) {
-        return { ...base, result: "fail", reason: `geography ${claimed} is outside ${required.join(", ")}`, evidence_ids: ids };
+        return proven
+          ? { ...base, result: "fail", reason: `geography ${claimed} is outside ${required.join(", ")}`, evidence_ids: ids, provenance }
+          : { ...base, result: "unknown", reason: `geography ${claimed} is reported outside ${required.join(", ")}, not verified`, evidence_ids: ids, provenance };
       }
       return proven
-        ? { ...base, result: "pass", reason: `geography ${claimed} matches ${required.join(", ")}`, evidence_ids: ids }
-        : { ...base, result: "unknown", reason: `geography ${claimed} is reported, not proven`, evidence_ids: ids };
-    }
-    case "industry":
-    case "business_model": {
-      const ok = industrySatisfied(c.value, item.value);
-      if (!ok) {
-        // A label that does not mention it is not a disproof: LinkedIn's
-        // "Technology, Information and Internet" says nothing about B2B SaaS.
-        return { ...base, result: "unknown", reason: `${dim} "${item.value}" neither shows nor rules out ${text(c.value)}`, evidence_ids: ids };
-      }
-      return proven
-        ? { ...base, result: "pass", reason: `${dim} "${item.value}" matches`, evidence_ids: ids }
-        : { ...base, result: "unknown", reason: `${dim} "${item.value}" is a provider label, not proof`, evidence_ids: ids };
+        ? { ...base, result: "pass", reason: `geography ${claimed} matches ${required.join(", ")}`, evidence_ids: ids, provenance }
+        : { ...base, result: "unknown", reason: `geography ${claimed} is reported, not proven`, evidence_ids: ids, provenance };
     }
     case "company_size": {
       const r = headcountSatisfied(c.value, item.value);
-      if (r === "fail") return { ...base, result: "fail", reason: `headcount ${item.value} is outside the required range`, evidence_ids: ids };
-      if (r === "unknown") return { ...base, result: "unknown", reason: "headcount is not established", evidence_ids: ids };
+      if (r === "fail") {
+        return proven
+          ? { ...base, result: "fail", reason: `headcount ${item.value} is outside the required range`, evidence_ids: ids, provenance }
+          : { ...base, result: "unknown", reason: `headcount ${item.value} is reported outside the range, not verified`, evidence_ids: ids, provenance };
+      }
+      if (r === "unknown") return { ...base, result: "unknown", reason: "headcount is not established", evidence_ids: ids, provenance };
       return proven
-        ? { ...base, result: "pass", reason: `headcount ${item.value} is within range`, evidence_ids: ids }
-        : { ...base, result: "unknown", reason: `headcount ${item.value} is advisory, not proven`, evidence_ids: ids };
+        ? { ...base, result: "pass", reason: `headcount ${item.value} is within range`, evidence_ids: ids, provenance }
+        : { ...base, result: "unknown", reason: `headcount ${item.value} is advisory, not proven`, evidence_ids: ids, provenance };
     }
     case "company_stage": {
       // A STAGE LABEL IS NOT A STAGE DISPROOF. "series_c" does not mention
@@ -173,21 +195,85 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
       // unknown and send the candidate to evidence completion.
       const want = text(c.value);
       const got = typeof item.value === "string" ? text(item.value) : text(JSON.stringify(item.value));
-      if (!want) return { ...base, result: "unknown", reason: "no stage was asked for", evidence_ids: ids };
+      if (!want) return { ...base, result: "unknown", reason: "no stage was asked for", evidence_ids: ids, provenance };
       if (!got.includes(want)) {
-        return { ...base, result: "unknown", reason: `stage "${item.value}" neither shows nor rules out ${want}`, evidence_ids: ids };
+        return { ...base, result: "unknown", reason: `stage "${item.value}" neither shows nor rules out ${want}`, evidence_ids: ids, provenance };
       }
       return proven
-        ? { ...base, result: "pass", reason: `stage "${item.value}" matches ${want}`, evidence_ids: ids }
-        : { ...base, result: "unknown", reason: `stage "${item.value}" is reported, not proven`, evidence_ids: ids };
+        ? { ...base, result: "pass", reason: `stage "${item.value}" matches ${want}`, evidence_ids: ids, provenance }
+        : { ...base, result: "unknown", reason: `stage "${item.value}" is reported, not proven`, evidence_ids: ids, provenance };
     }
     default: {
       // Signal dimensions: presence of a fresh, proven item satisfies them.
-      if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids };
-      if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids };
-      return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids };
+      if (!proven) return { ...base, result: "unknown", reason: `${dim} is reported, not proven`, evidence_ids: ids, provenance };
+      if (item.value === false) return { ...base, result: "fail", reason: `${dim} is false`, evidence_ids: ids, provenance };
+      return { ...base, result: "pass", reason: `${dim} is proven by ${item.source.actor}`, evidence_ids: ids, provenance };
     }
   }
+}
+
+/**
+ * INDUSTRY AND BUSINESS MODEL, through the controlled vocabulary.
+ *
+ * An `industry` criterion is also answered by the business model: the compiler
+ * files the noun phrase "B2B SaaS" under industry, while what can actually be
+ * established about a company is its model. Every current item for either
+ * dimension is read; only a PROVEN one can pass or fail the rule.
+ *
+ *   a proven item supports it, none contradicts    → pass
+ *   a proven item contradicts it, none supports    → fail
+ *   proven items disagree                          → unknown (a real conflict)
+ *   nothing proven says either                     → unknown
+ */
+function checkBusinessModel(
+  c: MissionCriterion, graph: CompanyEvidenceGraph,
+  base: Pick<CriterionCheck, "criterion_id" | "dimension" | "kind">,
+): CriterionCheck {
+  const dims: EvidenceDimension[] = c.dimension === "industry" ? ["business_model", "industry"] : ["business_model"];
+  const items = dims.map((d) => currentItem(graph, d)).filter((x): x is EvidenceItem => !!x && x.status !== "unknown");
+  const want = text(c.value);
+  if (items.length === 0) {
+    const stale = dims.some((d) => (graph.claims.find((x) => x.dimension === d)?.stale.length ?? 0) > 0);
+    return {
+      ...base, result: "unknown", evidence_ids: [], provenance: null,
+      reason: stale ? `the only ${dims[0]} evidence has expired` : `${dims[0].replace(/_/g, " ")} is not established`,
+    };
+  }
+  const read = items.map((item) => ({
+    item,
+    match: item.status === "disproven" ? "fail" as const : matchBusinessModel(c.value, item.value),
+  }));
+  const proven = read.filter((r) => r.item.status === "proven" || r.item.status === "disproven");
+  const supports = proven.filter((r) => r.match === "pass");
+  const contradicts = proven.filter((r) => r.match === "fail");
+  const say = (r: { item: EvidenceItem }) => `${r.item.dimension.replace(/_/g, " ")} "${r.item.value}"`;
+  if (supports.length > 0 && contradicts.length === 0) {
+    const r = supports[0];
+    return { ...base, result: "pass", reason: `${say(r)} matches ${want}`, evidence_ids: [r.item.evidence_id], provenance: provenanceOf(r.item) };
+  }
+  if (contradicts.length > 0 && supports.length === 0) {
+    const r = contradicts[0];
+    return {
+      ...base, result: "fail", evidence_ids: [r.item.evidence_id], provenance: provenanceOf(r.item),
+      reason: r.item.status === "disproven" ? `${r.item.dimension} is disproven by ${r.item.source.actor}` : `verified ${say(r)} rules out ${want}`,
+    };
+  }
+  if (supports.length > 0 && contradicts.length > 0) {
+    return {
+      ...base, result: "unknown", evidence_ids: [supports[0].item.evidence_id, contradicts[0].item.evidence_id],
+      provenance: provenanceOf(supports[0].item),
+      reason: `verified sources disagree: ${say(supports[0])} vs ${say(contradicts[0])}`,
+    };
+  }
+  // Nothing verified answers it. Say what was seen, and why it is not proof.
+  const seen = read.find((r) => r.match === "pass") ?? read[0];
+  const why = seen.item.status === "proven"
+    ? "neither shows nor rules out"
+    : seen.match === "pass" ? "suggests, but is not verified as," : seen.match === "fail" ? "suggests otherwise, but is not verified, for" : "neither shows nor rules out";
+  return {
+    ...base, result: "unknown", evidence_ids: [seen.item.evidence_id], provenance: provenanceOf(seen.item),
+    reason: `${say(seen)} ${why} ${want}`,
+  };
 }
 
 /**

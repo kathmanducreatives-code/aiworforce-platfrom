@@ -41,9 +41,10 @@
 // Pure. No network, no model, no database. Not part of `missionHash`.
 
 import {
-  canonicalSignalType, isHiringSignal,
+  canonicalSignalType, containsPhrase, isHiringSignal,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
+import { isControlledPhrase } from "./businessModelMatch.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
@@ -501,11 +502,47 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
   };
 
   // ── Company profile ──
+  //
+  // ── A HARD USER CRITERION IS THE USER'S WORDS (P5.2) ──────────────────────
+  //
+  // Missions approved before the Brain-merge fix carry a user-explicit value
+  // the Brain rewrote: canary 62c8b188 asked for "B2B SaaS" and carries
+  // "b2b saas (founder-led or small teams)". The part the request actually
+  // says stays hard; the words it does not say become a target — they can rank
+  // a company, never reject one. Only that shape (the user's phrase plus a
+  // bracketed or separated qualifier) is split; any other value is untouched.
+  const QUALIFIED = /^(.+?)\s*(?:[(\[]\s*(.+?)\s*[)\]]|\s[—–-]\s+(.+)|[,;:]\s*(.+))\s*$/;
+  const preference = (
+    dimension: CriterionDimension, label: string, qualifier: string, full: string,
+    source: CriterionSource, rationale: string,
+  ) => {
+    // A qualifier the controlled vocabulary can read ("b2b" over "saas") is a
+    // target evidence can answer; one it cannot ("founder-led or small teams")
+    // is disclosed as not established, rather than silently never met.
+    const evaluable = (dimension === "industry" || dimension === "business_model") ? isControlledPhrase(full) : true;
+    push({
+      kind: "target", dimension, value: evaluable ? full : qualifier,
+      label: `${label} preference: ${evaluable ? full : qualifier}`, source, user_phrase: "",
+      rationale, ...(evaluable ? {} : { status: "unprovable_today" as const }),
+    });
+  };
   const profileList = (
     dimension: CriterionDimension, field: string, values: readonly string[], label: string,
   ) => {
     for (const v of values) {
       const source = sourceFromProvenance(prov[field], inQuery(v));
+      const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
+      const head = split?.[1]?.trim() ?? "";
+      const tail = (split?.[2] ?? split?.[3] ?? split?.[4] ?? "").trim();
+      if (split && head && tail && inQuery(head)) {
+        push({
+          kind: "hard", dimension, value: head, label: `${label}: ${head}`, source: "user_explicit",
+          user_phrase: head, rationale: "stated in the request",
+        });
+        preference(dimension, label, tail, v, "user_inferred",
+          "not in the request's words (an earlier Company Brain merge added it); can rank, never reject");
+        continue;
+      }
       push({
         kind: source === "user_explicit" ? "hard" : "target",
         dimension, value: v, label: `${label}: ${v}`, source,
@@ -528,6 +565,24 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
   profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
   profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
   profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+
+  // ── Company Brain refinements of what the user closed: targets, never hard ──
+  const REFINED: Record<string, [CriterionDimension, string]> = {
+    "company_profile.verticals": ["industry", "Industry"],
+    "company_profile.business_models": ["business_model", "Business model"],
+    "company_profile.locations": ["geography", "Geography"],
+    "company_profile.stages": ["company_stage", "Company kind"],
+  };
+  for (const r of mission.brain_refinements ?? []) {
+    const d = REFINED[r.field];
+    if (!d || !r.qualifier) continue;
+    // Only while the user's value it refines is still on the mission.
+    const userValues = ((cp as unknown as Record<string, string[] | undefined>)[r.field.split(".")[1]] ?? [])
+      .map((x) => String(x).toLowerCase());
+    if (!userValues.some((u) => u === r.user_value || containsPhrase(u, r.user_value))) continue;
+    preference(d[0], d[1], r.qualifier, r.brain_value, "company_brain_preference",
+      `your Company Brain narrows "${r.user_value}"; a preference that can rank, never reject`);
+  }
 
   for (const st of cp.stages ?? []) {
     const source = sourceFromProvenance(prov["company_profile.stages"], true);

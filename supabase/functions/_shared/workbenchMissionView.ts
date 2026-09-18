@@ -26,7 +26,9 @@
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
 import type { ResearchWaveSummary } from "./researchFeedback.ts";
-import { evaluateEligibility, type CheckResult, type EligibilityResult } from "./candidateEligibility.ts";
+import {
+  evaluateEligibility, type CheckProvenance, type CheckResult, type EligibilityResult,
+} from "./candidateEligibility.ts";
 import {
   applyReasoning, computeCeiling, deterministicReasons, type Label, type ReasonedLabel, type ReasonedSentence,
 } from "./opportunityLabel.ts";
@@ -61,6 +63,14 @@ export interface WorkbenchLead {
   bucket: Bucket;
   found_by: string[];
   hard_checks: Record<string, CheckResult>;
+  /**
+   * P5.2 — each hard check with the evidence it rests on: status, method,
+   * confidence, actor and the grounding decision. What a pass or fail MEANS.
+   */
+  hard_check_details: Array<{
+    criterion_id: string; dimension: string; result: CheckResult; reason: string;
+    provenance: CheckProvenance | null;
+  }>;
   why_surfaced: ReasonedSentence[];
   key_evidence: Array<{ dimension: string; value: unknown; status: string; sources: string[]; evidence_id: string | null }>;
   missing_evidence: string[];
@@ -177,6 +187,10 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
       bucket,
       found_by: c.found_by,
       hard_checks: eligibility.hard_checks,
+      hard_check_details: eligibility.checks.filter((x) => x.kind === "hard").map((x) => ({
+        criterion_id: x.criterion_id, dimension: x.dimension, result: x.result, reason: x.reason,
+        provenance: x.provenance,
+      })),
       why_surfaced: why,
       key_evidence: keyEvidence(c.graph),
       missing_evidence: reasoned.missing_evidence,

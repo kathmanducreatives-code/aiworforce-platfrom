@@ -9744,6 +9744,12 @@ const QUALIFICATION_PRIORITY_CAPABILITIES: readonly CapabilityId[] = [
 
 const WORKING_SET_CAPABILITIES: ReadonlySet<string> = new Set([
   "startup_company_discovery", "general_company_discovery", "known_company_resolution",
+  // P5.2: the P3 job-first route fills the working set too. Without it a
+  // job-first continuation that did NOT reopen discovery (a slice stopped
+  // mid-qualification) skipped `job_discovery` as done and restored nobody —
+  // only the replenishment path, which has its own set, ever brought the pool
+  // back.
+  "job_discovery",
 ]);
 
 /**
@@ -10445,12 +10451,25 @@ export interface ResearchFabricProjection {
  * The registry holds the description, the YC record and any fetched page as
  * HARD FACTS; `groundedClaims` then checks every excerpt against that text and
  * drops what it cannot find. What survives is the company's own statement,
- * quoted and verified — admitted as proof at `model_extraction`, which
- * `compareEvidence` ranks below any provider field that disagrees.
+ * quoted and verified — admitted at `model_extraction`, which `compareEvidence`
+ * ranks below any provider field that disagrees.
  *
- * Null when the verification failed, when no business-model claim survived, or
- * when the grounder itself said the model is unknown — the honest answer for a
- * company whose description does not say what it sells.
+ * ── WHAT THE GROUNDING DECISION MAKES OF IT (P5.2) ─────────────────────────
+ *
+ *   pass    accepted: the reading is PROVEN and may pass — or, through the
+ *           controlled vocabulary, fail — a hard rule
+ *   fail    rejected with its reasoning intact (the verifier downgrades a
+ *           `fail` that validated nothing to `review`): the reading is PROVEN,
+ *           so a verified "consumer" model rules out a B2B requirement
+ *   review  uncertain: the reading is PLAUSIBLE — shown, ranked, never proof,
+ *           so the hard rule stays pending
+ *
+ * The decision travels on the item (`assessment`) into eligibility, so a check
+ * can say which kind of grounding it rests on.
+ *
+ * Null when no business-model claim survived, or when the grounder itself said
+ * the model is unknown — the honest answer for a company whose description does
+ * not say what it sells.
  */
 export function groundedBusinessModelItem(
   c: EngineCompany, missionId: string | null, at: string,
@@ -10458,13 +10477,13 @@ export function groundedBusinessModelItem(
   const g = c.grounded;
   const bm = g?.classifier_result?.business_model;
   const claims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
-  if (!g || !bm || bm.value === "unknown" || claims.length === 0 || g.final_grounded_decision === "fail") {
-    return null;
-  }
+  if (!g || !bm || bm.value === "unknown" || claims.length === 0) return null;
+  const decision = g.final_grounded_decision;
+  const accepted = decision === "pass" || decision === "fail";
   const excerpt = claims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
   return {
     evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
-    value: bm.value.replace(/_/g, " "), status: "proven",
+    value: bm.value.replace(/_/g, " "), status: accepted ? "proven" : "plausible",
     source: {
       provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
       url: null, excerpt: excerpt ? excerpt.slice(0, 280) : null,
@@ -10472,16 +10491,30 @@ export function groundedBusinessModelItem(
     method: "model_extraction", observed_at: at, valid_until: null,
     // NEVER `high`: a verified reading of a self-description is weaker than a
     // provider field, and the graph must rank it that way.
-    confidence: g.final_grounded_decision === "pass" ? "medium" : "low",
+    confidence: accepted ? "medium" : "low",
     derived_from: [...new Set(claims.flatMap((x) => x.evidence_ids))],
     mission_id: missionId, origin: "web",
+    assessment: {
+      decision, grounding_score: Number(g.grounding_score ?? 0), validated_claims: claims.length,
+    },
   };
+}
+
+/**
+ * A grounded item persisted BEFORE P5.2 carried no `assessment`, and a `review`
+ * grounding was stored as `proven` at `low` confidence. Read back, it would
+ * prove a hard rule this code now says it cannot — so it is read as what it
+ * was: plausible.
+ */
+function normaliseGroundedItem(e: EvidenceItem): EvidenceItem {
+  if (e.source?.actor !== "grounded_evidence_evaluation" || e.assessment) return e;
+  return e.status === "proven" && e.confidence === "low" ? { ...e, status: "plausible" } : e;
 }
 
 /** Every evidence item for one company: route observations, the registry, derived verdict facts. */
 export function companyEvidenceItems(c: EngineCompany, missionId: string | null = null) {
   const items = [
-    ...(c.observations ?? []).flatMap((o) => o.evidence.map((e) => ({ ...e, company_key: c.key }))),
+    ...(c.observations ?? []).flatMap((o) => o.evidence.map((e) => normaliseGroundedItem({ ...e, company_key: c.key }))),
     ...evidenceFromRegistry(c.evidence_registry, missionId),
   ];
   const at = c.observations?.[0]?.observed_at ?? new Date(0).toISOString();
@@ -10502,8 +10535,9 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
   // description, its YC record, a fetched page). `groundedClaims` then checks
   // every excerpt against that text and drops what it cannot find. A business
   // model that survives THAT is not a model's opinion — it is the company's own
-  // statement, quoted and verified — so it is admitted as proof, at medium
-  // confidence, ranked below any provider field that disagrees.
+  // statement, quoted and verified — so an ACCEPTED grounding is admitted as
+  // proof, at medium confidence, ranked below any provider field that
+  // disagrees. A `review` grounding is plausible only (see the builder).
   const groundedItem = groundedBusinessModelItem(c, missionId, at);
   if (groundedItem) items.push(groundedItem);
   if (c.hiring_assessment?.verdict === "hiring_verified") {

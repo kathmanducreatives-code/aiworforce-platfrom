@@ -1,0 +1,53 @@
+{
+  "_source": "lead_mission_queue 62c8b188 (task db9eee2d), request.tool_input.lead_mission, captured 2026-09-18 — verbatim",
+  "version": "lead-mission-v1",
+  "criteria": [
+    { "id": "industry:b2b_saas_founder_led_or_small_teams_", "kind": "hard", "label": "Industry: b2b saas (founder-led or small teams)", "value": "b2b saas (founder-led or small teams)", "source": "user_explicit", "status": "ok", "dimension": "industry", "rationale": "stated in the request", "user_phrase": "" },
+    { "id": "geography:united_states", "kind": "hard", "label": "Geography: United States", "value": "United States", "source": "user_explicit", "status": "ok", "dimension": "geography", "rationale": "stated in the request", "user_phrase": "" },
+    { "id": "company_stage:startup", "kind": "hard", "label": "Company kind: startup", "value": "startup", "source": "user_explicit", "status": "ok", "dimension": "company_stage", "rationale": "the company kind in the request", "user_phrase": "startup" },
+    { "id": "company_stage:seed", "kind": "target", "label": "Stage: seed", "value": "seed", "source": "user_explicit", "status": "unprovable_today", "dimension": "company_stage", "rationale": "stated without only/must, so a target", "elevated_by": null, "user_phrase": "seed-stage" },
+    { "id": "company_size:_min_1_max_150_", "kind": "hard", "label": "Company size: 1–150 employees", "value": { "max": 150, "min": 1 }, "source": "company_brain_policy", "status": "ok", "dimension": "company_size", "rationale": "your Company Brain's size rule, enforced on every mission", "user_phrase": "" },
+    { "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market", "kind": "target", "label": "Hiring: growth marketer · first hire in the function", "value": { "event": "hiring", "subject": "company", "qualifier": { "role_terms": ["growth marketer"], "role_families": ["marketing_growth"], "first_in_function": { "phrase": "first growth marketer", "source": "user_explicit" } } }, "source": "user_explicit", "status": "ok", "dimension": "hiring", "rationale": "an observable signal the request asks for", "time_window": { "days": 30, "rule": "currently / actively hiring", "basis": "posted", "source": "system_default", "enforced": false }, "user_phrase": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer." }
+  ],
+  "confidence": 0.99,
+  "directives": {
+    "source_strategy": [], "adjacent_signals": [], "excluded_signals": [], "preferred_signals": ["hiring"], "required_evidence": [],
+    "allowed_broadening": { "geographies": [], "company_types": [], "role_families": [], "employee_range": { "max": null, "min": null } },
+    "execution_preference": "balanced", "disallowed_broadening": [], "evaluation_instructions": "", "founder_unlock_recommended": false, "requested_contact_ready_count": null
+  },
+  "mission_type": "company_research",
+  "target_entity": "company",
+  "company_profile": {
+    "stages": ["startup"], "locations": ["United States"], "verticals": ["b2b saas (founder-led or small teams)"],
+    "employee_range": { "max": 150, "min": 1 }, "business_models": []
+  },
+  "decision_makers": { "roles": [], "current_employment_required": false },
+  "planner_runtime": { "role": "planner", "dirty": false, "git_sha": "046b61b086fc0ad236d0b2cf393ffdb702b7aca5", "function": "lead-mission-compiler", "git_short": "046b61b0", "build_timestamp": "2026-08-29T10:44:33.276Z", "lead_intelligence_contract_version": "v1" },
+  "requested_count": 1,
+  "field_provenance": {
+    "target_entity": "explicit_user_request", "requested_count": "explicit_user_request", "requested_output": "explicit_user_request",
+    "required_signals": "explicit_user_request", "decision_makers.roles": "gpt_inference", "company_profile.stages": "explicit_user_request",
+    "company_profile.locations": "explicit_user_request", "company_profile.verticals": "explicit_user_request",
+    "company_profile.employee_range": "company_brain_policy", "company_profile.business_models": "gpt_inference"
+  },
+  "hard_constraints": { "company_profile.locations": { "value": ["United States"], "reason": "stated explicitly in the user's query", "operator": "in" } },
+  "requested_output": "qualified_companies",
+  "required_signals": [
+    { "type": "hiring", "event": "hiring", "phrase": "hiring growth marketer", "subject": "company", "qualifier": { "role_terms": ["growth marketer"], "role_families": ["marketing_growth"], "first_in_function": { "phrase": "first growth marketer", "source": "user_explicit" } }, "role_families": ["marketing_growth"] }
+  ],
+  "soft_preferences": { "stage": { "value": "seed", "reason": "stated without only/must — a target, not a hard constraint" } },
+  "mission_semantics": {
+    "goal": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.",
+    "stage": { "kind": "target", "value": "seed", "hedged": false, "phrase": "seed-stage", "elevated_by": null },
+    "version": "mission-semantics-v1", "hypotheses": [],
+    "corrections": ["stage_hard_constraint_demoted_to_target:seed:not_elevated", "first_in_function_from_user_words:\"first growth marketer\""],
+    "window_sources": {}, "requested_count": 1,
+    "canonical_signals": [{ "kind": "hiring", "alias": "reader", "phrase": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.", "source": "user_explicit", "subject": "company", "legacy_event": "hiring" }],
+    "unmapped_signal_language": []
+  },
+  "original_user_query": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer.",
+  "required_capabilities": [],
+  "required_signal_terms": ["growth marketer"],
+  "prohibited_capabilities": ["founder_discovery", "employer_verification", "contact_enrichment"],
+  "lead_intelligence_contract_version": "v1"
+}
