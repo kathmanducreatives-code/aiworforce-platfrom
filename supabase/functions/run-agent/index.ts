@@ -100,6 +100,12 @@ import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
 import { projectResearchFabric } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
+import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
+import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
+import { buildWorkbenchMissionView } from "../_shared/workbenchMissionView.ts";
+import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
+import { missionCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
+import { anchorForCapability } from "../_shared/retrievalPlan.ts";
 import { criteriaExecutionPolicy } from "../_shared/criteriaExecutionPolicy.ts";
 import { ModelRoutingLedger } from "../_shared/gptModelRouter.ts";
 import { buildLeadRunTrace, describeLeadRunTrace } from "../_shared/leadRunTrace.ts";
@@ -6106,6 +6112,56 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 });
               } catch (e) {
                 console.error("[run-agent][research_fabric][failed]", String(e));
+                return null;
+              }
+            })() : null,
+            // ── P5: ONE PROJECTION OWNS EVERY NUMBER ────────────────────────
+            //
+            // Eligibility, the label ceiling and the Workbench counts, derived
+            // from the same evidence graphs as `research_fabric`. Deterministic:
+            // with no reasoner the ceiling itself is the label, explained from
+            // the evidence that set it.
+            workbench_mission_view: capabilityRun && persistedMission ? await (async () => {
+              try {
+                const criteria = persistedMission.criteria ?? deriveMissionCriteria(persistedMission);
+                const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
+                const candidates = missionCandidatesFrom(capabilityRun, {
+                  missionId: String(task.id),
+                  required: requiredEvidenceDimensions(
+                    criteriaExecutionPolicy(persistedMission),
+                    (persistedMission.required_signals ?? []).map((sig) => String(sig.type))),
+                });
+                return buildWorkbenchMissionView({
+                  mission: {
+                    requested_count: p5RequestedCount(persistedMission),
+                    execution_limit: quota.requestedLeadCount ?? null,
+                    anchor,
+                  },
+                  criteria,
+                  unsupported: criteriaSections(persistedMission).unsupported,
+                  candidates,
+                  stage: capabilityRun.state.qualified_company_keys?.length ? "complete" : "reasoning",
+                  waves: capabilityRun.state.research_waves ?? [],
+                  // `check()` is the ledger's own priced total — never a second sum.
+                  cost: { model_usd: modelCalls.check().priced_usd ?? 0 },
+                  // ── THE REASONER, BOUNDED BY THE CEILING ──────────────────
+                  //
+                  // One batched call over the candidates code already found
+                  // eligible, capped at ten. Every part of what it returns is
+                  // validated by `applyReasoning`; with no key, the flag off or
+                  // a failed call the map is empty and the ceiling stands.
+                  reasoning: await reasonForCandidates({
+                    request: persistedMission.original_user_query ?? routeUserRequest,
+                    criteria, anchor, candidates,
+                    enabled: String(readEnvSafe("LEAD_V2_REASONER") ?? "").trim().toLowerCase() !== "off",
+                    reason: makeGptOpportunityReasoner({
+                      readEnv: readEnvSafe, onModelCall: modelCalls.sink,
+                      log: (m, meta) => console.log(`[gpt-opportunity-reasoner] ${m}`, meta ?? ""),
+                    }, { onRoute: (r) => modelRouting.record(r) }),
+                  }),
+                });
+              } catch (e) {
+                console.error("[run-agent][workbench_mission_view][failed]", String(e));
                 return null;
               }
             })() : null,

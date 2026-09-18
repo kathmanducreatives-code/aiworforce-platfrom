@@ -240,6 +240,7 @@ import {
   summarizeResearchWave, validateRouteControl, type ResearchWaveSummary, type RouteCallStat,
 } from "./researchFeedback.ts";
 import { ACTOR_READINESS, routeActorReady } from "./actorIntelligence.ts";
+import type { MissionCandidate } from "./workbenchMissionView.ts";
 import {
   amendRetrievalPlan, anchorForCapability, buildRetrievalPlan, planEntryForCall, purposeForCapability, continuationAmendmentRefusal,
   type AmendmentTrigger, type RetrievalPlan,
@@ -10421,6 +10422,45 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
       [f.job_url ?? ""].filter(Boolean), f.source === "job_posting" ? "high" : "medium");
   }
   return items;
+}
+
+/**
+ * P5 — the candidates the Workbench view counts, from a finished run.
+ *
+ * One row per company, carrying its evidence graph and the three facts the
+ * bucket rule needs: was it screened out before paid work, is its identity
+ * resolved, and did its investigation actually happen. Built here because this
+ * is where the evidence items, the prequalification verdict and the identity
+ * all exist at once.
+ */
+export function missionCandidatesFrom(
+  run: { companies: readonly EngineCompany[] },
+  opts: { required?: readonly EvidenceDimension[]; missionId?: string | null; now?: Date } = {},
+): MissionCandidate[] {
+  return run.companies.map((c) => {
+    const ids = entityIdentifiersOf(c);
+    const graph = buildCompanyEvidenceGraph(c.key, companyEvidenceItems(c, opts.missionId ?? null), {
+      now: opts.now, required: opts.required,
+    });
+    return {
+      company_key: c.key,
+      name: c.enriched?.company_name ?? c.company.company_name,
+      domain: ids.domains[0] ?? null,
+      linkedin_url: ids.linkedin_company_url ?? c.identity?.linkedin_company_url ?? null,
+      found_by: [...new Set((c.found_by ?? []).map((f) => f.route_id ?? `${f.capability}:${f.actor_key}`))],
+      // THE CHEAP GATE'S OWN WORDS. `prequalified.eligible === false` is the
+      // free pass that ran before any paid call; a shortlist exclusion is the
+      // later, still-unpaid decision. Either one means no money was spent.
+      screened_out: c.prequalified && c.prequalified.eligible === false
+        ? (c.prequalified.exclusion ?? "prequalification")
+        : c.shortlist_exclusion,
+      identity_resolved: !!(c.identity && identityIsActionable(c.identity)) || !!ids.linkedin_company_url,
+      investigated: c.investigation_state === "investigated" || c.verdict !== null ||
+        c.brain !== null || c.hiring_assessment !== null,
+      graph,
+      next_action: null,
+    };
+  });
 }
 
 export function projectResearchFabric(

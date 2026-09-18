@@ -110,6 +110,13 @@ export const GPT_STAGES = [
    * executed.
    */
   "research_route_control",
+  /**
+   * P5. Chooses a label AT OR BELOW the ceiling code computed and writes the
+   * sentences that justify it, each citing evidence ids. It cannot promote,
+   * hide a gap or invent a fact — `applyReasoning` validates every part — so a
+   * wrong answer costs a weaker explanation, never a wrong lead.
+   */
+  "opportunity_reasoning",
   "mission_triage",
   "mission_evaluation",
   "company_qualification",
@@ -260,6 +267,12 @@ const POLICY: Readonly<Record<GptStage, StagePolicy>> = Object.freeze({
     reason:
       "re-plans against what the pool actually contains; getting this wrong " +
       "either re-buys evidence already held or drops the step that proves it",
+  },
+  opportunity_reasoning: {
+    primary: LUNA, effort: "low", escalation: null,
+    reason:
+      "explains a label the evidence already permits; the ceiling, the citations " +
+      "and the missing list are all code's, so there is nothing for a repair round to fix",
   },
   research_route_control: {
     primary: LUNA, effort: "low", escalation: null,
