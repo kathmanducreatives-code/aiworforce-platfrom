@@ -109,7 +109,16 @@ export function checkCriterion(c: MissionCriterion, graph: CompanyEvidenceGraph)
   if (!dim) {
     return { ...base, result: "unknown", reason: `no evidence dimension answers ${c.dimension}`, evidence_ids: [] };
   }
-  const item = currentItem(graph, dim);
+  // AN INDUSTRY CRITERION IS ALSO ANSWERED BY THE BUSINESS MODEL.
+  //
+  // The compiler puts the noun phrase "B2B SaaS" under `industry`, while the
+  // thing that can actually be established about a company is its business
+  // model. Either claim may satisfy it; the stronger one is preferred.
+  const item = c.dimension === "industry"
+    ? [currentItem(graph, "business_model"), currentItem(graph, "industry")]
+      .filter((x): x is EvidenceItem => !!x)
+      .sort((a, b) => (industrySatisfied(c.value, b.value) ? 1 : 0) - (industrySatisfied(c.value, a.value) ? 1 : 0))[0] ?? null
+    : currentItem(graph, dim);
   if (!item || item.status === "unknown") {
     const stale = graph.claims.find((x) => x.dimension === dim)?.stale.length ?? 0;
     return {

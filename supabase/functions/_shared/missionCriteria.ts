@@ -531,10 +531,26 @@ export function deriveMissionCriteria(mission: LeadMissionV1): MissionCriterion[
 
   for (const st of cp.stages ?? []) {
     const source = sourceFromProvenance(prov["company_profile.stages"], true);
-    if (stageIntent && st === "startup") {
-      // The noun ("startups") is the company kind; the stage word is below.
-      push({ kind: "hard", dimension: "company_stage", value: "startup", label: "Company kind: startup",
-        source: "user_explicit", user_phrase: "startup", rationale: "the company kind in the request" });
+    if (st === "startup") {
+      // The noun ("startups") is the company kind; a stage word, when the
+      // sentence has one, is pushed separately below.
+      //
+      // UNPROVABLE, AND SAID SO. No ready source states "this is a startup":
+      // a provider's industry label does not, a headcount does not (the plan
+      // forbids size and cohort proxies as proof — they are hypotheses), and a
+      // YC record proves membership of a cohort, not a company kind. Left as a
+      // provable hard rule it silently stranded EVERY candidate in `pending`:
+      // canary d1eff17a surfaced 0 of 36 for a fact nothing could establish.
+      // Disclosed on the card under "will not be established", exactly as the
+      // stage word "seed" already is, instead of quietly rejecting everyone.
+      push({
+        kind: source === "company_brain_preference" ? "target" : "hard",
+        dimension: "company_stage", value: "startup", label: "Company kind: startup",
+        source, user_phrase: source === "user_explicit" ? "startup" : "",
+        rationale: source === "company_brain_preference"
+          ? "your Company Brain's ICP" : "the company kind in the request",
+        status: "unprovable_today",
+      });
       continue;
     }
     push({

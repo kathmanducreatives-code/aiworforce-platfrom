@@ -11,7 +11,9 @@
 
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
-import { deriveMissionCriteria, type MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
+import {
+  criteriaSections, deriveMissionCriteria, type MissionCriterion,
+} from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import type { EvidenceDimension, EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
@@ -22,7 +24,7 @@ import {
   buildWorkbenchMissionView, countsAreExclusive, legacyCountsFrom, type MissionCandidate,
 } from "../../../supabase/functions/_shared/workbenchMissionView.ts";
 import {
-  missionCandidatesFrom, runCapabilityPlan,
+  companyEvidenceItems, missionCandidatesFrom, runCapabilityPlan,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCapabilityGraph } from "../../../supabase/functions/_shared/leadCapabilityGraph.ts";
 import { jobEmployerToCompany, normalizeLinkedInJob } from "../../../supabase/functions/_shared/hiringActorNormalizers.ts";
@@ -75,11 +77,13 @@ function ev(dimension: EvidenceDimension, value: unknown, over: Partial<Evidence
 const graphOf = (items: EvidenceItem[], required: EvidenceDimension[] = []) =>
   buildCompanyEvidenceGraph("c1", items, { now: NOW, required });
 
-/** Every HARD criterion of this mission, proven: geography, industry, stage. */
+/**
+ * Every PROVABLE hard criterion of this mission: geography and industry.
+ * "Company kind: startup" is `unprovable_today` and is disclosed, not enforced.
+ */
 const hardProven = () => [
   ev("geography", "San Francisco, CA, United States"),
   ev("industry", "b2b saas"),
-  ev("company_stage", "startup"),
 ];
 
 // ── SEM-1 ───────────────────────────────────────────────────────────────────
@@ -100,13 +104,16 @@ Deno.test("SEM-1: a preference that fails never makes a candidate ineligible", (
   // A DISPROVEN preference changes nothing either.
   const g2 = graphOf([...hardProven(), ev("headcount", 4000, { status: "disproven" }), ev("hiring", true)]);
   assertEquals(evaluateEligibility(CRITERIA_PREF, g2).eligibility, "eligible");
-  // Only hard dimensions appear in the hard checks.
-  assertEquals(Object.keys(r.hard_checks).sort(), ["company_stage", "geography", "industry"]);
+  // Only hard dimensions appear in the hard checks. `company_stage` is absent
+  // because "Company kind: startup" is `unprovable_today` (P5.2) — disclosed on
+  // the card rather than silently stranding every candidate in `pending`.
+  assertEquals(Object.keys(r.hard_checks).sort(), ["geography", "industry"],
+    "the size band here is a preference, and the company kind is unprovable");
 });
 
 Deno.test("SEM-1: a disproven hard criterion is ineligible; an unknown one is pending, not rejected", () => {
   const disproven = graphOf([
-    ev("geography", "Berlin, Germany"), ev("industry", "b2b saas"), ev("company_stage", "startup"),
+    ev("geography", "Berlin, Germany"), ev("industry", "b2b saas"),
   ]);
   const a = evaluateEligibility(CRITERIA, disproven);
   assertEquals(a.eligibility, "ineligible");
@@ -286,7 +293,7 @@ Deno.test("WB-1: every discovered company lands in exactly one bucket, and the l
       candidate("worth", { graph: graphOf([...hardProven(), ev("funding", { round: "seed" })], ["hiring"]) }),
       candidate("low", { graph: graphOf(hardProven()) }),
       candidate("pending", { graph: graphOf([]) }),
-      candidate("ineligible", { graph: graphOf([ev("geography", "Berlin, Germany"), ev("industry", "b2b saas"), ev("company_stage", "startup")]) }),
+      candidate("ineligible", { graph: graphOf([ev("geography", "Berlin, Germany"), ev("industry", "b2b saas")]) }),
       candidate("screened", { screened_out: "employee_size" }),
       candidate("noid", { identity_resolved: false }),
       candidate("working", { investigated: false, graph: graphOf(hardProven()) }),
@@ -398,7 +405,7 @@ Deno.test("only eligible candidates are worth a model call, best evidence first"
   const eligibleRich = candidate("rich", { graph: graphOf([...hardProven(), ev("hiring", true), ev("funding", { round: "seed" })]) });
   const eligibleThin = candidate("thin", { graph: graphOf(hardProven()) });
   const pending = candidate("pending", { graph: graphOf([]) });
-  const ineligible = candidate("ineligible", { graph: graphOf([ev("geography", "Berlin, Germany"), ev("industry", "b2b saas"), ev("company_stage", "startup")]) });
+  const ineligible = candidate("ineligible", { graph: graphOf([ev("geography", "Berlin, Germany"), ev("industry", "b2b saas")]) });
   const screened = candidate("screened", { screened_out: "employee_size" });
   const noId = candidate("noid", { identity_resolved: false });
 
@@ -438,4 +445,83 @@ Deno.test("a reasoner answer about a company that is not in the batch is discard
   assertEquals(Object.keys(parsed), ["known"]);
   assertEquals(parseReasonerResult(null, new Set(["known"])), {});
   assertEquals(parseReasonerResult({ candidates: "nope" }, new Set(["known"])), {});
+});
+
+// ── P5.2 ────────────────────────────────────────────────────────────────────
+
+Deno.test("P5.2: an unprovable hard criterion is disclosed, not enforced — it cannot strand every candidate", () => {
+  const kind = CRITERIA.find((c) => c.label === "Company kind: startup")!;
+  assertEquals([kind.kind, kind.status], ["hard", "unprovable_today"]);
+  // It reaches the user as a stated limitation, in the same section as "seed".
+  const unsupported = criteriaSections(MISSION).unsupported.join(" | ");
+  assert(/Company kind: startup \(hard\) — no current source proves it/.test(unsupported), unsupported);
+
+  // And it no longer decides eligibility: geography + industry proven ⇒ eligible.
+  const g = graphOf([...hardProven(), ev("hiring", true)]);
+  const e = evaluateEligibility(CRITERIA, g);
+  assertEquals(e.eligibility, "eligible");
+  assertFalse(e.gaps.includes("company_stage"));
+});
+
+Deno.test("P5.2: a business model the company's own words prove satisfies the industry criterion", () => {
+  // A LinkedIn label alone leaves it unknown …
+  const labelOnly = graphOf([
+    ev("geography", "Austin, TX, United States"),
+    ev("industry", "Technology, Information and Internet", { status: "plausible", confidence: "medium" }),
+  ]);
+  assertEquals(evaluateEligibility(CRITERIA, labelOnly).eligibility, "pending");
+
+  // … and a VERIFIED reading of the company's own description proves it.
+  const grounded = ev("business_model", "b2b saas", {
+    evidence_id: "grd_c1_business_model", method: "model_extraction", confidence: "medium", origin: "web",
+    source: { provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null, url: null, excerpt: "We sell B2B SaaS to revenue teams." },
+  });
+  const proven = graphOf([
+    ev("geography", "Austin, TX, United States"),
+    ev("industry", "Technology, Information and Internet", { status: "plausible", confidence: "medium" }),
+    grounded,
+  ]);
+  const e = evaluateEligibility(CRITERIA, proven);
+  assertEquals(e.eligibility, "eligible");
+  const check = e.checks.find((c) => c.dimension === "industry" && c.kind === "hard")!;
+  assertEquals([check.result, check.evidence_ids], ["pass", ["grd_c1_business_model"]]);
+
+  // A provider field still outranks it where they disagree: `compareEvidence`
+  // puts provider_field first, so the graph's current business-model claim is
+  // the provider's when one exists.
+  const contested = graphOf([grounded, ev("business_model", "consumer")]);
+  assertEquals(contested.claims.find((c) => c.dimension === "business_model")!.current!.method, "provider_field");
+});
+
+Deno.test("P5.2: only a VERIFIED self-description becomes evidence, and never as a provider field", () => {
+  const company = (grounded: unknown) => ({
+    key: "c1", company: { company_name: "Acme", linkedin_company_url: null, canonical_domain: null, website: null, geography: null, external_source_id: "x" },
+    observations: [], evidence_registry: null, hiring_jobs: [], hiring_assessment: null,
+    first_in_function: null, enriched: null, identity: null, found_by: [], grounded,
+  }) as never;
+  const claim = {
+    claim: "Acme sells B2B SaaS to revenue teams", claim_type: "business_model",
+    evidence_ids: ["reg_desc_1"], evidence_excerpts: [{ evidence_id: "reg_desc_1", excerpt: "B2B SaaS for revenue teams" }],
+  };
+  const pass = {
+    version: "grounded-claims-v1", classifier_result: { business_model: { value: "b2b_saas", confidence: 0.9, claims: [claim] } },
+    validated_claims: [claim], rejected_claims: [], grounding_score: 1, final_grounded_decision: "pass",
+    downgrade_reasons: [], unacknowledged_conflicts: [],
+  };
+  const item = companyEvidenceItems(company(pass), "task-p5").find((e) => e.evidence_id === "grd_c1_business_model")!;
+  assert(item, "a verified reading of the company's own words is evidence");
+  assertEquals([item.dimension, item.value, item.status], ["business_model", "b2b saas", "proven"]);
+  assertEquals([item.method, item.confidence, item.origin], ["model_extraction", "medium", "web"],
+    "ranked BELOW a provider field, so a contradicting provider claim wins");
+  assertEquals(item.derived_from, ["reg_desc_1"], "it cites the hard fact it was read from");
+  assert(item.source.excerpt?.includes("B2B SaaS"), "the company's own words travel with it");
+
+  const has = (g: unknown) => companyEvidenceItems(company(g), null).some((e) => e.evidence_id === "grd_c1_business_model");
+  // A verification that FAILED proves nothing.
+  assertFalse(has({ ...pass, final_grounded_decision: "fail" }));
+  // A claim the excerpt check rejected is not a validated claim, so nothing is emitted.
+  assertFalse(has({ ...pass, validated_claims: [], rejected_claims: [claim] }));
+  // And "unknown" is not a business model.
+  assertFalse(has({ ...pass, classifier_result: { business_model: { value: "unknown", confidence: 0.2, claims: [] } } }));
+  assertFalse(has(null));
 });

@@ -10432,6 +10432,38 @@ export function companyEvidenceItems(c: EngineCompany, missionId: string | null 
     method: "deterministic_derivation", observed_at: at, valid_until: null, confidence,
     derived_from: from, mission_id: missionId, origin: "lead_mission",
   });
+  // ── P5.2: WHAT THE COMPANY SAYS ABOUT ITSELF, ONCE IT HAS BEEN CHECKED ──
+  //
+  // Canary d1eff17a surfaced nothing: `industry` arrived only as a LinkedIn
+  // label, which is `plausible`, so the hard industry criterion could never be
+  // met and all 36 candidates sat in `pending`.
+  //
+  // The registry already holds the company's own words as a HARD FACT (its
+  // description, its YC record, a fetched page). `groundedClaims` then checks
+  // every excerpt against that text and drops what it cannot find. A business
+  // model that survives THAT is not a model's opinion — it is the company's own
+  // statement, quoted and verified — so it is admitted as proof, at medium
+  // confidence, ranked below any provider field that disagrees.
+  const g = c.grounded;
+  const bm = g?.classifier_result?.business_model;
+  const bmClaims = (g?.validated_claims ?? []).filter((x) => x.claim_type === "business_model");
+  if (g && bm && bm.value !== "unknown" && bmClaims.length > 0 && g.final_grounded_decision !== "fail") {
+    const excerpt = bmClaims.flatMap((x) => x.evidence_excerpts).map((x) => x.excerpt).find(Boolean) ?? null;
+    items.push({
+      evidence_id: `grd_${c.key}_business_model`, company_key: c.key, dimension: "business_model",
+      value: bm.value.replace(/_/g, " "), status: "proven",
+      source: {
+        provider: "engine", actor: "grounded_evidence_evaluation", provider_call_id: null,
+        url: null, excerpt: excerpt ? excerpt.slice(0, 280) : null,
+      },
+      method: "model_extraction", observed_at: at, valid_until: null,
+      // NEVER `high`: a verified reading of a self-description is weaker than a
+      // provider field, and `compareEvidence` must rank it that way.
+      confidence: g.final_grounded_decision === "pass" ? "medium" : "low",
+      derived_from: [...new Set(bmClaims.flatMap((x) => x.evidence_ids))],
+      mission_id: missionId, origin: "web",
+    });
+  }
   if (c.hiring_assessment?.verdict === "hiring_verified") {
     derived("hiring", true, "proven", c.hiring_jobs.map((j) => j.job_url ?? "").filter(Boolean).slice(0, 5), "high");
   }
