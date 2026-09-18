@@ -11,6 +11,9 @@
 //   MATCH-1  industry matching was substring: "AI" matched "Retail"
 //   E2E-1    persistence was checked by grepping source; this runs the real
 //            engine through checkpoint → restore → Stage-2 rebuild → view
+//   VOCAB-1  (canary e4da3d5a) the grounding prompts never named the business-
+//            model codes and the parser accepted only exact codes, so a
+//            validated "B2B SaaS" answer parsed as "unknown" — every time
 //
 // Offline. No provider, model or database is reached.
 
@@ -25,7 +28,15 @@ import {
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
 import type { EvidenceDimension, EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 import { checkCriterion, evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
-import { matchBusinessModel } from "../../../supabase/functions/_shared/businessModelMatch.ts";
+import {
+  BUSINESS_MODEL_CODES, canonicalBusinessModel, matchBusinessModel,
+} from "../../../supabase/functions/_shared/businessModelMatch.ts";
+import {
+  GROUNDED_CLASSIFIER_PROMPT, GROUNDED_RESPONSE_SHAPE, parseGroundedResult,
+} from "../../../supabase/functions/_shared/groundedClaims.ts";
+import {
+  BATCH_EVALUATION_PROMPT, buildBatchPayload, evaluateBatchResponse,
+} from "../../../supabase/functions/_shared/groundedBatchEvaluation.ts";
 import { buildWorkbenchMissionView } from "../../../supabase/functions/_shared/workbenchMissionView.ts";
 import {
   checkpointSnapshot, companyEvidenceItems, missionCandidatesFrom, runCapabilityPlan,
@@ -376,4 +387,110 @@ Deno.test("E2E-1: grounded proof survives checkpoint → restore → Stage-2 reb
   const bm = companyEvidenceItems(audicus as never).find((e) => e.dimension === "business_model")!;
   assertEquals([bm.status, bm.source.actor, bm.assessment?.decision], ["proven", "grounded_evidence_evaluation", "pass"]);
   assert(bm.derived_from.length > 0 && bm.source.excerpt, "it still cites the company's own words");
+});
+
+
+// ═══════════════════════════════════════════════════════════════ VOCAB-1 ══
+
+Deno.test("VOCAB-1: a free-text business-model answer is read into its code, never guessed", () => {
+  const cases: Array<[string, string]> = [
+    ["b2b_saas", "b2b_saas"], ["B2B SaaS", "b2b_saas"], ["b2b saas", "b2b_saas"],
+    ["B2B SaaS platform for financial firms", "b2b_saas"], ["B2B software-as-a-service", "b2b_saas"],
+    ["enterprise software", "b2b_software"], ["B2B services agency", "b2b_service"],
+    ["consumer app", "consumer"], ["B2C marketplace", "consumer"], ["AI SaaS", "ai_saas"],
+    ["B2B AI SaaS", "b2b_saas"],
+    // Refused: ambiguous, mixed, negated or silent.
+    ["SaaS", "unknown"], ["B2B", "unknown"], ["B2B and B2C", "unknown"], ["B2B and B2C SaaS", "unknown"], ["not B2B SaaS", "unknown"],
+    ["non-SaaS B2B", "unknown"], ["software and services", "unknown"], ["Retail", "unknown"], ["", "unknown"],
+  ];
+  for (const [raw, want] of cases) assertEquals(canonicalBusinessModel(raw), want, JSON.stringify(raw));
+  assertEquals(parseGroundedResult({ business_model: { value: "B2B SaaS", confidence: 0.94, claims: [] } }).business_model.value, "b2b_saas");
+
+  // Both grounding routes now NAME the codes, in the prompt and in the shape.
+  const batchShape = JSON.stringify((buildBatchPayload({ batch: [], originalUserQuery: null }) as { response_shape: unknown }).response_shape);
+  for (const code of BUSINESS_MODEL_CODES) {
+    assert(GROUNDED_CLASSIFIER_PROMPT.includes(code), `single-company prompt names ${code}`);
+    assert(BATCH_EVALUATION_PROMPT.includes(code), `batch prompt names ${code}`);
+    assert(JSON.stringify(GROUNDED_RESPONSE_SHAPE).includes(code), `single-company shape names ${code}`);
+    assert(batchShape.includes(code), `batch shape names ${code}`);
+  }
+});
+
+Deno.test("VOCAB-1: free-text answers through the REAL batch verifier reach eligibility as PASS, FAIL and PENDING", async () => {
+  const mission = compileLeadMission({ originalUserQuery: CANONICAL, proposal }).final_mission;
+  const criteria = deriveMissionCriteria(mission);
+  const byUrl = new Map(ROWS.map((r) => [(r.company as { linkedinUrl: string }).linkedinUrl, r.company as Record<string, unknown>]));
+  /** What the MODEL says, in its own words — never the code. */
+  const SAYS: Record<string, { value: string; fit: "pass" | "review" | "fail" }> = {
+    "Audicus": { value: "B2B SaaS", fit: "pass" },
+    "Bevi": { value: "Consumer hardware brand", fit: "fail" },
+    "Bobyard": { value: "B2B SaaS platform", fit: "review" },
+  };
+  const evaluateBatch = (members: Parameters<typeof evaluateBatchResponse>[0]["batch"]) => {
+    const rows = members.flatMap((m) => {
+      const says = SAYS[String(m.company_name)];
+      const desc = m.registry.items.find((x) => x.evidence_type === "company_description");
+      if (!says || !desc?.source_text) return [];
+      const claim = {
+        claim: "the company describes itself", claim_type: "business_model", evidence_ids: [desc.evidence_id],
+        evidence_excerpts: [{ evidence_id: desc.evidence_id, excerpt: desc.source_text.slice(0, 24) }],
+      };
+      // A hiring mission's PASS must also ground the current signal (the
+      // verifier downgrades a pass without one), so cite the posting verbatim.
+      const job = m.registry.items.find((x) => (x.evidence_type === "job_posting" || x.evidence_type === "yc_job") && x.source_text);
+      const signal = job ? [{
+        claim: "the company has an open marketing role", claim_type: "commercial_signal", evidence_ids: [job.evidence_id],
+        evidence_excerpts: [{ evidence_id: job.evidence_id, excerpt: String(job.source_text).slice(0, 20) }],
+      }] : [];
+      return [{
+        company_key: m.company_key, business_model: { value: says.value, confidence: 0.9, claims: [claim] },
+        company_fit: says.fit, agentory_use_case: "plausible",
+        mission_signal_assessment: { strongest_signal: null, signal_strength: "none", evidence_ids: [], reason: "" },
+        supporting_claims: signal, conflicting_evidence_ids: [], missing_evidence: [], unknown_fields: [], confidence: 0.9, reason: "",
+      }];
+    });
+    return Promise.resolve(evaluateBatchResponse({ batch: members, raw: { results: rows } }));
+  };
+  const run = await runCapabilityPlan({
+    planDiscovery: emptyDiscoverySelector(),
+    planExecution: () => Promise.resolve({
+      reasoning: "vocab", steps: [
+        { capability: "job_discovery", actor_key: "apify_linkedin_job_search", purpose: "roles", input: { jobTitles: ['"growth marketer"'], locations: ["United States"], postedLimit: "month", maxItems: 10 }, depends_on: [] },
+        { capability: "company_enrichment", actor_key: "apify_linkedin_company_details", purpose: "details", input: { companies: ["{{url}}"] }, depends_on: [1] },
+        { capability: "company_brain_qualification", actor_key: null, purpose: "qualify", input: {}, depends_on: [2] },
+      ],
+    }),
+    invoke: (call: { actorKey: string; input: Record<string, unknown>; onProviderRun?: (r: { run_id: string; dataset_id: null }) => void }) => {
+      call.onProviderRun?.({ run_id: `run-${call.actorKey}`, dataset_id: null });
+      if (call.actorKey === "apify_linkedin_job_search") return Promise.resolve(call.input.company ? [] : ROWS);
+      if (call.actorKey === "apify_linkedin_company_details") {
+        return Promise.resolve(((call.input.companies as string[]) ?? []).map((u) => {
+          const c = byUrl.get(u)!;
+          return { id: c.id, name: c.name, linkedinUrl: u, website: c.website, employeeCount: c.employeeCount, description: c.description, industries: c.industries, locations: c.locations };
+        }));
+      }
+      return Promise.resolve([]);
+    },
+    verifyEmployer: () => ({ verified: true, outcome: "verified_match" }),
+    evaluateBatch,
+  } as never, {
+    mission, plan: buildCapabilityGraph(mission, { executability: "enforce" }), maxCandidates: 10,
+    readEnv: (k: string) => (k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined),
+    specMode: "enforce", specScope: { workspace_id: "ws-vocab", lineage_id: "lineage-vocab" },
+  } as never) as unknown as { companies: Array<Record<string, unknown> & { key: string; company: { company_name: string } }> };
+
+  const bmOf = (name: string) => companyEvidenceItems(run.companies.find((c) => c.company.company_name === name) as never)
+    .find((e) => e.dimension === "business_model");
+  // The model never said a code; each answer still became evidence.
+  assertEquals([bmOf("Audicus")?.value, bmOf("Audicus")?.status], ["b2b saas", "proven"]);
+  assertEquals([bmOf("Bevi")?.value, bmOf("Bevi")?.status], ["consumer", "proven"]);
+  assertEquals([bmOf("Bobyard")?.value, bmOf("Bobyard")?.status], ["b2b saas", "plausible"]);
+
+  const industry = (name: string) => {
+    const [cand] = missionCandidatesFrom({ companies: [run.companies.find((c) => c.company.company_name === name)!] } as never, { now: NOW });
+    return evaluateEligibility(criteria, cand.graph).hard_checks.industry;
+  };
+  assertEquals(industry("Audicus"), "pass", "a pass grounding of \"B2B SaaS\" proves the criterion");
+  assertEquals(industry("Bevi"), "fail", "a verified consumer reading rules it out");
+  assertEquals(industry("Bobyard"), "unknown", "a review grounding stays pending");
 });

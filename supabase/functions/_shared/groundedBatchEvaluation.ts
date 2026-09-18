@@ -132,7 +132,8 @@ export function buildBatchPayload(i: {
       results: [{
         company_key: "must match one of the supplied company_key values",
         business_model: {
-          value: "string", confidence: "number", claims: [CLAIM_SHAPE],
+          value: "b2b_saas|ai_saas|b2b_software|b2b_service|consumer|unknown",
+          confidence: "number", claims: [CLAIM_SHAPE],
         },
         company_fit: "pass|review|fail",
         agentory_use_case: "strong|plausible|weak|none",
@@ -169,6 +170,8 @@ export const BATCH_EVALUATION_PROMPT = [
   "Absence of evidence is unknown; it is never proof that something is false.",
   "A failed data provider means UNRESOLVED, never 'the company is not hiring'.",
   "Return 'review' when evidence is insufficient — that is the correct answer.",
+  "business_model.value MUST be exactly one of: b2b_saas, ai_saas, b2b_software,",
+  "b2b_service, consumer, unknown. Use unknown when the evidence does not say.",
   "You do not choose data providers, tools or Actors, and you never name one.",
   "Return only the requested JSON object. Do not explain your reasoning process.",
 ].join(" ");

@@ -25,6 +25,7 @@
 //
 // PURE. No network, provider, model or database access.
 
+import { canonicalBusinessModel } from "./businessModelMatch.ts";
 import {
   abstractSourceLabel, findEvidence, hardFactsForPrompt,
   type EvidenceItem, type EvidenceRegistry, type EvidenceType,
@@ -188,8 +189,6 @@ function enumOr<T extends string>(v: unknown, allowed: readonly T[], fallback: T
   return (allowed as readonly string[]).includes(s) ? s as T : fallback;
 }
 
-const MODELS: readonly BusinessModelValue[] =
-  ["b2b_saas", "ai_saas", "b2b_software", "b2b_service", "consumer", "unknown"];
 /**
  * Exported so the PROMPT and the PARSER name the same vocabulary. A claim type
  * the model is not told about is parsed as `company_fit`, which then fails the
@@ -236,7 +235,9 @@ export function parseGroundedResult(raw: unknown): GroundedClassifierResult {
 
   return {
     business_model: {
-      value: enumOr(bm.value, MODELS, "unknown"),
+      // Read through the controlled vocabulary, not an exact-string enum:
+      // "B2B SaaS" is b2b_saas. See `canonicalBusinessModel`.
+      value: canonicalBusinessModel(bm.value),
       confidence: num01(bm.confidence),
       claims: parseClaims(bm.claims),
     },
@@ -536,6 +537,8 @@ export const GROUNDED_CLASSIFIER_PROMPT = [
   "A failed data provider means UNRESOLVED, never 'the company is not hiring'.",
   "A broad industry label alone does not establish a business model.",
   "A job title alone does not establish a business model.",
+  "business_model.value MUST be exactly one of: b2b_saas, ai_saas, b2b_software,",
+  "b2b_service, consumer, unknown. Use unknown when the evidence does not say.",
   "A company description saying it helps sales teams is NOT evidence that it is hiring.",
   "Only a dated job posting or commercial event may support a current-signal claim.",
   "Name any evidence that conflicts, in conflicting_evidence_ids.",
@@ -582,7 +585,10 @@ export const CLAIM_SHAPE = Object.freeze({
  * result with nothing in it.
  */
 export const GROUNDED_RESPONSE_SHAPE = Object.freeze({
-  business_model: { value: "string", confidence: "number", claims: [CLAIM_SHAPE] },
+  business_model: {
+    value: "b2b_saas|ai_saas|b2b_software|b2b_service|consumer|unknown",
+    confidence: "number", claims: [CLAIM_SHAPE],
+  },
   company_fit: "pass|review|fail",
   agentory_use_case: "strong|plausible|weak|none",
   mission_signal_assessment: {

@@ -143,3 +143,52 @@ export function matchBusinessModel(required: unknown, evidence: unknown): MatchR
   if (results.includes("pass")) return "pass";
   return results.every((r) => r === "fail") ? "fail" : "unknown";
 }
+
+// ── THE GROUNDER'S ANSWER, READ INTO ITS VOCABULARY (P5.2) ──────────────────
+//
+// The grounding prompts asked for `business_model.value` as a bare "string" and
+// never named the allowed values, while the parser accepted only the exact
+// codes. Canary e4da3d5a: 4 of 5 companies carried a VALIDATED business-model
+// claim at 0.86–0.96 confidence and every one parsed as "unknown" — so no
+// business-model evidence ever reached eligibility. The prompts now name the
+// codes; this reads whatever still arrives as free text ("B2B SaaS",
+// "B2B SaaS platform for financial firms") through the same controlled
+// vocabulary, and refuses anything it cannot read unambiguously.
+
+export type BusinessModelCode =
+  | "b2b_saas" | "ai_saas" | "b2b_software" | "b2b_service" | "consumer" | "unknown";
+
+export const BUSINESS_MODEL_CODES: readonly BusinessModelCode[] =
+  ["b2b_saas", "ai_saas", "b2b_software", "b2b_service", "consumer", "unknown"];
+
+const NEGATION = new Set(["not", "non", "no", "neither", "nor", "without", "never", "isn't", "isnt"]);
+
+/**
+ * A model's business-model answer as one code. Exact codes pass through;
+ * free text is read by facets. Ambiguous or negated text is `unknown`:
+ *
+ *   b2b + saas → b2b_saas        b2b + software → b2b_software
+ *   b2b + service → b2b_service  consumer (alone) → consumer
+ *   ai + saas, no audience → ai_saas
+ *   both audiences, service beside saas/software, any negation → unknown
+ */
+export function canonicalBusinessModel(raw: unknown): BusinessModelCode {
+  const exact = String(raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if ((BUSINESS_MODEL_CODES as readonly string[]).includes(exact)) return exact as BusinessModelCode;
+  const words = tokens(normalise(raw));
+  if (words.length === 0 || words.some((w) => NEGATION.has(w))) return "unknown";
+  const audiences = new Set(words.map((w) => AUDIENCE[w]).filter(Boolean));
+  const deliveries = new Set(words.map((w) => DELIVERY[w]).filter(Boolean));
+  const ai = words.some((w) => AI.has(w));
+  if (audiences.size > 1) return "unknown";
+  if (deliveries.has("service") && (deliveries.has("saas") || deliveries.has("software"))) return "unknown";
+  const audience = [...audiences][0] ?? null;
+  const delivery: Delivery | null = deliveries.has("saas") ? "saas" : deliveries.has("software") ? "software"
+    : deliveries.has("service") ? "service" : null;
+  if (audience === "consumer") return "consumer";
+  if (audience === "b2b") {
+    return delivery === "saas" ? "b2b_saas" : delivery === "software" ? "b2b_software"
+      : delivery === "service" ? "b2b_service" : "unknown";
+  }
+  return ai && delivery === "saas" ? "ai_saas" : "unknown";
+}
