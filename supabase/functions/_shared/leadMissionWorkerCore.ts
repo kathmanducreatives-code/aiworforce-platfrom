@@ -88,6 +88,16 @@ export interface WorkerDeps {
   heartbeatFor: (mission: ClaimedMission) => HeartbeatController;
   runMission: (mission: ClaimedMission, ctl: MissionRunControl) => Promise<MissionOutcome>;
   release: (mission: ClaimedMission, outcome: ReleaseOutcome) => Promise<void>;
+  /**
+   * P4.1 — reconcile cancelled missions no worker will ever claim again.
+   *
+   * A cancellation that lands while the mission is UNCLAIMED (queued, or
+   * resumable between slices) is never followed by a release, so nothing
+   * ends the task and lineage — canary 3dbcec17. Run on an idle tick only,
+   * bounded by the implementation, and a no-op when every cancelled row
+   * already agrees. Optional: a deps without it behaves exactly as before.
+   */
+  sweepCancelled?: () => Promise<{ scanned: number; reconciled: number }>;
   sleep: (ms: number) => Promise<void>;
   log?: (msg: string, meta?: unknown) => void;
 }
@@ -186,6 +196,16 @@ export async function runWorkerLoop(
   while (!shouldStop()) {
     const tick = await workerTick(deps);
     if (!tick.claimed && !shouldStop()) {
+      // IDLE IS WHEN IT IS FREE. Never between claim and run, so a sweep can
+      // not delay a mission, and never while one is executing.
+      if (deps.sweepCancelled) {
+        try {
+          const swept = await deps.sweepCancelled();
+          if (swept.reconciled > 0) deps.log?.("[worker] cancelled missions reconciled", swept);
+        } catch (e) {
+          deps.log?.("[worker] cancel sweep failed", String((e as Error)?.message ?? e));
+        }
+      }
       await deps.sleep(deps.config.idlePollMs);
     }
   }

@@ -27,9 +27,12 @@ import {
 import { createExecutionDeadline } from "../supabase/functions/_shared/leadExecutionFinalizer.ts";
 import { terminalStatusOf } from "../supabase/functions/_shared/leadMissionV2Request.ts";
 import {
-  applyTerminalPatch, finalQueueStatus, isTerminalQueueStatus, planTerminalReconciliation,
-  terminalReasonFor, terminalViolations, type TerminalRows,
+  finalQueueStatus, isTerminalQueueStatus, terminalReasonFor,
 } from "../supabase/functions/_shared/leadMissionTerminal.ts";
+import {
+  CANCEL_SWEEP_LIMIT, CANCELLED_REASON, reconcileTerminalRows, sweepCancelledMissions,
+  type CancelSweepDb, type TerminalIds,
+} from "../supabase/functions/_shared/leadMissionCancellation.ts";
 import { createLeadMissionRunner } from "./leadMissionRunner.ts";
 import { newStatus, healthView, startHealthServer } from "./health.ts";
 
@@ -145,43 +148,56 @@ async function main() {
   //
   // When the queue ends a mission, the task, the lineage and the plan end with
   // it. Run 4250f181 finished `queue failed / task ready / lineage active /
-  // plan partial` because the queue decided alone. See leadMissionTerminal.ts.
-  const reconcileTerminal = async (
-    queueStatus: "complete" | "failed" | "cancelled", reason: string,
-    ids: { taskId: string | null; lineageId: string | null; planId: string | null },
-  ) => {
-    const rows: TerminalRows = { task: null, lineage: null, plan: null };
-    if (ids.taskId) {
-      const { data } = await db.from("tasks").select("status, result").eq("id", ids.taskId).maybeSingle();
-      if (data) rows.task = data as TerminalRows["task"];
-    }
-    if (ids.lineageId) {
-      const { data } = await db.from("lead_lineages").select("status").eq("lineage_id", ids.lineageId).maybeSingle();
-      if (data) rows.lineage = data as TerminalRows["lineage"];
-    }
-    if (ids.planId) {
-      const { data } = await db.from("task_plans").select("status").eq("id", ids.planId).maybeSingle();
-      if (data) rows.plan = data as TerminalRows["plan"];
-    }
-    const patch = planTerminalReconciliation(queueStatus, reason, rows, new Date().toISOString());
-    if (patch.violations.length === 0) return;
-    if (patch.task && ids.taskId) {
-      const { error } = await db.from("tasks").update(patch.task).eq("id", ids.taskId);
+  // plan partial` because the queue decided alone. The rule lives in
+  // leadMissionTerminal.ts and the row I/O in leadMissionCancellation.ts, which
+  // a test can drive without a database — this file cannot be imported.
+  const rowsDb: CancelSweepDb = {
+    readTask: async (taskId) => {
+      const { data } = await db.from("tasks").select("status, result").eq("id", taskId).maybeSingle();
+      return (data ?? null) as { status: string | null; result: Record<string, unknown> | null } | null;
+    },
+    readLineage: async (lineageId) => {
+      const { data } = await db.from("lead_lineages").select("status").eq("lineage_id", lineageId).maybeSingle();
+      return (data ?? null) as { status: string | null } | null;
+    },
+    readPlan: async (planId) => {
+      const { data } = await db.from("task_plans").select("status").eq("id", planId).maybeSingle();
+      return (data ?? null) as { status: string | null } | null;
+    },
+    writeTask: async (taskId, patch) => {
+      const { error } = await db.from("tasks").update(patch).eq("id", taskId);
       if (error) log("[worker] terminal reconcile: task write failed", error.message);
-    }
-    if (patch.lineage && ids.lineageId) {
-      const { error } = await db.from("lead_lineages").update({
-        ...patch.lineage, lease_holder: null, lease_expires_at: null, updated_at: new Date().toISOString(),
-      }).eq("lineage_id", ids.lineageId);
+    },
+    writeLineage: async (lineageId, patch) => {
+      const { error } = await db.from("lead_lineages").update(patch).eq("lineage_id", lineageId);
       if (error) log("[worker] terminal reconcile: lineage write failed", error.message);
-    }
-    if (patch.plan && ids.planId) {
-      const { error } = await db.from("task_plans").update(patch.plan).eq("id", ids.planId);
+    },
+    writePlan: async (planId, patch) => {
+      const { error } = await db.from("task_plans").update(patch).eq("id", planId);
       if (error) log("[worker] terminal reconcile: plan write failed", error.message);
-    }
+    },
+    // CANCELLED ONLY, and only the recent ones: a cancellation no release will
+    // ever follow (the row was unclaimed when it was cancelled). Terminal
+    // `complete` and `failed` rows are not visited, so nothing successful is
+    // rewritten by a sweep.
+    listCancelled: async (limit) => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await db.from("lead_mission_queue")
+        .select("id, task_id, lineage_id, request")
+        .eq("status", "cancelled").gte("updated_at", since)
+        .order("updated_at", { ascending: false }).limit(limit);
+      if (error) { log("[worker] cancel sweep read failed", error.message); return []; }
+      return (data ?? []) as Array<{ id: string; task_id: string | null; lineage_id: string | null; request: Record<string, unknown> | null }>;
+    },
+  };
+
+  const reconcileTerminal = async (
+    queueStatus: "complete" | "failed" | "cancelled", reason: string, ids: TerminalIds,
+  ) => {
+    const r = await reconcileTerminalRows(rowsDb, queueStatus, reason, ids, new Date().toISOString());
+    if (r.violations.length === 0) return;
     log("[worker] terminal state reconciled", {
-      queue_status: queueStatus, reason, before: patch.violations,
-      after: terminalViolations(queueStatus, applyTerminalPatch(rows, patch)),
+      queue_status: queueStatus, reason, before: r.violations, written: r.written, after: r.remaining,
     });
   };
 
@@ -219,7 +235,20 @@ async function main() {
     try { return await runner.run(...args); } finally { working = false; }
   };
 
-  const deps: WorkerDeps = { workerId, config: cfg, claim, heartbeatFor, runMission, release, sleep, log };
+  const deps: WorkerDeps = {
+    workerId, config: cfg, claim, heartbeatFor, runMission, release, sleep, log,
+    // The cancellation the worker never sees: cancelled while unclaimed, so no
+    // release follows it. See leadMissionCancellation.ts.
+    sweepCancelled: async () => {
+      const r = await sweepCancelledMissions(rowsDb, new Date().toISOString(), CANCEL_SWEEP_LIMIT);
+      for (const d of r.details) {
+        log("[worker] cancelled mission reconciled", {
+          queue: d.queue_id, reason: CANCELLED_REASON, before: d.violations, written: d.written, after: d.remaining,
+        });
+      }
+      return { scanned: r.scanned, reconciled: r.reconciled };
+    },
+  };
 
   let stop = false;
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
